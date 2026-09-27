@@ -438,13 +438,20 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       await flushReact();
     }
 
+    async function chooseAugustWorksAgent() {
+      await clickByText((t) => t.includes("August Works agent"));
+    }
+
     it("creates the organization on Continue and lands on the agent step, no mission", async () => {
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
       const { root } = await openStepOne();
       await clickByText((t) => t.startsWith("Continue"));
 
       expect(mockCompaniesApi.create).toHaveBeenCalledWith({ name: "Initech" });
-      expect(document.body.textContent).toContain("Create your first agent");
+      expect(document.body.textContent).toContain("Add an agent");
+      expect(document.body.textContent).toContain("OpenClaw agent");
+      expect(document.body.textContent).toContain("Hermes agent");
+      expect(document.body.textContent).toContain("Skip for now");
       expect(document.body.textContent).not.toContain("Define your mission");
       expect(document.body.textContent).not.toContain("Tell us about your team");
 
@@ -461,7 +468,8 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
       const { root } = await openStepOne();
       await clickByText((t) => t.startsWith("Continue"));
-      expect(document.body.textContent).toContain("Create your first agent");
+      expect(document.body.textContent).toContain("Add an agent");
+      await chooseAugustWorksAgent();
 
       // Step 3 → 4 needs an agent name — the one field the step has now.
       const agentField = document.body.querySelector(
@@ -473,7 +481,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       await flushReact();
       await clickByText((t) => isArcPrimary(t));
 
-      expect(document.body.textContent).toContain("Connect a model");
+      expect(document.body.textContent).toContain("Connect a runtime");
       await pickFirstSource(clickByText);
       expect(document.body.textContent).not.toContain("Adapter environment check");
       expect(document.body.textContent).not.toContain("Test now");
@@ -547,6 +555,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         await flushReact();
       }
       await clickText((t) => t.startsWith("Continue"));
+      await clickText((t) => t.includes("August Works agent"));
       const agentField = document.body.querySelector(
         "#onboarding-agent-name",
       ) as HTMLInputElement;
@@ -607,6 +616,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       };
 
       await clickText((t) => t.startsWith("Continue"));
+      await clickText((t) => t.includes("August Works agent"));
       const agentField = document.body.querySelector(
         "#onboarding-agent-name",
       ) as HTMLInputElement;
@@ -642,6 +652,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
       const { root } = await openStepOne();
       await clickByText((t) => t.startsWith("Continue"));
+      await chooseAugustWorksAgent();
       const agentField = document.body.querySelector(
         "#onboarding-agent-name",
       ) as HTMLInputElement;
@@ -650,7 +661,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       });
       await flushReact();
       await clickByText((t) => isArcPrimary(t));
-      expect(document.body.textContent).toContain("Connect a model");
+      expect(document.body.textContent).toContain("Connect a runtime");
       await pickFirstSource(clickByText);
 
       const connect = [...document.body.querySelectorAll("button")].find((b) =>
@@ -690,7 +701,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       await flushReact();
 
       expect(mockCompaniesApi.create).toHaveBeenCalledTimes(1);
-      expect(document.body.textContent).toContain("Create your first agent");
+      expect(document.body.textContent).toContain("Add an agent");
 
       await act(async () => root.unmount());
     });
@@ -725,7 +736,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
 
       await act(async () => resolveCreate({ id: "company-new", issuePrefix: "INI" }));
       await flushReact();
-      expect(document.body.textContent).toContain("Create your first agent");
+      expect(document.body.textContent).toContain("Add an agent");
 
       await act(async () => root.unmount());
     });
@@ -736,7 +747,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
       const { root } = await openStepOne();
       await clickByText((t) => t.startsWith("Continue"));
-      expect(document.body.textContent).toContain("Create your first agent");
+      expect(document.body.textContent).toContain("Add an agent");
 
       await clickByText((t) => t.includes("Back"));
 
@@ -786,6 +797,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       };
 
       await clickByText((t) => t.startsWith("Continue"));
+      await clickByText((t) => t.includes("August Works agent"));
       const agentField = document.body.querySelector(
         "#onboarding-agent-name",
       ) as HTMLInputElement;
@@ -794,7 +806,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       });
       await flushReact();
       await clickByText((t) => isArcPrimary(t));
-      expect(document.body.textContent).toContain("Connect a model");
+      expect(document.body.textContent).toContain("Connect a runtime");
 
       // The credential mode is chosen *before* a source, because picking a
       // source starts the sequence and the mode link fades out with the row —
@@ -1344,7 +1356,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     // The draft is restored once companies settle: step 3 (Create your first
     // agent) with the saved agent name in the input, not the defaults
     // (step 0, "Chief of staff").
-    expect(document.body.textContent).toContain("Create your first agent");
+    expect(document.body.textContent).toContain("Add an agent");
     const nameInput = document.body.querySelector(
       "#onboarding-agent-name",
     ) as HTMLInputElement | null;
@@ -1354,7 +1366,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     // labelled by destination: the wizard has its own numbering, and two
     // controls both announcing "Step 1" would mean different things.
     const currentStep = document.body.querySelector('[aria-current="step"]');
-    expect(currentStep?.getAttribute("aria-label")).toBe("Create your first agent");
+    expect(currentStep?.getAttribute("aria-label")).toBe("Add an agent");
     expect(document.body.textContent).toContain("Step 1 of 3");
 
     await act(async () => {
@@ -1408,7 +1420,11 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
 
     expect(mockCompaniesApi.create).toHaveBeenCalledWith({ name: "Created Co" });
     expect(mockCompaniesApi.list).toHaveBeenCalledTimes(2);
-    expect(document.querySelector("#onboarding-agent-name")).not.toBeNull();
+    // The post-create refetch must not unmount or reset the live wizard. The
+    // new agent-type chooser is the stable first control on this step; the
+    // name field appears only after the managed-agent choice is selected.
+    expect(document.body.textContent).toContain("Add an agent");
+    expect(document.body.textContent).toContain("August Works agent");
 
     await act(async () => {
       resolveRefetch([{ id: "created", name: "Created Co", issuePrefix: "CRE" }]);
@@ -2008,7 +2024,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       // itself), each settling on its own render. One flush is not always
       // enough to reach the end of that chain.
       for (let i = 0; i < 5; i++) await flushReact();
-      expect(document.body.textContent).toContain("Connect a model");
+      expect(document.body.textContent).toContain("Connect a runtime");
       // No pick needed here: the draft this helper restores already names an
       // adapter, which is what a run returning to this step actually carries.
       return { root, queryClient };
@@ -2309,7 +2325,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
 
       expect(rowCentred()).toBe(false);
       expect(cta()).toBe("Next");
-      expect(document.body.textContent).toContain("Connect a model");
+      expect(document.body.textContent).toContain("Connect a runtime");
 
       await act(async () => root.unmount());
     });
@@ -2717,7 +2733,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       for (let i = 0; i < 6; i++) await flushReact();
 
       expect(mockAgentsApi.hire).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Connect a model");
+      expect(document.body.textContent).toContain("Connect a runtime");
 
       await act(async () => root.unmount());
     });
@@ -2828,7 +2844,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         for (let i = 0; i < 6; i++) await flushReact();
 
         expect(mockAgentsApi.startClaudeSetupTokenLogin).not.toHaveBeenCalled();
-        expect(document.body.textContent).toContain("Connect a model");
+        expect(document.body.textContent).toContain("Connect a runtime");
 
         await act(async () => root.unmount());
       } finally {

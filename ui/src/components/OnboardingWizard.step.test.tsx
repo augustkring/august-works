@@ -51,7 +51,7 @@ const mockInstanceSettingsApi = vi.hoisted(() => ({
   getExperimental: vi.fn(),
 }));
 
-const routerState = vi.hoisted(() => ({ pathname: "/" }));
+const routerState = vi.hoisted(() => ({ pathname: "/", navigate: vi.fn() }));
 const dialogState = vi.hoisted(() => ({
   onboardingOpen: false,
   onboardingOptions: {} as { initialStep?: number; companyId?: string },
@@ -80,7 +80,7 @@ vi.mock("../api/instanceSettings", () => ({ instanceSettingsApi: mockInstanceSet
 
 vi.mock("@/lib/router", () => ({
   useLocation: () => ({ pathname: routerState.pathname }),
-  useNavigate: () => vi.fn(),
+  useNavigate: () => routerState.navigate,
   useParams: () => ({}),
 }));
 
@@ -104,7 +104,10 @@ function currentStep(): "agent" | "closed" | "other" {
   if (!body.querySelector("[role='dialog'], .fixed.inset-0")) return "closed";
   // Keyed on the name field, which is the agent step's only control now that
   // the role picker is gone.
-  if (body.querySelector("#onboarding-agent-name")) return "agent";
+  if (
+    body.querySelector("#onboarding-agent-name") ||
+    body.textContent?.includes("OpenClaw agent")
+  ) return "agent";
   return "other";
 }
 
@@ -175,6 +178,7 @@ describe("OnboardingWizard — which step it lands on", () => {
     // an earlier case would decide the next one.
     localStorage.clear();
     routerState.pathname = "/";
+    routerState.navigate.mockReset();
     dialogState.onboardingOpen = false;
     dialogState.onboardingOptions = {};
     dialogState.onboardingRouteDismissed = false;
@@ -543,6 +547,13 @@ describe("OnboardingWizard — which step it lands on", () => {
      * putting something in the one field it has.
      */
     async function nameAgent(name = "Ada") {
+      if (!document.getElementById("onboarding-agent-name")) {
+        const option = [...document.body.querySelectorAll("button")].find((button) =>
+          button.textContent?.includes("August Works agent"),
+        );
+        expect(option, "the agent step should offer the managed-agent choice").toBeTruthy();
+        await press(option!);
+      }
       const field = document.getElementById("onboarding-agent-name") as HTMLInputElement;
       expect(field, "the agent step should render its name field").toBeTruthy();
       setControlledValue(field, name);
@@ -561,15 +572,15 @@ describe("OnboardingWizard — which step it lands on", () => {
     /**
      * The step's own CTA. By exact text, because "Back" sits beside it.
      *
-     * Two labels rather than one: the connect step calls its forward button
-     * "Connect", since there the press starts a sign-in rather than simply
-     * advancing. The rest of the arc still says "Next". These tests are about
-     * where a press lands, so either will do.
+     * The managed path advances with "Next", the connect step may say
+     * "Connect", and an existing runtime hands off with "Continue to setup".
+     * These tests are about where a press lands, so every forward label is
+     * intentionally accepted here.
      */
     function stepCta(): HTMLButtonElement {
       const cta = [...document.body.querySelectorAll("button")].find((b) => {
         const text = b.textContent?.trim();
-        return text === "Next" || text === "Connect";
+        return text === "Next" || text === "Connect" || text === "Continue to setup";
       });
       expect(cta, "the step should render its forward button").toBeTruthy();
       return cta as HTMLButtonElement;
@@ -605,6 +616,45 @@ describe("OnboardingWizard — which step it lands on", () => {
       expect(payload.name).toBe("Ada");
     });
 
+    it("continues OpenClaw setup in the dedicated agent flow", async () => {
+      await openOnAgentStep();
+      const option = [...document.body.querySelectorAll("button")].find((button) =>
+        button.textContent?.includes("OpenClaw agent"),
+      );
+      expect(option).toBeTruthy();
+      await press(option!);
+      await press(stepCta());
+
+      expect(routerState.navigate).toHaveBeenCalledWith(
+        "/agents/new?adapterType=openclaw_gateway",
+      );
+    });
+
+    it("continues Hermes setup in its gateway flow", async () => {
+      await openOnAgentStep();
+      const option = [...document.body.querySelectorAll("button")].find((button) =>
+        button.textContent?.includes("Hermes agent"),
+      );
+      expect(option).toBeTruthy();
+      await press(option!);
+      await press(stepCta());
+
+      expect(routerState.navigate).toHaveBeenCalledWith(
+        "/agents/new?adapterType=hermes_gateway",
+      );
+    });
+
+    it("lets a customer skip agent setup and return to the dashboard", async () => {
+      await openOnAgentStep();
+      const skip = [...document.body.querySelectorAll("button")].find((button) =>
+        button.textContent?.trim() === "Skip for now",
+      );
+      expect(skip).toBeTruthy();
+      await press(skip!);
+
+      expect(routerState.navigate).toHaveBeenCalledWith("/dashboard");
+    });
+
     it("does not offer a way back behind the step it entered on", async () => {
       // Step 1 creates a company. A run that already holds one must not be
       // able to walk into it, by the Back button or the progress bar.
@@ -620,7 +670,7 @@ describe("OnboardingWizard — which step it lands on", () => {
       // every one of them is inert — asserted over the whole set rather than
       // one segment, since a single enabled one is the whole defect.
       const segments = [...document.body.querySelectorAll("button")].filter((b) =>
-        ["Create your first agent", "Connect a model", "Review"].includes(
+        ["Add an agent", "Connect a runtime", "Review"].includes(
           b.getAttribute("aria-label") ?? "",
         ),
       ) as HTMLButtonElement[];

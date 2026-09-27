@@ -83,6 +83,7 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { RadioCardGroup } from "@/components/ui/radio-card";
 import { cn } from "../lib/utils";
 import {
   extractModelName,
@@ -146,9 +147,33 @@ type Step = 0 | 1 | 2 | 3 | 4 | 5;
 // Plugin/external adapters use arbitrary type ids, so this mirrors the master
 // wizard's registry-driven approach rather than a fixed union.
 type AdapterType = string;
+type AgentOnboardingChoice = "" | "august_works" | "openclaw" | "hermes";
+
+function AugustWorksMonogram() {
+  return (
+    <span
+      className="inline-flex size-5 items-center justify-center rounded-md bg-foreground font-mono text-(length:--text-micro) font-bold leading-none tracking-tighter text-background"
+      aria-hidden="true"
+    >
+      AW
+    </span>
+  );
+}
+
+function RuntimeChoiceMark({ runtime }: { runtime: "openclaw" | "hermes" }) {
+  if (runtime === "openclaw") {
+    return <img src="/brands/adapters/openclaw.svg" alt="" className="size-5 object-contain" />;
+  }
+  return (
+    <>
+      <img src="/brands/adapters/hermesagent.svg" alt="" className="size-5 object-contain dark:hidden" />
+      <img src="/brands/adapters/hermesagent-dark.svg" alt="" className="hidden size-5 object-contain dark:block" />
+    </>
+  );
+}
 
 // First-run onboarding stays on the proven direct adapters even when an
-// instance administrator has opted into Paperclip Runner elsewhere. The
+// instance administrator has opted into August Works Runner elsewhere. The
 // experimental flag only exposes the runner in explicit agent configuration.
 const ONBOARDING_EXCLUDED_ADAPTER_TYPES = new Set([
   "process",
@@ -274,7 +299,7 @@ function ModelSourceMark({
 // Exported so tests write/read the exact key the component uses, instead of
 // duplicating the literal and silently drifting from it if it's ever renamed.
 export const ONBOARDING_STORAGE_KEY = "paperclip-onboarding-state";
-const DEFAULT_TASK_TITLE = "Paperclip onboarding";
+const DEFAULT_TASK_TITLE = "August Works setup";
 /**
  * The onboarding draft in `localStorage`, via a browser that is allowed to say
  * no.
@@ -593,6 +618,17 @@ function OnboardingWizardInner({
     // one.
     (saved?.agentRole as AgentRole) || DEFAULT_AGENT_ROLE,
   );
+  const [agentChoice, setAgentChoice] = useState<AgentOnboardingChoice>(() => {
+    const savedChoice = saved?.agentChoice;
+    if (
+      savedChoice === "august_works" ||
+      savedChoice === "openclaw" ||
+      savedChoice === "hermes"
+    ) {
+      return savedChoice;
+    }
+    return saved?.agentName ? "august_works" : "";
+  });
   const [adapterType, setAdapterType] = useState<AdapterType>(() =>
     restoreOnboardingAdapterType(saved?.adapterType),
   );
@@ -903,7 +939,7 @@ function OnboardingWizardInner({
     if (!effectiveOnboardingOpen) return;
     const state = {
       step, companyName,
-      agentName, agentAppearance, agentRole, adapterType, cwd, model, command, args, url,
+      agentName, agentAppearance, agentRole, agentChoice, adapterType, cwd, model, command, args, url,
       // The mode, never the key: this blob is localStorage.
       credentialMode, credentialModeChoice,
       createdCompanyId, createdCompanyPrefix, createdAgentId,
@@ -912,7 +948,7 @@ function OnboardingWizardInner({
     onboardingDraftStorage.write(JSON.stringify(state));
   }, [
     effectiveOnboardingOpen, step, companyName,
-    agentName, agentAppearance, agentRole, adapterType, cwd, model, command, args, url,
+    agentName, agentAppearance, agentRole, agentChoice, adapterType, cwd, model, command, args, url,
     credentialMode, credentialModeChoice,
     createdCompanyId, createdCompanyPrefix, createdAgentId,
     createdCompanyGoalId, createdProjectId, createdIssueRef,
@@ -930,7 +966,7 @@ function OnboardingWizardInner({
       ? queryKeys.agents.adapterModels(createdCompanyId, adapterType, null)
       : ["agents", "none", "adapter-models", adapterType, null],
     queryFn: () => agentsApi.adapterModels(createdCompanyId!, adapterType, { environmentId: null }),
-    // Models are picked on step 4 (Connect a model).
+    // Models are picked on step 4 (Connect a runtime).
     enabled: Boolean(createdCompanyId) && effectiveOnboardingOpen && step === 4
   });
   const getCapabilities = useAdapterCapabilities();
@@ -1626,6 +1662,7 @@ function OnboardingWizardInner({
     setAgentName("");
     setAgentAppearance(randomAgentAppearance());
     setAgentRole(DEFAULT_AGENT_ROLE);
+    setAgentChoice("");
     setAdapterType("claude_local");
     setModel("");
     setCommand("");
@@ -2011,6 +2048,30 @@ function OnboardingWizardInner({
     }
   }
 
+  function handleSkipAgentSetup() {
+    onboardingDraftStorage.clear();
+    reset();
+    closeOnboarding();
+    setRouteDismissed(true);
+    navigate("/dashboard");
+  }
+
+  function handleExternalAgentSetup() {
+    const adapterType =
+      agentChoice === "openclaw"
+        ? "openclaw_gateway"
+        : agentChoice === "hermes"
+          ? "hermes_gateway"
+          : null;
+    if (!adapterType) return;
+
+    onboardingDraftStorage.clear();
+    reset();
+    closeOnboarding();
+    setRouteDismissed(true);
+    navigate(`/agents/new?${new URLSearchParams({ adapterType })}`);
+  }
+
 
   // Step 4 → 5 ("Give it a heartbeat"): hire the lead agent + seed its
   // instructions, then advance to Review. Guarded so revisiting step 4
@@ -2023,7 +2084,7 @@ function OnboardingWizardInner({
     if (adapterType === "paperclip_runner") {
       setAdapterType("claude_local");
       setModel("");
-      setError("Paperclip Runner is not available during onboarding. Choose a legacy adapter.");
+      setError("August Works Runner is not available during onboarding. Choose another runtime.");
       return;
     }
     if (createdAgentId) {
@@ -2313,7 +2374,9 @@ function OnboardingWizardInner({
       // yet — two organizations for one name, two agents for one hire.
       if (loading) return;
       if (step === 1 && companyName.trim()) void handleCreateCompany();
-      else if (step === 3 && agentName.trim()) setStep(4);
+      else if (step === 3 && agentChoice === "august_works" && agentName.trim()) setStep(4);
+      else if (step === 3 && (agentChoice === "openclaw" || agentChoice === "hermes"))
+        handleExternalAgentSetup();
       // `connectStepReady`, the same predicate the step's button uses. Spelling
       // the condition out here again is what let this path hire against a
       // source the tile row had never shown, after the button was gated and
@@ -2550,9 +2613,9 @@ function OnboardingWizardInner({
                           {step === 1
                             ? "What is the name of your organization?"
                             : step === 3
-                              ? "Create your first agent"
+                              ? "Add an agent"
                               : step === 4
-                                ? "Connect a model"
+                                ? "Connect a runtime"
                                 : "Let's get started..."}
                         </motion.span>
                       }
@@ -2566,20 +2629,22 @@ function OnboardingWizardInner({
                         The naming step carries none either: the question is
                         the whole screen, and Cloud's naming step (which most
                         walkers see instead) is drawn the same way. */}
+                    {step !== 3 && (
                     <motion.div
                       className="overflow-hidden text-center"
                       initial={false}
-                      animate={step === 1 || step === 3 ? ledeMotion.closed : ledeMotion.open}
-                      aria-hidden={step === 1 || step === 3 || undefined}
+                      animate={step === 1 ? ledeMotion.closed : ledeMotion.open}
+                      aria-hidden={step === 1 || undefined}
                     >
                       <p className="pt-2 text-base leading-relaxed text-muted-foreground">
                         <motion.span key={step} {...titleSwapMotion} className="inline-block">
                           {step === 4
-                            ? "Paperclip works with your subscription or API keys."
-                            : `${agentName.trim() || "Your first agent"} is ready to work!`}
+                              ? "August Works works with your subscription or API keys."
+                              : `${agentName.trim() || "Your first agent"} is ready to work!`}
                         </motion.span>
                       </p>
                     </motion.div>
+                    )}
                   </div>
                 </MotionConfig>
               )}
@@ -2621,25 +2686,43 @@ function OnboardingWizardInner({
                 </motion.div>
               )}
 
-              {/* Step 3: the name, and only the name. The role picker went with
-                  the question it was asking — a customer naming their first
-                  agent is describing what it does, and the placeholder carries
-                  the range of answers that fit. Hiring uses the neutral
-                  `general` role; a specific one can be set later, where there
-                  is context to choose it in. */}
+              {/* Step 3: choose whether this is a new August Works agent or a
+                  runtime that already exists. External runtimes continue in
+                  the full setup flow because their connection requirements are
+                  materially different from a managed agent's model setup. */}
               {step === 3 && (
                 <motion.div key="step-3" {...stepContentMotion} exit={stepHandoff ? stepContentMotion.exit : undefined} className="mx-auto flex w-full flex-col gap-9">
+                  <RadioCardGroup
+                    value={agentChoice}
+                    onValueChange={(value) => {
+                      setError(null);
+                      setAgentChoice(value as AgentOnboardingChoice);
+                    }}
+                    ariaLabel="Agent type"
+                    options={[
+                      {
+                        value: "august_works",
+                        title: "New August Works agent",
+                        description: "Create and manage a new agent in August Works.",
+                        icon: <AugustWorksMonogram />,
+                      },
+                      {
+                        value: "openclaw",
+                        title: "Existing OpenClaw agent",
+                        description: "Connect an agent that already runs in OpenClaw.",
+                        icon: <RuntimeChoiceMark runtime="openclaw" />,
+                      },
+                      {
+                        value: "hermes",
+                        title: "Existing Hermes agent",
+                        description: "Connect an agent that already runs in Hermes.",
+                        icon: <RuntimeChoiceMark runtime="hermes" />,
+                      },
+                    ]}
+                  />
+                  {agentChoice === "august_works" && (
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="onboarding-agent-name">Agent name</Label>
-                    {/*
-                      Filled, not outlined, and the column's full width — the
-                      same field the naming step before the hand-off draws.
-                      `bg-muted` is the design's field surface; the default
-                      Input is a hairline border over `bg-input/30`, which on
-                      this ground reads as an empty outline rather than a place
-                      to type. The border is kept but made transparent so the
-                      focus ring, which colours the border, still has one.
-                    */}
                     <Input
                       id="onboarding-agent-name"
                       className="h-(--sz-44px) rounded-lg border-transparent bg-muted shadow-none dark:bg-muted"
@@ -2655,10 +2738,11 @@ function OnboardingWizardInner({
                       autoFocus
                     />
                   </div>
+                  )}
                 </motion.div>
               )}
 
-              {/* Step 4: Connect a model — adapter + model + env check (capsule above) */}
+              {/* Step 4: Connect a runtime — adapter + model + env check (capsule above) */}
               {step === 4 && (
                 <motion.div key="step-4" {...stepContentMotion} exit={stepHandoff ? stepContentMotion.exit : undefined} className="space-y-8">
                   <div>
@@ -3080,10 +3164,14 @@ function OnboardingWizardInner({
                     // only means "the previous step" once nothing is running.
                     step === 4 && connectPhase !== "idle"
                       ? unwindConnectStep
+                      : step === 3 && agentChoice
+                        ? () => setAgentChoice("")
                       : canGoBackFromOnboardingStep({ currentStep: step, entryStep })
                         ? () => setStep(backStepFrom(step))
                         : undefined
                   }
+                  secondaryLabel={step === 3 ? "Skip for now" : undefined}
+                  onSecondary={step === 3 ? handleSkipAgentSetup : undefined}
                   // The prototype's cloud flow hires on this step and calls the
                   // action "Create". Here the model step sits between, so this
                   // one advances — which is exactly the distinction the
@@ -3091,6 +3179,8 @@ function OnboardingWizardInner({
                   primaryLabel={
                     step === 1
                       ? "Continue"
+                      : step === 3 && agentChoice !== "august_works"
+                        ? "Continue to setup"
                       : step === 5
                         ? "Get started"
                         : step === 4
@@ -3117,14 +3207,17 @@ function OnboardingWizardInner({
                     step === 1
                       ? !companyName.trim() || loading
                       : step === 3
-                        ? !agentName.trim()
+                        ? !agentChoice || (agentChoice === "august_works" && !agentName.trim())
                         : step === 4
                           ? connectCta.disabled || loading
                           : loading || launchStateIncomplete
                   }
                   onPrimary={() => {
                     if (step === 1) void handleCreateCompany();
-                    else if (step === 3) setStep(4);
+                    else if (step === 3) {
+                      if (agentChoice === "august_works") setStep(4);
+                      else handleExternalAgentSetup();
+                    }
                     // One button, two jobs — start the sign-in, or hire — and
                     // Cmd+Enter has to do the same thing. See
                     // `handleConnectStepPrimary`.

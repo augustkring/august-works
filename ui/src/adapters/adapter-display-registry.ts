@@ -81,7 +81,7 @@ const adapterDisplayMap: Record<string, AdapterDisplayInfo> = {
     recommended: true,
   },
   paperclip_runner: {
-    label: "Paperclip Runner",
+    label: "August Works Runner",
     description: "Experimental Rust runner with a Codex provider",
     icon: Cpu,
     experimental: true,
@@ -134,11 +134,8 @@ const adapterDisplayMap: Record<string, AdapterDisplayInfo> = {
   },
   openclaw_gateway: {
     label: "OpenClaw Gateway",
-    description: "External gateway adapter",
+    description: "Connect an existing OpenClaw agent through its gateway",
     icon: Bot,
-    comingSoon: true,
-    disabledLabel: "Invite external agents from the add-agent modal",
-    hideFromVisualSelection: true,
   },
   process: {
     label: "Process",

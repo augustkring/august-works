@@ -23,7 +23,21 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 function resolveThemeFromDocument(): Theme {
   if (typeof document === "undefined") return "dark";
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+  if (document.documentElement.classList.contains("dark")) return "dark";
+
+  // The app shell may set the class before React mounts. In standalone
+  // surfaces such as onboarding, there is no shell to do that work, so start
+  // from the viewer's persisted choice or system preference instead of always
+  // flashing light mode.
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "light" || stored === "dark") return stored;
+  } catch {
+    // A restricted browser can still safely fall through to its system theme.
+  }
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
 }
 
 function hasStoredTheme(): boolean {
