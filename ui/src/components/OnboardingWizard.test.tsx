@@ -318,7 +318,10 @@ async function pickFirstSource(
  * the label.
  */
 function isArcPrimary(text: string): boolean {
-  return text.startsWith("Next") || text.startsWith("Connect");
+  // The agent-type cards now include labels such as "Connect an OpenClaw
+  // agent". Match the footer action exactly so a test walk cannot accidentally
+  // select a different runtime instead of advancing the selected path.
+  return text === "Next" || text === "Connect";
 }
 
 describe("OnboardingWizard restore-gate (stale localStorage across accounts)", () => {
@@ -448,9 +451,9 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       await clickByText((t) => t.startsWith("Continue"));
 
       expect(mockCompaniesApi.create).toHaveBeenCalledWith({ name: "Initech" });
-      expect(document.body.textContent).toContain("Add an agent");
-      expect(document.body.textContent).toContain("OpenClaw agent");
-      expect(document.body.textContent).toContain("Hermes agent");
+      expect(document.body.textContent).toContain("Add your first agent");
+      expect(document.body.textContent).toContain("Create an August Works agent");
+      expect(document.body.textContent).toContain("Connect an existing agent");
       expect(document.body.textContent).toContain("Skip for now");
       expect(document.body.textContent).not.toContain("Define your mission");
       expect(document.body.textContent).not.toContain("Tell us about your team");
@@ -468,7 +471,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
       const { root } = await openStepOne();
       await clickByText((t) => t.startsWith("Continue"));
-      expect(document.body.textContent).toContain("Add an agent");
+      expect(document.body.textContent).toContain("Add your first agent");
       await chooseAugustWorksAgent();
 
       // Step 3 → 4 needs an agent name — the one field the step has now.
@@ -701,7 +704,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       await flushReact();
 
       expect(mockCompaniesApi.create).toHaveBeenCalledTimes(1);
-      expect(document.body.textContent).toContain("Add an agent");
+      expect(document.body.textContent).toContain("Add your first agent");
 
       await act(async () => root.unmount());
     });
@@ -736,7 +739,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
 
       await act(async () => resolveCreate({ id: "company-new", issuePrefix: "INI" }));
       await flushReact();
-      expect(document.body.textContent).toContain("Add an agent");
+      expect(document.body.textContent).toContain("Add your first agent");
 
       await act(async () => root.unmount());
     });
@@ -747,7 +750,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
       const { root } = await openStepOne();
       await clickByText((t) => t.startsWith("Continue"));
-      expect(document.body.textContent).toContain("Add an agent");
+      expect(document.body.textContent).toContain("Add your first agent");
 
       await clickByText((t) => t.includes("Back"));
 
@@ -808,20 +811,25 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       await clickByText((t) => isArcPrimary(t));
       expect(document.body.textContent).toContain("Connect a runtime");
 
-      // The credential mode is chosen *before* a source, because picking a
-      // source starts the sequence and the mode link fades out with the row —
-      // after that it is inert, and switching would mean changing the card out
-      // from under a running sign-in.
+      // Model source is the only first decision. API key then asks where the
+      // key came from; subscriptions start their own normal flow.
       if (useApiKeys) {
-        await clickByText((t) => t.startsWith("Use API key"));
+        await clickByText((t) => t === "API keyClaude · GPT · Gemini · Grok · Kimi · Other");
+        const provider = [...document.querySelectorAll('[aria-label="API key provider"] [role="radio"]')]
+          .find((option) => option.textContent?.startsWith("Claude"));
+        expect(provider, "Claude should be available as an API-key provider").toBeTruthy();
+        await act(async () => {
+          provider!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        await flushReact();
+      } else {
+        // Pick a source. The step arrives with nothing chosen — `adapterType`
+        // carries a value for the hire, but that is not the same as the customer
+        // having answered — so the input surface stays closed and the step will
+        // not advance until a tile is pressed. Every case below is about what
+        // happens *after* that choice, so the helper makes it.
+        await pickFirstSource(clickByText);
       }
-
-      // Pick a source. The step arrives with nothing chosen — `adapterType`
-      // carries a value for the hire, but that is not the same as the customer
-      // having answered — so the input surface stays closed and the step will
-      // not advance until a tile is pressed. Every case below is about what
-      // happens *after* that choice, so the helper makes it.
-      await pickFirstSource(clickByText);
 
       return { root, clickByText };
     }
@@ -901,7 +909,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
           id: "saved-org-key", companyId: "company-new", key, name: "Saved key", scope: "company", status: "active",
         }]);
       }
-      const { root, clickByText } = await openConnectStep();
+      const { root, clickByText } = await openConnectStep({ useApiKeys: true });
       const picker = document.body.querySelector('select[aria-label="Saved API key"]') as HTMLSelectElement;
       expect(picker.value).toBe(scope === "personal" ? "user:saved-key" : "company:saved-org-key");
       await clickByText((t) => isArcPrimary(t));
@@ -1006,13 +1014,38 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       await clickByText((t) => isArcPrimary(t));
       expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
 
-      // Switching the credential mode means backing out first: the mode link
-      // fades away with the row once a source is chosen, and is inert after
-      // that, so it cannot be used to change the card out from under a running
-      // sign-in. Back unwinds to the question, and the answer is given again.
+      // Back returns to the one source question. Pick the API-key route and
+      // then the provider again; a subscription/API mode toggle no longer
+      // exists in the flow.
       await clickByText((t) => t.startsWith("Back"));
-      await clickByText((t) => t.startsWith("Use API key"));
-      await pickFirstSource(clickByText);
+      // The visible row comes back before it becomes interactive: Back closes
+      // the card, gives its room back, and then settles the row. Retry the
+      // real interaction until the row accepts it instead of coupling this
+      // behavioural test to the exact motion-token durations.
+      let provider: Element | undefined;
+      for (let attempt = 0; attempt < 30 && !provider; attempt++) {
+        const apiKeySource = [...document.body.querySelectorAll("button")].find(
+          (button) => button.textContent?.trim() === "API keyClaude · GPT · Gemini · Grok · Kimi · Other",
+        );
+        if (apiKeySource) {
+          await act(async () => {
+            apiKeySource.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          });
+          await flushReact();
+          provider = [...document.querySelectorAll('[aria-label="API key provider"] [role="radio"]')]
+            .find((option) => option.textContent?.startsWith("Claude"));
+        }
+        if (!provider) {
+          await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          });
+        }
+      }
+      expect(provider, "Claude should be available as an API-key provider").toBeTruthy();
+      await act(async () => {
+        provider!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await flushReact();
 
       const field = document.body.querySelector(
         'input[type="password"]',
@@ -1356,7 +1389,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     // The draft is restored once companies settle: step 3 (Create your first
     // agent) with the saved agent name in the input, not the defaults
     // (step 0, "Chief of staff").
-    expect(document.body.textContent).toContain("Add an agent");
+    expect(document.body.textContent).toContain("Add your first agent");
     const nameInput = document.body.querySelector(
       "#onboarding-agent-name",
     ) as HTMLInputElement | null;
@@ -1423,7 +1456,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     // The post-create refetch must not unmount or reset the live wizard. The
     // new agent-type chooser is the stable first control on this step; the
     // name field appears only after the managed-agent choice is selected.
-    expect(document.body.textContent).toContain("Add an agent");
+    expect(document.body.textContent).toContain("Add your first agent");
     expect(document.body.textContent).toContain("August Works agent");
 
     await act(async () => {
@@ -2090,7 +2123,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       const labels = [...document.body.querySelectorAll("button[aria-checked]")].map(
         (tile) => tile.textContent ?? "",
       );
-      expect(labels.length, "both recommended sources should render").toBe(2);
+      expect(labels.length, "three model-source routes should render").toBe(3);
       expect(labels.some((l) => l.includes("Claude"))).toBe(true);
       expect(labels.some((l) => l.includes("OpenAI"))).toBe(true);
       // The negative half is the one that fails on the unwired version: the
@@ -3096,7 +3129,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       // That label is the provider name now, not the adapter type: this row
       // asks which provider you are signing in to, so it reads through
       // `MODEL_SOURCE_NAMES` rather than the display registry.
-      await clickByText((t) => t.startsWith("OpenAI"));
+      await clickByText((t) => t.includes("OpenAI"));
 
       expect(mockAgentsApi.getAdapterAuthSignal).toHaveBeenCalledWith(
         "company-new",

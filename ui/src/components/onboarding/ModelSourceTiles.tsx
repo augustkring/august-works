@@ -27,6 +27,8 @@ export type ModelSource = {
   label: string;
   /** The brand mark, rendered into a 30px square. */
   icon: ReactNode;
+  /** A fixed, source-specific credential hint (for example, "Gemini · Kimi"). */
+  credentialHint?: string;
 };
 
 const CREDENTIAL_TAG_LABEL: Record<CredentialMode, string> = {
@@ -123,7 +125,13 @@ function ModelSourceTile({
       <span className="text-(length:--text-compact) font-medium text-foreground">
         {source.label}
       </span>
-      <CredentialTag mode={mode} />
+      {source.credentialHint ? (
+        <span className="flex h-4 w-full items-center justify-center whitespace-nowrap text-(length:--text-micro) text-muted-foreground">
+          {source.credentialHint}
+        </span>
+      ) : (
+        <CredentialTag mode={mode} />
+      )}
     </button>
   );
 }

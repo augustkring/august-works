@@ -16,16 +16,18 @@ This plan is now **gateway-only**. Paperclip supports OpenClaw through `openclaw
 5. E2E pass criteria must include the 3 functional task cases.
 
 ## Current Product Flow
-1. Board/CEO opens company settings.
-2. Click `Generate OpenClaw Invite Prompt`.
-3. Paste generated prompt into OpenClaw chat.
-4. OpenClaw submits invite acceptance with:
+1. Board/CEO chooses **Connect an existing agent** during onboarding (or opens the external-agent invite from the agent screen).
+2. Paperclip creates one short-lived agent invitation and copies the connection request.
+3. The operator pastes that one request into the agent chat. The operator does not choose a runtime or enter gateway details.
+4. OpenClaw identifies itself and submits invite acceptance with:
 - `adapterType: "openclaw_gateway"`
 - `agentDefaultsPayload.url: ws://... | wss://...`
 - `agentDefaultsPayload.headers["x-openclaw-token"]`
 5. Board approves join request.
 6. OpenClaw claims API key and installs/uses Paperclip skill.
 7. First task run may trigger pairing approval once; after approval, pairing persists via stored device key.
+
+Manual gateway fields remain available only for repair and advanced configuration.
 
 ## Technical Contract (Gateway)
 `agentDefaultsPayload` minimum:

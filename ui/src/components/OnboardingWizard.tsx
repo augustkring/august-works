@@ -35,7 +35,6 @@ import {
   MAKE_ROOM,
   MAKE_ROOM_MS,
   SOURCE_COLLAPSE_MS,
-  SOURCE_LINK_EXIT,
 } from "./onboarding/onboarding-motion";
 
 /**
@@ -105,9 +104,11 @@ import {
   selectReusableOnboardingProject,
 } from "../lib/onboarding-launch";
 import { buildNewAgentRuntimeConfig } from "../lib/new-agent-runtime-config";
-import { DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX } from "@paperclipai/adapter-codex-local";
+import { DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX, DEFAULT_CODEX_LOCAL_MODEL } from "@paperclipai/adapter-codex-local";
+import { DEFAULT_CLAUDE_LOCAL_MODEL } from "@paperclipai/adapter-claude-local";
 import { DEFAULT_CURSOR_LOCAL_MODEL } from "@paperclipai/adapter-cursor-local";
 import { DEFAULT_GEMINI_LOCAL_MODEL } from "@paperclipai/adapter-gemini-local";
+import { DEFAULT_GROK_LOCAL_MODEL } from "@paperclipai/adapter-grok-local";
 import { DEFAULT_KIMI_LOCAL_MODEL } from "@paperclipai/adapter-kimi-local";
 import { DEFAULT_OPENCODE_LOCAL_MODEL, isValidOpenCodeModelId } from "@paperclipai/adapter-opencode-local";
 import {
@@ -129,9 +130,9 @@ import {
 } from "./onboarding/Stepper";
 import { AgentPreview } from "./onboarding/AgentPreview";
 import { ModelSourceTiles, type CredentialMode } from "./onboarding/ModelSourceTiles";
-import { CredentialModeLink } from "./onboarding/CredentialModeLink";
 import { FooterNav, type FooterPrimaryIcon } from "./onboarding/FooterNav";
 import { OnboardingHeading } from "./onboarding/OnboardingPrimitives";
+import { ExternalAgentInviteDialog } from "./new-agent/ExternalAgentInviteDialog";
 import { DEFAULT_AGENT_ROLE } from "../lib/onboarding-agent-role";
 import { capsuleHeroMotion, capsuleRoomEnter, capsuleRoomExit, heroRoomArrival, heroRoomMotion, ledeMotion, stepContentMotion, titleSwapMotion } from "./onboarding/onboarding-motion";
 import { Badge } from "@/components/ui/badge";
@@ -141,34 +142,80 @@ import {
   Check,
   Loader2,
   ChevronDown,
+  KeyRound,
 } from "lucide-react";
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5;
 // Plugin/external adapters use arbitrary type ids, so this mirrors the master
 // wizard's registry-driven approach rather than a fixed union.
 type AdapterType = string;
-type AgentOnboardingChoice = "" | "august_works" | "openclaw" | "hermes";
+type AgentOnboardingChoice = "" | "august_works" | "external";
+
+const API_KEY_SOURCE_ID = "api_key";
+const OTHER_OPENAI_COMPATIBLE_PROVIDER_ID = "other_openai_compatible";
+const API_KEY_PROVIDER_TYPES = new Set([
+  "claude_local",
+  "codex_local",
+  "gemini_local",
+  "grok_local",
+  "kimi_local",
+]);
+
+const API_KEY_PROVIDER_LABELS: Record<string, string> = {
+  claude_local: "Claude",
+  codex_local: "OpenAI / GPT",
+  gemini_local: "Gemini",
+  grok_local: "Grok",
+  kimi_local: "Kimi",
+  [OTHER_OPENAI_COMPATIBLE_PROVIDER_ID]: "Other",
+};
+
+/**
+ * Key prefixes are optional convenience hints, never an authentication check.
+ * OpenAI-compatible providers intentionally share bearer-token conventions, so
+ * unknown `sk-…` keys must remain unclassified until the person chooses.
+ */
+function inferApiKeyProvider(value: string): string | null {
+  const key = value.trim();
+  if (key.startsWith("sk-ant-")) return "claude_local";
+  if (key.startsWith("xai-")) return "grok_local";
+  if (key.startsWith("AIza")) return "gemini_local";
+  return null;
+}
+
+function isHttpsEndpoint(value: string): boolean {
+  try {
+    return new URL(value.trim()).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 function AugustWorksMonogram() {
   return (
-    <span
-      className="inline-flex size-5 items-center justify-center rounded-md bg-foreground font-mono text-(length:--text-micro) font-bold leading-none tracking-tighter text-background"
-      aria-hidden="true"
-    >
-      AW
+    <span className="inline-flex size-5" aria-hidden="true">
+      <img
+        src="/brands/august-works/monogram-black.svg"
+        alt=""
+        className="size-full dark:hidden"
+      />
+      <img
+        src="/brands/august-works/monogram-white.svg"
+        alt=""
+        className="hidden size-full dark:block"
+      />
     </span>
   );
 }
 
-function RuntimeChoiceMark({ runtime }: { runtime: "openclaw" | "hermes" }) {
-  if (runtime === "openclaw") {
-    return <img src="/brands/adapters/openclaw.svg" alt="" className="size-5 object-contain" />;
-  }
+/** OpenClaw and Hermes are the supported self-connection routes, not AW agents. */
+function ExternalAgentConnectionMarks() {
   return (
-    <>
-      <img src="/brands/adapters/hermesagent.svg" alt="" className="size-5 object-contain dark:hidden" />
-      <img src="/brands/adapters/hermesagent-dark.svg" alt="" className="hidden size-5 object-contain dark:block" />
-    </>
+    <span className="inline-flex h-5 items-center gap-1.5" aria-hidden="true">
+      <img src="/brands/adapters/openclaw.svg" alt="" className="h-5 w-5 object-contain" />
+      <img src="/brands/adapters/hermesagent.svg" alt="" className="h-5 w-5 object-contain dark:hidden" />
+      <img src="/brands/adapters/hermesagent-dark.svg" alt="" className="hidden h-5 w-5 object-contain dark:block" />
+    </span>
   );
 }
 
@@ -276,6 +323,9 @@ const MODEL_SOURCE_INLINE_MARKS: Record<string, ComponentType<{ className?: stri
 const API_KEY_ENV_KEYS: Record<string, string> = {
   claude_local: ANTHROPIC_API_KEY_ENV_KEY,
   codex_local: "OPENAI_API_KEY",
+  gemini_local: "GEMINI_API_KEY",
+  grok_local: "XAI_API_KEY",
+  kimi_local: "KIMI_MODEL_API_KEY",
 };
 
 function apiKeyEnvKeyFor(adapterType: string): string {
@@ -592,6 +642,7 @@ function OnboardingWizardInner({
   useEffect(() => { lastStep.current = step; }, [step]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [externalInviteOpen, setExternalInviteOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
 
@@ -622,11 +673,13 @@ function OnboardingWizardInner({
     const savedChoice = saved?.agentChoice;
     if (
       savedChoice === "august_works" ||
-      savedChoice === "openclaw" ||
-      savedChoice === "hermes"
+      savedChoice === "external"
     ) {
       return savedChoice;
     }
+    // Older drafts asked people to identify their runtime before we could
+    // connect it. The new path lets the agent identify its own runtime.
+    if (savedChoice === "openclaw" || savedChoice === "hermes") return "external";
     return saved?.agentName ? "august_works" : "";
   });
   const [adapterType, setAdapterType] = useState<AdapterType>(() =>
@@ -655,6 +708,14 @@ function OnboardingWizardInner({
    * whether the row has been *answered* on this visit.
    */
   const [sourcePicked, setSourcePicked] = useState(false);
+  // "API key" is a primary source in its own right. Provider selection is
+  // progressive disclosure: it appears only after the person chooses this
+  // route, and automatic recognition remains a reversible suggestion.
+  const [apiKeySourceSelected, setApiKeySourceSelected] = useState(false);
+  const [apiKeyProviderPicked, setApiKeyProviderPicked] = useState(false);
+  const [apiKeyProviderId, setApiKeyProviderId] = useState<string | null>(null);
+  const [otherApiBaseUrl, setOtherApiBaseUrl] = useState("");
+  const [otherApiModel, setOtherApiModel] = useState("");
   const savedNativeRunnerDraft = saved?.adapterType === "paperclip_runner";
   const [cwd, setCwd] = useState((saved?.cwd as string) ?? "");
   // Native drafts may carry provider-specific configuration that is invalid
@@ -720,6 +781,7 @@ function OnboardingWizardInner({
    * `localStorage`, and a provider key does not belong there.
    */
   const [apiKey, setApiKey] = useState("");
+  const isOtherOpenAiCompatible = apiKeyProviderId === OTHER_OPENAI_COMPATIBLE_PROVIDER_ID;
   // The owner's stored Claude subscription login, read right before the hire
   // (see handleGiveHeartbeat). Onboarding applies it with no extra control,
   // so nothing else reads this state yet.
@@ -743,7 +805,12 @@ function OnboardingWizardInner({
   const selectedApiKeyId = selectedSavedKey?.companyId === createdCompanyId && selectedSavedKey?.envKey === apiKeyEnvKeyFor(adapterType)
     ? selectedSavedKey.id
     : savedKeys.options[0]?.id;
-  const selectedApiKey = savedKeys.options.find((option) => option.id === selectedApiKeyId);
+  // A generic provider is deliberately never allowed to reuse an OpenAI key
+  // merely because both routes happen to use the same environment-variable
+  // name. It must be pasted explicitly for that endpoint.
+  const selectedApiKey = isOtherOpenAiCompatible
+    ? undefined
+    : savedKeys.options.find((option) => option.id === selectedApiKeyId);
   const credentialMode = credentialModeChoice ?? (
     (savedKeys.subscriptions.length > 0 || (adapterType === "claude_local" && savedKeys.storedLogin.data))
       ? "subscription" : savedKeys.options.length || adapterType === "opencode_local" ? "api" : "subscription"
@@ -797,7 +864,7 @@ function OnboardingWizardInner({
    */
   const apiKeySecretRef = useRef<{ key: string; companyId: string; envKey: string; binding?: Awaited<ReturnType<typeof storeProviderApiKey>>["binding"]; aiConnection?: AiConnectionBinding } | null>(null);
   const managedSubscriptionRef = useRef<{ companyId: string; binding: AiConnectionBinding } | null>(null);
-  const managedProvider = aiProviderForAdapter(adapterType);
+  const managedProvider = isOtherOpenAiCompatible ? null : aiProviderForAdapter(adapterType);
   function managedBindingForStep(): AiConnectionBinding | undefined {
     if (credentialMode === "api") return selectedApiKey?.aiConnection ?? (
       !selectedApiKey && apiKeySecretRef.current?.companyId === createdCompanyId && apiKeySecretRef.current.envKey === apiKeyEnvKeyFor(adapterType)
@@ -1184,13 +1251,46 @@ function OnboardingWizardInner({
     };
   }, [disabledTypes]);
 
+  // The first five providers have first-class, testable adapters. "Other" is
+  // constrained to an HTTPS OpenAI-compatible Responses endpoint and runs via
+  // the Codex adapter's existing custom-provider configuration.
+  const apiKeyProviderAdapters = useMemo(
+    () => [...recommendedAdapters, ...moreAdapters]
+      .filter((adapter) => API_KEY_PROVIDER_TYPES.has(adapter.type)),
+    [recommendedAdapters, moreAdapters],
+  );
+
+  const selectApiKeyProvider = (providerId: string) => {
+    const adapter = providerId === OTHER_OPENAI_COMPATIBLE_PROVIDER_ID
+      ? "codex_local"
+      : providerId;
+    setApiKeyProviderId(providerId);
+    setApiKeyProviderPicked(true);
+    setAdapterType(adapter);
+    setSelectedSavedKey(null);
+    if (providerId === "claude_local") setModel(DEFAULT_CLAUDE_LOCAL_MODEL);
+    else if (providerId === "codex_local") setModel(DEFAULT_CODEX_LOCAL_MODEL);
+    else if (providerId === "gemini_local") setModel(DEFAULT_GEMINI_LOCAL_MODEL);
+    else if (providerId === "grok_local") setModel(DEFAULT_GROK_LOCAL_MODEL);
+    else if (providerId === "kimi_local") setModel(DEFAULT_KIMI_LOCAL_MODEL);
+    else setModel(otherApiModel.trim());
+    setConnectPhase((phase) => phase === "idle" ? "collapsing" : phase);
+  };
+
   /**
    * A source chosen from the visible row. Read off the row rather than off
    * `adapterType` alone, because a restored draft can name an adapter this step
    * no longer offers — a selection the customer cannot see.
    */
-  const sourceSelected =
-    sourcePicked && recommendedAdapters.some((opt) => opt.type === adapterType);
+  const sourceSelected = sourcePicked && (
+    apiKeySourceSelected
+      ? true
+      : recommendedAdapters.some((adapter) => adapter.type === adapterType)
+  );
+
+  const otherProviderReady = !isOtherOpenAiCompatible || (
+    isHttpsEndpoint(otherApiBaseUrl) && otherApiModel.trim().length > 0
+  );
 
   /**
    * Whether the connect step may advance.
@@ -1209,7 +1309,11 @@ function OnboardingWizardInner({
    * Anything that gates this step belongs in here, so the next one is added
    * once rather than twice.
    */
-  const connectStepReady = sourceSelected && !adapterEnvLoading && !savedKeys.loading;
+  const connectStepReady = sourceSelected &&
+    (!apiKeySourceSelected || apiKeyProviderPicked) &&
+    otherProviderReady &&
+    !adapterEnvLoading &&
+    !savedKeys.loading;
 
   /**
    * Whether this step has a sign-in to do before it can hire.
@@ -1284,13 +1388,6 @@ function OnboardingWizardInner({
    * the step was visited.
    */
   const connectCardMounted = connectCardSpace || connectPhase === "unwindRoom";
-  const connectLinkSpace =
-    connectPhase === "idle" ||
-    connectPhase === "collapsing" ||
-    connectPhase === "unwindRoom" ||
-    connectPhase === "unwindRow";
-  const connectLinkVisible = connectPhase === "idle" || connectPhase === "unwindRow";
-
   /**
    * When "Connecting" started, and whether the login behind it has finished.
    *
@@ -1576,7 +1673,7 @@ function OnboardingWizardInner({
     setAdapterEnvResult(null);
     adapterEnvResultAppliedStoredLoginRef.current = false;
     setAdapterEnvError(null);
-  }, [step, adapterType, model, command, args, url, credentialMode, apiKey, selectedSavedKey, selectedApiKey?.id, savedSubscription?.id]);
+  }, [step, adapterType, model, command, args, url, credentialMode, apiKey, apiKeyProviderId, otherApiBaseUrl, otherApiModel, selectedSavedKey, selectedApiKey?.id, savedSubscription?.id]);
 
   /**
    * Leaving the step puts the row back to a question.
@@ -1663,6 +1760,8 @@ function OnboardingWizardInner({
     setAgentAppearance(randomAgentAppearance());
     setAgentRole(DEFAULT_AGENT_ROLE);
     setAgentChoice("");
+    setApiKeySourceSelected(false);
+    setApiKeyProviderPicked(false);
     setAdapterType("claude_local");
     setModel("");
     setCommand("");
@@ -1910,6 +2009,31 @@ function OnboardingWizardInner({
           ? { ...(config.env as Record<string, unknown>) }
           : {};
       env[apiKeyEnvKeyFor(adapterType)] = selectedApiKey?.binding ?? apiKeySecretRef.current?.binding;
+      // Kimi's API mode requires both the credential and the model name in the
+      // run environment. The UI supplies a safe default, but the value still
+      // has to be explicit beside the secret reference for a remote run.
+      if (adapterType === "kimi_local") {
+        env.KIMI_MODEL_NAME = {
+          type: "plain",
+          value: model || DEFAULT_KIMI_LOCAL_MODEL,
+        };
+      }
+      if (isOtherOpenAiCompatible) {
+        env.PAPERCLIP_CODEX_PROVIDERS = {
+          type: "plain",
+          value: JSON.stringify({
+            providers: {
+              custom: {
+                name: "Custom OpenAI-compatible provider",
+                base_url: otherApiBaseUrl.trim(),
+                env_key: "OPENAI_API_KEY",
+                wire_api: "responses",
+              },
+            },
+            model_provider: "custom",
+          }),
+        };
+      }
       config.env = env;
     }
     if (credentialMode === "subscription" && savedSubscription?.binding) {
@@ -2056,20 +2180,9 @@ function OnboardingWizardInner({
     navigate("/dashboard");
   }
 
-  function handleExternalAgentSetup() {
-    const adapterType =
-      agentChoice === "openclaw"
-        ? "openclaw_gateway"
-        : agentChoice === "hermes"
-          ? "hermes_gateway"
-          : null;
-    if (!adapterType) return;
-
-    onboardingDraftStorage.clear();
-    reset();
-    closeOnboarding();
-    setRouteDismissed(true);
-    navigate(`/agents/new?${new URLSearchParams({ adapterType })}`);
+  function handleExternalAgentInviteDone() {
+    setExternalInviteOpen(false);
+    handleSkipAgentSetup();
   }
 
 
@@ -2375,8 +2488,8 @@ function OnboardingWizardInner({
       if (loading) return;
       if (step === 1 && companyName.trim()) void handleCreateCompany();
       else if (step === 3 && agentChoice === "august_works" && agentName.trim()) setStep(4);
-      else if (step === 3 && (agentChoice === "openclaw" || agentChoice === "hermes"))
-        handleExternalAgentSetup();
+      else if (step === 3 && agentChoice === "external")
+        setExternalInviteOpen(true);
       // `connectStepReady`, the same predicate the step's button uses. Spelling
       // the condition out here again is what let this path hire against a
       // source the tile row had never shown, after the button was gated and
@@ -2440,6 +2553,7 @@ function OnboardingWizardInner({
   const visibleError = error ?? (launchStateIncomplete ? INCOMPLETE_ONBOARDING_STATE_MESSAGE : null);
 
   return (
+    <>
     <Dialog
       open={effectiveOnboardingOpen}
       onOpenChange={(open) => {
@@ -2613,7 +2727,7 @@ function OnboardingWizardInner({
                           {step === 1
                             ? "What is the name of your organization?"
                             : step === 3
-                              ? "Add an agent"
+                              ? "Add your first agent"
                               : step === 4
                                 ? "Connect a runtime"
                                 : "Let's get started..."}
@@ -2686,10 +2800,10 @@ function OnboardingWizardInner({
                 </motion.div>
               )}
 
-              {/* Step 3: choose whether this is a new August Works agent or a
-                  runtime that already exists. External runtimes continue in
-                  the full setup flow because their connection requirements are
-                  materially different from a managed agent's model setup. */}
+              {/* Step 3: either create a managed August Works agent or ask an
+                  existing agent to connect itself. Runtime details belong to
+                  the agent: making the customer identify and configure an
+                  OpenClaw or Hermes gateway here only adds failure-prone work. */}
               {step === 3 && (
                 <motion.div key="step-3" {...stepContentMotion} exit={stepHandoff ? stepContentMotion.exit : undefined} className="mx-auto flex w-full flex-col gap-9">
                   <RadioCardGroup
@@ -2702,21 +2816,15 @@ function OnboardingWizardInner({
                     options={[
                       {
                         value: "august_works",
-                        title: "New August Works agent",
-                        description: "Create and manage a new agent in August Works.",
+                        title: "Create an August Works agent",
+                        description: "Set up a new agent and connect its model.",
                         icon: <AugustWorksMonogram />,
                       },
                       {
-                        value: "openclaw",
-                        title: "Existing OpenClaw agent",
-                        description: "Connect an agent that already runs in OpenClaw.",
-                        icon: <RuntimeChoiceMark runtime="openclaw" />,
-                      },
-                      {
-                        value: "hermes",
-                        title: "Existing Hermes agent",
-                        description: "Connect an agent that already runs in Hermes.",
-                        icon: <RuntimeChoiceMark runtime="hermes" />,
+                        value: "external",
+                        title: "Connect an existing agent",
+                        description: "Send one request. Your agent handles the secure connection.",
+                        icon: <ExternalAgentConnectionMarks />,
                       },
                     ]}
                   />
@@ -2746,26 +2854,36 @@ function OnboardingWizardInner({
               {step === 4 && (
                 <motion.div key="step-4" {...stepContentMotion} exit={stepHandoff ? stepContentMotion.exit : undefined} className="space-y-8">
                   <div>
-                    {/* Sources come from `recommendedAdapters`, not a list
-                        written here — that filter is `recommended` in the
-                        display registry, so a third tile appears the day
-                        someone marks one rather than the day someone
-                        remembers to edit this file.
-
-                        Picking one starts the sign-in now. The row is the
-                        question, and answering it is what opens the card. */}
+                    {/* One first decision: an account subscription or a key.
+                        Provider choice appears only after API key is chosen. */}
                     <ModelSourceTiles
                       label="Model source"
-                      sources={recommendedAdapters.map((opt) => ({
-                        id: opt.type,
-                        label: CONNECT_SOURCE_NAMES[opt.type] ?? opt.label,
-                        icon: <ModelSourceMark type={opt.type} Fallback={opt.icon} />,
-                      }))}
-                      mode={credentialMode}
+                      sources={[
+                        ...(recommendedAdapters.some((adapter) => adapter.type === "claude_local") ? [{
+                          id: "claude_local",
+                          label: "Claude subscription",
+                          icon: <ModelSourceMark type="claude_local" Fallback={getAdapterDisplay("claude_local").icon} />,
+                        }] : []),
+                        ...(recommendedAdapters.some((adapter) => adapter.type === "codex_local") ? [{
+                          id: "codex_local",
+                          label: "Codex subscription (OpenAI)",
+                          icon: <ModelSourceMark type="codex_local" Fallback={getAdapterDisplay("codex_local").icon} />,
+                        }] : []),
+                        {
+                          id: API_KEY_SOURCE_ID,
+                          label: "API key",
+                          icon: <KeyRound className="size-5" aria-hidden="true" />,
+                          credentialHint: "Claude · GPT · Gemini · Grok · Kimi · Other",
+                        },
+                      ]}
+                      mode="subscription"
                       selectedId={
-                        sourcePicked &&
-                        recommendedAdapters.some((opt) => opt.type === adapterType)
-                          ? adapterType
+                        sourcePicked
+                          ? apiKeySourceSelected
+                            ? API_KEY_SOURCE_ID
+                            : adapterType === "claude_local" || adapterType === "codex_local"
+                              ? adapterType
+                              : null
                           : null
                       }
                       collapsed={connectCollapsed}
@@ -2773,42 +2891,56 @@ function OnboardingWizardInner({
                       onSelect={(id) => {
                         if (connectPhase !== "idle") return;
                         autoConnectStartedRef.current = false;
+                        setError(null);
+                        if (id === API_KEY_SOURCE_ID) {
+                          setApiKeySourceSelected(true);
+                          setApiKeyProviderPicked(false);
+                          setApiKeyProviderId(null);
+                          setApiKey("");
+                          setCredentialMode("api");
+                          setSourcePicked(true);
+                          setConnectPhase("collapsing");
+                          return;
+                        }
+                        setApiKeySourceSelected(false);
+                        setApiKeyProviderPicked(false);
+                        setApiKeyProviderId(null);
                         setSourcePicked(true);
                         setAdapterType(id);
-                        if (id === "opencode_local") setModel(DEFAULT_OPENCODE_LOCAL_MODEL);
-                        else if (id !== "codex_local") setModel("");
+                        setCredentialMode("subscription");
+                        setModel(id === "claude_local" ? DEFAULT_CLAUDE_LOCAL_MODEL : DEFAULT_CODEX_LOCAL_MODEL);
                         setConnectPhase("collapsing");
                       }}
                     />
 
-                    {/* Fades on the first beat but keeps its space until the
-                        second, so pressing a tile moves nothing vertically.
-                        Once a sign-in is running there is no switching to keys
-                        without abandoning it, so it goes rather than sitting
-                        there inviting a press that cannot be honoured. */}
-                    <motion.div
-                      className="overflow-hidden"
-                      /*
-                        Inert once it has faded. It is clipped to nothing rather
-                        than unmounted, so without this it stays clickable and
-                        focusable — a control that has stopped applying, still
-                        answering to a keyboard and still able to change the
-                        credential mode out from under a running sign-in.
-                      */
-                      inert={!connectLinkVisible}
-                      initial={false}
-                      animate={{
-                        opacity: connectLinkVisible ? 1 : 0,
-                        height: connectLinkSpace ? "auto" : 0,
-                      }}
-                      transition={{ opacity: SOURCE_LINK_EXIT, height: MAKE_ROOM }}
-                    >
-                      <div className="-ml-3 mt-1">
-                        <CredentialModeLink mode={credentialMode} onChange={setCredentialMode} />
-                        {savedKeys.options.length > 0 && <p className="px-3 text-sm text-muted-foreground">{savedKeys.options.length} saved API {savedKeys.options.length === 1 ? "key available" : "keys available"}.</p>}
-                        {credentialMode === "subscription" && authSignalStatus === "present" && <p className="px-3 text-sm text-muted-foreground">An existing provider connection is available.</p>}
+                    {apiKeySourceSelected && (
+                      <div className="mt-5 space-y-2">
+                        <Label>Where is this key from?</Label>
+                        <RadioCardGroup
+                          value={apiKeyProviderPicked ? apiKeyProviderId ?? "" : ""}
+                          onValueChange={(value) => {
+                            if (connectPhase === "connecting" || connectPhase === "loading" || connectPhase === "waiting") return;
+                            selectApiKeyProvider(value);
+                          }}
+                          ariaLabel="API key provider"
+                          className="sm:grid-cols-2"
+                          options={[
+                            ...apiKeyProviderAdapters.map((opt) => ({
+                            value: opt.type,
+                            title: API_KEY_PROVIDER_LABELS[opt.type] ?? CONNECT_SOURCE_NAMES[opt.type] ?? opt.label,
+                            description: "Connect with an API key.",
+                            icon: <ModelSourceMark type={opt.type} Fallback={opt.icon} />,
+                            })),
+                            {
+                              value: OTHER_OPENAI_COMPATIBLE_PROVIDER_ID,
+                              title: "Other",
+                              description: "OpenAI-compatible Responses API.",
+                              icon: <KeyRound className="size-4" aria-hidden="true" />,
+                            },
+                          ]}
+                        />
                       </div>
-                    </motion.div>
+                    )}
                   </div>
 
                   {/*
@@ -2854,14 +2986,14 @@ function OnboardingWizardInner({
                       </p>
                     ) : credentialMode === "api" ? (
                       <OnboardingLoginCard
-                        instruction={savedKeys.options.length ? "Choose a saved API key or enter a new one" : `Provide your ${
-                          CONNECT_SOURCE_NAMES[adapterType] ?? adapterType
-                        } API key to connect`}
+                        instruction={apiKeyProviderPicked
+                          ? `Provide your ${API_KEY_PROVIDER_LABELS[apiKeyProviderId ?? ""] ?? CONNECT_SOURCE_NAMES[adapterType] ?? adapterType} API key to connect`
+                          : "Paste an API key. August Works will recognise it when it can; otherwise choose its provider."}
                       >
-                        <SavedProviderKeySelect {...savedKeys} disabled={loading || adapterEnvLoading} value={selectedApiKey?.id ?? ""} onChange={(id) => {
+                        {apiKeyProviderPicked && !isOtherOpenAiCompatible && <SavedProviderKeySelect {...savedKeys} disabled={loading || adapterEnvLoading} value={selectedApiKey?.id ?? ""} onChange={(id) => {
                           setSelectedSavedKey(createdCompanyId ? { companyId: createdCompanyId, envKey: apiKeyEnvKeyFor(adapterType), id } : null);
                           setApiKey("");
-                        }} />
+                        }} />}
                         {!selectedApiKey && <OnboardingCardField
                           label="API key"
                           placeholder="Enter API key here"
@@ -2874,9 +3006,45 @@ function OnboardingWizardInner({
                           onChange={(value) => {
                             setSelectedSavedKey(createdCompanyId ? { companyId: createdCompanyId, envKey: apiKeyEnvKeyFor(adapterType), id: "" } : null);
                             setApiKey(value);
+                            const inferredProvider = !apiKeyProviderPicked ? inferApiKeyProvider(value) : null;
+                            if (inferredProvider) selectApiKeyProvider(inferredProvider);
                           }}
                           onSubmit={() => handleConnectStepPrimary()}
                         />}
+                        {isOtherOpenAiCompatible && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="onboarding-other-api-base-url">API base URL</Label>
+                              <Input
+                                id="onboarding-other-api-base-url"
+                                type="url"
+                                inputMode="url"
+                                autoComplete="url"
+                                placeholder="https://api.example.com/v1"
+                                value={otherApiBaseUrl}
+                                onChange={(event) => setOtherApiBaseUrl(event.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="onboarding-other-api-model">Model</Label>
+                              <Input
+                                id="onboarding-other-api-model"
+                                autoComplete="off"
+                                placeholder="provider/model"
+                                value={otherApiModel}
+                                onChange={(event) => {
+                                  setOtherApiModel(event.target.value);
+                                  setModel(event.target.value);
+                                }}
+                              />
+                            </div>
+                            {!otherProviderReady && (
+                              <p role="alert" className="sm:col-span-2 text-sm text-destructive">
+                                Enter an HTTPS API base URL and model for this OpenAI-compatible provider.
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </OnboardingLoginCard>
                     ) : connectStepNeedsLogin &&
                       createdCompanyId &&
@@ -3179,8 +3347,8 @@ function OnboardingWizardInner({
                   primaryLabel={
                     step === 1
                       ? "Continue"
-                      : step === 3 && agentChoice !== "august_works"
-                        ? "Continue to setup"
+                      : step === 3 && agentChoice === "external"
+                        ? "Prepare connection request"
                       : step === 5
                         ? "Get started"
                         : step === 4
@@ -3216,7 +3384,7 @@ function OnboardingWizardInner({
                     if (step === 1) void handleCreateCompany();
                     else if (step === 3) {
                       if (agentChoice === "august_works") setStep(4);
-                      else handleExternalAgentSetup();
+                      else setExternalInviteOpen(true);
                     }
                     // One button, two jobs — start the sign-in, or hire — and
                     // Cmd+Enter has to do the same thing. See
@@ -3231,6 +3399,16 @@ function OnboardingWizardInner({
         </div>
       </DialogPortal>
     </Dialog>
+    {externalInviteOpen && createdCompanyId && (
+      <ExternalAgentInviteDialog
+        companyId={createdCompanyId}
+        autoCreate
+        onBack={() => setExternalInviteOpen(false)}
+        onClose={() => setExternalInviteOpen(false)}
+        onComplete={handleExternalAgentInviteDone}
+      />
+    )}
+    </>
   );
 }
 

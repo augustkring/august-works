@@ -120,6 +120,21 @@ function respond(pathname: string, method: string): Response {
 
   if (pathname.includes("/config-schema")) return json({ fields: [] });
 
+  // The existing-agent path creates an agent-only invite, then reads this
+  // compact manifest to make its one-time instruction. Keep both sides of
+  // that contract in the preview so the real dialog can be walked end to end.
+  if (pathname.endsWith("/invites") && method === "POST")
+    return json({
+      token: "invite-preview-token",
+      onboardingTextPath: "/api/invites/invite-preview-token/onboarding.txt",
+    });
+  if (pathname.includes("/invites/") && pathname.endsWith("/onboarding"))
+    return json({
+      onboarding: {
+        connectivity: { connectionCandidates: [window.location.origin] },
+      },
+    });
+
   if (pathname.endsWith("/adapters"))
     return json(
       [
@@ -157,6 +172,13 @@ function respond(pathname: string, method: string): Response {
     pathname.includes("/user-secrets")
   )
     return json([]);
+
+  // The active-session lookup is deliberately empty in this isolated preview.
+  // It must return 404 before the generic session mocks below: otherwise a
+  // pending response is mistaken for a conflicting existing sign-in.
+  if (pathname.endsWith("/setup-token-login-sessions/active") || pathname.endsWith("/login-sessions/active")) {
+    return json({}, 404);
+  }
 
   // The browser-code login: a session, then a prompt once the latency passes.
   if (has("/setup-token-login-sessions")) {

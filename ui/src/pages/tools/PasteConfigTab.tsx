@@ -137,7 +137,7 @@ export function PasteConfigTab({ companyId }: { companyId: string }) {
       navigateTopLevel(target.url);
     } catch (error) {
       setOAuthPhase("error");
-      setOAuthError(error instanceof Error ? error.message : "Paperclip couldn’t start secure sign-in. Try again.");
+      setOAuthError(error instanceof Error ? error.message : "August Works couldn’t start secure sign-in. Try again.");
     }
   };
 
@@ -149,7 +149,7 @@ export function PasteConfigTab({ companyId }: { companyId: string }) {
       setOAuthError(
         error instanceof Error
           ? error.message
-          : "Paperclip couldn’t start secure sign-in. Try again.",
+          : "August Works couldn’t start secure sign-in. Try again.",
       );
     },
   });

@@ -41,6 +41,10 @@ const mockAgentsApi = vi.hoisted(() => ({
   getClaudeOAuthTokenStatus: vi.fn(),
 }));
 const mockCompaniesApi = vi.hoisted(() => ({ create: vi.fn() }));
+const mockAccessApi = vi.hoisted(() => ({
+  createCompanyInvite: vi.fn(),
+  getInviteOnboarding: vi.fn(),
+}));
 // The hire path resolves the Test environment before it probes: it reads the
 // environment list, the instance settings, and the experimental settings. The
 // test stubs these so the resolution settles on the local default, the same as
@@ -71,6 +75,7 @@ const companyState = vi.hoisted(() => ({
 vi.mock("../api/goals", () => ({ goalsApi: mockGoalsApi }));
 vi.mock("@/api/adapters", () => ({ adaptersApi: mockAdaptersApi }));
 vi.mock("../api/companies", () => ({ companiesApi: mockCompaniesApi }));
+vi.mock("../api/access", () => ({ accessApi: mockAccessApi }));
 vi.mock("../api/agents", () => ({ agentsApi: mockAgentsApi }));
 vi.mock("../api/approvals", () => ({ approvalsApi: { create: vi.fn() } }));
 vi.mock("../api/issues", () => ({ issuesApi: { create: vi.fn() } }));
@@ -102,11 +107,10 @@ const { OnboardingWizard } = await import("./OnboardingWizard");
 function currentStep(): "agent" | "closed" | "other" {
   const body = document.body;
   if (!body.querySelector("[role='dialog'], .fixed.inset-0")) return "closed";
-  // Keyed on the name field, which is the agent step's only control now that
-  // the role picker is gone.
+  // Keyed on controls that only exist on the agent step.
   if (
     body.querySelector("#onboarding-agent-name") ||
-    body.textContent?.includes("OpenClaw agent")
+    body.textContent?.includes("Connect an existing agent")
   ) return "agent";
   return "other";
 }
@@ -371,6 +375,11 @@ describe("OnboardingWizard — which step it lands on", () => {
     // then `/onboarding` left the wizard showing "create an organization" while
     // still holding it — and the next confirmation wrote into the old company.
     mockCompaniesApi.create.mockResolvedValue({ id: "company-1", issuePrefix: "PC1" });
+    mockAccessApi.createCompanyInvite.mockResolvedValue({
+      token: "invite-token",
+      onboardingTextPath: "/api/invites/invite-token/onboarding.txt",
+    });
+    mockAccessApi.getInviteOnboarding.mockRejectedValue(new Error("Not found"));
     mockGoalsApi.create.mockResolvedValue({ id: "goal-company-1" });
     routerState.pathname = "/onboarding";
     await render();
@@ -580,7 +589,7 @@ describe("OnboardingWizard — which step it lands on", () => {
     function stepCta(): HTMLButtonElement {
       const cta = [...document.body.querySelectorAll("button")].find((b) => {
         const text = b.textContent?.trim();
-        return text === "Next" || text === "Connect" || text === "Continue to setup";
+        return text === "Next" || text === "Connect" || text === "Prepare connection request";
       });
       expect(cta, "the step should render its forward button").toBeTruthy();
       return cta as HTMLButtonElement;
@@ -616,32 +625,29 @@ describe("OnboardingWizard — which step it lands on", () => {
       expect(payload.name).toBe("Ada");
     });
 
-    it("continues OpenClaw setup in the dedicated agent flow", async () => {
+    it("prepares one self-connection request for an existing agent", async () => {
       await openOnAgentStep();
       const option = [...document.body.querySelectorAll("button")].find((button) =>
-        button.textContent?.includes("OpenClaw agent"),
+        button.textContent?.includes("Connect an existing agent"),
       );
       expect(option).toBeTruthy();
       await press(option!);
       await press(stepCta());
+      await settle();
 
-      expect(routerState.navigate).toHaveBeenCalledWith(
-        "/agents/new?adapterType=openclaw_gateway",
-      );
+      expect(mockAccessApi.createCompanyInvite).toHaveBeenCalledWith("company-1", {
+        allowedJoinTypes: "agent",
+        humanRole: null,
+        agentMessage: null,
+      });
+      expect(document.body.textContent).toContain("Ask your agent to connect");
+      expect(routerState.navigate).not.toHaveBeenCalled();
     });
 
-    it("continues Hermes setup in its gateway flow", async () => {
+    it("does not ask the customer to identify OpenClaw or Hermes", async () => {
       await openOnAgentStep();
-      const option = [...document.body.querySelectorAll("button")].find((button) =>
-        button.textContent?.includes("Hermes agent"),
-      );
-      expect(option).toBeTruthy();
-      await press(option!);
-      await press(stepCta());
-
-      expect(routerState.navigate).toHaveBeenCalledWith(
-        "/agents/new?adapterType=hermes_gateway",
-      );
+      expect(document.body.textContent).not.toContain("Connect an OpenClaw agent");
+      expect(document.body.textContent).not.toContain("Connect a Hermes agent");
     });
 
     it("lets a customer skip agent setup and return to the dashboard", async () => {

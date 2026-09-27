@@ -462,7 +462,7 @@ function AuthScreenPreview({ mode, error }: { mode: "sign_in" | "sign_up"; error
               <span className="text-sm font-medium">Paperclip</span>
             </div>
             <h3 className="text-xl font-semibold">
-              {mode === "sign_in" ? "Sign in to Paperclip" : "Create your Paperclip account"}
+              {mode === "sign_in" ? "Sign in to August Works" : "Create your August Works account"}
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
               {mode === "sign_in"
@@ -813,7 +813,7 @@ export function InviteUxLab() {
             left={
               <InviteSummaryPanel
                 title="Join Acme Robotics"
-                description="Create your Paperclip account first. If you already have one, switch to sign in and continue the invite with the same email."
+                description="Create your August Works account first. If you already have one, switch to sign in and continue the invite with the same email."
                 inviteMessage="Welcome aboard."
                 requestedAccess="Operator"
               />
@@ -825,7 +825,7 @@ export function InviteUxLab() {
             left={
               <InviteSummaryPanel
                 title="Join Acme Robotics"
-                description="Create your Paperclip account first. If you already have one, switch to sign in and continue the invite with the same email."
+                description="Create your August Works account first. If you already have one, switch to sign in and continue the invite with the same email."
                 inviteMessage="Welcome aboard."
                 requestedAccess="Operator"
               />
