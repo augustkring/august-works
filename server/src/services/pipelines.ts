@@ -1207,25 +1207,6 @@ function derivedStageAutomationPayload(
   };
 }
 
-function derivedWorkflowStageAutomationPayload(
-  workflow: Pick<typeof workflows.$inferSelect, "id" | "name" | "description">,
-  executionContext: PipelineAutomationExecutionContext = readAutomationExecutionContext(),
-): PipelineStageAutomation {
-  return {
-    routineId: null,
-    targetKind: "workflow",
-    targetRef: workflow.id,
-    workflowId: workflow.id,
-    assigneeAgentId: null,
-    titleTemplate: workflow.name,
-    instructionsBody: workflow.description ?? "",
-    ...executionContext,
-    env: null,
-    latestRoutineRevisionId: null,
-    latestRoutineRevisionNumber: 0,
-  };
-}
-
 function secretRefsFromEnv(env: Record<string, EnvBinding> | null | undefined) {
   const refs: Array<{ key: string; secretId: string }> = [];
   for (const [key, binding] of Object.entries(env ?? {})) {
@@ -1239,11 +1220,6 @@ function secretRefsFromEnv(env: Record<string, EnvBinding> | null | undefined) {
 function stageAutomationRoutineIdFromConfig(config?: PipelineStageConfig | null) {
   const target = stageAutomationTargetFromConfig(config);
   return target?.kind === "routine" ? target.routineId : null;
-}
-
-function stageAutomationWorkflowIdFromConfig(config?: PipelineStageConfig | null) {
-  const target = stageAutomationTargetFromConfig(config);
-  return target?.kind === "workflow" ? target.workflowId : null;
 }
 
 function withStageAutomationTarget(
