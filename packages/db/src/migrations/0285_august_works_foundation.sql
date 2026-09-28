@@ -9,6 +9,7 @@ CREATE TABLE "foundation_documents" (
   "authority_level" text DEFAULT 'canonical' NOT NULL,
   "status" text DEFAULT 'draft' NOT NULL,
   "sensitivity" text DEFAULT 'internal' NOT NULL,
+  "draft_metadata" jsonb,
   "owner_user_id" text,
   "owner_agent_id" uuid,
   "review_frequency_days" integer,

@@ -39,6 +39,18 @@ export const FOUNDATION_PROPOSAL_STATUSES = [
 ] as const;
 export type FoundationProposalStatus = (typeof FOUNDATION_PROPOSAL_STATUSES)[number];
 
+export interface FoundationGovernanceSnapshot {
+  category: FoundationCategory;
+  documentType: string;
+  authorityLevel: FoundationAuthorityLevel;
+  sensitivity: FoundationSensitivity;
+  ownerUserId: string | null;
+  ownerAgentId: string | null;
+  reviewFrequencyDays: number | null;
+  validFrom: Date | null;
+  validUntil: Date | null;
+}
+
 export interface FoundationRevisionView {
   id: string;
   revisionNumber: number;
@@ -73,6 +85,7 @@ export interface FoundationDocument {
   latestRevisionId: string | null;
   latestRevisionNumber: number;
   canonicalRevision: FoundationRevisionView | null;
+  canonicalGovernance: FoundationGovernanceSnapshot | null;
 }
 
 export interface FoundationChangeProposal {

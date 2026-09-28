@@ -22,7 +22,7 @@ import {
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
 
-type FoundationDb = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+type FoundationDb = Db;
 
 export interface FoundationMutationActor {
   principal: ExecutionPrincipal;
@@ -128,18 +128,18 @@ function mapFoundationRow(row: {
     documentId: row.foundation.documentId,
     approvedRevisionId: row.foundation.approvedRevisionId,
     foundationKey: row.foundation.foundationKey,
-    category: row.foundation.category as FoundationDocument["category"],
-    documentType: row.foundation.documentType,
-    authorityLevel: row.foundation.authorityLevel as FoundationDocument["authorityLevel"],
+    category: (row.foundation.draftMetadata?.category ?? row.foundation.category) as FoundationDocument["category"],
+    documentType: row.foundation.draftMetadata?.documentType ?? row.foundation.documentType,
+    authorityLevel: (row.foundation.draftMetadata?.authorityLevel ?? row.foundation.authorityLevel) as FoundationDocument["authorityLevel"],
     status: row.foundation.status as FoundationDocument["status"],
-    sensitivity: row.foundation.sensitivity as FoundationDocument["sensitivity"],
-    ownerUserId: row.foundation.ownerUserId,
+    sensitivity: (row.foundation.draftMetadata?.sensitivity ?? row.foundation.sensitivity) as FoundationDocument["sensitivity"],
+    ownerUserId: row.foundation.draftMetadata?.ownerUserId ?? row.foundation.ownerUserId,
     ownerAgentId: row.foundation.ownerAgentId,
-    reviewFrequencyDays: row.foundation.reviewFrequencyDays,
+    reviewFrequencyDays: row.foundation.draftMetadata?.reviewFrequencyDays ?? row.foundation.reviewFrequencyDays,
     lastReviewedAt: row.foundation.lastReviewedAt,
     nextReviewAt: row.foundation.nextReviewAt,
-    validFrom: row.foundation.validFrom,
-    validUntil: row.foundation.validUntil,
+    validFrom: row.foundation.draftMetadata?.validFrom ?? row.foundation.validFrom,
+    validUntil: row.foundation.draftMetadata?.validUntil ?? row.foundation.validUntil,
     createdAt: row.foundation.createdAt,
     updatedAt: row.foundation.updatedAt,
     title: row.document.title,
@@ -156,6 +156,19 @@ function mapFoundationRow(row: {
           createdAt: row.canonicalRevision.createdAt,
         }
       : null,
+    canonicalGovernance: row.foundation.approvedRevisionId
+      ? {
+          category: row.foundation.category as FoundationDocument["category"],
+          documentType: row.foundation.documentType,
+          authorityLevel: row.foundation.authorityLevel as FoundationDocument["authorityLevel"],
+          sensitivity: row.foundation.sensitivity as FoundationDocument["sensitivity"],
+          ownerUserId: row.foundation.ownerUserId,
+          ownerAgentId: row.foundation.ownerAgentId,
+          reviewFrequencyDays: row.foundation.reviewFrequencyDays,
+          validFrom: row.foundation.validFrom,
+          validUntil: row.foundation.validUntil,
+        }
+      : null,
   };
 }
 
@@ -168,7 +181,14 @@ async function selectFoundation(
     .select(foundationSelect)
     .from(foundationDocuments)
     .innerJoin(documents, eq(foundationDocuments.documentId, documents.id))
-    .leftJoin(approvedRevision, eq(foundationDocuments.approvedRevisionId, approvedRevision.id))
+    .leftJoin(
+      approvedRevision,
+      and(
+        eq(foundationDocuments.approvedRevisionId, approvedRevision.id),
+        eq(foundationDocuments.documentId, approvedRevision.documentId),
+        eq(foundationDocuments.companyId, approvedRevision.companyId),
+      ),
+    )
     .where(and(eq(foundationDocuments.companyId, companyId), predicate))
     .then((rows) => rows[0] ?? null);
 }
@@ -228,7 +248,14 @@ export function foundationService(db: Db) {
         .select(foundationSelect)
         .from(foundationDocuments)
         .innerJoin(documents, eq(foundationDocuments.documentId, documents.id))
-        .leftJoin(approvedRevision, eq(foundationDocuments.approvedRevisionId, approvedRevision.id))
+        .leftJoin(
+          approvedRevision,
+          and(
+            eq(foundationDocuments.approvedRevisionId, approvedRevision.id),
+            eq(foundationDocuments.documentId, approvedRevision.documentId),
+            eq(foundationDocuments.companyId, approvedRevision.companyId),
+          ),
+        )
         .where(eq(foundationDocuments.companyId, companyId))
         .orderBy(asc(foundationDocuments.category), asc(foundationDocuments.foundationKey));
       return rows.map(mapFoundationRow);
@@ -302,6 +329,7 @@ export function foundationService(db: Db) {
               authorityLevel: input.authorityLevel,
               status: "draft",
               sensitivity: input.sensitivity,
+              draftMetadata: null,
               ownerUserId: input.ownerUserId ?? null,
               ownerAgentId: input.ownerAgentId ?? null,
               reviewFrequencyDays: input.reviewFrequencyDays ?? null,
@@ -406,23 +434,40 @@ export function foundationService(db: Db) {
             .where(eq(documents.id, existing.documentId));
         }
 
+        const nextGovernance = {
+          category: patch.category ?? existing.category,
+          documentType: patch.documentType ?? existing.documentType,
+          authorityLevel: patch.authorityLevel ?? existing.authorityLevel,
+          sensitivity: patch.sensitivity ?? existing.sensitivity,
+          ownerUserId: patch.ownerUserId === undefined ? existing.ownerUserId : patch.ownerUserId,
+          ownerAgentId: patch.ownerAgentId === undefined ? existing.ownerAgentId : patch.ownerAgentId,
+          reviewFrequencyDays:
+            patch.reviewFrequencyDays === undefined
+              ? existing.reviewFrequencyDays
+              : patch.reviewFrequencyDays,
+          validFrom: nextValidFrom,
+          validUntil: nextValidUntil,
+        };
+
+        const hasApprovedBaseline = existing.approvedRevisionId !== null;
         await txDb
           .update(foundationDocuments)
           .set({
-            category: patch.category ?? existing.category,
-            documentType: patch.documentType ?? existing.documentType,
-            authorityLevel: patch.authorityLevel ?? existing.authorityLevel,
-            sensitivity: patch.sensitivity ?? existing.sensitivity,
-            ownerUserId: patch.ownerUserId === undefined ? existing.ownerUserId : patch.ownerUserId,
-            ownerAgentId: patch.ownerAgentId === undefined ? existing.ownerAgentId : patch.ownerAgentId,
-            reviewFrequencyDays:
-              patch.reviewFrequencyDays === undefined
-                ? existing.reviewFrequencyDays
-                : patch.reviewFrequencyDays,
-            validFrom: nextValidFrom,
-            validUntil: nextValidUntil,
+            ...(hasApprovedBaseline
+              ? { draftMetadata: nextGovernance }
+              : {
+                  category: nextGovernance.category,
+                  documentType: nextGovernance.documentType,
+                  authorityLevel: nextGovernance.authorityLevel,
+                  sensitivity: nextGovernance.sensitivity,
+                  ownerUserId: nextGovernance.ownerUserId,
+                  ownerAgentId: nextGovernance.ownerAgentId,
+                  reviewFrequencyDays: nextGovernance.reviewFrequencyDays,
+                  validFrom: nextGovernance.validFrom,
+                  validUntil: nextGovernance.validUntil,
+                  draftMetadata: null,
+                }),
             status: "draft",
-            nextReviewAt: null,
             updatedAt: now,
           })
           .where(
@@ -517,13 +562,31 @@ export function foundationService(db: Db) {
         }
 
         const now = new Date();
+        const stored = lockedRow.foundation;
+        const pendingGovernance = stored.draftMetadata;
+        const approvedReviewFrequency =
+          pendingGovernance?.reviewFrequencyDays ?? stored.reviewFrequencyDays;
         await txDb
           .update(foundationDocuments)
           .set({
+            ...(pendingGovernance
+              ? {
+                  category: pendingGovernance.category,
+                  documentType: pendingGovernance.documentType,
+                  authorityLevel: pendingGovernance.authorityLevel,
+                  sensitivity: pendingGovernance.sensitivity,
+                  ownerUserId: pendingGovernance.ownerUserId,
+                  ownerAgentId: pendingGovernance.ownerAgentId,
+                  reviewFrequencyDays: pendingGovernance.reviewFrequencyDays,
+                  validFrom: pendingGovernance.validFrom,
+                  validUntil: pendingGovernance.validUntil,
+                }
+              : {}),
+            draftMetadata: null,
             status: "approved",
             approvedRevisionId: existing.latestRevisionId,
             lastReviewedAt: now,
-            nextReviewAt: nextReviewAt(now, existing.reviewFrequencyDays),
+            nextReviewAt: nextReviewAt(now, approvedReviewFrequency),
             updatedAt: now,
           })
           .where(eq(foundationDocuments.id, foundationDocumentId));
@@ -600,6 +663,24 @@ export function foundationService(db: Db) {
         );
         if (!foundation) throw notFound("Foundation document not found");
 
+        const baseRevisionId = input.baseRevisionId ?? foundation.document.latestRevisionId;
+        if (baseRevisionId) {
+          const baseRevision = await txDb
+            .select({ id: documentRevisions.id })
+            .from(documentRevisions)
+            .where(
+              and(
+                eq(documentRevisions.companyId, companyId),
+                eq(documentRevisions.documentId, foundation.document.id),
+                eq(documentRevisions.id, baseRevisionId),
+              ),
+            )
+            .then((rows) => rows[0] ?? null);
+          if (!baseRevision) {
+            throw unprocessable("Proposal base revision must belong to the Foundation document");
+          }
+        }
+
         const actorData = actorFields(actor);
         const now = new Date();
         const [proposal] = await txDb
@@ -611,7 +692,7 @@ export function foundationService(db: Db) {
             sourceId: input.sourceId ?? null,
             proposedByAgentId: actorData.agentId,
             proposedByUserId: actorData.userId,
-            baseRevisionId: input.baseRevisionId ?? foundation.document.latestRevisionId,
+            baseRevisionId,
             proposedBody: input.proposedBody,
             changeSummary: input.changeSummary ?? null,
             reason: input.reason ?? null,

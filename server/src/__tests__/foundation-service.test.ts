@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import {
   agents,
   companies,
@@ -178,6 +179,8 @@ describeEmbeddedPostgres("Foundation service", () => {
       {
         baseRevisionId: approved.latestRevisionId!,
         body: "# Company\nUnapproved changed truth",
+        sensitivity: "restricted",
+        validFrom: "2026-10-01T00:00:00.000Z",
         changeSummary: "Draft update",
       },
       actor(company.userId),
@@ -188,6 +191,33 @@ describeEmbeddedPostgres("Foundation service", () => {
     expect(nextDraft.latestRevisionNumber).toBe(2);
     expect(nextDraft.approvedRevisionId).toBe(approved.approvedRevisionId);
     expect(nextDraft.canonicalRevision?.body).toBe("# Company\nInitial truth");
+    expect(nextDraft.sensitivity).toBe("restricted");
+    expect(nextDraft.canonicalGovernance?.sensitivity).toBe("internal");
+
+    const [storedDraft] = await db
+      .select()
+      .from(foundationDocuments)
+      .where(eq(foundationDocuments.id, nextDraft.id));
+    expect(storedDraft?.sensitivity).toBe("internal");
+    expect(storedDraft?.draftMetadata).toMatchObject({ sensitivity: "restricted" });
+
+    const reviewedDraft = await svc.submitForReview(
+      company.id,
+      nextDraft.id,
+      nextDraft.latestRevisionId!,
+      actor(company.userId),
+    );
+    const reapproved = await svc.approve(
+      company.id,
+      nextDraft.id,
+      reviewedDraft.latestRevisionId!,
+      actor(company.userId),
+    );
+    expect(reapproved.canonicalRevision?.body).toBe("# Company\nUnapproved changed truth");
+    expect(reapproved.canonicalGovernance?.sensitivity).toBe("restricted");
+    expect(reapproved.canonicalGovernance?.validFrom?.toISOString()).toBe(
+      "2026-10-01T00:00:00.000Z",
+    );
   });
 
   it("rejects invalid lifecycle transitions and stale revision writes", async () => {
@@ -242,7 +272,7 @@ describeEmbeddedPostgres("Foundation service", () => {
         .where(
           // Deliberately direct DB mutation: this verifies the durable constraint,
           // independent of TypeScript and service validation.
-          (await import("drizzle-orm")).eq(foundationDocuments.id, created.id),
+          eq(foundationDocuments.id, created.id),
         ),
     ).rejects.toBeTruthy();
   });

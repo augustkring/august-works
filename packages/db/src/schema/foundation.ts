@@ -3,12 +3,14 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { FoundationGovernanceSnapshot } from "@paperclipai/shared";
 import { agents } from "./agents.js";
 import { companies } from "./companies.js";
 import { documentRevisions } from "./document_revisions.js";
@@ -33,6 +35,7 @@ export const foundationDocuments = pgTable(
     authorityLevel: text("authority_level").notNull().default("canonical"),
     status: text("status").notNull().default("draft"),
     sensitivity: text("sensitivity").notNull().default("internal"),
+    draftMetadata: jsonb("draft_metadata").$type<FoundationGovernanceSnapshot | null>(),
     ownerUserId: text("owner_user_id"),
     ownerAgentId: uuid("owner_agent_id").references(() => agents.id, { onDelete: "set null" }),
     reviewFrequencyDays: integer("review_frequency_days"),
