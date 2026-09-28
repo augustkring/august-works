@@ -2031,6 +2031,13 @@
       "when": 1790598000000,
       "tag": "0291_workflow_revision_db_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 292,
+      "version": "7",
+      "when": 1790600400000,
+      "tag": "0292_workflow_revision_delete_guard",
+      "breakpoints": true
     }
   ]
 }

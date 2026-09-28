@@ -29,8 +29,10 @@ describePg("Workflow service", () => {
   }, 20_000);
 
   afterEach(async () => {
-    await db.delete(workflowRevisions);
+    // Workflow deletion is the explicit lifecycle owner and cascades revision
+    // history. Direct revision deletion is intentionally guarded.
     await db.delete(workflows);
+    await db.delete(workflowRevisions);
     await db.delete(projects);
     await db.delete(companyMemberships);
     await db.delete(agents);
@@ -350,6 +352,65 @@ describePg("Workflow service", () => {
       variables: [],
       settings: {},
     });
+  });
+
+  it("rejects direct deletion of active and published workflow revisions while allowing owner cascade", async () => {
+    const company = await seedCompany("Alpha");
+    const svc = workflowService(db);
+    const created = await createWorkflow(company.id, company.userId);
+
+    await expect(
+      db.delete(workflowRevisions).where(eq(workflowRevisions.id, created.draftRevisionId!)),
+    ).rejects.toBeTruthy();
+
+    const updated = await svc.updateDraft(
+      company.id,
+      created.id,
+      {
+        expectedRevisionId: created.draftRevisionId!,
+        graph: {
+          version: 1,
+          nodes: [{
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Manual start",
+            position: { x: 0, y: 0 },
+            config: {},
+          }],
+          edges: [],
+          variables: [],
+          settings: {},
+        },
+      },
+      actor(company.userId),
+    );
+    const published = await svc.publish(
+      company.id,
+      created.id,
+      {
+        expectedDraftRevisionId: updated.draftRevisionId!,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      },
+      actor(company.userId),
+    );
+
+    await expect(
+      db.delete(workflowRevisions).where(
+        eq(workflowRevisions.id, published.publishedRevisionId!),
+      ),
+    ).rejects.toBeTruthy();
+
+    // The workflow owns its revision history. Explicit deletion of that owner
+    // still performs the declared cascade instead of trapping the company.
+    await expect(
+      db.delete(workflows).where(eq(workflows.id, created.id)),
+    ).resolves.toBeTruthy();
+
+    expect(
+      await db.select().from(workflowRevisions)
+        .where(eq(workflowRevisions.workflowId, created.id)),
+    ).toHaveLength(0);
   });
 
   it("rejects a workflow pointer to a revision owned by another workflow", async () => {
