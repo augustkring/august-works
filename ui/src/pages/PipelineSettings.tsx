@@ -1435,7 +1435,7 @@ export function PipelineSettings() {
       !!selectedCompanyId &&
       (
         stageExecutionTargetKind === "workflow" ||
-        stages.some(
+        (pipelineQuery.data?.stages ?? []).some(
           (stage) =>
             stageAutomation(stage).executionTargetKind === "workflow",
         )
@@ -2301,21 +2301,17 @@ export function PipelineSettings() {
           (workflow) => workflow.id === stageWorkflowId,
         ) ?? null
       : null;
-  const workflowOptions = useMemo<InlineEntityOption[]>(
-    () =>
-      (workflowsQuery.data ?? [])
-        .filter(
-          (workflow) =>
-            workflow.status === "active" &&
-            Boolean(workflow.publishedRevisionId),
-        )
-        .map((workflow) => ({
-          id: workflow.id,
-          label: workflow.name,
-          searchText: workflow.description ?? "",
-        })),
-    [workflowsQuery.data],
-  );
+  const workflowOptions: InlineEntityOption[] = (workflowsQuery.data ?? [])
+    .filter(
+      (workflow) =>
+        workflow.status === "active" &&
+        Boolean(workflow.publishedRevisionId),
+    )
+    .map((workflow) => ({
+      id: workflow.id,
+      label: workflow.name,
+      searchText: workflow.description ?? "",
+    }));
   const stageEnvDirty =
     stageExecutionTargetKind === "agent_task" &&
     selectedStage != null &&
