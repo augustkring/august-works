@@ -91,8 +91,8 @@ export interface Routine {
   title: string;
   description: string | null;
   assigneeAgentId: string | null;
-  executionTargetKind: RoutineExecutionTargetKind | null;
-  executionTargetRef: string | null;
+  executionTargetKind?: RoutineExecutionTargetKind | null;
+  executionTargetRef?: string | null;
   priority: string;
   status: string;
   concurrencyPolicy: string;
@@ -238,7 +238,7 @@ export interface RoutineRun {
   triggerPayload: Record<string, unknown> | null;
   dispatchFingerprint: string | null;
   linkedIssueId: string | null;
-  linkedWorkflowRunId: string | null;
+  linkedWorkflowRunId?: string | null;
   linkedWorkflowId?: string | null;
   linkedWorkflowRunStatus?: WorkflowRunStatus | null;
   coalescedIntoRunId: string | null;
