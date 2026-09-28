@@ -6,6 +6,7 @@ import {
   companies,
   companyMemberships,
   createDb,
+  issues,
   principalPermissionGrants,
   workflowRevisions,
   workflowRuns,
@@ -40,6 +41,7 @@ describePg("Workflow executor V1", () => {
   afterEach(async () => {
     await db.delete(activityLog);
     await db.delete(approvals);
+    await db.delete(issues);
     await db.delete(workflowStepRuns);
     await db.delete(workflowRuns);
     await db.delete(workflowRevisions);
@@ -1160,6 +1162,341 @@ describePg("Workflow executor V1", () => {
       status: "failed",
       errorCode: "workflow_human_approval_rejected",
     });
+  });
+
+  it("creates one existing task idempotently from a Create Task node", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "task",
+          type: "work.create_task",
+          name: "Create accountable task",
+          position: { x: 180, y: 0 },
+          config: {
+            title: "Review onboarding package",
+            description: "Confirm the package is complete.",
+            projectId: null,
+            assigneeAgentId: null,
+            assigneeUserId: null,
+            waitForCompletion: false,
+          },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "task" }],
+      variables: [],
+      settings: {},
+    });
+    const executor = workflowExecutorService(db);
+    const actor = {
+      principal: { type: "user" as const, userId: seeded.userId },
+      responsibleUserId: seeded.userId,
+    };
+
+    const first = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      actor,
+      "task-create-idempotency",
+    );
+    const replay = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      actor,
+      "task-create-idempotency",
+    );
+
+    expect(first.run.status).toBe("succeeded");
+    expect(replay.run.id).toBe(first.run.id);
+    const createdTasks = await db
+      .select()
+      .from(issues)
+      .where(eq(issues.originRunId, first.run.id));
+    expect(createdTasks).toHaveLength(1);
+    expect(createdTasks[0]).toMatchObject({
+      companyId: seeded.companyId,
+      title: "Review onboarding package",
+      status: "backlog",
+      originKind: "workflow_task",
+      originId: seeded.workflow.id,
+      originRunId: first.run.id,
+    });
+    expect(
+      first.steps.find((step) => step.nodeId === "task"),
+    ).toMatchObject({
+      status: "succeeded",
+      outputJson: expect.objectContaining({
+        issueId: createdTasks[0]!.id,
+        status: "backlog",
+      }),
+    });
+  });
+
+  it("waits durably for task completion and resumes from the task checkpoint", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "task",
+          type: "work.create_task",
+          name: "Create and wait",
+          position: { x: 180, y: 0 },
+          config: {
+            title: "Human follow-up",
+            description: null,
+            projectId: null,
+            assigneeAgentId: null,
+            assigneeUserId: null,
+            waitForCompletion: true,
+          },
+        },
+        {
+          id: "after",
+          type: "core.condition",
+          name: "Continue",
+          position: { x: 360, y: 0 },
+          config: { expression: "true" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "start", target: "task" },
+        { id: "e2", source: "task", target: "after" },
+      ],
+      variables: [],
+      settings: {},
+    });
+    const executor = workflowExecutorService(db);
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "task-wait",
+    );
+
+    expect(waiting.run).toMatchObject({
+      status: "waiting",
+      executionOwnerId: null,
+      leaseExpiresAt: null,
+    });
+    expect(waiting.waits).toEqual([
+      expect.objectContaining({
+        nodeId: "task",
+        kind: "task_completion",
+        status: "active",
+        referenceType: "issue",
+      }),
+    ]);
+    const issueId = waiting.waits[0]!.referenceId!;
+    expect(
+      waiting.steps.find((step) => step.nodeId === "task"),
+    ).toMatchObject({
+      status: "waiting",
+      outputJson: expect.objectContaining({ issueId }),
+    });
+    expect(
+      waiting.steps.find((step) => step.nodeId === "after"),
+    ).toBeUndefined();
+
+    const completedAt = new Date();
+    await db
+      .update(issues)
+      .set({ status: "done", completedAt, updatedAt: completedAt })
+      .where(eq(issues.id, issueId));
+
+    const recovery = await executor.recoverExpiredRuns(
+      10,
+      new Date(completedAt.getTime() + 1),
+    );
+    expect(recovery).toMatchObject({
+      recovered: 1,
+      failedRunIds: [],
+    });
+
+    const completed = await executor.getRun(
+      seeded.companyId,
+      waiting.run.id,
+    );
+    expect(completed?.run.status).toBe("succeeded");
+    expect(completed?.waits[0]).toMatchObject({
+      status: "resolved",
+      resolutionJson: expect.objectContaining({
+        issueId,
+        status: "done",
+      }),
+    });
+    expect(
+      completed?.steps.find((step) => step.nodeId === "task"),
+    ).toMatchObject({
+      status: "succeeded",
+      outputJson: expect.objectContaining({
+        issueId,
+        status: "done",
+      }),
+    });
+    expect(
+      completed?.steps.find((step) => step.nodeId === "after"),
+    ).toMatchObject({ status: "succeeded" });
+  });
+
+  it("fails a waiting workflow when its created task is cancelled", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "task",
+          type: "work.create_task",
+          name: "Create and wait",
+          position: { x: 180, y: 0 },
+          config: {
+            title: "Cancelable task",
+            projectId: null,
+            assigneeAgentId: null,
+            assigneeUserId: null,
+            waitForCompletion: true,
+          },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "task" }],
+      variables: [],
+      settings: {},
+    });
+    const executor = workflowExecutorService(db);
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "task-cancel",
+    );
+    const issueId = waiting.waits[0]!.referenceId!;
+    const cancelledAt = new Date();
+    await db
+      .update(issues)
+      .set({
+        status: "cancelled",
+        cancelledAt,
+        updatedAt: cancelledAt,
+      })
+      .where(eq(issues.id, issueId));
+
+    const recovery = await executor.recoverExpiredRuns(
+      10,
+      new Date(cancelledAt.getTime() + 1),
+    );
+    expect(recovery.recovered).toBe(1);
+
+    const failed = await executor.getRun(
+      seeded.companyId,
+      waiting.run.id,
+    );
+    expect(failed?.run).toMatchObject({
+      status: "failed",
+      failureCode: "workflow_task_cancelled",
+    });
+    expect(failed?.waits[0]).toMatchObject({
+      status: "cancelled",
+    });
+    expect(
+      failed?.steps.find((step) => step.nodeId === "task"),
+    ).toMatchObject({
+      status: "failed",
+      errorCode: "workflow_task_cancelled",
+    });
+  });
+
+  it("fails Create Task at execution time when task assignment is not authorized", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "task",
+          type: "work.create_task",
+          name: "Restricted task",
+          position: { x: 180, y: 0 },
+          config: {
+            title: "Restricted task",
+            projectId: null,
+            assigneeAgentId: null,
+            assigneeUserId: null,
+            waitForCompletion: false,
+          },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "task" }],
+      variables: [],
+      settings: {},
+    });
+    await db
+      .update(companyMemberships)
+      .set({ membershipRole: "viewer" })
+      .where(
+        and(
+          eq(companyMemberships.companyId, seeded.companyId),
+          eq(companyMemberships.principalId, seeded.userId),
+        ),
+      );
+
+    const result = await workflowExecutorService(db).startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "task-auth-denied",
+    );
+
+    expect(result.run).toMatchObject({
+      status: "failed",
+      failureCode: "workflow_task_permission_denied",
+    });
+    expect(
+      result.steps.find((step) => step.nodeId === "task"),
+    ).toMatchObject({
+      status: "failed",
+      errorCode: "workflow_task_permission_denied",
+    });
+    expect(
+      await db.select().from(issues).where(eq(issues.companyId, seeded.companyId)),
+    ).toHaveLength(0);
   });
 
 });
