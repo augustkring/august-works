@@ -144,3 +144,45 @@ export interface ContextBudgetResult {
   selectedItemCount: number;
   bucketItemCounts: Record<ContextEvidenceBucket, number>;
 }
+
+
+export const CONTEXT_PROVIDER_REQUIREMENTS = ["mandatory", "optional"] as const;
+export type ContextProviderRequirement = (typeof CONTEXT_PROVIDER_REQUIREMENTS)[number];
+
+export const CONTEXT_PROVIDER_WARNING_CODES = [
+  "permission_denied",
+  "provider_timeout",
+  "provider_failed",
+  "provider_omitted",
+] as const;
+export type ContextProviderWarningCode =
+  (typeof CONTEXT_PROVIDER_WARNING_CODES)[number];
+
+export interface ContextProviderWarning {
+  providerKey: string;
+  code: ContextProviderWarningCode;
+  message: string;
+}
+
+export interface ContextPacketManifestRef {
+  id: string;
+  queryHash: string;
+  policySnapshotHash: string;
+}
+
+export interface ContextPacket {
+  governance: {
+    sensitivityCeiling: EvidenceSensitivity;
+    asOf: string;
+  };
+  foundation: EvidenceItem[];
+  connectedEvidence: EvidenceItem[];
+  sharedMemory: EvidenceItem[];
+  privateMemory: EvidenceItem[];
+  taskContext: EvidenceItem[];
+  artifacts: EvidenceItem[];
+  warnings: ContextProviderWarning[];
+  citations: EvidenceCitation[];
+  manifest: ContextPacketManifestRef | null;
+  selectedEstimatedTokens: number;
+}

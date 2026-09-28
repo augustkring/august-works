@@ -243,3 +243,19 @@ export {
   type ContextManifestSelectedEvidence,
   type CreateContextManifestInput,
 } from "./context/context-manifest.js";
+
+export {
+  contextEngineService,
+  runContextProviders,
+  serializeContextPacket,
+  DEFAULT_CONTEXT_AUTHORITY_POLICY,
+  DEFAULT_CONTEXT_BUDGET,
+  DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS,
+  DEFAULT_CONTEXT_TOTAL_DEADLINE_MS,
+  type AssembleContextInput,
+  type ContextAssemblyResult,
+  type ContextProvider,
+  type ContextProviderInput,
+  type ContextProviderResult,
+  type ContextProviderRunResult,
+} from "./context/context-engine.js";

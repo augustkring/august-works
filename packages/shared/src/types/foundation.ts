@@ -163,6 +163,9 @@ export interface FoundationSearchResult {
   contentHash: string;
   tokenCount: number;
   rank: number;
+  sourceUpdatedAt: string | null;
+  validFrom: string | null;
+  validUntil: string | null;
 }
 
 export interface FoundationCapabilities {

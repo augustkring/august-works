@@ -350,9 +350,12 @@ export function foundationIndexService(db: Db) {
           authorityLevel: foundationDocuments.authorityLevel,
           sensitivity: foundationDocuments.sensitivity,
           status: foundationDocuments.status,
+          validFrom: foundationDocuments.validFrom,
+          validUntil: foundationDocuments.validUntil,
           documentRevisionId: foundationSections.documentRevisionId,
           revisionNumber: searchRevision.revisionNumber,
           title: searchRevision.title,
+          sourceUpdatedAt: searchRevision.createdAt,
           headingPath: foundationSections.headingPath,
           ordinal: foundationSections.ordinal,
           body: foundationSections.body,
@@ -421,6 +424,9 @@ export function foundationIndexService(db: Db) {
         contentHash: row.contentHash,
         tokenCount: row.tokenCount,
         rank: Number(row.rank),
+        sourceUpdatedAt: row.sourceUpdatedAt?.toISOString() ?? null,
+        validFrom: row.validFrom?.toISOString() ?? null,
+        validUntil: row.validUntil?.toISOString() ?? null,
       }));
     },
   };
