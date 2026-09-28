@@ -41,6 +41,7 @@ import type {
   WorkflowGraphV1,
   WorkflowNodeDefinitionDescriptor,
   WorkflowNodeV1,
+  WorkflowRetryPolicy,
 } from "@paperclipai/shared";
 import { workflowsApi } from "@/api/workflows";
 import { ApiError } from "@/api/client";
@@ -64,6 +65,28 @@ type BuilderNodeData = {
 type BuilderNode = Node<BuilderNodeData, "workflow-node">;
 type BuilderEdgeData = { workflowEdge: WorkflowEdgeV1 };
 type BuilderEdge = Edge<BuilderEdgeData>;
+
+const NO_RETRY_POLICY: WorkflowRetryPolicy = {
+  mode: "none",
+  maxAttempts: 1,
+  initialDelayMs: 0,
+  maxDelayMs: 0,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function boundedInteger(
+  raw: string,
+  minimum: number,
+  maximum: number,
+  fallback: number,
+): number {
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(maximum, Math.max(minimum, parsed));
+}
 
 function defaultConfig(type: string): Record<string, unknown> | null {
   switch (type) {
@@ -987,14 +1010,17 @@ function NodeInspector({
 }) {
   const workflowNode = node.data.workflowNode;
   const definition = node.data.definition;
-  const config = (
-    workflowNode.config && typeof workflowNode.config === "object" && !Array.isArray(workflowNode.config)
-      ? workflowNode.config
-      : {}
-  ) as Record<string, unknown>;
+  const config = isRecord(workflowNode.config) ? workflowNode.config : {};
+  const retryPolicy =
+    workflowNode.retryPolicy ??
+    definition?.retryPolicyDefault ??
+    NO_RETRY_POLICY;
 
   const updateConfig = (patch: Record<string, unknown>) =>
     onUpdate({ config: { ...config, ...patch } });
+
+  const updateRetryPolicy = (patch: Partial<WorkflowRetryPolicy>) =>
+    onUpdate({ retryPolicy: { ...retryPolicy, ...patch } });
 
   const insertDataExpression = (expression: string) => {
     if (!canEdit) return;
@@ -1056,8 +1082,8 @@ function NodeInspector({
           Output value expression
           <Input
             value={String(
-              config.mapping && typeof config.mapping === "object"
-                ? (config.mapping as Record<string, unknown>).value ?? ""
+              isRecord(config.mapping)
+                ? config.mapping.value ?? ""
                 : "",
             )}
             disabled={!canEdit}
@@ -1129,6 +1155,132 @@ function NodeInspector({
         <div className="border-l-2 border-amber-500 pl-3 text-xs leading-5 text-muted-foreground">
           Publish gate: {definition.publishBlockedReason.replaceAll("_", " ")}
         </div>
+      ) : null}
+
+      {definition ? (
+        <details className="border-t border-border pt-4">
+          <summary className="cursor-pointer text-xs font-medium">
+            Execution policy
+          </summary>
+          <div className="mt-3 space-y-3">
+            <label className="block space-y-1 text-xs font-medium">
+              Retry
+              <select
+                value={retryPolicy.mode}
+                disabled={!canEdit}
+                onChange={(event) => {
+                  const mode = event.target.value;
+                  if (mode === "none") {
+                    onUpdate({ retryPolicy: NO_RETRY_POLICY });
+                  } else if (mode === "fixed" || mode === "exponential") {
+                    onUpdate({
+                      retryPolicy: {
+                        mode,
+                        maxAttempts:
+                          retryPolicy.maxAttempts > 1 ? retryPolicy.maxAttempts : 3,
+                        initialDelayMs:
+                          retryPolicy.initialDelayMs > 0
+                            ? retryPolicy.initialDelayMs
+                            : 1_000,
+                        maxDelayMs:
+                          retryPolicy.maxDelayMs >=
+                          (retryPolicy.initialDelayMs > 0
+                            ? retryPolicy.initialDelayMs
+                            : 1_000)
+                            ? retryPolicy.maxDelayMs
+                            : 5_000,
+                      },
+                    });
+                  }
+                }}
+                className="mt-1 h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="none">No automatic retry</option>
+                <option value="fixed">Fixed delay</option>
+                <option value="exponential">Exponential backoff</option>
+              </select>
+            </label>
+
+            {retryPolicy.mode !== "none" ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <label className="block space-y-1 text-xs font-medium">
+                  Max attempts
+                  <Input
+                    type="number"
+                    min={2}
+                    max={20}
+                    value={retryPolicy.maxAttempts}
+                    disabled={!canEdit}
+                    onChange={(event) =>
+                      updateRetryPolicy({
+                        maxAttempts: boundedInteger(
+                          event.target.value,
+                          2,
+                          20,
+                          retryPolicy.maxAttempts,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <label className="block space-y-1 text-xs font-medium">
+                  Initial delay ms
+                  <Input
+                    type="number"
+                    min={0}
+                    max={86_400_000}
+                    value={retryPolicy.initialDelayMs}
+                    disabled={!canEdit}
+                    onChange={(event) => {
+                      const initialDelayMs = boundedInteger(
+                        event.target.value,
+                        0,
+                        86_400_000,
+                        retryPolicy.initialDelayMs,
+                      );
+                      updateRetryPolicy({
+                        initialDelayMs,
+                        maxDelayMs: Math.max(
+                          initialDelayMs,
+                          retryPolicy.maxDelayMs,
+                        ),
+                      });
+                    }}
+                  />
+                </label>
+                <label className="block space-y-1 text-xs font-medium">
+                  Max delay ms
+                  <Input
+                    type="number"
+                    min={retryPolicy.initialDelayMs}
+                    max={86_400_000}
+                    value={retryPolicy.maxDelayMs}
+                    disabled={!canEdit}
+                    onChange={(event) =>
+                      updateRetryPolicy({
+                        maxDelayMs: boundedInteger(
+                          event.target.value,
+                          retryPolicy.initialDelayMs,
+                          86_400_000,
+                          retryPolicy.maxDelayMs,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+              </div>
+            ) : null}
+
+            <div className="text-[11px] leading-4 text-muted-foreground">
+              <p>
+                Idempotency: {definition.idempotencyStrategy.replaceAll("_", " ")}
+              </p>
+              <p className="mt-1">
+                Retries only occur for errors the executor classifies as retryable and when the action is safe to repeat.
+              </p>
+            </div>
+          </div>
+        </details>
       ) : null}
 
       {supportsExpressionInput ? (
