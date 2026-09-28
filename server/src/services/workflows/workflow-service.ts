@@ -12,7 +12,6 @@ import {
   createWorkflowSchema,
   publishWorkflowSchema,
   updateWorkflowDraftSchema,
-  workflowGraphV1Schema,
   type CreateWorkflow,
   type ExecutionPrincipal,
   type PublishWorkflow,
@@ -23,6 +22,7 @@ import {
   type WorkflowRevision,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
+import { workflowNodeRegistryService } from "./workflow-node-registry.js";
 
 type WorkflowDb = Db;
 
@@ -159,20 +159,6 @@ function assertPublishedPointer(workflow: typeof workflows.$inferSelect, expecte
   }
 }
 
-function validatePublishableDraft(revision: typeof workflowRevisions.$inferSelect) {
-  const graph = workflowGraphV1Schema.parse(revision.graph);
-  if (graph.nodes.length > 0) {
-    throw unprocessable(
-      "Workflow contains node types that cannot be published before the Node Registry is available",
-      {
-        code: "workflow_node_invalid",
-        reason: "node_registry_not_ready",
-        nodeTypes: [...new Set(graph.nodes.map((node) => node.type))].sort(),
-      },
-    );
-  }
-}
-
 export function workflowService(db: Db) {
   return {
     list: async (companyId: string) =>
@@ -264,6 +250,7 @@ export function workflowService(db: Db) {
             currentDraftRevisionId: workflow.draftRevisionId,
           });
         }
+        await workflowNodeRegistryService(txDb).validateDraftGraph(companyId, patch.graph);
         const nextInputSchema = patch.inputSchema === undefined ? currentDraft.inputSchema : patch.inputSchema;
         const nextOutputSchema = patch.outputSchema === undefined ? currentDraft.outputSchema : patch.outputSchema;
         if (
@@ -336,7 +323,7 @@ export function workflowService(db: Db) {
             currentDraftRevisionId: workflow.draftRevisionId,
           });
         }
-        validatePublishableDraft(draft);
+        await workflowNodeRegistryService(txDb).validatePublishGraph(companyId, draft.graph);
         const previousPublished = await getRevisionById(
           txDb,
           companyId,

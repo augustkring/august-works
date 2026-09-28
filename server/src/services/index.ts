@@ -267,3 +267,5 @@ export {
 } from "./context/context-runtime.js";
 
 export { workflowService, type WorkflowMutationActor } from "./workflows/workflow-service.js";
+
+export { workflowNodeDefinitions, workflowNodeRegistryService } from "./workflows/workflow-node-registry.js";

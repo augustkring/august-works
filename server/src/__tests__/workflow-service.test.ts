@@ -270,7 +270,7 @@ describePg("Workflow service", () => {
     });
   });
 
-  it("fails closed on non-empty publish until the Node Registry validates capabilities", async () => {
+  it("fails closed when a registered draft-only node is not ready to publish", async () => {
     const company = await seedCompany("Alpha");
     const svc = workflowService(db);
     const created = await createWorkflow(company.id, company.userId);
@@ -282,11 +282,11 @@ describePg("Workflow service", () => {
         graph: {
           version: 1,
           nodes: [{
-            id: "start",
-            type: "core.manual_trigger",
-            name: "Start",
+            id: "transform",
+            type: "core.transform",
+            name: "Transform",
             position: { x: 0, y: 0 },
-            config: {},
+            config: { mapping: { normalized: "{{trigger.value}}" } },
           }],
           edges: [],
           variables: [],
@@ -311,7 +311,9 @@ describePg("Workflow service", () => {
       status: 422,
       details: expect.objectContaining({
         code: "workflow_node_invalid",
-        reason: "node_registry_not_ready",
+        reason: "node_not_publishable_yet",
+        nodeType: "core.transform",
+        blockedReason: "expression_engine_not_ready",
       }),
     });
   });
@@ -387,6 +389,135 @@ describePg("Workflow service", () => {
       state: "draft",
     });
     expect(stored?.publishedRevisionId).toBeNull();
+  });
+
+  it("publishes a registered publish-ready Manual Trigger node", async () => {
+    const company = await seedCompany("Alpha");
+    const svc = workflowService(db);
+    const created = await createWorkflow(company.id, company.userId);
+    const updated = await svc.updateDraft(
+      company.id,
+      created.id,
+      {
+        expectedRevisionId: created.draftRevisionId!,
+        graph: {
+          version: 1,
+          nodes: [{
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Manual start",
+            position: { x: 0, y: 0 },
+            config: {},
+          }],
+          edges: [],
+          variables: [],
+          settings: {},
+        },
+      },
+      actor(company.userId),
+    );
+
+    const published = await svc.publish(
+      company.id,
+      created.id,
+      {
+        expectedDraftRevisionId: updated.draftRevisionId!,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      },
+      actor(company.userId),
+    );
+
+    expect(published.publishedRevision?.graph.nodes).toEqual([
+      expect.objectContaining({ id: "start", type: "core.manual_trigger" }),
+    ]);
+  });
+
+  it("rejects unregistered node types during draft validation", async () => {
+    const company = await seedCompany("Alpha");
+    const svc = workflowService(db);
+    const created = await createWorkflow(company.id, company.userId);
+
+    await expect(
+      svc.updateDraft(
+        company.id,
+        created.id,
+        {
+          expectedRevisionId: created.draftRevisionId!,
+          graph: {
+            version: 1,
+            nodes: [{
+              id: "mystery",
+              type: "custom.unknown",
+              name: "Unknown",
+              position: { x: 0, y: 0 },
+              config: {},
+            }],
+            edges: [],
+            variables: [],
+            settings: {},
+          },
+        },
+        actor(company.userId),
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: expect.objectContaining({
+        code: "workflow_node_invalid",
+        reason: "node_type_unregistered",
+        nodeType: "custom.unknown",
+      }),
+    });
+  });
+
+  it("rejects cross-company agent references inside draft node config", async () => {
+    const alpha = await seedCompany("Alpha");
+    const beta = await seedCompany("Beta");
+    const [betaAgent] = await db.insert(agents).values({
+      companyId: beta.id,
+      name: "Beta agent",
+      role: "analyst",
+      adapterType: "codex_local",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    }).returning();
+    const svc = workflowService(db);
+    const created = await createWorkflow(alpha.id, alpha.userId);
+
+    await expect(
+      svc.updateDraft(
+        alpha.id,
+        created.id,
+        {
+          expectedRevisionId: created.draftRevisionId!,
+          graph: {
+            version: 1,
+            nodes: [{
+              id: "agent-step",
+              type: "agent.task",
+              name: "Delegate",
+              position: { x: 0, y: 0 },
+              config: {
+                agentId: betaAgent!.id,
+                objective: "Do work",
+              },
+            }],
+            edges: [],
+            variables: [],
+            settings: {},
+          },
+        },
+        actor(alpha.userId),
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: expect.objectContaining({
+        code: "workflow_node_invalid",
+        reason: "cross_company_reference",
+        referenceType: "agent",
+      }),
+    });
   });
 
 });

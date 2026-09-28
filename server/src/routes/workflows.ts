@@ -13,6 +13,7 @@ import {
   accessService,
   instanceSettingsService,
   logActivity,
+  workflowNodeRegistryService,
   workflowService,
   type WorkflowMutationActor,
 } from "../services/index.js";
@@ -26,6 +27,7 @@ type WorkflowPermission = Extract<
 export function workflowRoutes(db: Db) {
   const router = Router();
   const svc = workflowService(db);
+  const nodeRegistry = workflowNodeRegistryService(db);
   const access = accessService(db);
   const settings = instanceSettingsService(db);
 
@@ -134,6 +136,13 @@ export function workflowRoutes(db: Db) {
     await assertWorkflowsEnabled();
     const companyId = req.params.companyId as string;
     res.json(await capabilities(req, companyId));
+  });
+
+  router.get("/companies/:companyId/workflows/node-registry", async (req, res) => {
+    await assertWorkflowsEnabled();
+    const companyId = req.params.companyId as string;
+    await assertPermission(req, companyId, "workflows:read");
+    res.json(nodeRegistry.list());
   });
 
   router.get("/companies/:companyId/workflows", async (req, res) => {

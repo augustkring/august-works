@@ -274,4 +274,27 @@ describePg("Workflow routes", () => {
     });
   });
 
+  it("exposes the typed Node Registry to authorized readers", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+
+    const response = await request(app(localBoard))
+      .get(`/api/companies/${company.id}/workflows/node-registry`)
+      .expect(200);
+
+    expect(response.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "core.manual_trigger",
+          sideEffectClass: "pure",
+          publishState: "ready",
+        }),
+        expect.objectContaining({
+          type: "connector.action",
+          publishState: "draft_only",
+        }),
+      ]),
+    );
+  });
+
 });
