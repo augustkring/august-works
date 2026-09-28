@@ -2273,24 +2273,9 @@ function pipelineAutomationTargetFromExecution(
 }
 
 function workflowActorForPipeline(actor: PipelineActor): WorkflowRunActor {
-  if (actor.type === "user") {
-    return {
-      principal: { type: "user", userId: actor.userId },
-      responsibleUserId: actor.userId,
-    };
-  }
-  if (actor.type === "agent") {
-    return {
-      principal: {
-        type: "agent",
-        agentId: actor.agentId,
-        responsibleUserId: null,
-      },
-      responsibleUserId: null,
-    };
-  }
   return {
     principal: { type: "system", service: "pipeline-automation" },
+    responsibleUserId: actor.type === "user" ? actor.userId : null,
   };
 }
 
