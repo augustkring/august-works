@@ -187,17 +187,38 @@ describePg("Workflow service", () => {
     });
   });
 
-  it("publishes an immutable empty revision and creates a separate next draft", async () => {
+  it("publishes an immutable valid revision and creates a separate next draft", async () => {
     const company = await seedCompany("Alpha");
     const svc = workflowService(db);
     const created = await createWorkflow(company.id, company.userId);
-    const firstDraftId = created.draftRevisionId!;
+    const publishable = await svc.updateDraft(
+      company.id,
+      created.id,
+      {
+        expectedRevisionId: created.draftRevisionId!,
+        graph: {
+          version: 1,
+          nodes: [{
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Manual start",
+            position: { x: 0, y: 0 },
+            config: {},
+          }],
+          edges: [],
+          variables: [],
+          settings: {},
+        },
+      },
+      actor(company.userId),
+    );
+    const firstPublishableDraftId = publishable.draftRevisionId!;
 
     const published = await svc.publish(
       company.id,
       created.id,
       {
-        expectedDraftRevisionId: firstDraftId,
+        expectedDraftRevisionId: firstPublishableDraftId,
         expectedPublishedRevisionId: null,
         approvalId: null,
       },
@@ -205,15 +226,15 @@ describePg("Workflow service", () => {
     );
 
     expect(published.publishedRevision).toMatchObject({
-      id: firstDraftId,
-      revisionNumber: 1,
+      id: firstPublishableDraftId,
+      revisionNumber: 2,
       state: "published",
     });
     expect(published.draftRevision).toMatchObject({
-      revisionNumber: 2,
+      revisionNumber: 3,
       state: "draft",
     });
-    expect(published.draftRevisionId).not.toBe(firstDraftId);
+    expect(published.draftRevisionId).not.toBe(firstPublishableDraftId);
 
     const updated = await svc.updateDraft(
       company.id,
@@ -230,7 +251,7 @@ describePg("Workflow service", () => {
             config: {},
           }],
           edges: [],
-          variables: [],
+          variables: [{ name: "futureValue" }],
           settings: {},
         },
       },
@@ -239,7 +260,13 @@ describePg("Workflow service", () => {
 
     expect(updated.publishedRevision?.graph).toEqual({
       version: 1,
-      nodes: [],
+      nodes: [{
+        id: "start",
+        type: "core.manual_trigger",
+        name: "Manual start",
+        position: { x: 0, y: 0 },
+        config: {},
+      }],
       edges: [],
       variables: [],
       settings: {},
@@ -250,8 +277,29 @@ describePg("Workflow service", () => {
     const company = await seedCompany("Alpha");
     const svc = workflowService(db);
     const created = await createWorkflow(company.id, company.userId);
+    const publishable = await svc.updateDraft(
+      company.id,
+      created.id,
+      {
+        expectedRevisionId: created.draftRevisionId!,
+        graph: {
+          version: 1,
+          nodes: [{
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Manual start",
+            position: { x: 0, y: 0 },
+            config: {},
+          }],
+          edges: [],
+          variables: [],
+          settings: {},
+        },
+      },
+      actor(company.userId),
+    );
     const input = {
-      expectedDraftRevisionId: created.draftRevisionId!,
+      expectedDraftRevisionId: publishable.draftRevisionId!,
       expectedPublishedRevisionId: null,
       approvalId: null,
     };
