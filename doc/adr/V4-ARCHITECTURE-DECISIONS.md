@@ -15,6 +15,8 @@ The V4 Golden Master requires an explicit durable boundary for this decision bef
 ### Decision
 Foundation content remains in existing documents/document_revisions; Foundation tables add semantics, authority, review lifecycle, indexing metadata, and proposals. `documents.latest_revision_id` tracks the current working revision while `foundation_documents.approved_revision_id` independently pins the canonical approved revision, so a new draft cannot silently replace approved company truth.
 
+For V1, the Golden Master taxonomy is represented directly by the required `category` field. The architecture draft also listed a nullable `folder_id`, but the current repository folder subsystem only supports `routine|skill`, PR 05 requires category overview rather than nested folders, and no later V4 Foundation contract depends on folder hierarchy. `folder_id` is therefore deliberately deferred rather than widening the shared folder subsystem without a validated user task. Adding nested Foundation folders later requires a small additive migration and an ADR review.
+
 ### Alternatives considered
 A second Foundation content store; free-form files as sole authority.
 
