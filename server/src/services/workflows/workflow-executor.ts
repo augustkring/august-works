@@ -6,6 +6,7 @@ import {
   agents,
   approvals,
   companyMemberships,
+  routineRuns,
   workflowRevisions,
   workflowRuns,
   workflowStepRuns,
@@ -720,6 +721,33 @@ async function markSkippedBranch(
   }
 }
 
+async function finalizeLinkedRoutineRun(
+  executor: Db,
+  run: typeof workflowRuns.$inferSelect,
+  outcome: {
+    status: "completed" | "failed";
+    failureReason: string | null;
+    completedAt: Date;
+  },
+) {
+  if (run.source !== "routine") return;
+  await executor
+    .update(routineRuns)
+    .set({
+      status: outcome.status,
+      failureReason: outcome.failureReason,
+      completedAt: outcome.completedAt,
+      updatedAt: outcome.completedAt,
+    })
+    .where(
+      and(
+        eq(routineRuns.companyId, run.companyId),
+        eq(routineRuns.linkedWorkflowRunId, run.id),
+        eq(routineRuns.status, "workflow_started"),
+      ),
+    );
+}
+
 async function finishRun(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
@@ -759,6 +787,15 @@ async function finishRun(
         workflowRunId: run.id,
       });
     }
+    await finalizeLinkedRoutineRun(
+      tx as unknown as Db,
+      finishedRun,
+      {
+        status: "completed",
+        failureReason: null,
+        completedAt: finishedAt,
+      },
+    );
     const { publication } = await persistWorkflowActivity(
       tx as unknown as Db,
       actor,
@@ -866,6 +903,15 @@ async function failRun(
         workflowRunId: run.id,
       });
     }
+    await finalizeLinkedRoutineRun(
+      tx as unknown as Db,
+      failedRun,
+      {
+        status: "failed",
+        failureReason: errorMessage,
+        completedAt: now,
+      },
+    );
     const { publication } = await persistWorkflowActivity(
       tx as unknown as Db,
       actor,
@@ -2459,6 +2505,15 @@ async function rejectHumanWait(
         waitId: wait.id,
       });
     }
+    await finalizeLinkedRoutineRun(
+      tx as unknown as Db,
+      failedRun,
+      {
+        status: "failed",
+        failureReason: failedStep.errorMessage,
+        completedAt: now,
+      },
+    );
 
     const waitActivity = await persistWorkflowActivity(
       tx as unknown as Db,
