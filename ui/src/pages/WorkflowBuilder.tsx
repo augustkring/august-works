@@ -1028,6 +1028,7 @@ function NodeInspector({
     definition?.retryPolicyDefault ??
     NO_RETRY_POLICY;
   const isCreateTaskNode = workflowNode.type === "work.create_task";
+  const isAgentTaskNode = workflowNode.type === "agent.task";
   const { data: taskProjects = [] } = useQuery({
     queryKey: queryKeys.projects.list(companyId, { includeArchived: false }),
     queryFn: () => projectsApi.list(companyId, { includeArchived: false }),
@@ -1036,7 +1037,7 @@ function NodeInspector({
   const { data: taskAgents = [] } = useQuery({
     queryKey: queryKeys.agents.list(companyId),
     queryFn: () => agentsApi.list(companyId),
-    enabled: isCreateTaskNode,
+    enabled: isCreateTaskNode || isAgentTaskNode,
   });
   const { data: taskUserDirectory } = useQuery({
     queryKey: queryKeys.access.companyUserDirectory(companyId),
@@ -1298,14 +1299,73 @@ function NodeInspector({
       ) : null}
 
       {workflowNode.type === "agent.task" ? (
-        <label className="block space-y-1 text-xs font-medium">
-          Agent objective
-          <Input
-            value={String(config.objective ?? "")}
-            disabled={!canEdit}
-            onChange={(event) => updateConfig({ objective: event.target.value })}
-          />
-        </label>
+        <>
+          <label className="block space-y-1 text-xs font-medium">
+            Agent
+            <select
+              value={String(config.agentId ?? "")}
+              disabled={!canEdit}
+              onChange={(event) =>
+                updateConfig({ agentId: event.target.value })
+              }
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="" disabled>
+                Select agent
+              </option>
+              {taskAgents
+                .filter((agent) => agent.status !== "terminated")
+                .map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block space-y-1 text-xs font-medium">
+            Agent objective
+            <textarea
+              value={String(config.objective ?? "")}
+              disabled={!canEdit}
+              rows={4}
+              onChange={(event) =>
+                updateConfig({ objective: event.target.value })
+              }
+              className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <span className="block text-[11px] font-normal leading-4 text-muted-foreground">
+              Only the accountable task and its governed context are delegated.
+              The agent does not inherit broader workflow authority.
+            </span>
+          </label>
+          <label className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-xs">
+            <input
+              type="checkbox"
+              checked={config.waitForCompletion !== false}
+              disabled={!canEdit}
+              onChange={(event) =>
+                updateConfig({
+                  waitForCompletion: event.target.checked,
+                })
+              }
+              className="mt-0.5 h-4 w-4 rounded border-input focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+            />
+            <span>
+              <span className="block font-medium">Wait for task completion</span>
+              <span className="mt-0.5 block font-normal leading-4 text-muted-foreground">
+                The workflow releases its worker while the assigned agent works
+                and resumes from the task&apos;s terminal event.
+              </span>
+            </span>
+          </label>
+          {config.expectedOutputSchema != null ? (
+            <div className="border-l-2 border-amber-500 pl-3 text-xs leading-5 text-muted-foreground">
+              Structured Agent Task output is draft-only until Tasks expose an
+              authoritative structured-result channel. Remove the expected
+              output schema before publishing.
+            </div>
+          ) : null}
+        </>
       ) : null}
 
       {workflowNode.type === "connector.action" ? (
