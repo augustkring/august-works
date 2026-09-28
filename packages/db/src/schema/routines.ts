@@ -1,6 +1,7 @@
 import {
   type AnyPgColumn,
   boolean,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -176,7 +177,7 @@ export const routineRuns = pgTable(
     triggerPayload: jsonb("trigger_payload").$type<Record<string, unknown>>(),
     dispatchFingerprint: text("dispatch_fingerprint"),
     linkedIssueId: uuid("linked_issue_id").references(() => issues.id, { onDelete: "set null" }),
-    linkedWorkflowRunId: uuid("linked_workflow_run_id").references(() => workflowRuns.id, { onDelete: "set null" }),
+    linkedWorkflowRunId: uuid("linked_workflow_run_id"),
     coalescedIntoRunId: uuid("coalesced_into_run_id"),
     failureReason: text("failure_reason"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -198,6 +199,11 @@ export const routineRuns = pgTable(
       table.companyId,
       table.linkedWorkflowRunId,
     ),
+    linkedWorkflowRunFk: foreignKey({
+      columns: [table.companyId, table.linkedWorkflowRunId],
+      foreignColumns: [workflowRuns.companyId, workflowRuns.id],
+      name: "routine_runs_company_linked_workflow_run_fk",
+    }).onDelete("set null"),
     idempotencyIdx: index("routine_runs_trigger_idempotency_idx").on(table.triggerId, table.idempotencyKey),
   }),
 );
