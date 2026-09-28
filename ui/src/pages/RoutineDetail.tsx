@@ -1067,6 +1067,11 @@ export function RoutineDetail() {
             ? null
             : routine.assigneeAgentId
         }
+        executionTargetKind={
+          routine.executionTargetKind === "workflow"
+            ? "workflow"
+            : "agent_task"
+        }
         variables={routine.variables ?? []}
         isPending={runRoutine.isPending}
         onSubmit={(data) => runRoutine.mutate(data)}
