@@ -3965,7 +3965,13 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         : null;
       const stageName = input.patch.name ?? existing.name;
       let config = normalizeStageConfig(kind, input.patch.config !== undefined ? input.patch.config : stageConfig(existing));
-      if (automationRequest) {
+      if (automationRequest?.target?.kind === "workflow") {
+        config = withStageAutomationTarget(
+          config,
+          automationRequest.target,
+          automationRequest.executionContext,
+        );
+      } else if (automationRequest) {
         config = reconcilePipelineStageConfigVariables(config, [
           automationRequest.titleTemplate ?? PIPELINE_AUTOMATION_DEFAULT_TITLE_TEMPLATE,
           automationRequest.instructionsBody,
@@ -3976,11 +3982,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       return db.transaction(async (tx) => {
         const nextConfig =
           automationRequest?.target?.kind === "workflow"
-            ? withStageAutomationTarget(
-                config,
-                automationRequest.target,
-                automationRequest.executionContext,
-              )
+            ? config
             : automationRequest
               ? await syncPipelineStageAutomation(tx, {
                   companyId: input.companyId,
