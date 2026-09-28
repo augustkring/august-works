@@ -1,7 +1,7 @@
 # Workflows V1 API contract
 
 **Feature flag:** `enableWorkflowsV1` (default off)
-**Scope:** PR 11–23 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries/waits, Human Approval, and Routine → Workflow execution targets using the existing Routine trigger engine. Pipeline/task integration, callback/task waits, and side-effect node execution remain gated.
+**Scope:** PR 11–24 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries/waits, Human Approval, Routine → Workflow execution targets, and Pipeline → Workflow automation targets through the existing pipeline automation ledger. Task integration, callback/task waits, and side-effect node execution remain gated.
 
 ## Authorization
 
@@ -107,6 +107,8 @@ PR 22 binds Human Approval to the existing company-level `approvals` system. The
 External callback and task-completion waits share the same durable storage/lifecycle but remain non-executable until their existing connector/task event systems are bound in the ordered PRs. External callback tokens are stored only as hashes.
 
 PR 23 allows the existing Routine engine to enqueue Workflows without introducing another scheduler or webhook control plane. Routine schedule/webhook/API semantics, replay protection, catch-up and concurrency remain authoritative in Routines. When the execution target is a Workflow, the RoutineRun and queued `workflow_run` are persisted atomically; the child run uses source `routine`, is bound to the then-current published Workflow revision, and receives routine/run/trigger provenance in the trigger payload. After commit, inline execution is best-effort; if the process stops before or during execution, the existing workflow recovery loop owns continuation. A terminal child Workflow settles the originating `workflow_started` RoutineRun to `completed` or `failed` in the same terminal transaction.
+
+PR 24 generalizes Pipeline stage automation without changing Pipeline ownership of persistent business state. Legacy `onEnter.type="run_routine"` remains readable; new stages may use a typed `run_target` with `routine` or `workflow`. The existing `pipeline_automation_executions` ledger keeps its case/stage-event idempotency identity, retry generations, cleanup policy, liveness and audit semantics. Workflow targets are recorded in that same ledger, durably enqueue a child `workflow_run` with source `pipeline`, and link the exact run back to the automation attempt. Pipeline liveness reads the child Workflow state for running/waiting/failure and retry UI creates a fresh pipeline automation generation rather than retrying the same failed child run. Workflow-backed stages intentionally reject existing Pipeline breakdown mechanics until those mechanics have a native Workflow contract; no agent/routine fallback is silently substituted.
 
 A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
