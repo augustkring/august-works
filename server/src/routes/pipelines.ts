@@ -2358,9 +2358,12 @@ function stageAutomationId(stage: typeof pipelineStages.$inferSelect) {
   const config = stage.config && typeof stage.config === "object" && !Array.isArray(stage.config)
     ? stage.config as PipelineStageConfig
     : null;
+  const target = stageAutomationTarget(config);
+  if (!target) return null;
   const onEnter = config?.onEnter;
-  if (!onEnter || onEnter.type !== "run_routine" || !onEnter.routineId) return null;
-  return typeof onEnter.id === "string" ? onEnter.id : `${stage.id}:on_enter`;
+  return typeof onEnter?.id === "string"
+    ? onEnter.id
+    : `${stage.id}:on_enter`;
 }
 
 async function loadBuiltFromAutomation(
@@ -2474,13 +2477,13 @@ function stageHasChildrenTerminalGate(config: unknown) {
 }
 
 function readStageAutomationId(stage: typeof pipelineStages.$inferSelect) {
+  const target = stageAutomationTarget(stage.config);
+  if (!target) return null;
   if (!stage.config || typeof stage.config !== "object" || Array.isArray(stage.config)) return null;
   const onEnterValue = (stage.config as Record<string, unknown>).onEnter;
   if (!onEnterValue || typeof onEnterValue !== "object" || Array.isArray(onEnterValue)) return null;
   const onEnter = onEnterValue as Record<string, unknown>;
   const rawId = typeof onEnter.id === "string" ? onEnter.id.trim() : "";
-  const routineId = typeof onEnter.routineId === "string" ? onEnter.routineId.trim() : "";
-  if (onEnter.type !== "run_routine" || routineId.length === 0) return null;
   return rawId.length > 0 ? rawId : `${stage.id}:on_enter`;
 }
 
@@ -2697,6 +2700,85 @@ async function derivePipelineCaseLiveness(
     .orderBy(desc(pipelineAutomationExecutions.updatedAt), desc(pipelineAutomationExecutions.createdAt))
     .limit(1)
     .then((rows) => rows[0] ?? null);
+  if (
+    latestAutomation?.targetKind === "workflow" &&
+    latestAutomation.workflowRunId
+  ) {
+    const workflowRun = await db
+      .select({
+        id: workflowRuns.id,
+        status: workflowRuns.status,
+        failureCode: workflowRuns.failureCode,
+        failureMessage: workflowRuns.failureMessage,
+      })
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.companyId, companyId),
+          eq(workflowRuns.id, latestAutomation.workflowRunId),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+
+    if (
+      workflowRun &&
+      ["queued", "running", "recovering", "cancelling"].includes(workflowRun.status)
+    ) {
+      return {
+        state: "live",
+        reason: "lease_active",
+        message: `Linked Workflow run is ${workflowRun.status}.`,
+        automation: {
+          automationId: latestAutomation.automationId,
+          targetKind: "workflow",
+          targetRef: latestAutomation.targetRef,
+          workflowRunId: workflowRun.id,
+          executionId: latestAutomation.id,
+          error: null,
+        },
+      };
+    }
+    if (workflowRun?.status === "waiting") {
+      return {
+        state: "waiting",
+        reason: "linked_issue_waiting",
+        message: "Linked Workflow run is waiting for a durable continuation.",
+        automation: {
+          automationId: latestAutomation.automationId,
+          targetKind: "workflow",
+          targetRef: latestAutomation.targetRef,
+          workflowRunId: workflowRun.id,
+          executionId: latestAutomation.id,
+          error: null,
+        },
+      };
+    }
+    if (
+      workflowRun &&
+      (workflowRun.status === "failed" || workflowRun.status === "cancelled")
+    ) {
+      return {
+        state: "attention",
+        reason: "automation_failed",
+        message:
+          workflowRun.failureMessage ??
+          `Linked Workflow run ${workflowRun.status}.`,
+        automation: {
+          automationId: latestAutomation.automationId,
+          targetKind: "workflow",
+          targetRef: latestAutomation.targetRef,
+          workflowRunId: workflowRun.id,
+          executionId: latestAutomation.id,
+          error:
+            workflowRun.failureCode ??
+            workflowRun.failureMessage ??
+            workflowRun.status,
+        },
+      };
+    }
+  }
+
   if (latestAutomation?.status === "failed") {
     const fingerprint = latestAutomation.error?.startsWith("permission_preflight_failed:")
       ? latestAutomation.error.slice("permission_preflight_failed:".length)
@@ -2722,6 +2804,9 @@ async function derivePipelineCaseLiveness(
           automation: {
             automationId: latestAutomation.automationId,
             routineId: latestAutomation.routineId,
+            targetKind: latestAutomation.targetKind,
+            targetRef: latestAutomation.targetRef,
+            workflowRunId: latestAutomation.workflowRunId,
             executionId: latestAutomation.id,
             error: latestAutomation.error,
             fingerprint,
@@ -2738,6 +2823,9 @@ async function derivePipelineCaseLiveness(
       automation: {
         automationId: latestAutomation.automationId,
         routineId: latestAutomation.routineId,
+        targetKind: latestAutomation.targetKind,
+        targetRef: latestAutomation.targetRef,
+        workflowRunId: latestAutomation.workflowRunId,
         executionId: latestAutomation.id,
         error: latestAutomation.error,
         fingerprint,
