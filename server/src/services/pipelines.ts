@@ -3099,8 +3099,24 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       .limit(1)
       .then((rows) => rows[0] ?? null);
     if (!execution) throw notFound("Pipeline automation execution not found");
-    if (execution.status === "succeeded" && execution.executionIssueId) {
+    if (
+      execution.status === "succeeded" &&
+      (execution.executionIssueId || execution.workflowRunId)
+    ) {
       return { status: "succeeded", execution };
+    }
+    const executionTarget = pipelineAutomationTargetFromExecution(execution);
+    if (!executionTarget) {
+      const [failed] = await db
+        .update(pipelineAutomationExecutions)
+        .set({
+          status: "failed",
+          error: "automation_target_missing",
+          updatedAt: nowDate(),
+        })
+        .where(eq(pipelineAutomationExecutions.id, execution.id))
+        .returning();
+      return { status: "failed", execution: failed! };
     }
 
     const detail = await getCaseWithStageOrThrow(db, execution.companyId, execution.caseId);
@@ -3122,13 +3138,124 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     }
 
     try {
-      const routine = await assertRoutineInCompany(execution.companyId, execution.routineId);
       const outputSummaries = summarizePipelineCaseOutputsForContext(
         await outputsSvc.listCaseOutputs(execution.companyId, execution.caseId),
       );
       const contextPack = buildPipelineCaseContextPack({ ...detail, outputSummaries });
       const variables = buildPipelineCaseVariables(detail);
       const breakdownConfig = readBreakdownConfig(stageConfig(detail.stage));
+
+      if (executionTarget.kind === "workflow") {
+        if (breakdownConfig) {
+          throw unprocessable(
+            "Workflow-target pipeline automation does not yet support pipeline breakdown mechanics",
+            { code: "pipeline_workflow_breakdown_not_ready" },
+          );
+        }
+
+        const resolved = await resolveWorkflowExecutionRevision(
+          db,
+          execution.companyId,
+          executionTarget.workflowId,
+        );
+        const workflowActor = workflowActorForPipeline(actor);
+        const workflowPublications: ActivityPublication[] = [];
+        const workflowPayload = {
+          pipeline: contextPack.pipeline,
+          case: contextPack.case,
+          stage: contextPack.stage,
+          triggeringEventId: execution.triggeringEventId,
+          automation: {
+            automationId: execution.automationId,
+            automationExecutionId: execution.id,
+            generation: execution.generation,
+          },
+          contextPack,
+          variables,
+        };
+
+        const queued = await db.transaction(async (tx) => {
+          const txDb = tx as unknown as Db;
+          const workflowRun = await enqueueWorkflowRunInTransaction(
+            txDb,
+            {
+              companyId: execution.companyId,
+              workflowId: executionTarget.workflowId,
+              revisionId: resolved.revision.id,
+              nodeId: resolved.triggerNodeId,
+              triggerId: null,
+              source: "pipeline",
+              triggerPayload: workflowPayload,
+              responsibleUserId:
+                actor.type === "user" ? actor.userId : null,
+              idempotencyKey: `pipeline-automation:${execution.id}`,
+              correlationId:
+                `pipeline:${execution.caseId}:${execution.automationId}:${execution.triggeringEventId}`,
+              actor: workflowActor,
+            },
+          );
+          workflowPublications.push(...workflowRun.publications);
+          const [updatedExecution] = await txDb
+            .update(pipelineAutomationExecutions)
+            .set({
+              status: "succeeded",
+              workflowRunId: workflowRun.run.id,
+              error: null,
+              updatedAt: nowDate(),
+            })
+            .where(eq(pipelineAutomationExecutions.id, execution.id))
+            .returning();
+          if (!updatedExecution) {
+            throw notFound("Pipeline automation execution disappeared during Workflow dispatch");
+          }
+          return {
+            execution: updatedExecution,
+            workflowRun: workflowRun.run,
+          };
+        });
+
+        for (const publication of workflowPublications) {
+          publishActivity(publication);
+        }
+
+        let deferredExecutionError: string | null = null;
+        try {
+          await workflowExecutorService(db).executeQueuedRun(
+            execution.companyId,
+            queued.workflowRun.id,
+            workflowActor,
+          );
+        } catch (error) {
+          deferredExecutionError =
+            error instanceof Error ? error.message : String(error);
+        }
+
+        await writeCaseEvent(db, {
+          companyId: execution.companyId,
+          caseId: execution.caseId,
+          type: "automation_executed",
+          actor,
+          payload: {
+            automationId: execution.automationId,
+            targetKind: "workflow",
+            workflowId: executionTarget.workflowId,
+            workflowRunId: queued.workflowRun.id,
+            status: "workflow_started",
+            ...(deferredExecutionError
+              ? {
+                executionDeferred: true,
+                deferredExecutionError,
+              }
+              : {}),
+          },
+        });
+        return { status: "succeeded", execution: queued.execution };
+      }
+
+      const routine = await assertRoutineInCompany(
+        execution.companyId,
+        executionTarget.routineId,
+      );
       if (breakdownConfig) {
         const { targetPipeline } = await loadBreakdownTarget(db, execution.companyId, breakdownConfig);
         await assertAutomationAssigneeCanWriteTargetPipeline({
@@ -3147,7 +3274,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
             config: breakdownConfig,
           })
         : null;
-      const run = await routinesSvc.runPipelineStageEntryRoutine(execution.routineId, {
+      const run = await routinesSvc.runPipelineStageEntryRoutine(executionTarget.routineId, {
         source: "api",
         assigneeAgentId: routine.assigneeAgentId,
         idempotencyKey: `pipeline:${execution.caseId}:${execution.automationId}:${execution.triggeringEventId}`,
@@ -3214,7 +3341,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         actor,
         payload: {
           automationId: execution.automationId,
-          routineId: execution.routineId,
+          targetKind: "routine",
+          routineId: executionTarget.routineId,
           routineRunId: run.id,
           issueId: run.linkedIssueId,
           status: run.status,
@@ -3245,7 +3373,14 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         actor,
         payload: {
           automationId: execution.automationId,
-          routineId: execution.routineId,
+          targetKind: executionTarget.kind,
+          targetRef:
+            executionTarget.kind === "routine"
+              ? executionTarget.routineId
+              : executionTarget.workflowId,
+          ...(executionTarget.kind === "routine"
+            ? { routineId: executionTarget.routineId }
+            : { workflowId: executionTarget.workflowId }),
           error: message,
           ...(permissionPreflight
             ? {
