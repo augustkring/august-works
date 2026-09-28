@@ -117,6 +117,7 @@ const runDetail: WorkflowRunDetail = {
       updatedAt: new Date("2026-09-28T12:01:01Z"),
     },
   ],
+  waits: [],
 };
 
 async function flush() {
