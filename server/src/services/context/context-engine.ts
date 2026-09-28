@@ -143,6 +143,34 @@ async function withProviderDeadline<T>(
   }
 }
 
+export async function withContextStageDeadline<T>(
+  stage: string,
+  promiseFactory: (signal: AbortSignal) => Promise<T>,
+  deadlineAt: number,
+): Promise<T> {
+  const remainingMs = deadlineAt - Date.now();
+  if (remainingMs <= 0) {
+    throw new HttpError(503, "Context assembly deadline exceeded", {
+      code: "source_unavailable",
+      reason: "context_deadline",
+      stage,
+    });
+  }
+
+  try {
+    return await withProviderDeadline(stage, promiseFactory, remainingMs);
+  } catch (error) {
+    if (error instanceof ProviderDeadlineError) {
+      throw new HttpError(503, "Context assembly deadline exceeded", {
+        code: "source_unavailable",
+        reason: "context_deadline",
+        stage,
+      });
+    }
+    throw error;
+  }
+}
+
 export async function runContextProviders(
   providers: ContextProvider[],
   request: AssembleContextInput,
@@ -461,7 +489,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
       const authorityPolicy = rawInput.authorityPolicy ?? DEFAULT_CONTEXT_AUTHORITY_POLICY;
       const deadlineAt = Date.now() + totalDeadlineMs;
 
-      const principalDecision = await withProviderDeadline(
+      const principalDecision = await withContextStageDeadline(
         "authorization",
         () => access.decide({
           actor: {
@@ -475,7 +503,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
           action: "company_scope:read",
           resource: { type: "company", companyId: input.companyId },
         }),
-        Math.max(1, deadlineAt - Date.now()),
+        deadlineAt,
       );
       if (!principalDecision.allowed) {
         throw forbidden(principalDecision.explanation, {
@@ -506,7 +534,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         });
       }
 
-      const manifestResult = await withProviderDeadline(
+      const manifestResult = await withContextStageDeadline(
         "context_manifest",
         () => manifests.create({
           companyId: input.companyId,
@@ -535,7 +563,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
             return { decision, retrievalScore };
           }),
         }),
-        remainingMs,
+        deadlineAt,
       );
 
       const packet = packetFromDecisions(budgeted.selected, {

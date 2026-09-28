@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { forbidden } from "../../errors.js";
 import type { ContextPacket, EvidenceItem } from "@paperclipai/shared";
 import {
   runContextProviders,
   serializeContextPacket,
+  withContextStageDeadline,
   type ContextProvider,
 } from "./context-engine.js";
 
@@ -35,6 +37,55 @@ function evidence(id: string, overrides: Partial<EvidenceItem> = {}): EvidenceIt
     ...overrides,
   };
 }
+
+describe("Context total deadline policy", () => {
+  it("maps a hung mandatory assembly stage to the stable context deadline error", async () => {
+    const started = Date.now();
+    await expect(
+      withContextStageDeadline(
+        "authorization",
+        async () => new Promise(() => undefined),
+        Date.now() + 15,
+      ),
+    ).rejects.toMatchObject({
+      status: 503,
+      details: {
+        code: "source_unavailable",
+        reason: "context_deadline",
+        stage: "authorization",
+      },
+    });
+    expect(Date.now() - started).toBeLessThan(250);
+  });
+
+  it("fails immediately when the total deadline is already exhausted", async () => {
+    await expect(
+      withContextStageDeadline(
+        "context_manifest",
+        async () => "never",
+        Date.now() - 1,
+      ),
+    ).rejects.toMatchObject({
+      status: 503,
+      details: {
+        code: "source_unavailable",
+        reason: "context_deadline",
+        stage: "context_manifest",
+      },
+    });
+  });
+
+  it("preserves non-timeout policy failures instead of rewriting them as availability errors", async () => {
+    const policyError = forbidden("Denied", { code: "permission_denied" });
+    await expect(
+      withContextStageDeadline(
+        "authorization",
+        async () => { throw policyError; },
+        Date.now() + 100,
+      ),
+    ).rejects.toBe(policyError);
+  });
+});
 
 describe("Context provider deadline policy", () => {
   it("omits an optional provider that hangs and returns a visible warning", async () => {
