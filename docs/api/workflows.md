@@ -1,7 +1,7 @@
 # Workflows V1 API contract
 
 **Feature flag:** `enableWorkflowsV1` (default off)
-**Scope:** PR 11–17 persistence/API, typed Node Registry, manual executor V1 and run-history/live-run API. Advanced durability nodes remain gated.
+**Scope:** PR 11–18 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API and deterministic Condition branching. Advanced durability nodes remain gated.
 
 ## Authorization
 
@@ -48,7 +48,9 @@ PR 13 validates every draft node against a typed registry and company-scoped ref
 
 A registered node may be `ready` or `draft_only`. Publish fails closed with `workflow_node_invalid` / `node_not_publishable_yet` until the node's execution, authorization, retry/idempotency, and policy integration are implemented.
 
-`core.manual_trigger` is currently publish-ready. Transform, Condition, Connector Action, Create Task, Agent Task, and Human Approval are intentionally draft-only until their dependent implementation waves land.
+`core.manual_trigger` and `core.condition` are publish-ready. Transform, Connector Action, Create Task, Agent Task, and Human Approval remain intentionally draft-only until their dependent implementation waves land.
+
+A Condition may be terminal or may expose exactly one `true` and one `false` branch. Branch labels/source handles are part of the published graph contract; ambiguous or duplicate condition branches fail publish.
 
 ## Stable errors
 
@@ -64,16 +66,18 @@ A registered node may be `ready` or `draft_only`. Publish fails closed with `wor
 - `workflow_run_claim_conflict`
 - `idempotency_key_invalid`
 - `idempotency_key_reused`
+- `workflow_condition_expression_invalid`
+- `workflow_condition_reference_missing`
+- `workflow_condition_type_invalid`
+- `workflow_condition_branch_missing`
 
 ## Current execution boundary
 
-PR 16 introduced the durable run/step records, manual-run idempotency contract,
-lease-based claim and the first executable node: `core.manual_trigger`.
+PR 16 introduced durable run/step records, manual-run idempotency and lease-based ownership. PR 18 adds deterministic `core.condition` execution and explicit true/false branch selection.
 
-Live execution remains deliberately fail-closed for every other node type until
-its executor, authorization, retry/idempotency and recovery semantics land in
-the ordered durability PRs. A run always binds to the published revision it
-started with; later draft edits or publishes do not rewrite that run.
+Condition expressions intentionally do not execute host JavaScript and never call an LLM. The current grammar supports boolean literals, boolean references, strict equality/inequality and finite numeric ordered comparisons over `trigger`, `variables` and prior `steps` outputs. Missing references or invalid runtime types fail closed into a durable failed step/run.
+
+Live execution remains deliberately fail-closed for every other node type until its executor, authorization, retry/idempotency and recovery semantics land in the ordered durability PRs. A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
 The run-history endpoint reads the existing authoritative `workflow_runs` state;
 it does not create a second history store. Cancellation/retry endpoints are not
