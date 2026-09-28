@@ -1552,6 +1552,8 @@ export type {
   RevokeToolTrustRule,
   Routine,
   RoutineEnvConfig,
+  RoutineExecutionTarget,
+  RoutineExecutionTargetKind,
   RoutineManagedByPlugin,
   RoutineDescriptionDocument,
   RoutineVariable,
@@ -1619,7 +1621,7 @@ export type {
   QuotaWindow,
   ProviderQuotaResult,
 } from "./types/index.js";
-export { WORKSPACE_READINESS_STATES } from "./types/index.js";
+export { WORKSPACE_READINESS_STATES, ROUTINE_EXECUTION_TARGET_KINDS } from "./types/index.js";
 export {
   COMPANY_SEARCH_EXTRACT_KINDS,
   COMPANY_SEARCH_EXTRACT_SCOPES,
@@ -2241,6 +2243,7 @@ export {
   createRoutineTriggerSchema,
   updateRoutineTriggerSchema,
   routineVariableSchema,
+  routineExecutionTargetSchema,
   runRoutineSchema,
   pipelineAutomationRetryCleanupOptionsSchema,
   pipelineAutomationRetryRequestSchema,
