@@ -13,6 +13,14 @@ import type {
 import { api } from "./client";
 
 export const workflowsApi = {
+  dataSelector: (
+    companyId: string,
+    input: WorkflowDataSelectorRequest,
+  ) =>
+    api.post<WorkflowDataSelectorModel>(
+      `/companies/${companyId}/workflows/data-selector`,
+      input,
+    ),
   capabilities: (companyId: string) =>
     api.get<WorkflowCapabilities>(`/companies/${companyId}/workflows/capabilities`),
 

@@ -270,3 +270,51 @@ export interface WorkflowCapabilitySearchResult {
   query: string;
   candidates: WorkflowCapabilityCandidate[];
 }
+
+export const WORKFLOW_DATA_SELECTOR_SOURCE_KINDS = [
+  "variables",
+  "trigger",
+  "step",
+] as const;
+export type WorkflowDataSelectorSourceKind =
+  (typeof WORKFLOW_DATA_SELECTOR_SOURCE_KINDS)[number];
+
+export const WORKFLOW_DATA_VALUE_TYPES = [
+  "object",
+  "array",
+  "string",
+  "number",
+  "integer",
+  "boolean",
+  "null",
+  "unknown",
+] as const;
+export type WorkflowDataValueType = (typeof WORKFLOW_DATA_VALUE_TYPES)[number];
+
+export interface WorkflowDataSelectorField {
+  key: string;
+  label: string;
+  path: string;
+  expression: string;
+  valueType: WorkflowDataValueType;
+  required: boolean;
+  sampleValue: unknown | null;
+  children: WorkflowDataSelectorField[];
+}
+
+export interface WorkflowDataSelectorSource {
+  id: string;
+  kind: WorkflowDataSelectorSourceKind;
+  label: string;
+  expression: string;
+  nodeId: string | null;
+  nodeType: string | null;
+  schema: WorkflowJsonSchema | null;
+  fields: WorkflowDataSelectorField[];
+  sampleData: unknown | null;
+}
+
+export interface WorkflowDataSelectorModel {
+  targetNodeId: string;
+  sources: WorkflowDataSelectorSource[];
+}

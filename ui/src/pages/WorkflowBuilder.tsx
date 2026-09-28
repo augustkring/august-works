@@ -53,6 +53,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import { WorkflowDataSelector } from "@/components/workflows/WorkflowDataSelector";
 
 type BuilderNodeData = {
   workflowNode: WorkflowNodeV1;
@@ -511,6 +512,10 @@ export function WorkflowBuilder() {
   };
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const builderGraph = useMemo(
+    () => toGraph(nodes, edges, { variables, settings }),
+    [nodes, edges, variables, settings],
+  );
   const capabilities = capabilitiesQuery.data;
   const capabilityCandidates = capabilitySearchQuery.data?.candidates ?? [];
 
@@ -817,6 +822,9 @@ export function WorkflowBuilder() {
               canEdit={capabilities?.edit === true}
               onUpdate={updateSelectedNode}
               onDelete={() => removeNode(selectedNode.id)}
+              companyId={selectedCompanyId}
+              graph={builderGraph}
+              inputSchema={detailQuery.data.draftRevision?.inputSchema ?? null}
             />
           ) : (
             <div className="py-8 text-sm text-muted-foreground">
@@ -834,11 +842,17 @@ function NodeInspector({
   canEdit,
   onUpdate,
   onDelete,
+  companyId,
+  graph,
+  inputSchema,
 }: {
   node: BuilderNode;
   canEdit: boolean;
   onUpdate: (patch: Partial<WorkflowNodeV1>) => void;
   onDelete: () => void;
+  companyId: string;
+  graph: WorkflowGraphV1;
+  inputSchema: Record<string, unknown> | null;
 }) {
   const workflowNode = node.data.workflowNode;
   const definition = node.data.definition;
@@ -850,6 +864,18 @@ function NodeInspector({
 
   const updateConfig = (patch: Record<string, unknown>) =>
     onUpdate({ config: { ...config, ...patch } });
+
+  const insertDataExpression = (expression: string) => {
+    if (!canEdit) return;
+    if (workflowNode.type === "core.condition") {
+      updateConfig({ expression });
+    } else if (workflowNode.type === "core.transform") {
+      updateConfig({ mapping: { value: expression } });
+    }
+  };
+  const supportsExpressionInput =
+    workflowNode.type === "core.condition" ||
+    workflowNode.type === "core.transform";
 
   return (
     <div className="space-y-5">
@@ -969,6 +995,16 @@ function NodeInspector({
         <div className="border-l-2 border-amber-500 pl-3 text-xs leading-5 text-muted-foreground">
           Publish gate: {definition.publishBlockedReason.replaceAll("_", " ")}
         </div>
+      ) : null}
+
+      {supportsExpressionInput ? (
+        <WorkflowDataSelector
+          companyId={companyId}
+          graph={graph}
+          targetNodeId={workflowNode.id}
+          inputSchema={inputSchema}
+          onInsert={insertDataExpression}
+        />
       ) : null}
 
       {canEdit ? (

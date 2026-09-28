@@ -5,6 +5,7 @@ import {
   publishWorkflowSchema,
   updateWorkflowDraftSchema,
   workflowCapabilitySearchQuerySchema,
+  workflowDataSelectorRequestSchema,
   type PermissionKey,
   type WorkflowCapabilities,
 } from "@paperclipai/shared";
@@ -15,6 +16,7 @@ import {
   instanceSettingsService,
   logActivity,
   workflowCapabilityResolverService,
+  workflowDataSelectorService,
   workflowNodeRegistryService,
   workflowService,
   type WorkflowMutationActor,
@@ -31,6 +33,7 @@ export function workflowRoutes(db: Db) {
   const svc = workflowService(db);
   const nodeRegistry = workflowNodeRegistryService(db);
   const capabilityResolver = workflowCapabilityResolverService(db);
+  const dataSelector = workflowDataSelectorService(db);
   const access = accessService(db);
   const settings = instanceSettingsService(db);
 
@@ -150,6 +153,17 @@ export function workflowRoutes(db: Db) {
     const query = workflowCapabilitySearchQuerySchema.parse(req.query);
     res.json(await capabilityResolver.search(companyId, query));
   });
+
+  router.post(
+    "/companies/:companyId/workflows/data-selector",
+    validate(workflowDataSelectorRequestSchema),
+    async (req, res) => {
+      await assertWorkflowsEnabled();
+      const companyId = req.params.companyId as string;
+      await assertPermission(req, companyId, "workflows:read");
+      res.json(await dataSelector.build(companyId, req.body));
+    },
+  );
 
   router.get("/companies/:companyId/workflows/node-registry", async (req, res) => {
     await assertWorkflowsEnabled();

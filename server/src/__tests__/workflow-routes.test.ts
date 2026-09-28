@@ -342,4 +342,59 @@ describePg("Workflow routes", () => {
     });
   });
 
+  it("builds a deterministic Data Selector model for the current unsaved graph", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+
+    const response = await request(app(localBoard))
+      .post(`/api/companies/${company.id}/workflows/data-selector`)
+      .send({
+        graph: {
+          version: 1,
+          nodes: [
+            {
+              id: "start",
+              type: "core.manual_trigger",
+              name: "Manual start",
+              position: { x: 0, y: 0 },
+              config: {},
+            },
+            {
+              id: "target",
+              type: "core.condition",
+              name: "Check",
+              position: { x: 100, y: 0 },
+              config: { expression: "true" },
+            },
+          ],
+          edges: [{ id: "edge", source: "start", target: "target" }],
+          variables: [{ name: "threshold", required: true, defaultValue: 10 }],
+          settings: {},
+        },
+        targetNodeId: "target",
+        inputSchema: {
+          type: "object",
+          properties: { leadId: { type: "string" } },
+        },
+      })
+      .expect(200);
+
+    expect(response.body.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "variables",
+          fields: [
+            expect.objectContaining({ expression: "{{variables.threshold}}" }),
+          ],
+        }),
+        expect.objectContaining({
+          id: "trigger:start",
+          fields: [
+            expect.objectContaining({ expression: "{{trigger.leadId}}" }),
+          ],
+        }),
+      ]),
+    );
+  });
+
 });

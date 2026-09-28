@@ -198,3 +198,14 @@ export const workflowCapabilitySearchQuerySchema = z
 
 export type WorkflowCapabilitySearchQuery =
   z.infer<typeof workflowCapabilitySearchQuerySchema>;
+
+export const workflowDataSelectorRequestSchema = z
+  .object({
+    graph: workflowGraphV1Schema,
+    targetNodeId: workflowIdSchema,
+    inputSchema: workflowJsonSchemaSchema.nullable().optional(),
+  })
+  .strict();
+
+export type WorkflowDataSelectorRequest =
+  z.infer<typeof workflowDataSelectorRequestSchema>;

@@ -2952,3 +2952,19 @@ export {
   type WorkflowCapabilitySearchQuery,
   type UpdateWorkflowDraft,
 } from "./validators/workflow.js";
+
+export type {
+  WorkflowDataSelectorField,
+  WorkflowDataSelectorModel,
+  WorkflowDataSelectorSource,
+  WorkflowDataSelectorSourceKind,
+  WorkflowDataValueType,
+} from "./types/workflow.js";
+export {
+  WORKFLOW_DATA_SELECTOR_SOURCE_KINDS,
+  WORKFLOW_DATA_VALUE_TYPES,
+} from "./types/workflow.js";
+export {
+  workflowDataSelectorRequestSchema,
+  type WorkflowDataSelectorRequest,
+} from "./validators/workflow.js";
