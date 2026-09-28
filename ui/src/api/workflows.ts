@@ -6,6 +6,8 @@ import type {
   WorkflowCapabilities,
   WorkflowCapabilityKind,
   WorkflowCapabilitySearchResult,
+  WorkflowDataSelectorModel,
+  WorkflowDataSelectorRequest,
   WorkflowDetail,
   WorkflowNodeDefinitionDescriptor,
   WorkflowRevision,
