@@ -1,7 +1,7 @@
 # Workflows V1 API contract
 
 **Feature flag:** `enableWorkflowsV1` (default off)
-**Scope:** PR 11–20 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic Condition branching, checkpoint/replay recovery, and durable executor-owned retry/idempotency policy. Waitpoint nodes and side-effect node execution remain gated.
+**Scope:** PR 11–21 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries, and durable waitpoints. Human/task/callback integrations and side-effect node execution remain gated.
 
 ## Authorization
 
@@ -40,7 +40,7 @@ A successful publish supersedes the previous published revision, publishes the e
 | POST | `/companies/:companyId/workflows/:id/publish` | human + publish | expected draft + expected published | immutable publish + new draft clone | `workflow.revision_published` |
 | GET | `/companies/:companyId/workflows/:id/runs?limit=30` | read | none | newest run summaries | none |
 | POST | `/companies/:companyId/workflows/:id/run` | run | `Idempotency-Key` | durable manual run bound to published revision | workflow run/step activity |
-| GET | `/companies/:companyId/workflow-runs/:runId` | read | none | run + step attempts | none |
+| GET | `/companies/:companyId/workflow-runs/:runId` | read | none | run + step attempts + durable waits | none |
 
 ## Current publish gate
 
@@ -48,7 +48,7 @@ PR 13 validates every draft node against a typed registry and company-scoped ref
 
 A registered node may be `ready` or `draft_only`. Publish fails closed with `workflow_node_invalid` / `node_not_publishable_yet` until the node's execution, authorization, retry/idempotency, and policy integration are implemented.
 
-`core.manual_trigger` and `core.condition` are publish-ready. Transform, Connector Action, Create Task, Agent Task, and Human Approval remain intentionally draft-only until their dependent implementation waves land.
+`core.manual_trigger`, `core.condition`, and bounded `core.wait` are publish-ready. Transform, Connector Action, Create Task, Agent Task, and Human Approval remain intentionally draft-only until their dependent implementation waves land.
 
 A Condition may be terminal or may expose exactly one `true` and one `false` branch. Branch labels/source handles are part of the published graph contract; ambiguous or duplicate condition branches fail publish.
 
@@ -77,6 +77,12 @@ A Condition may be terminal or may expose exactly one `true` and one `false` bra
 - `workflow_revision_unavailable_for_recovery`
 - `workflow_step_retry_conflict`
 - `workflow_step_retry_unsafe`
+- `workflow_wait_config_invalid`
+- `workflow_wait_deadline_exceeded`
+- `workflow_wait_create_conflict`
+- `workflow_wait_key_conflict`
+- `workflow_wait_signal_conflict`
+- `workflow_wait_resolution_conflict`
 
 ## Current execution boundary
 
@@ -89,6 +95,10 @@ PR 19 adds checkpoint/replay recovery. Every running workflow carries an executi
 PR 20 makes retry policy executor-owned. Retry modes are `none`, `fixed`, or `exponential`; retry attempts are separate `workflow_step_runs` rows. A retryable failure may transition the current attempt to `retry_scheduled` and the run to `waiting`; reconciliation resumes only after the configured backoff, marks the old attempt `retried`, and executes attempt `n+1`. The retry decision fails closed unless the error is retryable, the side effect is safe to repeat/deduplicated, the retry budget and parent deadline permit it, and provider policy permits retry. A stable `workflow-step:<run>:<node-hash>` identity is derived once per logical step and remains constant across attempts.
 
 Backoff does not hold an HTTP request or worker sleep open. The durable state itself is the source of truth, and the existing reconciliation loop owns wake-up. Current executable nodes are still pure/deterministic; Connector Action, Create Task and Agent Task remain draft-only until their execution-time authorization and real dedupe/idempotency path are implemented.
+
+PR 21 introduces `workflow_waits` as the authoritative wait state with CAS terminal resolution (`resolved | timed_out | cancelled`) and durable wait kinds for `delay | human_interaction | external_callback | task_completion`. The first executable waitpoint is bounded `core.wait` (Delay): execution persists the active wait, marks the step/run `waiting`, clears the execution lease, and returns without sleeping a worker or holding the HTTP request open. Reconciliation resumes only when `wakeAt` is due, resolves the wait and step atomically, reclaims the run lease, and replays from checkpoints. Delay is rejected if it would extend beyond the remaining workflow deadline.
+
+Human Interaction, external callback and task-completion waits share the same durable storage/lifecycle but are not exposed as executable nodes until their existing approval/interaction/task systems are bound in the ordered PRs. External callback tokens are stored only as hashes.
 
 A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
