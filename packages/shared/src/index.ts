@@ -239,6 +239,10 @@ export { DECISION_TRAINING_RETENTION_POLICY } from "./types/decision-training.js
 export type {
   PipelineAutomationRetryBlocker,
   PipelineAutomationRetryCleanupOptions,
+  PipelineAutomationRetryTargetRef,
+  PipelineAutomationRetryWorkflowRef,
+  PipelineAutomationTarget,
+  PipelineAutomationTargetKind,
   PipelineAutomationRetryEffectCounts,
   PipelineAutomationRetryPlan,
   PipelineAutomationRetryRequest,
@@ -266,6 +270,7 @@ export type {
   PipelineCaseWorkProductOutputItem,
   PipelineStageAutomation,
 } from "./types/pipeline.js";
+export { PIPELINE_AUTOMATION_TARGET_KINDS } from "./types/pipeline.js";
 export {
   analyzeFrontmatterBlock,
   asBoolean,
@@ -2247,6 +2252,7 @@ export {
   runRoutineSchema,
   pipelineAutomationRetryCleanupOptionsSchema,
   pipelineAutomationRetryRequestSchema,
+  pipelineAutomationTargetSchema,
   pipelineAutomationRetryScopeSchema,
   pipelineStageAutomationSchema,
   pipelineStageApproverSchema,
