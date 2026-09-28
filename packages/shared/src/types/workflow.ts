@@ -102,3 +102,10 @@ export interface WorkflowDetail extends Workflow {
   draftRevision: WorkflowRevision | null;
   publishedRevision: WorkflowRevision | null;
 }
+
+export interface WorkflowCapabilities {
+  read: boolean;
+  edit: boolean;
+  publish: boolean;
+  run: boolean;
+}

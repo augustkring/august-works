@@ -2890,6 +2890,7 @@ export {
   WORKFLOW_REVISION_STATES,
   WORKFLOW_STATUSES,
   type Workflow,
+  type WorkflowCapabilities,
   type WorkflowDetail,
   type WorkflowEdgeV1,
   type WorkflowGraphV1,

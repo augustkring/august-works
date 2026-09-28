@@ -265,3 +265,5 @@ export {
   type ContextAssemble,
   type FreshNativeGovernedContextInput,
 } from "./context/context-runtime.js";
+
+export { workflowService, type WorkflowMutationActor } from "./workflows/workflow-service.js";

@@ -121,6 +121,7 @@ export const AUGUST_WORKS_AUDIT_ACTIONS = [
   "agent.message_sent",
   "agent.task_delegated",
   "workflow.created",
+  "workflow.draft_updated",
   "workflow.revision_published",
   "workflow.run_started",
   "workflow.run_completed",
