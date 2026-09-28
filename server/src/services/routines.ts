@@ -1272,6 +1272,7 @@ export function routineService(
         linkedIssueId: routineRuns.linkedIssueId,
         linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
         linkedWorkflowId: workflowRuns.workflowId,
+        linkedWorkflowRunStatus: workflowRuns.status,
         coalescedIntoRunId: routineRuns.coalescedIntoRunId,
         failureReason: routineRuns.failureReason,
         completedAt: routineRuns.completedAt,
@@ -1315,6 +1316,8 @@ export function routineService(
         linkedIssueId: row.linkedIssueId,
         linkedWorkflowRunId: row.linkedWorkflowRunId,
         linkedWorkflowId: row.linkedWorkflowId,
+        linkedWorkflowRunStatus:
+          row.linkedWorkflowRunStatus as RoutineRunSummary["linkedWorkflowRunStatus"],
         coalescedIntoRunId: row.coalescedIntoRunId,
         failureReason: row.failureReason,
         completedAt: row.completedAt,
@@ -2562,6 +2565,8 @@ export function routineService(
               linkedIssueId: run.linkedIssueId,
               linkedWorkflowRunId: run.linkedWorkflowRunId,
               linkedWorkflowId: run.linkedWorkflowId,
+              linkedWorkflowRunStatus:
+                run.linkedWorkflowRunStatus as RoutineRunSummary["linkedWorkflowRunStatus"],
               coalescedIntoRunId: run.coalescedIntoRunId,
               failureReason: run.failureReason,
               completedAt: run.completedAt,
@@ -3616,6 +3621,8 @@ export function routineService(
         linkedIssueId: row.linkedIssueId,
         linkedWorkflowRunId: row.linkedWorkflowRunId,
         linkedWorkflowId: row.linkedWorkflowId,
+        linkedWorkflowRunStatus:
+          row.linkedWorkflowRunStatus as RoutineRunSummary["linkedWorkflowRunStatus"],
         coalescedIntoRunId: row.coalescedIntoRunId,
         failureReason: row.failureReason,
         completedAt: row.completedAt,
