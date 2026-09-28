@@ -2837,3 +2837,21 @@ export {
   type TransitionFoundationDocument,
   type UpdateFoundationDraft,
 } from "./validators/foundation.js";
+
+export {
+  EVIDENCE_SENSITIVITIES,
+  EVIDENCE_SOURCE_CLASSES,
+  EVIDENCE_TRUST_LEVELS,
+  type EvidenceCitation,
+  type EvidenceItem,
+  type EvidenceSensitivity,
+  type EvidenceSourceClass,
+  type EvidenceTrustLevel,
+} from "./types/context.js";
+export {
+  EVIDENCE_EXCERPT_MAX_CHARS,
+  evidenceCitationSchema,
+  evidenceItemSchema,
+  evidenceItemsSchema,
+  type EvidenceItemInput,
+} from "./validators/context.js";

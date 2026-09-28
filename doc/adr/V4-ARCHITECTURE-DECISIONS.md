@@ -48,7 +48,7 @@ Revisit if production evidence, security findings, upstream changes, licensing, 
 The V4 Golden Master requires an explicit durable boundary for this decision before dependent implementation proceeds.
 
 ### Decision
-Retrieval providers normalize authorized source material into one evidence contract before ranking, budgeting, and model serialization; source systems remain authoritative.
+Retrieval providers normalize authorized source material into one evidence contract before ranking, budgeting, and model serialization; source systems remain authoritative. The contract preserves source class, provider/type/ref, freshness/validity, authority domain, trust, sensitivity, citation, and metadata. `external_untrusted` content is structurally forced to trust level `untrusted`; retrieved content remains data and cannot acquire governance authority through provider-supplied fields.
 
 ### Alternatives considered
 Provider-native prompt serialization; one giant vector index.
