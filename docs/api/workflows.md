@@ -1,7 +1,7 @@
 # Workflows V1 API contract
 
 **Feature flag:** `enableWorkflowsV1` (default off)
-**Scope:** PR 11–24 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries/waits, Human Approval, Routine → Workflow execution targets, and Pipeline → Workflow automation targets through the existing pipeline automation ledger. Task integration, callback/task waits, and side-effect node execution remain gated.
+**Scope:** PR 11–25 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries/waits, Human Approval, Routine/Pipeline → Workflow integration, and Task ↔ Workflow integration. Connector-side execution and agent nodes remain gated.
 
 ## Authorization
 
@@ -40,6 +40,7 @@ A successful publish supersedes the previous published revision, publishes the e
 | POST | `/companies/:companyId/workflows/:id/publish` | human + publish | expected draft + expected published | immutable publish + new draft clone | `workflow.revision_published` |
 | GET | `/companies/:companyId/workflows/:id/runs?limit=30` | read | none | newest run summaries | none |
 | POST | `/companies/:companyId/workflows/:id/run` | run | `Idempotency-Key` | durable manual run bound to published revision | workflow run/step activity |
+| POST | `/companies/:companyId/issues/:issueId/workflows/:workflowId/run` | workflow run + task mutate | `Idempotency-Key` | task-sourced run with authoritative task context | `workflow.task_invoked` + workflow run/step activity |
 | GET | `/companies/:companyId/workflow-runs/:runId` | read | none | run + step attempts + durable waits | none |
 
 ## Current publish gate
@@ -48,7 +49,7 @@ PR 13 validates every draft node against a typed registry and company-scoped ref
 
 A registered node may be `ready` or `draft_only`. Publish fails closed with `workflow_node_invalid` / `node_not_publishable_yet` until the node's execution, authorization, retry/idempotency, and policy integration are implemented.
 
-`core.manual_trigger`, `core.condition`, bounded `core.wait`, and `human.approval` are publish-ready. Transform, Connector Action, Create Task, and Agent Task remain intentionally draft-only until their dependent implementation waves land.
+`core.manual_trigger`, `core.condition`, bounded `core.wait`, `human.approval`, and `work.create_task` are publish-ready. Transform, Connector Action, and Agent Task remain intentionally draft-only until their dependent implementation waves land.
 
 A Condition may be terminal or may expose exactly one `true` and one `false` branch. Branch labels/source handles are part of the published graph contract; ambiguous or duplicate condition branches fail publish.
 
@@ -87,6 +88,13 @@ A Condition may be terminal or may expose exactly one `true` and one `false` bra
 - `workflow_human_approval_create_conflict`
 - `workflow_human_approval_rejected`
 - `workflow_human_approval_cancelled`
+- `workflow_task_config_invalid`
+- `workflow_task_responsible_user_required`
+- `workflow_task_permission_denied`
+- `workflow_task_create_failed`
+- `workflow_task_cancelled`
+- `workflow_task_missing`
+- `workflow_task_not_active`
 
 ## Current execution boundary
 
@@ -98,17 +106,21 @@ PR 19 adds checkpoint/replay recovery. Every running workflow carries an executi
 
 PR 20 makes retry policy executor-owned. Retry modes are `none`, `fixed`, or `exponential`; retry attempts are separate `workflow_step_runs` rows. A retryable failure may transition the current attempt to `retry_scheduled` and the run to `waiting`; reconciliation resumes only after the configured backoff, marks the old attempt `retried`, and executes attempt `n+1`. The retry decision fails closed unless the error is retryable, the side effect is safe to repeat/deduplicated, the retry budget and parent deadline permit it, and provider policy permits retry. A stable `workflow-step:<run>:<node-hash>` identity is derived once per logical step and remains constant across attempts.
 
-Backoff does not hold an HTTP request or worker sleep open. The durable state itself is the source of truth, and the existing reconciliation loop owns wake-up. Current executable nodes are still pure/deterministic; Connector Action, Create Task and Agent Task remain draft-only until their execution-time authorization and real dedupe/idempotency path are implemented.
+Backoff does not hold an HTTP request or worker sleep open. The durable state itself is the source of truth, and the existing reconciliation loop owns wake-up. Connector Action and Agent Task remain draft-only until their execution-time authorization and integration paths land.
 
 PR 21 introduces `workflow_waits` as the authoritative wait state with CAS terminal resolution (`resolved | timed_out | cancelled`) and durable wait kinds for `delay | human_interaction | external_callback | task_completion`. The first executable waitpoint is bounded `core.wait` (Delay): execution persists the active wait, marks the step/run `waiting`, clears the execution lease, and returns without sleeping a worker or holding the HTTP request open. Reconciliation resumes only when `wakeAt` is due, resolves the wait and step atomically, reclaims the run lease, and replays from checkpoints. Delay is rejected if it would extend beyond the remaining workflow deadline.
 
 PR 22 binds Human Approval to the existing company-level `approvals` system. The workflow executor creates a normal `workflow_step_approval` record and stores only its ID in the durable wait. Existing Approve/Reject/Request revision UI and routes remain authoritative; the workflow never introduces a second approval engine. Approval resumes the exact checkpointed run, rejection/cancellation closes the step and run explicitly, and revision-requested approvals remain waiting until resolved. Workflow approval payloads include a human-readable reason, consequence, risk classification, reversibility warning and workflow/run identity. Workflow-requested approvals intentionally do not register a requesting agent, preventing the generic approval route from also waking an agent and creating a second continuation path.
 
-External callback and task-completion waits share the same durable storage/lifecycle but remain non-executable until their existing connector/task event systems are bound in the ordered PRs. External callback tokens are stored only as hashes.
+External callback waits remain non-executable until their connector event binding lands. Task-completion waits are executable through Create Task and use task terminal events as the primary continuation signal, with the workflow reconciliation sweep retained as recovery fallback. External callback tokens are stored only as hashes.
 
 PR 23 allows the existing Routine engine to enqueue Workflows without introducing another scheduler or webhook control plane. Routine schedule/webhook/API semantics, replay protection, catch-up and concurrency remain authoritative in Routines. When the execution target is a Workflow, the RoutineRun and queued `workflow_run` are persisted atomically; the child run uses source `routine`, is bound to the then-current published Workflow revision, and receives routine/run/trigger provenance in the trigger payload. After commit, inline execution is best-effort; if the process stops before or during execution, the existing workflow recovery loop owns continuation. A terminal child Workflow settles the originating `workflow_started` RoutineRun to `completed` or `failed` in the same terminal transaction.
 
 PR 24 generalizes Pipeline stage automation without changing Pipeline ownership of persistent business state. Legacy `onEnter.type="run_routine"` remains readable; new stages may use a typed `run_target` with `routine` or `workflow`. The existing `pipeline_automation_executions` ledger keeps its case/stage-event idempotency identity, retry generations, cleanup policy, liveness and audit semantics. Workflow targets are recorded in that same ledger, durably enqueue a child `workflow_run` with source `pipeline`, and link the exact run back to the automation attempt. Pipeline liveness reads the child Workflow state for running/waiting/failure and retry UI creates a fresh pipeline automation generation rather than retrying the same failed child run. Workflow-backed stages intentionally reject existing Pipeline breakdown mechanics until those mechanics have a native Workflow contract; no agent/routine fallback is silently substituted.
+
+PR 25 binds Tasks and Workflows in both directions without introducing a second task system. `work.create_task` creates the existing Issue/Task primitive and performs execution-time `tasks:assign` authorization against the final project/assignee. Its stable workflow-step idempotency key is persisted through the existing Issue-create idempotency receipt, so crash/replay reuses the same Task rather than duplicating the side effect. With `waitForCompletion=false`, the step checkpoints the created task and continues immediately. With `waitForCompletion=true`, the step creates a durable `task_completion` wait, releases the workflow lease, and resumes when the referenced Task becomes `done`; cancellation fails the workflow explicitly. Task terminal events enqueue a post-commit workflow continuation, while reconciliation remains the crash/recovery fallback.
+
+Tasks can also invoke published Workflows through the existing task surface. The caller must hold both `workflows:run` and mutation authority for that specific task; cross-company references and terminal tasks fail closed. The workflow run uses source `task`, binds the published revision at invocation time, and overwrites any caller-supplied `task` object with authoritative server-side task context before idempotency comparison. Create Task intentionally does not wake an assigned agent; active delegation belongs to the Agent Task node in PR 26.
 
 A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
