@@ -6,7 +6,7 @@ import type {
   RoutineTrigger,
 } from "@paperclipai/shared";
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@paperclipai/shared";
-import { CalendarClock, Clock3, Play, Repeat, UserRound } from "lucide-react";
+import { CalendarClock, Clock3, GitBranch, Play, Repeat, UserRound } from "lucide-react";
 import { IssueRow } from "@/components/IssueRow";
 import { MarkdownBody } from "@/components/MarkdownBody";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -138,7 +138,13 @@ function OverviewFact({
 }
 
 export function RoutineOverview() {
-  const { routine, routineRuns, currentAssignee, hasLiveRun } = useRoutineDetail();
+  const {
+    routine,
+    routineRuns,
+    currentAssignee,
+    currentWorkflow,
+    hasLiveRun,
+  } = useRoutineDetail();
   const schedule = summarizeRoutineSchedule(routine.triggers);
   const hasWebhook = routine.triggers.some((trigger) => trigger.kind === "webhook" && trigger.enabled);
   const sortedRuns = [...(routineRuns ?? [])].sort(
@@ -151,9 +157,12 @@ export function RoutineOverview() {
     routineDetailHref(routine.id),
     "issues",
   );
+  const hasExecutionTarget = Boolean(
+    routine.executionTargetRef ?? routine.assigneeAgentId,
+  );
   const automationState = routine.status === "archived"
     ? "archived"
-    : !routine.assigneeAgentId
+    : !hasExecutionTarget
       ? "draft"
       : routine.status;
 
@@ -186,9 +195,19 @@ export function RoutineOverview() {
         />
       </div>
 
-      <section className="flex flex-col gap-2" aria-labelledby="routine-agent-heading">
-        <h2 id="routine-agent-heading" className="text-sm font-semibold">Default agent</h2>
-        {currentAssignee ? (
+      <section className="flex flex-col gap-2" aria-labelledby="routine-execution-target-heading">
+        <h2 id="routine-execution-target-heading" className="text-sm font-semibold">
+          Execution target
+        </h2>
+        {routine.executionTargetKind === "workflow" && routine.executionTargetRef ? (
+          <Link
+            to={`/workflows/${routine.executionTargetRef}`}
+            className="flex w-fit items-center gap-2 rounded-md text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <GitBranch className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            {currentWorkflow?.name ?? "Workflow"}
+          </Link>
+        ) : currentAssignee ? (
           <Link
             to={`/agents/${currentAssignee.urlKey ?? currentAssignee.id}`}
             className="flex w-fit items-center gap-2 rounded-md text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -197,7 +216,9 @@ export function RoutineOverview() {
             {currentAssignee.name}
           </Link>
         ) : (
-          <p className="text-sm text-muted-foreground">No default agent. Automatic triggers remain paused.</p>
+          <p className="text-sm text-muted-foreground">
+            No execution target. Automatic triggers remain paused.
+          </p>
         )}
       </section>
 
