@@ -62,6 +62,7 @@ import {
 } from "./workflows/workflow-executor.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
 import { authorizationService } from "./authorization.js";
+import { instanceSettingsService } from "./instance-settings.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import type { IssuePostCommitAction } from "./issues.js";
 import {
@@ -2343,6 +2344,16 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
   const outputsSvc = pipelineCaseOutputsService(db);
   const authorization = authorizationService(db);
   const secretsSvc = secretService(db);
+  const instanceSettings = instanceSettingsService(db);
+
+  async function assertWorkflowsEnabledForPipelineAutomation() {
+    const experimental = await instanceSettings.getExperimental();
+    if (experimental.enableWorkflowsV1 !== true) {
+      throw notFound("Workflows are not enabled", {
+        code: "workflows_disabled",
+      });
+    }
+  }
 
   async function assertRoutineInCompany(companyId: string, routineId: string) {
     const routine = await db
@@ -2366,6 +2377,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       await assertRoutineInCompany(companyId, target.routineId);
       return;
     }
+    await assertWorkflowsEnabledForPipelineAutomation();
     await resolveWorkflowExecutionRevision(
       db,
       companyId,
@@ -3193,6 +3205,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       const breakdownConfig = readBreakdownConfig(stageConfig(detail.stage));
 
       if (executionTarget.kind === "workflow") {
+        await assertWorkflowsEnabledForPipelineAutomation();
         if (breakdownConfig) {
           throw unprocessable(
             "Workflow-target pipeline automation does not yet support pipeline breakdown mechanics",
