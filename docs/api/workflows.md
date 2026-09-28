@@ -1,7 +1,7 @@
 # Workflows V1 API contract
 
 **Feature flag:** `enableWorkflowsV1` (default off)
-**Scope:** PR 11–21 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries, and durable waitpoints. Human/task/callback integrations and side-effect node execution remain gated.
+**Scope:** PR 11–22 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries/waits, and Human Approval bound to the existing approvals system. Task/callback wait integrations and side-effect node execution remain gated.
 
 ## Authorization
 
@@ -48,7 +48,7 @@ PR 13 validates every draft node against a typed registry and company-scoped ref
 
 A registered node may be `ready` or `draft_only`. Publish fails closed with `workflow_node_invalid` / `node_not_publishable_yet` until the node's execution, authorization, retry/idempotency, and policy integration are implemented.
 
-`core.manual_trigger`, `core.condition`, and bounded `core.wait` are publish-ready. Transform, Connector Action, Create Task, Agent Task, and Human Approval remain intentionally draft-only until their dependent implementation waves land.
+`core.manual_trigger`, `core.condition`, bounded `core.wait`, and `human.approval` are publish-ready. Transform, Connector Action, Create Task, and Agent Task remain intentionally draft-only until their dependent implementation waves land.
 
 A Condition may be terminal or may expose exactly one `true` and one `false` branch. Branch labels/source handles are part of the published graph contract; ambiguous or duplicate condition branches fail publish.
 
@@ -83,6 +83,10 @@ A Condition may be terminal or may expose exactly one `true` and one `false` bra
 - `workflow_wait_key_conflict`
 - `workflow_wait_signal_conflict`
 - `workflow_wait_resolution_conflict`
+- `workflow_human_approval_config_invalid`
+- `workflow_human_approval_create_conflict`
+- `workflow_human_approval_rejected`
+- `workflow_human_approval_cancelled`
 
 ## Current execution boundary
 
@@ -98,7 +102,9 @@ Backoff does not hold an HTTP request or worker sleep open. The durable state it
 
 PR 21 introduces `workflow_waits` as the authoritative wait state with CAS terminal resolution (`resolved | timed_out | cancelled`) and durable wait kinds for `delay | human_interaction | external_callback | task_completion`. The first executable waitpoint is bounded `core.wait` (Delay): execution persists the active wait, marks the step/run `waiting`, clears the execution lease, and returns without sleeping a worker or holding the HTTP request open. Reconciliation resumes only when `wakeAt` is due, resolves the wait and step atomically, reclaims the run lease, and replays from checkpoints. Delay is rejected if it would extend beyond the remaining workflow deadline.
 
-Human Interaction, external callback and task-completion waits share the same durable storage/lifecycle but are not exposed as executable nodes until their existing approval/interaction/task systems are bound in the ordered PRs. External callback tokens are stored only as hashes.
+PR 22 binds Human Approval to the existing company-level `approvals` system. The workflow executor creates a normal `workflow_step_approval` record and stores only its ID in the durable wait. Existing Approve/Reject/Request revision UI and routes remain authoritative; the workflow never introduces a second approval engine. Approval resumes the exact checkpointed run, rejection/cancellation closes the step and run explicitly, and revision-requested approvals remain waiting until resolved. Workflow approval payloads include a human-readable reason, consequence, risk classification, reversibility warning and workflow/run identity. Workflow-requested approvals intentionally do not register a requesting agent, preventing the generic approval route from also waking an agent and creating a second continuation path.
+
+External callback and task-completion waits share the same durable storage/lifecycle but remain non-executable until their existing connector/task event systems are bound in the ordered PRs. External callback tokens are stored only as hashes.
 
 A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
