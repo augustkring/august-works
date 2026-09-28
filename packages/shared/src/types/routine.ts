@@ -69,6 +69,17 @@ export interface RoutineVariable {
 
 export type RoutineEnvConfig = Record<string, EnvBinding>;
 
+export const ROUTINE_EXECUTION_TARGET_KINDS = [
+  "agent_task",
+  "workflow",
+] as const;
+export type RoutineExecutionTargetKind =
+  (typeof ROUTINE_EXECUTION_TARGET_KINDS)[number];
+
+export type RoutineExecutionTarget =
+  | { kind: "agent_task"; agentId: string }
+  | { kind: "workflow"; workflowId: string };
+
 export interface Routine {
   id: string;
   companyId: string;
@@ -79,6 +90,8 @@ export interface Routine {
   title: string;
   description: string | null;
   assigneeAgentId: string | null;
+  executionTargetKind: RoutineExecutionTargetKind | null;
+  executionTargetRef: string | null;
   priority: string;
   status: string;
   concurrencyPolicy: string;
@@ -124,6 +137,8 @@ export interface RoutineRevisionSnapshotRoutineV1 {
   title: string;
   description: string | null;
   assigneeAgentId: string | null;
+  executionTargetKind?: RoutineExecutionTargetKind | null;
+  executionTargetRef?: string | null;
   priority: IssuePriority;
   status: RoutineStatus;
   concurrencyPolicy: RoutineConcurrencyPolicy;
@@ -222,6 +237,7 @@ export interface RoutineRun {
   triggerPayload: Record<string, unknown> | null;
   dispatchFingerprint: string | null;
   linkedIssueId: string | null;
+  linkedWorkflowRunId: string | null;
   coalescedIntoRunId: string | null;
   failureReason: string | null;
   completedAt: Date | null;
