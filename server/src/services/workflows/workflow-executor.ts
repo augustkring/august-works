@@ -2127,15 +2127,27 @@ function workflowTaskActorFields(
   };
 }
 
-function workflowTaskOutput(issue: {
-  id: string;
-  identifier: string | null;
-  status: string;
-}) {
+function workflowTaskOutput(
+  issue: {
+    id: string;
+    identifier: string | null;
+    status: string;
+  },
+  execution?: {
+    agentId: string | null;
+    heartbeatRunId: string | null;
+  } | null,
+) {
   return {
     issueId: issue.id,
     identifier: issue.identifier,
     status: issue.status,
+    ...(execution?.agentId
+      ? {
+          agentId: execution.agentId,
+          heartbeatRunId: execution.heartbeatRunId,
+        }
+      : {}),
   };
 }
 
