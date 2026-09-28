@@ -22,6 +22,8 @@ import {
   pipelines,
   routineRevisions,
   routines,
+  workflowRuns,
+  workflows,
 } from "@paperclipai/db";
 import {
   extractRoutineVariableNames,
@@ -31,6 +33,7 @@ import {
   type PipelineAutomationRetryCleanupOptions,
   type PipelineAutomationRetryPlan,
   type PipelineAutomationRetryScope,
+  type PipelineAutomationTarget,
   type PipelineCaseConversationSourceKind,
   type PipelineCaseConversationSourceLinkRole,
   type PipelineCaseConversationSourceReason,
@@ -46,7 +49,17 @@ import { conflict, HttpError, notFound, unprocessable } from "../errors.js";
 import { routineService } from "./routines.js";
 import { secretService } from "./secrets.js";
 import type { IssueAssignmentWakeupDeps } from "./issue-assignment-wakeup.js";
-import { logActivity } from "./activity-log.js";
+import {
+  logActivity,
+  publishActivity,
+  type ActivityPublication,
+} from "./activity-log.js";
+import {
+  enqueueWorkflowRunInTransaction,
+  resolveWorkflowExecutionRevision,
+  workflowExecutorService,
+  type WorkflowRunActor,
+} from "./workflows/workflow-executor.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
 import { authorizationService } from "./authorization.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
@@ -156,8 +169,9 @@ export type PipelineStageConfig = Record<string, unknown> & {
     whenFinishedMoveTo?: unknown;
   };
   onEnter?: {
-    type?: "run_routine";
+    type?: "run_routine" | "run_target";
     routineId?: string;
+    target?: PipelineAutomationTarget;
     id?: string;
     projectId?: string | null;
     projectWorkspaceId?: string | null;
@@ -178,6 +192,7 @@ type PipelineDb = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 type PipelineRetryPlanInternal = PipelineAutomationRetryPlan & {
   targetStageRow: typeof pipelineStages.$inferSelect | null;
+  automationTarget: PipelineAutomationTarget | null;
   automationRoutineId: string | null;
 };
 
