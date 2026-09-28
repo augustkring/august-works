@@ -158,6 +158,25 @@ function stageAutomationWorkflowId(config: unknown) {
   return target?.kind === "workflow" ? target.workflowId : null;
 }
 
+function requestedStageWorkflowAutomationId(config: unknown) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return null;
+  const record = config as Record<string, unknown>;
+  const automation = record.automation;
+  if (automation && typeof automation === "object" && !Array.isArray(automation)) {
+    const automationRecord = automation as Record<string, unknown>;
+    if (automationRecord.targetKind === "workflow") {
+      const workflowId =
+        typeof automationRecord.workflowId === "string"
+          ? automationRecord.workflowId.trim()
+          : typeof automationRecord.targetRef === "string"
+            ? automationRecord.targetRef.trim()
+            : "";
+      if (workflowId) return workflowId;
+    }
+  }
+  return stageAutomationWorkflowId(config);
+}
+
 function readAutomationContextValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -765,6 +784,34 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
   const outputsSvc = pipelineCaseOutputsService(db);
   const access = accessService(db);
   const issuesSvc = issueService(db);
+
+  async function assertWorkflowAutomationRunPermission(
+    req: Request,
+    companyId: string,
+    config: unknown,
+  ) {
+    const workflowId = requestedStageWorkflowAutomationId(config);
+    if (!workflowId) return;
+    if (
+      req.actor.type === "board" &&
+      (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin)
+    ) {
+      return;
+    }
+    const decision = await access.decide({
+      actor: req.actor,
+      action: "workflows:run",
+      resource: { type: "company", companyId },
+    });
+    if (!decision.allowed) {
+      throw forbidden(decision.explanation, {
+        code: "permission_denied",
+        reason: decision.reason,
+        permission: "workflows:run",
+        workflowId,
+      });
+    }
+  }
   const documentAnnotationsSvc = documentAnnotationService(db);
 
   router.get("/companies/:companyId/pipelines", async (req, res) => {
@@ -852,6 +899,13 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         code: decision.code ?? "pipeline_write_forbidden",
         reason: decision.reason,
       });
+    }
+    for (const stage of req.body.stages ?? []) {
+      await assertWorkflowAutomationRunPermission(
+        req,
+        companyId,
+        stage.config,
+      );
     }
     try {
       const created = await svc.createPipeline({
@@ -1197,6 +1251,11 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const companyId = await assertPipelineAccess(db, req, pipelineId);
     await assertPipelineWriteAccess(req, { access, companyId, pipelineId });
     const actor = actorForMutation(req);
+    await assertWorkflowAutomationRunPermission(
+      req,
+      companyId,
+      req.body.config,
+    );
     try {
       const stage = await svc.createStage({
         companyId,
@@ -1220,6 +1279,13 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const companyId = await assertPipelineAccess(db, req, pipelineId);
     await assertPipelineWriteAccess(req, { access, companyId, pipelineId });
     const actor = actorForMutation(req);
+    if (req.body.config !== undefined) {
+      await assertWorkflowAutomationRunPermission(
+        req,
+        companyId,
+        req.body.config,
+      );
+    }
     try {
       res.json(await svc.updateStage({ companyId, pipelineId, stageId, patch: req.body, actor }));
     } catch (error) {
