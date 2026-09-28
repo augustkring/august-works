@@ -25,6 +25,10 @@ import {
   type WorkflowStepRun,
   type WorkflowWait,
 } from "@paperclipai/shared";
+import {
+  queueIssueAssignmentWakeup,
+  type IssueAssignmentWakeupDeps,
+} from "../issue-assignment-wakeup.js";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
@@ -71,6 +75,10 @@ export interface WorkflowRunActor {
   principal: ExecutionPrincipal;
   runId?: string | null;
   responsibleUserId?: string | null;
+}
+
+export interface WorkflowExecutorRuntimeDeps {
+  heartbeat?: IssueAssignmentWakeupDeps;
 }
 
 function workflowActivityActor(actor: WorkflowRunActor) {
