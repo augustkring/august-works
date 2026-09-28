@@ -593,6 +593,7 @@ function createRoutineDispatchFingerprint(input: {
   projectId: string | null;
   projectWorkspaceId: string | null;
   assigneeAgentId: string | null;
+  executionTarget: RoutineExecutionTarget;
   routineRevisionId: string | null;
   routineEnvFingerprint: string | null;
   executionWorkspaceId?: string | null;
@@ -1755,6 +1756,44 @@ export function routineService(
       .then((rows) => rows[0]?.issues ?? null);
   }
 
+  async function findLiveWorkflowExecution(
+    routine: typeof routines.$inferSelect,
+    dispatchFingerprint: string,
+    executor: Db = db,
+  ) {
+    return executor
+      .select({
+        routineRunId: routineRuns.id,
+        workflowRunId: workflowRuns.id,
+        workflowStatus: workflowRuns.status,
+      })
+      .from(routineRuns)
+      .innerJoin(
+        workflowRuns,
+        and(
+          eq(workflowRuns.companyId, routineRuns.companyId),
+          eq(workflowRuns.id, routineRuns.linkedWorkflowRunId),
+        ),
+      )
+      .where(
+        and(
+          eq(routineRuns.companyId, routine.companyId),
+          eq(routineRuns.routineId, routine.id),
+          eq(routineRuns.dispatchFingerprint, dispatchFingerprint),
+          inArray(workflowRuns.status, [
+            "queued",
+            "running",
+            "waiting",
+            "recovering",
+            "cancelling",
+          ]),
+        ),
+      )
+      .orderBy(desc(routineRuns.createdAt), desc(routineRuns.id))
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+  }
+
   async function finalizeRun(runId: string, patch: Partial<typeof routineRuns.$inferInsert>, executor: Db = db) {
     return executor
       .update(routineRuns)
@@ -1913,11 +1952,31 @@ export function routineService(
   }) {
     const projectId = input.projectId ?? input.routine.projectId ?? null;
     const projectWorkspaceId = input.projectWorkspaceId ?? null;
-    const assigneeAgentId = input.assigneeAgentId ?? input.routine.assigneeAgentId ?? null;
-    if (!assigneeAgentId) {
-      throw unprocessable("Default agent required");
+    const configuredExecutionTarget = resolveRoutineExecutionTarget(input.routine);
+    if (
+      configuredExecutionTarget?.kind === "workflow" &&
+      input.assigneeAgentId
+    ) {
+      throw unprocessable(
+        "Workflow-target routines cannot override an assignee agent at run time",
+      );
     }
-    await assertAssignableAgent(db, input.routine.companyId, assigneeAgentId, { kind: "routine" });
+    const executionTarget: RoutineExecutionTarget | null =
+      input.assigneeAgentId
+        ? { kind: "agent_task", agentId: input.assigneeAgentId }
+        : configuredExecutionTarget;
+    if (!executionTarget) {
+      throw unprocessable("Routine execution target required");
+    }
+    await assertRoutineExecutionTarget(
+      input.routine.companyId,
+      executionTarget,
+      { requireRunnable: true },
+    );
+    const assigneeAgentId =
+      executionTarget.kind === "agent_task"
+        ? executionTarget.agentId
+        : null;
     const automaticVariables: Record<string, string | number | boolean> = {};
     if (input.executionWorkspaceId && routineUsesWorkspaceBranch(input.routine)) {
       const workspace = await db
@@ -1961,6 +2020,7 @@ export function routineService(
       projectId,
       projectWorkspaceId,
       assigneeAgentId,
+      executionTarget,
       routineRevisionId: input.routine.latestRevisionId,
       routineEnvFingerprint: createRoutineEnvFingerprint(input.routine.env),
       executionWorkspaceId: input.executionWorkspaceId ?? null,
