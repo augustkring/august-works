@@ -321,6 +321,17 @@ export function WorkflowRun() {
                     Open approval
                   </Button>
                 ) : null}
+                {activeWait.kind === "task_completion" &&
+                activeWait.referenceType === "issue" &&
+                activeWait.referenceId ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/issues/${activeWait.referenceId}`)}
+                  >
+                    Open task
+                  </Button>
+                ) : null}
               </div>
             ) : null}
           </section>
