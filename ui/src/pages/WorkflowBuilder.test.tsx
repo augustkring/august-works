@@ -9,6 +9,7 @@ import type {
   WorkflowCapabilityCandidate,
   WorkflowDetail,
   WorkflowNodeDefinitionDescriptor,
+  WorkflowRunDetail,
 } from "@paperclipai/shared";
 import { ApiError } from "@/api/client";
 import { WorkflowBuilder } from "./WorkflowBuilder";
@@ -20,6 +21,7 @@ const apiMock = vi.hoisted(() => ({
   capabilitySearch: vi.fn(),
   updateDraft: vi.fn(),
   publish: vi.fn(),
+  startRun: vi.fn(),
 }));
 
 vi.mock("@/api/workflows", () => ({ workflowsApi: apiMock }));
@@ -248,6 +250,103 @@ describe("WorkflowBuilder", () => {
 
     flushSync(() => root.unmount());
   });
+  it("runs the published revision through the explicit live-run action", async () => {
+    const publishedRevision = {
+      ...baseDetail.draftRevision!,
+      id: "revision-published",
+      revisionNumber: 2,
+      state: "published" as const,
+      graph: {
+        version: 1 as const,
+        nodes: [
+          {
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Manual Trigger",
+            position: { x: 0, y: 0 },
+            config: {},
+          },
+        ],
+        edges: [],
+        variables: [],
+        settings: {},
+      },
+    };
+    const publishedDetail: WorkflowDetail = {
+      ...baseDetail,
+      publishedRevisionId: publishedRevision.id,
+      publishedRevision,
+    };
+    const runDetail: WorkflowRunDetail = {
+      run: {
+        id: "run-1",
+        companyId: "company-1",
+        workflowId: "workflow-1",
+        workflowRevisionId: publishedRevision.id,
+        triggerId: null,
+        status: "succeeded",
+        source: "manual",
+        triggerPayload: {},
+        responsibleUserId: "user-1",
+        idempotencyKey: "ui-run-test",
+        correlationId: "correlation-1",
+        executionOwnerId: null,
+        leaseExpiresAt: null,
+        ownerHeartbeatAt: null,
+        startedAt: new Date(),
+        finishedAt: new Date(),
+        failureCode: null,
+        failureMessage: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      steps: [],
+    };
+    apiMock.get.mockResolvedValue(publishedDetail);
+    apiMock.capabilities.mockResolvedValue({
+      read: true,
+      edit: true,
+      publish: true,
+      run: true,
+    });
+    apiMock.startRun.mockResolvedValue(runDetail);
+
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    flushSync(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/workflows/workflow-1"]}>
+            <Routes>
+              <Route path="/workflows/:workflowId" element={<WorkflowBuilder />} />
+              <Route
+                path="/workflows/:workflowId/runs/:runId"
+                element={<div>Run destination</div>}
+              />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+
+    const runButton = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Run published"));
+    expect(runButton).toBeTruthy();
+    flushSync(() => runButton!.click());
+    await flush();
+
+    expect(apiMock.startRun).toHaveBeenCalledWith(
+      "company-1",
+      "workflow-1",
+      { input: {}, revisionId: null },
+      expect.stringMatching(/^ui-run-/),
+    );
+    expect(container.textContent).toContain("Run destination");
+
+    flushSync(() => root.unmount());
+  });
+
   it("renders governed capability availability without exposing raw IDs", async () => {
     apiMock.capabilitySearch.mockResolvedValue({
       query: "",
