@@ -4836,7 +4836,10 @@ export async function resolveWorkflowExecutionRevision(
   };
 }
 
-export function workflowExecutorService(db: Db) {
+export function workflowExecutorService(
+  db: Db,
+  runtimeDeps: WorkflowExecutorRuntimeDeps = {},
+) {
   return {
     getRun: (companyId: string, runId: string) =>
       getRunDetail(db, companyId, runId),
@@ -4896,7 +4899,7 @@ export function workflowExecutorService(db: Db) {
           actor,
         );
         if (claimed) {
-          await executeClaimedRun(db, claimed, actor);
+          await executeClaimedRun(db, claimed, actor, runtimeDeps);
         }
       }
 
@@ -4953,7 +4956,7 @@ export function workflowExecutorService(db: Db) {
             workflowRunId: queued.run.id,
           });
         }
-        await executeClaimedRun(db, claimed, actor);
+        await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
       const detail = await getRunDetail(db, companyId, queued.run.id);
@@ -5058,7 +5061,7 @@ export function workflowExecutorService(db: Db) {
             workflowRunId: queued.run.id,
           });
         }
-        await executeClaimedRun(db, claimed, actor);
+        await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
       const detail = await getRunDetail(db, companyId, queued.run.id);
@@ -5115,6 +5118,7 @@ export function workflowExecutorService(db: Db) {
             row.run,
             row.wait,
             now,
+            runtimeDeps,
           );
           if (outcome === "recovered") recovered += 1;
           else if (outcome === "raced") raced += 1;
@@ -5170,7 +5174,12 @@ export function workflowExecutorService(db: Db) {
       const failedRunIds: string[] = [];
       for (const candidate of candidates) {
         try {
-          const outcome = await recoverCandidate(db, candidate, now);
+          const outcome = await recoverCandidate(
+            db,
+            candidate,
+            now,
+            runtimeDeps,
+          );
           if (outcome === "recovered") recovered += 1;
           else if (outcome === "raced") raced += 1;
           else deferred += 1;
