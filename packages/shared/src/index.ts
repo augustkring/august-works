@@ -2679,6 +2679,20 @@ export {
   type InstanceFeatureKey,
 } from "./feature-catalog.js";
 export {
+  AUGUST_WORKS_AUDIT_ACTIONS,
+  AUGUST_WORKS_PLATFORM_FEATURE_FLAGS,
+  AUGUST_WORKS_PLATFORM_FEATURE_KEYS,
+  EXECUTION_PRINCIPAL_TYPES,
+  executionPrincipalSchema,
+  executionPrincipalToActivityActor,
+  type ActivityActorRef,
+  type AugustWorksAuditAction,
+  type AugustWorksPlatformFeatureFlagContract,
+  type AugustWorksPlatformFeatureKey,
+  type ExecutionPrincipal,
+  type ExecutionPrincipalType,
+} from "./august-works-platform.js";
+export {
   EXPERIMENTAL_SETTINGS_WILDCARD,
   HIDEABLE_COMPANY_PAGES,
   HIDEABLE_COMPANY_SECTIONS,
