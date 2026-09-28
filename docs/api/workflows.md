@@ -1,7 +1,7 @@
 # Workflows V1 API contract
 
 **Feature flag:** `enableWorkflowsV1` (default off)
-**Scope:** PR 11–13 persistence/API + typed Node Registry. No executor is enabled by this contract.
+**Scope:** PR 11–17 persistence/API, typed Node Registry, manual executor V1 and run-history/live-run API. Advanced durability nodes remain gated.
 
 ## Authorization
 
@@ -38,6 +38,9 @@ A successful publish supersedes the previous published revision, publishes the e
 | GET | `/companies/:companyId/workflows/:id/revisions` | read | none | read | none |
 | PATCH | `/companies/:companyId/workflows/:id/draft` | human + edit | `expectedRevisionId` | new immutable draft | `workflow.draft_updated` |
 | POST | `/companies/:companyId/workflows/:id/publish` | human + publish | expected draft + expected published | immutable publish + new draft clone | `workflow.revision_published` |
+| GET | `/companies/:companyId/workflows/:id/runs?limit=30` | read | none | newest run summaries | none |
+| POST | `/companies/:companyId/workflows/:id/run` | run | `Idempotency-Key` | durable manual run bound to published revision | workflow run/step activity |
+| GET | `/companies/:companyId/workflow-runs/:runId` | read | none | run + step attempts | none |
 
 ## Current publish gate
 
@@ -56,18 +59,22 @@ A registered node may be `ready` or `draft_only`. Publish fails closed with `wor
 - `workflow_invalid_transition`
 - `workflow_node_invalid`
 - `workflow_publish_approval_unsupported`
-
-No Workflow endpoint executes external side effects in PR 11.
-
+- `workflow_revision_not_published`
+- `workflow_executor_capability_not_ready`
+- `workflow_run_claim_conflict`
+- `idempotency_key_invalid`
+- `idempotency_key_reused`
 
 ## Current execution boundary
 
-PR 10–15 expose workflow persistence, draft/publish authoring, the node registry,
-capability discovery and the builder. There is intentionally no workflow run
-endpoint yet.
+PR 16 introduced the durable run/step records, manual-run idempotency contract,
+lease-based claim and the first executable node: `core.manual_trigger`.
 
-The capabilities response therefore reports `run: false` even when a principal
-already holds the reserved `workflows:run` permission. The capability becomes
-true only when the durable executor and run API from PR 16+ are implemented and
-verified. This prevents UI/agent surfaces from promising behavior that does not
-exist.
+Live execution remains deliberately fail-closed for every other node type until
+its executor, authorization, retry/idempotency and recovery semantics land in
+the ordered durability PRs. A run always binds to the published revision it
+started with; later draft edits or publishes do not rewrite that run.
+
+The run-history endpoint reads the existing authoritative `workflow_runs` state;
+it does not create a second history store. Cancellation/retry endpoints are not
+advertised until their durability semantics are implemented.
