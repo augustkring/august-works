@@ -1,9 +1,11 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity as ActivityIcon } from "lucide-react";
+import { Activity as ActivityIcon, GitBranch } from "lucide-react";
 import { issuesApi } from "@/api/issues";
 import { queryKeys } from "@/lib/queryKeys";
 import { routineDetailHref } from "../RoutineContextualSidebar";
+import { Link } from "@/lib/router";
+import { StatusBadge } from "../StatusBadge";
 import { createIssueDetailLocationState } from "@/lib/issueDetailBreadcrumb";
 import { useToastActions } from "@/context/ToastContext";
 import { IssuesList } from "../IssuesList";
@@ -13,7 +15,15 @@ import { RoutineActivityRow } from "../RoutineActivityRow";
 import { useRoutineDetail } from "./context";
 
 export function RunsSection() {
-  const { routine, companyId, agents, projects, hasLiveRun, activeIssueId } = useRoutineDetail();
+  const {
+    routine,
+    companyId,
+    agents,
+    projects,
+    hasLiveRun,
+    activeIssueId,
+    routineRuns,
+  } = useRoutineDetail();
   const queryClient = useQueryClient();
   const { pushToast } = useToastActions();
   const filters = { originKind: "routine_execution", originId: routine.id };
@@ -22,6 +32,64 @@ export function RunsSection() {
     queryKey: issueQueryKey,
     queryFn: () => issuesApi.list(companyId, filters),
   });
+  if (routine.executionTargetKind === "workflow") {
+    const runs = [...(routineRuns ?? [])].sort(
+      (left, right) =>
+        new Date(right.triggeredAt).getTime() -
+        new Date(left.triggeredAt).getTime(),
+    );
+    if (runs.length === 0) {
+      return (
+        <EmptyState
+          icon={GitBranch}
+          message="No workflow runs yet. Run the routine or wait for its next trigger."
+        />
+      );
+    }
+    return (
+      <div className="divide-y divide-border border-y border-border">
+        {runs.map((run) => {
+          const workflowRunHref =
+            run.linkedWorkflowRunId && run.linkedWorkflowId
+              ? `/workflows/${run.linkedWorkflowId}/runs/${run.linkedWorkflowRunId}`
+              : null;
+          const content = (
+            <>
+              <GitBranch
+                className="h-4 w-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">
+                  {run.trigger?.label ?? "Workflow run"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {new Date(run.triggeredAt).toLocaleString()} · {run.source}
+                </p>
+              </div>
+              <StatusBadge
+                status={run.linkedWorkflowRunStatus ?? run.status}
+              />
+            </>
+          );
+          return workflowRunHref ? (
+            <Link
+              key={run.id}
+              to={workflowRunHref}
+              className="flex items-center gap-3 px-2 py-3 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {content}
+            </Link>
+          ) : (
+            <div key={run.id} className="flex items-center gap-3 px-2 py-3">
+              {content}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   const updateIssue = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => issuesApi.update(id, data),
     onSuccess: () => {
