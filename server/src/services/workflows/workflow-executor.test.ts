@@ -11,6 +11,7 @@ import {
   workflowStepRuns,
   workflows,
 } from "@paperclipai/db";
+import type { WorkflowGraphV1 } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -97,9 +98,7 @@ describePg("Workflow executor V1", () => {
     return { companyId, userId, workflow: published };
   }
 
-  async function seedPublishedGraph(
-    graph: Parameters<ReturnType<typeof workflowService>["updateDraft"]>[2]["graph"],
-  ) {
+  async function seedPublishedGraph(graph: WorkflowGraphV1) {
     const companyId = randomUUID();
     const userId = `user-${companyId}`;
     await db.insert(companies).values({
