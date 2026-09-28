@@ -2049,6 +2049,12 @@ describePg("Workflow executor V1", () => {
       status: "succeeded",
       outputJson: { result: true },
     });
+    const actions = (await db.select().from(activityLog)).map(
+      (row) => row.action,
+    );
+    expect(actions).toContain("workflow.agent_task_created");
+    expect(actions).toContain("workflow.agent_task_delegated");
+    expect(actions).toContain("workflow.agent_task_completed");
   });
 
   it("retries Agent Task wakeup without duplicating the accountable task", async () => {
