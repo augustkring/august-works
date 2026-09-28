@@ -422,6 +422,17 @@ export const queryKeys = {
     fileResourceAvailability: (issueId: string, refKeys: readonly string[]) =>
       ["issues", "file-resources", issueId, "availability", refKeys] as const,
   },
+  foundation: {
+    list: (companyId: string) => ["foundation", companyId, "list"] as const,
+    detail: (companyId: string, id: string) =>
+      ["foundation", companyId, "detail", id] as const,
+    revisions: (companyId: string, id: string) =>
+      ["foundation", companyId, "detail", id, "revisions"] as const,
+    proposals: (companyId: string, id: string) =>
+      ["foundation", companyId, "detail", id, "proposals"] as const,
+    search: (companyId: string, q: string, scope: "approved" | "working") =>
+      ["foundation", companyId, "search", q, scope] as const,
+  },
   routines: {
     list: (companyId: string, filters?: { projectId?: string | null }) =>
       [

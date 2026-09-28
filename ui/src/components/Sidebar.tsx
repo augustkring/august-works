@@ -10,6 +10,7 @@ import {
   SquarePen,
   Network,
   Boxes,
+  BookOpen,
   Repeat,
   Layers,
   GitBranch,
@@ -91,6 +92,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
   );
   const showWorkspacesLink = experimentalSettings?.enableIsolatedWorkspaces === true;
   const showPipelines = experimentalSettings?.enablePipelines === true;
+  const showFoundation = experimentalSettings?.enableFoundationV1 === true;
   const showStatusCards = experimentalSettings?.enableStatusCards === true;
   const goalsLinkPending = experimentalSettings === undefined;
   const showGoalsLink = experimentalSettings?.enableGoalsSidebarLink === true;
@@ -166,6 +168,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
               Cmd/Ctrl+K remains the keyboard path (command palette). */}
           <SidebarNavItem to="/search" label="Search" icon={Search} />
           <SidebarNavItem to="/dashboard" label="Dashboard" icon={LayoutDashboard} liveCount={liveRunCount} />
+          {showFoundation ? <SidebarNavItem to="/foundation" label="Foundation" icon={BookOpen} /> : null}
           <SidebarNavItem
             to="/inbox"
             label="Inbox"
