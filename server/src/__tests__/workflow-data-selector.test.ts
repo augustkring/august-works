@@ -144,4 +144,39 @@ describe("workflow Data Selector", () => {
     expect(transform?.fields.map((field) => field.label)).toEqual(["companyName", "score"]);
     expect(transform?.fields[0]?.expression).toBe('{{steps["normalize"].companyName}}');
   });
+  it("never exposes the target as its own source in a cyclic draft", async () => {
+    const cyclic: WorkflowGraphV1 = {
+      ...graph,
+      nodes: [
+        {
+          id: "a",
+          type: "core.condition",
+          name: "A",
+          position: { x: 0, y: 0 },
+          config: { expression: "true" },
+        },
+        {
+          id: "target",
+          type: "core.transform",
+          name: "Target",
+          position: { x: 100, y: 0 },
+          config: { mapping: { value: "x" } },
+        },
+      ],
+      edges: [
+        { id: "c1", source: "a", target: "target" },
+        { id: "c2", source: "target", target: "a" },
+      ],
+      variables: [],
+    };
+
+    const model = await workflowDataSelectorService(noDb).build(
+      "22222222-2222-4222-8222-222222222222",
+      { graph: cyclic, targetNodeId: "target", inputSchema: null },
+    );
+
+    expect(model.sources.map((source) => source.id)).toEqual(["step:a"]);
+    expect(model.sources.some((source) => source.nodeId === "target")).toBe(false);
+  });
+
 });

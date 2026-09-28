@@ -165,7 +165,7 @@ function upstreamNodeIds(graph: WorkflowGraphV1, targetNodeId: string) {
   const stack = [...(incoming.get(targetNodeId) ?? [])];
   while (stack.length > 0) {
     const nodeId = stack.pop()!;
-    if (upstream.has(nodeId)) continue;
+    if (nodeId === targetNodeId || upstream.has(nodeId)) continue;
     upstream.add(nodeId);
     stack.push(...(incoming.get(nodeId) ?? []));
   }
