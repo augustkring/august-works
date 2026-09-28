@@ -1271,6 +1271,7 @@ export function routineService(
         routineRevisionId: routineRuns.routineRevisionId,
         linkedIssueId: routineRuns.linkedIssueId,
         linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
+        linkedWorkflowId: workflowRuns.workflowId,
         coalescedIntoRunId: routineRuns.coalescedIntoRunId,
         failureReason: routineRuns.failureReason,
         completedAt: routineRuns.completedAt,
@@ -1287,6 +1288,13 @@ export function routineService(
       .from(routineRuns)
       .leftJoin(routineTriggers, eq(routineRuns.triggerId, routineTriggers.id))
       .leftJoin(issues, eq(routineRuns.linkedIssueId, issues.id))
+      .leftJoin(
+        workflowRuns,
+        and(
+          eq(workflowRuns.companyId, routineRuns.companyId),
+          eq(workflowRuns.id, routineRuns.linkedWorkflowRunId),
+        ),
+      )
       .where(and(eq(routineRuns.companyId, companyId), inArray(routineRuns.routineId, routineIds)))
       .orderBy(routineRuns.routineId, desc(routineRuns.createdAt), desc(routineRuns.id));
 
@@ -1306,6 +1314,7 @@ export function routineService(
         routineRevisionId: row.routineRevisionId,
         linkedIssueId: row.linkedIssueId,
         linkedWorkflowRunId: row.linkedWorkflowRunId,
+        linkedWorkflowId: row.linkedWorkflowId,
         coalescedIntoRunId: row.coalescedIntoRunId,
         failureReason: row.failureReason,
         completedAt: row.completedAt,
@@ -2552,6 +2561,7 @@ export function routineService(
               routineRevisionId: run.routineRevisionId,
               linkedIssueId: run.linkedIssueId,
               linkedWorkflowRunId: run.linkedWorkflowRunId,
+              linkedWorkflowId: run.linkedWorkflowId,
               coalescedIntoRunId: run.coalescedIntoRunId,
               failureReason: run.failureReason,
               completedAt: run.completedAt,
@@ -3605,6 +3615,7 @@ export function routineService(
         routineRevisionId: row.routineRevisionId,
         linkedIssueId: row.linkedIssueId,
         linkedWorkflowRunId: row.linkedWorkflowRunId,
+        linkedWorkflowId: row.linkedWorkflowId,
         coalescedIntoRunId: row.coalescedIntoRunId,
         failureReason: row.failureReason,
         completedAt: row.completedAt,
