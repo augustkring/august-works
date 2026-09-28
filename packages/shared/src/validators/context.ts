@@ -3,6 +3,7 @@ import {
   EVIDENCE_SENSITIVITIES,
   EVIDENCE_SOURCE_CLASSES,
   EVIDENCE_TRUST_LEVELS,
+  CONTEXT_EVIDENCE_BUCKETS,
   type EvidenceItem,
 } from "../types/context.js";
 
@@ -85,3 +86,60 @@ export const evidenceItemSchema: z.ZodType<EvidenceItem> = z
 export const evidenceItemsSchema = z.array(evidenceItemSchema).max(500);
 
 export type EvidenceItemInput = z.input<typeof evidenceItemSchema>;
+
+export const contextAuthoritySelectorSchema = z
+  .object({
+    sourceClass: z.enum(EVIDENCE_SOURCE_CLASSES),
+    sourceProvider: z.string().trim().min(1).max(160).optional(),
+  })
+  .strict();
+
+export const contextAuthorityRuleSchema = z
+  .object({
+    authorityDomain: z.string().trim().min(1).max(240),
+    preferredSources: z.array(contextAuthoritySelectorSchema).min(1).max(16),
+  })
+  .strict();
+
+export const contextAuthorityPolicySchema = z
+  .object({
+    rules: z.array(contextAuthorityRuleSchema).max(200),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.rules.forEach((rule, index) => {
+      if (seen.has(rule.authorityDomain)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["rules", index, "authorityDomain"],
+          message: "Authority domains must be unique within one policy",
+        });
+      }
+      seen.add(rule.authorityDomain);
+    });
+  });
+
+const contextBudgetBucketSchema = z
+  .object({
+    maxItems: z.number().int().min(0).max(500),
+  })
+  .strict();
+
+export const contextBudgetSchema = z
+  .object({
+    maxItems: z.number().int().min(1).max(500),
+    maxEstimatedTokens: z.number().int().min(1).max(2_000_000),
+    buckets: z.object(
+      Object.fromEntries(
+        CONTEXT_EVIDENCE_BUCKETS.map((bucket) => [bucket, contextBudgetBucketSchema]),
+      ) as Record<
+        (typeof CONTEXT_EVIDENCE_BUCKETS)[number],
+        typeof contextBudgetBucketSchema
+      >,
+    ).strict(),
+  })
+  .strict();
+
+export type ContextAuthorityPolicyInput = z.input<typeof contextAuthorityPolicySchema>;
+export type ContextBudgetInput = z.input<typeof contextBudgetSchema>;

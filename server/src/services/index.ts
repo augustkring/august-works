@@ -221,3 +221,16 @@ export {
 export { approvedFoundationView, foundationService, type FoundationMutationActor } from "./foundation/foundation-service.js";
 
 export { foundationIndexService, extractFoundationSections, replaceFoundationRevisionSections } from "./foundation/foundation-index.js";
+
+export {
+  evidenceIsTemporallyApplicable,
+  evidenceWithinSensitivityCeiling,
+  filterEligibleEvidence,
+  orderEvidenceByAuthority,
+  resolveEvidenceAuthority,
+} from "./context/context-authority.js";
+export {
+  evidenceBucket,
+  estimateEvidenceTokens,
+  fitEvidenceToBudget,
+} from "./context/context-budget.js";

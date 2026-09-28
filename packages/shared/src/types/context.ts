@@ -60,3 +60,87 @@ export interface EvidenceItem {
   citation: EvidenceCitation;
   metadata: Record<string, unknown>;
 }
+
+export const CONTEXT_EVIDENCE_BUCKETS = [
+  "foundation",
+  "connected_evidence",
+  "shared_memory",
+  "private_memory",
+  "task_context",
+  "artifacts",
+] as const;
+
+export type ContextEvidenceBucket = (typeof CONTEXT_EVIDENCE_BUCKETS)[number];
+
+export interface ContextAuthoritySelector {
+  sourceClass: EvidenceSourceClass;
+  sourceProvider?: string;
+}
+
+export interface ContextAuthorityRule {
+  authorityDomain: string;
+  preferredSources: ContextAuthoritySelector[];
+}
+
+export interface ContextAuthorityPolicy {
+  rules: ContextAuthorityRule[];
+}
+
+export type ContextAuthorityReason =
+  | "preferred_authority"
+  | "authority_fallback"
+  | "lower_authority"
+  | "non_authoritative_source"
+  | "unconfigured_domain";
+
+export interface ContextAuthorityDecision {
+  evidence: EvidenceItem;
+  authorityRank: number | null;
+  primaryForDomain: boolean;
+  reason: ContextAuthorityReason;
+}
+
+export type ContextEligibilityExclusionReason =
+  | "not_yet_valid"
+  | "expired"
+  | "sensitivity_ceiling";
+
+export interface ContextEligibilityExclusion {
+  evidenceId: string;
+  reason: ContextEligibilityExclusionReason;
+}
+
+export interface ContextEligibilityResult {
+  eligible: EvidenceItem[];
+  excluded: ContextEligibilityExclusion[];
+}
+
+export interface ContextBudgetBucket {
+  maxItems: number;
+}
+
+export interface ContextBudget {
+  maxItems: number;
+  maxEstimatedTokens: number;
+  buckets: Record<ContextEvidenceBucket, ContextBudgetBucket>;
+}
+
+export type ContextBudgetExclusionReason =
+  | "bucket_item_limit"
+  | "total_item_limit"
+  | "total_token_limit";
+
+export interface ContextBudgetExclusion {
+  evidenceId: string;
+  bucket: ContextEvidenceBucket;
+  estimatedTokens: number;
+  reason: ContextBudgetExclusionReason;
+}
+
+export interface ContextBudgetResult {
+  selected: ContextAuthorityDecision[];
+  excluded: ContextBudgetExclusion[];
+  selectedEstimatedTokens: number;
+  selectedItemCount: number;
+  bucketItemCounts: Record<ContextEvidenceBucket, number>;
+}
