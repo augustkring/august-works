@@ -2856,6 +2856,7 @@ export {
   type ContextBudgetExclusionReason,
   type ContextBudgetResult,
   type ContextPacket,
+  type ContextPacketAuthority,
   type ContextPacketManifestRef,
   type ContextProviderRequirement,
   type ContextProviderWarning,
