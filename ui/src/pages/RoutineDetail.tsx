@@ -207,13 +207,26 @@ export function RoutineDetail() {
     enabled: !!activeIssueId,
     refetchInterval: 3000,
   });
-  const hasLiveRun = (liveRuns ?? []).length > 0;
+  const hasLiveAgentRun = (liveRuns ?? []).length > 0;
   const { data: routineRuns } = useQuery({
     queryKey: queryKeys.routines.runs(routineId!),
     queryFn: () => routinesApi.listRuns(routineId!),
     enabled: !!routineId,
-    refetchInterval: hasLiveRun ? 3000 : false,
+    refetchInterval: (query) => {
+      const hasLiveWorkflowRun = (query.state.data ?? []).some((run) =>
+        ["queued", "running", "waiting", "recovering", "cancelling"].includes(
+          run.linkedWorkflowRunStatus ?? "",
+        ),
+      );
+      return hasLiveAgentRun || hasLiveWorkflowRun ? 3000 : false;
+    },
   });
+  const hasLiveWorkflowRun = (routineRuns ?? []).some((run) =>
+    ["queued", "running", "waiting", "recovering", "cancelling"].includes(
+      run.linkedWorkflowRunStatus ?? "",
+    ),
+  );
+  const hasLiveRun = hasLiveAgentRun || hasLiveWorkflowRun;
   const relatedActivityIds = useMemo(
     () => ({
       triggerIds: routine?.triggers.map((trigger) => trigger.id) ?? [],
