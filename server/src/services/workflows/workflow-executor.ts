@@ -3621,6 +3621,90 @@ async function executeWorkflowGraph(
           output = { result: conditionResult };
           await completeRunningStep(db, ownedRun, runningStep, output, actor);
         }
+      } else if (current.type === "work.create_task") {
+        const config = createTaskNodeConfig(current);
+        const prepared = await prepareRunnableStep(
+          db,
+          ownedRun,
+          current.id,
+          {
+            title: config.title,
+            description: config.description,
+            projectId: config.projectId,
+            assigneeAgentId: config.assigneeAgentId,
+            assigneeUserId: config.assigneeUserId,
+            waitForCompletion: config.waitForCompletion,
+          },
+          actor,
+        );
+        if (prepared.checkpoint) {
+          output = prepared.checkpoint.outputJson;
+        } else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) {
+            throw new WorkflowCheckpointError(
+              "workflow_checkpoint_state_invalid",
+              `Create Task ${current.id} produced no runnable attempt`,
+            );
+          }
+          try {
+            if (config.waitForCompletion) {
+              await scheduleTaskCompletionWait(
+                db,
+                ownedRun,
+                current,
+                runningStep,
+                actor,
+              );
+              return;
+            }
+            const created = await createWorkflowTask(
+              db,
+              ownedRun,
+              current,
+              actor,
+            );
+            output = workflowTaskOutput(created.issue);
+            await completeRunningStep(
+              db,
+              ownedRun,
+              runningStep,
+              output,
+              actor,
+            );
+          } catch (error) {
+            if (
+              error instanceof WorkflowCheckpointError ||
+              error instanceof WorkflowRetryableNodeError
+            ) {
+              throw error;
+            }
+            const status =
+              typeof error === "object" &&
+              error !== null &&
+              "status" in error &&
+              typeof Reflect.get(error, "status") === "number"
+                ? Reflect.get(error, "status") as number
+                : null;
+            if (status !== null && status >= 400 && status < 500) {
+              throw new WorkflowCheckpointError(
+                "workflow_task_create_failed",
+                error instanceof Error
+                  ? error.message
+                  : "Task creation was rejected",
+              );
+            }
+            throw new WorkflowRetryableNodeError({
+              code: "workflow_task_create_failed",
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Task creation failed",
+              sideEffectSafeToRepeat: true,
+              providerAllowsRetry: true,
+            });
+          }
+        }
       } else if (current.type === "human.approval") {
         const config = humanApprovalConfig(current);
         const prepared = await prepareRunnableStep(
@@ -3808,7 +3892,8 @@ async function executeClaimedRun(
             node.type !== "core.manual_trigger" &&
             node.type !== "core.condition" &&
             node.type !== "core.wait" &&
-            node.type !== "human.approval",
+            node.type !== "human.approval" &&
+            node.type !== "work.create_task",
         )
         .map((node) => node.type),
     ),
@@ -3841,6 +3926,9 @@ async function recoverWaitingCandidate(
     }
     if (wait.kind === "human_interaction") {
       return resolveHumanApprovalWait(db, candidate, wait, now);
+    }
+    if (wait.kind === "task_completion") {
+      return resolveTaskCompletionWait(db, candidate, wait, now);
     }
     if (wait.kind !== "delay" || !wait.wakeAt || wait.wakeAt.getTime() > now.getTime()) {
       return "deferred";
@@ -4052,7 +4140,8 @@ export async function resolveWorkflowExecutionRevision(
             node.type !== "core.manual_trigger" &&
             node.type !== "core.condition" &&
             node.type !== "core.wait" &&
-            node.type !== "human.approval",
+            node.type !== "human.approval" &&
+            node.type !== "work.create_task",
         )
         .map((node) => node.type),
     ),
