@@ -20,7 +20,7 @@ export interface IssueAssignmentWakeupDeps {
       contextSnapshot?: Record<string, unknown>;
       durableChatRequest?: DurableChatWakeupRequest;
     },
-  ) => Promise<AgentWakeupResponse>;
+  ) => Promise<AgentWakeupResponse | null | undefined>;
 }
 
 export function queueIssueAssignmentWakeup(input: {
