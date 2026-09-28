@@ -96,6 +96,8 @@ function defaultConfig(type: string): Record<string, unknown> | null {
       return { mapping: { value: "{{input.value}}" } };
     case "core.condition":
       return { expression: "true" };
+    case "core.wait":
+      return { durationSeconds: 300 };
     case "work.create_task":
       return { title: "New task" };
     case "human.approval":
@@ -1073,6 +1075,34 @@ function NodeInspector({
           />
           <span className="block text-[11px] font-normal leading-4 text-muted-foreground">
             Supports true/false, boolean data references and strict comparisons such as {"{{trigger.amount}} >= 50000"}.
+          </span>
+        </label>
+      ) : null}
+
+      {workflowNode.type === "core.wait" ? (
+        <label className="block space-y-1 text-xs font-medium">
+          Wait duration (seconds)
+          <Input
+            type="number"
+            min={1}
+            max={604800}
+            value={String(config.durationSeconds ?? 300)}
+            disabled={!canEdit}
+            onChange={(event) =>
+              updateConfig({
+                durationSeconds: boundedInteger(
+                  event.target.value,
+                  1,
+                  604800,
+                  typeof config.durationSeconds === "number"
+                    ? config.durationSeconds
+                    : 300,
+                ),
+              })
+            }
+          />
+          <span className="block text-[11px] font-normal leading-4 text-muted-foreground">
+            The run is checkpointed and released while waiting; no browser request or worker stays open.
           </span>
         </label>
       ) : null}
