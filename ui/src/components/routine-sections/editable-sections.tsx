@@ -5,6 +5,7 @@ import {
   Braces,
   Clock3,
   Edit3,
+  GitBranch,
   Play,
   X,
 } from "lucide-react";
@@ -103,12 +104,14 @@ export function OverviewSection({
     setEditDraft,
     assigneeOptions,
     projectOptions,
+    workflowOptions,
     recentAssigneeIds,
     recentProjectIds,
     agentById,
     projectById,
     currentAssignee,
     currentProject,
+    currentWorkflow,
     mentionOptions,
     assigneeSelectorRef,
     projectSelectorRef,
@@ -135,56 +138,137 @@ export function OverviewSection({
 
   return (
     <div className="space-y-6">
-      {/* Assignment row */}
+      {/* Execution target + project row */}
       <div className="overflow-x-auto overscroll-x-contain">
         <div className="inline-flex min-w-full flex-wrap items-center gap-2 text-sm text-muted-foreground sm:min-w-max sm:flex-nowrap">
-          <span>For</span>
-          <InlineEntitySelector
-            ref={assigneeSelectorRef}
-            value={editDraft.assigneeAgentId}
-            options={assigneeOptions}
-            recentOptionIds={recentAssigneeIds}
-            placeholder="Responsible"
-            noneLabel="No responsible"
-            searchPlaceholder="Search responsible..."
-            emptyMessage="No responsible found."
-            onChange={(assigneeAgentId) =>
-              setEditDraft((current) => ({ ...current, assigneeAgentId }))
+          <span>Run with</span>
+          <Select
+            value={editDraft.executionTargetKind}
+            onValueChange={(value) =>
+              setEditDraft((current) => ({
+                ...current,
+                executionTargetKind: value as "agent_task" | "workflow",
+                executionTargetRef:
+                  value === "agent_task"
+                    ? current.assigneeAgentId
+                    : current.executionTargetKind === "workflow"
+                      ? current.executionTargetRef
+                      : "",
+              }))
             }
-            onConfirm={() => {
-              if (editDraft.projectId) {
-                descriptionEditorRef.current?.focus();
-              } else {
-                projectSelectorRef.current?.focus();
+          >
+            <SelectTrigger className="h-8 w-[118px]" aria-label="Execution target type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="agent_task">Agent</SelectItem>
+              <SelectItem value="workflow">Workflow</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {editDraft.executionTargetKind === "agent_task" ? (
+            <InlineEntitySelector
+              ref={assigneeSelectorRef}
+              value={editDraft.assigneeAgentId}
+              options={assigneeOptions}
+              recentOptionIds={recentAssigneeIds}
+              placeholder="Agent"
+              noneLabel="No agent"
+              searchPlaceholder="Search agents..."
+              emptyMessage="No agents found."
+              onChange={(assigneeAgentId) =>
+                setEditDraft((current) => ({
+                  ...current,
+                  assigneeAgentId,
+                  executionTargetRef: assigneeAgentId,
+                }))
               }
-            }}
-            renderTriggerValue={(option) =>
-              option ? (
-                currentAssignee ? (
+              onConfirm={() => {
+                if (editDraft.projectId) {
+                  descriptionEditorRef.current?.focus();
+                } else {
+                  projectSelectorRef.current?.focus();
+                }
+              }}
+              renderTriggerValue={(option) =>
+                option ? (
+                  currentAssignee ? (
+                    <>
+                      <AgentAvatar
+                        agent={currentAssignee}
+                        size={16}
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                      />
+                      <span className="truncate">{option.label}</span>
+                    </>
+                  ) : (
+                    <span className="truncate">{option.label}</span>
+                  )
+                ) : (
+                  <span className="text-muted-foreground">Agent</span>
+                )
+              }
+              renderOption={(option) => {
+                if (!option.id) return <span className="truncate">{option.label}</span>;
+                const assignee = agentById.get(option.id);
+                return (
                   <>
-                    <AgentAvatar agent={currentAssignee} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/>
+                    {assignee ? (
+                      <AgentAvatar
+                        agent={assignee}
+                        size={16}
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                      />
+                    ) : null}
+                    <span className="truncate">{option.label}</span>
+                  </>
+                );
+              }}
+            />
+          ) : (
+            <InlineEntitySelector
+              value={editDraft.executionTargetRef}
+              options={workflowOptions}
+              placeholder="Workflow"
+              noneLabel="No workflow"
+              searchPlaceholder="Search workflows..."
+              emptyMessage="No active published workflows found."
+              onChange={(workflowId) =>
+                setEditDraft((current) => ({
+                  ...current,
+                  executionTargetRef: workflowId,
+                }))
+              }
+              onConfirm={() => {
+                if (editDraft.projectId) {
+                  descriptionEditorRef.current?.focus();
+                } else {
+                  projectSelectorRef.current?.focus();
+                }
+              }}
+              renderTriggerValue={(option) =>
+                option ? (
+                  <>
+                    <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                     <span className="truncate">{option.label}</span>
                   </>
                 ) : (
-                  <span className="truncate">{option.label}</span>
+                  <span className="text-muted-foreground">Workflow</span>
                 )
-              ) : (
-                <span className="text-muted-foreground">Responsible</span>
-              )
-            }
-            renderOption={(option) => {
-              if (!option.id) return <span className="truncate">{option.label}</span>;
-              const assignee = agentById.get(option.id);
-              return (
+              }
+              renderOption={(option) => (
                 <>
-                  {assignee ? (
-                    <AgentAvatar agent={assignee} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/>
-                  ) : null}
-                  <span className="truncate">{option.label}</span>
+                  <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="truncate">
+                    {currentWorkflow?.id === option.id
+                      ? currentWorkflow.name
+                      : option.label}
+                  </span>
                 </>
-              );
-            }}
-          />
+              )}
+            />
+          )}
+
           <span>in</span>
           <InlineEntitySelector
             ref={projectSelectorRef}
@@ -227,10 +311,14 @@ export function OverviewSection({
         </div>
       </div>
 
-      {!routine.assigneeAgentId ? (
+      {(
+        editDraft.executionTargetKind === "agent_task"
+          ? !editDraft.assigneeAgentId
+          : !editDraft.executionTargetRef
+      ) ? (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-900 dark:text-amber-200">
-          Default agent required. This routine can stay as a draft and still run manually, but
-          automation stays paused until you assign a default agent.
+          Execution target required. The routine can stay paused as a draft, but automatic
+          triggers need an agent or an active published workflow.
         </div>
       ) : null}
 
