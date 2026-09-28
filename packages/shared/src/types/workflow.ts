@@ -408,6 +408,7 @@ export const WORKFLOW_WAIT_KINDS = [
   "human_interaction",
   "external_callback",
   "task_completion",
+  "external_agent_run",
 ] as const;
 export type WorkflowWaitKind = (typeof WORKFLOW_WAIT_KINDS)[number];
 
