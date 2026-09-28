@@ -107,7 +107,7 @@ function mutationMessage(error: unknown) {
   if (error instanceof ApiError) {
     const code = (error.body as { code?: string } | null)?.code;
     if (code === "revision_conflict") {
-      return "This document changed elsewhere. The latest version has been reloaded.";
+      return "This document changed elsewhere. Your edits are preserved; reload the latest revision before saving.";
     }
   }
   return error instanceof Error ? error.message : "The Foundation change could not be saved.";
@@ -441,6 +441,10 @@ function FoundationDocumentWorkspace({
   const [proposalOpen, setProposalOpen] = useState(false);
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
   const [edit, setEdit] = useState(() => makeEditState(document));
+  const editIsStale =
+    editing &&
+    Boolean(document.latestRevisionId) &&
+    edit.baseRevisionId !== document.latestRevisionId;
 
   const displayedGovernance =
     mode === "approved" && document.canonicalGovernance
@@ -493,7 +497,8 @@ function FoundationDocumentWorkspace({
 
   const saveMutation = useMutation({
     mutationFn: () => {
-      if (!document.latestRevisionId) throw new Error("This document has no working revision.");
+      if (!edit.baseRevisionId) throw new Error("This document has no working revision.");
+      if (editIsStale) throw new Error("Reload the latest revision before saving this draft.");
       const reviewDays = edit.reviewFrequencyDays.trim()
         ? Number.parseInt(edit.reviewFrequencyDays, 10)
         : null;
@@ -502,7 +507,7 @@ function FoundationDocumentWorkspace({
       }
       const owner = parseOwner(edit.owner);
       return foundationApi.updateDraft(companyId, document.id, {
-        baseRevisionId: document.latestRevisionId,
+        baseRevisionId: edit.baseRevisionId,
         title: edit.title.trim() || null,
         body: edit.body,
         category: edit.category,
@@ -599,7 +604,16 @@ function FoundationDocumentWorkspace({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canEdit ? (
-              <Button variant="outline" size="sm" onClick={() => { setTab("document"); setMode("working"); setEditing(true); }}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setTab("document");
+                  setMode("working");
+                  setEdit(makeEditState(document));
+                  setEditing(true);
+                }}
+              >
                 <Pencil className="mr-1.5 h-3.5 w-3.5" />
                 Edit draft
               </Button>
@@ -709,7 +723,9 @@ function FoundationDocumentWorkspace({
               setEditing(false);
             }}
             onSave={() => saveMutation.mutate()}
+            onReloadLatest={() => setEdit(makeEditState(document))}
             saving={saveMutation.isPending}
+            stale={editIsStale}
           />
         ) : mode === "approved" && !document.canonicalRevision ? (
           <div className="border-l-2 border-amber-500 pl-4 py-2">
@@ -783,6 +799,7 @@ function makeEditState(document: FoundationDocument) {
       ? `agent:${document.ownerAgentId}`
       : "";
   return {
+    baseRevisionId: document.latestRevisionId,
     title: document.title ?? "",
     body: document.body,
     category: document.category,
@@ -807,7 +824,9 @@ function FoundationEditor({
   agents,
   onCancel,
   onSave,
+  onReloadLatest,
   saving,
+  stale,
 }: {
   state: ReturnType<typeof makeEditState>;
   setState: (next: ReturnType<typeof makeEditState>) => void;
@@ -815,10 +834,23 @@ function FoundationEditor({
   agents: Array<{ id: string; name: string }>;
   onCancel: () => void;
   onSave: () => void;
+  onReloadLatest: () => void;
   saving: boolean;
+  stale: boolean;
 }) {
   return (
     <section aria-label="Edit Foundation draft" className="space-y-4">
+      {stale ? (
+        <div role="alert" className="border-l-2 border-amber-500 pl-3">
+          <p className="text-sm font-medium">A newer revision exists</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Your edits are still here. Reload the latest revision before saving so another person's changes are not overwritten.
+          </p>
+          <Button className="mt-2" size="sm" variant="outline" onClick={onReloadLatest}>
+            Reload latest revision
+          </Button>
+        </div>
+      ) : null}
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1 text-xs font-medium">
           Title
@@ -913,7 +945,7 @@ function FoundationEditor({
 
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel} disabled={saving}>Cancel</Button>
-        <Button onClick={onSave} disabled={saving}>{saving ? "Saving…" : "Save draft"}</Button>
+        <Button onClick={onSave} disabled={saving || stale}>{saving ? "Saving…" : "Save draft"}</Button>
       </div>
     </section>
   );
