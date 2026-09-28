@@ -20,6 +20,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { approvalService } from "../approvals.js";
+import { issueService } from "../issues.js";
 import { workflowService } from "./workflow-service.js";
 import {
   scheduleWorkflowStepRetry,
@@ -1432,6 +1433,83 @@ describePg("Workflow executor V1", () => {
     ).toMatchObject({
       status: "failed",
       errorCode: "workflow_task_cancelled",
+    });
+  });
+
+  it("resumes a task-completion wait from the committed task terminal event", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "task",
+          type: "work.create_task",
+          name: "Create and wait",
+          position: { x: 180, y: 0 },
+          config: {
+            title: "Event-driven completion",
+            description: null,
+            projectId: null,
+            assigneeAgentId: null,
+            assigneeUserId: null,
+            waitForCompletion: true,
+          },
+        },
+        {
+          id: "after",
+          type: "core.condition",
+          name: "Continue",
+          position: { x: 360, y: 0 },
+          config: { expression: "true" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "start", target: "task" },
+        { id: "e2", source: "task", target: "after" },
+      ],
+      variables: [],
+      settings: {},
+    });
+    const executor = workflowExecutorService(db);
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "task-event-wait",
+    );
+    expect(waiting.run.status).toBe("waiting");
+    const issueId = waiting.waits[0]!.referenceId!;
+
+    await issueService(db).update(issueId, { status: "done" });
+
+    const completed = await executor.getRun(
+      seeded.companyId,
+      waiting.run.id,
+    );
+    expect(completed?.run.status).toBe("succeeded");
+    expect(completed?.waits[0]).toMatchObject({
+      kind: "task_completion",
+      status: "resolved",
+      resolutionJson: expect.objectContaining({
+        issueId,
+        status: "done",
+      }),
+    });
+    expect(
+      completed?.steps.find((step) => step.nodeId === "after"),
+    ).toMatchObject({
+      status: "succeeded",
+      outputJson: { result: true },
     });
   });
 
