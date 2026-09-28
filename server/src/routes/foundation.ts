@@ -130,8 +130,8 @@ export function foundationRoutes(db: Db) {
     async (req, res) => {
       await assertFoundationEnabled();
       const companyId = req.params.companyId as string;
-      assertCompanyAccess(req, companyId);
       assertBoard(req);
+      await assertFoundationPermission(req, companyId, "foundation:edit");
       const created = await svc.createDraft(companyId, req.body, boardMutationActor(req));
       await audit(req, {
         companyId,
@@ -183,8 +183,8 @@ export function foundationRoutes(db: Db) {
     async (req, res) => {
       await assertFoundationEnabled();
       const companyId = req.params.companyId as string;
-      assertCompanyAccess(req, companyId);
       assertBoard(req);
+      await assertFoundationPermission(req, companyId, "foundation:edit");
       const updated = await svc.updateDraft(
         companyId,
         req.params.foundationDocumentId as string,
@@ -211,8 +211,8 @@ export function foundationRoutes(db: Db) {
     async (req, res) => {
       await assertFoundationEnabled();
       const companyId = req.params.companyId as string;
-      assertCompanyAccess(req, companyId);
       assertBoard(req);
+      await assertFoundationPermission(req, companyId, "foundation:edit");
       const updated = await svc.submitForReview(
         companyId,
         req.params.foundationDocumentId as string,
@@ -235,8 +235,8 @@ export function foundationRoutes(db: Db) {
     async (req, res) => {
       await assertFoundationEnabled();
       const companyId = req.params.companyId as string;
-      assertCompanyAccess(req, companyId);
       assertBoard(req);
+      await assertFoundationPermission(req, companyId, "foundation:approve");
       const updated = await svc.approve(
         companyId,
         req.params.foundationDocumentId as string,
@@ -262,8 +262,8 @@ export function foundationRoutes(db: Db) {
     async (req, res) => {
       await assertFoundationEnabled();
       const companyId = req.params.companyId as string;
-      assertCompanyAccess(req, companyId);
       assertBoard(req);
+      await assertFoundationPermission(req, companyId, "foundation:approve");
       const updated = await svc.rejectReview(
         companyId,
         req.params.foundationDocumentId as string,
@@ -304,8 +304,7 @@ export function foundationRoutes(db: Db) {
     async (req, res) => {
       await assertFoundationEnabled();
       const companyId = req.params.companyId as string;
-      assertCompanyAccess(req, companyId);
-      assertBoard(req);
+      await assertFoundationPermission(req, companyId, "foundation:read");
       const foundation = await svc.get(companyId, req.params.foundationDocumentId as string);
       if (!foundation) {
         res.status(404).json({ error: "Foundation document not found" });
@@ -334,7 +333,8 @@ export function foundationRoutes(db: Db) {
       await audit(req, {
         companyId,
         action: "foundation.proposal_created",
-        entityId: proposal.foundationDocumentId,
+        entityType: "foundation_change_proposal",
+        entityId: proposal.id,
         details: {
           proposalId: proposal.id,
           sourceType: proposal.sourceType,

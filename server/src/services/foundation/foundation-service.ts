@@ -795,9 +795,11 @@ export function foundationService(db: Db) {
       const outcome = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
-        if (actor.principal.type !== "user") {
-          throw forbidden("Foundation proposal decisions require a user principal");
+        if (actor.principal.type === "agent") {
+          throw forbidden("Agents cannot make Foundation proposal decisions");
         }
+        const reviewerUserId =
+          actor.principal.type === "user" ? actor.principal.userId : null;
 
         const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
         if (!lockedRow) throw notFound("Foundation document not found");
@@ -819,7 +821,7 @@ export function foundationService(db: Db) {
             .update(foundationChangeProposals)
             .set({
               status: "superseded",
-              reviewedByUserId: actor.principal.userId,
+              reviewedByUserId: reviewerUserId,
               reviewedAt: now,
               updatedAt: now,
             })
@@ -843,7 +845,7 @@ export function foundationService(db: Db) {
             format: "markdown",
             body: proposal.proposedBody,
             changeSummary: proposal.changeSummary ?? "Accepted Foundation proposal",
-            createdByUserId: actor.principal.userId,
+            createdByUserId: reviewerUserId,
             createdByRunId: actor.runId ?? null,
             createdAt: now,
           })
@@ -855,7 +857,7 @@ export function foundationService(db: Db) {
             latestBody: proposal.proposedBody,
             latestRevisionId: revision!.id,
             latestRevisionNumber: nextRevisionNumber,
-            updatedByUserId: actor.principal.userId,
+            updatedByUserId: reviewerUserId,
             updatedByAgentId: null,
             updatedAt: now,
           })
@@ -875,7 +877,7 @@ export function foundationService(db: Db) {
           .update(foundationChangeProposals)
           .set({
             status: "accepted",
-            reviewedByUserId: actor.principal.userId,
+            reviewedByUserId: reviewerUserId,
             reviewedAt: now,
             updatedAt: now,
           })
@@ -914,9 +916,11 @@ export function foundationService(db: Db) {
       db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
-        if (actor.principal.type !== "user") {
-          throw forbidden("Foundation proposal decisions require a user principal");
+        if (actor.principal.type === "agent") {
+          throw forbidden("Agents cannot make Foundation proposal decisions");
         }
+        const reviewerUserId =
+          actor.principal.type === "user" ? actor.principal.userId : null;
 
         const foundation = await lockFoundation(tx, companyId, foundationDocumentId);
         if (!foundation) throw notFound("Foundation document not found");
@@ -935,7 +939,7 @@ export function foundationService(db: Db) {
           .update(foundationChangeProposals)
           .set({
             status: "rejected",
-            reviewedByUserId: actor.principal.userId,
+            reviewedByUserId: reviewerUserId,
             reviewedAt: now,
             updatedAt: now,
           })

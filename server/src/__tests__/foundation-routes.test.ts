@@ -339,4 +339,44 @@ describeEmbeddedPostgres("Foundation routes", () => {
     expect(revisions.body.map((item: { revisionNumber: number }) => item.revisionNumber)).toEqual([2, 1]);
   });
 
+  it("requires an explicit Foundation read grant for normal session users", async () => {
+    const company = await seedCompany();
+    await enableFoundation();
+    const userId = "session-user";
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "viewer",
+    });
+    const sessionActor: Express.Request["actor"] = {
+      type: "board",
+      userId,
+      source: "session",
+      isInstanceAdmin: false,
+      companyIds: [company.id],
+      memberships: [{ companyId: company.id, membershipRole: "viewer", status: "active" }],
+    };
+
+    await request(app(sessionActor))
+      .get(`/api/companies/${company.id}/foundation`)
+      .expect(403)
+      .expect((response) => {
+        expect(response.body.code).toBe("permission_denied");
+      });
+
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: userId,
+      permissionKey: "foundation:read",
+      scope: null,
+    });
+
+    await request(app(sessionActor))
+      .get(`/api/companies/${company.id}/foundation`)
+      .expect(200);
+  });
+
 });
