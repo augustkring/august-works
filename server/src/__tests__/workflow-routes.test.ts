@@ -4,6 +4,7 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
+  agents,
   companies,
   companyMemberships,
   createDb,
@@ -38,6 +39,7 @@ describePg("Workflow routes", () => {
     await db.delete(workflows);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(agents);
     await db.delete(companies);
     await db.delete(instanceSettings);
   });
@@ -203,4 +205,73 @@ describePg("Workflow routes", () => {
       .get(`/api/companies/${beta.id}/workflows/${created.body.id}`)
       .expect(404);
   });
+  it("does not advertise human-only Workflow mutations to agents", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+    const [agent] = await db.insert(agents).values({
+      companyId: company.id,
+      name: "Workflow Agent",
+      role: "analyst",
+      adapterType: "codex_local",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    }).returning();
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent!.id,
+      status: "active",
+      membershipRole: "member",
+    });
+    await db.insert(principalPermissionGrants).values([
+      {
+        companyId: company.id,
+        principalType: "agent",
+        principalId: agent!.id,
+        permissionKey: "workflows:read",
+        scope: null,
+      },
+      {
+        companyId: company.id,
+        principalType: "agent",
+        principalId: agent!.id,
+        permissionKey: "workflows:edit",
+        scope: null,
+      },
+      {
+        companyId: company.id,
+        principalType: "agent",
+        principalId: agent!.id,
+        permissionKey: "workflows:publish",
+        scope: null,
+      },
+      {
+        companyId: company.id,
+        principalType: "agent",
+        principalId: agent!.id,
+        permissionKey: "workflows:run",
+        scope: null,
+      },
+    ]);
+
+    const response = await request(app({
+      type: "agent",
+      agentId: agent!.id,
+      companyId: company.id,
+      source: "agent_key",
+      keyId: "workflow-agent-key",
+      runId: "workflow-agent-run",
+    }))
+      .get(`/api/companies/${company.id}/workflows/capabilities`)
+      .expect(200);
+
+    expect(response.body).toEqual({
+      read: true,
+      edit: false,
+      publish: false,
+      run: true,
+    });
+  });
+
 });

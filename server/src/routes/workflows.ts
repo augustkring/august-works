@@ -61,7 +61,12 @@ export function workflowRoutes(db: Db) {
       req.actor.type === "board" &&
       (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin)
     ) {
-      return { allowed: true as const };
+      return {
+        allowed: true as const,
+        action: permission,
+        reason: "allow_local_board" as const,
+        explanation: "Allowed by local trusted board access.",
+      };
     }
     return access.decide({
       actor: req.actor,
@@ -95,10 +100,11 @@ export function workflowRoutes(db: Db) {
       decidePermission(req, companyId, "workflows:publish"),
       decidePermission(req, companyId, "workflows:run"),
     ]);
+    const humanMutationSurface = req.actor.type === "board";
     return {
       read: read.allowed,
-      edit: edit.allowed,
-      publish: publish.allowed,
+      edit: humanMutationSurface && edit.allowed,
+      publish: humanMutationSurface && publish.allowed,
       run: run.allowed,
     };
   }
