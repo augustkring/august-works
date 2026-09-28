@@ -3853,10 +3853,22 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
             ...stage,
             kind: normalizeStageKind(stage.kind),
           }));
-        const stageInputs = stageInputsBase.map((stage) => ({
-          ...stage,
-          config: normalizeStageConfig(stage.kind, "config" in stage ? stage.config : {}),
-        }));
+        const stageInputs = stageInputsBase.map((stage) => {
+          const rawConfig = "config" in stage ? stage.config : {};
+          const automationRequest = readStageAutomationRequest(rawConfig);
+          let config = normalizeStageConfig(stage.kind, rawConfig);
+          if (automationRequest?.target?.kind === "workflow") {
+            config = withStageAutomationTarget(
+              config,
+              automationRequest.target,
+              automationRequest.executionContext,
+            );
+          }
+          return {
+            ...stage,
+            config,
+          };
+        });
         const stageKeys = new Set(stageInputs.map((stage) => stage.key));
         for (const stage of stageInputs) {
           assertReviewTargetsInSet(stage.kind, stage.config, stageKeys);
@@ -3940,7 +3952,15 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       actor?: PipelineActor;
     }) {
       await getPipelineOrThrow(db, input.companyId, input.pipelineId);
-      const config = normalizeStageConfig(input.kind, input.config);
+      const automationRequest = readStageAutomationRequest(input.config);
+      let config = normalizeStageConfig(input.kind, input.config);
+      if (automationRequest?.target?.kind === "workflow") {
+        config = withStageAutomationTarget(
+          config,
+          automationRequest.target,
+          automationRequest.executionContext,
+        );
+      }
       const kind = normalizeStageKind(input.kind);
       await validateStageTargets(input.companyId, input.pipelineId, input.kind, config);
       await validateStageAutomationConfig(input.companyId, config);
