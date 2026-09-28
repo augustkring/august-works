@@ -76,6 +76,7 @@ export interface AssembleContextInput {
   projectId?: string | null;
   query: string;
   intent?: string | null;
+  includeFoundation?: boolean;
   sensitivityCeiling?: EvidenceSensitivity;
   asOf?: Date;
   budget?: ContextBudget;
@@ -485,7 +486,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
 
       const providers = options.providers ?? [
         ...(input.issueId ? [taskProvider(db)] : []),
-        foundationProvider(db),
+        ...(input.includeFoundation === false ? [] : [foundationProvider(db)]),
       ];
       const providerResult = await runContextProviders(providers, input, deadlineAt);
       const eligibility = filterEligibleEvidence(dedupeEvidence(providerResult.evidence), {
@@ -522,6 +523,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
               key: provider.key,
               requirement: provider.requirement,
             })),
+            includeFoundation: input.includeFoundation !== false,
             asOf: asOf.toISOString(),
           },
           selected: budgeted.selected.map((decision) => {

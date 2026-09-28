@@ -259,3 +259,9 @@ export {
   type ContextProviderResult,
   type ContextProviderRunResult,
 } from "./context/context-engine.js";
+
+export {
+  assembleFreshNativeGovernedContext,
+  type ContextAssemble,
+  type FreshNativeGovernedContextInput,
+} from "./context/context-runtime.js";

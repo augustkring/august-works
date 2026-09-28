@@ -469,6 +469,7 @@ import {
   instanceSettingsService,
   resolveWorktreeRunExecutionActivation,
 } from "./instance-settings.js";
+import { assembleFreshNativeGovernedContext } from "./context/context-runtime.js";
 import {
   evaluateExecutionAllowlist,
   isExecutionForcedToKubernetes,
@@ -23473,6 +23474,25 @@ export function heartbeatService(
                   })
                 : null;
             const pinnedPlanMarkdown = pinnedPlan?.body ?? "";
+            const governedContextMarkdown =
+              await assembleFreshNativeGovernedContext(db, {
+                enabled:
+                  experimentalInstanceSettings.enableContextEngineV1 === true,
+                foundationEnabled:
+                  experimentalInstanceSettings.enableFoundationV1 === true,
+                companyId: agent.companyId,
+                agentId: agent.id,
+                responsibleUserId: run.responsibleUserId ?? responsibleUserId,
+                runId: run.id,
+                issueId: issueRef.id,
+                projectId: issueRef.projectId,
+                issueTitle: issueRef.title,
+                issueDescription: issueRef.description,
+                immediateRequest:
+                  nativeReviewRequest ??
+                  safeWakeCommentContext?.body ??
+                  null,
+              });
             const nativeRuntimeContext = await buildNativeRuntimeContext({
               db,
               agent,
@@ -23502,6 +23522,7 @@ export function heartbeatService(
                         ? `## Project repositories\nThe task workspace also contains these editable Git repositories:\n${projectRepositoryPaths.map((repo) => `- ${repo}`).join("\n")}`
                         : null,
                     ].filter(Boolean).join("\n\n"),
+                    governedContextMarkdown,
                     initialCommunicationGuidance: nativeReviewRequest ? null : readNonEmptyString(context.paperclipTaskCommunicationGuidance),
                     wakePayload: context.paperclipWake,
                     resumedSession,
