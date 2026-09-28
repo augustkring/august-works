@@ -4400,6 +4400,73 @@ export function workflowExecutorService(db: Db) {
       return detail;
     },
 
+    resumeTaskWaitsForIssue: async (
+      companyId: string,
+      issueId: string,
+      now = new Date(),
+    ): Promise<{
+      checked: number;
+      recovered: number;
+      raced: number;
+      deferred: number;
+      failedRunIds: string[];
+    }> => {
+      const rows = await db
+        .select({
+          wait: workflowWaits,
+          run: workflowRuns,
+        })
+        .from(workflowWaits)
+        .innerJoin(
+          workflowRuns,
+          and(
+            eq(workflowRuns.companyId, workflowWaits.companyId),
+            eq(workflowRuns.id, workflowWaits.workflowRunId),
+          ),
+        )
+        .where(
+          and(
+            eq(workflowWaits.companyId, companyId),
+            eq(workflowWaits.kind, "task_completion"),
+            eq(workflowWaits.status, "active"),
+            eq(workflowWaits.referenceType, "issue"),
+            eq(workflowWaits.referenceId, issueId),
+            eq(workflowRuns.status, "waiting"),
+          ),
+        )
+        .orderBy(asc(workflowWaits.createdAt))
+        .limit(100);
+
+      let recovered = 0;
+      let raced = 0;
+      let deferred = 0;
+      const failedRunIds: string[] = [];
+
+      for (const row of rows) {
+        try {
+          const outcome = await resolveTaskCompletionWait(
+            db,
+            row.run,
+            row.wait,
+            now,
+          );
+          if (outcome === "recovered") recovered += 1;
+          else if (outcome === "raced") raced += 1;
+          else deferred += 1;
+        } catch {
+          failedRunIds.push(row.run.id);
+        }
+      }
+
+      return {
+        checked: rows.length,
+        recovered,
+        raced,
+        deferred,
+        failedRunIds,
+      };
+    },
+
     recoverExpiredRuns: async (
       limit = 20,
       now = new Date(),
