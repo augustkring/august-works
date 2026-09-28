@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -17,6 +18,8 @@ import { documents } from "./documents.js";
 import { issues } from "./issues.js";
 import { pipelineStages, pipelines } from "./pipelines.js";
 import { routines } from "./routines.js";
+import { workflowRuns } from "./workflows.js";
+import type { PipelineAutomationTargetKind } from "@paperclipai/shared";
 
 export type PipelineCasePendingSuggestion = {
   id: string;
@@ -189,7 +192,10 @@ export const pipelineAutomationExecutions = pgTable(
     caseId: uuid("case_id").notNull().references(() => pipelineCases.id, { onDelete: "cascade" }),
     automationId: text("automation_id").notNull(),
     triggeringEventId: uuid("triggering_event_id").notNull(),
-    routineId: uuid("routine_id").notNull().references(() => routines.id, { onDelete: "cascade" }),
+    targetKind: text("target_kind").$type<PipelineAutomationTargetKind>(),
+    targetRef: uuid("target_ref"),
+    routineId: uuid("routine_id").references(() => routines.id, { onDelete: "cascade" }),
+    workflowRunId: uuid("workflow_run_id"),
     status: text("status").notNull(),
     executionIssueId: uuid("execution_issue_id").references(() => issues.id, { onDelete: "set null" }),
     retryOfExecutionId: uuid("retry_of_execution_id"),
@@ -205,9 +211,40 @@ export const pipelineAutomationExecutions = pgTable(
       table.triggeringEventId,
     ),
     companyCaseIdx: index("pipeline_automation_executions_company_case_idx").on(table.companyId, table.caseId),
+    targetIdx: index("pipeline_automation_executions_target_idx").on(
+      table.companyId,
+      table.targetKind,
+      table.targetRef,
+    ),
     routineIdx: index("pipeline_automation_executions_routine_idx").on(table.routineId),
+    workflowRunIdx: index("pipeline_automation_executions_workflow_run_idx").on(
+      table.companyId,
+      table.workflowRunId,
+    ),
+    workflowRunFk: foreignKey({
+      columns: [table.companyId, table.workflowRunId],
+      foreignColumns: [workflowRuns.companyId, workflowRuns.id],
+      name: "pipeline_automation_executions_company_workflow_run_fk",
+    }),
     executionIssueIdx: index("pipeline_automation_executions_execution_issue_idx").on(table.executionIssueId),
     retryOfExecutionIdx: index("pipeline_automation_executions_retry_of_execution_idx").on(table.retryOfExecutionId),
+    targetCheck: check(
+      "pipeline_automation_executions_target_check",
+      sql`(
+        ${table.targetKind} is null
+        and ${table.targetRef} is null
+        and ${table.routineId} is not null
+      ) or (
+        ${table.targetKind} = 'routine'
+        and ${table.targetRef} is not null
+        and ${table.routineId} = ${table.targetRef}
+        and ${table.workflowRunId} is null
+      ) or (
+        ${table.targetKind} = 'workflow'
+        and ${table.targetRef} is not null
+        and ${table.routineId} is null
+      )`,
+    ),
     statusCheck: check("pipeline_automation_executions_status_check", sql`${table.status} in ('succeeded', 'failed')`),
   }),
 );
