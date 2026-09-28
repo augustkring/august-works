@@ -1,6 +1,7 @@
 import type {
   CreateWorkflow,
   PublishWorkflow,
+  StartWorkflowRun,
   UpdateWorkflowDraft,
   Workflow,
   WorkflowCapabilities,
@@ -10,6 +11,8 @@ import type {
   WorkflowDataSelectorRequest,
   WorkflowDetail,
   WorkflowNodeDefinitionDescriptor,
+  WorkflowRun,
+  WorkflowRunDetail,
   WorkflowRevision,
 } from "@paperclipai/shared";
 import { api } from "./client";
@@ -59,6 +62,26 @@ export const workflowsApi = {
     api.get<WorkflowRevision[]>(
       `/companies/${companyId}/workflows/${workflowId}/revisions`,
     ),
+
+  listRuns: (companyId: string, workflowId: string, limit = 30) =>
+    api.get<WorkflowRun[]>(
+      `/companies/${companyId}/workflows/${workflowId}/runs?limit=${Math.min(Math.max(limit, 1), 100)}`,
+    ),
+
+  startRun: (
+    companyId: string,
+    workflowId: string,
+    input: StartWorkflowRun,
+    idempotencyKey: string,
+  ) =>
+    api.post<WorkflowRunDetail>(
+      `/companies/${companyId}/workflows/${workflowId}/run`,
+      input,
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    ),
+
+  getRun: (companyId: string, runId: string) =>
+    api.get<WorkflowRunDetail>(`/companies/${companyId}/workflow-runs/${runId}`),
 
   nodeRegistry: (companyId: string) =>
     api.get<WorkflowNodeDefinitionDescriptor[]>(
