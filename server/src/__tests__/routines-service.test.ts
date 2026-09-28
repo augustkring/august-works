@@ -2989,6 +2989,17 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
         source: "manual",
       },
     });
+    const settledRoutineRun = await db
+      .select()
+      .from(routineRuns)
+      .where(eq(routineRuns.id, run.id))
+      .then((rows) => rows[0]);
+    expect(settledRoutineRun).toMatchObject({
+      status: "completed",
+      linkedWorkflowRunId: run.linkedWorkflowRunId,
+      failureReason: null,
+    });
+    expect(settledRoutineRun?.completedAt).not.toBeNull();
   });
 
   it("coalesces a matching routine dispatch into an active workflow run", async () => {
