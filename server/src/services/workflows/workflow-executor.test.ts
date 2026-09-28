@@ -465,4 +465,275 @@ describePg("Workflow executor V1", () => {
     });
   });
 
+  it("recovers an expired run from the last succeeded checkpoint without replaying it", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "condition",
+          type: "core.condition",
+          name: "Continue",
+          position: { x: 180, y: 0 },
+          config: { expression: "{{trigger.enabled}}" },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "condition" }],
+      variables: [],
+      settings: {},
+    });
+    const now = new Date("2026-09-28T15:00:00.000Z");
+    const old = new Date(now.getTime() - 120_000);
+    const [run] = await db.insert(workflowRuns).values({
+      companyId: seeded.companyId,
+      workflowId: seeded.workflow.id,
+      workflowRevisionId: seeded.workflow.publishedRevisionId!,
+      status: "running",
+      source: "manual",
+      triggerPayload: { enabled: true },
+      correlationId: randomUUID(),
+      executionOwnerId: "dead-worker",
+      leaseExpiresAt: new Date(now.getTime() - 60_000),
+      ownerHeartbeatAt: old,
+      startedAt: old,
+      createdAt: old,
+      updatedAt: old,
+    }).returning();
+
+    await db.insert(workflowStepRuns).values([
+      {
+        companyId: seeded.companyId,
+        workflowRunId: run!.id,
+        nodeId: "start",
+        attempt: 1,
+        status: "succeeded",
+        inputJson: { enabled: true },
+        outputJson: { enabled: true },
+        startedAt: old,
+        finishedAt: new Date(old.getTime() + 10),
+        durationMs: 10,
+        createdAt: old,
+        updatedAt: old,
+      },
+      {
+        companyId: seeded.companyId,
+        workflowRunId: run!.id,
+        nodeId: "condition",
+        attempt: 1,
+        status: "pending",
+        inputJson: { expression: "{{trigger.enabled}}" },
+        createdAt: old,
+        updatedAt: old,
+      },
+    ]);
+
+    const recovery = await workflowExecutorService(db).recoverExpiredRuns(10, now);
+    expect(recovery).toMatchObject({
+      checked: 1,
+      recovered: 1,
+      raced: 0,
+      failedRunIds: [],
+    });
+
+    const detail = await workflowExecutorService(db).getRun(seeded.companyId, run!.id);
+    expect(detail?.run).toMatchObject({
+      status: "succeeded",
+      executionOwnerId: null,
+      leaseExpiresAt: null,
+    });
+    expect(detail?.steps.filter((step) => step.nodeId === "start")).toHaveLength(1);
+    expect(detail?.steps.find((step) => step.nodeId === "condition")).toMatchObject({
+      attempt: 1,
+      status: "succeeded",
+      outputJson: { result: true },
+    });
+
+    const actions = (await db.select().from(activityLog)).map((row) => row.action);
+    expect(actions).toContain("workflow.run_recovery_started");
+    expect(actions).toContain("workflow.run_recovered");
+    expect(
+      actions.filter((action) => action === "workflow.step_completed"),
+    ).toHaveLength(1);
+  });
+
+  it("preserves an interrupted attempt and resumes the node as attempt n+1", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "condition",
+          type: "core.condition",
+          name: "Continue",
+          position: { x: 180, y: 0 },
+          config: { expression: "true" },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "condition" }],
+      variables: [],
+      settings: {},
+    });
+    const now = new Date("2026-09-28T15:10:00.000Z");
+    const old = new Date(now.getTime() - 120_000);
+    const [run] = await db.insert(workflowRuns).values({
+      companyId: seeded.companyId,
+      workflowId: seeded.workflow.id,
+      workflowRevisionId: seeded.workflow.publishedRevisionId!,
+      status: "running",
+      source: "manual",
+      triggerPayload: {},
+      correlationId: randomUUID(),
+      executionOwnerId: "dead-worker",
+      leaseExpiresAt: new Date(now.getTime() - 60_000),
+      ownerHeartbeatAt: old,
+      startedAt: old,
+      createdAt: old,
+      updatedAt: old,
+    }).returning();
+
+    await db.insert(workflowStepRuns).values([
+      {
+        companyId: seeded.companyId,
+        workflowRunId: run!.id,
+        nodeId: "start",
+        attempt: 1,
+        status: "succeeded",
+        inputJson: {},
+        outputJson: {},
+        startedAt: old,
+        finishedAt: new Date(old.getTime() + 10),
+        durationMs: 10,
+        createdAt: old,
+        updatedAt: old,
+      },
+      {
+        companyId: seeded.companyId,
+        workflowRunId: run!.id,
+        nodeId: "condition",
+        attempt: 1,
+        status: "running",
+        inputJson: { expression: "true" },
+        startedAt: new Date(old.getTime() + 20),
+        createdAt: new Date(old.getTime() + 20),
+        updatedAt: new Date(old.getTime() + 20),
+      },
+    ]);
+
+    const recovery = await workflowExecutorService(db).recoverExpiredRuns(10, now);
+    expect(recovery.recovered).toBe(1);
+
+    const detail = await workflowExecutorService(db).getRun(seeded.companyId, run!.id);
+    const conditionAttempts = detail!.steps
+      .filter((step) => step.nodeId === "condition")
+      .sort((left, right) => left.attempt - right.attempt);
+    expect(conditionAttempts).toHaveLength(2);
+    expect(conditionAttempts[0]).toMatchObject({
+      attempt: 1,
+      status: "failed",
+      errorCode: "workflow_execution_interrupted",
+    });
+    expect(conditionAttempts[1]).toMatchObject({
+      attempt: 2,
+      status: "succeeded",
+      outputJson: { result: true },
+    });
+    expect(detail?.run.status).toBe("succeeded");
+  });
+
+  it("claims an abandoned queued run after the recovery grace period", async () => {
+    const seeded = await seedPublishedManualWorkflow();
+    const now = new Date("2026-09-28T15:20:00.000Z");
+    const old = new Date(now.getTime() - 120_000);
+    const [run] = await db.insert(workflowRuns).values({
+      companyId: seeded.companyId,
+      workflowId: seeded.workflow.id,
+      workflowRevisionId: seeded.workflow.publishedRevisionId!,
+      status: "queued",
+      source: "manual",
+      triggerPayload: { source: "recovery" },
+      correlationId: randomUUID(),
+      createdAt: old,
+      updatedAt: old,
+    }).returning();
+    await db.insert(workflowStepRuns).values({
+      companyId: seeded.companyId,
+      workflowRunId: run!.id,
+      nodeId: "start",
+      attempt: 1,
+      status: "pending",
+      inputJson: { source: "recovery" },
+      createdAt: old,
+      updatedAt: old,
+    });
+
+    const recovery = await workflowExecutorService(db).recoverExpiredRuns(10, now);
+    expect(recovery.recovered).toBe(1);
+    const detail = await workflowExecutorService(db).getRun(seeded.companyId, run!.id);
+    expect(detail?.run.status).toBe("succeeded");
+    expect(detail?.steps).toEqual([
+      expect.objectContaining({
+        nodeId: "start",
+        attempt: 1,
+        status: "succeeded",
+        outputJson: { source: "recovery" },
+      }),
+    ]);
+  });
+
+  it("does not steal a run while its execution lease is still valid", async () => {
+    const seeded = await seedPublishedManualWorkflow();
+    const now = new Date("2026-09-28T15:30:00.000Z");
+    const old = new Date(now.getTime() - 10_000);
+    const [run] = await db.insert(workflowRuns).values({
+      companyId: seeded.companyId,
+      workflowId: seeded.workflow.id,
+      workflowRevisionId: seeded.workflow.publishedRevisionId!,
+      status: "running",
+      source: "manual",
+      triggerPayload: {},
+      correlationId: randomUUID(),
+      executionOwnerId: "healthy-worker",
+      leaseExpiresAt: new Date(now.getTime() + 20_000),
+      ownerHeartbeatAt: old,
+      startedAt: old,
+      createdAt: old,
+      updatedAt: old,
+    }).returning();
+    await db.insert(workflowStepRuns).values({
+      companyId: seeded.companyId,
+      workflowRunId: run!.id,
+      nodeId: "start",
+      attempt: 1,
+      status: "pending",
+      inputJson: {},
+      createdAt: old,
+      updatedAt: old,
+    });
+
+    const recovery = await workflowExecutorService(db).recoverExpiredRuns(10, now);
+    expect(recovery).toMatchObject({
+      checked: 0,
+      recovered: 0,
+      raced: 0,
+      failedRunIds: [],
+    });
+    const stored = await workflowExecutorService(db).getRun(seeded.companyId, run!.id);
+    expect(stored?.run).toMatchObject({
+      status: "running",
+      executionOwnerId: "healthy-worker",
+    });
+  });
+
 });
