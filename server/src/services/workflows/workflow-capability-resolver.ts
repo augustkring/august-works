@@ -287,6 +287,10 @@ export function workflowCapabilityResolverService(db: Db) {
             and(
               eq(agents.companyId, companyId),
               ne(agents.status, "terminated"),
+              // OpenClaw/external agents require the dedicated attenuated
+              // external-agent node contract (V4 PR 27). Do not silently map
+              // them onto the native Agent Task node before that boundary exists.
+              ne(agents.adapterType, "openclaw_gateway"),
               ...searchTerms.map(agentTermPredicate),
             ),
           )
