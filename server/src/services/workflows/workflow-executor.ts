@@ -1043,7 +1043,7 @@ async function prepareRunnableStep(
 }
 
 
-async function scheduleStepRetry(
+export async function scheduleWorkflowStepRetry(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
   graph: WorkflowGraphV1,
@@ -1531,7 +1531,7 @@ async function executeWorkflowGraph(
       }
     } catch (error) {
       if (error instanceof WorkflowRetryableNodeError && runningStep) {
-        const scheduled = await scheduleStepRetry(
+        const scheduled = await scheduleWorkflowStepRetry(
           db,
           ownedRun,
           graph,
