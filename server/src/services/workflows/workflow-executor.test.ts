@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
+  approvals,
   companies,
   companyMemberships,
   createDb,
@@ -16,6 +17,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
+import { approvalService } from "../approvals.js";
 import { workflowService } from "./workflow-service.js";
 import {
   scheduleWorkflowStepRetry,
@@ -37,6 +39,7 @@ describePg("Workflow executor V1", () => {
 
   afterEach(async () => {
     await db.delete(activityLog);
+    await db.delete(approvals);
     await db.delete(workflowStepRuns);
     await db.delete(workflowRuns);
     await db.delete(workflowRevisions);
@@ -995,6 +998,168 @@ describePg("Workflow executor V1", () => {
     expect(actions).toContain("workflow.step_waiting");
     expect(actions).toContain("workflow.wait_resolved");
     expect(actions).toContain("workflow.run_resumed");
+  });
+
+  it("parks on the existing approval system and resumes after human approval", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "approval",
+          type: "human.approval",
+          name: "Approve customer send",
+          position: { x: 180, y: 0 },
+          config: {
+            summary: "Approve the customer-facing send",
+            consequence: "The workflow may continue to the customer communication step.",
+          },
+        },
+        {
+          id: "after",
+          type: "core.condition",
+          name: "Continue",
+          position: { x: 360, y: 0 },
+          config: { expression: "true" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "start", target: "approval" },
+        { id: "e2", source: "approval", target: "after" },
+      ],
+      variables: [],
+      settings: {},
+    });
+
+    const executor = workflowExecutorService(db);
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      { principal: { type: "user", userId: seeded.userId } },
+      "approval-run",
+    );
+
+    expect(waiting.run.status).toBe("waiting");
+    expect(waiting.waits).toHaveLength(1);
+    const wait = waiting.waits[0]!;
+    expect(wait).toMatchObject({
+      nodeId: "approval",
+      kind: "human_interaction",
+      status: "active",
+      referenceType: "approval",
+    });
+    expect(wait.referenceId).toEqual(expect.any(String));
+
+    const storedApproval = await approvalService(db).getById(wait.referenceId!);
+    expect(storedApproval).toMatchObject({
+      companyId: seeded.companyId,
+      type: "workflow_step_approval",
+      status: "pending",
+      requestedByAgentId: null,
+      requestedByUserId: seeded.userId,
+    });
+    expect(storedApproval?.payload).toMatchObject({
+      summary: "Approve the customer-facing send",
+      consequence: "The workflow may continue to the customer communication step.",
+      workflowRunId: waiting.run.id,
+      workflowNodeId: "approval",
+      riskLevel: "C3",
+    });
+
+    await approvalService(db).approve(
+      wait.referenceId!,
+      seeded.userId,
+      "Approved in test",
+    );
+    const recovery = await executor.recoverExpiredRuns(10, new Date());
+    expect(recovery).toMatchObject({
+      recovered: 1,
+      failedRunIds: [],
+    });
+
+    const completed = await executor.getRun(seeded.companyId, waiting.run.id);
+    expect(completed?.run.status).toBe("succeeded");
+    expect(completed?.waits[0]).toMatchObject({
+      status: "resolved",
+      resolutionJson: expect.objectContaining({
+        decision: "approved",
+        approvalId: wait.referenceId,
+      }),
+    });
+    expect(completed?.steps.find((step) => step.nodeId === "approval")).toMatchObject({
+      status: "succeeded",
+      outputJson: expect.objectContaining({ decision: "approved" }),
+    });
+    expect(completed?.steps.find((step) => step.nodeId === "after")).toMatchObject({
+      status: "succeeded",
+    });
+  });
+
+  it("fails the workflow explicitly when its existing approval is rejected", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "approval",
+          type: "human.approval",
+          name: "Approve",
+          position: { x: 180, y: 0 },
+          config: {
+            summary: "Approve the consequential step",
+            consequence: "The workflow would continue.",
+          },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "approval" }],
+      variables: [],
+      settings: {},
+    });
+
+    const executor = workflowExecutorService(db);
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      { principal: { type: "user", userId: seeded.userId } },
+      "approval-reject-run",
+    );
+    const wait = waiting.waits[0]!;
+    await approvalService(db).reject(
+      wait.referenceId!,
+      seeded.userId,
+      "Not approved",
+    );
+
+    const recovery = await executor.recoverExpiredRuns(10, new Date());
+    expect(recovery.recovered).toBe(1);
+
+    const failed = await executor.getRun(seeded.companyId, waiting.run.id);
+    expect(failed?.run).toMatchObject({
+      status: "failed",
+      failureCode: "workflow_human_approval_rejected",
+    });
+    expect(failed?.waits[0]).toMatchObject({
+      status: "resolved",
+      resolutionJson: expect.objectContaining({ decision: "rejected" }),
+    });
+    expect(failed?.steps.find((step) => step.nodeId === "approval")).toMatchObject({
+      status: "failed",
+      errorCode: "workflow_human_approval_rejected",
+    });
   });
 
 });
