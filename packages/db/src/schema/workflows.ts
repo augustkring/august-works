@@ -67,7 +67,9 @@ export const workflowRuns = pgTable(
     workflowId: uuid("workflow_id")
       .notNull()
       .references(() => workflows.id, { onDelete: "cascade" }),
-    workflowRevisionId: uuid("workflow_revision_id").notNull(),
+    workflowRevisionId: uuid("workflow_revision_id")
+      .notNull()
+      .references(() => workflowRevisions.id, { onDelete: "restrict" }),
     triggerId: uuid("trigger_id"),
     status: text("status").notNull().default("queued"),
     source: text("source").notNull().default("manual"),

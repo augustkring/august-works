@@ -280,7 +280,7 @@ describePg("Workflow routes", () => {
       read: true,
       edit: false,
       publish: false,
-      run: false,
+      run: true,
     });
   });
 
@@ -330,7 +330,7 @@ describePg("Workflow routes", () => {
     });
   });
 
-  it("does not advertise run capability before the durable executor exists", async () => {
+  it("advertises run capability once the manual durable executor exists", async () => {
     const company = await seedCompany();
     await enableWorkflows();
 
@@ -342,7 +342,7 @@ describePg("Workflow routes", () => {
       read: true,
       edit: true,
       publish: true,
-      run: false,
+      run: true,
     });
   });
 

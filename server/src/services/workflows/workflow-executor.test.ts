@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
+  activityLog,
   companies,
   companyMemberships,
   createDb,
@@ -30,6 +31,7 @@ describePg("Workflow executor V1", () => {
   }, 20_000);
 
   afterEach(async () => {
+    await db.delete(activityLog);
     await db.delete(workflowStepRuns);
     await db.delete(workflowRuns);
     await db.delete(workflowRevisions);
@@ -123,6 +125,15 @@ describePg("Workflow executor V1", () => {
         inputJson: { leadId: "lead-1" },
         outputJson: { leadId: "lead-1" },
       }),
+    ]);
+
+    const actions = (await db.select().from(activityLog)).map((row) => row.action);
+    expect(actions).toEqual([
+      "workflow.run_queued",
+      "workflow.run_started",
+      "workflow.step_started",
+      "workflow.step_completed",
+      "workflow.run_completed",
     ]);
   });
 

@@ -20,6 +20,7 @@ import {
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
+import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
 
 const MANUAL_EXECUTION_LEASE_MS = 30_000;
 
@@ -27,6 +28,59 @@ export interface WorkflowRunActor {
   principal: ExecutionPrincipal;
   runId?: string | null;
   responsibleUserId?: string | null;
+}
+
+function workflowActivityActor(actor: WorkflowRunActor) {
+  if (actor.principal.type === "user") {
+    return {
+      actorType: "user" as const,
+      actorId: actor.principal.userId,
+      agentId: null,
+    };
+  }
+  if (actor.principal.type === "agent") {
+    return {
+      actorType: "agent" as const,
+      actorId: actor.principal.agentId,
+      agentId: actor.principal.agentId,
+    };
+  }
+  return {
+    actorType: "system" as const,
+    actorId: actor.principal.service,
+    agentId: null,
+  };
+}
+
+function publishActivities(publications: ActivityPublication[]) {
+  for (const publication of publications) publishActivity(publication);
+}
+
+async function persistWorkflowActivity(
+  db: Db,
+  actor: WorkflowRunActor,
+  input: {
+    companyId: string;
+    action: string;
+    entityType: string;
+    entityId: string;
+    details?: Record<string, unknown> | null;
+  },
+) {
+  const activityActor = workflowActivityActor(actor);
+  return persistActivity(db, {
+    companyId: input.companyId,
+    actorType: activityActor.actorType,
+    actorId: activityActor.actorId,
+    agentId: activityActor.agentId,
+    runId: actor.runId ?? null,
+    responsibleUserIdOverride: actor.responsibleUserId ??
+      (actor.principal.type === "user" ? actor.principal.userId : null),
+    action: input.action,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    details: input.details ?? null,
+  });
 }
 
 function mapRun(row: typeof workflowRuns.$inferSelect): WorkflowRun {
@@ -160,6 +214,7 @@ async function createQueuedManualRun(
     responsibleUserId: string | null;
     idempotencyKey: string | null;
     correlationId: string;
+    actor: WorkflowRunActor;
   },
 ) {
   if (input.idempotencyKey) {
@@ -200,7 +255,25 @@ async function createQueuedManualRun(
         createdAt: now,
         updatedAt: now,
       });
-      return { run: run!, created: true };
+      const { publication } = await persistWorkflowActivity(
+        tx as unknown as Db,
+        input.actor,
+        {
+          companyId: input.companyId,
+          action: "workflow.run_queued",
+          entityType: "workflow_run",
+          entityId: run!.id,
+          details: {
+            workflowId: input.workflowId,
+            workflowRevisionId: input.revisionId,
+            source: "manual",
+          },
+        },
+      );
+      return { run: run!, created: true, publications: [publication] };
+    }).then((result) => {
+      publishActivities(result.publications);
+      return { run: result.run, created: result.created };
     });
   } catch (error) {
     if (input.idempotencyKey && isUniqueViolation(error, "workflow_runs_company_idempotency_uq")) {
@@ -218,63 +291,108 @@ async function claimQueuedRun(
   companyId: string,
   runId: string,
   ownerId: string,
+  actor: WorkflowRunActor,
 ) {
-  const now = new Date();
-  const leaseExpiresAt = new Date(now.getTime() + MANUAL_EXECUTION_LEASE_MS);
-  const [claimed] = await db
-    .update(workflowRuns)
-    .set({
-      status: "running",
-      executionOwnerId: ownerId,
-      leaseExpiresAt,
-      ownerHeartbeatAt: now,
-      startedAt: now,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(workflowRuns.companyId, companyId),
-        eq(workflowRuns.id, runId),
-        eq(workflowRuns.status, "queued"),
-      ),
-    )
-    .returning();
-  return claimed ?? null;
+  const publications: ActivityPublication[] = [];
+  const claimed = await db.transaction(async (tx) => {
+    const now = new Date();
+    const leaseExpiresAt = new Date(now.getTime() + MANUAL_EXECUTION_LEASE_MS);
+    const [row] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "running",
+        executionOwnerId: ownerId,
+        leaseExpiresAt,
+        ownerHeartbeatAt: now,
+        startedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.companyId, companyId),
+          eq(workflowRuns.id, runId),
+          eq(workflowRuns.status, "queued"),
+        ),
+      )
+      .returning();
+    if (!row) return null;
+    const { publication } = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId,
+        action: "workflow.run_started",
+        entityType: "workflow_run",
+        entityId: runId,
+        details: { executionOwnerId: ownerId },
+      },
+    );
+    publications.push(publication);
+    return row;
+  });
+  publishActivities(publications);
+  return claimed;
 }
 
 async function executeManualTrigger(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
   nodeId: string,
+  actor: WorkflowRunActor,
 ) {
-  const stepStartedAt = new Date();
-  const [runningStep] = await db
-    .update(workflowStepRuns)
-    .set({
-      status: "running",
-      startedAt: stepStartedAt,
-      updatedAt: stepStartedAt,
-    })
-    .where(
-      and(
-        eq(workflowStepRuns.companyId, run.companyId),
-        eq(workflowStepRuns.workflowRunId, run.id),
-        eq(workflowStepRuns.nodeId, nodeId),
-        eq(workflowStepRuns.attempt, 1),
-        eq(workflowStepRuns.status, "pending"),
-      ),
-    )
-    .returning();
-  if (!runningStep) {
-    throw conflict("Workflow trigger step could not be claimed", {
-      code: "workflow_step_claim_conflict",
-      workflowRunId: run.id,
-      nodeId,
-    });
-  }
+  const startedPublications: ActivityPublication[] = [];
+  const runningStep = await db.transaction(async (tx) => {
+    const stepStartedAt = new Date();
+    const [row] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "running",
+        startedAt: stepStartedAt,
+        updatedAt: stepStartedAt,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.nodeId, nodeId),
+          eq(workflowStepRuns.attempt, 1),
+          eq(workflowStepRuns.status, "pending"),
+        ),
+      )
+      .returning();
+    if (!row) {
+      throw conflict("Workflow trigger step could not be claimed", {
+        code: "workflow_step_claim_conflict",
+        workflowRunId: run.id,
+        nodeId,
+      });
+    }
+    const { publication } = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_started",
+        entityType: "workflow_step_run",
+        entityId: row.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId,
+          attempt: 1,
+        },
+      },
+    );
+    startedPublications.push(publication);
+    return row;
+  });
+  publishActivities(startedPublications);
 
   const finishedAt = new Date();
-  const durationMs = Math.max(0, finishedAt.getTime() - stepStartedAt.getTime());
+  const durationMs = Math.max(
+    0,
+    finishedAt.getTime() - (runningStep.startedAt ?? finishedAt).getTime(),
+  );
+  const completedPublications: ActivityPublication[] = [];
   await db.transaction(async (tx) => {
     const [finishedStep] = await tx
       .update(workflowStepRuns)
@@ -325,7 +443,41 @@ async function executeManualTrigger(
         workflowRunId: run.id,
       });
     }
+
+    const stepActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_completed",
+        entityType: "workflow_step_run",
+        entityId: finishedStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId,
+          attempt: 1,
+          durationMs,
+        },
+      },
+    );
+    const runActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_completed",
+        entityType: "workflow_run",
+        entityId: finishedRun.id,
+        details: {
+          workflowId: finishedRun.workflowId,
+          workflowRevisionId: finishedRun.workflowRevisionId,
+          source: finishedRun.source,
+        },
+      },
+    );
+    completedPublications.push(stepActivity.publication, runActivity.publication);
   });
+  publishActivities(completedPublications);
 }
 
 export function workflowExecutorService(db: Db) {
@@ -423,18 +575,19 @@ export function workflowExecutorService(db: Db) {
           (actor.principal.type === "user" ? actor.principal.userId : null),
         idempotencyKey,
         correlationId: randomUUID(),
+        actor,
       });
 
       if (queued.created) {
         const ownerId = `inline:${randomUUID()}`;
-        const claimed = await claimQueuedRun(db, companyId, queued.run.id, ownerId);
+        const claimed = await claimQueuedRun(db, companyId, queued.run.id, ownerId, actor);
         if (!claimed) {
           throw conflict("Workflow run could not be claimed", {
             code: "workflow_run_claim_conflict",
             workflowRunId: queued.run.id,
           });
         }
-        await executeManualTrigger(db, claimed, triggers[0]!.id);
+        await executeManualTrigger(db, claimed, triggers[0]!.id, actor);
       }
 
       const detail = await getRunDetail(db, companyId, queued.run.id);

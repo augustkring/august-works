@@ -254,24 +254,6 @@ export function workflowRoutes(db: Db) {
         runActor(req),
         idempotencyKey(req),
       );
-      const actor = getActorInfo(req);
-      await logActivity(db, {
-        companyId,
-        actorType: actor.actorType,
-        actorId: actor.actorId,
-        agentId: actor.agentId,
-        runId: actor.runId,
-        agentApiKeyId: actor.agentApiKeyId,
-        action: "workflow.run_completed",
-        entityType: "workflow_run",
-        entityId: result.run.id,
-        details: {
-          workflowId: result.run.workflowId,
-          workflowRevisionId: result.run.workflowRevisionId,
-          status: result.run.status,
-          source: result.run.source,
-        },
-      });
       res.status(201).json(result);
     },
   );
