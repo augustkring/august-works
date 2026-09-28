@@ -263,8 +263,10 @@ export interface PipelineCaseEvent {
   actorAgent?: { id: string; name: string } | null;
   automation?: {
     routine: { id: string; title: string } | null;
+    workflow?: { id: string; name: string } | null;
     issue: { id: string; identifier: string | null; title: string; status: string } | null;
     routineRunId?: string | null;
+    workflowRunId?: string | null;
     stage?: { id: string; key: string; name: string; kind: string } | null;
   };
   createdAt: Date | string;
