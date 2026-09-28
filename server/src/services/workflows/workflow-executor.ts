@@ -14,6 +14,7 @@ import {
   startWorkflowRunSchema,
   type ExecutionPrincipal,
   type StartWorkflowRun,
+  type WorkflowGraphV1,
   type WorkflowRun,
   type WorkflowRunDetail,
   type WorkflowStepRun,
@@ -21,6 +22,10 @@ import {
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
+import {
+  evaluateWorkflowConditionExpression,
+  WorkflowConditionExpressionError,
+} from "./workflow-condition-expression.js";
 
 const MANUAL_EXECUTION_LEASE_MS = 30_000;
 
@@ -334,13 +339,95 @@ async function claimQueuedRun(
   return claimed;
 }
 
-async function executeManualTrigger(
+type WorkflowNode = WorkflowGraphV1["nodes"][number];
+
+function graphVariables(graph: WorkflowGraphV1): Record<string, unknown> {
+  return Object.fromEntries(
+    graph.variables
+      .filter((variable) => variable.defaultValue !== undefined)
+      .map((variable) => [variable.name, variable.defaultValue]),
+  );
+}
+
+function conditionBranchKey(
+  edge: WorkflowGraphV1["edges"][number],
+): "true" | "false" | null {
+  const normalized = (edge.sourceHandle ?? edge.label ?? "").trim().toLowerCase();
+  if (normalized === "true" || normalized === "false") return normalized;
+  return null;
+}
+
+function reachableFrom(
+  graph: WorkflowGraphV1,
+  startNodeId: string,
+): Set<string> {
+  const outgoing = new Map<string, string[]>();
+  for (const edge of graph.edges) {
+    outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target]);
+  }
+  const reached = new Set<string>();
+  const stack = [startNodeId];
+  while (stack.length > 0) {
+    const nodeId = stack.pop()!;
+    if (reached.has(nodeId)) continue;
+    reached.add(nodeId);
+    stack.push(...(outgoing.get(nodeId) ?? []));
+  }
+  return reached;
+}
+
+async function createPendingStep(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  nodeId: string,
+  inputJson: unknown,
+) {
+  const now = new Date();
+  const [created] = await db
+    .insert(workflowStepRuns)
+    .values({
+      companyId: run.companyId,
+      workflowRunId: run.id,
+      nodeId,
+      attempt: 1,
+      status: "pending",
+      inputJson,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing()
+    .returning();
+  if (created) return created;
+
+  const existing = await db
+    .select()
+    .from(workflowStepRuns)
+    .where(
+      and(
+        eq(workflowStepRuns.companyId, run.companyId),
+        eq(workflowStepRuns.workflowRunId, run.id),
+        eq(workflowStepRuns.nodeId, nodeId),
+        eq(workflowStepRuns.attempt, 1),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+  if (!existing || existing.status !== "pending") {
+    throw conflict("Workflow step already exists in a non-pending state", {
+      code: "workflow_step_claim_conflict",
+      workflowRunId: run.id,
+      nodeId,
+    });
+  }
+  return existing;
+}
+
+async function startPendingStep(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
   nodeId: string,
   actor: WorkflowRunActor,
 ) {
-  const startedPublications: ActivityPublication[] = [];
+  const publications: ActivityPublication[] = [];
   const runningStep = await db.transaction(async (tx) => {
     const stepStartedAt = new Date();
     const [row] = await tx
@@ -361,7 +448,7 @@ async function executeManualTrigger(
       )
       .returning();
     if (!row) {
-      throw conflict("Workflow trigger step could not be claimed", {
+      throw conflict("Workflow step could not be claimed", {
         code: "workflow_step_claim_conflict",
         workflowRunId: run.id,
         nodeId,
@@ -382,23 +469,32 @@ async function executeManualTrigger(
         },
       },
     );
-    startedPublications.push(publication);
+    publications.push(publication);
     return row;
   });
-  publishActivities(startedPublications);
+  publishActivities(publications);
+  return runningStep;
+}
 
+async function completeRunningStep(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  runningStep: typeof workflowStepRuns.$inferSelect,
+  outputJson: unknown,
+  actor: WorkflowRunActor,
+) {
   const finishedAt = new Date();
   const durationMs = Math.max(
     0,
     finishedAt.getTime() - (runningStep.startedAt ?? finishedAt).getTime(),
   );
-  const completedPublications: ActivityPublication[] = [];
-  await db.transaction(async (tx) => {
-    const [finishedStep] = await tx
+  const publications: ActivityPublication[] = [];
+  const finished = await db.transaction(async (tx) => {
+    const [row] = await tx
       .update(workflowStepRuns)
       .set({
         status: "succeeded",
-        outputJson: run.triggerPayload ?? {},
+        outputJson,
         finishedAt,
         durationMs,
         updatedAt: finishedAt,
@@ -410,14 +506,119 @@ async function executeManualTrigger(
         ),
       )
       .returning();
-    if (!finishedStep) {
-      throw conflict("Workflow trigger step changed during completion", {
+    if (!row) {
+      throw conflict("Workflow step changed during completion", {
         code: "workflow_step_completion_conflict",
         workflowRunId: run.id,
-        nodeId,
+        nodeId: runningStep.nodeId,
       });
     }
+    const { publication } = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_completed",
+        entityType: "workflow_step_run",
+        entityId: row.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: row.nodeId,
+          attempt: row.attempt,
+          durationMs,
+        },
+      },
+    );
+    publications.push(publication);
+    return row;
+  });
+  publishActivities(publications);
+  return finished;
+}
 
+async function recordSkippedStep(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  nodeId: string,
+  actor: WorkflowRunActor,
+) {
+  const publications: ActivityPublication[] = [];
+  await db.transaction(async (tx) => {
+    const now = new Date();
+    const [row] = await tx
+      .insert(workflowStepRuns)
+      .values({
+        companyId: run.companyId,
+        workflowRunId: run.id,
+        nodeId,
+        attempt: 1,
+        status: "skipped",
+        finishedAt: now,
+        durationMs: 0,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing()
+      .returning();
+    if (!row) return;
+    const { publication } = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_skipped",
+        entityType: "workflow_step_run",
+        entityId: row.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId,
+          attempt: 1,
+          reason: "branch_not_selected",
+        },
+      },
+    );
+    publications.push(publication);
+  });
+  publishActivities(publications);
+}
+
+async function markSkippedBranch(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  graph: WorkflowGraphV1,
+  startNodeId: string,
+  protectedNodeIds: Set<string>,
+  actor: WorkflowRunActor,
+) {
+  const outgoing = new Map<string, string[]>();
+  for (const edge of graph.edges) {
+    outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target]);
+  }
+  const visited = new Set<string>();
+  const stack = [startNodeId];
+  while (stack.length > 0) {
+    const nodeId = stack.pop()!;
+    if (visited.has(nodeId) || protectedNodeIds.has(nodeId)) continue;
+    visited.add(nodeId);
+    await recordSkippedStep(db, run, nodeId, actor);
+    stack.push(...(outgoing.get(nodeId) ?? []));
+  }
+}
+
+async function finishRun(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  actor: WorkflowRunActor,
+) {
+  if (!run.executionOwnerId) {
+    throw conflict("Workflow run has no execution owner", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+  const publications: ActivityPublication[] = [];
+  await db.transaction(async (tx) => {
+    const finishedAt = new Date();
     const [finishedRun] = await tx
       .update(workflowRuns)
       .set({
@@ -433,7 +634,7 @@ async function executeManualTrigger(
           eq(workflowRuns.id, run.id),
           eq(workflowRuns.companyId, run.companyId),
           eq(workflowRuns.status, "running"),
-          eq(workflowRuns.executionOwnerId, run.executionOwnerId!),
+          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
         ),
       )
       .returning();
@@ -443,24 +644,7 @@ async function executeManualTrigger(
         workflowRunId: run.id,
       });
     }
-
-    const stepActivity = await persistWorkflowActivity(
-      tx as unknown as Db,
-      actor,
-      {
-        companyId: run.companyId,
-        action: "workflow.step_completed",
-        entityType: "workflow_step_run",
-        entityId: finishedStep.id,
-        details: {
-          workflowRunId: run.id,
-          nodeId,
-          attempt: 1,
-          durationMs,
-        },
-      },
-    );
-    const runActivity = await persistWorkflowActivity(
+    const { publication } = await persistWorkflowActivity(
       tx as unknown as Db,
       actor,
       {
@@ -475,9 +659,250 @@ async function executeManualTrigger(
         },
       },
     );
-    completedPublications.push(stepActivity.publication, runActivity.publication);
+    publications.push(publication);
   });
-  publishActivities(completedPublications);
+  publishActivities(publications);
+}
+
+async function failRun(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  actor: WorkflowRunActor,
+  errorCode: string,
+  errorMessage: string,
+  runningStep?: typeof workflowStepRuns.$inferSelect,
+) {
+  if (!run.executionOwnerId) {
+    throw conflict("Workflow run has no execution owner", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+  const publications: ActivityPublication[] = [];
+  await db.transaction(async (tx) => {
+    const now = new Date();
+    if (runningStep) {
+      const durationMs = Math.max(
+        0,
+        now.getTime() - (runningStep.startedAt ?? now).getTime(),
+      );
+      const [failedStep] = await tx
+        .update(workflowStepRuns)
+        .set({
+          status: "failed",
+          finishedAt: now,
+          durationMs,
+          errorCode,
+          errorMessage,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workflowStepRuns.id, runningStep.id),
+            eq(workflowStepRuns.status, "running"),
+          ),
+        )
+        .returning();
+      if (failedStep) {
+        const { publication } = await persistWorkflowActivity(
+          tx as unknown as Db,
+          actor,
+          {
+            companyId: run.companyId,
+            action: "workflow.step_failed",
+            entityType: "workflow_step_run",
+            entityId: failedStep.id,
+            details: {
+              workflowRunId: run.id,
+              nodeId: failedStep.nodeId,
+              attempt: failedStep.attempt,
+              errorCode,
+            },
+          },
+        );
+        publications.push(publication);
+      }
+    }
+
+    const [failedRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "failed",
+        executionOwnerId: null,
+        leaseExpiresAt: null,
+        ownerHeartbeatAt: null,
+        finishedAt: now,
+        failureCode: errorCode,
+        failureMessage: errorMessage,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "running"),
+          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+        ),
+      )
+      .returning();
+    if (!failedRun) {
+      throw conflict("Workflow run ownership changed during failure handling", {
+        code: "workflow_run_claim_lost",
+        workflowRunId: run.id,
+      });
+    }
+    const { publication } = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_failed",
+        entityType: "workflow_run",
+        entityId: failedRun.id,
+        details: {
+          workflowId: failedRun.workflowId,
+          workflowRevisionId: failedRun.workflowRevisionId,
+          source: failedRun.source,
+          errorCode,
+        },
+      },
+    );
+    publications.push(publication);
+  });
+  publishActivities(publications);
+}
+
+function conditionExpression(node: WorkflowNode): string {
+  if (
+    typeof node.config !== "object" ||
+    node.config === null ||
+    Array.isArray(node.config) ||
+    typeof (node.config as Record<string, unknown>).expression !== "string"
+  ) {
+    throw new WorkflowConditionExpressionError(
+      "workflow_condition_expression_invalid",
+      "Published condition node is missing its expression",
+    );
+  }
+  return (node.config as Record<string, string>).expression;
+}
+
+async function executeWorkflowGraph(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  graph: WorkflowGraphV1,
+  actor: WorkflowRunActor,
+) {
+  const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
+  const trigger = graph.nodes.find((node) => node.type === "core.manual_trigger");
+  if (!trigger) {
+    await failRun(
+      db,
+      run,
+      actor,
+      "workflow_trigger_missing",
+      "Published workflow has no manual trigger",
+    );
+    return;
+  }
+
+  const outputs: Record<string, unknown> = {};
+  const variables = graphVariables(graph);
+  let current: WorkflowNode | null = trigger;
+
+  while (current) {
+    let output: unknown;
+    let conditionResult: boolean | null = null;
+    let runningStep: typeof workflowStepRuns.$inferSelect | undefined;
+
+    if (current.type === "core.manual_trigger") {
+      runningStep = await startPendingStep(db, run, current.id, actor);
+      output = run.triggerPayload ?? {};
+      await completeRunningStep(db, run, runningStep, output, actor);
+    } else if (current.type === "core.condition") {
+      const expression = conditionExpression(current);
+      await createPendingStep(db, run, current.id, { expression });
+      runningStep = await startPendingStep(db, run, current.id, actor);
+      try {
+        conditionResult = evaluateWorkflowConditionExpression(expression, {
+          trigger: (run.triggerPayload ?? {}) as Record<string, unknown>,
+          variables,
+          steps: outputs,
+        });
+      } catch (error) {
+        const code =
+          error instanceof WorkflowConditionExpressionError
+            ? error.code
+            : "workflow_condition_execution_failed";
+        const message =
+          error instanceof Error ? error.message : "Condition evaluation failed";
+        await failRun(db, run, actor, code, message, runningStep);
+        return;
+      }
+      output = { result: conditionResult };
+      await completeRunningStep(db, run, runningStep, output, actor);
+    } else {
+      await failRun(
+        db,
+        run,
+        actor,
+        "workflow_executor_capability_not_ready",
+        `Workflow node type ${current.type} is not executable yet`,
+      );
+      return;
+    }
+
+    outputs[current.id] = output;
+    const outgoing = graph.edges.filter((edge) => edge.source === current!.id);
+    if (outgoing.length === 0) {
+      current = null;
+      continue;
+    }
+
+    if (current.type === "core.condition") {
+      const selectedKey = conditionResult ? "true" : "false";
+      const selected = outgoing.find((edge) => conditionBranchKey(edge) === selectedKey);
+      if (!selected) {
+        await failRun(
+          db,
+          run,
+          actor,
+          "workflow_condition_branch_missing",
+          `Condition node ${current.id} has no ${selectedKey} branch`,
+        );
+        return;
+      }
+
+      const protectedNodeIds = reachableFrom(graph, selected.target);
+      for (const edge of outgoing) {
+        if (edge.id === selected.id) continue;
+        await markSkippedBranch(
+          db,
+          run,
+          graph,
+          edge.target,
+          protectedNodeIds,
+          actor,
+        );
+      }
+      current = nodes.get(selected.target) ?? null;
+      continue;
+    }
+
+    if (outgoing.length !== 1) {
+      await failRun(
+        db,
+        run,
+        actor,
+        "workflow_implicit_parallel_unsupported",
+        `Workflow node ${current.id} has an unsupported number of outgoing paths`,
+      );
+      return;
+    }
+    current = nodes.get(outgoing[0]!.target) ?? null;
+  }
+
+  await finishRun(db, run, actor);
 }
 
 export function workflowExecutorService(db: Db) {
@@ -607,7 +1032,9 @@ export function workflowExecutorService(db: Db) {
       }
 
       const executableNodes = revision.graph.nodes.filter(
-        (node) => node.type !== "core.manual_trigger",
+        (node) =>
+          node.type !== "core.manual_trigger" &&
+          node.type !== "core.condition",
       );
       const triggers = revision.graph.nodes.filter(
         (node) => node.type === "core.manual_trigger",
@@ -645,7 +1072,7 @@ export function workflowExecutorService(db: Db) {
             workflowRunId: queued.run.id,
           });
         }
-        await executeManualTrigger(db, claimed, triggers[0]!.id, actor);
+        await executeWorkflowGraph(db, claimed, revision.graph, actor);
       }
 
       const detail = await getRunDetail(db, companyId, queued.run.id);
