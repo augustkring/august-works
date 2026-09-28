@@ -14,6 +14,7 @@ import {
   foundationDocuments,
   foundationSections,
   instanceSettings,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -42,6 +43,7 @@ describeEmbeddedPostgres("Foundation routes", () => {
     await db.delete(foundationDocuments);
     await db.delete(documentRevisions);
     await db.delete(documents);
+    await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
     await db.delete(agents);
     await db.delete(companies);
@@ -181,6 +183,21 @@ describeEmbeddedPostgres("Foundation routes", () => {
       })
       .returning();
 
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent!.id,
+      status: "active",
+      membershipRole: "member",
+    });
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent!.id,
+      permissionKey: "foundation:propose",
+      scope: null,
+    });
+
     const agentActor: Express.Request["actor"] = {
       type: "agent",
       agentId: agent!.id,
@@ -193,7 +210,10 @@ describeEmbeddedPostgres("Foundation routes", () => {
 
     await agentHttp
       .get(`/api/companies/${company.id}/foundation`)
-      .expect(403);
+      .expect(403)
+      .expect((response) => {
+        expect(response.body.code).toBe("permission_denied");
+      });
 
     const proposal = await agentHttp
       .post(`/api/companies/${company.id}/foundation/${created.body.id}/proposals`)
@@ -235,4 +255,88 @@ describeEmbeddedPostgres("Foundation routes", () => {
       .get(`/api/companies/${beta.id}/foundation/${created.body.id}`)
       .expect(404);
   });
+  it("rejects agent proposals without an explicit Foundation grant", async () => {
+    const company = await seedCompany();
+    await enableFoundation();
+    const board = request(app(boardActor));
+    const created = await board
+      .post(`/api/companies/${company.id}/foundation`)
+      .send({
+        foundationKey: "operating-model",
+        category: "operating_model",
+        documentType: "operating_model",
+        body: "Current model",
+      })
+      .expect(201);
+
+    const [agent] = await db
+      .insert(agents)
+      .values({
+        companyId: company.id,
+        name: "Unprivileged Agent",
+        role: "analyst",
+        adapterType: "codex_local",
+        adapterConfig: {},
+        runtimeConfig: {},
+        permissions: {},
+      })
+      .returning();
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent!.id,
+      status: "active",
+      membershipRole: "member",
+    });
+
+    const response = await request(app({
+      type: "agent",
+      agentId: agent!.id,
+      companyId: company.id,
+      source: "agent_key",
+      keyId: "test-key",
+      runId: "test-run",
+    }))
+      .post(`/api/companies/${company.id}/foundation/${created.body.id}/proposals`)
+      .send({ sourceType: "agent_run", proposedBody: "Unauthorized proposal" })
+      .expect(403);
+
+    expect(response.body.code).toBe("permission_denied");
+    expect(await db.select().from(foundationChangeProposals)).toHaveLength(0);
+  });
+
+  it("lists Foundation revision history and accepts a current proposal into draft", async () => {
+    const company = await seedCompany();
+    await enableFoundation();
+    const board = request(app(boardActor));
+    const created = await board
+      .post(`/api/companies/${company.id}/foundation`)
+      .send({
+        foundationKey: "strategy",
+        category: "strategy",
+        documentType: "strategy",
+        body: "Current strategy",
+      })
+      .expect(201);
+    const proposal = await board
+      .post(`/api/companies/${company.id}/foundation/${created.body.id}/proposals`)
+      .send({ sourceType: "user", proposedBody: "Next strategy" })
+      .expect(201);
+
+    const accepted = await board
+      .post(`/api/companies/${company.id}/foundation/${created.body.id}/proposals/${proposal.body.id}/accept`)
+      .send({})
+      .expect(200);
+    expect(accepted.body.foundation).toMatchObject({
+      status: "draft",
+      body: "Next strategy",
+      latestRevisionNumber: 2,
+    });
+
+    const revisions = await board
+      .get(`/api/companies/${company.id}/foundation/${created.body.id}/revisions`)
+      .expect(200);
+    expect(revisions.body.map((item: { revisionNumber: number }) => item.revisionNumber)).toEqual([2, 1]);
+  });
+
 });

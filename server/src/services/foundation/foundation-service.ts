@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
@@ -239,9 +239,73 @@ export function foundationService(db: Db) {
     return row ? mapFoundationRow(row) : null;
   }
 
+  async function listRevisions(companyId: string, foundationDocumentId: string) {
+    const foundation = await db
+      .select({ documentId: foundationDocuments.documentId })
+      .from(foundationDocuments)
+      .where(
+        and(
+          eq(foundationDocuments.companyId, companyId),
+          eq(foundationDocuments.id, foundationDocumentId),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    if (!foundation) return null;
+
+    return db
+      .select({
+        id: documentRevisions.id,
+        revisionNumber: documentRevisions.revisionNumber,
+        title: documentRevisions.title,
+        body: documentRevisions.body,
+        changeSummary: documentRevisions.changeSummary,
+        createdByAgentId: documentRevisions.createdByAgentId,
+        createdByUserId: documentRevisions.createdByUserId,
+        createdByRunId: documentRevisions.createdByRunId,
+        createdAt: documentRevisions.createdAt,
+      })
+      .from(documentRevisions)
+      .where(
+        and(
+          eq(documentRevisions.companyId, companyId),
+          eq(documentRevisions.documentId, foundation.documentId),
+        ),
+      )
+      .orderBy(desc(documentRevisions.revisionNumber));
+  }
+
+  async function lockProposal(
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
+    companyId: string,
+    foundationDocumentId: string,
+    proposalId: string,
+  ) {
+    await tx.execute(sql`
+      select id
+      from ${foundationChangeProposals}
+      where ${foundationChangeProposals.companyId} = ${companyId}
+        and ${foundationChangeProposals.foundationDocumentId} = ${foundationDocumentId}
+        and ${foundationChangeProposals.id} = ${proposalId}
+      for update
+    `);
+    const txDb = tx as unknown as Db;
+    return txDb
+      .select()
+      .from(foundationChangeProposals)
+      .where(
+        and(
+          eq(foundationChangeProposals.companyId, companyId),
+          eq(foundationChangeProposals.foundationDocumentId, foundationDocumentId),
+          eq(foundationChangeProposals.id, proposalId),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+  }
+
   return {
     get,
     getByKey,
+    listRevisions,
 
     list: async (companyId: string) => {
       const rows = await db
@@ -721,6 +785,164 @@ export function foundationService(db: Db) {
           ),
         )
         .orderBy(asc(foundationChangeProposals.createdAt)),
+
+    acceptProposal: async (
+      companyId: string,
+      foundationDocumentId: string,
+      proposalId: string,
+      actor: FoundationMutationActor,
+    ) => {
+      const outcome = await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await assertActorCompanyScope(txDb, companyId, actor);
+        if (actor.principal.type !== "user") {
+          throw forbidden("Foundation proposal decisions require a user principal");
+        }
+
+        const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
+        if (!lockedRow) throw notFound("Foundation document not found");
+        const existing = mapFoundationRow(lockedRow);
+        requireMutable(existing);
+
+        const proposal = await lockProposal(tx, companyId, foundationDocumentId, proposalId);
+        if (!proposal) throw notFound("Foundation proposal not found");
+        if (proposal.status !== "pending") {
+          throw conflict("Foundation proposal is no longer pending", {
+            code: "foundation_invalid_transition",
+            status: proposal.status,
+          });
+        }
+
+        if (!existing.latestRevisionId || proposal.baseRevisionId !== existing.latestRevisionId) {
+          const now = new Date();
+          await txDb
+            .update(foundationChangeProposals)
+            .set({
+              status: "superseded",
+              reviewedByUserId: actor.principal.userId,
+              reviewedAt: now,
+              updatedAt: now,
+            })
+            .where(eq(foundationChangeProposals.id, proposal.id));
+          return {
+            kind: "stale" as const,
+            proposalId: proposal.id,
+            currentRevisionId: existing.latestRevisionId,
+          };
+        }
+
+        const now = new Date();
+        const nextRevisionNumber = existing.latestRevisionNumber + 1;
+        const [revision] = await txDb
+          .insert(documentRevisions)
+          .values({
+            companyId,
+            documentId: existing.documentId,
+            revisionNumber: nextRevisionNumber,
+            title: existing.title,
+            format: "markdown",
+            body: proposal.proposedBody,
+            changeSummary: proposal.changeSummary ?? "Accepted Foundation proposal",
+            createdByUserId: actor.principal.userId,
+            createdByRunId: actor.runId ?? null,
+            createdAt: now,
+          })
+          .returning();
+
+        await txDb
+          .update(documents)
+          .set({
+            latestBody: proposal.proposedBody,
+            latestRevisionId: revision!.id,
+            latestRevisionNumber: nextRevisionNumber,
+            updatedByUserId: actor.principal.userId,
+            updatedByAgentId: null,
+            updatedAt: now,
+          })
+          .where(eq(documents.id, existing.documentId));
+
+        await txDb
+          .update(foundationDocuments)
+          .set({ status: "draft", updatedAt: now })
+          .where(
+            and(
+              eq(foundationDocuments.companyId, companyId),
+              eq(foundationDocuments.id, foundationDocumentId),
+            ),
+          );
+
+        const [acceptedProposal] = await txDb
+          .update(foundationChangeProposals)
+          .set({
+            status: "accepted",
+            reviewedByUserId: actor.principal.userId,
+            reviewedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(foundationChangeProposals.id, proposal.id))
+          .returning();
+
+        const row = await selectFoundation(
+          txDb,
+          companyId,
+          eq(foundationDocuments.id, foundationDocumentId),
+        );
+        if (!row) throw new Error("Foundation document disappeared after proposal acceptance");
+        return {
+          kind: "accepted" as const,
+          proposal: acceptedProposal!,
+          foundation: mapFoundationRow(row),
+        };
+      });
+
+      if (outcome.kind === "stale") {
+        throw conflict("Foundation proposal is based on a stale revision", {
+          code: "revision_conflict",
+          proposalId: outcome.proposalId,
+          currentRevisionId: outcome.currentRevisionId,
+        });
+      }
+      return outcome;
+    },
+
+    rejectProposal: async (
+      companyId: string,
+      foundationDocumentId: string,
+      proposalId: string,
+      actor: FoundationMutationActor,
+    ) =>
+      db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await assertActorCompanyScope(txDb, companyId, actor);
+        if (actor.principal.type !== "user") {
+          throw forbidden("Foundation proposal decisions require a user principal");
+        }
+
+        const foundation = await lockFoundation(tx, companyId, foundationDocumentId);
+        if (!foundation) throw notFound("Foundation document not found");
+        const proposal = await lockProposal(tx, companyId, foundationDocumentId, proposalId);
+        if (!proposal) throw notFound("Foundation proposal not found");
+        if (proposal.status === "rejected") return proposal;
+        if (proposal.status !== "pending") {
+          throw conflict("Foundation proposal is no longer pending", {
+            code: "foundation_invalid_transition",
+            status: proposal.status,
+          });
+        }
+
+        const now = new Date();
+        const [updated] = await txDb
+          .update(foundationChangeProposals)
+          .set({
+            status: "rejected",
+            reviewedByUserId: actor.principal.userId,
+            reviewedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(foundationChangeProposals.id, proposal.id))
+          .returning();
+        return updated!;
+      }),
 
     archive: async (
       companyId: string,

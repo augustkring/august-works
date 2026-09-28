@@ -1021,6 +1021,10 @@ export const PERMISSION_KEYS = [
   "tasks:assign_scope",
   "tasks:manage_active_checkouts",
   "pipelines:write",
+  "foundation:read",
+  "foundation:propose",
+  "foundation:edit",
+  "foundation:approve",
   "joins:approve",
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

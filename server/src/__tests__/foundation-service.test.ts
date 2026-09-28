@@ -328,4 +328,60 @@ describeEmbeddedPostgres("Foundation service", () => {
     expect(unchanged?.body).toBe("# Company\nInitial truth");
     expect(unchanged?.canonicalRevision).toBeNull();
   });
+  it("accepts a current proposal into a new draft revision without changing approved truth", async () => {
+    const company = await seedCompany("Alpha");
+    const svc = foundationService(db);
+    const draft = await createCompanyProfile(company.id, company.userId);
+    const inReview = await svc.submitForReview(company.id, draft.id, draft.latestRevisionId!, actor(company.userId));
+    const approved = await svc.approve(company.id, draft.id, inReview.latestRevisionId!, actor(company.userId));
+    const proposal = await svc.createProposal(
+      company.id,
+      approved.id,
+      { sourceType: "agent_run", proposedBody: "# Company\nNext truth" },
+      actor(company.userId),
+    );
+
+    const accepted = await svc.acceptProposal(company.id, approved.id, proposal.id, actor(company.userId));
+    expect(accepted.proposal.status).toBe("accepted");
+    expect(accepted.foundation).toMatchObject({
+      status: "draft",
+      body: "# Company\nNext truth",
+      latestRevisionNumber: 2,
+      approvedRevisionId: approved.approvedRevisionId,
+    });
+    expect(accepted.foundation.canonicalRevision?.body).toBe("# Company\nInitial truth");
+  });
+
+  it("marks stale proposals superseded and preserves the current draft", async () => {
+    const company = await seedCompany("Alpha");
+    const svc = foundationService(db);
+    const draft = await createCompanyProfile(company.id, company.userId);
+    const proposal = await svc.createProposal(
+      company.id,
+      draft.id,
+      { sourceType: "agent_run", proposedBody: "Stale proposal" },
+      actor(company.userId),
+    );
+    const current = await svc.updateDraft(
+      company.id,
+      draft.id,
+      { baseRevisionId: draft.latestRevisionId!, body: "Current draft" },
+      actor(company.userId),
+    );
+
+    await expect(
+      svc.acceptProposal(company.id, draft.id, proposal.id, actor(company.userId)),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({ code: "revision_conflict", currentRevisionId: current.latestRevisionId }),
+    });
+
+    const [storedProposal] = await db
+      .select()
+      .from(foundationChangeProposals)
+      .where(eq(foundationChangeProposals.id, proposal.id));
+    expect(storedProposal?.status).toBe("superseded");
+    expect((await svc.get(company.id, draft.id))?.body).toBe("Current draft");
+  });
+
 });

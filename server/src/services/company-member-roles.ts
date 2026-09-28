@@ -39,6 +39,10 @@ export function grantsForHumanRole(
         { permissionKey: "tools:manage_runtime", scope: null },
         { permissionKey: "tools:use", scope: null },
         { permissionKey: "tools:admin", scope: null },
+        { permissionKey: "foundation:read", scope: null },
+        { permissionKey: "foundation:propose", scope: null },
+        { permissionKey: "foundation:edit", scope: null },
+        { permissionKey: "foundation:approve", scope: null },
       ];
     case "admin":
       return [
@@ -53,11 +57,20 @@ export function grantsForHumanRole(
         { permissionKey: "tools:manage_runtime", scope: null },
         { permissionKey: "tools:use", scope: null },
         { permissionKey: "tools:admin", scope: null },
+        { permissionKey: "foundation:read", scope: null },
+        { permissionKey: "foundation:propose", scope: null },
+        { permissionKey: "foundation:edit", scope: null },
+        { permissionKey: "foundation:approve", scope: null },
       ];
     case "operator":
-      return [{ permissionKey: "tasks:assign", scope: null }];
+      return [
+        { permissionKey: "tasks:assign", scope: null },
+        { permissionKey: "foundation:read", scope: null },
+        { permissionKey: "foundation:propose", scope: null },
+        { permissionKey: "foundation:edit", scope: null },
+      ];
     case "viewer":
-      return [];
+      return [{ permissionKey: "foundation:read", scope: null }];
   }
 }
 

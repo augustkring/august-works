@@ -97,6 +97,8 @@ export const AUGUST_WORKS_AUDIT_ACTIONS = [
   "foundation.draft_updated",
   "foundation.document_archived",
   "foundation.proposal_created",
+  "foundation.proposal_accepted",
+  "foundation.proposal_rejected",
   "connection.created",
   "connection.grant_created",
   "connection.grant_revoked",

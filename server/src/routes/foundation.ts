@@ -5,10 +5,12 @@ import {
   createFoundationDocumentSchema,
   transitionFoundationDocumentSchema,
   updateFoundationDraftSchema,
+  type PermissionKey,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { forbidden, notFound, unauthorized } from "../errors.js";
 import {
+  accessService,
   foundationService,
   instanceSettingsService,
   logActivity,
@@ -23,6 +25,7 @@ import {
 export function foundationRoutes(db: Db) {
   const router = Router();
   const svc = foundationService(db);
+  const access = accessService(db);
   const settings = instanceSettingsService(db);
 
   async function assertFoundationEnabled() {
@@ -61,10 +64,42 @@ export function foundationRoutes(db: Db) {
     return boardMutationActor(req);
   }
 
+  type FoundationPermission = Extract<
+    PermissionKey,
+    "foundation:read" | "foundation:propose" | "foundation:edit" | "foundation:approve"
+  >;
+
+  async function assertFoundationPermission(
+    req: Request,
+    companyId: string,
+    permission: FoundationPermission,
+  ) {
+    assertCompanyAccess(req, companyId);
+    if (
+      req.actor.type === "board" &&
+      (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin)
+    ) {
+      return;
+    }
+    const decision = await access.decide({
+      actor: req.actor,
+      action: permission,
+      resource: { type: "company", companyId },
+    });
+    if (!decision.allowed) {
+      throw forbidden(decision.explanation, {
+        code: "permission_denied",
+        reason: decision.reason,
+        permission,
+      });
+    }
+  }
+
   async function audit(req: Request, input: {
     companyId: string;
     action: string;
     entityId: string;
+    entityType?: string;
     details?: Record<string, unknown>;
   }) {
     const actor = getActorInfo(req);
@@ -76,7 +111,7 @@ export function foundationRoutes(db: Db) {
       runId: actor.runId,
       agentApiKeyId: actor.agentApiKeyId,
       action: input.action,
-      entityType: "foundation_document",
+      entityType: input.entityType ?? "foundation_document",
       entityId: input.entityId,
       details: input.details ?? null,
     });
@@ -85,8 +120,7 @@ export function foundationRoutes(db: Db) {
   router.get("/companies/:companyId/foundation", async (req, res) => {
     await assertFoundationEnabled();
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
-    assertBoard(req);
+    await assertFoundationPermission(req, companyId, "foundation:read");
     res.json(await svc.list(companyId));
   });
 
@@ -116,8 +150,7 @@ export function foundationRoutes(db: Db) {
   router.get("/companies/:companyId/foundation/:foundationDocumentId", async (req, res) => {
     await assertFoundationEnabled();
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
-    assertBoard(req);
+    await assertFoundationPermission(req, companyId, "foundation:read");
     const result = await svc.get(companyId, req.params.foundationDocumentId as string);
     if (!result) {
       res.status(404).json({ error: "Foundation document not found" });
@@ -125,6 +158,24 @@ export function foundationRoutes(db: Db) {
     }
     res.json(result);
   });
+
+  router.get(
+    "/companies/:companyId/foundation/:foundationDocumentId/revisions",
+    async (req, res) => {
+      await assertFoundationEnabled();
+      const companyId = req.params.companyId as string;
+      await assertFoundationPermission(req, companyId, "foundation:read");
+      const revisions = await svc.listRevisions(
+        companyId,
+        req.params.foundationDocumentId as string,
+      );
+      if (!revisions) {
+        res.status(404).json({ error: "Foundation document not found" });
+        return;
+      }
+      res.json(revisions);
+    },
+  );
 
   router.patch(
     "/companies/:companyId/foundation/:foundationDocumentId/draft",
@@ -232,8 +283,8 @@ export function foundationRoutes(db: Db) {
   router.post("/companies/:companyId/foundation/:foundationDocumentId/archive", async (req, res) => {
     await assertFoundationEnabled();
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
     assertBoard(req);
+    await assertFoundationPermission(req, companyId, "foundation:approve");
     const updated = await svc.archive(
       companyId,
       req.params.foundationDocumentId as string,
@@ -270,7 +321,7 @@ export function foundationRoutes(db: Db) {
     async (req, res) => {
       await assertFoundationEnabled();
       const companyId = req.params.companyId as string;
-      assertCompanyAccess(req, companyId);
+      await assertFoundationPermission(req, companyId, "foundation:propose");
       if (req.actor.type !== "board" && req.actor.type !== "agent") {
         throw unauthorized("Authentication required");
       }
@@ -291,6 +342,57 @@ export function foundationRoutes(db: Db) {
         },
       });
       res.status(201).json(proposal);
+    },
+  );
+
+  router.post(
+    "/companies/:companyId/foundation/:foundationDocumentId/proposals/:proposalId/accept",
+    async (req, res) => {
+      await assertFoundationEnabled();
+      const companyId = req.params.companyId as string;
+      assertBoard(req);
+      await assertFoundationPermission(req, companyId, "foundation:edit");
+      const result = await svc.acceptProposal(
+        companyId,
+        req.params.foundationDocumentId as string,
+        req.params.proposalId as string,
+        boardMutationActor(req),
+      );
+      await audit(req, {
+        companyId,
+        action: "foundation.proposal_accepted",
+        entityType: "foundation_change_proposal",
+        entityId: result.proposal.id,
+        details: {
+          foundationDocumentId: result.foundation.id,
+          revisionId: result.foundation.latestRevisionId,
+        },
+      });
+      res.json(result);
+    },
+  );
+
+  router.post(
+    "/companies/:companyId/foundation/:foundationDocumentId/proposals/:proposalId/reject",
+    async (req, res) => {
+      await assertFoundationEnabled();
+      const companyId = req.params.companyId as string;
+      assertBoard(req);
+      await assertFoundationPermission(req, companyId, "foundation:edit");
+      const proposal = await svc.rejectProposal(
+        companyId,
+        req.params.foundationDocumentId as string,
+        req.params.proposalId as string,
+        boardMutationActor(req),
+      );
+      await audit(req, {
+        companyId,
+        action: "foundation.proposal_rejected",
+        entityType: "foundation_change_proposal",
+        entityId: proposal.id,
+        details: { foundationDocumentId: proposal.foundationDocumentId },
+      });
+      res.json(proposal);
     },
   );
 
