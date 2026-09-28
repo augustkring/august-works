@@ -1708,15 +1708,9 @@ async function resolveDueDelayWait(
       .returning();
     if (!resolvedWait) return null;
 
-    const [completedStep] = await tx
-      .update(workflowStepRuns)
-      .set({
-        status: "succeeded",
-        outputJson: resolvedWait.resolutionJson,
-        finishedAt: now,
-        durationMs: sql<number>`greatest(0, floor(extract(epoch from (${now} - ${workflowStepRuns.startedAt})) * 1000))::integer`,
-        updatedAt: now,
-      })
+    const waitingStep = await tx
+      .select()
+      .from(workflowStepRuns)
       .where(
         and(
           eq(workflowStepRuns.companyId, run.companyId),
@@ -1725,9 +1719,37 @@ async function resolveDueDelayWait(
           eq(workflowStepRuns.status, "waiting"),
         ),
       )
+      .then((rows) => rows[0] ?? null);
+    if (!waitingStep) {
+      throw conflict("Workflow wait step changed before delay resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+    const durationMs = Math.max(
+      0,
+      now.getTime() - (waitingStep.startedAt ?? now).getTime(),
+    );
+    const [completedStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "succeeded",
+        outputJson: resolvedWait.resolutionJson,
+        finishedAt: now,
+        durationMs,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, waitingStep.id),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
       .returning();
     if (!completedStep) {
-      throw conflict("Workflow wait step changed before delay resolution", {
+      throw conflict("Workflow wait step changed during delay resolution", {
         code: "workflow_wait_resolution_conflict",
         workflowRunId: run.id,
         nodeId: wait.nodeId,
