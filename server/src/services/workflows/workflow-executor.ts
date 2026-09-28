@@ -391,7 +391,7 @@ async function createPendingStep(
       companyId: run.companyId,
       workflowRunId: run.id,
       nodeId,
-      attempt: 1,
+      attempt,
       status: "pending",
       inputJson,
       createdAt: now,
