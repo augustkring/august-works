@@ -256,12 +256,16 @@ function assertIdempotentRequestMatches(
   input: {
     workflowId: string;
     revisionId: string;
+    source: WorkflowRunSource;
+    triggerId?: string | null;
     triggerPayload: Record<string, unknown>;
   },
 ) {
   if (
     existing.workflowId !== input.workflowId ||
     existing.workflowRevisionId !== input.revisionId ||
+    existing.source !== input.source ||
+    existing.triggerId !== (input.triggerId ?? null) ||
     !isDeepStrictEqual(existing.triggerPayload ?? {}, input.triggerPayload)
   ) {
     throw conflict("Idempotency key was already used for a different workflow run request", {
