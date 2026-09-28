@@ -82,6 +82,18 @@ describe("Workflow Graph V1", () => {
       maxDelayMs: 0,
     }).success).toBe(false);
     expect(workflowRetryPolicySchema.safeParse({
+      mode: "none",
+      maxAttempts: 1,
+      initialDelayMs: 1_000,
+      maxDelayMs: 1_000,
+    }).success).toBe(false);
+    expect(workflowRetryPolicySchema.safeParse({
+      mode: "fixed",
+      maxAttempts: 1,
+      initialDelayMs: 1_000,
+      maxDelayMs: 1_000,
+    }).success).toBe(false);
+    expect(workflowRetryPolicySchema.safeParse({
       mode: "exponential",
       maxAttempts: 4,
       initialDelayMs: 5_000,
