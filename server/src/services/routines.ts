@@ -2913,7 +2913,40 @@ export function routineService(
 
       const snapshot = routineRevisionSnapshotSchema.parse(targetRevision.snapshot) as RoutineRevisionSnapshotV1;
       const routineSnapshot = snapshot.routine;
-      await assertRestorableAssignee(existingRoutine.companyId, routineSnapshot.assigneeAgentId, actor);
+      const restoredExecutionTarget: RoutineExecutionTarget | null =
+        routineSnapshot.executionTargetKind === "workflow" &&
+        routineSnapshot.executionTargetRef
+          ? {
+              kind: "workflow",
+              workflowId: routineSnapshot.executionTargetRef,
+            }
+          : routineSnapshot.executionTargetKind === "agent_task" &&
+              routineSnapshot.executionTargetRef
+            ? {
+                kind: "agent_task",
+                agentId: routineSnapshot.executionTargetRef,
+              }
+            : routineSnapshot.assigneeAgentId
+              ? {
+                  kind: "agent_task",
+                  agentId: routineSnapshot.assigneeAgentId,
+                }
+              : null;
+      const restoredTargetStorage = executionTargetStorage(
+        restoredExecutionTarget,
+      );
+      if (restoredExecutionTarget?.kind === "agent_task") {
+        await assertRestorableAssignee(
+          existingRoutine.companyId,
+          restoredExecutionTarget.agentId,
+          actor,
+        );
+      }
+      await assertRoutineExecutionTarget(
+        existingRoutine.companyId,
+        restoredExecutionTarget,
+        { requireRunnable: routineSnapshot.status === "active" },
+      );
 
       const result = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
@@ -2961,7 +2994,9 @@ export function routineService(
             parentIssueId: routineSnapshot.parentIssueId,
             title: routineSnapshot.title,
             description: routineSnapshot.description,
-            assigneeAgentId: routineSnapshot.assigneeAgentId,
+            assigneeAgentId: restoredTargetStorage.assigneeAgentId,
+            executionTargetKind: restoredTargetStorage.executionTargetKind,
+            executionTargetRef: restoredTargetStorage.executionTargetRef,
             priority: routineSnapshot.priority,
             status: routineSnapshot.status,
             concurrencyPolicy: routineSnapshot.concurrencyPolicy,
