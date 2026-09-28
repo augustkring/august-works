@@ -2831,9 +2831,7 @@ async function scheduleAgentTaskCompletionWait(
         scheduled.wait,
         scheduled.issue,
         new Date(),
-        error.code === "workflow_agent_task_assignment_changed"
-          ? "workflow_agent_unavailable"
-          : "workflow_agent_unavailable",
+        "workflow_agent_unavailable",
         error.message,
       );
       return;
