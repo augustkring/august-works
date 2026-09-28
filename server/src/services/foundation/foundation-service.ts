@@ -545,8 +545,8 @@ export function foundationService(db: Db) {
       db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
-        if (actor.principal.type !== "user") {
-          throw forbidden("Foundation approval requires a user principal");
+        if (actor.principal.type === "agent") {
+          throw forbidden("Agents cannot approve canonical Foundation changes");
         }
 
         const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
@@ -614,8 +614,8 @@ export function foundationService(db: Db) {
       db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
-        if (actor.principal.type !== "user") {
-          throw forbidden("Foundation review decisions require a user principal");
+        if (actor.principal.type === "agent") {
+          throw forbidden("Agents cannot make Foundation review decisions");
         }
 
         const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
