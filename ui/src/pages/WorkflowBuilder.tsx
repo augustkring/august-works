@@ -203,7 +203,28 @@ function WorkflowNodeCard({ data, selected }: NodeProps<BuilderNode>) {
           <span className="shrink-0 text-[10px] text-muted-foreground">draft</span>
         ) : null}
       </div>
-      <Handle type="source" position={Position.Right} />
+      {data.workflowNode.type === "core.condition" ? (
+        <>
+          <Handle
+            id="true"
+            type="source"
+            position={Position.Right}
+            style={{ top: "38%" }}
+          />
+          <Handle
+            id="false"
+            type="source"
+            position={Position.Right}
+            style={{ top: "72%" }}
+          />
+          <div className="mt-2 flex justify-end gap-2 text-[10px] text-muted-foreground">
+            <span>True</span>
+            <span>False</span>
+          </div>
+        </>
+      ) : (
+        <Handle type="source" position={Position.Right} />
+      )}
     </div>
   );
 }
@@ -231,6 +252,7 @@ export function WorkflowBuilder() {
   const [capabilitySearch, setCapabilitySearch] = useState("");
   const deferredCapabilitySearch = useDeferredValue(capabilitySearch);
   const [connectTargetId, setConnectTargetId] = useState("");
+  const [connectBranch, setConnectBranch] = useState<"true" | "false">("true");
 
   useEffect(() => {
     setBreadcrumbs([
@@ -284,6 +306,7 @@ export function WorkflowBuilder() {
     setConflicted(false);
     setSelectedNodeId(null);
     setConnectTargetId("");
+    setConnectBranch("true");
   }, [definitions]);
 
   useEffect(() => {
@@ -332,13 +355,45 @@ export function WorkflowBuilder() {
 
   const onConnect = (connection: Connection) => {
     if (!connection.source || !connection.target) return;
+    const sourceNode = nodes.find((node) => node.id === connection.source);
+    const isCondition = sourceNode?.data.workflowNode.type === "core.condition";
+    const branch = isCondition
+      ? connection.sourceHandle === "true" || connection.sourceHandle === "false"
+        ? connection.sourceHandle
+        : null
+      : null;
+
+    if (isCondition && !branch) {
+      pushToast({
+        title: "Choose a condition branch",
+        body: "Connect from either the True or False output.",
+        tone: "error",
+      });
+      return;
+    }
+    if (
+      isCondition &&
+      edges.some(
+        (edge) =>
+          edge.source === connection.source &&
+          (edge.sourceHandle ?? edge.data?.workflowEdge.sourceHandle) === branch,
+      )
+    ) {
+      pushToast({
+        title: `${branch === "true" ? "True" : "False"} branch already connected`,
+        body: "Each condition branch can activate one deterministic path.",
+        tone: "error",
+      });
+      return;
+    }
+
     const workflowEdge: WorkflowEdgeV1 = {
       id: randomId("edge"),
       source: connection.source,
       target: connection.target,
-      sourceHandle: connection.sourceHandle ?? null,
+      sourceHandle: branch ?? connection.sourceHandle ?? null,
       targetHandle: connection.targetHandle ?? null,
-      label: "Next",
+      label: branch ?? "Next",
     };
     setEdges((current) => [
       ...current,
@@ -540,10 +595,12 @@ export function WorkflowBuilder() {
 
   const connectSelected = () => {
     if (!selectedNodeId || !connectTargetId || selectedNodeId === connectTargetId) return;
+    const selected = nodes.find((node) => node.id === selectedNodeId);
     onConnect({
       source: selectedNodeId,
       target: connectTargetId,
-      sourceHandle: null,
+      sourceHandle:
+        selected?.data.workflowNode.type === "core.condition" ? connectBranch : null,
       targetHandle: null,
     });
   };
@@ -790,6 +847,19 @@ export function WorkflowBuilder() {
 
             {selectedNodeId && nodes.length > 1 && capabilities?.edit ? (
               <div className="mt-4 space-y-2">
+                {selectedNode?.data.workflowNode.type === "core.condition" ? (
+                  <label className="block text-xs font-medium">
+                    Branch
+                    <select
+                      value={connectBranch}
+                      onChange={(event) => setConnectBranch(event.target.value as "true" | "false")}
+                      className="mt-1 h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                    >
+                      <option value="true">True</option>
+                      <option value="false">False</option>
+                    </select>
+                  </label>
+                ) : null}
                 <label className="block text-xs font-medium">
                   Connect selected to
                   <select
@@ -826,6 +896,7 @@ export function WorkflowBuilder() {
                       {nodes.find((node) => node.id === edge.source)?.data.workflowNode.name ?? edge.source}
                       {" → "}
                       {nodes.find((node) => node.id === edge.target)?.data.workflowNode.name ?? edge.target}
+                      {edge.label && edge.label !== "Next" ? ` [${edge.label}]` : ""}
                     </span>
                     {capabilities?.edit ? (
                       <Button
@@ -971,6 +1042,9 @@ function NodeInspector({
             disabled={!canEdit}
             onChange={(event) => updateConfig({ expression: event.target.value })}
           />
+          <span className="block text-[11px] font-normal leading-4 text-muted-foreground">
+            Supports true/false, boolean data references and strict comparisons such as {"{{trigger.amount}} >= 50000"}.
+          </span>
         </label>
       ) : null}
 
