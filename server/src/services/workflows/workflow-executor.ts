@@ -3083,6 +3083,7 @@ async function issueForTaskWait(
       identifier: issues.identifier,
       status: issues.status,
       title: issues.title,
+      assigneeAgentId: issues.assigneeAgentId,
     })
     .from(issues)
     .where(
@@ -3092,6 +3093,111 @@ async function issueForTaskWait(
       ),
     )
     .then((rows) => rows[0] ?? null);
+}
+
+async function ensureAgentTaskWakeupForWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+  issue: {
+    id: string;
+    status: string;
+    assigneeAgentId: string | null;
+  },
+  now: Date,
+  runtimeDeps: WorkflowExecutorRuntimeDeps,
+): Promise<"ready" | "deferred" | "failed"> {
+  const waitingStep = await db
+    .select()
+    .from(workflowStepRuns)
+    .where(
+      and(
+        eq(workflowStepRuns.companyId, run.companyId),
+        eq(workflowStepRuns.workflowRunId, run.id),
+        eq(workflowStepRuns.nodeId, wait.nodeId),
+        eq(workflowStepRuns.status, "waiting"),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+  if (!waitingStep || !waitingStep.agentId) return "ready";
+  if (waitingStep.heartbeatRunId) return "ready";
+
+  if (issue.assigneeAgentId !== waitingStep.agentId) {
+    const changed = await failTaskWait(
+      db,
+      run,
+      wait,
+      issue,
+      now,
+      "workflow_agent_unavailable",
+      "Agent Task ownership changed before delegation could start",
+    );
+    return changed ? "failed" : "deferred";
+  }
+
+  const actor: WorkflowRunActor = {
+    principal: { type: "system", service: "workflow-agent-task" },
+    responsibleUserId: run.responsibleUserId,
+  };
+
+  try {
+    const heartbeatRunId = await wakeWorkflowAgentTask(
+      db,
+      run,
+      wait.nodeId,
+      {
+        id: issue.id,
+        status: issue.status,
+        assigneeAgentId: issue.assigneeAgentId,
+      },
+      waitingStep.agentId,
+      actor,
+      runtimeDeps,
+    );
+    await bindAgentTaskExecution(
+      db,
+      run,
+      waitingStep,
+      issue.id,
+      waitingStep.agentId,
+      heartbeatRunId,
+      actor,
+    );
+    return "ready";
+  } catch (error) {
+    if (error instanceof WorkflowCheckpointError) {
+      const changed = await failTaskWait(
+        db,
+        run,
+        wait,
+        issue,
+        now,
+        "workflow_agent_unavailable",
+        error.message,
+      );
+      return changed ? "failed" : "deferred";
+    }
+
+    const deferred = await persistWorkflowActivity(
+      db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.agent_task_wakeup_deferred",
+        entityType: "workflow_step_run",
+        entityId: waitingStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: wait.nodeId,
+          issueId: issue.id,
+          agentId: waitingStep.agentId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      },
+    );
+    publishActivity(deferred.publication);
+    return "deferred";
+  }
 }
 
 async function resumeCompletedTaskWait(
@@ -3158,7 +3264,10 @@ async function resumeCompletedTaskWait(
       .update(workflowStepRuns)
       .set({
         status: "succeeded",
-        outputJson: workflowTaskOutput(issue),
+        outputJson: workflowTaskOutput(issue, {
+          agentId: waitingStep.agentId,
+          heartbeatRunId: waitingStep.heartbeatRunId,
+        }),
         finishedAt: now,
         durationMs,
         updatedAt: now,
@@ -3515,7 +3624,16 @@ async function resolveTaskCompletionWait(
     );
     return changed ? "recovered" : "raced";
   }
-  return "deferred";
+
+  const wakeup = await ensureAgentTaskWakeupForWait(
+    db,
+    run,
+    wait,
+    issue,
+    now,
+    runtimeDeps,
+  );
+  return wakeup === "failed" ? "recovered" : "deferred";
 }
 
 type HumanApprovalConfig = {
