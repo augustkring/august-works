@@ -1,9 +1,9 @@
 ---
 title: Routines
-summary: Recurring task scheduling, triggers, and run history
+summary: Recurring scheduling, reusable triggers, execution targets, and run history
 ---
 
-Routines are recurring tasks that fire on a schedule, webhook, or API call and create a heartbeat run for the assigned agent.
+Routines own recurring trigger semantics: schedule, webhook, API/manual dispatch, catch-up, concurrency, replay protection, and delivery idempotency. A routine now has one execution target: either the existing agent-task path or a published Workflow. This preserves the existing scheduler instead of creating a second workflow scheduler.
 
 ## List Routines
 
@@ -27,10 +27,12 @@ Returns routine details including triggers.
 POST /api/companies/{companyId}/routines
 {
   "title": "Weekly CEO briefing",
-  "description": "Compile status report and email Founder",
-  "assigneeAgentId": "{agentId}",
+  "description": "Compile the weekly operating brief",
+  "executionTarget": {
+    "kind": "workflow",
+    "workflowId": "{workflowId}"
+  },
   "projectId": "{projectId}",
-  "goalId": "{goalId}",
   "priority": "medium",
   "status": "active",
   "concurrencyPolicy": "coalesce_if_active",
@@ -38,7 +40,7 @@ POST /api/companies/{companyId}/routines
 }
 ```
 
-**Agents can only create routines assigned to themselves.** Board operators can assign to any agent.
+Existing clients may continue using `assigneeAgentId`; it is dual-read as an `agent_task` execution target. New clients SHOULD use `executionTarget`. Agents can create/manage only their own agent-target routines; changing a routine to a Workflow target requires the existing board/task-assignment authority.
 
 Fields:
 
@@ -46,10 +48,11 @@ Fields:
 |-------|----------|-------------|
 | `title` | yes | Routine name |
 | `description` | no | Human-readable description of the routine |
-| `assigneeAgentId` | yes | Agent who receives each run |
-| `projectId` | yes | Project this routine belongs to |
-| `goalId` | no | Goal to link runs to |
-| `parentIssueId` | no | Parent issue for created run issues |
+| `executionTarget` | no | `{kind:"agent_task", agentId}` or `{kind:"workflow", workflowId}`. An active routine requires a valid target; targetless creates are stored paused as drafts. |
+| `assigneeAgentId` | no | Backward-compatible agent target field. For agent targets it mirrors the target agent; it must not be combined with a Workflow target. |
+| `projectId` | no | Optional project context. Existing agent-task execution may use it for the created task/workspace. |
+| `goalId` | no | Goal to link agent-task runs to |
+| `parentIssueId` | no | Parent issue for agent-task execution |
 | `priority` | no | `critical`, `high`, `medium` (default), `low` |
 | `status` | no | `active` (default), `paused`, `archived` |
 | `concurrencyPolicy` | no | Behaviour when a run fires while a previous one is still active |
@@ -59,9 +62,9 @@ Fields:
 
 | Value | Behaviour |
 |-------|-----------|
-| `coalesce_if_active` (default) | Incoming run is immediately finalised as `coalesced` and linked to the active run — no new issue is created |
-| `skip_if_active` | Incoming run is immediately finalised as `skipped` and linked to the active run — no new issue is created |
-| `always_enqueue` | Always create a new run regardless of active runs |
+| `coalesce_if_active` (default) | Incoming run is finalized as `coalesced` against the matching active execution target. Agent targets link to the active Issue/run; Workflow targets link to the active `workflow_run`. |
+| `skip_if_active` | Incoming run is finalized as `skipped` while matching work is active. |
+| `always_enqueue` | Always create a new target execution regardless of active runs. |
 
 **Catch-up policies:**
 
@@ -80,7 +83,7 @@ PATCH /api/routines/{routineId}
 }
 ```
 
-All fields from create are updatable. `baseRevisionId` is optional for backward compatibility; when provided, stale values return `409 Conflict` with the current revision id. **Agents can only update routines assigned to themselves and cannot reassign a routine to another agent.**
+All fields from create are updatable. `executionTarget: null` explicitly clears the target; omitting `executionTarget` preserves it. `baseRevisionId` is optional for backward compatibility; when provided, stale values return `409 Conflict` with the current revision id. Agents can only update their own agent-target routines and cannot switch a routine to a Workflow target.
 
 ## List Revisions
 
@@ -178,7 +181,7 @@ POST /api/routines/{routineId}/run
 }
 ```
 
-Fires a run immediately, bypassing the schedule. Concurrency policy still applies.
+Fires a run immediately through the routine's configured execution target. Concurrency policy still applies. Agent-target routines may accept the existing one-run agent/project/workspace overrides. Workflow-target routines do not accept an agent override; the published Workflow target is fixed for that run.
 
 `triggerId` is optional. When supplied, the server validates the trigger belongs to this routine (`403`) and is enabled (`409`), then records the run against that trigger and updates its `lastFiredAt`. Omit it for a generic manual run with no trigger attribution.
 
@@ -229,9 +232,12 @@ const response = await fetch(process.env.WEBHOOK_URL, {
 console.log(response.status, await response.json());
 ```
 
-`202` returns the routine run, including its status and linked task. The task
-runs asynchronously, so acceptance does not mean the agent has finished.
-Concurrency policy can coalesce or skip a delivery while work is active.
+`202` returns the routine run. Agent targets expose `linkedIssueId`; Workflow
+targets expose `linkedWorkflowRunId`. Target execution may continue
+asynchronously, so acceptance does not imply completion. Workflow dispatch
+durably creates the RoutineRun and queued Workflow run in one transaction; the
+existing workflow recovery loop can continue a queued run after process loss.
+Concurrency policy can coalesce or skip a delivery while matching work is active.
 Payload fields or a nested `variables` object supply declared routine variables;
 nested values take precedence. The full payload is retained in run history.
 
@@ -257,20 +263,22 @@ execution controls still apply, including the isolated-worktree execution gate.
 GET /api/routines/{routineId}/runs?limit=50
 ```
 
-Returns recent run history for the routine. Defaults to 50 most recent runs.
+Returns recent run history for the routine. Defaults to 50 most recent runs. Workflow-backed rows include the linked Workflow run id plus the derived Workflow id/status used by the UI for navigation and live state.
 
 ## Agent Access Rules
 
-Agents can read all routines in their company but can only create and manage routines assigned to themselves:
+Agents can read all routines in their company. Mutation authority remains attenuated by execution target:
 
 | Operation | Agent | Board |
 |-----------|-------|-------|
 | List / Get | ✅ any routine | ✅ |
-| Create | ✅ own only | ✅ |
-| Update / activate | ✅ own only | ✅ |
-| Add / update / delete triggers | ✅ own only | ✅ |
-| Rotate trigger secret | ✅ own only | ✅ |
-| Manual run | ✅ own only | ✅ |
+| Create agent-target routine | ✅ own only | ✅ |
+| Create Workflow-target routine | ❌ | ✅ |
+| Update / activate own agent-target routine | ✅ | ✅ |
+| Change execution target to Workflow | ❌ | ✅ |
+| Add / update / delete triggers | ✅ own agent-target routine | ✅ |
+| Rotate trigger secret | ✅ own agent-target routine | ✅ |
+| Manual run | ✅ own agent-target routine | ✅ |
 | Reassign to another agent | ❌ | ✅ |
 
 ## Routine Lifecycle
@@ -284,7 +292,7 @@ Archived routines do not fire and cannot be reactivated.
 
 ## Routine detail navigation
 
-The routine detail page keeps **Runs** and **Activity** in the routine sidebar. Runs lists the execution issues for that routine using the shared issue list, including issue status, priority, assignee, and search controls. Activity shows the routine, trigger, and run event timeline without leaving the routine page. The overview links to these same local tabs.
+The routine detail page keeps **Runs** and **Activity** in the routine sidebar. Agent-target Runs reuse the shared Issue list. Workflow-target Runs show linked Workflow runs and navigate to the existing Workflow run detail; no second run-history model is created. Activity remains the routine/trigger/run event timeline. Revision history records execution-target changes and preserves legacy snapshots that predate the target fields.
 
 
 ## Webhook setup and connection checks
