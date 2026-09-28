@@ -39,6 +39,7 @@ import { Badge } from "@/components/ui/badge";
 
 type AgentLookup = Map<string, { id: string; name: string }>;
 type ProjectLookup = Map<string, { id: string; name: string }>;
+type WorkflowLookup = Map<string, { id?: string; name: string }>;
 type SecretLookup = Map<string, CompanySecret>;
 
 type DirtyFieldDescriptor = {
@@ -54,6 +55,7 @@ type Props = {
   onSaveEdits: () => void;
   agents: AgentLookup;
   projects: ProjectLookup;
+  workflows?: WorkflowLookup;
   secrets?: CompanySecret[];
   onRestoreSecretMaterials: (response: RestoreRoutineRevisionResponse) => void;
   onRestored?: (response: RestoreRoutineRevisionResponse) => void;
@@ -67,6 +69,7 @@ export function RoutineHistoryTab({
   onSaveEdits,
   agents,
   projects,
+  workflows = new Map(),
   secrets,
   onRestoreSecretMaterials,
   onRestored,
@@ -266,6 +269,7 @@ export function RoutineHistoryTab({
                 isHistorical={isHistoricalSelected}
                 agents={agents}
                 projects={projects}
+                workflows={workflows}
                 onCompare={() => setDiffOpen(true)}
                 onRestore={openRestoreConfirm}
                 restorePending={restoreMutation.isPending}
@@ -306,6 +310,7 @@ export function RoutineHistoryTab({
           initialNewRevisionId={currentRevision.id}
           agents={agents}
           projects={projects}
+          workflows={workflows}
           secrets={secretLookup}
           onRestore={(rev) => {
             setSelectedRevisionId(rev.id);
@@ -493,6 +498,7 @@ function RevisionPreview({
   isHistorical,
   agents,
   projects,
+  workflows,
   onCompare,
   onRestore,
   restorePending,
@@ -503,6 +509,7 @@ function RevisionPreview({
   isHistorical: boolean;
   agents: AgentLookup;
   projects: ProjectLookup;
+  workflows: WorkflowLookup;
   onCompare: () => void;
   onRestore: () => void;
   restorePending: boolean;
@@ -540,10 +547,13 @@ function RevisionPreview({
       differs: !!currentSnapshot && currentSnapshot.status !== snapshot.status,
     },
     {
-      key: "assigneeAgentId",
-      label: "Default agent",
-      value: resolveAgentName(snapshot.assigneeAgentId, agents),
-      differs: !!currentSnapshot && currentSnapshot.assigneeAgentId !== snapshot.assigneeAgentId,
+      key: "executionTarget",
+      label: "Execution target",
+      value: resolveRoutineExecutionTargetName(snapshot, agents, workflows),
+      differs:
+        !!currentSnapshot &&
+        routineExecutionTargetIdentity(currentSnapshot) !==
+          routineExecutionTargetIdentity(snapshot),
     },
     {
       key: "projectId",
@@ -779,6 +789,7 @@ function RoutineRevisionDiffModal({
   initialNewRevisionId,
   agents,
   projects,
+  workflows,
   secrets,
   onRestore,
 }: {
@@ -789,6 +800,7 @@ function RoutineRevisionDiffModal({
   initialNewRevisionId: string;
   agents: AgentLookup;
   projects: ProjectLookup;
+  workflows: WorkflowLookup;
   secrets: SecretLookup;
   onRestore: (revision: RoutineRevision) => void;
 }) {
@@ -805,8 +817,18 @@ function RoutineRevisionDiffModal({
   const left = revisions.find((r) => r.id === leftId) ?? null;
   const right = revisions.find((r) => r.id === rightId) ?? null;
   const fieldChanges = useMemo(
-    () => (left && right ? computeFieldChanges(left, right, agents, projects, secrets) : []),
-    [left, right, agents, projects, secrets],
+    () =>
+      left && right
+        ? computeFieldChanges(
+            left,
+            right,
+            agents,
+            projects,
+            workflows,
+            secrets,
+          )
+        : [],
+    [left, right, agents, projects, workflows, secrets],
   );
   const descriptionDiff = useMemo<DiffRow[]>(
     () => (left && right
@@ -992,6 +1014,35 @@ function resolveAgentName(agentId: string | null, lookup: AgentLookup) {
   return lookup.get(agentId)?.name ?? agentId;
 }
 
+function routineExecutionTargetIdentity(
+  snapshot: RoutineRevision["snapshot"]["routine"],
+): string {
+  if (snapshot.executionTargetKind === "workflow" && snapshot.executionTargetRef) {
+    return `workflow:${snapshot.executionTargetRef}`;
+  }
+  const agentId =
+    snapshot.executionTargetKind === "agent_task"
+      ? (snapshot.executionTargetRef ?? snapshot.assigneeAgentId)
+      : snapshot.assigneeAgentId;
+  return agentId ? `agent_task:${agentId}` : "none";
+}
+
+function resolveRoutineExecutionTargetName(
+  snapshot: RoutineRevision["snapshot"]["routine"],
+  agents: AgentLookup,
+  workflows: WorkflowLookup,
+): string {
+  if (snapshot.executionTargetKind === "workflow" && snapshot.executionTargetRef) {
+    return workflows.get(snapshot.executionTargetRef)?.name ??
+      `Workflow ${snapshot.executionTargetRef.slice(0, 8)}`;
+  }
+  const agentId =
+    snapshot.executionTargetKind === "agent_task"
+      ? (snapshot.executionTargetRef ?? snapshot.assigneeAgentId)
+      : snapshot.assigneeAgentId;
+  return resolveAgentName(agentId ?? null, agents);
+}
+
 function resolveProjectName(projectId: string | null, lookup: ProjectLookup) {
   if (!projectId) return "No project";
   return lookup.get(projectId)?.name ?? projectId;
@@ -1041,6 +1092,7 @@ function computeFieldChanges(
   right: RoutineRevision,
   agents: AgentLookup,
   projects: ProjectLookup,
+  workflows: WorkflowLookup,
   secrets: SecretLookup,
 ): Array<{ field: string; oldValue: string | null; newValue: string | null }> {
   const oldRoutine = left.snapshot.routine;
@@ -1059,12 +1111,24 @@ function computeFieldChanges(
   };
   compareScalar("title", "Title", oldRoutine.title, newRoutine.title);
   compareScalar("priority", "Priority", oldRoutine.priority, newRoutine.priority);
-  compareScalar(
-    "assigneeAgentId",
-    "Default agent",
-    resolveAgentName(oldRoutine.assigneeAgentId, agents),
-    resolveAgentName(newRoutine.assigneeAgentId, agents),
-  );
+  if (
+    routineExecutionTargetIdentity(oldRoutine) !==
+    routineExecutionTargetIdentity(newRoutine)
+  ) {
+    changes.push({
+      field: "Execution target",
+      oldValue: resolveRoutineExecutionTargetName(
+        oldRoutine,
+        agents,
+        workflows,
+      ),
+      newValue: resolveRoutineExecutionTargetName(
+        newRoutine,
+        agents,
+        workflows,
+      ),
+    });
+  }
   compareScalar(
     "projectId",
     "Project",
