@@ -403,7 +403,45 @@ export interface WorkflowStepRun {
   updatedAt: Date;
 }
 
+export const WORKFLOW_WAIT_KINDS = [
+  "delay",
+  "human_interaction",
+  "external_callback",
+  "task_completion",
+] as const;
+export type WorkflowWaitKind = (typeof WORKFLOW_WAIT_KINDS)[number];
+
+export const WORKFLOW_WAIT_STATUSES = [
+  "active",
+  "resolved",
+  "timed_out",
+  "cancelled",
+] as const;
+export type WorkflowWaitStatus = (typeof WORKFLOW_WAIT_STATUSES)[number];
+
+export interface WorkflowWait {
+  id: string;
+  companyId: string;
+  workflowRunId: string;
+  nodeId: string;
+  waitKey: string;
+  kind: WorkflowWaitKind;
+  status: WorkflowWaitStatus;
+  wakeAt: Date | null;
+  timeoutAt: Date | null;
+  referenceType: string | null;
+  referenceId: string | null;
+  signalTokenHash: string | null;
+  resolutionJson: unknown;
+  resolvedByType: string | null;
+  resolvedById: string | null;
+  resolvedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface WorkflowRunDetail {
   run: WorkflowRun;
   steps: WorkflowStepRun[];
+  waits: WorkflowWait[];
 }
