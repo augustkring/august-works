@@ -160,6 +160,48 @@ describe("Context provider deadline policy", () => {
 });
 
 describe("Context model serialization", () => {
+  it("preserves authority decisions at the serialization boundary", () => {
+    const primary = evidence("foundation-primary");
+    const lower = evidence("memory-lower", {
+      sourceClass: "accepted_memory",
+      sourceProvider: "memory",
+    });
+    const packet: ContextPacket = {
+      governance: { sensitivityCeiling: "internal", asOf: "2026-09-28T09:00:00.000Z" },
+      foundation: [primary],
+      connectedEvidence: [],
+      sharedMemory: [lower],
+      privateMemory: [],
+      taskContext: [],
+      artifacts: [],
+      warnings: [],
+      citations: [primary.citation, lower.citation],
+      authority: [
+        {
+          evidenceId: primary.id,
+          authorityDomain: "company_strategy",
+          authorityRank: 0,
+          primaryForDomain: true,
+          reason: "preferred_authority",
+        },
+        {
+          evidenceId: lower.id,
+          authorityDomain: "company_strategy",
+          authorityRank: 1,
+          primaryForDomain: false,
+          reason: "lower_authority",
+        },
+      ],
+      manifest: null,
+      selectedEstimatedTokens: 20,
+    };
+
+    const markdown = serializeContextPacket(packet);
+    expect(markdown).toContain("authority=preferred_authority:company_strategy");
+    expect(markdown).toContain("authority=lower_authority:company_strategy");
+    expect(markdown).toContain("must not override the primary source");
+  });
+
   it("marks untrusted external content as data rather than instructions", () => {
     const packet: ContextPacket = {
       governance: { sensitivityCeiling: "internal", asOf: "2026-09-28T09:00:00.000Z" },

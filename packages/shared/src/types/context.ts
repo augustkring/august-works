@@ -170,6 +170,14 @@ export interface ContextPacketManifestRef {
   policySnapshotHash: string;
 }
 
+export interface ContextPacketAuthority {
+  evidenceId: string;
+  authorityDomain: string | null;
+  authorityRank: number | null;
+  primaryForDomain: boolean;
+  reason: ContextAuthorityReason;
+}
+
 export interface ContextPacket {
   governance: {
     sensitivityCeiling: EvidenceSensitivity;
@@ -183,6 +191,7 @@ export interface ContextPacket {
   artifacts: EvidenceItem[];
   warnings: ContextProviderWarning[];
   citations: EvidenceCitation[];
+  authority?: ContextPacketAuthority[];
   manifest: ContextPacketManifestRef | null;
   selectedEstimatedTokens: number;
 }
