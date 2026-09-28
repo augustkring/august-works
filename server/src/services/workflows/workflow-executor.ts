@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -27,7 +27,8 @@ import {
   WorkflowConditionExpressionError,
 } from "./workflow-condition-expression.js";
 
-const MANUAL_EXECUTION_LEASE_MS = 30_000;
+const WORKFLOW_EXECUTION_LEASE_MS = 30_000;
+const ABANDONED_QUEUED_RUN_AGE_MS = 30_000;
 
 export interface WorkflowRunActor {
   principal: ExecutionPrincipal;
@@ -254,7 +255,7 @@ async function createQueuedManualRun(
         companyId: input.companyId,
         workflowRunId: run!.id,
         nodeId: input.nodeId,
-        attempt: 1,
+        attempt,
         status: "pending",
         inputJson: input.triggerPayload,
         createdAt: now,
@@ -301,7 +302,7 @@ async function claimQueuedRun(
   const publications: ActivityPublication[] = [];
   const claimed = await db.transaction(async (tx) => {
     const now = new Date();
-    const leaseExpiresAt = new Date(now.getTime() + MANUAL_EXECUTION_LEASE_MS);
+    const leaseExpiresAt = new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS);
     const [row] = await tx
       .update(workflowRuns)
       .set({
@@ -381,6 +382,7 @@ async function createPendingStep(
   run: typeof workflowRuns.$inferSelect,
   nodeId: string,
   inputJson: unknown,
+  attempt = 1,
 ) {
   const now = new Date();
   const [created] = await db
@@ -407,7 +409,7 @@ async function createPendingStep(
         eq(workflowStepRuns.companyId, run.companyId),
         eq(workflowStepRuns.workflowRunId, run.id),
         eq(workflowStepRuns.nodeId, nodeId),
-        eq(workflowStepRuns.attempt, 1),
+        eq(workflowStepRuns.attempt, attempt),
       ),
     )
     .then((rows) => rows[0] ?? null);
@@ -426,6 +428,7 @@ async function startPendingStep(
   run: typeof workflowRuns.$inferSelect,
   nodeId: string,
   actor: WorkflowRunActor,
+  attempt = 1,
 ) {
   const publications: ActivityPublication[] = [];
   const runningStep = await db.transaction(async (tx) => {
@@ -442,7 +445,7 @@ async function startPendingStep(
           eq(workflowStepRuns.companyId, run.companyId),
           eq(workflowStepRuns.workflowRunId, run.id),
           eq(workflowStepRuns.nodeId, nodeId),
-          eq(workflowStepRuns.attempt, 1),
+          eq(workflowStepRuns.attempt, attempt),
           eq(workflowStepRuns.status, "pending"),
         ),
       )
@@ -465,7 +468,7 @@ async function startPendingStep(
         details: {
           workflowRunId: run.id,
           nodeId,
-          attempt: 1,
+          attempt,
         },
       },
     );
@@ -790,6 +793,330 @@ function conditionExpression(node: WorkflowNode): string {
   return expression;
 }
 
+type WorkflowStepRow = typeof workflowStepRuns.$inferSelect;
+
+class WorkflowCheckpointError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "WorkflowCheckpointError";
+    this.code = code;
+  }
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function checkpointConditionResult(step: WorkflowStepRow): boolean {
+  const output = step.outputJson;
+  if (!isRecordValue(output) || typeof output.result !== "boolean") {
+    throw new WorkflowCheckpointError(
+      "workflow_checkpoint_invalid",
+      `Condition checkpoint for node ${step.nodeId} has no boolean result`,
+    );
+  }
+  return output.result;
+}
+
+async function nodeAttempts(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  nodeId: string,
+): Promise<WorkflowStepRow[]> {
+  return db
+    .select()
+    .from(workflowStepRuns)
+    .where(
+      and(
+        eq(workflowStepRuns.companyId, run.companyId),
+        eq(workflowStepRuns.workflowRunId, run.id),
+        eq(workflowStepRuns.nodeId, nodeId),
+      ),
+    )
+    .orderBy(desc(workflowStepRuns.attempt));
+}
+
+async function renewRunLease(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+) {
+  if (!run.executionOwnerId) {
+    throw conflict("Workflow run has no execution owner", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+  const now = new Date();
+  const [renewed] = await db
+    .update(workflowRuns)
+    .set({
+      ownerHeartbeatAt: now,
+      leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS),
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(workflowRuns.id, run.id),
+        eq(workflowRuns.companyId, run.companyId),
+        eq(workflowRuns.status, "running"),
+        eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+      ),
+    )
+    .returning();
+  if (!renewed) {
+    throw conflict("Workflow run ownership changed while renewing its lease", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+  return renewed;
+}
+
+async function interruptRunningStep(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  step: WorkflowStepRow,
+  actor: WorkflowRunActor,
+): Promise<WorkflowStepRow> {
+  const publications: ActivityPublication[] = [];
+  const interrupted = await db.transaction(async (tx) => {
+    const now = new Date();
+    const durationMs = Math.max(
+      0,
+      now.getTime() - (step.startedAt ?? now).getTime(),
+    );
+    const [row] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "failed",
+        finishedAt: now,
+        durationMs,
+        errorCode: "workflow_execution_interrupted",
+        errorMessage: "Previous executor lease expired before step completion",
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, step.id),
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.status, "running"),
+        ),
+      )
+      .returning();
+    if (!row) {
+      throw conflict("Workflow step changed while recovery was taking ownership", {
+        code: "workflow_step_claim_conflict",
+        workflowRunId: run.id,
+        nodeId: step.nodeId,
+        attempt: step.attempt,
+      });
+    }
+    const { publication } = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_interrupted",
+        entityType: "workflow_step_run",
+        entityId: row.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: row.nodeId,
+          attempt: row.attempt,
+          errorCode: "workflow_execution_interrupted",
+        },
+      },
+    );
+    publications.push(publication);
+    return row;
+  });
+  publishActivities(publications);
+  return interrupted;
+}
+
+async function prepareRunnableStep(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  nodeId: string,
+  inputJson: unknown,
+  actor: WorkflowRunActor,
+): Promise<{ checkpoint: WorkflowStepRow | null; running: WorkflowStepRow | null }> {
+  const attempts = await nodeAttempts(db, run, nodeId);
+  const succeeded = attempts.find((step) => step.status === "succeeded") ?? null;
+  if (succeeded) return { checkpoint: succeeded, running: null };
+
+  let latest = attempts[0] ?? null;
+  if (latest?.status === "skipped") {
+    throw new WorkflowCheckpointError(
+      "workflow_checkpoint_path_conflict",
+      `Selected workflow path reached previously skipped node ${nodeId}`,
+    );
+  }
+
+  if (latest?.status === "running") {
+    latest = await interruptRunningStep(db, run, latest, actor);
+  }
+
+  let pending: WorkflowStepRow;
+  if (latest?.status === "pending") {
+    pending = latest;
+  } else if (
+    latest === null ||
+    (latest.status === "failed" &&
+      latest.errorCode === "workflow_execution_interrupted")
+  ) {
+    const attempt = latest ? latest.attempt + 1 : 1;
+    pending = await createPendingStep(db, run, nodeId, inputJson, attempt);
+  } else {
+    throw new WorkflowCheckpointError(
+      "workflow_checkpoint_state_invalid",
+      `Workflow node ${nodeId} cannot resume from step state ${latest.status}`,
+    );
+  }
+
+  const running = await startPendingStep(
+    db,
+    run,
+    nodeId,
+    actor,
+    pending.attempt,
+  );
+  return { checkpoint: null, running };
+}
+
+async function claimExpiredRunForRecovery(
+  db: Db,
+  candidate: typeof workflowRuns.$inferSelect,
+  ownerId: string,
+  now: Date,
+  actor: WorkflowRunActor,
+) {
+  const publications: ActivityPublication[] = [];
+  const claimed = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "recovering",
+        executionOwnerId: ownerId,
+        ownerHeartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, candidate.id),
+          eq(workflowRuns.companyId, candidate.companyId),
+          inArray(workflowRuns.status, ["running", "recovering"]),
+          lt(workflowRuns.leaseExpiresAt, now),
+        ),
+      )
+      .returning();
+    if (!row) return null;
+
+    const { publication } = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: row.companyId,
+        action: "workflow.run_recovery_started",
+        entityType: "workflow_run",
+        entityId: row.id,
+        details: {
+          workflowId: row.workflowId,
+          workflowRevisionId: row.workflowRevisionId,
+          previousExecutionOwnerId: candidate.executionOwnerId,
+          recoveryExecutionOwnerId: ownerId,
+        },
+      },
+    );
+    publications.push(publication);
+    return row;
+  });
+  publishActivities(publications);
+  return claimed;
+}
+
+async function resumeRecoveredRun(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  actor: WorkflowRunActor,
+) {
+  if (!run.executionOwnerId) {
+    throw conflict("Recovering workflow run has no execution owner", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+  const publications: ActivityPublication[] = [];
+  const resumed = await db.transaction(async (tx) => {
+    const now = new Date();
+    const [row] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "running",
+        ownerHeartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "recovering"),
+          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+        ),
+      )
+      .returning();
+    if (!row) {
+      throw conflict("Workflow recovery ownership changed before resume", {
+        code: "workflow_run_claim_lost",
+        workflowRunId: run.id,
+      });
+    }
+
+    const { publication } = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: row.companyId,
+        action: "workflow.run_recovered",
+        entityType: "workflow_run",
+        entityId: row.id,
+        details: {
+          workflowId: row.workflowId,
+          workflowRevisionId: row.workflowRevisionId,
+          executionOwnerId: row.executionOwnerId,
+        },
+      },
+    );
+    publications.push(publication);
+    return row;
+  });
+  publishActivities(publications);
+  return resumed;
+}
+
+async function revisionForRun(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+) {
+  return db
+    .select()
+    .from(workflowRevisions)
+    .where(
+      and(
+        eq(workflowRevisions.id, run.workflowRevisionId),
+        eq(workflowRevisions.companyId, run.companyId),
+        eq(workflowRevisions.workflowId, run.workflowId),
+        inArray(workflowRevisions.state, ["published", "superseded"]),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+}
+
 async function executeWorkflowGraph(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
@@ -812,47 +1139,90 @@ async function executeWorkflowGraph(
   const outputs: Record<string, unknown> = {};
   const variables = graphVariables(graph);
   let current: WorkflowNode | null = trigger;
+  let ownedRun = run;
 
   while (current) {
+    ownedRun = await renewRunLease(db, ownedRun);
     let output: unknown;
     let conditionResult: boolean | null = null;
-    let runningStep: typeof workflowStepRuns.$inferSelect | undefined;
+    let runningStep: WorkflowStepRow | undefined;
 
-    if (current.type === "core.manual_trigger") {
-      runningStep = await startPendingStep(db, run, current.id, actor);
-      output = run.triggerPayload ?? {};
-      await completeRunningStep(db, run, runningStep, output, actor);
-    } else if (current.type === "core.condition") {
-      const expression = conditionExpression(current);
-      await createPendingStep(db, run, current.id, { expression });
-      runningStep = await startPendingStep(db, run, current.id, actor);
-      try {
-        conditionResult = evaluateWorkflowConditionExpression(expression, {
-          trigger: (run.triggerPayload ?? {}) as Record<string, unknown>,
-          variables,
-          steps: outputs,
-        });
-      } catch (error) {
-        const code =
-          error instanceof WorkflowConditionExpressionError
-            ? error.code
-            : "workflow_condition_execution_failed";
-        const message =
-          error instanceof Error ? error.message : "Condition evaluation failed";
-        await failRun(db, run, actor, code, message, runningStep);
+    try {
+      if (current.type === "core.manual_trigger") {
+        const prepared = await prepareRunnableStep(
+          db,
+          ownedRun,
+          current.id,
+          ownedRun.triggerPayload ?? {},
+          actor,
+        );
+        if (prepared.checkpoint) {
+          output = prepared.checkpoint.outputJson ?? ownedRun.triggerPayload ?? {};
+        } else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) {
+            throw new WorkflowCheckpointError(
+              "workflow_checkpoint_state_invalid",
+              `Manual trigger ${current.id} produced no runnable attempt`,
+            );
+          }
+          output = ownedRun.triggerPayload ?? {};
+          await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
+      } else if (current.type === "core.condition") {
+        const expression = conditionExpression(current);
+        const prepared = await prepareRunnableStep(
+          db,
+          ownedRun,
+          current.id,
+          { expression },
+          actor,
+        );
+        if (prepared.checkpoint) {
+          output = prepared.checkpoint.outputJson;
+          conditionResult = checkpointConditionResult(prepared.checkpoint);
+        } else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) {
+            throw new WorkflowCheckpointError(
+              "workflow_checkpoint_state_invalid",
+              `Condition ${current.id} produced no runnable attempt`,
+            );
+          }
+          conditionResult = evaluateWorkflowConditionExpression(expression, {
+            trigger: ownedRun.triggerPayload ?? {},
+            variables,
+            steps: outputs,
+          });
+          output = { result: conditionResult };
+          await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
+      } else {
+        await failRun(
+          db,
+          ownedRun,
+          actor,
+          "workflow_executor_capability_not_ready",
+          `Workflow node type ${current.type} is not executable yet`,
+        );
         return;
       }
-      output = { result: conditionResult };
-      await completeRunningStep(db, run, runningStep, output, actor);
-    } else {
-      await failRun(
-        db,
-        run,
-        actor,
-        "workflow_executor_capability_not_ready",
-        `Workflow node type ${current.type} is not executable yet`,
-      );
-      return;
+    } catch (error) {
+      if (
+        error instanceof WorkflowConditionExpressionError ||
+        error instanceof WorkflowCheckpointError
+      ) {
+        await failRun(
+          db,
+          ownedRun,
+          actor,
+          error.code,
+          error.message,
+          runningStep,
+        );
+        return;
+      }
+      throw error;
     }
 
     outputs[current.id] = output;
@@ -868,7 +1238,7 @@ async function executeWorkflowGraph(
       if (!selected) {
         await failRun(
           db,
-          run,
+          ownedRun,
           actor,
           "workflow_condition_branch_missing",
           `Condition node ${current.id} has no ${selectedKey} branch`,
@@ -881,7 +1251,7 @@ async function executeWorkflowGraph(
         if (edge.id === selected.id) continue;
         await markSkippedBranch(
           db,
-          run,
+          ownedRun,
           graph,
           edge.target,
           protectedNodeIds,
@@ -895,7 +1265,7 @@ async function executeWorkflowGraph(
     if (outgoing.length !== 1) {
       await failRun(
         db,
-        run,
+        ownedRun,
         actor,
         "workflow_implicit_parallel_unsupported",
         `Workflow node ${current.id} has an unsupported number of outgoing paths`,
@@ -905,8 +1275,87 @@ async function executeWorkflowGraph(
     current = nodes.get(outgoing[0]!.target) ?? null;
   }
 
-  await finishRun(db, run, actor);
+  await finishRun(db, ownedRun, actor);
 }
+
+async function executeClaimedRun(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  actor: WorkflowRunActor,
+) {
+  const revision = await revisionForRun(db, run);
+  if (!revision) {
+    await failRun(
+      db,
+      run,
+      actor,
+      "workflow_revision_unavailable_for_recovery",
+      "Workflow revision bound to this run is unavailable for execution",
+    );
+    return;
+  }
+
+  const unsupportedNodeTypes = [
+    ...new Set(
+      revision.graph.nodes
+        .filter(
+          (node) =>
+            node.type !== "core.manual_trigger" &&
+            node.type !== "core.condition",
+        )
+        .map((node) => node.type),
+    ),
+  ].sort();
+  if (unsupportedNodeTypes.length > 0) {
+    await failRun(
+      db,
+      run,
+      actor,
+      "workflow_executor_capability_not_ready",
+      `Workflow revision contains unsupported node types: ${unsupportedNodeTypes.join(", ")}`,
+    );
+    return;
+  }
+
+  await executeWorkflowGraph(db, run, revision.graph, actor);
+}
+
+async function recoverCandidate(
+  db: Db,
+  candidate: typeof workflowRuns.$inferSelect,
+  now: Date,
+) {
+  const actor: WorkflowRunActor = {
+    principal: { type: "system", service: "workflow-recovery" },
+  };
+  const ownerId = `recovery:${randomUUID()}`;
+
+  if (candidate.status === "queued") {
+    const claimed = await claimQueuedRun(
+      db,
+      candidate.companyId,
+      candidate.id,
+      ownerId,
+      actor,
+    );
+    if (!claimed) return false;
+    await executeClaimedRun(db, claimed, actor);
+    return true;
+  }
+
+  const recovering = await claimExpiredRunForRecovery(
+    db,
+    candidate,
+    ownerId,
+    now,
+    actor,
+  );
+  if (!recovering) return false;
+  const resumed = await resumeRecoveredRun(db, recovering, actor);
+  await executeClaimedRun(db, resumed, actor);
+  return true;
+}
+
 
 export function workflowExecutorService(db: Db) {
   return {
@@ -1075,12 +1524,56 @@ export function workflowExecutorService(db: Db) {
             workflowRunId: queued.run.id,
           });
         }
-        await executeWorkflowGraph(db, claimed, revision.graph, actor);
+        await executeClaimedRun(db, claimed, actor);
       }
 
       const detail = await getRunDetail(db, companyId, queued.run.id);
       if (!detail) throw new Error("Workflow run disappeared after execution");
       return detail;
+    },
+
+    recoverExpiredRuns: async (
+      limit = 20,
+      now = new Date(),
+    ): Promise<{ checked: number; recovered: number; raced: number; failedRunIds: string[] }> => {
+      const safeLimit = Math.min(Math.max(limit, 1), 100);
+      const queuedBefore = new Date(now.getTime() - ABANDONED_QUEUED_RUN_AGE_MS);
+      const candidates = await db
+        .select()
+        .from(workflowRuns)
+        .where(
+          or(
+            and(
+              eq(workflowRuns.status, "queued"),
+              lt(workflowRuns.updatedAt, queuedBefore),
+            ),
+            and(
+              inArray(workflowRuns.status, ["running", "recovering"]),
+              lt(workflowRuns.leaseExpiresAt, now),
+            ),
+          ),
+        )
+        .orderBy(asc(workflowRuns.updatedAt))
+        .limit(safeLimit);
+
+      let recovered = 0;
+      let raced = 0;
+      const failedRunIds: string[] = [];
+      for (const candidate of candidates) {
+        try {
+          const didRecover = await recoverCandidate(db, candidate, now);
+          if (didRecover) recovered += 1;
+          else raced += 1;
+        } catch {
+          failedRunIds.push(candidate.id);
+        }
+      }
+      return {
+        checked: candidates.length,
+        recovered,
+        raced,
+        failedRunIds,
+      };
     },
   };
 }
