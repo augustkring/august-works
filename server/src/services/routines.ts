@@ -2132,88 +2132,26 @@ export function routineService(
           : undefined;
 
       if (executionTarget.kind === "workflow") {
-        try {
-          const activeWorkflow = await findLiveWorkflowExecution(
-            input.routine,
-            dispatchFingerprint,
-            txDb,
-          );
-          if (
-            activeWorkflow &&
-            input.routine.concurrencyPolicy !== "always_enqueue"
-          ) {
-            const status =
-              input.routine.concurrencyPolicy === "skip_if_active"
-                ? "skipped"
-                : "coalesced";
-            const updated = await finalizeRun(
-              createdRun.id,
-              {
-                status,
-                linkedWorkflowRunId: activeWorkflow.workflowRunId,
-                coalescedIntoRunId: activeWorkflow.routineRunId,
-                completedAt: triggeredAt,
-              },
-              txDb,
-            );
-            await updateRoutineTouchedState(
-              {
-                routineId: input.routine.id,
-                triggerId: input.trigger?.id ?? null,
-                triggeredAt,
-                status,
-                nextRunAt,
-              },
-              txDb,
-            );
-            return updated ?? createdRun;
-          }
-
-          const resolvedWorkflow = await resolveWorkflowExecutionRevision(
-            txDb,
-            input.routine.companyId,
-            executionTarget.workflowId,
-          );
-          const workflowActor = workflowActorForRoutine(
-            input.source,
-            input.actor,
-            responsibleUserId,
-          );
-          const workflowPayload = {
-            ...(triggerPayload ?? {}),
-            routine: {
-              routineId: input.routine.id,
-              routineRunId: createdRun.id,
-              routineRevisionId: input.routine.latestRevisionId,
-              triggerId: input.trigger?.id ?? null,
-              source: input.source,
-            },
-          };
-          const queuedWorkflow = await enqueueWorkflowRunInTransaction(
-            txDb,
-            {
-              companyId: input.routine.companyId,
-              workflowId: executionTarget.workflowId,
-              revisionId: resolvedWorkflow.revision.id,
-              nodeId: resolvedWorkflow.triggerNodeId,
-              triggerId: null,
-              source: "routine",
-              triggerPayload: workflowPayload,
-              responsibleUserId,
-              idempotencyKey: `routine-run:${createdRun.id}`,
-              correlationId: `routine:${createdRun.id}`,
-              actor: workflowActor,
-            },
-          );
-          queuedWorkflowRunId = queuedWorkflow.run.id;
-          queuedWorkflowActor = workflowActor;
-          workflowPublications.push(...queuedWorkflow.publications);
-
+        const activeWorkflow = await findLiveWorkflowExecution(
+          input.routine,
+          dispatchFingerprint,
+          txDb,
+        );
+        if (
+          activeWorkflow &&
+          input.routine.concurrencyPolicy !== "always_enqueue"
+        ) {
+          const status =
+            input.routine.concurrencyPolicy === "skip_if_active"
+              ? "skipped"
+              : "coalesced";
           const updated = await finalizeRun(
             createdRun.id,
             {
-              status: "workflow_started",
-              linkedWorkflowRunId: queuedWorkflow.run.id,
+              status,
+              linkedWorkflowRunId: activeWorkflow.workflowRunId,
+              coalescedIntoRunId: activeWorkflow.routineRunId,
+              completedAt: triggeredAt,
             },
             txDb,
           );
@@ -2222,36 +2160,73 @@ export function routineService(
               routineId: input.routine.id,
               triggerId: input.trigger?.id ?? null,
               triggeredAt,
-              status: "workflow_started",
+              status,
               nextRunAt,
             },
             txDb,
           );
           return updated ?? createdRun;
-        } catch (error) {
-          const failureReason =
-            error instanceof Error ? error.message : String(error);
-          const failed = await finalizeRun(
-            createdRun.id,
-            {
-              status: "failed",
-              failureReason,
-              completedAt: new Date(),
-            },
-            txDb,
-          );
-          await updateRoutineTouchedState(
-            {
-              routineId: input.routine.id,
-              triggerId: input.trigger?.id ?? null,
-              triggeredAt,
-              status: "failed",
-              nextRunAt,
-            },
-            txDb,
-          );
-          return failed ?? createdRun;
         }
+
+        const resolvedWorkflow = await resolveWorkflowExecutionRevision(
+          txDb,
+          input.routine.companyId,
+          executionTarget.workflowId,
+        );
+        const workflowActor = workflowActorForRoutine(
+          input.source,
+          input.actor,
+          responsibleUserId,
+        );
+        const workflowPayload = {
+          ...(triggerPayload ?? {}),
+          routine: {
+            routineId: input.routine.id,
+            routineRunId: createdRun.id,
+            routineRevisionId: input.routine.latestRevisionId,
+            triggerId: input.trigger?.id ?? null,
+            source: input.source,
+          },
+        };
+        const queuedWorkflow = await enqueueWorkflowRunInTransaction(
+          txDb,
+          {
+            companyId: input.routine.companyId,
+            workflowId: executionTarget.workflowId,
+            revisionId: resolvedWorkflow.revision.id,
+            nodeId: resolvedWorkflow.triggerNodeId,
+            triggerId: null,
+            source: "routine",
+            triggerPayload: workflowPayload,
+            responsibleUserId,
+            idempotencyKey: `routine-run:${createdRun.id}`,
+            correlationId: `routine:${createdRun.id}`,
+            actor: workflowActor,
+          },
+        );
+        queuedWorkflowRunId = queuedWorkflow.run.id;
+        queuedWorkflowActor = workflowActor;
+        workflowPublications.push(...queuedWorkflow.publications);
+
+        const updated = await finalizeRun(
+          createdRun.id,
+          {
+            status: "workflow_started",
+            linkedWorkflowRunId: queuedWorkflow.run.id,
+          },
+          txDb,
+        );
+        await updateRoutineTouchedState(
+          {
+            routineId: input.routine.id,
+            triggerId: input.trigger?.id ?? null,
+            triggeredAt,
+            status: "workflow_started",
+            nextRunAt,
+          },
+          txDb,
+        );
+        return updated ?? createdRun;
       }
 
       let createdIssue: Awaited<ReturnType<typeof issueSvc.create>> | null = null;
