@@ -5,6 +5,7 @@ import type {
   RoutineDetail as RoutineDetailType,
   RoutineEnvConfig,
   RoutineVariable,
+  Workflow,
 } from "@paperclipai/shared";
 import type { MarkdownEditorRef, MentionOption } from "../MarkdownEditor";
 import type { InlineEntityOption } from "../InlineEntitySelector";
@@ -42,7 +43,15 @@ export const EDITABLE_SECTIONS: RoutineSectionKey[] = [
 
 /** Which dirty-field keys belong to which section (for scoped save state). */
 export const SECTION_FIELD_KEYS: Record<string, string[]> = {
-  overview: ["title", "description", "projectId", "assigneeAgentId", "priority"],
+  overview: [
+    "title",
+    "description",
+    "projectId",
+    "assigneeAgentId",
+    "executionTargetKind",
+    "executionTargetRef",
+    "priority",
+  ],
   variables: ["variables"],
   secrets: ["env"],
   delivery: ["concurrencyPolicy", "catchUpPolicy", "activityGatePolicy", "activityGateScope"],
@@ -53,6 +62,8 @@ export type RoutineEditDraft = {
   description: string;
   projectId: string;
   assigneeAgentId: string;
+  executionTargetKind: "agent_task" | "workflow";
+  executionTargetRef: string;
   priority: string;
   concurrencyPolicy: string;
   catchUpPolicy: string;
@@ -138,15 +149,19 @@ export type RoutineDetailContextValue = {
   // entities
   agents: AgentList;
   projects: ProjectList;
+  workflows: Workflow[];
   agentById: Map<string, AgentList[number]>;
   projectById: Map<string, ProjectList[number]>;
+  workflowById: Map<string, Workflow>;
   assigneeOptions: InlineEntityOption[];
   projectOptions: InlineEntityOption[];
+  workflowOptions: InlineEntityOption[];
   recentAssigneeIds: string[];
   recentProjectIds: string[];
   mentionOptions: MentionOption[];
   currentAssignee: AgentList[number] | null;
   currentProject: ProjectList[number] | null;
+  currentWorkflow: Workflow | null;
 
   // operate data
   routineRuns: RoutineRunList | undefined;
