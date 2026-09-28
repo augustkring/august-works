@@ -170,6 +170,12 @@ export async function runContextProviders(
         }
         return { evidence, warnings: result.warnings ?? [] };
       } catch (error) {
+        // Authorization, tenant-boundary and other client/policy failures are
+        // never availability failures. An optional provider must not downgrade
+        // a security invariant into a warning.
+        if (error instanceof HttpError && error.status >= 400 && error.status < 500) {
+          throw error;
+        }
         if (provider.requirement === "mandatory") {
           if (error instanceof HttpError) throw error;
           throw new HttpError(503, `Mandatory Context provider failed: ${provider.key}`, {
@@ -223,8 +229,11 @@ function packetFromDecisions(
   return {
     governance: { sensitivityCeiling: input.sensitivityCeiling, asOf: input.asOf.toISOString() },
     foundation: byClass("foundation"),
-    connectedEvidence: evidence.filter((item) =>
-      ["system_of_record", "conversation", "external_untrusted"].includes(item.sourceClass)
+    connectedEvidence: evidence.filter(
+      (item) =>
+        item.sourceClass === "system_of_record" ||
+        item.sourceClass === "conversation" ||
+        item.sourceClass === "external_untrusted",
     ),
     sharedMemory: byClass("accepted_memory"),
     privateMemory: byClass("private_memory"),
@@ -322,6 +331,7 @@ function foundationProvider(db: Db): ContextProvider {
           sensitivity: row.sensitivity,
           citation: { label: row.title ?? row.foundationKey, href: `/foundation/${row.foundationDocumentId}` },
           metadata: {
+            retrievalScore: row.rank,
             foundationKey: row.foundationKey,
             category: row.category,
             documentType: row.documentType,
@@ -402,11 +412,13 @@ function taskProvider(db: Db): ContextProvider {
           sourceType: "issue",
           sourceRef: `issue://${issue.id}`,
           title: issue.identifier ? `${issue.identifier}: ${issue.title}` : issue.title,
-          excerpt: [
-            `Status: ${issue.status}`,
-            `Priority: ${issue.priority}`,
-            issue.description?.trim() ? `Description: ${issue.description.trim()}` : null,
-          ].filter(Boolean).join("\n") || issue.title,
+          excerpt: (
+            [
+              `Status: ${issue.status}`,
+              `Priority: ${issue.priority}`,
+              issue.description?.trim() ? `Description: ${issue.description.trim()}` : null,
+            ].filter(Boolean).join("\n") || issue.title
+          ).slice(0, 60_000),
           sourceVersion: updatedAt,
           sourceUpdatedAt: updatedAt,
           observedAt: new Date().toISOString(),
@@ -512,7 +524,14 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
             })),
             asOf: asOf.toISOString(),
           },
-          selected: budgeted.selected.map((decision) => ({ decision })),
+          selected: budgeted.selected.map((decision) => {
+            const rawScore = decision.evidence.metadata.retrievalScore;
+            const retrievalScore =
+              typeof rawScore === "number" && Number.isFinite(rawScore)
+                ? rawScore
+                : null;
+            return { decision, retrievalScore };
+          }),
         }),
         remainingMs,
       );

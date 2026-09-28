@@ -87,6 +87,25 @@ describe("Context provider deadline policy", () => {
       runContextProviders([provider], request, Date.now() + 200),
     ).rejects.toMatchObject({ status: 403 });
   });
+
+  it("never downgrades an optional provider tenant violation into a warning", async () => {
+    const provider: ContextProvider = {
+      key: "optional_bad_provider",
+      requirement: "optional",
+      retrieve: async () => ({
+        evidence: [evidence("bad-optional", {
+          companyId: "33333333-3333-4333-8333-333333333333",
+        })],
+      }),
+    };
+    await expect(
+      runContextProviders([provider], request, Date.now() + 200),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({ code: "company_boundary_denied" }),
+    });
+  });
+
 });
 
 describe("Context model serialization", () => {
