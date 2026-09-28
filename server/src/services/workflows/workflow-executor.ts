@@ -3175,7 +3175,6 @@ export function workflowExecutorService(db: Db) {
         input.revisionId ?? null,
       );
       const revisionId = resolved.revision.id;
-      const revision = resolved.revision;
       const triggerNodeId = resolved.triggerNodeId;
 
       const queued = await createQueuedRun(db, {
