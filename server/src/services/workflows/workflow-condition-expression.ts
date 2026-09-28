@@ -213,25 +213,44 @@ export function parseWorkflowConditionExpression(
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function referenceRoot(
+  root: string | undefined,
+  context: WorkflowConditionContext,
+): Record<string, unknown> {
+  switch (root) {
+    case "trigger":
+      return context.trigger;
+    case "variables":
+      return context.variables;
+    case "steps":
+      return context.steps;
+    default:
+      throw new WorkflowConditionExpressionError(
+        "workflow_condition_expression_invalid",
+        "Condition reference has an unsupported root",
+      );
+  }
+}
+
 function resolveReference(
   operand: Extract<Operand, { kind: "reference" }>,
   context: WorkflowConditionContext,
 ): unknown {
   const [root, ...path] = operand.segments;
-  let current: unknown = context[root as keyof WorkflowConditionContext];
+  let current: unknown = referenceRoot(root, context);
 
   for (const segment of path) {
-    if (
-      typeof current !== "object" ||
-      current === null ||
-      !Object.prototype.hasOwnProperty.call(current, segment)
-    ) {
+    if (!isRecord(current) || !Object.prototype.hasOwnProperty.call(current, segment)) {
       throw new WorkflowConditionExpressionError(
         "workflow_condition_reference_missing",
         `Condition reference could not resolve ${operand.segments.join(".")}`,
       );
     }
-    current = (current as Record<string, unknown>)[segment];
+    current = current[segment];
   }
   return current;
 }
@@ -270,6 +289,11 @@ function numericComparison(
       return left < right;
     case "<=":
       return left <= right;
+    default:
+      throw new WorkflowConditionExpressionError(
+        "workflow_condition_expression_invalid",
+        "Unsupported numeric condition operator",
+      );
   }
 }
 
@@ -301,5 +325,10 @@ export function evaluateWorkflowConditionExpression(
     case "<":
     case "<=":
       return numericComparison(left, right, parsed.operator);
+    default:
+      throw new WorkflowConditionExpressionError(
+        "workflow_condition_expression_invalid",
+        "Unsupported condition operator",
+      );
   }
 }
