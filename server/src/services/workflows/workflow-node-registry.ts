@@ -201,11 +201,7 @@ const REGISTRY: RegisteredWorkflowNode[] = [
       cancellationSupport: "none",
       testMode: "safe",
       failureOutputs: [],
-      auditEvents: [
-        "workflow.task_created",
-        "workflow.task_waiting",
-        "workflow.task_completed",
-      ],
+      auditEvents: [],
       uiComponent: "manual_trigger",
       accessibilityContract: {
         label: "Manual trigger",
@@ -465,8 +461,17 @@ const REGISTRY: RegisteredWorkflowNode[] = [
       idempotencyStrategy: "workflow_step_key",
       cancellationSupport: "none",
       testMode: "dry_run",
-      failureOutputs: ["permission_denied", "task_create_failed"],
-      auditEvents: [],
+      failureOutputs: [
+        "workflow_task_permission_denied",
+        "workflow_task_create_failed",
+        "workflow_task_cancelled",
+        "workflow_task_missing",
+      ],
+      auditEvents: [
+        "workflow.task_created",
+        "workflow.task_waiting",
+        "workflow.task_completed",
+      ],
       uiComponent: "create_task",
       accessibilityContract: {
         label: "Create task",
