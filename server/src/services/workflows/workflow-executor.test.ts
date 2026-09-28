@@ -1876,4 +1876,267 @@ describePg("Workflow executor V1", () => {
     ).toHaveLength(0);
   });
 
+  it("delegates Agent Task through the existing task and heartbeat runtime", async () => {
+    const seeded = await seedPublishedAgentTaskWorkflow({
+      waitForCompletion: false,
+    });
+    const heartbeatRunId = randomUUID();
+    const heartbeat = fakeHeartbeat({
+      companyId: seeded.companyId,
+      agentId: seeded.agentId,
+      runId: heartbeatRunId,
+    });
+
+    const result = await workflowExecutorService(db, { heartbeat }).startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "agent-task-nowait",
+    );
+
+    expect(result.run.status).toBe("succeeded");
+    const delegate = result.steps.find((step) => step.nodeId === "delegate");
+    expect(delegate).toMatchObject({
+      status: "succeeded",
+      agentId: seeded.agentId,
+      heartbeatRunId,
+      outputJson: expect.objectContaining({
+        agentId: seeded.agentId,
+        heartbeatRunId,
+        status: "todo",
+      }),
+    });
+
+    const delegatedTasks = await db
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.companyId, seeded.companyId),
+          eq(issues.originRunId, result.run.id),
+        ),
+      );
+    expect(delegatedTasks).toHaveLength(1);
+    expect(delegatedTasks[0]).toMatchObject({
+      assigneeAgentId: seeded.agentId,
+      status: "todo",
+      originKind: "workflow_task",
+    });
+    expect(heartbeat.wakeup).toHaveBeenCalledTimes(1);
+    expect(heartbeat.wakeup).toHaveBeenCalledWith(
+      seeded.agentId,
+      expect.objectContaining({
+        source: "assignment",
+        reason: "workflow_agent_task",
+        allowRunCoalescing: false,
+        idempotencyKey: expect.stringContaining("workflow-agent-task:"),
+        contextSnapshot: expect.objectContaining({
+          issueId: delegatedTasks[0]!.id,
+          source: "workflow.agent_task",
+        }),
+      }),
+    );
+
+    const storedHeartbeat = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, heartbeatRunId))
+      .then((rows) => rows[0] ?? null);
+    expect(storedHeartbeat).toMatchObject({
+      companyId: seeded.companyId,
+      agentId: seeded.agentId,
+      status: "queued",
+    });
+  });
+
+  it("waits on Agent Task completion and resumes from the task terminal event", async () => {
+    const seeded = await seedPublishedAgentTaskWorkflow({
+      waitForCompletion: true,
+    });
+    const heartbeatRunId = randomUUID();
+    const heartbeat = fakeHeartbeat({
+      companyId: seeded.companyId,
+      agentId: seeded.agentId,
+      runId: heartbeatRunId,
+    });
+    const executor = workflowExecutorService(db, { heartbeat });
+
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "agent-task-wait",
+    );
+
+    expect(waiting.run.status).toBe("waiting");
+    expect(waiting.waits).toHaveLength(1);
+    expect(waiting.waits[0]).toMatchObject({
+      nodeId: "delegate",
+      kind: "task_completion",
+      status: "active",
+      referenceType: "issue",
+    });
+    expect(
+      waiting.steps.find((step) => step.nodeId === "delegate"),
+    ).toMatchObject({
+      status: "waiting",
+      agentId: seeded.agentId,
+      heartbeatRunId,
+    });
+
+    const issueId = waiting.waits[0]!.referenceId!;
+    await issueService(db).update(issueId, { status: "done" });
+
+    const completed = await executor.getRun(
+      seeded.companyId,
+      waiting.run.id,
+    );
+    expect(completed?.run.status).toBe("succeeded");
+    expect(completed?.waits[0]).toMatchObject({
+      status: "resolved",
+      resolutionJson: expect.objectContaining({
+        issueId,
+        status: "done",
+      }),
+    });
+    expect(
+      completed?.steps.find((step) => step.nodeId === "delegate"),
+    ).toMatchObject({
+      status: "succeeded",
+      agentId: seeded.agentId,
+      heartbeatRunId,
+      outputJson: expect.objectContaining({
+        issueId,
+        status: "done",
+        agentId: seeded.agentId,
+        heartbeatRunId,
+      }),
+    });
+    expect(
+      completed?.steps.find((step) => step.nodeId === "after"),
+    ).toMatchObject({
+      status: "succeeded",
+      outputJson: { result: true },
+    });
+  });
+
+  it("retries Agent Task wakeup without duplicating the accountable task", async () => {
+    const seeded = await seedPublishedAgentTaskWorkflow({
+      waitForCompletion: false,
+    });
+    const heartbeatRunId = randomUUID();
+    let wakeAttempt = 0;
+    const heartbeat: IssueAssignmentWakeupDeps = {
+      wakeup: vi.fn(async (agentId, options) => {
+        wakeAttempt += 1;
+        if (wakeAttempt === 1) {
+          throw new Error("temporary heartbeat transport failure");
+        }
+        await db.insert(heartbeatRuns).values({
+          id: heartbeatRunId,
+          companyId: seeded.companyId,
+          agentId,
+          invocationSource: options.source ?? "assignment",
+          triggerDetail: options.triggerDetail ?? "system",
+          status: "queued",
+          contextSnapshot: options.contextSnapshot ?? {},
+        });
+        return {
+          status: "skipped",
+          reason: "already_queued",
+          message: null,
+          issueId:
+            typeof options.contextSnapshot?.issueId === "string"
+              ? options.contextSnapshot.issueId
+              : null,
+          executionRunId: heartbeatRunId,
+          executionAgentId: agentId,
+          executionAgentName: "Research Agent",
+        };
+      }),
+    };
+    const executor = workflowExecutorService(db, { heartbeat });
+
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "agent-task-retry",
+    );
+
+    expect(waiting.run.status).toBe("waiting");
+    const firstAttempt = waiting.steps.find(
+      (step) => step.nodeId === "delegate" && step.attempt === 1,
+    );
+    expect(firstAttempt).toMatchObject({
+      status: "retry_scheduled",
+      errorCode: "workflow_agent_wakeup_failed",
+    });
+    const tasksAfterFirstAttempt = await db
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.companyId, seeded.companyId),
+          eq(issues.originRunId, waiting.run.id),
+        ),
+      );
+    expect(tasksAfterFirstAttempt).toHaveLength(1);
+
+    const scheduledAt = firstAttempt!.finishedAt!;
+    const recovery = await executor.recoverExpiredRuns(
+      10,
+      new Date(new Date(scheduledAt).getTime() + 1_100),
+    );
+    expect(recovery).toMatchObject({
+      recovered: 1,
+      failedRunIds: [],
+    });
+
+    const completed = await executor.getRun(
+      seeded.companyId,
+      waiting.run.id,
+    );
+    expect(completed?.run.status).toBe("succeeded");
+    const delegateAttempts = completed!.steps
+      .filter((step) => step.nodeId === "delegate")
+      .sort((left, right) => left.attempt - right.attempt);
+    expect(delegateAttempts).toHaveLength(2);
+    expect(delegateAttempts[0]).toMatchObject({
+      attempt: 1,
+      status: "retried",
+      errorCode: "workflow_agent_wakeup_failed",
+    });
+    expect(delegateAttempts[1]).toMatchObject({
+      attempt: 2,
+      status: "succeeded",
+      agentId: seeded.agentId,
+      heartbeatRunId,
+    });
+    const tasksAfterRetry = await db
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.companyId, seeded.companyId),
+          eq(issues.originRunId, waiting.run.id),
+        ),
+      );
+    expect(tasksAfterRetry).toHaveLength(1);
+    expect(tasksAfterRetry[0]!.id).toBe(tasksAfterFirstAttempt[0]!.id);
+    expect(heartbeat.wakeup).toHaveBeenCalledTimes(2);
+  });
+
 });
