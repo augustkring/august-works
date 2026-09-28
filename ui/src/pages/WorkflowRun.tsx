@@ -5,6 +5,7 @@ import type {
   WorkflowRunStatus,
   WorkflowStepRun,
   WorkflowStepRunStatus,
+  WorkflowWait,
 } from "@paperclipai/shared";
 import { workflowsApi } from "@/api/workflows";
 import { useCompany } from "@/context/CompanyContext";
@@ -65,6 +66,31 @@ function stepStatusLabel(status: WorkflowStepRunStatus) {
       return "Cancelling";
     case "cancelled":
       return "Cancelled";
+  }
+}
+
+function waitingLabel(
+  wait: WorkflowWait | null,
+  retryScheduled: boolean,
+) {
+  if (retryScheduled) return "Retrying";
+  if (wait?.kind === "human_interaction") return "Waiting on you";
+  if (wait) return "Waiting on system";
+  return "Waiting";
+}
+
+function waitDescription(wait: WorkflowWait) {
+  switch (wait.kind) {
+    case "delay":
+      return wait.wakeAt
+        ? `Resumes automatically after ${formatDateTime(wait.wakeAt)}.`
+        : "Waiting for the configured delay.";
+    case "human_interaction":
+      return "Waiting for a human response before execution can continue.";
+    case "external_callback":
+      return "Waiting for an authenticated external callback.";
+    case "task_completion":
+      return "Waiting for the linked task to reach its completion state.";
   }
 }
 
@@ -172,13 +198,18 @@ export function WorkflowRun() {
     );
   }
 
-  const { run, steps } = runQuery.data;
+  const { run, steps, waits } = runQuery.data;
   const routeMismatch = workflowId && run.workflowId !== workflowId;
   const completedSteps = steps.filter((step) => step.status === "succeeded").length;
   const activeStep =
     steps.find((step) =>
       ["running", "waiting", "retry_scheduled", "cancelling"].includes(step.status),
     ) ?? null;
+  const activeWait = waits.find((wait) => wait.status === "active") ?? null;
+  const runStatusText =
+    run.status === "waiting"
+      ? waitingLabel(activeWait, activeStep?.status === "retry_scheduled")
+      : runStatusLabel(run.status);
   const live = !TERMINAL_RUN_STATUSES.has(run.status);
 
   if (routeMismatch) {
@@ -216,7 +247,7 @@ export function WorkflowRun() {
                 <h1 className="text-xl font-semibold tracking-tight">
                   Run {run.id.slice(0, 8)}
                 </h1>
-                <Badge variant="outline">{runStatusLabel(run.status)}</Badge>
+                <Badge variant="outline">{runStatusText}</Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 {workflowQuery.data?.name ?? "Workflow"} · {run.source.replaceAll("_", " ")}
@@ -239,7 +270,7 @@ export function WorkflowRun() {
             <h2 id="run-summary" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Outcome
             </h2>
-            <p className="mt-1 text-sm font-medium">{runStatusLabel(run.status)}</p>
+            <p className="mt-1 text-sm font-medium">{runStatusText}</p>
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Started</p>
@@ -258,7 +289,7 @@ export function WorkflowRun() {
         </section>
 
         <div aria-live="polite" className="sr-only">
-          {live ? `Run status: ${runStatusLabel(run.status)}` : `Final run status: ${runStatusLabel(run.status)}`}
+          {live ? `Run status: ${runStatusText}` : `Final run status: ${runStatusText}`}
         </div>
 
         {activeStep ? (
@@ -270,8 +301,15 @@ export function WorkflowRun() {
               {nodeNames.get(activeStep.nodeId) ?? activeStep.nodeId}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {stepStatusLabel(activeStep.status)} · attempt {activeStep.attempt}
+              {activeStep.status === "waiting"
+                ? waitingLabel(activeWait, false)
+                : stepStatusLabel(activeStep.status)} · attempt {activeStep.attempt}
             </p>
+            {activeWait && activeWait.nodeId === activeStep.nodeId ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {waitDescription(activeWait)}
+              </p>
+            ) : null}
           </section>
         ) : null}
 
@@ -285,7 +323,7 @@ export function WorkflowRun() {
               <p className="mt-1 text-xs text-muted-foreground">Code: {run.failureCode}</p>
             ) : null}
             <p className="mt-2 text-xs text-muted-foreground">
-              Review the failed step and published workflow before starting a new run. Automatic retry is not exposed until its durability contract is implemented.
+              Review the failed attempt history and published workflow before starting a new run. Configured automatic retries are preserved as separate attempts in this log.
             </p>
           </div>
         ) : null}
@@ -316,6 +354,12 @@ export function WorkflowRun() {
               {steps.map((step) => {
                 const input = jsonPreview(step.inputJson);
                 const output = jsonPreview(step.outputJson);
+                const stepWait =
+                  waits.find(
+                    (wait) =>
+                      wait.nodeId === step.nodeId &&
+                      wait.status === "active",
+                  ) ?? null;
                 return (
                   <li key={step.id} className="py-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -324,7 +368,11 @@ export function WorkflowRun() {
                           <h3 className="text-sm font-medium">
                             {nodeNames.get(step.nodeId) ?? step.nodeId}
                           </h3>
-                          <Badge variant="outline">{stepStatusLabel(step.status)}</Badge>
+                          <Badge variant="outline">
+                            {step.status === "waiting"
+                              ? waitingLabel(stepWait, false)
+                              : stepStatusLabel(step.status)}
+                          </Badge>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
                           Attempt {step.attempt} · {executorLabel(step)}
@@ -338,7 +386,9 @@ export function WorkflowRun() {
 
                     {step.status === "waiting" ? (
                       <p className="mt-3 text-xs text-muted-foreground">
-                        Waiting on system. Human waitpoints are not enabled in the current executor.
+                        {stepWait
+                          ? waitDescription(stepWait)
+                          : "Waiting for a durable workflow signal."}
                       </p>
                     ) : null}
                     {step.status === "retry_scheduled" || step.status === "retried" ? (
