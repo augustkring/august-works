@@ -179,6 +179,7 @@ export function HistorySection() {
     saveRoutine,
     agentById,
     projectById,
+    workflowById,
     availableSecrets,
     onHistoryRestoreSecretMaterials,
     onHistoryRestored,
@@ -197,6 +198,7 @@ export function HistorySection() {
       }}
       agents={agentById}
       projects={projectById}
+      workflows={workflowById}
       secrets={availableSecrets}
       onRestoreSecretMaterials={onHistoryRestoreSecretMaterials}
       onRestored={onHistoryRestored}
