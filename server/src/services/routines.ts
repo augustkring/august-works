@@ -2505,6 +2505,9 @@ export function routineService(
             dispatchFingerprint: routineRuns.dispatchFingerprint,
             routineRevisionId: routineRuns.routineRevisionId,
             linkedIssueId: routineRuns.linkedIssueId,
+            linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
+            linkedWorkflowId: workflowRuns.workflowId,
+            linkedWorkflowRunStatus: workflowRuns.status,
             coalescedIntoRunId: routineRuns.coalescedIntoRunId,
             failureReason: routineRuns.failureReason,
             completedAt: routineRuns.completedAt,
@@ -2521,6 +2524,13 @@ export function routineService(
           .from(routineRuns)
           .leftJoin(routineTriggers, eq(routineRuns.triggerId, routineTriggers.id))
           .leftJoin(issues, eq(routineRuns.linkedIssueId, issues.id))
+          .leftJoin(
+            workflowRuns,
+            and(
+              eq(workflowRuns.companyId, routineRuns.companyId),
+              eq(workflowRuns.id, routineRuns.linkedWorkflowRunId),
+            ),
+          )
           .where(eq(routineRuns.routineId, row.id))
           .orderBy(desc(routineRuns.createdAt))
           .limit(25)
@@ -3561,6 +3571,9 @@ export function routineService(
           dispatchFingerprint: routineRuns.dispatchFingerprint,
           routineRevisionId: routineRuns.routineRevisionId,
           linkedIssueId: routineRuns.linkedIssueId,
+          linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
+          linkedWorkflowId: workflowRuns.workflowId,
+          linkedWorkflowRunStatus: workflowRuns.status,
           coalescedIntoRunId: routineRuns.coalescedIntoRunId,
           failureReason: routineRuns.failureReason,
           completedAt: routineRuns.completedAt,
@@ -3577,6 +3590,13 @@ export function routineService(
         .from(routineRuns)
         .leftJoin(routineTriggers, eq(routineRuns.triggerId, routineTriggers.id))
         .leftJoin(issues, eq(routineRuns.linkedIssueId, issues.id))
+        .leftJoin(
+          workflowRuns,
+          and(
+            eq(workflowRuns.companyId, routineRuns.companyId),
+            eq(workflowRuns.id, routineRuns.linkedWorkflowRunId),
+          ),
+        )
         .where(eq(routineRuns.routineId, routineId))
         .orderBy(desc(routineRuns.createdAt))
         .limit(cappedLimit);
