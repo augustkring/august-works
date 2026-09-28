@@ -3679,13 +3679,12 @@ async function executeWorkflowGraph(
             ) {
               throw error;
             }
-            const status =
-              typeof error === "object" &&
-              error !== null &&
-              "status" in error &&
-              typeof Reflect.get(error, "status") === "number"
-                ? Reflect.get(error, "status") as number
+            const statusValue =
+              typeof error === "object" && error !== null
+                ? Reflect.get(error, "status")
                 : null;
+            const status =
+              typeof statusValue === "number" ? statusValue : null;
             if (status !== null && status >= 400 && status < 500) {
               throw new WorkflowCheckpointError(
                 "workflow_task_create_failed",
