@@ -448,7 +448,7 @@ function resolveRoutineExecutionTarget(
 }
 
 function requestedRoutineExecutionTarget(input: {
-  executionTarget?: RoutineExecutionTarget;
+  executionTarget?: RoutineExecutionTarget | null;
   assigneeAgentId?: string | null;
 }): RoutineExecutionTarget | null {
   if (input.executionTarget) return input.executionTarget;
