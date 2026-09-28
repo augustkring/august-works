@@ -6,6 +6,7 @@ import {
   agents,
   approvals,
   companyMemberships,
+  issues,
   routineRuns,
   workflowRevisions,
   workflowRuns,
@@ -27,6 +28,11 @@ import {
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
+import {
+  authorizationService,
+  type AuthorizationActor,
+} from "../authorization.js";
+import { issueService } from "../issues.js";
 import {
   evaluateWorkflowConditionExpression,
   WorkflowConditionExpressionError,
@@ -1919,6 +1925,206 @@ async function resolveDueDelayWait(
   });
   publishActivities(publications);
   return resumed;
+}
+
+type CreateTaskConfig = {
+  title: string;
+  description: string | null;
+  projectId: string | null;
+  assigneeAgentId: string | null;
+  assigneeUserId: string | null;
+  waitForCompletion: boolean;
+};
+
+function createTaskNodeConfig(node: WorkflowNode): CreateTaskConfig {
+  const config = node.config;
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    throw new WorkflowCheckpointError(
+      "workflow_task_config_invalid",
+      "Published Create Task node is missing its configuration",
+    );
+  }
+  const title = Reflect.get(config, "title");
+  const description = Reflect.get(config, "description");
+  const projectId = Reflect.get(config, "projectId");
+  const assigneeAgentId = Reflect.get(config, "assigneeAgentId");
+  const assigneeUserId = Reflect.get(config, "assigneeUserId");
+  const waitForCompletion = Reflect.get(config, "waitForCompletion");
+
+  if (typeof title !== "string" || title.trim().length === 0) {
+    throw new WorkflowCheckpointError(
+      "workflow_task_config_invalid",
+      "Published Create Task node requires a title",
+    );
+  }
+  const nullableString = (
+    value: unknown,
+    field: string,
+  ): string | null => {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== "string" || value.trim().length === 0) {
+      throw new WorkflowCheckpointError(
+        "workflow_task_config_invalid",
+        `Published Create Task node has invalid ${field}`,
+      );
+    }
+    return value.trim();
+  };
+  const parsedDescription =
+    description === null || description === undefined
+      ? null
+      : typeof description === "string"
+        ? description
+        : null;
+  if (
+    description !== null &&
+    description !== undefined &&
+    typeof description !== "string"
+  ) {
+    throw new WorkflowCheckpointError(
+      "workflow_task_config_invalid",
+      "Published Create Task node has invalid description",
+    );
+  }
+
+  const parsedAgentId = nullableString(assigneeAgentId, "assigneeAgentId");
+  const parsedUserId = nullableString(assigneeUserId, "assigneeUserId");
+  if (parsedAgentId && parsedUserId) {
+    throw new WorkflowCheckpointError(
+      "workflow_task_config_invalid",
+      "Create Task cannot assign both an agent and a user",
+    );
+  }
+  if (
+    waitForCompletion !== undefined &&
+    typeof waitForCompletion !== "boolean"
+  ) {
+    throw new WorkflowCheckpointError(
+      "workflow_task_config_invalid",
+      "Published Create Task node has invalid waitForCompletion",
+    );
+  }
+
+  return {
+    title: title.trim(),
+    description: parsedDescription,
+    projectId: nullableString(projectId, "projectId"),
+    assigneeAgentId: parsedAgentId,
+    assigneeUserId: parsedUserId,
+    waitForCompletion: waitForCompletion === true,
+  };
+}
+
+function workflowTaskAuthorizationActor(
+  run: typeof workflowRuns.$inferSelect,
+  actor: WorkflowRunActor,
+): AuthorizationActor {
+  const responsibleUserId =
+    run.responsibleUserId ??
+    actor.responsibleUserId ??
+    (actor.principal.type === "agent"
+      ? actor.principal.responsibleUserId
+      : null);
+
+  if (actor.principal.type === "agent") {
+    return {
+      type: "agent",
+      agentId: actor.principal.agentId,
+      companyId: run.companyId,
+      source: "agent_jwt",
+      runId: actor.runId ?? run.id,
+      onBehalfOfUserId: responsibleUserId,
+    };
+  }
+  if (actor.principal.type === "user") {
+    return {
+      type: "board",
+      userId: actor.principal.userId,
+      companyIds: [run.companyId],
+      source: "session",
+    };
+  }
+  if (responsibleUserId) {
+    return {
+      type: "board",
+      userId: responsibleUserId,
+      companyIds: [run.companyId],
+      source: "session",
+      ignoreInstanceAdmin: true,
+    };
+  }
+  throw new WorkflowCheckpointError(
+    "workflow_task_responsible_user_required",
+    "Create Task requires an attributable user or agent responsible-user context",
+  );
+}
+
+async function assertWorkflowTaskAssignmentAuthorized(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  actor: WorkflowRunActor,
+  config: CreateTaskConfig,
+) {
+  const decision = await authorizationService(db).decide({
+    actor: workflowTaskAuthorizationActor(run, actor),
+    action: "tasks:assign",
+    resource: {
+      type: "issue",
+      companyId: run.companyId,
+      projectId: config.projectId,
+      parentIssueId: null,
+      assigneeAgentId: config.assigneeAgentId,
+      assigneeUserId: config.assigneeUserId,
+      originKind: "workflow_task",
+      originId: run.workflowId,
+      status: config.assigneeAgentId || config.assigneeUserId ? "todo" : "backlog",
+    },
+    scope: {
+      projectId: config.projectId,
+      assigneeAgentId: config.assigneeAgentId,
+      assigneeUserId: config.assigneeUserId,
+    },
+  });
+  if (!decision.allowed) {
+    throw new WorkflowCheckpointError(
+      "workflow_task_permission_denied",
+      decision.explanation,
+    );
+  }
+}
+
+function workflowTaskActorFields(
+  run: typeof workflowRuns.$inferSelect,
+  actor: WorkflowRunActor,
+) {
+  if (actor.principal.type === "user") {
+    return {
+      createdByAgentId: null,
+      createdByUserId: actor.principal.userId,
+    };
+  }
+  if (actor.principal.type === "agent") {
+    return {
+      createdByAgentId: actor.principal.agentId,
+      createdByUserId: null,
+    };
+  }
+  return {
+    createdByAgentId: null,
+    createdByUserId: run.responsibleUserId ?? actor.responsibleUserId ?? null,
+  };
+}
+
+function workflowTaskOutput(issue: {
+  id: string;
+  identifier: string | null;
+  status: string;
+}) {
+  return {
+    issueId: issue.id,
+    identifier: issue.identifier,
+    status: issue.status,
+  };
 }
 
 type HumanApprovalConfig = {
