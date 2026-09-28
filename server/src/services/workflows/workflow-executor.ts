@@ -3474,6 +3474,7 @@ async function resolveTaskCompletionWait(
   run: typeof workflowRuns.$inferSelect,
   wait: typeof workflowWaits.$inferSelect,
   now: Date,
+  runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ): Promise<"recovered" | "raced" | "deferred"> {
   const issue = await issueForTaskWait(db, run, wait);
   if (!issue) {
@@ -3498,6 +3499,7 @@ async function resolveTaskCompletionWait(
         principal: { type: "system", service: "workflow-task" },
         responsibleUserId: run.responsibleUserId,
       },
+      runtimeDeps,
     );
     return "recovered";
   }
@@ -4203,6 +4205,7 @@ async function executeWorkflowGraph(
   run: typeof workflowRuns.$inferSelect,
   graph: WorkflowGraphV1,
   actor: WorkflowRunActor,
+  runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ) {
   const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
   const trigger = graph.nodes.find((node) => node.type === "core.manual_trigger");
@@ -4527,6 +4530,7 @@ async function executeClaimedRun(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
   actor: WorkflowRunActor,
+  runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ) {
   const revision = await revisionForRun(db, run);
   if (!revision) {
@@ -4565,13 +4569,14 @@ async function executeClaimedRun(
     return;
   }
 
-  await executeWorkflowGraph(db, run, revision.graph, actor);
+  await executeWorkflowGraph(db, run, revision.graph, actor, runtimeDeps);
 }
 
 async function recoverWaitingCandidate(
   db: Db,
   candidate: typeof workflowRuns.$inferSelect,
   now: Date,
+  runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ): Promise<"recovered" | "raced" | "deferred"> {
   const scheduledStep = await retryScheduledStepForRun(db, candidate);
   if (!scheduledStep) {
@@ -4584,7 +4589,13 @@ async function recoverWaitingCandidate(
       return resolveHumanApprovalWait(db, candidate, wait, now);
     }
     if (wait.kind === "task_completion") {
-      return resolveTaskCompletionWait(db, candidate, wait, now);
+      return resolveTaskCompletionWait(
+        db,
+        candidate,
+        wait,
+        now,
+        runtimeDeps,
+      );
     }
     if (wait.kind !== "delay" || !wait.wakeAt || wait.wakeAt.getTime() > now.getTime()) {
       return "deferred";
@@ -4595,6 +4606,7 @@ async function recoverWaitingCandidate(
       db,
       resumed,
       { principal: { type: "system", service: "workflow-wait" } },
+      runtimeDeps,
     );
     return "recovered";
   }
@@ -4696,9 +4708,10 @@ async function recoverCandidate(
   db: Db,
   candidate: typeof workflowRuns.$inferSelect,
   now: Date,
+  runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ): Promise<"recovered" | "raced" | "deferred"> {
   if (candidate.status === "waiting") {
-    return recoverWaitingCandidate(db, candidate, now);
+    return recoverWaitingCandidate(db, candidate, now, runtimeDeps);
   }
 
   const actor: WorkflowRunActor = {
