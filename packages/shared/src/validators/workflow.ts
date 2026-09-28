@@ -32,6 +32,23 @@ export const workflowRetryPolicySchema = z
         message: "Retry mode none requires maxAttempts = 1",
       });
     }
+    if (
+      value.mode === "none" &&
+      (value.initialDelayMs !== 0 || value.maxDelayMs !== 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["initialDelayMs"],
+        message: "Retry mode none requires zero retry delays",
+      });
+    }
+    if (value.mode !== "none" && value.maxAttempts < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["maxAttempts"],
+        message: "Retry mode fixed or exponential requires at least two attempts",
+      });
+    }
   });
 
 const workflowIdSchema = z.string().trim().min(1).max(160);
