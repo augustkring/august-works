@@ -301,6 +301,7 @@ describe("WorkflowBuilder", () => {
         updatedAt: new Date(),
       },
       steps: [],
+      waits: [],
     };
     apiMock.get.mockResolvedValue(publishedDetail);
     apiMock.capabilities.mockResolvedValue({
