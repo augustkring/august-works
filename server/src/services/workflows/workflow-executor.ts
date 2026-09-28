@@ -2996,6 +2996,95 @@ async function recoverCandidate(
 }
 
 
+export async function resolveWorkflowExecutionRevision(
+  executor: Db,
+  companyId: string,
+  workflowId: string,
+  requestedRevisionId: string | null = null,
+) {
+  const workflow = await executor
+    .select({
+      id: workflows.id,
+      status: workflows.status,
+      publishedRevisionId: workflows.publishedRevisionId,
+    })
+    .from(workflows)
+    .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId)))
+    .then((rows) => rows[0] ?? null);
+  if (!workflow) throw notFound("Workflow not found");
+  if (workflow.status !== "active") {
+    throw conflict("Workflow is not active", {
+      code: "workflow_invalid_transition",
+      status: workflow.status,
+    });
+  }
+  if (!workflow.publishedRevisionId) {
+    throw unprocessable("Workflow has no published revision", {
+      code: "workflow_revision_not_published",
+    });
+  }
+
+  const revisionId = requestedRevisionId ?? workflow.publishedRevisionId;
+  if (revisionId !== workflow.publishedRevisionId) {
+    throw unprocessable("Live runs must use the current published revision", {
+      code: "workflow_revision_not_published",
+      revisionId,
+      currentPublishedRevisionId: workflow.publishedRevisionId,
+    });
+  }
+  const revision = await executor
+    .select()
+    .from(workflowRevisions)
+    .where(
+      and(
+        eq(workflowRevisions.companyId, companyId),
+        eq(workflowRevisions.workflowId, workflowId),
+        eq(workflowRevisions.id, revisionId),
+        eq(workflowRevisions.state, "published"),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+  if (!revision) {
+    throw unprocessable("Published workflow revision could not be resolved", {
+      code: "workflow_revision_not_published",
+      revisionId,
+    });
+  }
+
+  const unsupportedNodeTypes = [
+    ...new Set(
+      revision.graph.nodes
+        .filter(
+          (node) =>
+            node.type !== "core.manual_trigger" &&
+            node.type !== "core.condition" &&
+            node.type !== "core.wait" &&
+            node.type !== "human.approval",
+        )
+        .map((node) => node.type),
+    ),
+  ].sort();
+  const triggers = revision.graph.nodes.filter(
+    (node) => node.type === "core.manual_trigger",
+  );
+  if (triggers.length !== 1 || unsupportedNodeTypes.length > 0) {
+    throw unprocessable(
+      "This workflow revision requires executor capabilities that are not enabled yet",
+      {
+        code: "workflow_executor_capability_not_ready",
+        triggerCount: triggers.length,
+        unsupportedNodeTypes,
+      },
+    );
+  }
+
+  return {
+    workflow,
+    revision,
+    triggerNodeId: triggers[0]!.id,
+  };
+}
+
 export function workflowExecutorService(db: Db) {
   return {
     getRun: (companyId: string, runId: string) =>
@@ -3028,6 +3117,43 @@ export function workflowExecutorService(db: Db) {
       return rows.map(mapRun);
     },
 
+    executeQueuedRun: async (
+      companyId: string,
+      runId: string,
+      actor: WorkflowRunActor,
+    ): Promise<WorkflowRunDetail> => {
+      await assertActorCompanyScope(db, companyId, actor);
+      const existing = await db
+        .select()
+        .from(workflowRuns)
+        .where(
+          and(
+            eq(workflowRuns.companyId, companyId),
+            eq(workflowRuns.id, runId),
+          ),
+        )
+        .then((rows) => rows[0] ?? null);
+      if (!existing) throw notFound("Workflow run not found");
+
+      if (existing.status === "queued") {
+        const ownerId = `inline:${randomUUID()}`;
+        const claimed = await claimQueuedRun(
+          db,
+          companyId,
+          existing.id,
+          ownerId,
+          actor,
+        );
+        if (claimed) {
+          await executeClaimedRun(db, claimed, actor);
+        }
+      }
+
+      const detail = await getRunDetail(db, companyId, runId);
+      if (!detail) throw new Error("Workflow run disappeared after execution");
+      return detail;
+    },
+
     startManualRun: async (
       companyId: string,
       workflowId: string,
@@ -3042,111 +3168,21 @@ export function workflowExecutorService(db: Db) {
       const input = parsed.data;
       await assertActorCompanyScope(db, companyId, actor);
 
-      const workflow = await db
-        .select({
-          id: workflows.id,
-          status: workflows.status,
-          publishedRevisionId: workflows.publishedRevisionId,
-        })
-        .from(workflows)
-        .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId)))
-        .then((rows) => rows[0] ?? null);
-      if (!workflow) throw notFound("Workflow not found");
-
-      const existingIdempotentRun = idempotencyKey
-        ? await getIdempotentRun(db, companyId, idempotencyKey)
-        : null;
-      if (existingIdempotentRun) {
-        if (
-          existingIdempotentRun.workflowId !== workflowId ||
-          !isDeepStrictEqual(existingIdempotentRun.triggerPayload ?? {}, input.input) ||
-          (input.revisionId !== null &&
-            input.revisionId !== undefined &&
-            existingIdempotentRun.workflowRevisionId !== input.revisionId)
-        ) {
-          throw conflict(
-            "Idempotency key was already used for a different workflow run request",
-            {
-              code: "idempotency_key_reused",
-              workflowRunId: existingIdempotentRun.id,
-            },
-          );
-        }
-        const existingDetail = await getRunDetail(
-          db,
-          companyId,
-          existingIdempotentRun.id,
-        );
-        if (!existingDetail) {
-          throw new Error("Idempotent workflow run could not be reloaded");
-        }
-        return existingDetail;
-      }
-
-      if (workflow.status !== "active") {
-        throw conflict("Workflow is not active", {
-          code: "workflow_invalid_transition",
-          status: workflow.status,
-        });
-      }
-      if (!workflow.publishedRevisionId) {
-        throw unprocessable("Workflow has no published revision", {
-          code: "workflow_revision_not_published",
-        });
-      }
-
-      const revisionId = input.revisionId ?? workflow.publishedRevisionId;
-      if (revisionId !== workflow.publishedRevisionId) {
-        throw unprocessable("Manual live runs must use the current published revision", {
-          code: "workflow_revision_not_published",
-          revisionId,
-          currentPublishedRevisionId: workflow.publishedRevisionId,
-        });
-      }
-      const revision = await db
-        .select()
-        .from(workflowRevisions)
-        .where(
-          and(
-            eq(workflowRevisions.companyId, companyId),
-            eq(workflowRevisions.workflowId, workflowId),
-            eq(workflowRevisions.id, revisionId),
-            eq(workflowRevisions.state, "published"),
-          ),
-        )
-        .then((rows) => rows[0] ?? null);
-      if (!revision) {
-        throw unprocessable("Published workflow revision could not be resolved", {
-          code: "workflow_revision_not_published",
-          revisionId,
-        });
-      }
-
-      const executableNodes = revision.graph.nodes.filter(
-        (node) =>
-          node.type !== "core.manual_trigger" &&
-          node.type !== "core.condition" &&
-          node.type !== "core.wait" &&
-          node.type !== "human.approval",
+      const resolved = await resolveWorkflowExecutionRevision(
+        db,
+        companyId,
+        workflowId,
+        input.revisionId ?? null,
       );
-      const triggers = revision.graph.nodes.filter(
-        (node) => node.type === "core.manual_trigger",
-      );
-      if (triggers.length !== 1 || executableNodes.length !== 0) {
-        throw unprocessable(
-          "This workflow revision requires executor capabilities that are not enabled yet",
-          {
-            code: "workflow_executor_capability_not_ready",
-            unsupportedNodeTypes: [...new Set(executableNodes.map((node) => node.type))].sort(),
-          },
-        );
-      }
+      const revisionId = resolved.revision.id;
+      const revision = resolved.revision;
+      const triggerNodeId = resolved.triggerNodeId;
 
       const queued = await createQueuedRun(db, {
         companyId,
         workflowId,
         revisionId,
-        nodeId: triggers[0]!.id,
+        nodeId: triggerNodeId,
         triggerId: null,
         source: "manual",
         triggerPayload: input.input,
