@@ -767,7 +767,7 @@ describePg("Workflow executor V1", () => {
       ],
       edges: [{ id: "e1", source: "start", target: "condition" }],
       variables: [],
-      settings: { totalDeadlineSeconds: 60 },
+      settings: {},
     };
     const seeded = await seedPublishedGraph(graph);
     const actor = { principal: { type: "user" as const, userId: seeded.userId } };
