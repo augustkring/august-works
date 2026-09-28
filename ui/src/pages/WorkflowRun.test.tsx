@@ -174,4 +174,74 @@ describe("WorkflowRun", () => {
 
     flushSync(() => root.unmount());
   });
+  it("distinguishes a durable system wait and shows when a delay resumes", async () => {
+    const wakeAt = new Date("2026-09-28T12:05:00Z");
+    apiMock.getRun.mockResolvedValue({
+      ...runDetail,
+      run: {
+        ...runDetail.run,
+        status: "waiting",
+        finishedAt: null,
+      },
+      steps: [
+        ...runDetail.steps,
+        {
+          ...runDetail.steps[0]!,
+          id: "step-wait",
+          nodeId: "delay",
+          status: "waiting",
+          outputJson: null,
+          finishedAt: null,
+          durationMs: null,
+        },
+      ],
+      waits: [
+        {
+          id: "wait-1",
+          companyId: "company-1",
+          workflowRunId: runDetail.run.id,
+          nodeId: "delay",
+          waitKey: "primary",
+          kind: "delay",
+          status: "active",
+          wakeAt,
+          timeoutAt: null,
+          referenceType: null,
+          referenceId: null,
+          signalTokenHash: null,
+          resolutionJson: null,
+          resolvedByType: null,
+          resolvedById: null,
+          resolvedAt: null,
+          createdAt: new Date("2026-09-28T12:01:01Z"),
+          updatedAt: new Date("2026-09-28T12:01:01Z"),
+        },
+      ],
+    });
+
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    flushSync(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/workflows/workflow-1/runs/run-12345678"]}>
+            <Routes>
+              <Route
+                path="/workflows/:workflowId/runs/:runId"
+                element={<WorkflowRun />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Waiting on system");
+    expect(container.textContent).toContain("Resumes automatically after");
+    expect(container.textContent).not.toContain("Human waitpoints are not enabled");
+
+    flushSync(() => root.unmount());
+  });
+
 });
