@@ -1435,6 +1435,7 @@ describeEmbeddedPostgres("pipelineService", () => {
   });
 
   it("dispatches a stage-entry Workflow through the existing automation ledger", async () => {
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true });
     const company = await seedCompany();
     const published = await seedPublishedWorkflow(company.id);
     const pipeline = await svc.createPipeline({
@@ -1553,6 +1554,7 @@ describeEmbeddedPostgres("pipelineService", () => {
   });
 
   it("rejects a cross-company Workflow automation target before pipeline creation", async () => {
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true });
     const company = await seedCompany();
     const otherCompany = await seedCompany();
     const published = await seedPublishedWorkflow(otherCompany.id, "Other company workflow");
