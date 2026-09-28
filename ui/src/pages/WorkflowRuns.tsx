@@ -54,8 +54,14 @@ function formatDateTime(value: Date | string | null) {
 
 function formatDuration(run: WorkflowRun) {
   if (!run.startedAt) return "Not started";
-  const started = new Date(run.startedAt).getTime();
-  const ended = run.finishedAt ? new Date(run.finishedAt).getTime() : Date.now();
+  const started = run.startedAt instanceof Date
+    ? run.startedAt.getTime()
+    : new Date(run.startedAt).getTime();
+  const ended = run.finishedAt
+    ? run.finishedAt instanceof Date
+      ? run.finishedAt.getTime()
+      : new Date(run.finishedAt).getTime()
+    : Date.now();
   if (!Number.isFinite(started) || !Number.isFinite(ended) || ended < started) return "—";
   const milliseconds = ended - started;
   if (milliseconds < 1_000) return `${milliseconds} ms`;
