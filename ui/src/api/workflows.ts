@@ -4,6 +4,8 @@ import type {
   UpdateWorkflowDraft,
   Workflow,
   WorkflowCapabilities,
+  WorkflowCapabilityKind,
+  WorkflowCapabilitySearchResult,
   WorkflowDetail,
   WorkflowNodeDefinitionDescriptor,
   WorkflowRevision,
@@ -52,4 +54,18 @@ export const workflowsApi = {
     api.get<WorkflowNodeDefinitionDescriptor[]>(
       `/companies/${companyId}/workflows/node-registry`,
     ),
+
+  capabilitySearch: (
+    companyId: string,
+    input: { q?: string; limit?: number; kind?: WorkflowCapabilityKind } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (input.q?.trim()) params.set("q", input.q.trim());
+    if (input.limit) params.set("limit", String(input.limit));
+    if (input.kind) params.set("kind", input.kind);
+    const query = params.toString();
+    return api.get<WorkflowCapabilitySearchResult>(
+      `/companies/${companyId}/workflows/capability-search${query ? `?${query}` : ""}`,
+    );
+  },
 };

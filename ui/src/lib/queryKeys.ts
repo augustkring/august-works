@@ -435,6 +435,8 @@ export const queryKeys = {
       ["foundation", companyId, "search", q, scope] as const,
   },
   workflows: {
+    capabilitySearch: (companyId: string, q: string, kind?: string) =>
+      ["workflows", companyId, "capability-search", q, kind ?? "__all"] as const,
     capabilities: (companyId: string) => ["workflows", companyId, "capabilities"] as const,
     list: (companyId: string) => ["workflows", companyId, "list"] as const,
     detail: (companyId: string, workflowId: string) =>

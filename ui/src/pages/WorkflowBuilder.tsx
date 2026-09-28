@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useState,
@@ -28,11 +29,11 @@ import {
   ArrowUp,
   Check,
   GitBranch,
-  Plus,
   Save,
   Trash2,
 } from "lucide-react";
 import type {
+  WorkflowCapabilityCandidate,
   WorkflowDetail,
   WorkflowEdgeV1,
   WorkflowGraphV1,
@@ -60,14 +61,6 @@ type BuilderNodeData = {
 type BuilderNode = Node<BuilderNodeData, "workflow-node">;
 type BuilderEdgeData = { workflowEdge: WorkflowEdgeV1 };
 type BuilderEdge = Edge<BuilderEdgeData>;
-
-const ADDABLE_TYPES = new Set([
-  "core.manual_trigger",
-  "core.transform",
-  "core.condition",
-  "work.create_task",
-  "human.approval",
-]);
 
 function defaultConfig(type: string): Record<string, unknown> | null {
   switch (type) {
@@ -226,7 +219,8 @@ export function WorkflowBuilder() {
   const [dirty, setDirty] = useState(false);
   const [conflicted, setConflicted] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [nodeTypeToAdd, setNodeTypeToAdd] = useState("core.manual_trigger");
+  const [capabilitySearch, setCapabilitySearch] = useState("");
+  const deferredCapabilitySearch = useDeferredValue(capabilitySearch);
   const [connectTargetId, setConnectTargetId] = useState("");
 
   useEffect(() => {
@@ -250,6 +244,18 @@ export function WorkflowBuilder() {
     queryKey: queryKeys.workflows.nodeRegistry(selectedCompanyId!),
     queryFn: () => workflowsApi.nodeRegistry(selectedCompanyId!),
     enabled: !!selectedCompanyId,
+  });
+  const capabilitySearchQuery = useQuery({
+    queryKey: queryKeys.workflows.capabilitySearch(
+      selectedCompanyId!,
+      deferredCapabilitySearch.trim(),
+    ),
+    queryFn: () => workflowsApi.capabilitySearch(selectedCompanyId!, {
+      q: deferredCapabilitySearch.trim(),
+      limit: 24,
+    }),
+    enabled: !!selectedCompanyId,
+    staleTime: 10_000,
   });
   const definitions = useMemo(
     () => definitionMap(registryQuery.data ?? []),
@@ -424,14 +430,25 @@ export function WorkflowBuilder() {
     },
   });
 
-  const addNode = () => {
-    const config = defaultConfig(nodeTypeToAdd);
-    const definition = definitions.get(nodeTypeToAdd);
-    if (!config || !definition) return;
+  const addCapability = (candidate: WorkflowCapabilityCandidate) => {
+    if (!capabilities?.edit || candidate.availability.status === "unavailable") return;
+    const definition = definitions.get(candidate.nodeType);
+    if (!definition) {
+      pushToast({
+        title: "Capability is not available in this builder",
+        body: "Its workflow node contract is not registered in this version.",
+        tone: "error",
+      });
+      return;
+    }
+    const config =
+      typeof structuredClone === "function"
+        ? structuredClone(candidate.configTemplate)
+        : JSON.parse(JSON.stringify(candidate.configTemplate));
     const workflowNode: WorkflowNodeV1 = {
       id: randomId("node"),
-      type: definition.type,
-      name: definition.displayName,
+      type: candidate.nodeType,
+      name: candidate.title,
       position: {
         x: 100 + (nodes.length % 3) * 220,
         y: 80 + Math.floor(nodes.length / 3) * 140,
@@ -495,9 +512,7 @@ export function WorkflowBuilder() {
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
   const capabilities = capabilitiesQuery.data;
-  const addableDefinitions = (registryQuery.data ?? []).filter((definition) =>
-    ADDABLE_TYPES.has(definition.type),
-  );
+  const capabilityCandidates = capabilitySearchQuery.data?.candidates ?? [];
 
   if (!selectedCompanyId) {
     return <EmptyState icon={GitBranch} message="Select a company to open this workflow." />;
@@ -578,30 +593,82 @@ export function WorkflowBuilder() {
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Add step
           </p>
-          <select
-            aria-label="Workflow node type"
-            value={nodeTypeToAdd}
-            onChange={(event) => setNodeTypeToAdd(event.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <Input
+            aria-label="Search workflow capabilities"
+            value={capabilitySearch}
+            onChange={(event) => setCapabilitySearch(event.target.value)}
+            placeholder="What should happen next?"
+          />
+          <div
+            className="mt-2 max-h-72 space-y-1 overflow-y-auto"
+            aria-label="Workflow capability results"
           >
-            {addableDefinitions.map((definition) => (
-              <option key={definition.type} value={definition.type}>
-                {definition.displayName}
-                {definition.publishState === "draft_only" ? " · draft only" : ""}
-              </option>
-            ))}
-          </select>
-          <Button
-            className="mt-2 w-full"
-            variant="outline"
-            onClick={addNode}
-            disabled={!capabilities?.edit || addableDefinitions.length === 0}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add step
-          </Button>
+            {capabilitySearchQuery.isFetching && capabilityCandidates.length === 0 ? (
+              <p aria-live="polite" className="px-2 py-3 text-xs text-muted-foreground">
+                Finding capabilities…
+              </p>
+            ) : capabilitySearchQuery.error ? (
+              <div className="px-2 py-3">
+                <p className="text-xs font-medium text-destructive">Capabilities could not be loaded.</p>
+                <Button
+                  className="mt-2"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => capabilitySearchQuery.refetch()}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : capabilityCandidates.length === 0 ? (
+              <p className="px-2 py-3 text-xs text-muted-foreground">
+                No matching capabilities.
+              </p>
+            ) : (
+              capabilityCandidates.map((candidate) => {
+                const unavailable = candidate.availability.status === "unavailable";
+                const sourceLabel =
+                  candidate.kind === "connected_tool"
+                    ? candidate.source.applicationName ?? candidate.source.connectionName ?? "Connected app"
+                    : candidate.kind === "agent"
+                      ? "Agent"
+                      : "Core";
+                return (
+                  <button
+                    key={candidate.id}
+                    type="button"
+                    disabled={!capabilities?.edit || unavailable}
+                    onClick={() => addCapability(candidate)}
+                    className="w-full rounded-md border border-border/70 px-2.5 py-2 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={unavailable
+                      ? `${candidate.title} unavailable`
+                      : `Add ${candidate.title}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="min-w-0 truncate text-xs font-medium">
+                        {candidate.title}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        {candidate.riskClass}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                      {sourceLabel}
+                      {" · "}
+                      {candidate.availability.status.replaceAll("_", " ")}
+                      {candidate.publishState === "draft_only" ? " · draft only" : ""}
+                    </p>
+                    {candidate.description ? (
+                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-muted-foreground">
+                        {candidate.description}
+                      </p>
+                    ) : null}
+                  </button>
+                );
+              })
+            )}
+          </div>
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
-            Connector and agent pickers arrive in the next workflow implementation wave. Existing nodes remain visible.
+            Search core controls, connected tools and agents. Availability comes from the server; no AI search runs while you type.
           </p>
 
           <div className="mt-6 border-t border-border pt-4">
@@ -881,9 +948,20 @@ function NodeInspector({
         </>
       ) : null}
 
-      {workflowNode.type === "connector.action" || workflowNode.type === "agent.task" ? (
+      {workflowNode.type === "agent.task" ? (
+        <label className="block space-y-1 text-xs font-medium">
+          Agent objective
+          <Input
+            value={String(config.objective ?? "")}
+            disabled={!canEdit}
+            onChange={(event) => updateConfig({ objective: event.target.value })}
+          />
+        </label>
+      ) : null}
+
+      {workflowNode.type === "connector.action" ? (
         <div className="border-l-2 border-border pl-3 text-xs leading-5 text-muted-foreground">
-          This node is readable in the builder. Its governed capability picker is implemented in the next workflow wave rather than exposing raw IDs or JSON.
+          Connected tool selected through the governed capability resolver. Inputs are configured through the Data Selector in the next implementation step; raw connection IDs and credentials are not exposed here.
         </div>
       ) : null}
 

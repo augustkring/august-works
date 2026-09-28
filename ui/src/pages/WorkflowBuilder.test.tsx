@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+  WorkflowCapabilityCandidate,
   WorkflowDetail,
   WorkflowNodeDefinitionDescriptor,
 } from "@paperclipai/shared";
@@ -16,6 +17,7 @@ const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
   capabilities: vi.fn(),
   nodeRegistry: vi.fn(),
+  capabilitySearch: vi.fn(),
   updateDraft: vi.fn(),
   publish: vi.fn(),
 }));
@@ -74,6 +76,31 @@ const registry: WorkflowNodeDefinitionDescriptor[] = [
   },
 ];
 
+const manualCapability: WorkflowCapabilityCandidate = {
+  id: "core:core.manual_trigger",
+  kind: "core_node",
+  title: "Manual Trigger",
+  description: "Start manually",
+  nodeType: "core.manual_trigger",
+  configTemplate: {},
+  executionMode: "deterministic",
+  sideEffectClass: "pure",
+  riskClass: "C0",
+  inputSchema: null,
+  outputSchema: null,
+  requiredPermissions: [],
+  availability: { status: "available", reason: null },
+  operationalProfile: {
+    reliabilityBasis: "static_contract",
+    reliabilitySignal: "ready",
+    latencyProfile: null,
+    costProfile: "no_model_inference",
+  },
+  publishState: "ready",
+  publishBlockedReason: null,
+  source: { registryNodeType: "core.manual_trigger" },
+};
+
 const baseDetail: WorkflowDetail = {
   id: "workflow-1",
   companyId: "company-1",
@@ -124,6 +151,10 @@ describe("WorkflowBuilder", () => {
     apiMock.get.mockResolvedValue(baseDetail);
     apiMock.capabilities.mockResolvedValue({ read: true, edit: true, publish: true, run: false });
     apiMock.nodeRegistry.mockResolvedValue(registry);
+    apiMock.capabilitySearch.mockResolvedValue({
+      query: "",
+      candidates: [manualCapability],
+    });
   });
 
   afterEach(() => {
@@ -148,8 +179,9 @@ describe("WorkflowBuilder", () => {
     await flush();
 
     expect(container.textContent).toContain("Outline editor");
-    const addButton = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent?.includes("Add step"));
+    const addButton = container.querySelector(
+      'button[aria-label="Add Manual Trigger"]',
+    ) as HTMLButtonElement | null;
     expect(addButton).toBeTruthy();
     flushSync(() => addButton!.click());
     await flush();
@@ -192,8 +224,9 @@ describe("WorkflowBuilder", () => {
     });
     await flush();
 
-    const addButton = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent?.includes("Add step"));
+    const addButton = container.querySelector(
+      'button[aria-label="Add Manual Trigger"]',
+    ) as HTMLButtonElement | null;
     flushSync(() => addButton!.click());
     await flush();
 
@@ -215,4 +248,71 @@ describe("WorkflowBuilder", () => {
 
     flushSync(() => root.unmount());
   });
+  it("renders governed capability availability without exposing raw IDs", async () => {
+    apiMock.capabilitySearch.mockResolvedValue({
+      query: "",
+      candidates: [
+        manualCapability,
+        {
+          ...manualCapability,
+          id: "tool:catalog-secret-id",
+          kind: "connected_tool",
+          title: "Send email",
+          description: "Send a customer email",
+          nodeType: "connector.action",
+          configTemplate: {
+            toolCatalogEntryId: "catalog-secret-id",
+            connectionId: "connection-secret-id",
+            input: {},
+          },
+          sideEffectClass: "write",
+          riskClass: "C2",
+          requiredPermissions: ["tools:use"],
+          availability: { status: "unavailable", reason: "connection_missing_secret" },
+          operationalProfile: {
+            reliabilityBasis: "connection_health",
+            reliabilitySignal: "missing_secret",
+            latencyProfile: null,
+            costProfile: null,
+          },
+          publishState: "draft_only",
+          publishBlockedReason: "connector_runtime_not_ready",
+          source: {
+            applicationName: "Mail",
+            connectionName: "Customer mail",
+            toolName: "send_email",
+          },
+        } satisfies WorkflowCapabilityCandidate,
+      ],
+    });
+
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    flushSync(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/workflows/workflow-1"]}>
+            <Routes>
+              <Route path="/workflows/:workflowId" element={<WorkflowBuilder />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Send email");
+    expect(container.textContent).toContain("unavailable");
+    expect(container.textContent).toContain("draft only");
+    expect(container.textContent).not.toContain("catalog-secret-id");
+    expect(container.textContent).not.toContain("connection-secret-id");
+    expect(
+      (container.querySelector(
+        'button[aria-label="Send email unavailable"]',
+      ) as HTMLButtonElement | null)?.disabled,
+    ).toBe(true);
+
+    flushSync(() => root.unmount());
+  });
+
 });
