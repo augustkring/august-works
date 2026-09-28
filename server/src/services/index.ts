@@ -234,3 +234,12 @@ export {
   estimateEvidenceTokens,
   fitEvidenceToBudget,
 } from "./context/context-budget.js";
+
+export {
+  contextManifestService,
+  hashContextPolicySnapshot,
+  hashContextQuery,
+  hashEvidenceContent,
+  type ContextManifestSelectedEvidence,
+  type CreateContextManifestInput,
+} from "./context/context-manifest.js";

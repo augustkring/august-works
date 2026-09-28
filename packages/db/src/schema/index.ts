@@ -126,6 +126,7 @@ export { routineDocuments } from "./routine_documents.js";
 export { documentAnnotationThreads } from "./document_annotation_threads.js";
 export { documentAnnotationComments } from "./document_annotation_comments.js";
 export { documentAnnotationAnchorSnapshots } from "./document_annotation_anchor_snapshots.js";
+export { contextManifests, contextManifestItems } from "./context_manifests.js";
 export { heartbeatRuns } from "./heartbeat_runs.js";
 export { heartbeatRunEvents } from "./heartbeat_run_events.js";
 export { providerTraceRecords } from "./provider_trace_records.js";
