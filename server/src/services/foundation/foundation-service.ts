@@ -21,6 +21,7 @@ import {
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
+import { replaceFoundationRevisionSections } from "./foundation-index.js";
 
 type FoundationDb = Db;
 
@@ -404,6 +405,12 @@ export function foundationService(db: Db) {
             })
             .returning();
 
+          await replaceFoundationRevisionSections(txDb, {
+            companyId,
+            foundationDocumentId: foundation!.id,
+            documentRevisionId: revision!.id,
+          });
+
           const row = await selectFoundation(
             txDb,
             companyId,
@@ -545,6 +552,14 @@ export function foundationService(db: Db) {
               eq(foundationDocuments.id, foundationDocumentId),
             ),
           );
+
+        if (contentChanged && latestRevisionId) {
+          await replaceFoundationRevisionSections(txDb, {
+            companyId,
+            foundationDocumentId,
+            documentRevisionId: latestRevisionId,
+          });
+        }
 
         const row = await selectFoundation(
           txDb,
@@ -872,6 +887,12 @@ export function foundationService(db: Db) {
               eq(foundationDocuments.id, foundationDocumentId),
             ),
           );
+
+        await replaceFoundationRevisionSections(txDb, {
+          companyId,
+          foundationDocumentId,
+          documentRevisionId: revision!.id,
+        });
 
         const [acceptedProposal] = await txDb
           .update(foundationChangeProposals)

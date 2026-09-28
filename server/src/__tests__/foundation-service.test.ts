@@ -17,6 +17,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
+import { foundationIndexService } from "../services/foundation/foundation-index.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -381,6 +382,101 @@ describeEmbeddedPostgres("Foundation service", () => {
       .from(foundationChangeProposals)
       .where(eq(foundationChangeProposals.id, proposal.id));
     expect(storedProposal?.status).toBe("superseded");
+
+  it("keeps section hashes stable across revisions and searches approved truth only", async () => {
+    const company = await seedCompany("Alpha");
+    const svc = foundationService(db);
+    const index = foundationIndexService(db);
+    const draft = await svc.createDraft(
+      company.id,
+      {
+        foundationKey: "strategy",
+        category: "strategy",
+        documentType: "strategy",
+        body: "# Direction\nStable intro\n\n## Priority\nOld priority",
+      },
+      actor(company.userId),
+    );
+
+    const revisionOneSections = await db
+      .select()
+      .from(foundationSections)
+      .where(eq(foundationSections.documentRevisionId, draft.latestRevisionId!))
+      .orderBy(foundationSections.ordinal);
+    expect(revisionOneSections).toHaveLength(2);
+
+    const updated = await svc.updateDraft(
+      company.id,
+      draft.id,
+      {
+        baseRevisionId: draft.latestRevisionId!,
+        body: "# Direction\nStable intro\n\n## Priority\nNew priority",
+      },
+      actor(company.userId),
+    );
+    const revisionTwoSections = await db
+      .select()
+      .from(foundationSections)
+      .where(eq(foundationSections.documentRevisionId, updated.latestRevisionId!))
+      .orderBy(foundationSections.ordinal);
+
+    expect(revisionTwoSections).toHaveLength(2);
+    expect(revisionTwoSections[0]?.contentHash).toBe(revisionOneSections[0]?.contentHash);
+    expect(revisionTwoSections[1]?.contentHash).not.toBe(revisionOneSections[1]?.contentHash);
+
+    expect(await index.search(company.id, {
+      query: "New priority",
+      limit: 10,
+      scope: "approved",
+    })).toEqual([]);
+
+    const submitted = await svc.submitForReview(
+      company.id,
+      updated.id,
+      updated.latestRevisionId!,
+      actor(company.userId),
+    );
+    await svc.approve(
+      company.id,
+      updated.id,
+      submitted.latestRevisionId!,
+      actor(company.userId),
+    );
+
+    const approvedSearch = await index.search(company.id, {
+      query: "New priority",
+      limit: 10,
+      scope: "approved",
+    });
+    expect(approvedSearch).toHaveLength(1);
+    expect(approvedSearch[0]).toMatchObject({
+      foundationDocumentId: draft.id,
+      headingPath: ["Direction", "Priority"],
+      documentRevisionId: updated.latestRevisionId,
+    });
+
+    const nextDraft = await svc.updateDraft(
+      company.id,
+      updated.id,
+      {
+        baseRevisionId: updated.latestRevisionId!,
+        body: "# Direction\nStable intro\n\n## Priority\nUnapproved future priority",
+      },
+      actor(company.userId),
+    );
+    expect(nextDraft.status).toBe("draft");
+
+    expect(await index.search(company.id, {
+      query: "Unapproved future priority",
+      limit: 10,
+      scope: "approved",
+    })).toEqual([]);
+    expect(await index.search(company.id, {
+      query: "New priority",
+      limit: 10,
+      scope: "approved",
+    })).toHaveLength(1);
+  });
     expect((await svc.get(company.id, draft.id))?.body).toBe("Current draft");
   });
 

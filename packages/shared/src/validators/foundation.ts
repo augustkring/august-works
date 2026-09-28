@@ -101,3 +101,13 @@ export type CreateFoundationDocument = z.input<typeof createFoundationDocumentSc
 export type UpdateFoundationDraft = z.infer<typeof updateFoundationDraftSchema>;
 export type TransitionFoundationDocument = z.infer<typeof transitionFoundationDocumentSchema>;
 export type CreateFoundationChangeProposal = z.infer<typeof createFoundationChangeProposalSchema>;
+
+export const foundationSearchQuerySchema = z
+  .object({
+    q: z.string().trim().min(1).max(500),
+    limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+    scope: z.enum(["approved", "working"]).optional().default("approved"),
+  })
+  .strict();
+
+export type FoundationSearchQuery = z.infer<typeof foundationSearchQuerySchema>;

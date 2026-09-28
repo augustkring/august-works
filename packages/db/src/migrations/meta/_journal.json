@@ -1996,6 +1996,13 @@
       "when": 1790587800000,
       "tag": "0286_foundation_permission_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 287,
+      "version": "7",
+      "when": 1790588400000,
+      "tag": "0287_foundation_section_search_indexes",
+      "breakpoints": true
     }
   ]
 }

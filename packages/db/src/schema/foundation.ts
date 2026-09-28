@@ -123,6 +123,14 @@ export const foundationSections = pgTable(
       table.foundationDocumentId,
       table.documentRevisionId,
     ),
+    bodySearchIdx: index("foundation_sections_body_search_idx").using(
+      "gin",
+      table.body.op("gin_trgm_ops"),
+    ),
+    companyContentHashIdx: index("foundation_sections_company_content_hash_idx").on(
+      table.companyId,
+      table.contentHash,
+    ),
     tokenCountCheck: check(
       "foundation_sections_token_count_check",
       sql`${table.tokenCount} >= 0`,

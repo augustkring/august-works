@@ -3,6 +3,7 @@ import type { Db } from "@paperclipai/db";
 import {
   createFoundationChangeProposalSchema,
   createFoundationDocumentSchema,
+  foundationSearchQuerySchema,
   transitionFoundationDocumentSchema,
   updateFoundationDraftSchema,
   type PermissionKey,
@@ -11,6 +12,7 @@ import { validate } from "../middleware/validate.js";
 import { forbidden, notFound, unauthorized } from "../errors.js";
 import {
   accessService,
+  foundationIndexService,
   foundationService,
   instanceSettingsService,
   logActivity,
@@ -26,6 +28,7 @@ export function foundationRoutes(db: Db) {
   const router = Router();
   const svc = foundationService(db);
   const access = accessService(db);
+  const index = foundationIndexService(db);
   const settings = instanceSettingsService(db);
 
   async function assertFoundationEnabled() {
@@ -146,6 +149,20 @@ export function foundationRoutes(db: Db) {
       res.status(201).json(created);
     },
   );
+
+  router.get("/companies/:companyId/foundation/search", async (req, res) => {
+    await assertFoundationEnabled();
+    const companyId = req.params.companyId as string;
+    await assertFoundationPermission(req, companyId, "foundation:read");
+    const query = foundationSearchQuerySchema.parse(req.query);
+    res.json(
+      await index.search(companyId, {
+        query: query.q,
+        limit: query.limit,
+        scope: query.scope,
+      }),
+    );
+  });
 
   router.get("/companies/:companyId/foundation/:foundationDocumentId", async (req, res) => {
     await assertFoundationEnabled();

@@ -17,6 +17,7 @@
 | Method | Path | Authz | Concurrency | Side effect | Audit |
 |---|---|---|---|---|---|
 | GET | `/companies/:companyId/foundation` | read | none | read | none |
+| GET | `/companies/:companyId/foundation/search?q=...` | read | approved revision by default | read derived section index | none |
 | POST | `/companies/:companyId/foundation` | human + edit | company/key uniqueness | create draft/revision | `foundation.document_created` |
 | GET | `/companies/:companyId/foundation/:id` | read | none | read | none |
 | PATCH | `.../:id/draft` | human + edit | `baseRevisionId` | new working revision when content changes | `foundation.draft_updated` |
@@ -39,3 +40,12 @@ A stale proposal is persisted as `superseded` before the API returns `revision_c
 ## Canonical authority
 
 `documents.latest_revision_id` is the working revision. `foundation_documents.approved_revision_id` pins approved canonical content. Approved governance metadata is likewise preserved until a later draft passes the explicit approval transition.
+
+
+## Section index
+
+Every content revision is split into heading-aware Markdown sections and indexed transactionally with the revision write. The index stores heading path, ordinal, content hash, and an approximate provider-neutral retrieval token budget.
+
+Search defaults to `scope=approved`, which binds each section to `approvedRevisionId`. A working draft therefore cannot leak into normal approved Foundation search. `scope=working` exists for authorized editing surfaces.
+
+Content hashes are stable across revisions for unchanged sections so later Context/embedding layers can reuse derived work incrementally.

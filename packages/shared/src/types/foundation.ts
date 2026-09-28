@@ -118,3 +118,49 @@ export interface FoundationChangeProposal {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export type FoundationSearchScope = "approved" | "working";
+
+export interface FoundationSection {
+  id: string;
+  companyId: string;
+  foundationDocumentId: string;
+  documentRevisionId: string;
+  headingPath: string[];
+  ordinal: number;
+  body: string;
+  contentHash: string;
+  tokenCount: number;
+  createdAt: Date;
+}
+
+export interface FoundationIndexResult {
+  companyId: string;
+  foundationDocumentId: string;
+  documentRevisionId: string;
+  revisionNumber: number;
+  indexedSectionCount: number;
+  writtenSectionCount: number;
+  unchangedFromPreviousCount: number;
+  changedSectionCount: number;
+  removedSectionCount: number;
+}
+
+export interface FoundationSearchResult {
+  foundationDocumentId: string;
+  foundationKey: string;
+  category: FoundationCategory;
+  documentType: string;
+  authorityLevel: FoundationAuthorityLevel;
+  sensitivity: FoundationSensitivity;
+  status: FoundationDocumentStatus;
+  documentRevisionId: string;
+  revisionNumber: number;
+  title: string | null;
+  headingPath: string[];
+  ordinal: number;
+  excerpt: string;
+  contentHash: string;
+  tokenCount: number;
+  rank: number;
+}
