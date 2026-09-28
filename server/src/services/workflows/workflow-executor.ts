@@ -26,9 +26,35 @@ import {
   evaluateWorkflowConditionExpression,
   WorkflowConditionExpressionError,
 } from "./workflow-condition-expression.js";
+import {
+  decideWorkflowRetry,
+  effectiveWorkflowRetryPolicy,
+  workflowRetryDelayMs,
+  workflowStepIdempotencyKey,
+} from "./workflow-execution-policy.js";
+import { workflowNodeDefinitions } from "./workflow-node-registry.js";
 
 const WORKFLOW_EXECUTION_LEASE_MS = 30_000;
 const ABANDONED_QUEUED_RUN_AGE_MS = 30_000;
+
+export class WorkflowRetryableNodeError extends Error {
+  readonly code: string;
+  readonly sideEffectSafeToRepeat: boolean;
+  readonly providerAllowsRetry: boolean;
+
+  constructor(input: {
+    code: string;
+    message: string;
+    sideEffectSafeToRepeat: boolean;
+    providerAllowsRetry: boolean;
+  }) {
+    super(input.message);
+    this.name = "WorkflowRetryableNodeError";
+    this.code = input.code;
+    this.sideEffectSafeToRepeat = input.sideEffectSafeToRepeat;
+    this.providerAllowsRetry = input.providerAllowsRetry;
+  }
+}
 
 export interface WorkflowRunActor {
   principal: ExecutionPrincipal;
@@ -341,6 +367,34 @@ async function claimQueuedRun(
 }
 
 type WorkflowNode = WorkflowGraphV1["nodes"][number];
+
+const WORKFLOW_NODE_DEFINITIONS = new Map(
+  workflowNodeDefinitions().map((definition) => [definition.type, definition]),
+);
+
+function workflowNodeDefinition(node: WorkflowNode) {
+  const definition = WORKFLOW_NODE_DEFINITIONS.get(node.type);
+  if (!definition) {
+    throw new WorkflowCheckpointError(
+      "workflow_node_definition_missing",
+      `Workflow node definition is unavailable for ${node.type}`,
+    );
+  }
+  return definition;
+}
+
+function remainingWorkflowDeadlineMs(
+  run: typeof workflowRuns.$inferSelect,
+  graph: WorkflowGraphV1,
+  now: Date,
+): number | null {
+  const totalDeadlineSeconds = graph.settings.totalDeadlineSeconds;
+  if (!totalDeadlineSeconds || !run.startedAt) return null;
+  return Math.max(
+    0,
+    run.startedAt.getTime() + totalDeadlineSeconds * 1_000 - now.getTime(),
+  );
+}
 
 function graphVariables(graph: WorkflowGraphV1): Record<string, unknown> {
   return Object.fromEntries(
@@ -965,6 +1019,7 @@ async function prepareRunnableStep(
     pending = latest;
   } else if (
     latest === null ||
+    latest.status === "retried" ||
     (latest.status === "failed" &&
       latest.errorCode === "workflow_execution_interrupted")
   ) {
@@ -985,6 +1040,273 @@ async function prepareRunnableStep(
     pending.attempt,
   );
   return { checkpoint: null, running };
+}
+
+
+async function scheduleStepRetry(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  graph: WorkflowGraphV1,
+  node: WorkflowNode,
+  runningStep: WorkflowStepRow,
+  actor: WorkflowRunActor,
+  error: WorkflowRetryableNodeError,
+): Promise<boolean> {
+  if (!run.executionOwnerId) {
+    throw conflict("Workflow run has no execution owner", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+
+  const definition = workflowNodeDefinition(node);
+  const policy = effectiveWorkflowRetryPolicy(node.retryPolicy, definition);
+  const now = new Date();
+  const decision = decideWorkflowRetry({
+    policy,
+    currentAttempt: runningStep.attempt,
+    errorRetryable: true,
+    sideEffectSafeToRepeat: error.sideEffectSafeToRepeat,
+    remainingDeadlineMs: remainingWorkflowDeadlineMs(run, graph, now),
+    parentCancelled: false,
+    providerAllowsRetry: error.providerAllowsRetry,
+  });
+  if (!decision.retry || decision.delayMs === null) return false;
+
+  const finishedAt = now;
+  const durationMs = Math.max(
+    0,
+    finishedAt.getTime() - (runningStep.startedAt ?? finishedAt).getTime(),
+  );
+  const nextAttempt = runningStep.attempt + 1;
+  const idempotencyKey = workflowStepIdempotencyKey(run.id, node.id);
+  const publications: ActivityPublication[] = [];
+
+  await db.transaction(async (tx) => {
+    const [scheduledStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "retry_scheduled",
+        finishedAt,
+        durationMs,
+        errorCode: error.code,
+        errorMessage: error.message,
+        updatedAt: finishedAt,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, runningStep.id),
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.status, "running"),
+        ),
+      )
+      .returning();
+    if (!scheduledStep) {
+      throw conflict("Workflow step changed while retry was being scheduled", {
+        code: "workflow_step_retry_conflict",
+        workflowRunId: run.id,
+        nodeId: node.id,
+        attempt: runningStep.attempt,
+      });
+    }
+
+    const [waitingRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "waiting",
+        executionOwnerId: null,
+        leaseExpiresAt: null,
+        ownerHeartbeatAt: null,
+        updatedAt: finishedAt,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "running"),
+          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+        ),
+      )
+      .returning();
+    if (!waitingRun) {
+      throw conflict("Workflow run ownership changed while retry was being scheduled", {
+        code: "workflow_run_claim_lost",
+        workflowRunId: run.id,
+      });
+    }
+
+    const stepActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_retry_scheduled",
+        entityType: "workflow_step_run",
+        entityId: scheduledStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: node.id,
+          attempt: runningStep.attempt,
+          nextAttempt,
+          delayMs: decision.delayMs,
+          errorCode: error.code,
+          idempotencyKey,
+        },
+      },
+    );
+    const runActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_waiting",
+        entityType: "workflow_run",
+        entityId: waitingRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          reason: "retry_backoff",
+          nodeId: node.id,
+          nextAttempt,
+          delayMs: decision.delayMs,
+        },
+      },
+    );
+    publications.push(stepActivity.publication, runActivity.publication);
+  });
+  publishActivities(publications);
+  return true;
+}
+
+function retryDueAt(
+  step: WorkflowStepRow,
+  node: WorkflowNode,
+): Date {
+  const definition = workflowNodeDefinition(node);
+  const policy = effectiveWorkflowRetryPolicy(node.retryPolicy, definition);
+  const delayMs = workflowRetryDelayMs(policy, step.attempt + 1);
+  if (delayMs === null) {
+    throw new WorkflowCheckpointError(
+      "workflow_step_retry_unsafe",
+      `Retry policy no longer permits attempt ${step.attempt + 1} for node ${node.id}`,
+    );
+  }
+  const scheduledAt = step.finishedAt ?? step.updatedAt;
+  return new Date(scheduledAt.getTime() + delayMs);
+}
+
+async function claimDueRetryRun(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  scheduledStep: WorkflowStepRow,
+  ownerId: string,
+  now: Date,
+  actor: WorkflowRunActor,
+) {
+  const publications: ActivityPublication[] = [];
+  const claimed = await db.transaction(async (tx) => {
+    const [runningRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "running",
+        executionOwnerId: ownerId,
+        ownerHeartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "waiting"),
+          sql`${workflowRuns.executionOwnerId} is null`,
+          sql`${workflowRuns.leaseExpiresAt} is null`,
+        ),
+      )
+      .returning();
+    if (!runningRun) return null;
+
+    const [retriedStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "retried",
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, scheduledStep.id),
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.status, "retry_scheduled"),
+        ),
+      )
+      .returning();
+    if (!retriedStep) {
+      throw conflict("Workflow retry state changed before resume", {
+        code: "workflow_step_retry_conflict",
+        workflowRunId: run.id,
+        nodeId: scheduledStep.nodeId,
+        attempt: scheduledStep.attempt,
+      });
+    }
+
+    const stepActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_retried",
+        entityType: "workflow_step_run",
+        entityId: retriedStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: retriedStep.nodeId,
+          attempt: retriedStep.attempt,
+          nextAttempt: retriedStep.attempt + 1,
+        },
+      },
+    );
+    const runActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_resumed",
+        entityType: "workflow_run",
+        entityId: runningRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          reason: "retry_backoff_elapsed",
+          executionOwnerId: ownerId,
+        },
+      },
+    );
+    publications.push(stepActivity.publication, runActivity.publication);
+    return runningRun;
+  });
+  publishActivities(publications);
+  return claimed;
+}
+
+async function retryScheduledStepForRun(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+): Promise<WorkflowStepRow | null> {
+  return db
+    .select()
+    .from(workflowStepRuns)
+    .where(
+      and(
+        eq(workflowStepRuns.companyId, run.companyId),
+        eq(workflowStepRuns.workflowRunId, run.id),
+        eq(workflowStepRuns.status, "retry_scheduled"),
+      ),
+    )
+    .orderBy(desc(workflowStepRuns.attempt), desc(workflowStepRuns.updatedAt))
+    .limit(1)
+    .then((rows) => rows[0] ?? null);
 }
 
 async function claimExpiredRunForRecovery(
@@ -1208,6 +1530,27 @@ async function executeWorkflowGraph(
         return;
       }
     } catch (error) {
+      if (error instanceof WorkflowRetryableNodeError && runningStep) {
+        const scheduled = await scheduleStepRetry(
+          db,
+          ownedRun,
+          graph,
+          current,
+          runningStep,
+          actor,
+          error,
+        );
+        if (scheduled) return;
+        await failRun(
+          db,
+          ownedRun,
+          actor,
+          error.code,
+          error.message,
+          runningStep,
+        );
+        return;
+      }
       if (
         error instanceof WorkflowConditionExpressionError ||
         error instanceof WorkflowCheckpointError
@@ -1320,11 +1663,116 @@ async function executeClaimedRun(
   await executeWorkflowGraph(db, run, revision.graph, actor);
 }
 
+async function recoverWaitingRetryCandidate(
+  db: Db,
+  candidate: typeof workflowRuns.$inferSelect,
+  now: Date,
+): Promise<"recovered" | "raced" | "deferred"> {
+  const scheduledStep = await retryScheduledStepForRun(db, candidate);
+  if (!scheduledStep) return "deferred";
+
+  const revision = await revisionForRun(db, candidate);
+  if (!revision) {
+    const actor: WorkflowRunActor = {
+      principal: { type: "system", service: "workflow-retry" },
+    };
+    const claimed = await claimDueRetryRun(
+      db,
+      candidate,
+      scheduledStep,
+      `retry:${randomUUID()}`,
+      now,
+      actor,
+    );
+    if (!claimed) return "raced";
+    await failRun(
+      db,
+      claimed,
+      actor,
+      "workflow_revision_unavailable_for_recovery",
+      "Workflow revision bound to this retry is unavailable",
+    );
+    return "recovered";
+  }
+
+  const node = revision.graph.nodes.find((item) => item.id === scheduledStep.nodeId);
+  if (!node) {
+    const actor: WorkflowRunActor = {
+      principal: { type: "system", service: "workflow-retry" },
+    };
+    const claimed = await claimDueRetryRun(
+      db,
+      candidate,
+      scheduledStep,
+      `retry:${randomUUID()}`,
+      now,
+      actor,
+    );
+    if (!claimed) return "raced";
+    await failRun(
+      db,
+      claimed,
+      actor,
+      "workflow_checkpoint_invalid",
+      `Retry references missing workflow node ${scheduledStep.nodeId}`,
+    );
+    return "recovered";
+  }
+
+  let dueAt: Date;
+  try {
+    dueAt = retryDueAt(scheduledStep, node);
+  } catch (error) {
+    const actor: WorkflowRunActor = {
+      principal: { type: "system", service: "workflow-retry" },
+    };
+    const claimed = await claimDueRetryRun(
+      db,
+      candidate,
+      scheduledStep,
+      `retry:${randomUUID()}`,
+      now,
+      actor,
+    );
+    if (!claimed) return "raced";
+    await failRun(
+      db,
+      claimed,
+      actor,
+      error instanceof WorkflowCheckpointError
+        ? error.code
+        : "workflow_step_retry_unsafe",
+      error instanceof Error ? error.message : "Workflow retry policy is invalid",
+    );
+    return "recovered";
+  }
+  if (dueAt.getTime() > now.getTime()) return "deferred";
+
+  const actor: WorkflowRunActor = {
+    principal: { type: "system", service: "workflow-retry" },
+  };
+  const claimed = await claimDueRetryRun(
+    db,
+    candidate,
+    scheduledStep,
+    `retry:${randomUUID()}`,
+    now,
+    actor,
+  );
+  if (!claimed) return "raced";
+  await executeClaimedRun(db, claimed, actor);
+  return "recovered";
+}
+
 async function recoverCandidate(
   db: Db,
   candidate: typeof workflowRuns.$inferSelect,
   now: Date,
-) {
+): Promise<"recovered" | "raced" | "deferred"> {
+  if (candidate.status === "waiting") {
+    return recoverWaitingRetryCandidate(db, candidate, now);
+  }
+
   const actor: WorkflowRunActor = {
     principal: { type: "system", service: "workflow-recovery" },
   };
@@ -1338,9 +1786,9 @@ async function recoverCandidate(
       ownerId,
       actor,
     );
-    if (!claimed) return false;
+    if (!claimed) return "raced";
     await executeClaimedRun(db, claimed, actor);
-    return true;
+    return "recovered";
   }
 
   const recovering = await claimExpiredRunForRecovery(
@@ -1350,10 +1798,10 @@ async function recoverCandidate(
     now,
     actor,
   );
-  if (!recovering) return false;
+  if (!recovering) return "raced";
   const resumed = await resumeRecoveredRun(db, recovering, actor);
   await executeClaimedRun(db, resumed, actor);
-  return true;
+  return "recovered";
 }
 
 
@@ -1535,7 +1983,13 @@ export function workflowExecutorService(db: Db) {
     recoverExpiredRuns: async (
       limit = 20,
       now = new Date(),
-    ): Promise<{ checked: number; recovered: number; raced: number; failedRunIds: string[] }> => {
+    ): Promise<{
+      checked: number;
+      recovered: number;
+      raced: number;
+      deferred: number;
+      failedRunIds: string[];
+    }> => {
       const safeLimit = Math.min(Math.max(limit, 1), 100);
       const queuedBefore = new Date(now.getTime() - ABANDONED_QUEUED_RUN_AGE_MS);
       const candidates = await db
@@ -1551,6 +2005,7 @@ export function workflowExecutorService(db: Db) {
               inArray(workflowRuns.status, ["running", "recovering"]),
               lt(workflowRuns.leaseExpiresAt, now),
             ),
+            eq(workflowRuns.status, "waiting"),
           ),
         )
         .orderBy(asc(workflowRuns.updatedAt))
@@ -1558,12 +2013,14 @@ export function workflowExecutorService(db: Db) {
 
       let recovered = 0;
       let raced = 0;
+      let deferred = 0;
       const failedRunIds: string[] = [];
       for (const candidate of candidates) {
         try {
-          const didRecover = await recoverCandidate(db, candidate, now);
-          if (didRecover) recovered += 1;
-          else raced += 1;
+          const outcome = await recoverCandidate(db, candidate, now);
+          if (outcome === "recovered") recovered += 1;
+          else if (outcome === "raced") raced += 1;
+          else deferred += 1;
         } catch {
           failedRunIds.push(candidate.id);
         }
@@ -1572,6 +2029,7 @@ export function workflowExecutorService(db: Db) {
         checked: candidates.length,
         recovered,
         raced,
+        deferred,
         failedRunIds,
       };
     },
