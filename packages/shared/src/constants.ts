@@ -356,6 +356,7 @@ export const ONBOARDING_FIRST_TASK_ORIGIN_KIND = "onboarding_first_task";
 export const ISSUE_ORIGIN_KINDS = [
   "manual",
   "routine_execution",
+  "workflow_task",
   "stale_active_run_evaluation",
   "harness_liveness_escalation",
   // Historical origin only; automatic productivity reviews have been retired.
