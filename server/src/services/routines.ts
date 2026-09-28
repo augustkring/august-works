@@ -2383,7 +2383,12 @@ export function routineService(
     create: async (companyId: string, input: CreateRoutine, actor: Actor): Promise<Routine> => {
       await assertProject(companyId, input.projectId ?? null);
       await assertRoutineFolder(companyId, input.folderId ?? null);
-      await assertAssignableAgent(db, companyId, input.assigneeAgentId ?? null, { kind: "routine" });
+      const executionTarget = requestedRoutineExecutionTarget(input);
+      const targetStorage = executionTargetStorage(executionTarget);
+      const status = normalizeDraftRoutineStatus(input.status, executionTarget);
+      await assertRoutineExecutionTarget(companyId, executionTarget, {
+        requireRunnable: status === "active",
+      });
       if (input.goalId) await assertGoal(companyId, input.goalId);
       if (input.parentIssueId) await assertParentIssue(companyId, input.parentIssueId);
       const env = input.env === undefined || input.env === null
@@ -2397,7 +2402,6 @@ export function routineService(
         sanitizeRoutineVariableInputs(input.variables),
       );
       assertRoutineVariableDefinitions(variables);
-      const status = normalizeDraftRoutineStatus(input.status, input.assigneeAgentId);
       const responsibleUserId = await resolveRoutineResponsibleUserId(db, companyId, actor.userId, input.parentIssueId ?? null);
       if (!responsibleUserId) {
         throw unprocessable("Routine requires a responsible user");
@@ -2414,7 +2418,9 @@ export function routineService(
             parentIssueId: input.parentIssueId ?? null,
             title: input.title,
             description: input.description ?? null,
-            assigneeAgentId: input.assigneeAgentId ?? null,
+            assigneeAgentId: targetStorage.assigneeAgentId,
+            executionTargetKind: targetStorage.executionTargetKind,
+            executionTargetRef: targetStorage.executionTargetRef,
             priority: input.priority,
             status,
             concurrencyPolicy: input.concurrencyPolicy,
@@ -2451,7 +2457,13 @@ export function routineService(
       if (!existing) return null;
       const nextProjectId = patch.projectId === undefined ? existing.projectId : patch.projectId;
       const nextFolderId = patch.folderId === undefined ? existing.folderId : patch.folderId;
-      const nextAssigneeAgentId = patch.assigneeAgentId === undefined ? existing.assigneeAgentId : patch.assigneeAgentId;
+      const existingExecutionTarget = resolveRoutineExecutionTarget(existing);
+      const nextExecutionTarget = resolveUpdatedRoutineExecutionTarget(existing, patch);
+      const nextTargetStorage = executionTargetStorage(nextExecutionTarget);
+      const nextAssigneeAgentId = nextTargetStorage.assigneeAgentId;
+      const targetChanged =
+        JSON.stringify(existingExecutionTarget) !==
+        JSON.stringify(nextExecutionTarget);
       const nextTitle = patch.title ?? existing.title;
       const nextDescription = patch.description === undefined ? existing.description : patch.description;
       const nextEnv = patch.env === undefined
@@ -2464,19 +2476,27 @@ export function routineService(
             });
       const requestedStatus = patch.status ?? existing.status;
       if (patch.status === "active") {
-        assertRoutineCanEnable(patch.status, nextAssigneeAgentId);
+        assertRoutineCanEnable(patch.status, nextExecutionTarget);
       }
-      const nextStatus = patch.assigneeAgentId === undefined
-        ? requestedStatus
-        : normalizeDraftRoutineStatus(requestedStatus, nextAssigneeAgentId);
+      const nextStatus =
+        patch.status !== undefined || targetChanged
+          ? normalizeDraftRoutineStatus(
+              requestedStatus,
+              nextExecutionTarget,
+            )
+          : requestedStatus;
       const nextVariables = syncRoutineVariablesWithTemplate(
         [nextTitle, nextDescription],
         patch.variables === undefined ? existing.variables : sanitizeRoutineVariableInputs(patch.variables),
       );
       if (patch.projectId !== undefined) await assertProject(existing.companyId, nextProjectId);
       if (patch.folderId !== undefined) await assertRoutineFolder(existing.companyId, nextFolderId);
-      if (patch.assigneeAgentId !== undefined || patch.status === "active") {
-        await assertAssignableAgent(db, existing.companyId, nextAssigneeAgentId, { kind: "routine" });
+      if (targetChanged || patch.status === "active") {
+        await assertRoutineExecutionTarget(
+          existing.companyId,
+          nextExecutionTarget,
+          { requireRunnable: nextStatus === "active" },
+        );
       }
       if (patch.goalId) await assertGoal(existing.companyId, patch.goalId);
       if (patch.parentIssueId) await assertParentIssue(existing.companyId, patch.parentIssueId);
@@ -2531,6 +2551,8 @@ export function routineService(
           title: nextTitle,
           description: nextDescription,
           assigneeAgentId: nextAssigneeAgentId,
+          executionTargetKind: nextTargetStorage.executionTargetKind,
+          executionTargetRef: nextTargetStorage.executionTargetRef,
           priority: patch.priority ?? locked.priority,
           status: nextStatus,
           concurrencyPolicy: patch.concurrencyPolicy ?? locked.concurrencyPolicy,
@@ -2596,6 +2618,8 @@ export function routineService(
             title: candidate.title,
             description: candidate.description,
             assigneeAgentId: candidate.assigneeAgentId,
+            executionTargetKind: candidate.executionTargetKind,
+            executionTargetRef: candidate.executionTargetRef,
             priority: candidate.priority,
             status: candidate.status,
             concurrencyPolicy: candidate.concurrencyPolicy,
