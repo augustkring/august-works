@@ -80,6 +80,19 @@ export const workflowsApi = {
       { headers: { "Idempotency-Key": idempotencyKey } },
     ),
 
+  startTaskRun: (
+    companyId: string,
+    issueId: string,
+    workflowId: string,
+    input: StartWorkflowRun,
+    idempotencyKey: string,
+  ) =>
+    api.post<WorkflowRunDetail>(
+      `/companies/${companyId}/issues/${issueId}/workflows/${workflowId}/run`,
+      input,
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    ),
+
   getRun: (companyId: string, runId: string) =>
     api.get<WorkflowRunDetail>(`/companies/${companyId}/workflow-runs/${runId}`),
 
