@@ -29,6 +29,8 @@ import {
   ArrowUp,
   Check,
   GitBranch,
+  History,
+  Play,
   Save,
   Trash2,
 } from "lucide-react";
@@ -167,6 +169,12 @@ function workflowErrorMessage(error: unknown) {
       return reason
         ? `This draft cannot be published yet: ${reason.replaceAll("_", " ")}.`
         : "A workflow node is not valid for publishing yet.";
+    }
+    if (body?.code === "workflow_executor_capability_not_ready") {
+      return "This published revision contains steps that are not executable in the current durability phase yet.";
+    }
+    if (body?.code === "workflow_revision_not_published") {
+      return "Publish a valid workflow revision before starting a live run.";
     }
   }
   return error instanceof Error ? error.message : "The workflow change could not be completed.";
@@ -431,6 +439,35 @@ export function WorkflowBuilder() {
     },
   });
 
+  const runMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedCompanyId || !workflowId || !detailQuery.data?.publishedRevisionId) {
+        throw new Error("Publish a workflow revision before starting a live run.");
+      }
+      return workflowsApi.startRun(
+        selectedCompanyId,
+        workflowId,
+        { input: {}, revisionId: null },
+        randomId("ui-run"),
+      );
+    },
+    onSuccess: async (detail) => {
+      if (!selectedCompanyId || !workflowId) return;
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.workflows.runs(selectedCompanyId, workflowId),
+      });
+      pushToast({ title: "Workflow run completed", tone: "success" });
+      navigate(`/workflows/${workflowId}/runs/${detail.run.id}`);
+    },
+    onError: (error) => {
+      pushToast({
+        title: "Could not run workflow",
+        body: workflowErrorMessage(error),
+        tone: "error",
+      });
+    },
+  });
+
   const addCapability = (candidate: WorkflowCapabilityCandidate) => {
     if (!capabilities?.edit || candidate.availability.status === "unavailable") return;
     const definition = definitions.get(candidate.nodeType);
@@ -553,7 +590,27 @@ export function WorkflowBuilder() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/workflows/${workflowId}/runs`)}
+          >
+            <History className="mr-1.5 h-3.5 w-3.5" />
+            Runs
+          </Button>
+          {capabilities?.run && detailQuery.data.publishedRevisionId ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={runMutation.isPending || detailQuery.data.status !== "active"}
+              onClick={() => runMutation.mutate()}
+              title="Runs the current published revision. Unsaved draft changes are not included."
+            >
+              <Play className="mr-1.5 h-3.5 w-3.5" />
+              {runMutation.isPending ? "Running…" : "Run published"}
+            </Button>
+          ) : null}
           {conflicted ? (
             <Button
               variant="outline"
