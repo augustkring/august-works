@@ -19,6 +19,11 @@ export interface LivenessBannerLink {
   title?: string | null;
 }
 
+export interface LivenessWorkflowRunLink {
+  href: string;
+  label: string;
+}
+
 export interface LivenessBannerView {
   reason: PipelineCaseLiveness["reason"];
   tone: LivenessBannerTone;
@@ -28,6 +33,8 @@ export interface LivenessBannerView {
   blockerLink: LivenessBannerLink | null;
   /** Secondary link to the linked automation/work task, when one is known. */
   automationLink: LivenessBannerLink | null;
+  /** Link to a linked Workflow run when automation is Workflow-backed. */
+  workflowRunLink: LivenessWorkflowRunLink | null;
   /** Permission key the configured responsible is missing (e.g. `pipelines:write`). */
   permissionKey: string | null;
   /** Whether a retry call-to-action should render. */
@@ -81,6 +88,23 @@ function automationLinkFromLiveness(liveness: PipelineCaseLiveness): LivenessBan
   return null;
 }
 
+function workflowRunLinkFromLiveness(
+  liveness: PipelineCaseLiveness,
+): LivenessWorkflowRunLink | null {
+  const automation = liveness.automation;
+  if (
+    automation?.targetKind !== "workflow" ||
+    !automation.targetRef ||
+    !automation.workflowRunId
+  ) {
+    return null;
+  }
+  return {
+    href: `/workflows/${automation.targetRef}/runs/${automation.workflowRunId}`,
+    label: "Open workflow run",
+  };
+}
+
 /**
  * Derive the banner view-model from the server's liveness payload. Returns
  * `null` for states that should not raise a banner (terminal, actively running,
@@ -110,6 +134,7 @@ export function derivePipelineLivenessBanner(
         body: liveness.message,
         blockerLink: blockerLinkFromLiveness(liveness),
         automationLink: automationLinkFromLiveness(liveness),
+        workflowRunLink: workflowRunLinkFromLiveness(liveness),
         permissionKey: null,
         showRetry: false,
         retryKind: null,
@@ -125,6 +150,7 @@ export function derivePipelineLivenessBanner(
         body: liveness.message,
         blockerLink: blockerLinkFromLiveness(liveness),
         automationLink: automationLinkFromLiveness(liveness),
+        workflowRunLink: workflowRunLinkFromLiveness(liveness),
         permissionKey: null,
         showRetry: false,
         retryKind: null,
@@ -140,6 +166,7 @@ export function derivePipelineLivenessBanner(
         body: liveness.message,
         blockerLink: null,
         automationLink: automationLinkFromLiveness(liveness),
+        workflowRunLink: workflowRunLinkFromLiveness(liveness),
         permissionKey: permissionKeyFromFingerprint(liveness.automation?.fingerprint) ?? "pipelines:write",
         showRetry: false,
         retryKind: null,
@@ -161,6 +188,7 @@ export function derivePipelineLivenessBanner(
         body: liveness.message,
         blockerLink: null,
         automationLink: automationLinkFromLiveness(liveness),
+        workflowRunLink: workflowRunLinkFromLiveness(liveness),
         permissionKey: null,
         showRetry: true,
         retryKind: automationId ? "automation" : "stage",
@@ -177,6 +205,7 @@ export function derivePipelineLivenessBanner(
         body: liveness.message,
         blockerLink: null,
         automationLink: null,
+        workflowRunLink: workflowRunLinkFromLiveness(liveness),
         permissionKey: null,
         showRetry: true,
         retryKind: "stage",
@@ -192,6 +221,7 @@ export function derivePipelineLivenessBanner(
         body: missingPiecesBody(liveness),
         blockerLink: null,
         automationLink: null,
+        workflowRunLink: workflowRunLinkFromLiveness(liveness),
         permissionKey: null,
         showRetry: true,
         retryKind: "stage",
@@ -207,6 +237,7 @@ export function derivePipelineLivenessBanner(
         body: NO_ACTION_PATH_BODY,
         blockerLink: null,
         automationLink: null,
+        workflowRunLink: workflowRunLinkFromLiveness(liveness),
         permissionKey: null,
         showRetry: true,
         retryKind: "stage",
