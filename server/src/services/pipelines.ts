@@ -1277,6 +1277,8 @@ function routineRevisionSnapshotRoutine(routine: typeof routines.$inferSelect): 
     title: routine.title,
     description: routine.description,
     assigneeAgentId: routine.assigneeAgentId,
+    executionTargetKind: routine.executionTargetKind,
+    executionTargetRef: routine.executionTargetRef,
     priority: routine.priority as RoutineRevisionSnapshotV1["routine"]["priority"],
     status: routine.status as RoutineRevisionSnapshotV1["routine"]["status"],
     concurrencyPolicy: routine.concurrencyPolicy as RoutineRevisionSnapshotV1["routine"]["concurrencyPolicy"],
@@ -2937,6 +2939,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           title,
           description,
           assigneeAgentId: input.assigneeAgentId,
+          executionTargetKind: "agent_task",
+          executionTargetRef: input.assigneeAgentId,
           status: "active",
           originKind: "pipeline_automation",
           originId: input.pipelineId,
@@ -2971,6 +2975,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         title,
         description,
         assigneeAgentId: input.assigneeAgentId,
+        executionTargetKind: "agent_task",
+        executionTargetRef: input.assigneeAgentId,
         status: "active",
         priority: "medium",
         concurrencyPolicy: "coalesce_if_active",
@@ -3040,8 +3046,17 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       .innerJoin(pipelines, eq(pipelineStages.pipelineId, pipelines.id))
       .where(and(
         eq(pipelines.companyId, input.companyId),
-        sql`${pipelineStages.config}->'onEnter'->>'type' = 'run_routine'`,
-        sql`${pipelineStages.config}->'onEnter'->>'routineId' = ${input.routineId}`,
+        or(
+          and(
+            sql`${pipelineStages.config}->'onEnter'->>'type' = 'run_routine'`,
+            sql`${pipelineStages.config}->'onEnter'->>'routineId' = ${input.routineId}`,
+          ),
+          and(
+            sql`${pipelineStages.config}->'onEnter'->>'type' = 'run_target'`,
+            sql`${pipelineStages.config}->'onEnter'->'target'->>'kind' = 'routine'`,
+            sql`${pipelineStages.config}->'onEnter'->'target'->>'routineId' = ${input.routineId}`,
+          ),
+        ),
         input.exceptStageId ? ne(pipelineStages.id, input.exceptStageId) : undefined,
       ))
       .limit(1);
@@ -3959,21 +3974,28 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       await validateStageTargets(input.companyId, input.pipelineId, kind, config);
       await validateStageAutomationConfig(input.companyId, config);
       return db.transaction(async (tx) => {
-        const nextConfig = automationRequest
-          ? await syncPipelineStageAutomation(tx, {
-              companyId: input.companyId,
-              pipelineId: input.pipelineId,
-              stage: { ...existing, name: stageName, kind },
-              previousStageName: existing.name,
-              previousRoutineId,
-              config,
-              assigneeAgentId: automationRequest.assigneeAgentId,
-              titleTemplate: automationRequest.titleTemplate,
-              instructionsBody: automationRequest.instructionsBody,
-              executionContext: automationRequest.executionContext,
-              actor: input.actor ?? { type: "system" },
-            })
-          : config;
+        const nextConfig =
+          automationRequest?.target?.kind === "workflow"
+            ? withStageAutomationTarget(
+                config,
+                automationRequest.target,
+                automationRequest.executionContext,
+              )
+            : automationRequest
+              ? await syncPipelineStageAutomation(tx, {
+                  companyId: input.companyId,
+                  pipelineId: input.pipelineId,
+                  stage: { ...existing, name: stageName, kind },
+                  previousStageName: existing.name,
+                  previousRoutineId,
+                  config,
+                  assigneeAgentId: automationRequest.assigneeAgentId,
+                  titleTemplate: automationRequest.titleTemplate,
+                  instructionsBody: automationRequest.instructionsBody,
+                  executionContext: automationRequest.executionContext,
+                  actor: input.actor ?? { type: "system" },
+                })
+              : config;
         const nextRoutineId = stageAutomationRoutineIdFromConfig(nextConfig);
         const [updated] = await tx
           .update(pipelineStages)
