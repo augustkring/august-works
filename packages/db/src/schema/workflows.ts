@@ -232,7 +232,7 @@ export const workflowWaits = pgTable(
       .where(sql`${table.signalTokenHash} is not null`),
     kindCheck: check(
       "workflow_waits_kind_check",
-      sql`${table.kind} in ('delay', 'human_interaction', 'external_callback', 'task_completion')`,
+      sql`${table.kind} in ('delay', 'human_interaction', 'external_callback', 'task_completion', 'external_agent_run')`,
     ),
     statusCheck: check(
       "workflow_waits_status_check",
