@@ -456,7 +456,7 @@ export function WorkflowBuilder() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.workflows.runs(selectedCompanyId, workflowId),
       });
-      pushToast({ title: "Workflow run completed", tone: "success" });
+      pushToast({ title: "Workflow run started", tone: "success" });
       navigate(`/workflows/${workflowId}/runs/${detail.run.id}`);
     },
     onError: (error) => {
