@@ -92,7 +92,7 @@ describePg("Workflow routes", () => {
       });
   });
 
-  it("creates, reads, updates, publishes, and audits an empty workflow", async () => {
+  it("creates, reads, updates, publishes, and audits a valid manual workflow", async () => {
     const company = await seedCompany();
     await enableWorkflows();
     const http = request(app(localBoard));
@@ -108,12 +108,18 @@ describePg("Workflow routes", () => {
         expectedRevisionId: created.body.draftRevisionId,
         graph: {
           version: 1,
-          nodes: [],
+          nodes: [{
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Manual start",
+            position: { x: 0, y: 0 },
+            config: {},
+          }],
           edges: [],
           variables: [{ name: "leadId" }],
           settings: {},
         },
-        changeSummary: "Add lead variable",
+        changeSummary: "Add manual trigger and lead variable",
       })
       .expect(200);
 
