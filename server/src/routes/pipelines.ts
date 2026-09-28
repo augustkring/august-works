@@ -52,6 +52,8 @@ import {
   pipelineTransitions,
   pipelines,
   routines,
+  workflowRuns,
+  workflows,
 } from "@paperclipai/db";
 import { validate } from "../middleware/validate.js";
 import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized, unprocessable } from "../errors.js";
@@ -930,20 +932,36 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
       const routineId = stageAutomationRoutineId(stage.config);
       return routineId ? [routineId] : [];
     });
-    const routineRows = automationRoutineIds.length > 0
-      ? await db
-          .select({
-            id: routines.id,
-            assigneeAgentId: routines.assigneeAgentId,
-            title: routines.title,
-            description: routines.description,
-            env: routines.env,
-            latestRevisionId: routines.latestRevisionId,
-            latestRevisionNumber: routines.latestRevisionNumber,
-          })
-          .from(routines)
-          .where(and(eq(routines.companyId, companyId), inArray(routines.id, automationRoutineIds)))
-      : [];
+    const automationWorkflowIds = stages.flatMap((stage) => {
+      const workflowId = stageAutomationWorkflowId(stage.config);
+      return workflowId ? [workflowId] : [];
+    });
+    const [routineRows, workflowRows] = await Promise.all([
+      automationRoutineIds.length > 0
+        ? db
+            .select({
+              id: routines.id,
+              assigneeAgentId: routines.assigneeAgentId,
+              title: routines.title,
+              description: routines.description,
+              env: routines.env,
+              latestRevisionId: routines.latestRevisionId,
+              latestRevisionNumber: routines.latestRevisionNumber,
+            })
+            .from(routines)
+            .where(and(eq(routines.companyId, companyId), inArray(routines.id, automationRoutineIds)))
+        : Promise.resolve([]),
+      automationWorkflowIds.length > 0
+        ? db
+            .select({
+              id: workflows.id,
+              name: workflows.name,
+              description: workflows.description,
+            })
+            .from(workflows)
+            .where(and(eq(workflows.companyId, companyId), inArray(workflows.id, automationWorkflowIds)))
+        : Promise.resolve([]),
+    ]);
     const routineById = new Map(routineRows.map((row) => [
       row.id,
       {
@@ -955,7 +973,21 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         latestRevisionNumber: row.latestRevisionNumber,
       },
     ]));
-    res.json({ ...pipeline, stages: stages.map((stage) => withDerivedStageAutomation(stage, routineById)), transitions, documentKeys });
+    const workflowById = new Map(workflowRows.map((row) => [
+      row.id,
+      {
+        name: row.name,
+        description: row.description,
+      },
+    ]));
+    res.json({
+      ...pipeline,
+      stages: stages.map((stage) =>
+        withDerivedStageAutomation(stage, routineById, workflowById)
+      ),
+      transitions,
+      documentKeys,
+    });
   });
 
   // Setup-health warnings: surface any configuration that won't actually run
@@ -1022,7 +1054,12 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
       const routineId = stageAutomationRoutineId(stage.config);
       return routineId ? [routineId] : [];
     });
-    const routineRows = automationRoutineIds.length > 0
+    const automationWorkflowIds = stages.flatMap((stage) => {
+      const workflowId = stageAutomationWorkflowId(stage.config);
+      return workflowId ? [workflowId] : [];
+    });
+    const [routineRows, workflowRows] = await Promise.all([
+      automationRoutineIds.length > 0
       ? await db
           .select({
             id: routines.id,
@@ -1035,7 +1072,18 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
           })
           .from(routines)
           .where(and(eq(routines.companyId, companyId), inArray(routines.id, automationRoutineIds)))
-      : [];
+      : [],
+      automationWorkflowIds.length > 0
+        ? db
+            .select({
+              id: workflows.id,
+              name: workflows.name,
+              description: workflows.description,
+            })
+            .from(workflows)
+            .where(and(eq(workflows.companyId, companyId), inArray(workflows.id, automationWorkflowIds)))
+        : Promise.resolve([]),
+    ]);
     const routineById = new Map(routineRows.map((row) => [
       row.id,
       {
@@ -1045,6 +1093,13 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         env: row.env,
         latestRevisionId: row.latestRevisionId,
         latestRevisionNumber: row.latestRevisionNumber,
+      },
+    ]));
+    const workflowById = new Map(workflowRows.map((row) => [
+      row.id,
+      {
+        name: row.name,
+        description: row.description,
       },
     ]));
 
@@ -1074,7 +1129,11 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     }
 
     const healthStages: PipelineHealthStageInput[] = stages.map((stage) => {
-      const stageWithAutomation = withDerivedStageAutomation(stage, routineById);
+      const stageWithAutomation = withDerivedStageAutomation(
+        stage,
+        routineById,
+        workflowById,
+      );
       const automation = (stageWithAutomation.config as { automation?: { instructionsBody?: string | null } }).automation;
       return {
         id: stage.id,
