@@ -58,3 +58,16 @@ A registered node may be `ready` or `draft_only`. Publish fails closed with `wor
 - `workflow_publish_approval_unsupported`
 
 No Workflow endpoint executes external side effects in PR 11.
+
+
+## Current execution boundary
+
+PR 10–15 expose workflow persistence, draft/publish authoring, the node registry,
+capability discovery and the builder. There is intentionally no workflow run
+endpoint yet.
+
+The capabilities response therefore reports `run: false` even when a principal
+already holds the reserved `workflows:run` permission. The capability becomes
+true only when the durable executor and run API from PR 16+ are implemented and
+verified. This prevents UI/agent surfaces from promising behavior that does not
+exist.

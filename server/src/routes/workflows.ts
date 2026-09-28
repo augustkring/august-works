@@ -99,18 +99,20 @@ export function workflowRoutes(db: Db) {
     req: Request,
     companyId: string,
   ): Promise<WorkflowCapabilities> {
-    const [read, edit, publish, run] = await Promise.all([
+    const [read, edit, publish] = await Promise.all([
       decidePermission(req, companyId, "workflows:read"),
       decidePermission(req, companyId, "workflows:edit"),
       decidePermission(req, companyId, "workflows:publish"),
-      decidePermission(req, companyId, "workflows:run"),
     ]);
     const humanMutationSurface = req.actor.type === "board";
     return {
       read: read.allowed,
       edit: humanMutationSurface && edit.allowed,
       publish: humanMutationSurface && publish.allowed,
-      run: run.allowed,
+      // PR 10-15 intentionally expose persistence, authoring, registry and
+      // capability discovery only. Do not advertise executable behavior until
+      // the durable executor + run API (PR 16+) actually exists.
+      run: false,
     };
   }
 

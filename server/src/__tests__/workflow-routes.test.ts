@@ -276,7 +276,7 @@ describePg("Workflow routes", () => {
       read: true,
       edit: false,
       publish: false,
-      run: true,
+      run: false,
     });
   });
 
@@ -323,6 +323,22 @@ describePg("Workflow routes", () => {
           availability: { status: "available", reason: null },
         }),
       ],
+    });
+  });
+
+  it("does not advertise run capability before the durable executor exists", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+
+    const response = await request(app(localBoard))
+      .get(`/api/companies/${company.id}/workflows/capabilities`)
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      read: true,
+      edit: true,
+      publish: true,
+      run: false,
     });
   });
 
