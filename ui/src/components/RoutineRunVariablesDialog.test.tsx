@@ -283,6 +283,45 @@ describe("RoutineRunVariablesDialog", () => {
     });
   });
 
+  it("runs a workflow-target routine without agent or workspace overrides", async () => {
+    const root = createRoot(container);
+    const queryClient = createQueryClient(["workspaces.isolation"]);
+    const onSubmit = vi.fn();
+
+    await flushUi(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <RoutineRunVariablesDialog
+            open
+            onOpenChange={() => {}}
+            companyId="company-1"
+            projects={[createProject()]}
+            agents={[createAgent()]}
+            defaultProjectId="project-1"
+            defaultAssigneeAgentId="agent-1"
+            executionTargetKind="workflow"
+            variables={[]}
+            isPending={false}
+            onSubmit={onSubmit}
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    expect(document.body.textContent).toContain(
+      "The routine’s workflow execution target is fixed for this run.",
+    );
+    expect(document.body.textContent).not.toContain("Agent *");
+    expect(document.body.textContent).not.toContain("Workspace card");
+    expect(findRunButton()?.disabled).toBe(false);
+
+    await flushUi(() => findRunButton()?.click());
+    expect(onSubmit).toHaveBeenCalledWith({ variables: {} });
+    expect(issueWorkspaceDraftCalls).toBe(0);
+
+    await flushUi(() => root.unmount());
+  });
+
   it("hides workspace overrides while retaining an automatic workspace branch", async () => {
     const root = createRoot(container);
     const queryClient = createQueryClient(["workspaces.isolation"]);
