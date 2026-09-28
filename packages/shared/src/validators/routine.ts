@@ -82,7 +82,7 @@ const routineCreateObjectSchema = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().optional().nullable(),
   assigneeAgentId: z.string().guid().optional().nullable(),
-  executionTarget: routineExecutionTargetSchema.optional(),
+  executionTarget: routineExecutionTargetSchema.optional().nullable(),
   priority: z.enum(ISSUE_PRIORITIES).optional().default("medium"),
   status: z.enum(ROUTINE_STATUSES).optional().default("active"),
   concurrencyPolicy: z.enum(ROUTINE_CONCURRENCY_POLICIES).optional().default("coalesce_if_active"),
@@ -96,7 +96,7 @@ const routineCreateObjectSchema = z.object({
 function validateRoutineExecutionTargetCompatibility(
   value: {
     assigneeAgentId?: string | null;
-    executionTarget?: z.infer<typeof routineExecutionTargetSchema>;
+    executionTarget?: z.infer<typeof routineExecutionTargetSchema> | null;
   },
   ctx: z.RefinementCtx,
 ) {
