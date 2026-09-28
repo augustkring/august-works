@@ -428,6 +428,58 @@ describe("Routines page", () => {
     expect(groups[1]?.items.map((item) => item.title)).toEqual(["Weekly digest"]);
   });
 
+  it("groups workflow and agent routines by execution target", () => {
+    const groups = buildRoutineGroups(
+      [
+        createRoutine({
+          id: "routine-agent",
+          title: "Agent routine",
+          assigneeAgentId: "agent-1",
+          executionTargetKind: "agent_task",
+          executionTargetRef: "agent-1",
+        }),
+        createRoutine({
+          id: "routine-workflow",
+          title: "Workflow routine",
+          assigneeAgentId: null,
+          executionTargetKind: "workflow",
+          executionTargetRef: "11111111-1111-4111-8111-111111111111",
+        }),
+        createRoutine({
+          id: "routine-draft",
+          title: "Draft routine",
+          assigneeAgentId: null,
+          executionTargetKind: null,
+          executionTargetRef: null,
+        }),
+      ],
+      "assignee",
+      new Map(),
+      new Map([["agent-1", { name: "Agent One" }]]),
+      new Map(),
+      new Map([
+        [
+          "11111111-1111-4111-8111-111111111111",
+          { name: "Weekly workflow" },
+        ],
+      ]),
+    );
+
+    expect(groups.map((group) => group.label)).toEqual([
+      "Agent One",
+      "No execution target",
+      "Weekly workflow",
+    ]);
+    expect(
+      groups.find((group) => group.label === "Weekly workflow")?.items,
+    ).toEqual([
+      expect.objectContaining({
+        id: "routine-workflow",
+        title: "Workflow routine",
+      }),
+    ]);
+  });
+
   it("keeps built-in routines in their own section after configured groups", () => {
     const groups = buildRoutineSections(
       [
