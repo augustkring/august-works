@@ -2066,6 +2066,13 @@
       "when": 1790618400000,
       "tag": "0296_pipeline_automation_targets",
       "breakpoints": true
+    },
+    {
+      "idx": 297,
+      "version": "7",
+      "when": 1790622000000,
+      "tag": "0297_workflow_external_agent_wait",
+      "breakpoints": true
     }
   ]
 }
