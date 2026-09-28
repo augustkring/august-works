@@ -99,6 +99,16 @@ function invalidNode(
   });
 }
 
+function invalidGraph(
+  message: string,
+  details: Record<string, unknown>,
+): never {
+  throw unprocessable(message, {
+    code: "workflow_graph_invalid",
+    ...details,
+  });
+}
+
 async function requireProject(db: Db, companyId: string, nodeId: string, projectId: string) {
   const project = await db.select({ id: projects.id }).from(projects)
     .where(and(eq(projects.companyId, companyId), eq(projects.id, projectId)))
@@ -501,6 +511,108 @@ const REGISTRY: RegisteredWorkflowNode[] = [
 
 const REGISTRY_BY_TYPE = new Map(REGISTRY.map((entry) => [entry.descriptor.type, entry]));
 
+const EXPLICIT_SPLIT_NODE_TYPES = new Set([
+  "core.condition",
+  "core.switch",
+  "core.parallel",
+]);
+
+const EXPLICIT_MERGE_NODE_TYPES = new Set([
+  "core.merge",
+]);
+
+export function validateWorkflowPublishTopology(graph: WorkflowGraphV1): void {
+  const triggerNodes = graph.nodes.filter(
+    (node) => REGISTRY_BY_TYPE.get(node.type)?.descriptor.category === "trigger",
+  );
+  if (triggerNodes.length !== 1) {
+    invalidGraph("Published workflow must have exactly one effective entry trigger", {
+      reason: "entry_trigger_count",
+      triggerCount: triggerNodes.length,
+    });
+  }
+
+  const incoming = new Map(graph.nodes.map((node) => [node.id, 0] as const));
+  const outgoing = new Map(graph.nodes.map((node) => [node.id, [] as string[]] as const));
+
+  for (const edge of graph.edges) {
+    incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);
+    outgoing.get(edge.source)?.push(edge.target);
+  }
+
+  // Arbitrary graph cycles are forbidden in V1. Loops must later be represented
+  // by an explicit bounded Loop/Map node with its own execution contract.
+  const indegree = new Map(incoming);
+  const queue = graph.nodes
+    .filter((node) => (indegree.get(node.id) ?? 0) === 0)
+    .map((node) => node.id);
+  let visitedCount = 0;
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const nodeId = queue[cursor]!;
+    visitedCount += 1;
+    for (const target of outgoing.get(nodeId) ?? []) {
+      const next = (indegree.get(target) ?? 0) - 1;
+      indegree.set(target, next);
+      if (next === 0) queue.push(target);
+    }
+  }
+  if (visitedCount !== graph.nodes.length) {
+    invalidGraph("Published workflow cannot contain an arbitrary graph cycle", {
+      reason: "cycle_requires_explicit_loop",
+    });
+  }
+
+  const trigger = triggerNodes[0]!;
+  if ((incoming.get(trigger.id) ?? 0) !== 0) {
+    invalidGraph("Workflow entry trigger cannot have incoming edges", {
+      reason: "trigger_has_incoming_edge",
+      nodeId: trigger.id,
+    });
+  }
+
+  const reachable = new Set<string>();
+  const stack = [trigger.id];
+  while (stack.length > 0) {
+    const nodeId = stack.pop()!;
+    if (reachable.has(nodeId)) continue;
+    reachable.add(nodeId);
+    for (const target of outgoing.get(nodeId) ?? []) stack.push(target);
+  }
+
+  const unreachable = graph.nodes
+    .filter((node) => !reachable.has(node.id))
+    .map((node) => node.id)
+    .sort();
+  if (unreachable.length > 0) {
+    invalidGraph("Published workflow contains unreachable executable nodes", {
+      reason: "unreachable_nodes",
+      nodeIds: unreachable,
+    });
+  }
+
+  for (const node of graph.nodes) {
+    const outgoingCount = outgoing.get(node.id)?.length ?? 0;
+    if (outgoingCount > 1 && !EXPLICIT_SPLIT_NODE_TYPES.has(node.type)) {
+      invalidGraph("Published workflow requires an explicit branch/split node for parallel outgoing paths", {
+        reason: "implicit_parallel_split",
+        nodeId: node.id,
+        nodeType: node.type,
+        outgoingCount,
+      });
+    }
+
+    const incomingCount = incoming.get(node.id) ?? 0;
+    if (incomingCount > 1 && !EXPLICIT_MERGE_NODE_TYPES.has(node.type)) {
+      invalidGraph("Published workflow requires an explicit merge node for multiple incoming paths", {
+        reason: "implicit_merge",
+        nodeId: node.id,
+        nodeType: node.type,
+        incomingCount,
+      });
+    }
+  }
+}
+
 export function workflowNodeDefinitions(): WorkflowNodeDefinitionDescriptor[] {
   return REGISTRY
     .map((entry) => entry.descriptor)
@@ -574,7 +686,10 @@ export function workflowNodeRegistryService(db: Db) {
     list: workflowNodeDefinitions,
     validateDraftGraph: (companyId: string, graph: WorkflowGraphV1) =>
       validate(companyId, graph, "draft"),
-    validatePublishGraph: (companyId: string, graph: WorkflowGraphV1) =>
-      validate(companyId, graph, "publish"),
+    validatePublishGraph: async (companyId: string, graph: WorkflowGraphV1) => {
+      const validated = await validate(companyId, graph, "publish");
+      validateWorkflowPublishTopology(validated);
+      return validated;
+    },
   };
 }

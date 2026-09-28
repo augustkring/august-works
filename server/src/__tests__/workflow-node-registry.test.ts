@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Db } from "@paperclipai/db";
 import {
+  validateWorkflowPublishTopology,
   workflowNodeDefinitions,
   workflowNodeRegistryService,
 } from "../services/workflows/workflow-node-registry.js";
@@ -101,4 +102,160 @@ describe("Workflow Node Registry", () => {
       expect(JSON.stringify(error)).not.toContain('"expression":""');
     }
   });
+  it("enforces published graph topology independently from node implementation readiness", () => {
+    const node = (
+      id: string,
+      type: string,
+      x: number,
+      y: number,
+    ) => ({
+      id,
+      type,
+      name: id,
+      position: { x, y },
+      config:
+        type === "core.manual_trigger"
+          ? {}
+          : type === "core.condition"
+            ? { expression: "true" }
+            : { mapping: { value: "x" } },
+    });
+
+    expect(() =>
+      validateWorkflowPublishTopology({
+        version: 1,
+        nodes: [],
+        edges: [],
+        variables: [],
+        settings: {},
+      }),
+    ).toThrowError(expect.objectContaining({
+      details: expect.objectContaining({
+        code: "workflow_graph_invalid",
+        reason: "entry_trigger_count",
+        triggerCount: 0,
+      }),
+    }));
+
+    expect(() =>
+      validateWorkflowPublishTopology({
+        version: 1,
+        nodes: [
+          node("start-a", "core.manual_trigger", 0, 0),
+          node("start-b", "core.manual_trigger", 200, 0),
+        ],
+        edges: [],
+        variables: [],
+        settings: {},
+      }),
+    ).toThrowError(expect.objectContaining({
+      details: expect.objectContaining({
+        code: "workflow_graph_invalid",
+        reason: "entry_trigger_count",
+        triggerCount: 2,
+      }),
+    }));
+
+    expect(() =>
+      validateWorkflowPublishTopology({
+        version: 1,
+        nodes: [
+          node("start", "core.manual_trigger", 0, 0),
+          node("orphan", "core.transform", 200, 0),
+        ],
+        edges: [],
+        variables: [],
+        settings: {},
+      }),
+    ).toThrowError(expect.objectContaining({
+      details: expect.objectContaining({
+        code: "workflow_graph_invalid",
+        reason: "unreachable_nodes",
+        nodeIds: ["orphan"],
+      }),
+    }));
+
+    expect(() =>
+      validateWorkflowPublishTopology({
+        version: 1,
+        nodes: [
+          node("start", "core.manual_trigger", 0, 0),
+          node("transform", "core.transform", 200, 0),
+        ],
+        edges: [
+          { id: "e1", source: "start", target: "transform" },
+          { id: "e2", source: "transform", target: "start" },
+        ],
+        variables: [],
+        settings: {},
+      }),
+    ).toThrowError(expect.objectContaining({
+      details: expect.objectContaining({
+        code: "workflow_graph_invalid",
+        reason: "cycle_requires_explicit_loop",
+      }),
+    }));
+
+    expect(() =>
+      validateWorkflowPublishTopology({
+        version: 1,
+        nodes: [
+          node("start", "core.manual_trigger", 0, 0),
+          node("left", "core.transform", 200, -50),
+          node("right", "core.transform", 200, 50),
+        ],
+        edges: [
+          { id: "e1", source: "start", target: "left" },
+          { id: "e2", source: "start", target: "right" },
+        ],
+        variables: [],
+        settings: {},
+      }),
+    ).toThrowError(expect.objectContaining({
+      details: expect.objectContaining({
+        code: "workflow_graph_invalid",
+        reason: "implicit_parallel_split",
+        nodeId: "start",
+      }),
+    }));
+
+    expect(() =>
+      validateWorkflowPublishTopology({
+        version: 1,
+        nodes: [
+          node("start", "core.manual_trigger", 0, 0),
+          node("branch", "core.condition", 160, 0),
+          node("left", "core.transform", 320, -80),
+          node("right", "core.transform", 320, 80),
+          node("join", "core.transform", 480, 0),
+        ],
+        edges: [
+          { id: "e1", source: "start", target: "branch" },
+          { id: "e2", source: "branch", target: "left" },
+          { id: "e3", source: "branch", target: "right" },
+          { id: "e4", source: "left", target: "join" },
+          { id: "e5", source: "right", target: "join" },
+        ],
+        variables: [],
+        settings: {},
+      }),
+    ).toThrowError(expect.objectContaining({
+      details: expect.objectContaining({
+        code: "workflow_graph_invalid",
+        reason: "implicit_merge",
+        nodeId: "join",
+      }),
+    }));
+
+    expect(() =>
+      validateWorkflowPublishTopology({
+        version: 1,
+        nodes: [node("start", "core.manual_trigger", 0, 0)],
+        edges: [],
+        variables: [],
+        settings: {},
+      }),
+    ).not.toThrow();
+  });
+
 });
