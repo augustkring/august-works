@@ -4364,6 +4364,61 @@ async function executeWorkflowGraph(
             });
           }
         }
+      } else if (current.type === "agent.task") {
+        const config = agentTaskNodeConfig(current);
+        const prepared = await prepareRunnableStep(
+          db,
+          ownedRun,
+          current.id,
+          {
+            agentId: config.agentId,
+            objective: config.objective,
+            waitForCompletion: config.waitForCompletion,
+            expectedOutputSchema: null,
+          },
+          actor,
+        );
+        if (prepared.checkpoint) {
+          output = prepared.checkpoint.outputJson;
+        } else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) {
+            throw new WorkflowCheckpointError(
+              "workflow_checkpoint_state_invalid",
+              `Agent Task ${current.id} produced no runnable attempt`,
+            );
+          }
+
+          if (config.waitForCompletion) {
+            await scheduleAgentTaskCompletionWait(
+              db,
+              ownedRun,
+              current,
+              runningStep,
+              actor,
+              runtimeDeps,
+            );
+            return;
+          }
+
+          const delegated = await executeWorkflowAgentTask(
+            db,
+            ownedRun,
+            current,
+            runningStep,
+            actor,
+            runtimeDeps,
+          );
+          runningStep = delegated.step;
+          output = delegated.output;
+          await completeRunningStep(
+            db,
+            ownedRun,
+            runningStep,
+            output,
+            actor,
+          );
+        }
       } else if (current.type === "human.approval") {
         const config = humanApprovalConfig(current);
         const prepared = await prepareRunnableStep(
@@ -4553,7 +4608,8 @@ async function executeClaimedRun(
             node.type !== "core.condition" &&
             node.type !== "core.wait" &&
             node.type !== "human.approval" &&
-            node.type !== "work.create_task",
+            node.type !== "work.create_task" &&
+            node.type !== "agent.task",
         )
         .map((node) => node.type),
     ),
@@ -4810,7 +4866,8 @@ export async function resolveWorkflowExecutionRevision(
             node.type !== "core.condition" &&
             node.type !== "core.wait" &&
             node.type !== "human.approval" &&
-            node.type !== "work.create_task",
+            node.type !== "work.create_task" &&
+            node.type !== "agent.task",
         )
         .map((node) => node.type),
     ),
