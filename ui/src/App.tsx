@@ -44,6 +44,8 @@ import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
 import { Workflows } from "./pages/Workflows";
 import { WorkflowBuilder } from "./pages/WorkflowBuilder";
+import { WorkflowRuns } from "./pages/WorkflowRuns";
+import { WorkflowRun } from "./pages/WorkflowRun";
 import { Learnings, PipelineItemDetail, PipelineItemLegacyRedirect, Pipelines, ReviewQueue } from "./pages/Pipelines";
 import { PipelineSettings } from "./pages/PipelineSettings";
 import { StatusCards } from "./pages/StatusCards";
@@ -329,6 +331,14 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route
         path="workflows/:workflowId"
         element={<WorkflowBuilderExperimentalGate><WorkflowBuilder /></WorkflowBuilderExperimentalGate>}
+      />
+      <Route
+        path="workflows/:workflowId/runs"
+        element={<WorkflowBuilderExperimentalGate><WorkflowRuns /></WorkflowBuilderExperimentalGate>}
+      />
+      <Route
+        path="workflows/:workflowId/runs/:runId"
+        element={<WorkflowBuilderExperimentalGate><WorkflowRun /></WorkflowBuilderExperimentalGate>}
       />
       <Route path="routines" element={streamlinedUiEnabled ? <Routines /> : <ProductionSurface><ProductionRoutines /></ProductionSurface>} />
       <Route
