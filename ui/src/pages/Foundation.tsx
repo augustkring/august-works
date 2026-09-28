@@ -11,7 +11,6 @@ import {
 import {
   BookOpen,
   Check,
-  Clock3,
   FileText,
   History,
   Lightbulb,
@@ -211,6 +210,12 @@ export function Foundation() {
     : categoryDocuments;
 
   useEffect(() => {
+    if (detailQuery.data && search.trim().length < 2) {
+      setCategory(detailQuery.data.category);
+    }
+  }, [detailQuery.data?.category, detailQuery.data?.id, search]);
+
+  useEffect(() => {
     if (!foundationDocumentId && visibleDocuments.length === 1) {
       navigate(`/foundation/${visibleDocuments[0]!.id}`, { replace: true });
     }
@@ -265,7 +270,9 @@ export function Foundation() {
             className="pl-9"
           />
           {search.trim().length >= 2 && searchQuery.isFetching ? (
-            <span className="absolute right-3 top-2.5 text-xs text-muted-foreground">Searching…</span>
+            <span aria-live="polite" className="absolute right-3 top-2.5 text-xs text-muted-foreground">
+              Searching…
+            </span>
           ) : null}
         </div>
 
@@ -311,7 +318,17 @@ export function Foundation() {
               </p>
               <span className="text-xs text-muted-foreground">{visibleDocuments.length}</span>
             </div>
-            {search.trim().length >= 2 && !searchQuery.isFetching && visibleDocuments.length === 0 ? (
+            {search.trim().length >= 2 && searchQuery.error ? (
+              <div className="px-2 py-6">
+                <p className="text-sm font-medium text-destructive">Search failed</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Approved Foundation could not be searched.
+                </p>
+                <Button className="mt-3" size="sm" variant="outline" onClick={() => searchQuery.refetch()}>
+                  Retry
+                </Button>
+              </div>
+            ) : search.trim().length >= 2 && !searchQuery.isFetching && visibleDocuments.length === 0 ? (
               <p className="px-2 py-8 text-sm text-muted-foreground">No approved Foundation matches.</p>
             ) : visibleDocuments.length === 0 ? (
               <div className="px-2 py-8">
@@ -417,18 +434,40 @@ function FoundationDocumentWorkspace({
   const { pushToast } = useToastActions();
   const invalidate = useFoundationInvalidation(companyId, document.id);
   const [tab, setTab] = useState<WorkspaceTab>("document");
-  const [mode, setMode] = useState<DocumentMode>("working");
+  const [mode, setMode] = useState<DocumentMode>(
+    () => document.approvedRevisionId ? "approved" : "working",
+  );
   const [editing, setEditing] = useState(false);
   const [proposalOpen, setProposalOpen] = useState(false);
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
   const [edit, setEdit] = useState(() => makeEditState(document));
+
+  const displayedGovernance =
+    mode === "approved" && document.canonicalGovernance
+      ? document.canonicalGovernance
+      : {
+          category: document.category,
+          documentType: document.documentType,
+          authorityLevel: document.authorityLevel,
+          sensitivity: document.sensitivity,
+          ownerUserId: document.ownerUserId,
+          ownerAgentId: document.ownerAgentId,
+          reviewFrequencyDays: document.reviewFrequencyDays,
+          validFrom: document.validFrom,
+          validUntil: document.validUntil,
+        };
+  const displayedOwner = displayedGovernance.ownerUserId
+    ? userNames.get(displayedGovernance.ownerUserId) ?? "Human owner"
+    : displayedGovernance.ownerAgentId
+      ? agentNames.get(displayedGovernance.ownerAgentId) ?? "Agent owner"
+      : "Unassigned";
 
   useEffect(() => {
     setEditing(false);
     setEdit(makeEditState(document));
     setSelectedRevisionId(null);
     setMode(document.approvedRevisionId ? "approved" : "working");
-  }, [document.id]);
+  }, [document.approvedRevisionId, document.id]);
 
   useEffect(() => {
     if (!editing) setEdit(makeEditState(document));
@@ -552,10 +591,10 @@ function FoundationDocumentWorkspace({
               <Badge variant="outline" className={cn(statusClass(document.status))}>
                 {STATUS_LABELS[document.status]}
               </Badge>
-              <Badge variant="outline">{sensitivityLabel(document.sensitivity)}</Badge>
+              <Badge variant="outline">{sensitivityLabel(displayedGovernance.sensitivity)}</Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {FOUNDATION_CATEGORY_LABELS[document.category]} · {document.foundationKey}
+              {FOUNDATION_CATEGORY_LABELS[displayedGovernance.category]} · {document.foundationKey}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -599,7 +638,7 @@ function FoundationDocumentWorkspace({
         </div>
 
         <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-          <span>Owner: {ownerLabel(document, userNames, agentNames)}</span>
+          <span>Owner: {displayedOwner}</span>
           <span>Last approved: {formatDate(document.canonicalRevision?.createdAt)}</span>
           <span>Next review: {formatDate(document.nextReviewAt)}</span>
           <span>Working rev: {document.latestRevisionNumber}</span>
@@ -704,6 +743,7 @@ function FoundationDocumentWorkspace({
           selected={selectedRevision}
           loading={revisionsQuery.isLoading}
           error={revisionsQuery.error}
+          onRetry={() => revisionsQuery.refetch()}
           onSelect={setSelectedRevisionId}
         />
       ) : (
@@ -712,6 +752,7 @@ function FoundationDocumentWorkspace({
           proposals={proposalsQuery.data ?? []}
           loading={proposalsQuery.isLoading}
           error={proposalsQuery.error}
+          onRetry={() => proposalsQuery.refetch()}
           onCreate={() => setProposalOpen(true)}
           onAccept={(id) => approveProposal.mutate(id)}
           onReject={(id) => rejectProposal.mutate(id)}
@@ -883,16 +924,25 @@ function RevisionPanel({
   selected,
   loading,
   error,
+  onRetry,
   onSelect,
 }: {
   revisions: FoundationRevision[];
   selected: FoundationRevision | null;
   loading: boolean;
   error: unknown;
+  onRetry: () => void;
   onSelect: (id: string) => void;
 }) {
-  if (loading) return <p className="text-sm text-muted-foreground">Loading revisions…</p>;
-  if (error) return <p className="text-sm text-destructive">Revisions could not be loaded.</p>;
+  if (loading) return <p aria-live="polite" className="text-sm text-muted-foreground">Loading revisions…</p>;
+  if (error) {
+    return (
+      <div className="border-l-2 border-destructive pl-3">
+        <p className="text-sm font-medium text-destructive">Revisions could not be loaded.</p>
+        <Button className="mt-2" size="sm" variant="outline" onClick={onRetry}>Retry</Button>
+      </div>
+    );
+  }
   if (revisions.length === 0) return <p className="text-sm text-muted-foreground">No revisions yet.</p>;
 
   return (
@@ -935,6 +985,7 @@ function ProposalPanel({
   proposals,
   loading,
   error,
+  onRetry,
   onCreate,
   onAccept,
   onReject,
@@ -944,6 +995,7 @@ function ProposalPanel({
   proposals: FoundationChangeProposal[];
   loading: boolean;
   error: unknown;
+  onRetry: () => void;
   onCreate: () => void;
   onAccept: (id: string) => void;
   onReject: (id: string) => void;
@@ -963,8 +1015,13 @@ function ProposalPanel({
           Propose change
         </Button>
       </div>
-      {loading ? <p className="text-sm text-muted-foreground">Loading proposals…</p> : null}
-      {error ? <p className="text-sm text-destructive">Proposals could not be loaded.</p> : null}
+      {loading ? <p aria-live="polite" className="text-sm text-muted-foreground">Loading proposals…</p> : null}
+      {error ? (
+        <div className="border-l-2 border-destructive pl-3">
+          <p className="text-sm font-medium text-destructive">Proposals could not be loaded.</p>
+          <Button className="mt-2" size="sm" variant="outline" onClick={onRetry}>Retry</Button>
+        </div>
+      ) : null}
       {!loading && !error && proposals.length === 0 ? (
         <p className="py-6 text-sm text-muted-foreground">No proposals for this document.</p>
       ) : null}
