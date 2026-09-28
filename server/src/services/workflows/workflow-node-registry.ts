@@ -15,6 +15,7 @@ import {
   type WorkflowRetryPolicy,
 } from "@paperclipai/shared";
 import { unprocessable } from "../../errors.js";
+import { parseWorkflowConditionExpression } from "./workflow-condition-expression.js";
 
 type NodeConfigSchema = z.ZodType;
 
@@ -58,7 +59,17 @@ const transformConfig = z.object({
 }).strict();
 const conditionConfig = z.object({
   expression: z.string().trim().min(1).max(5_000),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  try {
+    parseWorkflowConditionExpression(value.expression);
+  } catch (error) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["expression"],
+      message: error instanceof Error ? error.message : "Invalid condition expression",
+    });
+  }
+});
 const connectorActionConfig = z.object({
   toolCatalogEntryId: z.string().guid(),
   connectionId: z.string().guid(),
@@ -275,8 +286,8 @@ const REGISTRY: RegisteredWorkflowNode[] = [
         supportsKeyboardInsert: true,
         supportsOutlineEdit: true,
       },
-      publishState: "draft_only",
-      publishBlockedReason: "branch_executor_not_ready",
+      publishState: "ready",
+      publishBlockedReason: null,
     }),
     configValidator: conditionConfig,
   },
@@ -592,6 +603,26 @@ export function validateWorkflowPublishTopology(graph: WorkflowGraphV1): void {
 
   for (const node of graph.nodes) {
     const outgoingCount = outgoing.get(node.id)?.length ?? 0;
+    const nodeOutgoingEdges = graph.edges.filter((edge) => edge.source === node.id);
+
+    if (node.type === "core.condition" && nodeOutgoingEdges.length > 0) {
+      const branchKeys = nodeOutgoingEdges.map((edge) =>
+        (edge.sourceHandle ?? edge.label ?? "").trim().toLowerCase(),
+      );
+      if (
+        nodeOutgoingEdges.length !== 2 ||
+        new Set(branchKeys).size !== 2 ||
+        !branchKeys.includes("true") ||
+        !branchKeys.includes("false")
+      ) {
+        invalidGraph("Condition branches must define exactly one true and one false path", {
+          reason: "condition_branches_invalid",
+          nodeId: node.id,
+          branchKeys,
+        });
+      }
+    }
+
     if (outgoingCount > 1 && !EXPLICIT_SPLIT_NODE_TYPES.has(node.type)) {
       invalidGraph("Published workflow requires an explicit branch/split node for parallel outgoing paths", {
         reason: "implicit_parallel_split",
