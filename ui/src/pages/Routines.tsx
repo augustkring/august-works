@@ -2,11 +2,12 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useSearchParams } from "@/lib/router";
-import { ArrowUpDown, Check, ChevronDown, ChevronRight, Layers, Plus, Repeat } from "lucide-react";
+import { ArrowUpDown, Check, ChevronDown, ChevronRight, GitBranch, Layers, Plus, Repeat } from "lucide-react";
 import { routinesApi } from "../api/routines";
 import { foldersApi } from "../api/folders";
 import { agentsApi } from "../api/agents";
 import { projectsApi } from "../api/projects";
+import { workflowsApi } from "../api/workflows";
 import { issuesApi } from "../api/issues";
 import { heartbeatsApi } from "../api/heartbeats";
 import { accessApi } from "../api/access";
@@ -145,17 +146,42 @@ function buildRoutineMutationPayload(input: {
   projectId: string;
   folderId: string | null;
   assigneeAgentId: string;
+  executionTargetKind: "agent_task" | "workflow";
+  executionTargetRef: string;
   priority: string;
   concurrencyPolicy: string;
   catchUpPolicy: string;
   variables: RoutineVariable[];
 }) {
+  const executionTarget =
+    input.executionTargetKind === "workflow"
+      ? input.executionTargetRef
+        ? {
+            kind: "workflow" as const,
+            workflowId: input.executionTargetRef,
+          }
+        : null
+      : input.assigneeAgentId
+        ? {
+            kind: "agent_task" as const,
+            agentId: input.assigneeAgentId,
+          }
+        : null;
+
   return {
-    ...input,
+    title: input.title,
     description: input.description.trim() || null,
     projectId: input.projectId || null,
     folderId: input.folderId || null,
-    assigneeAgentId: input.assigneeAgentId || null,
+    assigneeAgentId:
+      executionTarget?.kind === "agent_task"
+        ? executionTarget.agentId
+        : null,
+    executionTarget,
+    priority: input.priority,
+    concurrencyPolicy: input.concurrencyPolicy,
+    catchUpPolicy: input.catchUpPolicy,
+    variables: input.variables,
   };
 }
 
@@ -343,6 +369,8 @@ export function Routines() {
     projectId: string;
     folderId: string | null;
     assigneeAgentId: string;
+    executionTargetKind: "agent_task" | "workflow";
+    executionTargetRef: string;
     priority: string;
     concurrencyPolicy: string;
     catchUpPolicy: string;
@@ -353,6 +381,8 @@ export function Routines() {
     projectId: "",
     folderId: null,
     assigneeAgentId: "",
+    executionTargetKind: "agent_task",
+    executionTargetRef: "",
     priority: "medium",
     concurrencyPolicy: "coalesce_if_active",
     catchUpPolicy: "skip_missed",
@@ -391,6 +421,15 @@ export function Routines() {
     queryKey: queryKeys.projects.list(selectedCompanyId!, { includeArchived: true }),
     queryFn: () => projectsApi.list(selectedCompanyId!, { includeArchived: true }),
     enabled: !!selectedCompanyId,
+  });
+  const { data: workflows = [] } = useQuery({
+    queryKey: queryKeys.workflows.list(selectedCompanyId!),
+    queryFn: () => workflowsApi.list(selectedCompanyId!),
+    enabled:
+      !!selectedCompanyId &&
+      composerOpen &&
+      draft.executionTargetKind === "workflow",
+    retry: false,
   });
   const { data: companyMembers } = useQuery({
     queryKey: queryKeys.access.companyUserDirectory(selectedCompanyId!),
@@ -440,6 +479,8 @@ export function Routines() {
         projectId: "",
         folderId: null,
         assigneeAgentId: "",
+        executionTargetKind: "agent_task",
+        executionTargetRef: "",
         priority: "medium",
         concurrencyPolicy: "coalesce_if_active",
         catchUpPolicy: "skip_missed",
@@ -450,9 +491,9 @@ export function Routines() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.routines.list(selectedCompanyId!) });
       pushToast({
         title: "Routine created",
-        body: routine.assigneeAgentId
-          ? "Add the first trigger to turn it into a live workflow."
-          : "Draft saved. Add a default agent before enabling automation.",
+        body: (routine.executionTargetRef ?? routine.assigneeAgentId)
+          ? "Add the first trigger when you are ready to automate it."
+          : "Draft saved. Choose an execution target before enabling automation.",
         tone: "success",
       });
       navigate(routineDetailHref(routine.id, "triggers"));
@@ -630,6 +671,21 @@ export function Routines() {
       })),
     [projects],
   );
+  const workflowOptions = useMemo<InlineEntityOption[]>(
+    () =>
+      workflows
+        .filter(
+          (workflow) =>
+            workflow.status === "active" &&
+            Boolean(workflow.publishedRevisionId),
+        )
+        .map((workflow) => ({
+          id: workflow.id,
+          label: workflow.name,
+          searchText: workflow.description ?? "",
+        })),
+    [workflows],
+  );
   const agentById = useMemo(
     () => new Map((agents ?? []).map((agent) => [agent.id, agent])),
     [agents],
@@ -703,7 +759,10 @@ export function Routines() {
     () => buildRoutineSections(sortedRoutines, routineViewState.groupBy, projectById, agentById, folderById),
     [agentById, folderById, projectById, routineViewState.groupBy, sortedRoutines],
   );
-  const currentAssignee = draft.assigneeAgentId ? agentById.get(draft.assigneeAgentId) ?? null : null;
+  const currentAssignee =
+    draft.executionTargetKind === "agent_task" && draft.assigneeAgentId
+      ? agentById.get(draft.assigneeAgentId) ?? null
+      : null;
   const currentProject = draft.projectId ? projectById.get(draft.projectId) ?? null : null;
   const activeFolder = selectedFolderFromList(routineFolders?.folders ?? [], folderSelection);
   const hasRoutineFolders = (routineFolders?.folders.length ?? 0) > 0;
@@ -767,10 +826,13 @@ export function Routines() {
   }
 
   function handleToggleEnabled(routine: RoutineListItem, enabled: boolean) {
-    if (!enabled && !routine.assigneeAgentId) {
+    if (
+      !enabled &&
+      !(routine.executionTargetRef ?? routine.assigneeAgentId)
+    ) {
       pushToast({
-        title: "Default agent required",
-        body: "Set a default agent before enabling routine automation.",
+        title: "Execution target required",
+        body: "Choose an agent or workflow before enabling routine automation.",
         tone: "warn",
       });
       return;
@@ -1459,7 +1521,16 @@ export function Routines() {
         agents={agents ?? []}
         projects={projects ?? []}
         defaultProjectId={runDialogRoutine?.projectId ?? null}
-        defaultAssigneeAgentId={runDialogRoutine?.assigneeAgentId ?? null}
+        defaultAssigneeAgentId={
+          runDialogRoutine?.executionTargetKind === "workflow"
+            ? null
+            : runDialogRoutine?.assigneeAgentId ?? null
+        }
+        executionTargetKind={
+          runDialogRoutine?.executionTargetKind === "workflow"
+            ? "workflow"
+            : "agent_task"
+        }
         variables={runDialogRoutine?.variables ?? []}
         isPending={runRoutine.isPending}
         onSubmit={(data) => {
