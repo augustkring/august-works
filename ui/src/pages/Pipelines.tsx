@@ -229,7 +229,7 @@ function itemCountLabel(count: number) {
   return `${count} ${count === 1 ? "item" : "items"}`;
 }
 
-function currentStageAutomation(stage: PipelineStage):
+function currentStageAutomation(stage: Pick<PipelineStage, "config">):
   | { kind: "routine"; routineId: string }
   | { kind: "workflow"; workflowId: string }
   | null {
@@ -271,7 +271,7 @@ function currentStageAutomation(stage: PipelineStage):
 function readPipelineStageAutomationWorkflow(
   stage: Pick<PipelineStage, "config">,
 ): { id: string; name: string } | null {
-  const target = currentStageAutomation(stage as PipelineStage);
+  const target = currentStageAutomation(stage);
   if (target?.kind !== "workflow") return null;
   const automation = stage.config?.automation;
   const name =
