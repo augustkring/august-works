@@ -1270,6 +1270,7 @@ export function routineService(
         dispatchFingerprint: routineRuns.dispatchFingerprint,
         routineRevisionId: routineRuns.routineRevisionId,
         linkedIssueId: routineRuns.linkedIssueId,
+        linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
         coalescedIntoRunId: routineRuns.coalescedIntoRunId,
         failureReason: routineRuns.failureReason,
         completedAt: routineRuns.completedAt,
@@ -1304,6 +1305,7 @@ export function routineService(
         dispatchFingerprint: row.dispatchFingerprint,
         routineRevisionId: row.routineRevisionId,
         linkedIssueId: row.linkedIssueId,
+        linkedWorkflowRunId: row.linkedWorkflowRunId,
         coalescedIntoRunId: row.coalescedIntoRunId,
         failureReason: row.failureReason,
         completedAt: row.completedAt,
@@ -2549,6 +2551,7 @@ export function routineService(
               dispatchFingerprint: run.dispatchFingerprint,
               routineRevisionId: run.routineRevisionId,
               linkedIssueId: run.linkedIssueId,
+              linkedWorkflowRunId: run.linkedWorkflowRunId,
               coalescedIntoRunId: run.coalescedIntoRunId,
               failureReason: run.failureReason,
               completedAt: run.completedAt,
@@ -3313,8 +3316,6 @@ export function routineService(
       if (!routine) throw notFound("Routine not found");
       if (routine.status === "archived") throw conflict("Routine is archived");
       await assertProject(routine.companyId, input.projectId ?? null);
-      const assigneeAgentId = input.assigneeAgentId ?? routine.assigneeAgentId ?? null;
-      await assertAssignableAgent(db, routine.companyId, assigneeAgentId, { kind: "routine" });
       const trigger = input.triggerId ? await getTriggerById(input.triggerId) : null;
       if (trigger && trigger.routineId !== routine.id) throw forbidden("Trigger does not belong to routine");
       if (trigger && !trigger.enabled) throw conflict("Routine trigger is not active");
@@ -3341,8 +3342,6 @@ export function routineService(
       if (!routine) throw notFound("Routine not found");
       if (routine.status === "archived") throw conflict("Routine is archived");
       await assertProject(routine.companyId, input.projectId ?? null);
-      const assigneeAgentId = input.assigneeAgentId ?? routine.assigneeAgentId ?? null;
-      await assertAssignableAgent(db, routine.companyId, assigneeAgentId, { kind: "routine" });
       return dispatchRoutineRun({
         routine,
         trigger: null,
@@ -3605,6 +3604,7 @@ export function routineService(
         dispatchFingerprint: row.dispatchFingerprint,
         routineRevisionId: row.routineRevisionId,
         linkedIssueId: row.linkedIssueId,
+        linkedWorkflowRunId: row.linkedWorkflowRunId,
         coalescedIntoRunId: row.coalescedIntoRunId,
         failureReason: row.failureReason,
         completedAt: row.completedAt,
