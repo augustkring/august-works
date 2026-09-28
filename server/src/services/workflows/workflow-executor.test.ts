@@ -117,6 +117,7 @@ describePg("Workflow executor V1", () => {
 
   async function seedPublishedAgentTaskWorkflow(input: {
     waitForCompletion: boolean;
+    expectedOutputSchema?: Record<string, unknown> | null;
   }) {
     const companyId = randomUUID();
     const userId = `user-${companyId}`;
@@ -171,7 +172,7 @@ describePg("Workflow executor V1", () => {
             agentId,
             objective: "Research the account and produce the accountable task outcome.",
             waitForCompletion: input.waitForCompletion,
-            expectedOutputSchema: null,
+            expectedOutputSchema: input.expectedOutputSchema ?? null,
           },
         },
         ...(input.waitForCompletion
@@ -1874,6 +1875,28 @@ describePg("Workflow executor V1", () => {
     expect(
       await db.select().from(issues).where(eq(issues.companyId, seeded.companyId)),
     ).toHaveLength(0);
+  });
+
+  it("fails Agent Task publish when structured output has no authoritative task result channel", async () => {
+    await expect(
+      seedPublishedAgentTaskWorkflow({
+        waitForCompletion: true,
+        expectedOutputSchema: {
+          type: "object",
+          properties: {
+            score: { type: "number" },
+          },
+          required: ["score"],
+        },
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: expect.objectContaining({
+        code: "workflow_node_invalid",
+        reason: "workflow_agent_task_structured_output_not_ready",
+        nodeType: "agent.task",
+      }),
+    });
   });
 
   it("delegates Agent Task through the existing task and heartbeat runtime", async () => {
