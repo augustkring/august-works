@@ -74,7 +74,7 @@ export const routineExecutionTargetSchema = z.discriminatedUnion("kind", [
   }).strict(),
 ]);
 
-export const createRoutineSchema = z.object({
+const routineCreateObjectSchema = z.object({
   projectId: z.string().guid().optional().nullable(),
   folderId: z.string().guid().optional().nullable(),
   goalId: z.string().guid().optional().nullable(),
@@ -91,7 +91,15 @@ export const createRoutineSchema = z.object({
   activityGateScope: z.enum(ROUTINE_ACTIVITY_GATE_SCOPES).optional(),
   variables: z.array(routineVariableSchema).optional().default([]),
   env: envConfigSchema.optional().nullable(),
-}).superRefine((value, ctx) => {
+});
+
+function validateRoutineExecutionTargetCompatibility(
+  value: {
+    assigneeAgentId?: string | null;
+    executionTarget?: z.infer<typeof routineExecutionTargetSchema>;
+  },
+  ctx: z.RefinementCtx,
+) {
   if (
     value.executionTarget?.kind === "workflow" &&
     value.assigneeAgentId !== undefined &&
@@ -115,13 +123,20 @@ export const createRoutineSchema = z.object({
       message: "Agent execution target must match assigneeAgentId when both are supplied",
     });
   }
-});
+}
+
+export const createRoutineSchema = routineCreateObjectSchema.superRefine(
+  validateRoutineExecutionTargetCompatibility,
+);
 
 export type CreateRoutine = z.infer<typeof createRoutineSchema>;
 
-export const updateRoutineSchema = objectWithoutDefaults(createRoutineSchema).partial().extend({
-  baseRevisionId: z.string().guid().optional().nullable(),
-});
+export const updateRoutineSchema = objectWithoutDefaults(routineCreateObjectSchema)
+  .partial()
+  .extend({
+    baseRevisionId: z.string().guid().optional().nullable(),
+  })
+  .superRefine(validateRoutineExecutionTargetCompatibility);
 export type UpdateRoutine = z.infer<typeof updateRoutineSchema>;
 
 export const routineRevisionSnapshotRoutineV1Schema = z.object({
