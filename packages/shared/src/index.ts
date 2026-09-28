@@ -2982,5 +2982,7 @@ export {
 } from "./types/workflow.js";
 export {
   startWorkflowRunSchema,
+  workflowRunListQuerySchema,
   type StartWorkflowRun,
+  type WorkflowRunListQuery,
 } from "./validators/workflow.js";
