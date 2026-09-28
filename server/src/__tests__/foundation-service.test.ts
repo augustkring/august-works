@@ -480,4 +480,64 @@ describeEmbeddedPostgres("Foundation service", () => {
     expect((await svc.get(company.id, draft.id))?.body).toBe("Current draft");
   });
 
+  it("never returns another company's indexed sections", async () => {
+    const alpha = await seedCompany("Alpha");
+    const beta = await seedCompany("Beta");
+    const alphaSvc = foundationService(db);
+    const betaSvc = foundationService(db);
+    const index = foundationIndexService(db);
+
+    const alphaDraft = await alphaSvc.createDraft(
+      alpha.id,
+      {
+        foundationKey: "strategy",
+        category: "strategy",
+        documentType: "strategy",
+        body: "# Strategy\nAlpha secret strategy",
+      },
+      actor(alpha.userId),
+    );
+    const alphaReview = await alphaSvc.submitForReview(
+      alpha.id,
+      alphaDraft.id,
+      alphaDraft.latestRevisionId!,
+      actor(alpha.userId),
+    );
+    await alphaSvc.approve(
+      alpha.id,
+      alphaDraft.id,
+      alphaReview.latestRevisionId!,
+      actor(alpha.userId),
+    );
+
+    const betaDraft = await betaSvc.createDraft(
+      beta.id,
+      {
+        foundationKey: "strategy",
+        category: "strategy",
+        documentType: "strategy",
+        body: "# Strategy\nBeta strategy",
+      },
+      actor(beta.userId),
+    );
+    const betaReview = await betaSvc.submitForReview(
+      beta.id,
+      betaDraft.id,
+      betaDraft.latestRevisionId!,
+      actor(beta.userId),
+    );
+    await betaSvc.approve(
+      beta.id,
+      betaDraft.id,
+      betaReview.latestRevisionId!,
+      actor(beta.userId),
+    );
+
+    expect(await index.search(beta.id, {
+      query: "Alpha secret strategy",
+      limit: 10,
+      scope: "approved",
+    })).toEqual([]);
+  });
+
 });

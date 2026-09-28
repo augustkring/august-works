@@ -368,8 +368,21 @@ export function foundationIndexService(db: Db) {
             eq(foundationDocuments.id, foundationSections.foundationDocumentId),
           ),
         )
-        .innerJoin(documents, eq(documents.id, foundationDocuments.documentId))
-        .innerJoin(searchRevision, eq(searchRevision.id, foundationSections.documentRevisionId))
+        .innerJoin(
+          documents,
+          and(
+            eq(documents.id, foundationDocuments.documentId),
+            eq(documents.companyId, companyId),
+          ),
+        )
+        .innerJoin(
+          searchRevision,
+          and(
+            eq(searchRevision.id, foundationSections.documentRevisionId),
+            eq(searchRevision.companyId, companyId),
+            eq(searchRevision.documentId, foundationDocuments.documentId),
+          ),
+        )
         .where(
           and(
             eq(foundationSections.companyId, companyId),
