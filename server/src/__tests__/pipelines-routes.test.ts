@@ -30,6 +30,8 @@ import {
   projects,
   routineRuns,
   routines,
+  workflowRevisions,
+  workflows,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -83,6 +85,8 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await db.delete(executionWorkspaces);
     await db.delete(pipelines);
     await db.delete(routines);
+    await db.delete(workflowRevisions);
+    await db.delete(workflows);
     await db.delete(projectWorkspaces);
     await db.delete(projects);
     await db.delete(principalPermissionGrants);
@@ -115,6 +119,40 @@ describeEmbeddedPostgres("pipeline routes", () => {
       issuePrefix: `P${randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
     }).returning();
     return company!;
+  }
+
+  async function seedPublishedWorkflow(companyId: string) {
+    const [workflow] = await db.insert(workflows).values({
+      companyId,
+      name: "Pipeline target workflow",
+      status: "active",
+    }).returning();
+    const [revision] = await db.insert(workflowRevisions).values({
+      companyId,
+      workflowId: workflow!.id,
+      revisionNumber: 1,
+      state: "published",
+      graph: {
+        version: 1,
+        nodes: [
+          {
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Start",
+            position: { x: 0, y: 0 },
+            config: {},
+          },
+        ],
+        edges: [],
+        variables: [],
+        settings: {},
+      },
+    }).returning();
+    await db
+      .update(workflows)
+      .set({ publishedRevisionId: revision!.id })
+      .where(eq(workflows.id, workflow!.id));
+    return workflow!;
   }
 
   async function seedAutomationAgent(companyId: string) {
@@ -363,6 +401,110 @@ describeEmbeddedPostgres("pipeline routes", () => {
     expect(children.body.map((row: { case: { id: string; caseKey: string } }) => [row.case.id, row.case.caseKey])).toEqual([
       [visible.body.case.id, "visible-child"],
     ]);
+  });
+
+  it("requires workflows:run in addition to pipelines:write for Workflow automation targets", async () => {
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true });
+    const company = await seedCompany();
+    const workflow = await seedPublishedWorkflow(company.id);
+    const userId = "pipeline-workflow-user";
+
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "member",
+    });
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: userId,
+      permissionKey: "pipelines:write",
+      scope: null,
+    });
+
+    const actor: Express.Request["actor"] = {
+      type: "board",
+      userId,
+      source: "session",
+      companyIds: [company.id],
+      memberships: [
+        {
+          companyId: company.id,
+          membershipRole: "member",
+          status: "active",
+        },
+      ],
+    };
+    const http = request(app(actor));
+    const payload = {
+      key: "workflow-permission",
+      name: "Workflow permission",
+      stages: [
+        { key: "intake", name: "Intake", kind: "open", position: 100 },
+        {
+          key: "automation",
+          name: "Automation",
+          kind: "working",
+          position: 200,
+          config: {
+            onEnter: {
+              type: "run_target",
+              target: {
+                kind: "workflow",
+                workflowId: workflow.id,
+              },
+            },
+          },
+        },
+        { key: "done", name: "Done", kind: "done", position: 900 },
+        { key: "cancelled", name: "Cancelled", kind: "cancelled", position: 1000 },
+      ],
+    };
+
+    const denied = await http
+      .post(`/api/companies/${company.id}/pipelines`)
+      .send(payload)
+      .expect(403);
+    expect(denied.body).toMatchObject({
+      error: expect.objectContaining({
+        details: expect.objectContaining({
+          code: "permission_denied",
+          permission: "workflows:run",
+          workflowId: workflow.id,
+        }),
+      }),
+    });
+
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: userId,
+      permissionKey: "workflows:run",
+      scope: null,
+    });
+
+    const allowed = await http
+      .post(`/api/companies/${company.id}/pipelines`)
+      .send(payload)
+      .expect(201);
+    expect(allowed.body.stages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "automation",
+          config: expect.objectContaining({
+            onEnter: {
+              type: "run_target",
+              target: {
+                kind: "workflow",
+                workflowId: workflow.id,
+              },
+            },
+          }),
+        }),
+      ]),
+    );
   });
 
   it("writes an audit event when an agent removes a case issue link", async () => {
