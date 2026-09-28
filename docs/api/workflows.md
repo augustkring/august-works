@@ -1,7 +1,7 @@
 # Workflows V1 API contract
 
 **Feature flag:** `enableWorkflowsV1` (default off)
-**Scope:** PR 11–22 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries/waits, and Human Approval bound to the existing approvals system. Task/callback wait integrations and side-effect node execution remain gated.
+**Scope:** PR 11–23 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries/waits, Human Approval, and Routine → Workflow execution targets using the existing Routine trigger engine. Pipeline/task integration, callback/task waits, and side-effect node execution remain gated.
 
 ## Authorization
 
@@ -105,6 +105,8 @@ PR 21 introduces `workflow_waits` as the authoritative wait state with CAS termi
 PR 22 binds Human Approval to the existing company-level `approvals` system. The workflow executor creates a normal `workflow_step_approval` record and stores only its ID in the durable wait. Existing Approve/Reject/Request revision UI and routes remain authoritative; the workflow never introduces a second approval engine. Approval resumes the exact checkpointed run, rejection/cancellation closes the step and run explicitly, and revision-requested approvals remain waiting until resolved. Workflow approval payloads include a human-readable reason, consequence, risk classification, reversibility warning and workflow/run identity. Workflow-requested approvals intentionally do not register a requesting agent, preventing the generic approval route from also waking an agent and creating a second continuation path.
 
 External callback and task-completion waits share the same durable storage/lifecycle but remain non-executable until their existing connector/task event systems are bound in the ordered PRs. External callback tokens are stored only as hashes.
+
+PR 23 allows the existing Routine engine to enqueue Workflows without introducing another scheduler or webhook control plane. Routine schedule/webhook/API semantics, replay protection, catch-up and concurrency remain authoritative in Routines. When the execution target is a Workflow, the RoutineRun and queued `workflow_run` are persisted atomically; the child run uses source `routine`, is bound to the then-current published Workflow revision, and receives routine/run/trigger provenance in the trigger payload. After commit, inline execution is best-effort; if the process stops before or during execution, the existing workflow recovery loop owns continuation. A terminal child Workflow settles the originating `workflow_started` RoutineRun to `completed` or `failed` in the same terminal transaction.
 
 A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
