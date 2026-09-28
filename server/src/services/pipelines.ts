@@ -4891,8 +4891,12 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       scope: PipelineAutomationRetryScope;
       targetStageId?: string | null;
     }) {
-      const { targetStageRow: _targetStageRow, automationRoutineId: _automationRoutineId, ...plan } =
-        await buildAutomationRetryPlan(db, input);
+      const {
+        targetStageRow: _targetStageRow,
+        automationTarget: _automationTarget,
+        automationRoutineId: _automationRoutineId,
+        ...plan
+      } = await buildAutomationRetryPlan(db, input);
       return plan;
     },
 
@@ -4923,7 +4927,12 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           scope: input.scope,
           targetStageId: input.targetStageId,
         });
-        if (!plan.allowed || !plan.targetStageRow || !plan.automationId || !plan.automationRoutineId) {
+        if (
+          !plan.allowed ||
+          !plan.targetStageRow ||
+          !plan.automationId ||
+          !plan.automationTarget
+        ) {
           throw unprocessable("Pipeline automation retry is not currently allowed", {
             code: "automation_retry_not_allowed",
             blockers: plan.blockers,
@@ -5104,7 +5113,14 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           toStageId: plan.targetStageRow.id,
           payload: {
             automationId: plan.automationId,
-            routineId: plan.automationRoutineId,
+            targetKind: plan.automationTarget.kind,
+            targetRef:
+              plan.automationTarget.kind === "routine"
+                ? plan.automationTarget.routineId
+                : plan.automationTarget.workflowId,
+            ...(plan.automationTarget.kind === "routine"
+              ? { routineId: plan.automationTarget.routineId }
+              : { workflowId: plan.automationTarget.workflowId }),
             targetStageId: plan.targetStageRow.id,
             targetStageKey: plan.targetStageRow.key,
             retryAttemptId: ledger.id,
@@ -5124,7 +5140,12 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       });
       await executeIssuePostCommitActions(db, postCommitIssueActions);
       const automationExecution = await executeAutomationLedger(result.ledger.id, input.actor);
-      const { targetStageRow: _targetStageRow, automationRoutineId: _automationRoutineId, ...plan } = result.plan;
+      const {
+        targetStageRow: _targetStageRow,
+        automationTarget: _automationTarget,
+        automationRoutineId: _automationRoutineId,
+        ...plan
+      } = result.plan;
       return {
         case: result.case,
         plan,
@@ -5156,7 +5177,14 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           payload: {
             action: "stage_automation_rerun_requested",
             automationId: automation.id,
-            routineId: automation.routineId,
+            targetKind: automation.target.kind,
+            targetRef:
+              automation.target.kind === "routine"
+                ? automation.target.routineId
+                : automation.target.workflowId,
+            ...(automation.target.kind === "routine"
+              ? { routineId: automation.target.routineId }
+              : { workflowId: automation.target.workflowId }),
             stageId: detail.stage.id,
             stageKey: detail.stage.key,
           },
