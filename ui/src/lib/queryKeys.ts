@@ -443,6 +443,10 @@ export const queryKeys = {
       ["workflows", companyId, "detail", workflowId] as const,
     revisions: (companyId: string, workflowId: string) =>
       ["workflows", companyId, "detail", workflowId, "revisions"] as const,
+    runs: (companyId: string, workflowId: string) =>
+      ["workflows", companyId, "detail", workflowId, "runs"] as const,
+    run: (companyId: string, runId: string) =>
+      ["workflows", companyId, "run", runId] as const,
     nodeRegistry: (companyId: string) =>
       ["workflows", companyId, "node-registry"] as const,
   },
