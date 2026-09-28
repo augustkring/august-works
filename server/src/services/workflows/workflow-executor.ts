@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  approvals,
   companyMemberships,
   workflowRevisions,
   workflowRuns,
@@ -1844,6 +1845,679 @@ async function resolveDueDelayWait(
   return resumed;
 }
 
+type HumanApprovalConfig = {
+  summary: string;
+  consequence: string;
+};
+
+function humanApprovalConfig(node: WorkflowNode): HumanApprovalConfig {
+  const config = node.config;
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    throw new WorkflowCheckpointError(
+      "workflow_human_approval_config_invalid",
+      "Published Human Approval node is missing its configuration",
+    );
+  }
+  const summary = Reflect.get(config, "summary");
+  const consequence = Reflect.get(config, "consequence");
+  if (
+    typeof summary !== "string" ||
+    summary.trim().length === 0 ||
+    typeof consequence !== "string" ||
+    consequence.trim().length === 0
+  ) {
+    throw new WorkflowCheckpointError(
+      "workflow_human_approval_config_invalid",
+      "Published Human Approval node requires a summary and consequence",
+    );
+  }
+  return {
+    summary: summary.trim(),
+    consequence: consequence.trim(),
+  };
+}
+
+function approvalRequester(
+  actor: WorkflowRunActor,
+): { requestedByUserId: string | null; requestedByPrincipal: string } {
+  if (actor.principal.type === "user") {
+    return {
+      requestedByUserId: actor.principal.userId,
+      requestedByPrincipal: `user:${actor.principal.userId}`,
+    };
+  }
+  if (actor.principal.type === "agent") {
+    return {
+      requestedByUserId: actor.responsibleUserId ?? actor.principal.responsibleUserId ?? null,
+      requestedByPrincipal: `agent:${actor.principal.agentId}`,
+    };
+  }
+  return {
+    requestedByUserId: actor.responsibleUserId ?? null,
+    requestedByPrincipal: `system:${actor.principal.service}`,
+  };
+}
+
+async function scheduleHumanApprovalWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  node: WorkflowNode,
+  runningStep: WorkflowStepRow,
+  actor: WorkflowRunActor,
+): Promise<void> {
+  if (!run.executionOwnerId) {
+    throw conflict("Workflow run has no execution owner", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+
+  const config = humanApprovalConfig(node);
+  const requester = approvalRequester(actor);
+  const now = new Date();
+  const approvalId = randomUUID();
+  const waitKey = "primary";
+  const publications: ActivityPublication[] = [];
+
+  await db.transaction(async (tx) => {
+    const [approval] = await tx
+      .insert(approvals)
+      .values({
+        id: approvalId,
+        companyId: run.companyId,
+        type: "workflow_step_approval",
+        requestedByAgentId: null,
+        requestedByUserId: requester.requestedByUserId,
+        status: "pending",
+        payload: {
+          title: config.summary,
+          summary: config.summary,
+          consequence: config.consequence,
+          recommendedAction: "Approve only if the described workflow consequence should proceed.",
+          nextActionOnApproval: config.consequence,
+          risks: [
+            "Approval resumes this workflow from the exact published revision bound to the run.",
+          ],
+          riskLevel: "C3",
+          reversibility: "No rollback is implied. Review the consequence before approving.",
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          workflowRunId: run.id,
+          workflowNodeId: node.id,
+          requestedByPrincipal: requester.requestedByPrincipal,
+        },
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    if (!approval) {
+      throw conflict("Workflow approval could not be created", {
+        code: "workflow_human_approval_create_conflict",
+        workflowRunId: run.id,
+        nodeId: node.id,
+      });
+    }
+
+    const [wait] = await tx
+      .insert(workflowWaits)
+      .values({
+        companyId: run.companyId,
+        workflowRunId: run.id,
+        nodeId: node.id,
+        waitKey,
+        kind: "human_interaction",
+        status: "active",
+        referenceType: "approval",
+        referenceId: approval.id,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    if (!wait) {
+      throw conflict("Workflow human wait could not be created", {
+        code: "workflow_wait_create_conflict",
+        workflowRunId: run.id,
+        nodeId: node.id,
+      });
+    }
+
+    const [waitingStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "waiting",
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, runningStep.id),
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.status, "running"),
+        ),
+      )
+      .returning();
+    if (!waitingStep) {
+      throw conflict("Workflow step changed while human approval was created", {
+        code: "workflow_wait_create_conflict",
+        workflowRunId: run.id,
+        nodeId: node.id,
+      });
+    }
+
+    const [waitingRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "waiting",
+        executionOwnerId: null,
+        leaseExpiresAt: null,
+        ownerHeartbeatAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "running"),
+          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+        ),
+      )
+      .returning();
+    if (!waitingRun) {
+      throw conflict("Workflow run ownership changed while human approval was created", {
+        code: "workflow_run_claim_lost",
+        workflowRunId: run.id,
+      });
+    }
+
+    const waitActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.human_interaction_requested",
+        entityType: "workflow_wait",
+        entityId: wait.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: node.id,
+          approvalId: approval.id,
+          consequence: config.consequence,
+          riskLevel: "C3",
+        },
+      },
+    );
+    const approvalActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "approval.created",
+        entityType: "approval",
+        entityId: approval.id,
+        details: {
+          type: approval.type,
+          workflowRunId: run.id,
+          workflowNodeId: node.id,
+        },
+      },
+    );
+    const stepActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_waiting",
+        entityType: "workflow_step_run",
+        entityId: waitingStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: node.id,
+          attempt: waitingStep.attempt,
+          waitId: wait.id,
+          waitKind: "human_interaction",
+          approvalId: approval.id,
+        },
+      },
+    );
+    const runActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_waiting",
+        entityType: "workflow_run",
+        entityId: waitingRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          reason: "human_interaction",
+          nodeId: node.id,
+          waitId: wait.id,
+          approvalId: approval.id,
+        },
+      },
+    );
+    publications.push(
+      waitActivity.publication,
+      approvalActivity.publication,
+      stepActivity.publication,
+      runActivity.publication,
+    );
+  });
+  publishActivities(publications);
+}
+
+async function approvalForHumanWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+) {
+  if (wait.referenceType !== "approval" || !wait.referenceId) return null;
+  return db
+    .select()
+    .from(approvals)
+    .where(
+      and(
+        eq(approvals.companyId, run.companyId),
+        eq(approvals.id, wait.referenceId),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+}
+
+async function resumeApprovedHumanWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+  approval: typeof approvals.$inferSelect,
+  now: Date,
+): Promise<typeof workflowRuns.$inferSelect | null> {
+  const actor: WorkflowRunActor = {
+    principal: { type: "system", service: "workflow-human-approval" },
+    responsibleUserId: approval.decidedByUserId ?? null,
+  };
+  const ownerId = `approval:${randomUUID()}`;
+  const publications: ActivityPublication[] = [];
+
+  const resumed = await db.transaction(async (tx) => {
+    const [resolvedWait] = await tx
+      .update(workflowWaits)
+      .set({
+        status: "resolved",
+        resolutionJson: {
+          decision: "approved",
+          approvalId: approval.id,
+          decidedByUserId: approval.decidedByUserId,
+          decidedAt: approval.decidedAt?.toISOString() ?? null,
+        },
+        resolvedByType: "user",
+        resolvedById: approval.decidedByUserId,
+        resolvedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowWaits.id, wait.id),
+          eq(workflowWaits.companyId, run.companyId),
+          eq(workflowWaits.workflowRunId, run.id),
+          eq(workflowWaits.status, "active"),
+        ),
+      )
+      .returning();
+    if (!resolvedWait) return null;
+
+    const waitingStep = await tx
+      .select()
+      .from(workflowStepRuns)
+      .where(
+        and(
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.nodeId, wait.nodeId),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    if (!waitingStep) {
+      throw conflict("Workflow approval step changed before resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+    const durationMs = Math.max(
+      0,
+      now.getTime() - (waitingStep.startedAt ?? now).getTime(),
+    );
+    const [completedStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "succeeded",
+        outputJson: resolvedWait.resolutionJson,
+        finishedAt: now,
+        durationMs,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, waitingStep.id),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
+      .returning();
+    if (!completedStep) {
+      throw conflict("Workflow approval step changed during resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+
+    const [runningRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "running",
+        executionOwnerId: ownerId,
+        ownerHeartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "waiting"),
+          sql`${workflowRuns.executionOwnerId} is null`,
+          sql`${workflowRuns.leaseExpiresAt} is null`,
+        ),
+      )
+      .returning();
+    if (!runningRun) {
+      throw conflict("Workflow run changed before approval resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        waitId: wait.id,
+      });
+    }
+
+    const waitActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.human_interaction_resolved",
+        entityType: "workflow_wait",
+        entityId: resolvedWait.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: wait.nodeId,
+          approvalId: approval.id,
+          decision: "approved",
+        },
+      },
+    );
+    const stepActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_completed",
+        entityType: "workflow_step_run",
+        entityId: completedStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: completedStep.nodeId,
+          attempt: completedStep.attempt,
+          approvalId: approval.id,
+        },
+      },
+    );
+    const runActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_resumed",
+        entityType: "workflow_run",
+        entityId: runningRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          reason: "human_approval_approved",
+          approvalId: approval.id,
+          executionOwnerId: ownerId,
+        },
+      },
+    );
+    publications.push(
+      waitActivity.publication,
+      stepActivity.publication,
+      runActivity.publication,
+    );
+    return runningRun;
+  });
+  publishActivities(publications);
+  return resumed;
+}
+
+async function rejectHumanWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+  approval: typeof approvals.$inferSelect,
+  now: Date,
+): Promise<boolean> {
+  const decision =
+    approval.status === "cancelled" ? "cancelled" : "rejected";
+  const waitStatus = decision === "cancelled" ? "cancelled" : "resolved";
+  const errorCode =
+    decision === "cancelled"
+      ? "workflow_human_approval_cancelled"
+      : "workflow_human_approval_rejected";
+  const actor: WorkflowRunActor = {
+    principal: { type: "system", service: "workflow-human-approval" },
+    responsibleUserId: approval.decidedByUserId ?? null,
+  };
+  const publications: ActivityPublication[] = [];
+
+  const changed = await db.transaction(async (tx) => {
+    const [resolvedWait] = await tx
+      .update(workflowWaits)
+      .set({
+        status: waitStatus,
+        resolutionJson: {
+          decision,
+          approvalId: approval.id,
+          decidedByUserId: approval.decidedByUserId,
+          decidedAt: approval.decidedAt?.toISOString() ?? null,
+        },
+        resolvedByType: approval.decidedByUserId ? "user" : "system",
+        resolvedById: approval.decidedByUserId,
+        resolvedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowWaits.id, wait.id),
+          eq(workflowWaits.companyId, run.companyId),
+          eq(workflowWaits.workflowRunId, run.id),
+          eq(workflowWaits.status, "active"),
+        ),
+      )
+      .returning();
+    if (!resolvedWait) return false;
+
+    const waitingStep = await tx
+      .select()
+      .from(workflowStepRuns)
+      .where(
+        and(
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.nodeId, wait.nodeId),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    if (!waitingStep) {
+      throw conflict("Workflow approval step changed before rejection resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+    const durationMs = Math.max(
+      0,
+      now.getTime() - (waitingStep.startedAt ?? now).getTime(),
+    );
+    const [failedStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "failed",
+        finishedAt: now,
+        durationMs,
+        errorCode,
+        errorMessage:
+          decision === "cancelled"
+            ? "Human approval was cancelled"
+            : "Human approval was rejected",
+        outputJson: resolvedWait.resolutionJson,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, waitingStep.id),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
+      .returning();
+    if (!failedStep) {
+      throw conflict("Workflow approval step changed during rejection resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+
+    const [failedRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "failed",
+        finishedAt: now,
+        failureCode: errorCode,
+        failureMessage: failedStep.errorMessage,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "waiting"),
+          sql`${workflowRuns.executionOwnerId} is null`,
+          sql`${workflowRuns.leaseExpiresAt} is null`,
+        ),
+      )
+      .returning();
+    if (!failedRun) {
+      throw conflict("Workflow run changed during approval rejection", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        waitId: wait.id,
+      });
+    }
+
+    const waitActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.human_interaction_resolved",
+        entityType: "workflow_wait",
+        entityId: resolvedWait.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: wait.nodeId,
+          approvalId: approval.id,
+          decision,
+        },
+      },
+    );
+    const stepActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_failed",
+        entityType: "workflow_step_run",
+        entityId: failedStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: failedStep.nodeId,
+          attempt: failedStep.attempt,
+          approvalId: approval.id,
+          errorCode,
+        },
+      },
+    );
+    const runActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_failed",
+        entityType: "workflow_run",
+        entityId: failedRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          approvalId: approval.id,
+          errorCode,
+        },
+      },
+    );
+    publications.push(
+      waitActivity.publication,
+      stepActivity.publication,
+      runActivity.publication,
+    );
+    return true;
+  });
+  publishActivities(publications);
+  return changed;
+}
+
+async function resolveHumanApprovalWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+  now: Date,
+): Promise<"recovered" | "raced" | "deferred"> {
+  const approval = await approvalForHumanWait(db, run, wait);
+  if (!approval) return "deferred";
+  if (approval.status === "pending" || approval.status === "revision_requested") {
+    return "deferred";
+  }
+  if (approval.status === "approved") {
+    const resumed = await resumeApprovedHumanWait(db, run, wait, approval, now);
+    if (!resumed) return "raced";
+    await executeClaimedRun(
+      db,
+      resumed,
+      { principal: { type: "system", service: "workflow-human-approval" } },
+    );
+    return "recovered";
+  }
+  if (approval.status === "rejected" || approval.status === "cancelled") {
+    const changed = await rejectHumanWait(db, run, wait, approval, now);
+    return changed ? "recovered" : "raced";
+  }
+  return "deferred";
+}
+
 async function executeWorkflowGraph(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
@@ -1923,6 +2597,37 @@ async function executeWorkflowGraph(
           });
           output = { result: conditionResult };
           await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
+      } else if (current.type === "human.approval") {
+        const config = humanApprovalConfig(current);
+        const prepared = await prepareRunnableStep(
+          db,
+          ownedRun,
+          current.id,
+          {
+            summary: config.summary,
+            consequence: config.consequence,
+          },
+          actor,
+        );
+        if (prepared.checkpoint) {
+          output = prepared.checkpoint.outputJson;
+        } else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) {
+            throw new WorkflowCheckpointError(
+              "workflow_checkpoint_state_invalid",
+              `Human Approval ${current.id} produced no runnable attempt`,
+            );
+          }
+          await scheduleHumanApprovalWait(
+            db,
+            ownedRun,
+            current,
+            runningStep,
+            actor,
+          );
+          return;
         }
       } else if (current.type === "core.wait") {
         const durationSeconds = waitDurationSeconds(current);
@@ -2079,7 +2784,8 @@ async function executeClaimedRun(
           (node) =>
             node.type !== "core.manual_trigger" &&
             node.type !== "core.condition" &&
-            node.type !== "core.wait",
+            node.type !== "core.wait" &&
+            node.type !== "human.approval",
         )
         .map((node) => node.type),
     ),
@@ -2109,6 +2815,9 @@ async function recoverWaitingCandidate(
     if (!wait) return "deferred";
     if (wait.timeoutAt && wait.timeoutAt.getTime() <= now.getTime()) {
       return "deferred";
+    }
+    if (wait.kind === "human_interaction") {
+      return resolveHumanApprovalWait(db, candidate, wait, now);
     }
     if (wait.kind !== "delay" || !wait.wakeAt || wait.wakeAt.getTime() > now.getTime()) {
       return "deferred";
@@ -2387,7 +3096,8 @@ export function workflowExecutorService(db: Db) {
         (node) =>
           node.type !== "core.manual_trigger" &&
           node.type !== "core.condition" &&
-          node.type !== "core.wait",
+          node.type !== "core.wait" &&
+          node.type !== "human.approval",
       );
       const triggers = revision.graph.nodes.filter(
         (node) => node.type === "core.manual_trigger",
