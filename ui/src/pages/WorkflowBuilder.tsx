@@ -44,6 +44,9 @@ import type {
   WorkflowRetryPolicy,
 } from "@paperclipai/shared";
 import { workflowsApi } from "@/api/workflows";
+import { agentsApi } from "@/api/agents";
+import { projectsApi } from "@/api/projects";
+import { accessApi } from "@/api/access";
 import { ApiError } from "@/api/client";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
@@ -99,7 +102,14 @@ function defaultConfig(type: string): Record<string, unknown> | null {
     case "core.wait":
       return { durationSeconds: 300 };
     case "work.create_task":
-      return { title: "New task" };
+      return {
+        title: "New task",
+        description: null,
+        projectId: null,
+        assigneeAgentId: null,
+        assigneeUserId: null,
+        waitForCompletion: false,
+      };
     case "human.approval":
       return {
         summary: "Approval required",
@@ -1017,6 +1027,22 @@ function NodeInspector({
     workflowNode.retryPolicy ??
     definition?.retryPolicyDefault ??
     NO_RETRY_POLICY;
+  const isCreateTaskNode = workflowNode.type === "work.create_task";
+  const { data: taskProjects = [] } = useQuery({
+    queryKey: queryKeys.projects.list(companyId, { includeArchived: false }),
+    queryFn: () => projectsApi.list(companyId, { includeArchived: false }),
+    enabled: isCreateTaskNode,
+  });
+  const { data: taskAgents = [] } = useQuery({
+    queryKey: queryKeys.agents.list(companyId),
+    queryFn: () => agentsApi.list(companyId),
+    enabled: isCreateTaskNode,
+  });
+  const { data: taskUserDirectory } = useQuery({
+    queryKey: queryKeys.access.companyUserDirectory(companyId),
+    queryFn: () => accessApi.listUserDirectory(companyId),
+    enabled: isCreateTaskNode,
+  });
 
   const updateConfig = (patch: Record<string, unknown>) =>
     onUpdate({ config: { ...config, ...patch } });
@@ -1137,8 +1163,115 @@ function NodeInspector({
             <Input
               value={String(config.description ?? "")}
               disabled={!canEdit}
-              onChange={(event) => updateConfig({ description: event.target.value || null })}
+              onChange={(event) =>
+                updateConfig({
+                  description: event.target.value || null,
+                })
+              }
             />
+          </label>
+          <label className="block space-y-1 text-xs font-medium">
+            Project
+            <select
+              value={String(config.projectId ?? "")}
+              disabled={!canEdit}
+              onChange={(event) =>
+                updateConfig({
+                  projectId: event.target.value || null,
+                })
+              }
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">No project</option>
+              {taskProjects
+                .filter((project) => !project.archivedAt)
+                .map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block space-y-1 text-xs font-medium">
+            Assignee
+            <select
+              value={
+                typeof config.assigneeAgentId === "string"
+                  ? `agent:${config.assigneeAgentId}`
+                  : typeof config.assigneeUserId === "string"
+                    ? `user:${config.assigneeUserId}`
+                    : ""
+              }
+              disabled={!canEdit}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value.startsWith("agent:")) {
+                  updateConfig({
+                    assigneeAgentId: value.slice("agent:".length),
+                    assigneeUserId: null,
+                  });
+                } else if (value.startsWith("user:")) {
+                  updateConfig({
+                    assigneeAgentId: null,
+                    assigneeUserId: value.slice("user:".length),
+                  });
+                } else {
+                  updateConfig({
+                    assigneeAgentId: null,
+                    assigneeUserId: null,
+                  });
+                }
+              }}
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">Unassigned</option>
+              {taskAgents.some((agent) => agent.status !== "terminated") ? (
+                <optgroup label="Agents">
+                  {taskAgents
+                    .filter((agent) => agent.status !== "terminated")
+                    .map((agent) => (
+                      <option key={agent.id} value={`agent:${agent.id}`}>
+                        {agent.name}
+                      </option>
+                    ))}
+                </optgroup>
+              ) : null}
+              {(taskUserDirectory?.users.length ?? 0) > 0 ? (
+                <optgroup label="People">
+                  {(taskUserDirectory?.users ?? []).map((member) => (
+                    <option
+                      key={member.principalId}
+                      value={`user:${member.principalId}`}
+                    >
+                      {member.user?.name ??
+                        member.user?.email ??
+                        member.principalId}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+            </select>
+          </label>
+          <label className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-xs">
+            <input
+              type="checkbox"
+              checked={config.waitForCompletion === true}
+              disabled={!canEdit}
+              onChange={(event) =>
+                updateConfig({
+                  waitForCompletion: event.target.checked,
+                })
+              }
+              className="mt-0.5 h-4 w-4 rounded border-input focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+            />
+            <span>
+              <span className="block font-medium">Wait for completion</span>
+              <span className="mt-0.5 block font-normal leading-4 text-muted-foreground">
+                Checkpoints the workflow and releases the worker until the
+                linked task is done. Create Task does not wake an agent; use
+                Agent Task when the workflow should actively delegate work.
+              </span>
+            </span>
           </label>
         </>
       ) : null}
