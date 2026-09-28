@@ -309,7 +309,7 @@ async function createQueuedManualRun(
         companyId: input.companyId,
         workflowRunId: run!.id,
         nodeId: input.nodeId,
-        attempt,
+        attempt: 1,
         status: "pending",
         inputJson: input.triggerPayload,
         createdAt: now,
