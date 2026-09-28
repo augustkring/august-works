@@ -1339,6 +1339,9 @@ export function PipelineSettings() {
   const [stageKind, setStageKind] = useState("open");
   const [newEntriesDisabled, setNewEntriesDisabled] = useState(false);
   const [disableReason, setDisableReason] = useState("");
+  const [stageExecutionTargetKind, setStageExecutionTargetKind] =
+    useState<"agent_task" | "workflow">("agent_task");
+  const [stageWorkflowId, setStageWorkflowId] = useState("");
   const [stageAssigneeAgentId, setStageAssigneeAgentId] = useState("");
   const [stageProjectId, setStageProjectId] = useState("");
   const [stageProjectWorkspaceId, setStageProjectWorkspaceId] = useState("");
@@ -1422,6 +1425,22 @@ export function PipelineSettings() {
     queryKey: selectedCompanyId ? queryKeys.projects.list(selectedCompanyId) : ["projects", "none"],
     queryFn: () => projectsApi.list(selectedCompanyId!),
     enabled: !!selectedCompanyId,
+  });
+  const workflowsQuery = useQuery({
+    queryKey: selectedCompanyId
+      ? queryKeys.workflows.list(selectedCompanyId)
+      : ["workflows", "none"],
+    queryFn: () => workflowsApi.list(selectedCompanyId!),
+    enabled:
+      !!selectedCompanyId &&
+      (
+        stageExecutionTargetKind === "workflow" ||
+        stages.some(
+          (stage) =>
+            stageAutomation(stage).executionTargetKind === "workflow",
+        )
+      ),
+    retry: false,
   });
   const currentUserId = sessionQuery.data?.user?.id ?? sessionQuery.data?.session?.userId ?? null;
   const activeProjects = useMemo(
@@ -1729,6 +1748,8 @@ export function PipelineSettings() {
     setStageKind(form.kind);
     setNewEntriesDisabled(form.newEntriesDisabled);
     setDisableReason(form.disableReason);
+    setStageExecutionTargetKind(form.executionTargetKind);
+    setStageWorkflowId(form.workflowId);
     setStageAssigneeAgentId(form.assigneeAgentId);
     setStageProjectId(form.automationProjectId);
     setStageProjectWorkspaceId(form.automationProjectWorkspaceId);
@@ -1826,6 +1847,7 @@ export function PipelineSettings() {
     mutationFn: async () => {
       if (!pipelineId || !selectedStage || !pipeline) return null;
       if (
+        stageExecutionTargetKind === "agent_task" &&
         stageProjectId &&
         selectedProjectSupportsExecutionWorkspace &&
         stageExecutionWorkspacePreference === "reuse_existing" &&
@@ -1841,6 +1863,8 @@ export function PipelineSettings() {
         disabled: newEntriesDisabled,
         disabledReason: newEntriesDisabled ? disableReason.trim() || null : null,
         automation: buildStageAutomationForSave({
+          executionTargetKind: stageExecutionTargetKind,
+          workflowId: stageWorkflowId,
           assigneeAgentId: stageAssigneeAgentId,
           titleTemplate: issueTitleTemplate,
           instructionsBody,
@@ -2209,9 +2233,14 @@ export function PipelineSettings() {
         )
       : null;
   const canSaveAutomationWorkspace =
+    stageExecutionTargetKind !== "agent_task" ||
     !selectedProjectSupportsExecutionWorkspace ||
     stageExecutionWorkspacePreference !== "reuse_existing" ||
     Boolean(stageExecutionWorkspaceId);
+  const workflowTargetMissing =
+    stageExecutionTargetKind === "workflow" && !stageWorkflowId;
+  const workflowBreakdownConflict =
+    stageExecutionTargetKind === "workflow" && breakdownEnabled;
 
   const savedStageForm = selectedStage
     ? computeStageForm(selectedStage, pipeline.transitions ?? [])
@@ -2223,6 +2252,8 @@ export function PipelineSettings() {
         newEntriesDisabled,
         disableReason,
         assigneeAgentId: stageAssigneeAgentId,
+        executionTargetKind: stageExecutionTargetKind,
+        workflowId: stageWorkflowId,
         approvalRequired: stageKind === "review",
         approval: selectedApproval,
         approveTarget,
@@ -2260,8 +2291,35 @@ export function PipelineSettings() {
     selectedStage != null &&
     JSON.stringify(stripVariablesByName(stripVariableEditorMetadata(instructionsVariables), resolvedAutomationVariableKeys)) !==
       JSON.stringify(stripVariablesByName(savedInstructionsVariables, resolvedAutomationVariableKeys));
-  const selectedAutomationAgent = stageAssigneeAgentId ? agentById.get(stageAssigneeAgentId) ?? null : null;
-  const stageEnvDirty = selectedStage != null && JSON.stringify(stageEnv) !== savedStageEnvKey;
+  const selectedAutomationAgent =
+    stageExecutionTargetKind === "agent_task" && stageAssigneeAgentId
+      ? agentById.get(stageAssigneeAgentId) ?? null
+      : null;
+  const selectedAutomationWorkflow =
+    stageExecutionTargetKind === "workflow" && stageWorkflowId
+      ? (workflowsQuery.data ?? []).find(
+          (workflow) => workflow.id === stageWorkflowId,
+        ) ?? null
+      : null;
+  const workflowOptions = useMemo<InlineEntityOption[]>(
+    () =>
+      (workflowsQuery.data ?? [])
+        .filter(
+          (workflow) =>
+            workflow.status === "active" &&
+            Boolean(workflow.publishedRevisionId),
+        )
+        .map((workflow) => ({
+          id: workflow.id,
+          label: workflow.name,
+          searchText: workflow.description ?? "",
+        })),
+    [workflowsQuery.data],
+  );
+  const stageEnvDirty =
+    stageExecutionTargetKind === "agent_task" &&
+    selectedStage != null &&
+    JSON.stringify(stageEnv) !== savedStageEnvKey;
   const stageDirty =
     (savedStageForm != null &&
       currentStageForm != null &&
