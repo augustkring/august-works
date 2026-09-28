@@ -17,7 +17,11 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { workflowService } from "./workflow-service.js";
-import { workflowExecutorService } from "./workflow-executor.js";
+import {
+  scheduleWorkflowStepRetry,
+  WorkflowRetryableNodeError,
+  workflowExecutorService,
+} from "./workflow-executor.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe.sequential : describe.skip;
@@ -734,6 +738,152 @@ describePg("Workflow executor V1", () => {
       status: "running",
       executionOwnerId: "healthy-worker",
     });
+  });
+
+  it("persists retry backoff durably and resumes as a new attempt after the delay", async () => {
+    const graph: WorkflowGraphV1 = {
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "condition",
+          type: "core.condition",
+          name: "Retryable step",
+          position: { x: 180, y: 0 },
+          config: { expression: "true" },
+          retryPolicy: {
+            mode: "fixed",
+            maxAttempts: 3,
+            initialDelayMs: 1_000,
+            maxDelayMs: 1_000,
+          },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "condition" }],
+      variables: [],
+      settings: { totalDeadlineSeconds: 60 },
+    };
+    const seeded = await seedPublishedGraph(graph);
+    const actor = { principal: { type: "user" as const, userId: seeded.userId } };
+    const startedAt = new Date("2026-09-28T15:40:00.000Z");
+    const [run] = await db.insert(workflowRuns).values({
+      companyId: seeded.companyId,
+      workflowId: seeded.workflow.id,
+      workflowRevisionId: seeded.workflow.publishedRevisionId!,
+      status: "running",
+      source: "manual",
+      triggerPayload: {},
+      correlationId: randomUUID(),
+      executionOwnerId: "inline:test-retry",
+      leaseExpiresAt: new Date(startedAt.getTime() + 30_000),
+      ownerHeartbeatAt: startedAt,
+      startedAt,
+      createdAt: startedAt,
+      updatedAt: startedAt,
+    }).returning();
+
+    await db.insert(workflowStepRuns).values({
+      companyId: seeded.companyId,
+      workflowRunId: run!.id,
+      nodeId: "start",
+      attempt: 1,
+      status: "succeeded",
+      inputJson: {},
+      outputJson: {},
+      startedAt,
+      finishedAt: new Date(startedAt.getTime() + 5),
+      durationMs: 5,
+      createdAt: startedAt,
+      updatedAt: startedAt,
+    });
+    const [runningStep] = await db.insert(workflowStepRuns).values({
+      companyId: seeded.companyId,
+      workflowRunId: run!.id,
+      nodeId: "condition",
+      attempt: 1,
+      status: "running",
+      inputJson: { expression: "true" },
+      startedAt: new Date(startedAt.getTime() + 10),
+      createdAt: new Date(startedAt.getTime() + 10),
+      updatedAt: new Date(startedAt.getTime() + 10),
+    }).returning();
+
+    const scheduled = await scheduleWorkflowStepRetry(
+      db,
+      run!,
+      graph,
+      graph.nodes[1]!,
+      runningStep!,
+      actor,
+      new WorkflowRetryableNodeError({
+        code: "upstream_temporarily_unavailable",
+        message: "Temporary upstream failure",
+        sideEffectSafeToRepeat: true,
+        providerAllowsRetry: true,
+      }),
+    );
+    expect(scheduled).toBe(true);
+
+    const waiting = await workflowExecutorService(db).getRun(seeded.companyId, run!.id);
+    expect(waiting?.run).toMatchObject({
+      status: "waiting",
+      executionOwnerId: null,
+      leaseExpiresAt: null,
+    });
+    expect(waiting?.steps.find((step) => step.nodeId === "condition")).toMatchObject({
+      attempt: 1,
+      status: "retry_scheduled",
+      errorCode: "upstream_temporarily_unavailable",
+    });
+
+    const scheduledAttempt = waiting!.steps.find(
+      (step) => step.nodeId === "condition" && step.attempt === 1,
+    )!;
+    const scheduledAt = scheduledAttempt.finishedAt!;
+    const beforeDue = new Date(new Date(scheduledAt).getTime() + 500);
+    const before = await workflowExecutorService(db).recoverExpiredRuns(10, beforeDue);
+    expect(before).toMatchObject({
+      recovered: 0,
+      deferred: 1,
+      failedRunIds: [],
+    });
+
+    const afterDue = new Date(new Date(scheduledAt).getTime() + 1_100);
+    const after = await workflowExecutorService(db).recoverExpiredRuns(10, afterDue);
+    expect(after).toMatchObject({
+      recovered: 1,
+      deferred: 0,
+      failedRunIds: [],
+    });
+
+    const completed = await workflowExecutorService(db).getRun(seeded.companyId, run!.id);
+    expect(completed?.run.status).toBe("succeeded");
+    const conditionAttempts = completed!.steps
+      .filter((step) => step.nodeId === "condition")
+      .sort((left, right) => left.attempt - right.attempt);
+    expect(conditionAttempts).toHaveLength(2);
+    expect(conditionAttempts[0]).toMatchObject({
+      attempt: 1,
+      status: "retried",
+      errorCode: "upstream_temporarily_unavailable",
+    });
+    expect(conditionAttempts[1]).toMatchObject({
+      attempt: 2,
+      status: "succeeded",
+      outputJson: { result: true },
+    });
+
+    const actions = (await db.select().from(activityLog)).map((row) => row.action);
+    expect(actions).toContain("workflow.step_retry_scheduled");
+    expect(actions).toContain("workflow.run_waiting");
+    expect(actions).toContain("workflow.step_retried");
+    expect(actions).toContain("workflow.run_resumed");
   });
 
 });
