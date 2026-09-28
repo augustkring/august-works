@@ -28,6 +28,8 @@ import {
   routines,
   routineTriggers,
   routineWebhookTestReceipts,
+  workflowRuns,
+  workflows,
 } from "@paperclipai/db";
 import type {
   CreateRoutine,
@@ -37,6 +39,7 @@ import type {
   RoutineDescriptionDocument,
   RoutineListItem,
   RoutineManagedByPlugin,
+  RoutineExecutionTarget,
   RoutineRevision,
   RoutineRevisionSnapshotV1,
   RoutineRunSummary,
@@ -78,7 +81,17 @@ import {
   type WorktreeRunExecutionActivationState,
 } from "./instance-settings.js";
 import { queueIssueAssignmentWakeup, type IssueAssignmentWakeupDeps } from "./issue-assignment-wakeup.js";
-import { logActivity } from "./activity-log.js";
+import {
+  logActivity,
+  publishActivity,
+  type ActivityPublication,
+} from "./activity-log.js";
+import {
+  enqueueWorkflowRunInTransaction,
+  resolveWorkflowExecutionRevision,
+  workflowExecutorService,
+  type WorkflowRunActor,
+} from "./workflows/workflow-executor.js";
 import type { PluginWorkerManager } from "./plugin-worker-manager.js";
 import { runtimePublicOrigin } from "./cloud-runtime-identity.js";
 
@@ -413,20 +426,79 @@ function assertScheduleCompatibleVariables(variables: RoutineVariable[]) {
   }
 }
 
-function statusRequiresDefaultAgent(status: string) {
+function resolveRoutineExecutionTarget(
+  routine: Pick<
+    RoutineRow,
+    "executionTargetKind" | "executionTargetRef" | "assigneeAgentId"
+  >,
+): RoutineExecutionTarget | null {
+  if (routine.executionTargetKind === "workflow" && routine.executionTargetRef) {
+    return { kind: "workflow", workflowId: routine.executionTargetRef };
+  }
+  if (
+    routine.executionTargetKind === "agent_task" &&
+    routine.executionTargetRef
+  ) {
+    return { kind: "agent_task", agentId: routine.executionTargetRef };
+  }
+  if (routine.assigneeAgentId) {
+    return { kind: "agent_task", agentId: routine.assigneeAgentId };
+  }
+  return null;
+}
+
+function requestedRoutineExecutionTarget(input: {
+  executionTarget?: RoutineExecutionTarget;
+  assigneeAgentId?: string | null;
+}): RoutineExecutionTarget | null {
+  if (input.executionTarget) return input.executionTarget;
+  return input.assigneeAgentId
+    ? { kind: "agent_task", agentId: input.assigneeAgentId }
+    : null;
+}
+
+function executionTargetStorage(target: RoutineExecutionTarget | null) {
+  if (!target) {
+    return {
+      assigneeAgentId: null,
+      executionTargetKind: null,
+      executionTargetRef: null,
+    };
+  }
+  if (target.kind === "agent_task") {
+    return {
+      assigneeAgentId: target.agentId,
+      executionTargetKind: "agent_task" as const,
+      executionTargetRef: target.agentId,
+    };
+  }
+  return {
+    assigneeAgentId: null,
+    executionTargetKind: "workflow" as const,
+    executionTargetRef: target.workflowId,
+  };
+}
+
+function statusRequiresExecutionTarget(status: string) {
   return status === "active";
 }
 
-function normalizeDraftRoutineStatus(status: string, assigneeAgentId: string | null | undefined) {
-  if (statusRequiresDefaultAgent(status) && !assigneeAgentId) {
+function normalizeDraftRoutineStatus(
+  status: string,
+  target: RoutineExecutionTarget | null,
+) {
+  if (statusRequiresExecutionTarget(status) && !target) {
     return "paused";
   }
   return status;
 }
 
-function assertRoutineCanEnable(status: string, assigneeAgentId: string | null | undefined) {
-  if (statusRequiresDefaultAgent(status) && !assigneeAgentId) {
-    throw unprocessable("Default agent required");
+function assertRoutineCanEnable(
+  status: string,
+  target: RoutineExecutionTarget | null,
+) {
+  if (statusRequiresExecutionTarget(status) && !target) {
+    throw unprocessable("Routine execution target required");
   }
 }
 
