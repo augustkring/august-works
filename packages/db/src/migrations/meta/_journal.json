@@ -2045,6 +2045,13 @@
       "when": 1790605200000,
       "tag": "0293_workflow_runs_executor_v1",
       "breakpoints": true
+    },
+    {
+      "idx": 294,
+      "version": "7",
+      "when": 1790611200000,
+      "tag": "0294_workflow_waits",
+      "breakpoints": true
     }
   ]
 }
