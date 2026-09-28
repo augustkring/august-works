@@ -773,18 +773,21 @@ async function failRun(
 }
 
 function conditionExpression(node: WorkflowNode): string {
-  if (
-    typeof node.config !== "object" ||
-    node.config === null ||
-    Array.isArray(node.config) ||
-    typeof (node.config as Record<string, unknown>).expression !== "string"
-  ) {
+  const config = node.config;
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
     throw new WorkflowConditionExpressionError(
       "workflow_condition_expression_invalid",
       "Published condition node is missing its expression",
     );
   }
-  return (node.config as Record<string, string>).expression;
+  const expression = Reflect.get(config, "expression");
+  if (typeof expression !== "string") {
+    throw new WorkflowConditionExpressionError(
+      "workflow_condition_expression_invalid",
+      "Published condition node is missing its expression",
+    );
+  }
+  return expression;
 }
 
 async function executeWorkflowGraph(
