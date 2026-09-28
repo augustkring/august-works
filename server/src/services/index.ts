@@ -273,3 +273,5 @@ export { workflowNodeDefinitions, workflowNodeRegistryService } from "./workflow
 export { rankWorkflowCapabilities, workflowCapabilityResolverService } from "./workflows/workflow-capability-resolver.js";
 
 export { workflowDataSelectorService } from "./workflows/workflow-data-selector.js";
+
+export { workflowExecutorService, type WorkflowRunActor } from "./workflows/workflow-executor.js";

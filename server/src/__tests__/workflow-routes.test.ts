@@ -11,6 +11,8 @@ import {
   instanceSettings,
   principalPermissionGrants,
   workflowRevisions,
+  workflowRuns,
+  workflowStepRuns,
   workflows,
 } from "@paperclipai/db";
 import {
@@ -35,6 +37,8 @@ describePg("Workflow routes", () => {
 
   afterEach(async () => {
     await db.delete(activityLog);
+    await db.delete(workflowStepRuns);
+    await db.delete(workflowRuns);
     await db.delete(workflowRevisions);
     await db.delete(workflows);
     await db.delete(principalPermissionGrants);
@@ -395,6 +399,65 @@ describePg("Workflow routes", () => {
         }),
       ]),
     );
+  });
+
+  it("starts an idempotent manual Workflow run only from a published revision", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+    const http = request(app(localBoard));
+    const created = await http
+      .post(`/api/companies/${company.id}/workflows`)
+      .send({ name: "Runnable" })
+      .expect(201);
+    const updated = await http
+      .patch(`/api/companies/${company.id}/workflows/${created.body.id}/draft`)
+      .send({
+        expectedRevisionId: created.body.draftRevisionId,
+        graph: {
+          version: 1,
+          nodes: [{
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Manual start",
+            position: { x: 0, y: 0 },
+            config: {},
+          }],
+          edges: [],
+          variables: [],
+          settings: {},
+        },
+      })
+      .expect(200);
+    await http
+      .post(`/api/companies/${company.id}/workflows/${created.body.id}/publish`)
+      .send({
+        expectedDraftRevisionId: updated.body.draftRevisionId,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      })
+      .expect(200);
+
+    const first = await http
+      .post(`/api/companies/${company.id}/workflows/${created.body.id}/run`)
+      .set("Idempotency-Key", "route-manual-1")
+      .send({ input: { customerId: "c-1" } })
+      .expect(201);
+    expect(first.body.run.status).toBe("succeeded");
+    expect(first.body.steps).toHaveLength(1);
+
+    const repeated = await http
+      .post(`/api/companies/${company.id}/workflows/${created.body.id}/run`)
+      .set("Idempotency-Key", "route-manual-1")
+      .send({ input: { customerId: "c-1" } })
+      .expect(201);
+    expect(repeated.body.run.id).toBe(first.body.run.id);
+
+    await http
+      .get(`/api/companies/${company.id}/workflow-runs/${first.body.run.id}`)
+      .expect(200)
+      .expect((response) => {
+        expect(response.body.run.workflowId).toBe(created.body.id);
+      });
   });
 
 });

@@ -209,3 +209,12 @@ export const workflowDataSelectorRequestSchema = z
 
 export type WorkflowDataSelectorRequest =
   z.infer<typeof workflowDataSelectorRequestSchema>;
+
+export const startWorkflowRunSchema = z
+  .object({
+    input: z.record(z.string(), z.unknown()).optional().default({}),
+    revisionId: z.string().guid().nullable().optional().default(null),
+  })
+  .strict();
+
+export type StartWorkflowRun = z.input<typeof startWorkflowRunSchema>;

@@ -318,3 +318,92 @@ export interface WorkflowDataSelectorModel {
   targetNodeId: string;
   sources: WorkflowDataSelectorSource[];
 }
+
+export const WORKFLOW_RUN_STATUSES = [
+  "queued",
+  "running",
+  "waiting",
+  "recovering",
+  "cancelling",
+  "succeeded",
+  "failed",
+  "cancelled",
+] as const;
+export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number];
+
+export const WORKFLOW_RUN_SOURCES = [
+  "manual",
+  "schedule",
+  "webhook",
+  "api",
+  "connector_event",
+  "routine",
+  "pipeline",
+  "task",
+] as const;
+export type WorkflowRunSource = (typeof WORKFLOW_RUN_SOURCES)[number];
+
+export const WORKFLOW_STEP_RUN_STATUSES = [
+  "pending",
+  "running",
+  "waiting",
+  "retry_scheduled",
+  "retried",
+  "succeeded",
+  "failed",
+  "skipped",
+  "cancelling",
+  "cancelled",
+] as const;
+export type WorkflowStepRunStatus =
+  (typeof WORKFLOW_STEP_RUN_STATUSES)[number];
+
+export interface WorkflowRun {
+  id: string;
+  companyId: string;
+  workflowId: string;
+  workflowRevisionId: string;
+  triggerId: string | null;
+  status: WorkflowRunStatus;
+  source: WorkflowRunSource;
+  triggerPayload: Record<string, unknown>;
+  responsibleUserId: string | null;
+  idempotencyKey: string | null;
+  correlationId: string | null;
+  executionOwnerId: string | null;
+  leaseExpiresAt: Date | null;
+  ownerHeartbeatAt: Date | null;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  failureCode: string | null;
+  failureMessage: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface WorkflowStepRun {
+  id: string;
+  companyId: string;
+  workflowRunId: string;
+  nodeId: string;
+  attempt: number;
+  status: WorkflowStepRunStatus;
+  inputJson: unknown;
+  outputJson: unknown;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  durationMs: number | null;
+  agentId: string | null;
+  heartbeatRunId: string | null;
+  toolInvocationId: string | null;
+  automationArtifactVersionId: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface WorkflowRunDetail {
+  run: WorkflowRun;
+  steps: WorkflowStepRun[];
+}

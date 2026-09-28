@@ -3,6 +3,7 @@ import type { Db } from "@paperclipai/db";
 import {
   createWorkflowSchema,
   publishWorkflowSchema,
+  startWorkflowRunSchema,
   updateWorkflowDraftSchema,
   workflowCapabilitySearchQuerySchema,
   workflowDataSelectorRequestSchema,
@@ -10,13 +11,14 @@ import {
   type WorkflowCapabilities,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { forbidden, notFound, unauthorized } from "../errors.js";
+import { forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
 import {
   accessService,
   instanceSettingsService,
   logActivity,
   workflowCapabilityResolverService,
   workflowDataSelectorService,
+  workflowExecutorService,
   workflowNodeRegistryService,
   workflowService,
   type WorkflowMutationActor,
@@ -34,6 +36,7 @@ export function workflowRoutes(db: Db) {
   const nodeRegistry = workflowNodeRegistryService(db);
   const capabilityResolver = workflowCapabilityResolverService(db);
   const dataSelector = workflowDataSelectorService(db);
+  const executor = workflowExecutorService(db);
   const access = accessService(db);
   const settings = instanceSettingsService(db);
 
@@ -57,6 +60,44 @@ export function workflowRoutes(db: Db) {
       principal: { type: "user", userId: req.actor.userId },
       runId: req.actor.runId ?? null,
     };
+  }
+
+  function runActor(req: Request) {
+    if (req.actor.type === "agent" && req.actor.agentId) {
+      return {
+        principal: {
+          type: "agent" as const,
+          agentId: req.actor.agentId,
+          responsibleUserId: req.actor.onBehalfOfUserId ?? null,
+        },
+        runId: req.actor.runId ?? null,
+        responsibleUserId: req.actor.onBehalfOfUserId ?? null,
+      };
+    }
+    if (req.actor.type === "board" && req.actor.source === "local_implicit") {
+      return {
+        principal: { type: "system" as const, service: "local-board" },
+        runId: req.actor.runId ?? null,
+        responsibleUserId: req.actor.userId ?? null,
+      };
+    }
+    const info = getActorInfo(req);
+    return {
+      principal: { type: "user" as const, userId: info.actorId },
+      runId: info.runId,
+      responsibleUserId: info.actorId,
+    };
+  }
+
+  function idempotencyKey(req: Request) {
+    const value = req.header("Idempotency-Key")?.trim() ?? "";
+    if (!value) return null;
+    if (value.length > 200) {
+      throw unprocessable("Idempotency-Key must be 200 characters or fewer", {
+        code: "idempotency_key_invalid",
+      });
+    }
+    return value;
   }
 
   async function decidePermission(
@@ -102,20 +143,18 @@ export function workflowRoutes(db: Db) {
     req: Request,
     companyId: string,
   ): Promise<WorkflowCapabilities> {
-    const [read, edit, publish] = await Promise.all([
+    const [read, edit, publish, run] = await Promise.all([
       decidePermission(req, companyId, "workflows:read"),
       decidePermission(req, companyId, "workflows:edit"),
       decidePermission(req, companyId, "workflows:publish"),
+      decidePermission(req, companyId, "workflows:run"),
     ]);
     const humanMutationSurface = req.actor.type === "board";
     return {
       read: read.allowed,
       edit: humanMutationSurface && edit.allowed,
       publish: humanMutationSurface && publish.allowed,
-      // PR 10-15 intentionally expose persistence, authoring, registry and
-      // capability discovery only. Do not advertise executable behavior until
-      // the durable executor + run API (PR 16+) actually exists.
-      run: false,
+      run: run.allowed,
     };
   }
 
@@ -200,6 +239,54 @@ export function workflowRoutes(db: Db) {
       res.status(201).json(created);
     },
   );
+
+  router.post(
+    "/companies/:companyId/workflows/:workflowId/run",
+    validate(startWorkflowRunSchema),
+    async (req, res) => {
+      await assertWorkflowsEnabled();
+      const companyId = req.params.companyId as string;
+      await assertPermission(req, companyId, "workflows:run");
+      const result = await executor.startManualRun(
+        companyId,
+        req.params.workflowId as string,
+        req.body,
+        runActor(req),
+        idempotencyKey(req),
+      );
+      const actor = getActorInfo(req);
+      await logActivity(db, {
+        companyId,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        agentId: actor.agentId,
+        runId: actor.runId,
+        agentApiKeyId: actor.agentApiKeyId,
+        action: "workflow.run_completed",
+        entityType: "workflow_run",
+        entityId: result.run.id,
+        details: {
+          workflowId: result.run.workflowId,
+          workflowRevisionId: result.run.workflowRevisionId,
+          status: result.run.status,
+          source: result.run.source,
+        },
+      });
+      res.status(201).json(result);
+    },
+  );
+
+  router.get("/companies/:companyId/workflow-runs/:runId", async (req, res) => {
+    await assertWorkflowsEnabled();
+    const companyId = req.params.companyId as string;
+    await assertPermission(req, companyId, "workflows:read");
+    const result = await executor.getRun(companyId, req.params.runId as string);
+    if (!result) {
+      res.status(404).json({ error: "Workflow run not found" });
+      return;
+    }
+    res.json(result);
+  });
 
   router.get("/companies/:companyId/workflows/:workflowId", async (req, res) => {
     await assertWorkflowsEnabled();
