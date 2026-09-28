@@ -121,6 +121,14 @@ function executorLabel(step: WorkflowStepRun) {
   return "Workflow engine";
 }
 
+function issueIdFromStepOutput(value: unknown): string | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const issueId = Reflect.get(value, "issueId");
+  return typeof issueId === "string" && issueId.length > 0 ? issueId : null;
+}
+
 function jsonPreview(value: unknown) {
   if (value === null || value === undefined) return null;
   try {
@@ -378,6 +386,7 @@ export function WorkflowRun() {
               {steps.map((step) => {
                 const input = jsonPreview(step.inputJson);
                 const output = jsonPreview(step.outputJson);
+                const linkedIssueId = issueIdFromStepOutput(step.outputJson);
                 const stepWait =
                   waits.find(
                     (wait) =>
@@ -401,6 +410,32 @@ export function WorkflowRun() {
                         <p className="mt-1 text-xs text-muted-foreground">
                           Attempt {step.attempt} · {executorLabel(step)}
                         </p>
+                        {step.agentId ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {linkedIssueId ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate(`/issues/${linkedIssueId}`)}
+                              >
+                                Open delegated task
+                              </Button>
+                            ) : null}
+                            {step.heartbeatRunId ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  navigate(
+                                    `/agents/${step.agentId}/runs/${step.heartbeatRunId}`,
+                                  )
+                                }
+                              >
+                                Open agent run
+                              </Button>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="text-xs text-muted-foreground sm:text-right">
                         <p>{formatDateTime(step.startedAt)}</p>
