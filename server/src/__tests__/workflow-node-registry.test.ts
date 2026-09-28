@@ -225,8 +225,8 @@ describe("Workflow Node Registry", () => {
         ],
         edges: [
           { id: "e1", source: "start", target: "branch" },
-          { id: "e2", source: "branch", target: "left" },
-          { id: "e3", source: "branch", target: "right" },
+          { id: "e2", source: "branch", target: "left", sourceHandle: "true", label: "true" },
+          { id: "e3", source: "branch", target: "right", sourceHandle: "false", label: "false" },
           { id: "e4", source: "left", target: "join" },
           { id: "e5", source: "right", target: "join" },
         ],
@@ -234,6 +234,26 @@ describe("Workflow Node Registry", () => {
         settings: {},
       },
       { reason: "implicit_merge", nodeId: "join" },
+    );
+
+    expectTopologyError(
+      {
+        version: 1,
+        nodes: [
+          node("start", "core.manual_trigger", 0, 0),
+          node("branch", "core.condition", 160, 0),
+          node("left", "core.condition", 320, -80),
+          node("right", "core.condition", 320, 80),
+        ],
+        edges: [
+          { id: "e1", source: "start", target: "branch" },
+          { id: "e2", source: "branch", target: "left", label: "true" },
+          { id: "e3", source: "branch", target: "right", label: "true" },
+        ],
+        variables: [],
+        settings: {},
+      },
+      { reason: "condition_branches_invalid", nodeId: "branch" },
     );
 
     expect(() =>
@@ -245,6 +265,54 @@ describe("Workflow Node Registry", () => {
         settings: {},
       }),
     ).not.toThrow();
+  });
+
+  it("publishes a condition only when its deterministic expression is valid", async () => {
+    const registry = workflowNodeRegistryService({} as Db);
+    const graph = {
+      version: 1 as const,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "condition",
+          type: "core.condition",
+          name: "Amount threshold",
+          position: { x: 180, y: 0 },
+          config: { expression: "{{trigger.amount}} >= 50000" },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "condition" }],
+      variables: [],
+      settings: {},
+    };
+
+    await expect(
+      registry.validatePublishGraph("22222222-2222-4222-8222-222222222222", graph),
+    ).resolves.toEqual(graph);
+
+    await expect(
+      registry.validateDraftGraph("22222222-2222-4222-8222-222222222222", {
+        ...graph,
+        nodes: graph.nodes.map((node) =>
+          node.id === "condition"
+            ? { ...node, config: { expression: "process.exit(1)" } }
+            : node,
+        ),
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: expect.objectContaining({
+        code: "workflow_node_invalid",
+        reason: "node_config_invalid",
+        nodeId: "condition",
+      }),
+    });
   });
 
 });
