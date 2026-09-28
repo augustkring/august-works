@@ -31,6 +31,7 @@ interface RegisteredWorkflowNode {
     companyId: string,
     nodeId: string,
     config: Record<string, unknown>,
+    mode: "draft" | "publish",
   ) => Promise<void>;
 }
 
@@ -328,7 +329,7 @@ const REGISTRY: RegisteredWorkflowNode[] = [
       riskDefault: "C0",
       authorizationRequirements: [],
       timeoutDefaultSeconds: null,
-      retryPolicyDefault: NO_RETRY,
+      retryPolicyDefault: STANDARD_RETRY,
       idempotencyStrategy: "workflow_step_key",
       cancellationSupport: "durable_wait",
       testMode: "safe",
@@ -354,7 +355,18 @@ const REGISTRY: RegisteredWorkflowNode[] = [
       displayName: "Connector Action",
       description: "Invokes one existing governed Tool Catalogue entry through a selected connection.",
       inputSchema: { type: "object", additionalProperties: true },
-      outputSchema: null,
+      outputSchema: {
+        type: "object",
+        properties: {
+          issueId: { type: "string", format: "uuid" },
+          identifier: { type: ["string", "null"] },
+          status: { type: "string" },
+          agentId: { type: "string", format: "uuid" },
+          heartbeatRunId: { type: ["string", "null"], format: "uuid" },
+        },
+        required: ["issueId", "status", "agentId", "heartbeatRunId"],
+        additionalProperties: false,
+      },
       configSchema: {
         type: "object",
         required: ["toolCatalogEntryId", "connectionId"],
@@ -522,8 +534,20 @@ const REGISTRY: RegisteredWorkflowNode[] = [
       idempotencyStrategy: "workflow_step_key",
       cancellationSupport: "cooperative",
       testMode: "sandbox",
-      failureOutputs: ["permission_denied", "agent_unavailable", "agent_failed"],
-      auditEvents: ["agent.task_delegated"],
+      failureOutputs: [
+        "workflow_agent_task_config_invalid",
+        "workflow_agent_task_structured_output_not_ready",
+        "workflow_agent_unavailable",
+        "workflow_agent_wakeup_failed",
+        "workflow_task_permission_denied",
+        "workflow_task_cancelled",
+        "workflow_task_missing",
+      ],
+      auditEvents: [
+        "workflow.agent_task_created",
+        "workflow.agent_task_delegated",
+        "workflow.agent_task_completed",
+      ],
       uiComponent: "agent_task",
       accessibilityContract: {
         label: "Agent task",
@@ -531,13 +555,23 @@ const REGISTRY: RegisteredWorkflowNode[] = [
         supportsKeyboardInsert: true,
         supportsOutlineEdit: true,
       },
-      publishState: "draft_only",
-      publishBlockedReason: "agent_workflow_integration_not_ready",
+      publishState: "ready",
+      publishBlockedReason: null,
     }),
     configValidator: agentTaskConfig,
-    validateReferences: async (db, companyId, nodeId, config) => {
+    validateReferences: async (db, companyId, nodeId, config, mode) => {
       const parsed = agentTaskConfig.parse(config);
       await requireAgent(db, companyId, nodeId, parsed.agentId);
+      if (mode === "publish" && parsed.expectedOutputSchema != null) {
+        invalidNode(
+          "Structured Agent Task output is not publishable until the task runtime exposes an authoritative structured-result channel",
+          {
+            reason: "workflow_agent_task_structured_output_not_ready",
+            nodeId,
+            nodeType: "agent.task",
+          },
+        );
+      }
     },
   },
   {
@@ -757,6 +791,7 @@ export function workflowNodeRegistryService(db: Db) {
         companyId,
         node.id,
         parsed.data as Record<string, unknown>,
+        mode,
       );
     }
 
