@@ -1058,7 +1058,7 @@ export function Routines() {
             <div>
               <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">New routine</p>
               <p className="text-sm text-muted-foreground">
-                Define the recurring work first. Default project and agent are optional for draft routines.
+                Define the recurring work first. Project and execution target are optional for draft routines.
               </p>
             </div>
             <Button
@@ -1094,13 +1094,17 @@ export function Routines() {
                   }
                   if (event.key === "Tab" && !event.shiftKey) {
                     event.preventDefault();
-                    if (draft.assigneeAgentId) {
+                    const hasTarget =
+                      draft.executionTargetKind === "workflow"
+                        ? Boolean(draft.executionTargetRef)
+                        : Boolean(draft.assigneeAgentId);
+                    if (hasTarget) {
                       if (draft.projectId) {
                         descriptionEditorRef.current?.focus();
                       } else {
                         projectSelectorRef.current?.focus();
                       }
-                    } else {
+                    } else if (draft.executionTargetKind === "agent_task") {
                       assigneeSelectorRef.current?.focus();
                     }
                   }
@@ -1112,52 +1116,145 @@ export function Routines() {
             <div className="px-5 pb-3">
               <div className="overflow-x-auto overscroll-x-contain">
                 <div className="inline-flex min-w-full flex-wrap items-center gap-2 text-sm text-muted-foreground sm:min-w-max sm:flex-nowrap">
-                  <span>For</span>
-                  <InlineEntitySelector
-                    ref={assigneeSelectorRef}
-                    value={draft.assigneeAgentId}
-                    options={assigneeOptions}
-                    recentOptionIds={recentAssigneeIds}
-                    placeholder="Responsible"
-                    noneLabel="No responsible"
-                    searchPlaceholder="Search responsible..."
-                    emptyMessage="No responsible found."
-                    onChange={(assigneeAgentId) => {
-                      if (assigneeAgentId) trackRecentAssignee(assigneeAgentId);
-                      setDraft((current) => ({ ...current, assigneeAgentId }));
-                    }}
-                    onConfirm={() => {
-                      if (draft.projectId) {
-                        descriptionEditorRef.current?.focus();
-                      } else {
-                        projectSelectorRef.current?.focus();
+                  <span>Run with</span>
+                  <Select
+                    value={draft.executionTargetKind}
+                    onValueChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        executionTargetKind:
+                          value as "agent_task" | "workflow",
+                        executionTargetRef:
+                          value === "agent_task"
+                            ? current.assigneeAgentId
+                            : current.executionTargetKind === "workflow"
+                              ? current.executionTargetRef
+                              : "",
+                      }))
+                    }
+                  >
+                    <SelectTrigger
+                      className="h-8 w-[118px]"
+                      aria-label="Execution target type"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="agent_task">Agent</SelectItem>
+                      <SelectItem value="workflow">Workflow</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {draft.executionTargetKind === "agent_task" ? (
+                    <InlineEntitySelector
+                      ref={assigneeSelectorRef}
+                      value={draft.assigneeAgentId}
+                      options={assigneeOptions}
+                      recentOptionIds={recentAssigneeIds}
+                      placeholder="Agent"
+                      noneLabel="No agent"
+                      searchPlaceholder="Search agents..."
+                      emptyMessage="No agents found."
+                      onChange={(assigneeAgentId) => {
+                        if (assigneeAgentId) {
+                          trackRecentAssignee(assigneeAgentId);
+                        }
+                        setDraft((current) => ({
+                          ...current,
+                          assigneeAgentId,
+                          executionTargetRef: assigneeAgentId,
+                        }));
+                      }}
+                      onConfirm={() => {
+                        if (draft.projectId) {
+                          descriptionEditorRef.current?.focus();
+                        } else {
+                          projectSelectorRef.current?.focus();
+                        }
+                      }}
+                      renderTriggerValue={(option) =>
+                        option ? (
+                          currentAssignee ? (
+                            <>
+                              <AgentAvatar
+                                agent={currentAssignee}
+                                size={16}
+                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                              />
+                              <span className="truncate">{option.label}</span>
+                            </>
+                          ) : (
+                            <span className="truncate">{option.label}</span>
+                          )
+                        ) : (
+                          <span className="text-muted-foreground">Agent</span>
+                        )
                       }
-                    }}
-                    renderTriggerValue={(option) =>
-                      option ? (
-                        currentAssignee ? (
+                      renderOption={(option) => {
+                        if (!option.id) {
+                          return (
+                            <span className="truncate">{option.label}</span>
+                          );
+                        }
+                        const assignee = agentById.get(option.id);
+                        return (
                           <>
-                            <AgentAvatar agent={currentAssignee} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/>
+                            {assignee ? (
+                              <AgentAvatar
+                                agent={assignee}
+                                size={16}
+                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                              />
+                            ) : null}
+                            <span className="truncate">{option.label}</span>
+                          </>
+                        );
+                      }}
+                    />
+                  ) : (
+                    <InlineEntitySelector
+                      value={draft.executionTargetRef}
+                      options={workflowOptions}
+                      placeholder="Workflow"
+                      noneLabel="No workflow"
+                      searchPlaceholder="Search workflows..."
+                      emptyMessage="No active published workflows found."
+                      onChange={(workflowId) =>
+                        setDraft((current) => ({
+                          ...current,
+                          executionTargetRef: workflowId,
+                        }))
+                      }
+                      onConfirm={() => {
+                        if (draft.projectId) {
+                          descriptionEditorRef.current?.focus();
+                        } else {
+                          projectSelectorRef.current?.focus();
+                        }
+                      }}
+                      renderTriggerValue={(option) =>
+                        option ? (
+                          <>
+                            <GitBranch
+                              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                              aria-hidden="true"
+                            />
                             <span className="truncate">{option.label}</span>
                           </>
                         ) : (
-                          <span className="truncate">{option.label}</span>
+                          <span className="text-muted-foreground">Workflow</span>
                         )
-                      ) : (
-                        <span className="text-muted-foreground">Responsible</span>
-                      )
-                    }
-                    renderOption={(option) => {
-                      if (!option.id) return <span className="truncate">{option.label}</span>;
-                      const assignee = agentById.get(option.id);
-                      return (
+                      }
+                      renderOption={(option) => (
                         <>
-                          {assignee ? <AgentAvatar agent={assignee} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/> : null}
+                          <GitBranch
+                            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
                           <span className="truncate">{option.label}</span>
                         </>
-                      );
-                    }}
-                  />
+                      )}
+                    />
+                  )}
                   <span>in</span>
                   <InlineEntitySelector
                     ref={projectSelectorRef}
@@ -1234,7 +1331,7 @@ export function Routines() {
                 contentClassName="min-h-(--sz-160px) text-sm text-muted-foreground"
                 mentions={mentionOptions}
                 onSubmit={() => {
-                  if (!createRoutine.isPending && draft.title.trim() && draft.projectId && draft.assigneeAgentId) {
+                  if (!createRoutine.isPending && draft.title.trim()) {
                     createRoutine.mutate();
                   }
                 }}
@@ -1294,7 +1391,7 @@ export function Routines() {
 
           <div className="shrink-0 flex flex-col gap-3 border-t border-border/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm text-muted-foreground">
-              After creation, Paperclip takes you straight to trigger setup. Draft routines stay paused until you add a default agent.
+              After creation, Paperclip takes you straight to trigger setup. Draft routines stay paused until you choose an execution target.
             </div>
             <div className="flex flex-col gap-2 sm:items-end">
               <Button
