@@ -10,7 +10,12 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { WorkflowGraphV1, WorkflowJsonSchema } from "@paperclipai/shared";
+import type {
+  WorkflowGraphV1,
+  WorkflowJsonSchema,
+  WorkflowWaitKind,
+  WorkflowWaitStatus,
+} from "@paperclipai/shared";
 import { agents } from "./agents.js";
 import { companies } from "./companies.js";
 import { folders } from "./folders.js";
@@ -177,6 +182,71 @@ export const workflowStepRuns = pgTable(
     terminalFinishedCheck: check(
       "workflow_step_runs_terminal_finished_check",
       sql`${table.status} not in ('retried', 'succeeded', 'failed', 'skipped', 'cancelled') or ${table.finishedAt} is not null`,
+    ),
+  }),
+);
+
+export const workflowWaits = pgTable(
+  "workflow_waits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    workflowRunId: uuid("workflow_run_id")
+      .notNull()
+      .references(() => workflowRuns.id, { onDelete: "cascade" }),
+    nodeId: text("node_id").notNull(),
+    waitKey: text("wait_key").notNull(),
+    kind: text("kind").$type<WorkflowWaitKind>().notNull(),
+    status: text("status").$type<WorkflowWaitStatus>().notNull().default("active"),
+    wakeAt: timestamp("wake_at", { withTimezone: true }),
+    timeoutAt: timestamp("timeout_at", { withTimezone: true }),
+    referenceType: text("reference_type"),
+    referenceId: text("reference_id"),
+    signalTokenHash: text("signal_token_hash"),
+    resolutionJson: jsonb("resolution_json").$type<unknown>(),
+    resolvedByType: text("resolved_by_type"),
+    resolvedById: text("resolved_by_id"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    companyRunStatusIdx: index("workflow_waits_company_run_status_idx").on(
+      table.companyId,
+      table.workflowRunId,
+      table.status,
+    ),
+    statusWakeIdx: index("workflow_waits_status_wake_idx").on(
+      table.status,
+      table.wakeAt,
+    ),
+    runNodeActiveUq: uniqueIndex("workflow_waits_run_node_active_uq")
+      .on(table.workflowRunId, table.nodeId, table.waitKey)
+      .where(sql`${table.status} = 'active'`),
+    signalTokenHashUq: uniqueIndex("workflow_waits_signal_token_hash_uq")
+      .on(table.signalTokenHash)
+      .where(sql`${table.signalTokenHash} is not null`),
+    kindCheck: check(
+      "workflow_waits_kind_check",
+      sql`${table.kind} in ('delay', 'human_interaction', 'external_callback', 'task_completion')`,
+    ),
+    statusCheck: check(
+      "workflow_waits_status_check",
+      sql`${table.status} in ('active', 'resolved', 'timed_out', 'cancelled')`,
+    ),
+    terminalResolutionCheck: check(
+      "workflow_waits_terminal_resolution_check",
+      sql`(${table.status} = 'active' and ${table.resolvedAt} is null) or (${table.status} <> 'active' and ${table.resolvedAt} is not null)`,
+    ),
+    delayWakeCheck: check(
+      "workflow_waits_delay_wake_check",
+      sql`${table.kind} <> 'delay' or ${table.wakeAt} is not null`,
+    ),
+    callbackSignalCheck: check(
+      "workflow_waits_callback_signal_check",
+      sql`${table.kind} <> 'external_callback' or ${table.signalTokenHash} is not null`,
     ),
   }),
 );
