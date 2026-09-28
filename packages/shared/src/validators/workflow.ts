@@ -210,6 +210,14 @@ export const workflowDataSelectorRequestSchema = z
 export type WorkflowDataSelectorRequest =
   z.infer<typeof workflowDataSelectorRequestSchema>;
 
+export const workflowRunListQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).optional().default(30),
+  })
+  .strict();
+
+export type WorkflowRunListQuery = z.infer<typeof workflowRunListQuerySchema>;
+
 export const startWorkflowRunSchema = z
   .object({
     input: z.record(z.string(), z.unknown()).optional().default({}),
