@@ -1,7 +1,7 @@
 # Workflows V1 API contract
 
 **Feature flag:** `enableWorkflowsV1` (default off)
-**Scope:** PR 11–19 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic Condition branching and lease-based checkpoint/replay recovery. Advanced side-effect retry and waitpoint nodes remain gated.
+**Scope:** PR 11–20 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic Condition branching, checkpoint/replay recovery, and durable executor-owned retry/idempotency policy. Waitpoint nodes and side-effect node execution remain gated.
 
 ## Authorization
 
@@ -75,6 +75,8 @@ A Condition may be terminal or may expose exactly one `true` and one `false` bra
 - `workflow_checkpoint_state_invalid`
 - `workflow_execution_interrupted`
 - `workflow_revision_unavailable_for_recovery`
+- `workflow_step_retry_conflict`
+- `workflow_step_retry_unsafe`
 
 ## Current execution boundary
 
@@ -84,11 +86,14 @@ Condition expressions intentionally do not execute host JavaScript and never cal
 
 PR 19 adds checkpoint/replay recovery. Every running workflow carries an execution owner, heartbeat and expiring lease. The server reconciliation loop reclaims expired `RUNNING`/`RECOVERING` runs and abandoned `QUEUED` runs after a grace period. Recovery reloads the immutable published-or-superseded revision bound to the run, reuses `SUCCEEDED` step outputs as checkpoints, preserves a step interrupted by process loss as a failed attempt with `workflow_execution_interrupted`, and resumes that node as attempt `n+1`. A valid live lease is never stolen.
 
-Live execution remains deliberately fail-closed for every other node type until its executor, authorization and side-effect retry/idempotency semantics land in the ordered durability PRs. A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
+PR 20 makes retry policy executor-owned. Retry modes are `none`, `fixed`, or `exponential`; retry attempts are separate `workflow_step_runs` rows. A retryable failure may transition the current attempt to `retry_scheduled` and the run to `waiting`; reconciliation resumes only after the configured backoff, marks the old attempt `retried`, and executes attempt `n+1`. The retry decision fails closed unless the error is retryable, the side effect is safe to repeat/deduplicated, the retry budget and parent deadline permit it, and provider policy permits retry. A stable `workflow-step:<run>:<node-hash>` identity is derived once per logical step and remains constant across attempts.
+
+Backoff does not hold an HTTP request or worker sleep open. The durable state itself is the source of truth, and the existing reconciliation loop owns wake-up. Current executable nodes are still pure/deterministic; Connector Action, Create Task and Agent Task remain draft-only until their execution-time authorization and real dedupe/idempotency path are implemented.
+
+A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
 The run-history endpoint reads the existing authoritative `workflow_runs` state;
-it does not create a second history store. Cancellation/retry endpoints are not
-advertised until their durability semantics are implemented.
+it does not create a second history store. Cancellation and user-initiated whole-run retry endpoints are not advertised yet. Automatic node retry durability is implemented; wait/cancel semantics land in the next ordered gates.
 
 ## Recovery assurance boundary
 
