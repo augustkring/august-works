@@ -2275,7 +2275,15 @@ async function enqueueStageAutomationLedger(
       caseId: input.caseId,
       automationId: automation.id,
       triggeringEventId: input.eventId,
-      routineId: automation.routineId,
+      targetKind: automation.target.kind,
+      targetRef:
+        automation.target.kind === "routine"
+          ? automation.target.routineId
+          : automation.target.workflowId,
+      routineId:
+        automation.target.kind === "routine"
+          ? automation.target.routineId
+          : null,
       status: "failed",
       retryOfExecutionId: input.retryOfExecutionId ?? null,
       generation: input.generation ?? 1,
@@ -2350,10 +2358,31 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     return routine;
   }
 
+  async function assertPipelineAutomationTarget(
+    companyId: string,
+    target: PipelineAutomationTarget,
+  ) {
+    if (target.kind === "routine") {
+      await assertRoutineInCompany(companyId, target.routineId);
+      return;
+    }
+    await resolveWorkflowExecutionRevision(
+      db,
+      companyId,
+      target.workflowId,
+    );
+  }
+
   async function validateStageAutomationConfig(companyId: string, config?: PipelineStageConfig | null) {
-    const onEnter = config?.onEnter;
-    if (!onEnter || onEnter.type !== "run_routine" || !onEnter.routineId) return;
-    await assertRoutineInCompany(companyId, onEnter.routineId);
+    const target = stageAutomationTargetFromConfig(config);
+    if (!target) return;
+    if (target.kind === "workflow" && readBreakdownConfig(config ?? {})) {
+      throw unprocessable(
+        "Breakdown stage automation requires the existing routine/agent target until pipeline-native workflow breakdown actions are implemented",
+        { code: "pipeline_workflow_breakdown_not_ready" },
+      );
+    }
+    await assertPipelineAutomationTarget(companyId, target);
   }
 
   async function loadBreakdownTarget(
