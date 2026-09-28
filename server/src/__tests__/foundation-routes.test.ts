@@ -379,4 +379,180 @@ describeEmbeddedPostgres("Foundation routes", () => {
       .expect(200);
   });
 
+  it("returns only approved canonical Foundation content to an agent with read access", async () => {
+    const company = await seedCompany();
+    await enableFoundation();
+    const board = request(app(boardActor));
+
+    const governed = await board
+      .post(`/api/companies/${company.id}/foundation`)
+      .send({
+        foundationKey: "governed-strategy",
+        category: "strategy",
+        documentType: "strategy",
+        body: "Approved strategy",
+        sensitivity: "internal",
+      })
+      .expect(201);
+    const submitted = await board
+      .post(`/api/companies/${company.id}/foundation/${governed.body.id}/submit`)
+      .send({ expectedRevisionId: governed.body.latestRevisionId })
+      .expect(200);
+    const approved = await board
+      .post(`/api/companies/${company.id}/foundation/${governed.body.id}/approve`)
+      .send({ expectedRevisionId: submitted.body.latestRevisionId })
+      .expect(200);
+
+    await board
+      .patch(`/api/companies/${company.id}/foundation/${governed.body.id}/draft`)
+      .send({
+        baseRevisionId: approved.body.latestRevisionId,
+        body: "Unapproved future strategy",
+        sensitivity: "restricted",
+      })
+      .expect(200);
+
+    await board
+      .post(`/api/companies/${company.id}/foundation`)
+      .send({
+        foundationKey: "never-approved",
+        category: "strategy",
+        documentType: "strategy",
+        body: "Draft only",
+      })
+      .expect(201);
+
+    const [agent] = await db
+      .insert(agents)
+      .values({
+        companyId: company.id,
+        name: "Reader Agent",
+        role: "analyst",
+        adapterType: "codex_local",
+        adapterConfig: {},
+        runtimeConfig: {},
+        permissions: {},
+      })
+      .returning();
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent!.id,
+      status: "active",
+      membershipRole: "member",
+    });
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent!.id,
+      permissionKey: "foundation:read",
+      scope: null,
+    });
+
+    const agentHttp = request(app({
+      type: "agent",
+      agentId: agent!.id,
+      companyId: company.id,
+      source: "agent_key",
+      keyId: "read-key",
+      runId: "read-run",
+    }));
+
+    const list = await agentHttp
+      .get(`/api/companies/${company.id}/foundation`)
+      .expect(200);
+    expect(list.body).toHaveLength(1);
+    expect(list.body[0]).toMatchObject({
+      id: governed.body.id,
+      body: "Approved strategy",
+      sensitivity: "internal",
+      status: "approved",
+      latestRevisionId: approved.body.approvedRevisionId,
+    });
+
+    const detail = await agentHttp
+      .get(`/api/companies/${company.id}/foundation/${governed.body.id}`)
+      .expect(200);
+    expect(detail.body).toMatchObject({
+      body: "Approved strategy",
+      sensitivity: "internal",
+      status: "approved",
+    });
+
+    const draftOnly = await db
+      .select({ id: foundationDocuments.id })
+      .from(foundationDocuments)
+      .where(eq(foundationDocuments.foundationKey, "never-approved"))
+      .then((rows) => rows[0]!);
+    await agentHttp
+      .get(`/api/companies/${company.id}/foundation/${draftOnly.id}`)
+      .expect(404);
+  });
+
+  it("blocks agents from working-scope search, revision history, and proposal review data", async () => {
+    const company = await seedCompany();
+    await enableFoundation();
+    const board = request(app(boardActor));
+    const created = await board
+      .post(`/api/companies/${company.id}/foundation`)
+      .send({
+        foundationKey: "agent-boundary",
+        category: "company",
+        documentType: "company_profile",
+        body: "Canonical candidate",
+      })
+      .expect(201);
+
+    const [agent] = await db
+      .insert(agents)
+      .values({
+        companyId: company.id,
+        name: "Scoped Reader",
+        role: "analyst",
+        adapterType: "codex_local",
+        adapterConfig: {},
+        runtimeConfig: {},
+        permissions: {},
+      })
+      .returning();
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent!.id,
+      status: "active",
+      membershipRole: "member",
+    });
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent!.id,
+      permissionKey: "foundation:read",
+      scope: null,
+    });
+    const agentHttp = request(app({
+      type: "agent",
+      agentId: agent!.id,
+      companyId: company.id,
+      source: "agent_key",
+      keyId: "read-key",
+      runId: "read-run",
+    }));
+
+    await agentHttp
+      .get(`/api/companies/${company.id}/foundation/search`)
+      .query({ q: "Canonical", scope: "working" })
+      .expect(403)
+      .expect((response) => {
+        expect(response.body.code).toBe("permission_denied");
+      });
+
+    await agentHttp
+      .get(`/api/companies/${company.id}/foundation/${created.body.id}/revisions`)
+      .expect(403);
+
+    await agentHttp
+      .get(`/api/companies/${company.id}/foundation/${created.body.id}/proposals`)
+      .expect(403);
+  });
+
 });

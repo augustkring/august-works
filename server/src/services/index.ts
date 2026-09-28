@@ -218,6 +218,6 @@ export {
   type RemoteAgentService,
 } from "./remote-agent-profiles.js";
 
-export { foundationService, type FoundationMutationActor } from "./foundation/foundation-service.js";
+export { approvedFoundationView, foundationService, type FoundationMutationActor } from "./foundation/foundation-service.js";
 
 export { foundationIndexService, extractFoundationSections, replaceFoundationRevisionSections } from "./foundation/foundation-index.js";

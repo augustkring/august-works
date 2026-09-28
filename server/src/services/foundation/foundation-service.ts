@@ -30,6 +30,33 @@ export interface FoundationMutationActor {
   runId?: string | null;
 }
 
+export function approvedFoundationView(
+  foundation: FoundationDocument,
+): FoundationDocument | null {
+  const revision = foundation.canonicalRevision;
+  const governance = foundation.canonicalGovernance;
+  if (!foundation.approvedRevisionId || !revision || !governance) return null;
+
+  return {
+    ...foundation,
+    category: governance.category,
+    documentType: governance.documentType,
+    authorityLevel: governance.authorityLevel,
+    status: "approved",
+    sensitivity: governance.sensitivity,
+    ownerUserId: governance.ownerUserId,
+    ownerAgentId: governance.ownerAgentId,
+    reviewFrequencyDays: governance.reviewFrequencyDays,
+    validFrom: governance.validFrom,
+    validUntil: governance.validUntil,
+    title: revision.title,
+    body: revision.body,
+    latestRevisionId: revision.id,
+    latestRevisionNumber: revision.revisionNumber,
+    updatedAt: foundation.lastReviewedAt ?? revision.createdAt,
+  };
+}
+
 const approvedRevision = alias(documentRevisions, "foundation_approved_revision");
 
 function actorFields(actor: FoundationMutationActor) {

@@ -12,6 +12,7 @@ import { validate } from "../middleware/validate.js";
 import { forbidden, notFound, unauthorized } from "../errors.js";
 import {
   accessService,
+  approvedFoundationView,
   foundationIndexService,
   foundationService,
   instanceSettingsService,
@@ -124,7 +125,15 @@ export function foundationRoutes(db: Db) {
     await assertFoundationEnabled();
     const companyId = req.params.companyId as string;
     await assertFoundationPermission(req, companyId, "foundation:read");
-    res.json(await svc.list(companyId));
+    const items = await svc.list(companyId);
+    if (req.actor.type === "agent") {
+      res.json(items.flatMap((item) => {
+        const approved = approvedFoundationView(item);
+        return approved ? [approved] : [];
+      }));
+      return;
+    }
+    res.json(items);
   });
 
   router.post(
@@ -155,6 +164,12 @@ export function foundationRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     await assertFoundationPermission(req, companyId, "foundation:read");
     const query = foundationSearchQuerySchema.parse(req.query);
+    if (req.actor.type === "agent" && query.scope !== "approved") {
+      throw forbidden("Agents can only search approved Foundation content", {
+        code: "permission_denied",
+        reason: "foundation_working_scope_denied",
+      });
+    }
     res.json(
       await index.search(companyId, {
         query: query.q,
@@ -169,11 +184,13 @@ export function foundationRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     await assertFoundationPermission(req, companyId, "foundation:read");
     const result = await svc.get(companyId, req.params.foundationDocumentId as string);
-    if (!result) {
+    const visible =
+      req.actor.type === "agent" && result ? approvedFoundationView(result) : result;
+    if (!visible) {
       res.status(404).json({ error: "Foundation document not found" });
       return;
     }
-    res.json(result);
+    res.json(visible);
   });
 
   router.get(
@@ -181,6 +198,7 @@ export function foundationRoutes(db: Db) {
     async (req, res) => {
       await assertFoundationEnabled();
       const companyId = req.params.companyId as string;
+      assertBoard(req);
       await assertFoundationPermission(req, companyId, "foundation:read");
       const revisions = await svc.listRevisions(
         companyId,
@@ -321,6 +339,7 @@ export function foundationRoutes(db: Db) {
     async (req, res) => {
       await assertFoundationEnabled();
       const companyId = req.params.companyId as string;
+      assertBoard(req);
       await assertFoundationPermission(req, companyId, "foundation:read");
       const foundation = await svc.get(companyId, req.params.foundationDocumentId as string);
       if (!foundation) {
