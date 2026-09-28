@@ -104,6 +104,15 @@ const agentTaskConfig = z.object({
   waitForCompletion: z.boolean().optional().default(true),
   expectedOutputSchema: z.record(z.string(), z.unknown()).nullable().optional(),
 }).strict();
+const externalAgentConfig = z.object({
+  agentId: z.string().guid(),
+  objective: z.string().trim().min(1).max(10_000),
+  structuredInput: z.record(z.string(), z.unknown()).optional().default({}),
+  expectedOutputSchema: z.record(z.string(), z.unknown()).nullable().optional(),
+  timeoutSeconds: z.number().int().min(1).max(3_600).optional().default(120),
+  allowedCapabilityScope: z.literal("binding_grants").optional().default("binding_grants"),
+  fallbackPolicy: z.literal("fail").optional().default("fail"),
+}).strict();
 const humanApprovalConfig = z.object({
   summary: z.string().trim().min(1).max(1_000),
   consequence: z.string().trim().min(1).max(2_000),
@@ -155,6 +164,50 @@ async function requireAgent(db: Db, companyId: string, nodeId: string, agentId: 
       referenceId: agentId,
     });
   }
+}
+
+async function requireOpenClawAgent(
+  db: Db,
+  companyId: string,
+  nodeId: string,
+  agentId: string,
+) {
+  const agent = await db
+    .select({
+      id: agents.id,
+      adapterType: agents.adapterType,
+      status: agents.status,
+    })
+    .from(agents)
+    .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)))
+    .then((rows) => rows[0] ?? null);
+  if (!agent) {
+    invalidNode("External Agent node references an agent outside the company", {
+      reason: "cross_company_reference",
+      nodeId,
+      referenceType: "agent",
+      referenceId: agentId,
+    });
+  }
+  if (agent.adapterType !== "openclaw_gateway") {
+    invalidNode("External Agent must reference an OpenClaw Gateway agent", {
+      reason: "external_agent_binding_invalid",
+      nodeId,
+      referenceType: "agent",
+      referenceId: agentId,
+      adapterType: agent.adapterType,
+    });
+  }
+  if (agent.status === "terminated") {
+    invalidNode("External Agent binding is terminated", {
+      reason: "external_agent_binding_unavailable",
+      nodeId,
+      referenceType: "agent",
+      referenceId: agentId,
+      status: agent.status,
+    });
+  }
+  return agent;
 }
 
 async function requireUser(db: Db, companyId: string, nodeId: string, userId: string) {
@@ -572,6 +625,96 @@ const REGISTRY: RegisteredWorkflowNode[] = [
           },
         );
       }
+    },
+  },
+  {
+    descriptor: descriptor({
+      type: "agent.external",
+      version: 1,
+      category: "agent",
+      displayName: "External Agent",
+      description: "Runs a bounded task through an existing governed OpenClaw Gateway agent binding.",
+      inputSchema: { type: "object", additionalProperties: true },
+      outputSchema: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["succeeded"] },
+          output: {},
+          artifacts: { type: "array", items: { type: "object", additionalProperties: true } },
+          usage: { type: "object", additionalProperties: true },
+          externalRunId: { type: "string" },
+          issueId: { type: "string", format: "uuid" },
+          agentId: { type: "string", format: "uuid" },
+          heartbeatRunId: { type: "string", format: "uuid" },
+        },
+        required: [
+          "status",
+          "output",
+          "artifacts",
+          "usage",
+          "externalRunId",
+          "issueId",
+          "agentId",
+          "heartbeatRunId",
+        ],
+        additionalProperties: false,
+      },
+      configSchema: {
+        type: "object",
+        required: ["agentId", "objective"],
+        properties: {
+          agentId: { type: "string", format: "uuid" },
+          objective: { type: "string", minLength: 1, maxLength: 10_000 },
+          structuredInput: { type: "object", additionalProperties: true },
+          expectedOutputSchema: { type: ["object", "null"], additionalProperties: true },
+          timeoutSeconds: { type: "integer", minimum: 1, maximum: 3_600 },
+          allowedCapabilityScope: { type: "string", enum: ["binding_grants"] },
+          fallbackPolicy: { type: "string", enum: ["fail"] },
+        },
+        additionalProperties: false,
+      },
+      sideEffectClass: "write",
+      riskDefault: "C3",
+      authorizationRequirements: [{
+        permission: "tasks:assign",
+        timing: "execution",
+        description: "External work is delegated only through an accountable company task assigned to the selected OpenClaw agent.",
+      }],
+      timeoutDefaultSeconds: 120,
+      retryPolicyDefault: STANDARD_RETRY,
+      idempotencyStrategy: "workflow_step_key",
+      cancellationSupport: "cooperative",
+      testMode: "sandbox",
+      failureOutputs: [
+        "workflow_external_agent_config_invalid",
+        "workflow_external_agent_binding_invalid",
+        "workflow_external_agent_unavailable",
+        "workflow_external_agent_failed",
+        "workflow_external_agent_timeout",
+        "workflow_external_agent_cancelled",
+        "workflow_external_agent_result_missing",
+        "workflow_output_schema_invalid",
+        "workflow_output_schema_mismatch",
+      ],
+      auditEvents: [
+        "workflow.external_agent_requested",
+        "workflow.external_agent_dispatched",
+        "workflow.external_agent_completed",
+      ],
+      uiComponent: "external_agent",
+      accessibilityContract: {
+        label: "External agent",
+        description: "Run accountable work through a governed OpenClaw Gateway agent.",
+        supportsKeyboardInsert: true,
+        supportsOutlineEdit: true,
+      },
+      publishState: "ready",
+      publishBlockedReason: null,
+    }),
+    configValidator: externalAgentConfig,
+    validateReferences: async (db, companyId, nodeId, config) => {
+      const parsed = externalAgentConfig.parse(config);
+      await requireOpenClawAgent(db, companyId, nodeId, parsed.agentId);
     },
   },
   {
