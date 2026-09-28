@@ -22,6 +22,7 @@ const CORE_CAPABILITY_TYPES = new Set([
   "core.manual_trigger",
   "core.transform",
   "core.condition",
+  "core.wait",
   "work.create_task",
   "human.approval",
 ]);
@@ -36,6 +37,8 @@ function coreConfigTemplate(type: string): Record<string, unknown> {
       return { mapping: { value: "{{input.value}}" } };
     case "core.condition":
       return { expression: "true" };
+    case "core.wait":
+      return { durationSeconds: 300 };
     case "work.create_task":
       return { title: "New task" };
     case "human.approval":
