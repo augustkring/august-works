@@ -206,9 +206,37 @@ export function workflowCapabilityResolverService(db: Db) {
     ) => {
       const parsed = workflowCapabilitySearchQuerySchema.parse(rawInput);
       const candidateLimit = Math.max(parsed.limit * 6, 100);
+      const searchTerms = parsed.q
+        .toLocaleLowerCase()
+        .split(/\s+/)
+        .map((term) => term.trim())
+        .filter(Boolean);
+      const toolTermPredicate = (term: string) => {
+        const pattern = `%${term.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
+        return or(
+          ilike(toolCatalogEntries.title, pattern),
+          ilike(toolCatalogEntries.name, pattern),
+          ilike(toolCatalogEntries.toolName, pattern),
+          ilike(toolCatalogEntries.description, pattern),
+          ilike(toolConnections.name, pattern),
+          ilike(toolApplications.name, pattern),
+        );
+      };
+      const agentTermPredicate = (term: string) => {
+        const pattern = `%${term.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
+        return or(
+          ilike(agents.name, pattern),
+          ilike(agents.role, pattern),
+          ilike(agents.title, pattern),
+          ilike(agents.capabilities, pattern),
+          ilike(agents.adapterType, pattern),
+        );
+      };
 
       const [toolRows, agentRows] = await Promise.all([
-        db
+        parsed.kind === "core_node" || parsed.kind === "agent"
+          ? Promise.resolve([])
+          : db
           .select({
             catalogEntry: toolCatalogEntries,
             connection: toolConnections,
@@ -237,21 +265,14 @@ export function workflowCapabilityResolverService(db: Db) {
               eq(toolCatalogEntries.companyId, companyId),
               eq(toolCatalogEntries.entryKind, "tool"),
               eq(toolCatalogEntries.status, "active"),
-              parsed.q
-                ? or(
-                    ilike(toolCatalogEntries.title, `%${parsed.q}%`),
-                    ilike(toolCatalogEntries.name, `%${parsed.q}%`),
-                    ilike(toolCatalogEntries.toolName, `%${parsed.q}%`),
-                    ilike(toolCatalogEntries.description, `%${parsed.q}%`),
-                    ilike(toolConnections.name, `%${parsed.q}%`),
-                    ilike(toolApplications.name, `%${parsed.q}%`),
-                  )
-                : undefined,
+              ...searchTerms.map(toolTermPredicate),
             ),
           )
           .orderBy(asc(toolCatalogEntries.title), asc(toolCatalogEntries.toolName))
           .limit(candidateLimit),
-        db
+        parsed.kind === "core_node" || parsed.kind === "connected_tool"
+          ? Promise.resolve([])
+          : db
           .select({
             id: agents.id,
             name: agents.name,
@@ -266,15 +287,7 @@ export function workflowCapabilityResolverService(db: Db) {
             and(
               eq(agents.companyId, companyId),
               ne(agents.status, "terminated"),
-              parsed.q
-                ? or(
-                    ilike(agents.name, `%${parsed.q}%`),
-                    ilike(agents.role, `%${parsed.q}%`),
-                    ilike(agents.title, `%${parsed.q}%`),
-                    ilike(agents.capabilities, `%${parsed.q}%`),
-                    ilike(agents.adapterType, `%${parsed.q}%`),
-                  )
-                : undefined,
+              ...searchTerms.map(agentTermPredicate),
             ),
           )
           .orderBy(asc(agents.name))
@@ -368,8 +381,10 @@ export function workflowCapabilityResolverService(db: Db) {
           }))
         : [];
 
+      const core =
+        parsed.kind && parsed.kind !== "core_node" ? [] : coreCandidates();
       const candidates = rankWorkflowCapabilities(
-        [...coreCandidates(), ...tools, ...agentCandidates],
+        [...core, ...tools, ...agentCandidates],
         parsed,
       );
       return { query: parsed.q, candidates };
