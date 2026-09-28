@@ -2255,6 +2255,43 @@ function pipelineBatchError(error: unknown, fallbackCode = "unknown") {
   };
 }
 
+function pipelineAutomationTargetFromExecution(
+  execution: typeof pipelineAutomationExecutions.$inferSelect,
+): PipelineAutomationTarget | null {
+  if (execution.targetKind === "workflow" && execution.targetRef) {
+    return { kind: "workflow", workflowId: execution.targetRef };
+  }
+  if (execution.targetKind === "routine" && execution.targetRef) {
+    return { kind: "routine", routineId: execution.targetRef };
+  }
+  if (execution.routineId) {
+    return { kind: "routine", routineId: execution.routineId };
+  }
+  return null;
+}
+
+function workflowActorForPipeline(actor: PipelineActor): WorkflowRunActor {
+  if (actor.type === "user") {
+    return {
+      principal: { type: "user", userId: actor.userId },
+      responsibleUserId: actor.userId,
+    };
+  }
+  if (actor.type === "agent") {
+    return {
+      principal: {
+        type: "agent",
+        agentId: actor.agentId,
+        responsibleUserId: null,
+      },
+      responsibleUserId: null,
+    };
+  }
+  return {
+    principal: { type: "system", service: "pipeline-automation" },
+  };
+}
+
 async function enqueueStageAutomationLedger(
   db: PipelineDb,
   input: {
