@@ -1172,6 +1172,7 @@ async function startServerWithDatabaseTeardown(
             checked: result.checked,
             recovered: result.recovered,
             raced: result.raced,
+            deferred: result.deferred,
             failedRunIds: result.failedRunIds,
           },
           "workflow recovery sweep completed with failures",
@@ -1182,6 +1183,7 @@ async function startServerWithDatabaseTeardown(
             checked: result.checked,
             recovered: result.recovered,
             raced: result.raced,
+            deferred: result.deferred,
           },
           "workflow recovery sweep completed",
         );
