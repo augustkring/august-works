@@ -13,7 +13,7 @@ This ledger implements the ADR set required by the V4 Implementation Golden Mast
 The V4 Golden Master requires an explicit durable boundary for this decision before dependent implementation proceeds.
 
 ### Decision
-Foundation content remains in existing documents/document_revisions; Foundation tables add semantics, authority, review lifecycle, indexing metadata, and proposals.
+Foundation content remains in existing documents/document_revisions; Foundation tables add semantics, authority, review lifecycle, indexing metadata, and proposals. `documents.latest_revision_id` tracks the current working revision while `foundation_documents.approved_revision_id` independently pins the canonical approved revision, so a new draft cannot silently replace approved company truth.
 
 ### Alternatives considered
 A second Foundation content store; free-form files as sole authority.

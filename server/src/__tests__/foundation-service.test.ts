@@ -1,0 +1,298 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  agents,
+  companies,
+  companyMemberships,
+  createDb,
+  documentRevisions,
+  documents,
+  foundationChangeProposals,
+  foundationDocuments,
+  foundationSections,
+} from "@paperclipai/db";
+import {
+  getEmbeddedPostgresTestSupport,
+  startEmbeddedPostgresTestDatabase,
+} from "./helpers/embedded-postgres.js";
+import { foundationService } from "../services/foundation/foundation-service.js";
+
+const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
+const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+
+describeEmbeddedPostgres("Foundation service", () => {
+  let db!: ReturnType<typeof createDb>;
+  let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+
+  beforeAll(async () => {
+    tempDb = await startEmbeddedPostgresTestDatabase("paperclip-foundation-");
+    db = createDb(tempDb.connectionString);
+  }, 20_000);
+
+  afterEach(async () => {
+    await db.delete(foundationChangeProposals);
+    await db.delete(foundationSections);
+    await db.delete(foundationDocuments);
+    await db.delete(documentRevisions);
+    await db.delete(documents);
+    await db.delete(companyMemberships);
+    await db.delete(agents);
+    await db.delete(companies);
+  });
+
+  afterAll(async () => {
+    await tempDb?.cleanup();
+  });
+
+  async function seedCompany(name: string) {
+    const id = randomUUID();
+    const userId = `user-${id}`;
+    await db.insert(companies).values({
+      id,
+      name,
+      issuePrefix: `F${id.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+      defaultResponsibleUserId: userId,
+    });
+    await db.insert(companyMemberships).values({
+      companyId: id,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "owner",
+    });
+    return { id, userId };
+  }
+
+  function actor(userId: string) {
+    return { principal: { type: "user" as const, userId } };
+  }
+
+  async function createCompanyProfile(companyId: string, userId: string) {
+    return foundationService(db).createDraft(
+      companyId,
+      {
+        foundationKey: "company-profile",
+        category: "company",
+        documentType: "company_profile",
+        title: "Company profile",
+        body: "# Company\nInitial truth",
+        authorityLevel: "canonical",
+        sensitivity: "internal",
+        reviewFrequencyDays: 30,
+      },
+      actor(userId),
+    );
+  }
+
+  it("creates a tenant-scoped draft backed by documents and revisions", async () => {
+    const company = await seedCompany("Alpha");
+    const created = await createCompanyProfile(company.id, company.userId);
+
+    expect(created).toMatchObject({
+      companyId: company.id,
+      foundationKey: "company-profile",
+      status: "draft",
+      latestRevisionNumber: 1,
+      approvedRevisionId: null,
+      canonicalRevision: null,
+    });
+    expect(created.latestRevisionId).toBeTruthy();
+
+    const [document] = await db.select().from(documents);
+    const [revision] = await db.select().from(documentRevisions);
+    expect(document).toMatchObject({
+      id: created.documentId,
+      companyId: company.id,
+      latestRevisionId: created.latestRevisionId,
+      latestBody: "# Company\nInitial truth",
+    });
+    expect(revision).toMatchObject({
+      documentId: created.documentId,
+      revisionNumber: 1,
+      body: "# Company\nInitial truth",
+    });
+  });
+
+  it("enforces company boundaries on reads and mutations", async () => {
+    const alpha = await seedCompany("Alpha");
+    const beta = await seedCompany("Beta");
+    const created = await createCompanyProfile(alpha.id, alpha.userId);
+    const svc = foundationService(db);
+
+    await expect(svc.get(beta.id, created.id)).resolves.toBeNull();
+    await expect(
+      svc.updateDraft(
+        beta.id,
+        created.id,
+        {
+          baseRevisionId: created.latestRevisionId!,
+          body: "Cross-company write",
+        },
+        actor(beta.userId),
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("rejects duplicate Foundation keys within a company but permits the same key in another company", async () => {
+    const alpha = await seedCompany("Alpha");
+    const beta = await seedCompany("Beta");
+    await createCompanyProfile(alpha.id, alpha.userId);
+
+    await expect(createCompanyProfile(alpha.id, alpha.userId)).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({ code: "foundation_key_conflict" }),
+    });
+    await expect(createCompanyProfile(beta.id, beta.userId)).resolves.toMatchObject({
+      companyId: beta.id,
+      foundationKey: "company-profile",
+    });
+  });
+
+  it("preserves the approved revision while a new draft is edited", async () => {
+    const company = await seedCompany("Alpha");
+    const svc = foundationService(db);
+    const draft = await createCompanyProfile(company.id, company.userId);
+    const inReview = await svc.submitForReview(
+      company.id,
+      draft.id,
+      draft.latestRevisionId!,
+      actor(company.userId),
+    );
+    const approved = await svc.approve(
+      company.id,
+      draft.id,
+      inReview.latestRevisionId!,
+      actor(company.userId),
+    );
+
+    expect(approved).toMatchObject({
+      status: "approved",
+      approvedRevisionId: approved.latestRevisionId,
+    });
+    expect(approved.canonicalRevision?.body).toBe("# Company\nInitial truth");
+
+    const nextDraft = await svc.updateDraft(
+      company.id,
+      approved.id,
+      {
+        baseRevisionId: approved.latestRevisionId!,
+        body: "# Company\nUnapproved changed truth",
+        changeSummary: "Draft update",
+      },
+      actor(company.userId),
+    );
+
+    expect(nextDraft.status).toBe("draft");
+    expect(nextDraft.body).toBe("# Company\nUnapproved changed truth");
+    expect(nextDraft.latestRevisionNumber).toBe(2);
+    expect(nextDraft.approvedRevisionId).toBe(approved.approvedRevisionId);
+    expect(nextDraft.canonicalRevision?.body).toBe("# Company\nInitial truth");
+  });
+
+  it("rejects invalid lifecycle transitions and stale revision writes", async () => {
+    const company = await seedCompany("Alpha");
+    const svc = foundationService(db);
+    const draft = await createCompanyProfile(company.id, company.userId);
+
+    await expect(
+      svc.approve(company.id, draft.id, draft.latestRevisionId!, actor(company.userId)),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({ code: "foundation_invalid_transition" }),
+    });
+
+    const updated = await svc.updateDraft(
+      company.id,
+      draft.id,
+      {
+        baseRevisionId: draft.latestRevisionId!,
+        body: "Version 2",
+      },
+      actor(company.userId),
+    );
+
+    await expect(
+      svc.updateDraft(
+        company.id,
+        draft.id,
+        {
+          baseRevisionId: draft.latestRevisionId!,
+          body: "Stale overwrite",
+        },
+        actor(company.userId),
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({
+        code: "revision_conflict",
+        currentRevisionId: updated.latestRevisionId,
+      }),
+    });
+  });
+
+  it("enforces lifecycle values at the database boundary", async () => {
+    const company = await seedCompany("Alpha");
+    const created = await createCompanyProfile(company.id, company.userId);
+
+    await expect(
+      db
+        .update(foundationDocuments)
+        .set({ status: "not-a-real-state" })
+        .where(
+          // Deliberately direct DB mutation: this verifies the durable constraint,
+          // independent of TypeScript and service validation.
+          (await import("drizzle-orm")).eq(foundationDocuments.id, created.id),
+        ),
+    ).rejects.toBeTruthy();
+  });
+
+  it("rejects cross-company owner references", async () => {
+    const alpha = await seedCompany("Alpha");
+    const beta = await seedCompany("Beta");
+
+    await expect(
+      foundationService(db).createDraft(
+        alpha.id,
+        {
+          foundationKey: "strategy",
+          category: "strategy",
+          documentType: "strategy",
+          body: "Strategy",
+          ownerUserId: beta.userId,
+        },
+        actor(alpha.userId),
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      message: "Foundation owner user must have an active company membership",
+    });
+  });
+
+  it("creates proposals against the current revision without activating them as company truth", async () => {
+    const company = await seedCompany("Alpha");
+    const svc = foundationService(db);
+    const draft = await createCompanyProfile(company.id, company.userId);
+    const proposal = await svc.createProposal(
+      company.id,
+      draft.id,
+      {
+        sourceType: "agent_run",
+        proposedBody: "Candidate truth",
+        reason: "Observed new information",
+      },
+      actor(company.userId),
+    );
+
+    expect(proposal).toMatchObject({
+      companyId: company.id,
+      foundationDocumentId: draft.id,
+      baseRevisionId: draft.latestRevisionId,
+      status: "pending",
+      proposedBody: "Candidate truth",
+    });
+    const unchanged = await svc.get(company.id, draft.id);
+    expect(unchanged?.body).toBe("# Company\nInitial truth");
+    expect(unchanged?.canonicalRevision).toBeNull();
+  });
+});

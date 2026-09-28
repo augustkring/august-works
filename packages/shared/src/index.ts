@@ -2802,3 +2802,30 @@ export { MEMORY_CONNECTOR_IDS, isMemoryConnectorId, type MemoryConnectorId } fro
 export * from "./connection-routing.js";
 
 export { WORKSPACE_RESTORE_FAILURE_CODES, hasWorkspaceRestoreFailure, safeWorkspaceRestorePath } from "./workspace-restore.js";
+
+export {
+  FOUNDATION_AUTHORITY_LEVELS,
+  FOUNDATION_CATEGORIES,
+  FOUNDATION_DOCUMENT_STATUSES,
+  FOUNDATION_PROPOSAL_STATUSES,
+  FOUNDATION_SENSITIVITIES,
+  type FoundationAuthorityLevel,
+  type FoundationCategory,
+  type FoundationChangeProposal,
+  type FoundationDocument,
+  type FoundationDocumentStatus,
+  type FoundationProposalStatus,
+  type FoundationRevisionView,
+  type FoundationSensitivity,
+} from "./types/foundation.js";
+export {
+  createFoundationChangeProposalSchema,
+  createFoundationDocumentSchema,
+  foundationKeySchema,
+  transitionFoundationDocumentSchema,
+  updateFoundationDraftSchema,
+  type CreateFoundationChangeProposal,
+  type CreateFoundationDocument,
+  type TransitionFoundationDocument,
+  type UpdateFoundationDraft,
+} from "./validators/foundation.js";
