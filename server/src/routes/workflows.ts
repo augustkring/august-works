@@ -16,6 +16,7 @@ import { forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
 import {
   accessService,
   instanceSettingsService,
+  issueService,
   logActivity,
   workflowCapabilityResolverService,
   workflowDataSelectorService,
@@ -38,6 +39,7 @@ export function workflowRoutes(db: Db) {
   const capabilityResolver = workflowCapabilityResolverService(db);
   const dataSelector = workflowDataSelectorService(db);
   const executor = workflowExecutorService(db);
+  const issuesSvc = issueService(db);
   const access = accessService(db);
   const settings = instanceSettingsService(db);
 
@@ -138,6 +140,49 @@ export function workflowRoutes(db: Db) {
         permission,
       });
     }
+  }
+
+  async function assertTaskWorkflowInvocationAllowed(
+    req: Request,
+    companyId: string,
+    rawIssueId: string,
+  ) {
+    assertCompanyAccess(req, companyId);
+    const issue = await issuesSvc.getById(rawIssueId);
+    if (!issue || issue.companyId !== companyId) {
+      throw notFound("Task not found");
+    }
+    const decision = await access.decide({
+      actor: req.actor,
+      action: "issue:mutate",
+      resource: {
+        type: "issue",
+        companyId,
+        issueId: issue.id,
+        projectId: issue.projectId,
+        parentIssueId: issue.parentId,
+        assigneeAgentId: issue.assigneeAgentId,
+        assigneeUserId: issue.assigneeUserId,
+        originKind: issue.originKind ?? null,
+        originId: issue.originId ?? null,
+        status: issue.status,
+      },
+    });
+    if (!decision.allowed) {
+      throw forbidden(decision.explanation, {
+        code: "permission_denied",
+        reason: decision.reason,
+        permission: "issue:mutate",
+      });
+    }
+    if (issue.status === "done" || issue.status === "cancelled") {
+      throw unprocessable("Task is already terminal", {
+        code: "workflow_task_not_active",
+        issueId: issue.id,
+        status: issue.status,
+      });
+    }
+    return issue;
   }
 
   async function capabilities(
@@ -254,6 +299,41 @@ export function workflowRoutes(db: Db) {
       ),
     );
   });
+
+  router.post(
+    "/companies/:companyId/issues/:issueId/workflows/:workflowId/run",
+    validate(startWorkflowRunSchema),
+    async (req, res) => {
+      await assertWorkflowsEnabled();
+      const companyId = req.params.companyId as string;
+      await assertPermission(req, companyId, "workflows:run");
+      const issue = await assertTaskWorkflowInvocationAllowed(
+        req,
+        companyId,
+        req.params.issueId as string,
+      );
+      const result = await executor.startTaskRun(
+        companyId,
+        issue.id,
+        req.params.workflowId as string,
+        req.body,
+        runActor(req),
+        idempotencyKey(req),
+      );
+      await audit(req, {
+        companyId,
+        action: "workflow.task_invoked",
+        workflowId: req.params.workflowId as string,
+        details: {
+          issueId: issue.id,
+          issueIdentifier: issue.identifier,
+          workflowRunId: result.run.id,
+          workflowRevisionId: result.run.workflowRevisionId,
+        },
+      });
+      res.status(201).json(result);
+    },
+  );
 
   router.post(
     "/companies/:companyId/workflows/:workflowId/run",
