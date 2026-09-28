@@ -659,6 +659,7 @@ export const ROUTINE_RUN_STATUSES = [
   "coalesced",
   "skipped",
   "issue_created",
+  "workflow_started",
   "completed",
   "failed",
  ] as const;
