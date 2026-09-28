@@ -2059,6 +2059,13 @@
       "when": 1790614800000,
       "tag": "0295_routine_execution_targets",
       "breakpoints": true
+    },
+    {
+      "idx": 296,
+      "version": "7",
+      "when": 1790618400000,
+      "tag": "0296_pipeline_automation_targets",
+      "breakpoints": true
     }
   ]
 }
