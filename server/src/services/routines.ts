@@ -635,6 +635,8 @@ function routineRevisionSnapshotRoutine(routine: RoutineRow): RoutineRevisionSna
     title: routine.title,
     description: routine.description,
     assigneeAgentId: routine.assigneeAgentId,
+    executionTargetKind: routine.executionTargetKind,
+    executionTargetRef: routine.executionTargetRef,
     priority: routine.priority as RoutineRevisionSnapshotV1["routine"]["priority"],
     status: routine.status as RoutineRevisionSnapshotV1["routine"]["status"],
     concurrencyPolicy: routine.concurrencyPolicy as RoutineRevisionSnapshotV1["routine"]["concurrencyPolicy"],
