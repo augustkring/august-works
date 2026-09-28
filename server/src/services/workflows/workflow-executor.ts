@@ -2227,6 +2227,639 @@ async function createWorkflowTask(
   return { issue, config, idempotencyKey };
 }
 
+type AgentTaskConfig = {
+  agentId: string;
+  objective: string;
+  waitForCompletion: boolean;
+  expectedOutputSchema: Record<string, unknown> | null;
+};
+
+function agentTaskNodeConfig(node: WorkflowNode): AgentTaskConfig {
+  const config = node.config;
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    throw new WorkflowCheckpointError(
+      "workflow_agent_task_config_invalid",
+      "Published Agent Task node is missing its configuration",
+    );
+  }
+  const agentId = Reflect.get(config, "agentId");
+  const objective = Reflect.get(config, "objective");
+  const waitForCompletion = Reflect.get(config, "waitForCompletion");
+  const expectedOutputSchema = Reflect.get(config, "expectedOutputSchema");
+
+  if (typeof agentId !== "string" || agentId.trim().length === 0) {
+    throw new WorkflowCheckpointError(
+      "workflow_agent_task_config_invalid",
+      "Published Agent Task node requires an agent",
+    );
+  }
+  if (typeof objective !== "string" || objective.trim().length === 0) {
+    throw new WorkflowCheckpointError(
+      "workflow_agent_task_config_invalid",
+      "Published Agent Task node requires an objective",
+    );
+  }
+  if (
+    waitForCompletion !== undefined &&
+    typeof waitForCompletion !== "boolean"
+  ) {
+    throw new WorkflowCheckpointError(
+      "workflow_agent_task_config_invalid",
+      "Published Agent Task node has invalid waitForCompletion",
+    );
+  }
+  if (expectedOutputSchema != null) {
+    throw new WorkflowCheckpointError(
+      "workflow_agent_task_structured_output_not_ready",
+      "Structured Agent Task output requires an authoritative task result channel",
+    );
+  }
+
+  return {
+    agentId: agentId.trim(),
+    objective: objective.trim(),
+    waitForCompletion: waitForCompletion !== false,
+    expectedOutputSchema: null,
+  };
+}
+
+function agentTaskTitle(objective: string): string {
+  const compact = objective.replace(/\s+/g, " ").trim();
+  if (compact.length <= 180) return compact;
+  return `${compact.slice(0, 177)}...`;
+}
+
+function agentTaskAsCreateTaskConfig(config: AgentTaskConfig): CreateTaskConfig {
+  return {
+    title: agentTaskTitle(config.objective),
+    description: config.objective,
+    projectId: null,
+    assigneeAgentId: config.agentId,
+    assigneeUserId: null,
+    waitForCompletion: config.waitForCompletion,
+  };
+}
+
+function workflowWakeRequester(actor: WorkflowRunActor): {
+  requestedByActorType: "user" | "agent" | "system";
+  requestedByActorId: string;
+} {
+  if (actor.principal.type === "user") {
+    return {
+      requestedByActorType: "user",
+      requestedByActorId: actor.principal.userId,
+    };
+  }
+  if (actor.principal.type === "agent") {
+    return {
+      requestedByActorType: "agent",
+      requestedByActorId: actor.principal.agentId,
+    };
+  }
+  return {
+    requestedByActorType: "system",
+    requestedByActorId: actor.principal.service,
+  };
+}
+
+async function workflowAgentHeartbeat(
+  db: Db,
+  runtimeDeps: WorkflowExecutorRuntimeDeps,
+): Promise<IssueAssignmentWakeupDeps> {
+  if (runtimeDeps.heartbeat) return runtimeDeps.heartbeat;
+  const { heartbeatService } = await import("../heartbeat.js");
+  return heartbeatService(db);
+}
+
+async function createWorkflowAgentTaskIssueInTransaction(
+  executor: Db,
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  node: WorkflowNode,
+  config: AgentTaskConfig,
+  actor: WorkflowRunActor,
+): Promise<{
+  issue: Awaited<ReturnType<ReturnType<typeof issueService>["create"]>>;
+  deduplicated: boolean;
+  publications: ActivityPublication[];
+}> {
+  const taskConfig = agentTaskAsCreateTaskConfig(config);
+  const idempotencyKey = workflowStepIdempotencyKey(run.id, node.id);
+  const actorFields = workflowTaskActorFields(run, actor);
+  const responsibleUserId =
+    run.responsibleUserId ??
+    actor.responsibleUserId ??
+    (actor.principal.type === "agent"
+      ? actor.principal.responsibleUserId
+      : actor.principal.type === "user"
+        ? actor.principal.userId
+        : null);
+  let deduplicated = false;
+  const issue = await issueService(db).create(
+    run.companyId,
+    {
+      title: taskConfig.title,
+      description: config.objective,
+      projectId: null,
+      assigneeAgentId: config.agentId,
+      assigneeUserId: null,
+      status: "todo",
+      originKind: "workflow_task",
+      originId: run.workflowId,
+      originRunId: run.id,
+      originFingerprint: idempotencyKey,
+      responsibleUserId,
+      ...actorFields,
+      actorResponsibleUserId: responsibleUserId,
+      trustExplicitResponsibleUserId: Boolean(responsibleUserId),
+      idempotencyKey,
+      allowDuplicate: true,
+      onDeduplicated: () => {
+        deduplicated = true;
+      },
+    },
+    executor,
+  );
+
+  const publications: ActivityPublication[] = [];
+  if (!deduplicated) {
+    const { publication } = await persistWorkflowActivity(
+      executor,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.agent_task_created",
+        entityType: "issue",
+        entityId: issue.id,
+        details: {
+          workflowRunId: run.id,
+          workflowId: run.workflowId,
+          nodeId: node.id,
+          issueId: issue.id,
+          agentId: config.agentId,
+          waitForCompletion: config.waitForCompletion,
+          idempotencyKey,
+        },
+      },
+    );
+    publications.push(publication);
+  }
+
+  return { issue, deduplicated, publications };
+}
+
+async function bindAgentTaskExecution(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  step: WorkflowStepRow,
+  issueId: string,
+  agentId: string,
+  heartbeatRunId: string,
+  actor: WorkflowRunActor,
+) {
+  const publications: ActivityPublication[] = [];
+  const updated = await db.transaction(async (tx) => {
+    const now = new Date();
+    const [row] = await tx
+      .update(workflowStepRuns)
+      .set({
+        agentId,
+        heartbeatRunId,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, step.id),
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          inArray(workflowStepRuns.status, ["running", "waiting"]),
+        ),
+      )
+      .returning();
+    if (!row) {
+      throw conflict("Agent Task step changed before runtime binding", {
+        code: "workflow_agent_task_binding_conflict",
+        workflowRunId: run.id,
+        nodeId: step.nodeId,
+        issueId,
+      });
+    }
+
+    const { publication } = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.agent_task_delegated",
+        entityType: "workflow_step_run",
+        entityId: row.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: row.nodeId,
+          attempt: row.attempt,
+          issueId,
+          agentId,
+          heartbeatRunId,
+        },
+      },
+    );
+    publications.push(publication);
+    return row;
+  });
+  publishActivities(publications);
+  return updated;
+}
+
+async function wakeWorkflowAgentTask(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  nodeId: string,
+  issue: {
+    id: string;
+    status: string;
+    assigneeAgentId: string | null;
+  },
+  agentId: string,
+  actor: WorkflowRunActor,
+  runtimeDeps: WorkflowExecutorRuntimeDeps,
+): Promise<string> {
+  if (issue.assigneeAgentId !== agentId) {
+    throw new WorkflowCheckpointError(
+      "workflow_agent_task_assignment_changed",
+      "Agent Task ownership changed before delegation could start",
+    );
+  }
+
+  const heartbeat = await workflowAgentHeartbeat(db, runtimeDeps);
+  const requester = workflowWakeRequester(actor);
+  const stepKey = workflowStepIdempotencyKey(run.id, nodeId);
+
+  try {
+    const response = await queueIssueAssignmentWakeup({
+      heartbeat,
+      issue,
+      reason: "workflow_agent_task",
+      mutation: "workflow_delegate",
+      contextSource: "workflow.agent_task",
+      requestedByActorType: requester.requestedByActorType,
+      requestedByActorId: requester.requestedByActorId,
+      taskKey: stepKey,
+      idempotencyKey: `workflow-agent-task:${stepKey}`,
+      allowRunCoalescing: false,
+      rethrowOnError: true,
+    });
+
+    if (!response) {
+      throw new WorkflowCheckpointError(
+        "workflow_agent_unavailable",
+        "Agent Task wakeup was not accepted",
+      );
+    }
+    if (response.status === "skipped") {
+      if (
+        response.executionRunId &&
+        (!response.executionAgentId || response.executionAgentId === agentId)
+      ) {
+        return response.executionRunId;
+      }
+      throw new WorkflowCheckpointError(
+        "workflow_agent_unavailable",
+        response.message ?? response.reason ?? "Agent Task wakeup was skipped",
+      );
+    }
+    if (response.agentId !== agentId) {
+      throw new WorkflowCheckpointError(
+        "workflow_agent_unavailable",
+        "Agent Task wakeup resolved to an unexpected agent",
+      );
+    }
+    return response.id;
+  } catch (error) {
+    if (error instanceof WorkflowCheckpointError) throw error;
+    const statusValue =
+      typeof error === "object" && error !== null
+        ? Reflect.get(error, "status")
+        : null;
+    const status =
+      typeof statusValue === "number" ? statusValue : null;
+    if (status !== null && status >= 400 && status < 500) {
+      throw new WorkflowCheckpointError(
+        "workflow_agent_unavailable",
+        error instanceof Error ? error.message : "Agent Task was rejected",
+      );
+    }
+    throw new WorkflowRetryableNodeError({
+      code: "workflow_agent_wakeup_failed",
+      message:
+        error instanceof Error ? error.message : "Agent Task wakeup failed",
+      sideEffectSafeToRepeat: true,
+      providerAllowsRetry: true,
+    });
+  }
+}
+
+async function executeWorkflowAgentTask(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  node: WorkflowNode,
+  runningStep: WorkflowStepRow,
+  actor: WorkflowRunActor,
+  runtimeDeps: WorkflowExecutorRuntimeDeps,
+) {
+  const config = agentTaskNodeConfig(node);
+  await assertWorkflowTaskAssignmentAuthorized(
+    db,
+    run,
+    actor,
+    agentTaskAsCreateTaskConfig(config),
+  );
+
+  const created = await db.transaction(async (tx) =>
+    createWorkflowAgentTaskIssueInTransaction(
+      tx as unknown as Db,
+      db,
+      run,
+      node,
+      config,
+      actor,
+    )
+  );
+  publishActivities(created.publications);
+
+  const heartbeatRunId = await wakeWorkflowAgentTask(
+    db,
+    run,
+    node.id,
+    {
+      id: created.issue.id,
+      status: created.issue.status,
+      assigneeAgentId: created.issue.assigneeAgentId,
+    },
+    config.agentId,
+    actor,
+    runtimeDeps,
+  );
+  const boundStep = await bindAgentTaskExecution(
+    db,
+    run,
+    runningStep,
+    created.issue.id,
+    config.agentId,
+    heartbeatRunId,
+    actor,
+  );
+
+  return {
+    issue: created.issue,
+    step: boundStep,
+    config,
+    output: workflowTaskOutput(created.issue, {
+      agentId: config.agentId,
+      heartbeatRunId,
+    }),
+  };
+}
+
+async function scheduleAgentTaskCompletionWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  node: WorkflowNode,
+  runningStep: WorkflowStepRow,
+  actor: WorkflowRunActor,
+  runtimeDeps: WorkflowExecutorRuntimeDeps,
+): Promise<void> {
+  if (!run.executionOwnerId) {
+    throw conflict("Workflow run has no execution owner", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+
+  const config = agentTaskNodeConfig(node);
+  await assertWorkflowTaskAssignmentAuthorized(
+    db,
+    run,
+    actor,
+    agentTaskAsCreateTaskConfig(config),
+  );
+  const publications: ActivityPublication[] = [];
+
+  const scheduled = await db.transaction(async (tx) => {
+    const txDb = tx as unknown as Db;
+    const created = await createWorkflowAgentTaskIssueInTransaction(
+      txDb,
+      db,
+      run,
+      node,
+      config,
+      actor,
+    );
+    publications.push(...created.publications);
+    const now = new Date();
+
+    const [wait] = await tx
+      .insert(workflowWaits)
+      .values({
+        companyId: run.companyId,
+        workflowRunId: run.id,
+        nodeId: node.id,
+        waitKey: "primary",
+        kind: "task_completion",
+        status: "active",
+        referenceType: "issue",
+        referenceId: created.issue.id,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    if (!wait) {
+      throw conflict("Agent Task wait could not be created", {
+        code: "workflow_wait_create_conflict",
+        workflowRunId: run.id,
+        nodeId: node.id,
+      });
+    }
+
+    const [waitingStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "waiting",
+        agentId: config.agentId,
+        outputJson: workflowTaskOutput(created.issue, {
+          agentId: config.agentId,
+          heartbeatRunId: null,
+        }),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, runningStep.id),
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.status, "running"),
+        ),
+      )
+      .returning();
+    if (!waitingStep) {
+      throw conflict("Agent Task step changed while wait was being created", {
+        code: "workflow_wait_create_conflict",
+        workflowRunId: run.id,
+        nodeId: node.id,
+      });
+    }
+
+    const [waitingRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "waiting",
+        executionOwnerId: null,
+        leaseExpiresAt: null,
+        ownerHeartbeatAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "running"),
+          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+        ),
+      )
+      .returning();
+    if (!waitingRun) {
+      throw conflict("Workflow run ownership changed while Agent Task wait was created", {
+        code: "workflow_run_claim_lost",
+        workflowRunId: run.id,
+      });
+    }
+
+    const waitActivity = await persistWorkflowActivity(
+      txDb,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.wait_created",
+        entityType: "workflow_wait",
+        entityId: wait.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: node.id,
+          kind: "task_completion",
+          issueId: created.issue.id,
+          agentId: config.agentId,
+        },
+      },
+    );
+    const taskWaiting = await persistWorkflowActivity(
+      txDb,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.task_waiting",
+        entityType: "workflow_step_run",
+        entityId: waitingStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: node.id,
+          attempt: waitingStep.attempt,
+          issueId: created.issue.id,
+          agentId: config.agentId,
+          waitId: wait.id,
+        },
+      },
+    );
+    const runWaiting = await persistWorkflowActivity(
+      txDb,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_waiting",
+        entityType: "workflow_run",
+        entityId: waitingRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          reason: "agent_task_completion",
+          nodeId: node.id,
+          issueId: created.issue.id,
+          agentId: config.agentId,
+          waitId: wait.id,
+        },
+      },
+    );
+    publications.push(
+      waitActivity.publication,
+      taskWaiting.publication,
+      runWaiting.publication,
+    );
+    return {
+      issue: created.issue,
+      wait,
+      waitingStep,
+    };
+  });
+  publishActivities(publications);
+
+  try {
+    const heartbeatRunId = await wakeWorkflowAgentTask(
+      db,
+      run,
+      node.id,
+      {
+        id: scheduled.issue.id,
+        status: scheduled.issue.status,
+        assigneeAgentId: scheduled.issue.assigneeAgentId,
+      },
+      config.agentId,
+      actor,
+      runtimeDeps,
+    );
+    await bindAgentTaskExecution(
+      db,
+      run,
+      scheduled.waitingStep,
+      scheduled.issue.id,
+      config.agentId,
+      heartbeatRunId,
+      actor,
+    );
+  } catch (error) {
+    if (error instanceof WorkflowCheckpointError) {
+      await failTaskWait(
+        db,
+        run,
+        scheduled.wait,
+        scheduled.issue,
+        new Date(),
+        error.code === "workflow_agent_task_assignment_changed"
+          ? "workflow_agent_unavailable"
+          : "workflow_agent_unavailable",
+        error.message,
+      );
+      return;
+    }
+
+    const deferred = await persistWorkflowActivity(
+      db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.agent_task_wakeup_deferred",
+        entityType: "workflow_step_run",
+        entityId: scheduled.waitingStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: node.id,
+          issueId: scheduled.issue.id,
+          agentId: config.agentId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      },
+    );
+    publishActivity(deferred.publication);
+  }
+}
+
 async function scheduleTaskCompletionWait(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
