@@ -509,6 +509,37 @@ export function workflowExecutorService(db: Db) {
         .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId)))
         .then((rows) => rows[0] ?? null);
       if (!workflow) throw notFound("Workflow not found");
+
+      const existingIdempotentRun = idempotencyKey
+        ? await getIdempotentRun(db, companyId, idempotencyKey)
+        : null;
+      if (existingIdempotentRun) {
+        if (
+          existingIdempotentRun.workflowId !== workflowId ||
+          !isDeepStrictEqual(existingIdempotentRun.triggerPayload ?? {}, input.input) ||
+          (input.revisionId !== null &&
+            input.revisionId !== undefined &&
+            existingIdempotentRun.workflowRevisionId !== input.revisionId)
+        ) {
+          throw conflict(
+            "Idempotency key was already used for a different workflow run request",
+            {
+              code: "idempotency_key_reused",
+              workflowRunId: existingIdempotentRun.id,
+            },
+          );
+        }
+        const existingDetail = await getRunDetail(
+          db,
+          companyId,
+          existingIdempotentRun.id,
+        );
+        if (!existingDetail) {
+          throw new Error("Idempotent workflow run could not be reloaded");
+        }
+        return existingDetail;
+      }
+
       if (workflow.status !== "active") {
         throw conflict("Workflow is not active", {
           code: "workflow_invalid_transition",

@@ -243,4 +243,62 @@ describePg("Workflow executor V1", () => {
       }),
     ).rejects.toBeTruthy();
   });
+  it("keeps idempotency bound to the original run after a later publish", async () => {
+    const seeded = await seedPublishedManualWorkflow();
+    const executor = workflowExecutorService(db);
+    const first = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: { value: "original" } },
+      { principal: { type: "user", userId: seeded.userId } },
+      "stable-key",
+    );
+
+    const svc = workflowService(db);
+    const current = await svc.getDetail(seeded.companyId, seeded.workflow.id);
+    const changed = await svc.updateDraft(
+      seeded.companyId,
+      seeded.workflow.id,
+      {
+        expectedRevisionId: current!.draftRevisionId!,
+        graph: {
+          version: 1,
+          nodes: [{
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Manual start v2",
+            position: { x: 0, y: 0 },
+            config: {},
+          }],
+          edges: [],
+          variables: [],
+          settings: {},
+        },
+      },
+      { principal: { type: "user", userId: seeded.userId } },
+    );
+    const republished = await svc.publish(
+      seeded.companyId,
+      seeded.workflow.id,
+      {
+        expectedDraftRevisionId: changed.draftRevisionId!,
+        expectedPublishedRevisionId: current!.publishedRevisionId,
+        approvalId: null,
+      },
+      { principal: { type: "user", userId: seeded.userId } },
+    );
+    expect(republished.publishedRevisionId).not.toBe(first.run.workflowRevisionId);
+
+    const replay = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: { value: "original" } },
+      { principal: { type: "user", userId: seeded.userId } },
+      "stable-key",
+    );
+    expect(replay.run.id).toBe(first.run.id);
+    expect(replay.run.workflowRevisionId).toBe(first.run.workflowRevisionId);
+    expect(await db.select().from(workflowRuns)).toHaveLength(1);
+  });
+
 });
