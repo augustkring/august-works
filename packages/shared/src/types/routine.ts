@@ -238,6 +238,7 @@ export interface RoutineRun {
   dispatchFingerprint: string | null;
   linkedIssueId: string | null;
   linkedWorkflowRunId: string | null;
+  linkedWorkflowId?: string | null;
   coalescedIntoRunId: string | null;
   failureReason: string | null;
   completedAt: Date | null;
