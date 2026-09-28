@@ -16,7 +16,7 @@ import {
 } from "@paperclipai/shared";
 import { unprocessable } from "../../errors.js";
 
-type NodeConfigSchema = z.ZodTypeAny;
+type NodeConfigSchema = z.ZodType;
 
 interface RegisteredWorkflowNode {
   descriptor: WorkflowNodeDefinitionDescriptor;
@@ -531,7 +531,7 @@ export function workflowNodeRegistryService(db: Db) {
         reason: "node_config_invalid",
         nodeId: node.id,
         nodeType: node.type,
-        issues: parsed.error.issues.map((issue: z.ZodIssue) => ({
+        issues: parsed.error.issues.map((issue) => ({
           path: issue.path.join("."),
           code: issue.code,
           message: issue.message,
