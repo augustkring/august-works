@@ -88,6 +88,7 @@ const createTaskConfig = z.object({
   projectId: z.string().guid().nullable().optional(),
   assigneeAgentId: z.string().guid().nullable().optional(),
   assigneeUserId: z.string().trim().min(1).max(255).nullable().optional(),
+  waitForCompletion: z.boolean().optional().default(false),
 }).strict().superRefine((value, ctx) => {
   if (value.assigneeAgentId && value.assigneeUserId) {
     ctx.addIssue({
@@ -200,7 +201,11 @@ const REGISTRY: RegisteredWorkflowNode[] = [
       cancellationSupport: "none",
       testMode: "safe",
       failureOutputs: [],
-      auditEvents: [],
+      auditEvents: [
+        "workflow.task_created",
+        "workflow.task_waiting",
+        "workflow.task_completed",
+      ],
       uiComponent: "manual_trigger",
       accessibilityContract: {
         label: "Manual trigger",
@@ -427,8 +432,12 @@ const REGISTRY: RegisteredWorkflowNode[] = [
       inputSchema: { type: "object", additionalProperties: true },
       outputSchema: {
         type: "object",
-        properties: { issueId: { type: "string", format: "uuid" } },
-        required: ["issueId"],
+        properties: {
+          issueId: { type: "string", format: "uuid" },
+          identifier: { type: ["string", "null"] },
+          status: { type: "string" },
+        },
+        required: ["issueId", "status"],
         additionalProperties: false,
       },
       configSchema: {
@@ -440,6 +449,7 @@ const REGISTRY: RegisteredWorkflowNode[] = [
           projectId: { type: ["string", "null"], format: "uuid" },
           assigneeAgentId: { type: ["string", "null"], format: "uuid" },
           assigneeUserId: { type: ["string", "null"] },
+          waitForCompletion: { type: "boolean", default: false },
         },
         additionalProperties: false,
       },
@@ -464,8 +474,8 @@ const REGISTRY: RegisteredWorkflowNode[] = [
         supportsKeyboardInsert: true,
         supportsOutlineEdit: true,
       },
-      publishState: "draft_only",
-      publishBlockedReason: "task_workflow_integration_not_ready",
+      publishState: "ready",
+      publishBlockedReason: null,
     }),
     configValidator: createTaskConfig,
     validateReferences: async (db, companyId, nodeId, config) => {
