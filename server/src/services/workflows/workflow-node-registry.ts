@@ -74,6 +74,9 @@ const conditionConfig = z.object({
     });
   }
 });
+const waitConfig = z.object({
+  durationSeconds: z.number().int().min(1).max(604_800),
+}).strict();
 const connectorActionConfig = z.object({
   toolCatalogEntryId: z.string().guid(),
   connectionId: z.string().guid(),
@@ -294,6 +297,53 @@ const REGISTRY: RegisteredWorkflowNode[] = [
       publishBlockedReason: null,
     }),
     configValidator: conditionConfig,
+  },
+  {
+    descriptor: descriptor({
+      type: "core.wait",
+      version: 1,
+      category: "control",
+      displayName: "Wait",
+      description: "Pauses execution durably for a bounded amount of time without keeping a worker or request open.",
+      inputSchema: { type: "object", additionalProperties: true },
+      outputSchema: {
+        type: "object",
+        required: ["reason", "resumedAt"],
+        properties: {
+          reason: { type: "string", enum: ["delay_elapsed"] },
+          resumedAt: { type: "string" },
+        },
+        additionalProperties: false,
+      },
+      configSchema: {
+        type: "object",
+        required: ["durationSeconds"],
+        properties: {
+          durationSeconds: { type: "integer", minimum: 1, maximum: 604_800 },
+        },
+        additionalProperties: false,
+      },
+      sideEffectClass: "pure",
+      riskDefault: "C0",
+      authorizationRequirements: [],
+      timeoutDefaultSeconds: null,
+      retryPolicyDefault: NO_RETRY,
+      idempotencyStrategy: "workflow_step_key",
+      cancellationSupport: "durable_wait",
+      testMode: "safe",
+      failureOutputs: ["workflow_wait_timeout", "cancelled"],
+      auditEvents: ["workflow.wait_created", "workflow.wait_resolved"],
+      uiComponent: "wait",
+      accessibilityContract: {
+        label: "Wait",
+        description: "Pause this workflow durably before continuing.",
+        supportsKeyboardInsert: true,
+        supportsOutlineEdit: true,
+      },
+      publishState: "ready",
+      publishBlockedReason: null,
+    }),
+    configValidator: waitConfig,
   },
   {
     descriptor: descriptor({
