@@ -121,24 +121,37 @@ describe("Workflow Node Registry", () => {
             : { mapping: { value: "x" } },
     });
 
-    expect(() =>
-      validateWorkflowPublishTopology({
+    const expectTopologyError = (
+      graph: Parameters<typeof validateWorkflowPublishTopology>[0],
+      details: Record<string, unknown>,
+    ) => {
+      try {
+        validateWorkflowPublishTopology(graph);
+        throw new Error("Expected published workflow topology validation to fail");
+      } catch (error) {
+        expect(error).toMatchObject({
+          status: 422,
+          details: expect.objectContaining({
+            code: "workflow_graph_invalid",
+            ...details,
+          }),
+        });
+      }
+    };
+
+    expectTopologyError(
+      {
         version: 1,
         nodes: [],
         edges: [],
         variables: [],
         settings: {},
-      }),
-    ).toThrowError(expect.objectContaining({
-      details: expect.objectContaining({
-        code: "workflow_graph_invalid",
-        reason: "entry_trigger_count",
-        triggerCount: 0,
-      }),
-    }));
+      },
+      { reason: "entry_trigger_count", triggerCount: 0 },
+    );
 
-    expect(() =>
-      validateWorkflowPublishTopology({
+    expectTopologyError(
+      {
         version: 1,
         nodes: [
           node("start-a", "core.manual_trigger", 0, 0),
@@ -147,17 +160,12 @@ describe("Workflow Node Registry", () => {
         edges: [],
         variables: [],
         settings: {},
-      }),
-    ).toThrowError(expect.objectContaining({
-      details: expect.objectContaining({
-        code: "workflow_graph_invalid",
-        reason: "entry_trigger_count",
-        triggerCount: 2,
-      }),
-    }));
+      },
+      { reason: "entry_trigger_count", triggerCount: 2 },
+    );
 
-    expect(() =>
-      validateWorkflowPublishTopology({
+    expectTopologyError(
+      {
         version: 1,
         nodes: [
           node("start", "core.manual_trigger", 0, 0),
@@ -166,17 +174,12 @@ describe("Workflow Node Registry", () => {
         edges: [],
         variables: [],
         settings: {},
-      }),
-    ).toThrowError(expect.objectContaining({
-      details: expect.objectContaining({
-        code: "workflow_graph_invalid",
-        reason: "unreachable_nodes",
-        nodeIds: ["orphan"],
-      }),
-    }));
+      },
+      { reason: "unreachable_nodes", nodeIds: ["orphan"] },
+    );
 
-    expect(() =>
-      validateWorkflowPublishTopology({
+    expectTopologyError(
+      {
         version: 1,
         nodes: [
           node("start", "core.manual_trigger", 0, 0),
@@ -188,16 +191,12 @@ describe("Workflow Node Registry", () => {
         ],
         variables: [],
         settings: {},
-      }),
-    ).toThrowError(expect.objectContaining({
-      details: expect.objectContaining({
-        code: "workflow_graph_invalid",
-        reason: "cycle_requires_explicit_loop",
-      }),
-    }));
+      },
+      { reason: "cycle_requires_explicit_loop" },
+    );
 
-    expect(() =>
-      validateWorkflowPublishTopology({
+    expectTopologyError(
+      {
         version: 1,
         nodes: [
           node("start", "core.manual_trigger", 0, 0),
@@ -210,17 +209,12 @@ describe("Workflow Node Registry", () => {
         ],
         variables: [],
         settings: {},
-      }),
-    ).toThrowError(expect.objectContaining({
-      details: expect.objectContaining({
-        code: "workflow_graph_invalid",
-        reason: "implicit_parallel_split",
-        nodeId: "start",
-      }),
-    }));
+      },
+      { reason: "implicit_parallel_split", nodeId: "start" },
+    );
 
-    expect(() =>
-      validateWorkflowPublishTopology({
+    expectTopologyError(
+      {
         version: 1,
         nodes: [
           node("start", "core.manual_trigger", 0, 0),
@@ -238,14 +232,9 @@ describe("Workflow Node Registry", () => {
         ],
         variables: [],
         settings: {},
-      }),
-    ).toThrowError(expect.objectContaining({
-      details: expect.objectContaining({
-        code: "workflow_graph_invalid",
-        reason: "implicit_merge",
-        nodeId: "join",
-      }),
-    }));
+      },
+      { reason: "implicit_merge", nodeId: "join" },
+    );
 
     expect(() =>
       validateWorkflowPublishTopology({
