@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -484,6 +484,33 @@ export function workflowExecutorService(db: Db) {
   return {
     getRun: (companyId: string, runId: string) =>
       getRunDetail(db, companyId, runId),
+
+    listRuns: async (
+      companyId: string,
+      workflowId: string,
+      limit: number,
+    ): Promise<WorkflowRun[]> => {
+      const workflow = await db
+        .select({ id: workflows.id })
+        .from(workflows)
+        .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId)))
+        .then((rows) => rows[0] ?? null);
+      if (!workflow) throw notFound("Workflow not found");
+
+      const safeLimit = Math.min(Math.max(limit, 1), 100);
+      const rows = await db
+        .select()
+        .from(workflowRuns)
+        .where(
+          and(
+            eq(workflowRuns.companyId, companyId),
+            eq(workflowRuns.workflowId, workflowId),
+          ),
+        )
+        .orderBy(desc(workflowRuns.createdAt))
+        .limit(safeLimit);
+      return rows.map(mapRun);
+    },
 
     startManualRun: async (
       companyId: string,
