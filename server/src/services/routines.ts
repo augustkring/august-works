@@ -763,6 +763,116 @@ export function routineService(
       .then((rows) => rows[0] ?? null);
   }
 
+  async function assertRoutineExecutionTarget(
+    companyId: string,
+    target: RoutineExecutionTarget | null,
+    options: { requireRunnable: boolean },
+  ) {
+    if (!target) {
+      if (options.requireRunnable) {
+        throw unprocessable("Routine execution target required");
+      }
+      return;
+    }
+
+    if (target.kind === "agent_task") {
+      await assertAssignableAgent(db, companyId, target.agentId, {
+        kind: "routine",
+      });
+      return;
+    }
+
+    if (options.requireRunnable) {
+      const experimental = await instanceSettings.getExperimental();
+      if (experimental.enableWorkflowsV1 !== true) {
+        throw conflict("Workflows are disabled", {
+          code: "workflows_disabled",
+        });
+      }
+      await resolveWorkflowExecutionRevision(
+        db,
+        companyId,
+        target.workflowId,
+      );
+      return;
+    }
+
+    const workflow = await db
+      .select({ id: workflows.id })
+      .from(workflows)
+      .where(
+        and(
+          eq(workflows.companyId, companyId),
+          eq(workflows.id, target.workflowId),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    if (!workflow) {
+      throw unprocessable("Routine workflow target is not available in this company", {
+        code: "routine_execution_target_invalid",
+        targetKind: target.kind,
+        targetRef: target.workflowId,
+      });
+    }
+  }
+
+  function resolveUpdatedRoutineExecutionTarget(
+    existing: RoutineRow,
+    patch: UpdateRoutine,
+  ): RoutineExecutionTarget | null {
+    if (patch.executionTarget !== undefined) {
+      return patch.executionTarget;
+    }
+    if (patch.assigneeAgentId !== undefined) {
+      const current = resolveRoutineExecutionTarget(existing);
+      if (
+        current?.kind === "workflow" &&
+        patch.assigneeAgentId === null
+      ) {
+        return current;
+      }
+      return patch.assigneeAgentId
+        ? { kind: "agent_task", agentId: patch.assigneeAgentId }
+        : null;
+    }
+    return resolveRoutineExecutionTarget(existing);
+  }
+
+  function workflowActorForRoutine(
+    source: "schedule" | "manual" | "api" | "webhook",
+    actor: Actor | undefined,
+    responsibleUserId: string | null,
+  ): WorkflowRunActor {
+    if (source === "manual" && actor?.userId) {
+      return {
+        principal: { type: "user", userId: actor.userId },
+        responsibleUserId,
+      };
+    }
+    if (source === "manual" && actor?.agentId) {
+      return {
+        principal: {
+          type: "agent",
+          agentId: actor.agentId,
+          responsibleUserId,
+        },
+        responsibleUserId,
+      };
+    }
+    return {
+      principal: {
+        type: "system",
+        service:
+          source === "schedule"
+            ? "routine-scheduler"
+            : source === "webhook"
+              ? "routine-webhook"
+              : "routine-api",
+      },
+      responsibleUserId,
+    };
+  }
+
   async function getRoutineAgentSummary(
     companyId: string,
     agentId: string,
