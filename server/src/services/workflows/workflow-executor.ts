@@ -3331,6 +3331,26 @@ async function resumeCompletedTaskWait(
         },
       },
     );
+    const agentTaskCompleted = waitingStep.agentId
+      ? await persistWorkflowActivity(
+          tx as unknown as Db,
+          actor,
+          {
+            companyId: run.companyId,
+            action: "workflow.agent_task_completed",
+            entityType: "workflow_step_run",
+            entityId: completedStep.id,
+            details: {
+              workflowRunId: run.id,
+              nodeId: completedStep.nodeId,
+              attempt: completedStep.attempt,
+              issueId: issue.id,
+              agentId: waitingStep.agentId,
+              heartbeatRunId: waitingStep.heartbeatRunId,
+            },
+          },
+        )
+      : null;
     const waitResolved = await persistWorkflowActivity(
       tx as unknown as Db,
       actor,
@@ -3383,6 +3403,7 @@ async function resumeCompletedTaskWait(
     );
     publications.push(
       taskCompleted.publication,
+      ...(agentTaskCompleted ? [agentTaskCompleted.publication] : []),
       waitResolved.publication,
       stepCompleted.publication,
       runResumed.publication,
@@ -3399,7 +3420,10 @@ async function failTaskWait(
   wait: typeof workflowWaits.$inferSelect,
   issue: { id: string; identifier: string | null; status: string } | null,
   now: Date,
-  errorCode: "workflow_task_cancelled" | "workflow_task_missing",
+  errorCode:
+    | "workflow_task_cancelled"
+    | "workflow_task_missing"
+    | "workflow_agent_unavailable",
   errorMessage: string,
 ) {
   const actor: WorkflowRunActor = {
