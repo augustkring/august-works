@@ -2663,8 +2663,12 @@ export function PipelineItemDetailView({ pipelineId, caseId }: { pipelineId: str
   // inline so a 403/409 is never silently dropped.
   const retryLiveness = useMutation({
     mutationFn: (kind: LivenessRetryKind) => {
-      const automationId = detail?.liveness?.automation?.automationId ?? null;
-      if (kind === "automation" && automationId) {
+      const automation = detail?.liveness?.automation ?? null;
+      const automationId = automation?.automationId ?? null;
+      const workflowBacked =
+        automation?.targetKind === "workflow" ||
+        Boolean(automation?.workflowRunId);
+      if (kind === "automation" && automationId && !workflowBacked) {
         return pipelinesApi.retryAutomation(caseId, automationId);
       }
       return pipelinesApi.rerunCurrentStageAutomation(caseId);
@@ -3087,7 +3091,15 @@ export function PipelineItemDetailView({ pipelineId, caseId }: { pipelineId: str
                 <div className="sm:col-span-2">
                   <div className="text-xs font-medium uppercase text-muted-foreground">Automation</div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-1 text-foreground">
-                    {retryPlan.data.routine ? (
+                    {retryPlan.data.workflow ? (
+                      <Link
+                        to={`/workflows/${retryPlan.data.workflow.id}`}
+                        className="inline-flex items-center gap-1.5 font-medium underline-offset-2 hover:underline"
+                      >
+                        <GitBranch className="h-3.5 w-3.5" aria-hidden="true" />
+                        {retryPlan.data.workflow.name}
+                      </Link>
+                    ) : retryPlan.data.routine ? (
                       <>
                         <Link
                           to={`/routines/${retryPlan.data.routine.id}`}
@@ -3108,7 +3120,7 @@ export function PipelineItemDetailView({ pipelineId, caseId }: { pipelineId: str
                         )}
                       </>
                     ) : (
-                      "No routine configured"
+                      "No automation target configured"
                     )}
                   </div>
                 </div>
@@ -3798,11 +3810,27 @@ function PipelineEventText({
 }) {
   const kind = event.type.startsWith("case.") ? event.type.slice("case.".length) : event.type;
   if (kind === "automation_executed" && event.automation) {
-    const routineName = event.automation.routine?.title ?? "the automation";
+    const workflow = event.automation.workflow;
+    const routineName = event.automation.routine?.title ?? null;
+    const targetName = workflow?.name ?? routineName ?? "the automation";
     const issue = event.automation.issue;
+    const workflowRunHref =
+      workflow && event.automation.workflowRunId
+        ? `/workflows/${workflow.id}/runs/${event.automation.workflowRunId}`
+        : null;
     return (
       <>
-        Automation completed — ran <span className="font-medium">{routineName}</span>
+        Automation started —{" "}
+        {workflowRunHref ? (
+          <Link
+            to={workflowRunHref}
+            className="font-medium text-foreground hover:underline"
+          >
+            {targetName}
+          </Link>
+        ) : (
+          <span className="font-medium">{targetName}</span>
+        )}
         {issue ? (
           <>
             {" -> "}
