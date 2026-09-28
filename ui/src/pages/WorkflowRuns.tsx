@@ -139,7 +139,14 @@ export function WorkflowRuns() {
             <p className="mt-1 text-sm text-muted-foreground">
               The workflow is unchanged. Retry to load its execution history.
             </p>
-            <Button className="mt-3" variant="outline" onClick={() => runsQuery.refetch()}>
+            <Button
+              className="mt-3"
+              variant="outline"
+              onClick={() => {
+                void workflowQuery.refetch();
+                void runsQuery.refetch();
+              }}
+            >
               Retry
             </Button>
           </div>
