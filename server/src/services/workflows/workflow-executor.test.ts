@@ -886,4 +886,115 @@ describePg("Workflow executor V1", () => {
     expect(actions).toContain("workflow.run_resumed");
   });
 
+  it("checkpoints a delay wait, releases execution, and resumes only after wakeAt", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "delay",
+          type: "core.wait",
+          name: "Wait briefly",
+          position: { x: 180, y: 0 },
+          config: { durationSeconds: 1 },
+        },
+        {
+          id: "after",
+          type: "core.condition",
+          name: "Continue",
+          position: { x: 360, y: 0 },
+          config: { expression: "true" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "start", target: "delay" },
+        { id: "e2", source: "delay", target: "after" },
+      ],
+      variables: [],
+      settings: {},
+    });
+
+    const executor = workflowExecutorService(db);
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: { source: "delay-test" } },
+      { principal: { type: "user", userId: seeded.userId } },
+      "delay-run",
+    );
+
+    expect(waiting.run).toMatchObject({
+      status: "waiting",
+      executionOwnerId: null,
+      leaseExpiresAt: null,
+    });
+    expect(waiting.steps.find((step) => step.nodeId === "start")).toMatchObject({
+      status: "succeeded",
+    });
+    expect(waiting.steps.find((step) => step.nodeId === "delay")).toMatchObject({
+      attempt: 1,
+      status: "waiting",
+    });
+    expect(waiting.steps.find((step) => step.nodeId === "after")).toBeUndefined();
+    expect(waiting.waits).toHaveLength(1);
+    expect(waiting.waits[0]).toMatchObject({
+      nodeId: "delay",
+      waitKey: "primary",
+      kind: "delay",
+      status: "active",
+    });
+
+    const wakeAt = waiting.waits[0]!.wakeAt!;
+    const before = await executor.recoverExpiredRuns(
+      10,
+      new Date(new Date(wakeAt).getTime() - 100),
+    );
+    expect(before).toMatchObject({
+      recovered: 0,
+      deferred: 1,
+      failedRunIds: [],
+    });
+
+    const after = await executor.recoverExpiredRuns(
+      10,
+      new Date(new Date(wakeAt).getTime() + 100),
+    );
+    expect(after).toMatchObject({
+      recovered: 1,
+      deferred: 0,
+      failedRunIds: [],
+    });
+
+    const completed = await executor.getRun(seeded.companyId, waiting.run.id);
+    expect(completed?.run.status).toBe("succeeded");
+    expect(completed?.waits).toEqual([
+      expect.objectContaining({
+        nodeId: "delay",
+        kind: "delay",
+        status: "resolved",
+        resolutionJson: expect.objectContaining({ reason: "delay_elapsed" }),
+      }),
+    ]);
+    expect(completed?.steps.find((step) => step.nodeId === "delay")).toMatchObject({
+      status: "succeeded",
+      outputJson: expect.objectContaining({ reason: "delay_elapsed" }),
+    });
+    expect(completed?.steps.find((step) => step.nodeId === "after")).toMatchObject({
+      status: "succeeded",
+      outputJson: { result: true },
+    });
+
+    const actions = (await db.select().from(activityLog)).map((row) => row.action);
+    expect(actions).toContain("workflow.wait_created");
+    expect(actions).toContain("workflow.step_waiting");
+    expect(actions).toContain("workflow.wait_resolved");
+    expect(actions).toContain("workflow.run_resumed");
+  });
+
 });
