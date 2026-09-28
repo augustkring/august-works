@@ -6,6 +6,7 @@ import {
   startWorkflowRunSchema,
   updateWorkflowDraftSchema,
   workflowCapabilitySearchQuerySchema,
+  workflowRunListQuerySchema,
   workflowDataSelectorRequestSchema,
   type PermissionKey,
   type WorkflowCapabilities,
@@ -239,6 +240,20 @@ export function workflowRoutes(db: Db) {
       res.status(201).json(created);
     },
   );
+
+  router.get("/companies/:companyId/workflows/:workflowId/runs", async (req, res) => {
+    await assertWorkflowsEnabled();
+    const companyId = req.params.companyId as string;
+    await assertPermission(req, companyId, "workflows:read");
+    const query = workflowRunListQuerySchema.parse(req.query);
+    res.json(
+      await executor.listRuns(
+        companyId,
+        req.params.workflowId as string,
+        query.limit,
+      ),
+    );
+  });
 
   router.post(
     "/companies/:companyId/workflows/:workflowId/run",
