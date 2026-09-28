@@ -423,6 +423,7 @@ export const queryKeys = {
       ["issues", "file-resources", issueId, "availability", refKeys] as const,
   },
   foundation: {
+    capabilities: (companyId: string) => ["foundation", companyId, "capabilities"] as const,
     list: (companyId: string) => ["foundation", companyId, "list"] as const,
     detail: (companyId: string, id: string) =>
       ["foundation", companyId, "detail", id] as const,

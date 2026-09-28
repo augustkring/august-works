@@ -99,6 +99,42 @@ export function foundationRoutes(db: Db) {
     }
   }
 
+  async function resolveFoundationCapabilities(
+    req: Request,
+    companyId: string,
+  ) {
+    assertCompanyAccess(req, companyId);
+    if (
+      req.actor.type === "board" &&
+      (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin)
+    ) {
+      return { read: true, propose: true, edit: true, approve: true };
+    }
+
+    const permissions = [
+      "foundation:read",
+      "foundation:propose",
+      "foundation:edit",
+      "foundation:approve",
+    ] as const satisfies readonly FoundationPermission[];
+    const decisions = await Promise.all(
+      permissions.map((permission) =>
+        access.decide({
+          actor: req.actor,
+          action: permission,
+          resource: { type: "company", companyId },
+        }),
+      ),
+    );
+
+    return {
+      read: decisions[0]!.allowed,
+      propose: decisions[1]!.allowed,
+      edit: decisions[2]!.allowed,
+      approve: decisions[3]!.allowed,
+    };
+  }
+
   async function audit(req: Request, input: {
     companyId: string;
     action: string;
@@ -134,6 +170,12 @@ export function foundationRoutes(db: Db) {
       return;
     }
     res.json(items);
+  });
+
+  router.get("/companies/:companyId/foundation/capabilities", async (req, res) => {
+    await assertFoundationEnabled();
+    const companyId = req.params.companyId as string;
+    res.json(await resolveFoundationCapabilities(req, companyId));
   });
 
   router.post(

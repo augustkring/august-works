@@ -164,3 +164,10 @@ export interface FoundationSearchResult {
   tokenCount: number;
   rank: number;
 }
+
+export interface FoundationCapabilities {
+  read: boolean;
+  propose: boolean;
+  edit: boolean;
+  approve: boolean;
+}

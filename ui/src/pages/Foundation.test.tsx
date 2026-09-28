@@ -10,6 +10,7 @@ import { ApiError } from "@/api/client";
 import { Foundation } from "./Foundation";
 
 const apiMock = vi.hoisted(() => ({
+  capabilities: vi.fn(),
   list: vi.fn(),
   get: vi.fn(),
   search: vi.fn(),
@@ -123,6 +124,12 @@ describe("Foundation page", () => {
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
+    apiMock.capabilities.mockResolvedValue({
+      read: true,
+      propose: true,
+      edit: true,
+      approve: true,
+    });
     apiMock.list.mockResolvedValue([document]);
     apiMock.get.mockResolvedValue(document);
     apiMock.search.mockResolvedValue([]);
@@ -255,6 +262,43 @@ describe("Foundation page", () => {
         .find((button) => button.textContent?.includes("Save draft")) as HTMLButtonElement | undefined)
         ?.disabled,
     ).toBe(false);
+
+    flushSync(() => root.unmount());
+  });
+
+  it("hides mutation controls when the server reports read-only Foundation access", async () => {
+    apiMock.capabilities.mockResolvedValue({
+      read: true,
+      propose: false,
+      edit: false,
+      approve: false,
+    });
+
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    flushSync(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/foundation/foundation-1"]}>
+            <Routes>
+              <Route path="/foundation/:foundationDocumentId" element={<Foundation />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+
+    expect(container.textContent).not.toContain("New document");
+    expect(container.textContent).not.toContain("Edit draft");
+    expect(container.textContent).not.toContain("Send for review");
+
+    const proposalsTab = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Proposals"));
+    expect(proposalsTab).toBeTruthy();
+    flushSync(() => proposalsTab!.click());
+    await flush();
+    expect(container.textContent).not.toContain("Propose change");
 
     flushSync(() => root.unmount());
   });

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FOUNDATION_CATEGORIES,
+  type FoundationCapabilities,
   type FoundationCategory,
   type FoundationChangeProposal,
   type FoundationDocument,
@@ -152,6 +153,18 @@ export function Foundation() {
     setBreadcrumbs([{ label: "Foundation", href: "/foundation" }]);
   }, [setBreadcrumbs]);
 
+  const capabilitiesQuery = useQuery({
+    queryKey: queryKeys.foundation.capabilities(selectedCompanyId!),
+    queryFn: () => foundationApi.capabilities(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
+  });
+  const capabilities: FoundationCapabilities = capabilitiesQuery.data ?? {
+    read: false,
+    propose: false,
+    edit: false,
+    approve: false,
+  };
+
   const listQuery = useQuery({
     queryKey: queryKeys.foundation.list(selectedCompanyId!),
     queryFn: () => foundationApi.list(selectedCompanyId!),
@@ -251,10 +264,12 @@ export function Foundation() {
               The approved operating truth your people and agents can rely on.
             </p>
           </div>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            New document
-          </Button>
+          {capabilities.edit ? (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              New document
+            </Button>
+          ) : null}
         </header>
 
         <div className="relative max-w-lg">
@@ -394,6 +409,7 @@ export function Foundation() {
                 agents={agentsQuery.data ?? []}
                 userNames={userNames}
                 agentNames={agentNames}
+                capabilities={capabilities}
               />
             ) : null}
           </main>
@@ -423,6 +439,7 @@ function FoundationDocumentWorkspace({
   agents,
   userNames,
   agentNames,
+  capabilities,
 }: {
   companyId: string;
   document: FoundationDocument;
@@ -430,6 +447,7 @@ function FoundationDocumentWorkspace({
   agents: Array<{ id: string; name: string }>;
   userNames: Map<string, string>;
   agentNames: Map<string, string>;
+  capabilities: FoundationCapabilities;
 }) {
   const { pushToast } = useToastActions();
   const invalidate = useFoundationInvalidation(companyId, document.id);
@@ -582,7 +600,9 @@ function FoundationDocumentWorkspace({
   const displayTitle = mode === "approved"
     ? document.canonicalRevision?.title ?? document.title
     : document.title;
-  const canEdit = !["in_review", "archived", "superseded"].includes(document.status);
+  const canEdit =
+    capabilities.edit &&
+    !["in_review", "archived", "superseded"].includes(document.status);
 
   return (
     <div className="space-y-5" data-testid="foundation-document-workspace">
@@ -618,7 +638,7 @@ function FoundationDocumentWorkspace({
                 Edit draft
               </Button>
             ) : null}
-            {document.status === "draft" ? (
+            {document.status === "draft" && capabilities.edit ? (
               <Button
                 size="sm"
                 disabled={transitionMutation.isPending}
@@ -627,7 +647,7 @@ function FoundationDocumentWorkspace({
                 Send for review
               </Button>
             ) : null}
-            {document.status === "in_review" ? (
+            {document.status === "in_review" && capabilities.approve ? (
               <>
                 <Button
                   variant="outline"
@@ -773,6 +793,8 @@ function FoundationDocumentWorkspace({
           onAccept={(id) => approveProposal.mutate(id)}
           onReject={(id) => rejectProposal.mutate(id)}
           pending={approveProposal.isPending || rejectProposal.isPending}
+          canPropose={capabilities.propose}
+          canEdit={capabilities.edit}
         />
       )}
 
@@ -1022,6 +1044,8 @@ function ProposalPanel({
   onAccept,
   onReject,
   pending,
+  canPropose,
+  canEdit,
 }: {
   document: FoundationDocument;
   proposals: FoundationChangeProposal[];
@@ -1032,6 +1056,8 @@ function ProposalPanel({
   onAccept: (id: string) => void;
   onReject: (id: string) => void;
   pending: boolean;
+  canPropose: boolean;
+  canEdit: boolean;
 }) {
   return (
     <section aria-label="Foundation proposals" className="space-y-4">
@@ -1042,10 +1068,12 @@ function ProposalPanel({
             Suggestions become a working draft first. Approval is still a separate step.
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={onCreate}>
-          <Lightbulb className="mr-1.5 h-3.5 w-3.5" />
-          Propose change
-        </Button>
+        {canPropose ? (
+          <Button size="sm" variant="outline" onClick={onCreate}>
+            <Lightbulb className="mr-1.5 h-3.5 w-3.5" />
+            Propose change
+          </Button>
+        ) : null}
       </div>
       {loading ? <p aria-live="polite" className="text-sm text-muted-foreground">Loading proposals…</p> : null}
       {error ? (
@@ -1073,7 +1101,7 @@ function ProposalPanel({
                   <p className="mt-1 text-xs text-muted-foreground">{proposal.reason}</p>
                 ) : null}
               </div>
-              {proposal.status === "pending" && document.status !== "in_review" ? (
+              {canEdit && proposal.status === "pending" && document.status !== "in_review" ? (
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" disabled={pending} onClick={() => onReject(proposal.id)}>
                     Reject

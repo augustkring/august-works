@@ -555,4 +555,42 @@ describeEmbeddedPostgres("Foundation routes", () => {
       .expect(403);
   });
 
+  it("reports effective Foundation capabilities for a scoped session user", async () => {
+    const company = await seedCompany();
+    await enableFoundation();
+    const userId = "capability-viewer";
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "viewer",
+    });
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: userId,
+      permissionKey: "foundation:read",
+      scope: null,
+    });
+
+    const response = await request(app({
+      type: "board",
+      userId,
+      source: "session",
+      isInstanceAdmin: false,
+      companyIds: [company.id],
+      memberships: [{ companyId: company.id, membershipRole: "viewer", status: "active" }],
+    }))
+      .get(`/api/companies/${company.id}/foundation/capabilities`)
+      .expect(200);
+
+    expect(response.body).toEqual({
+      read: true,
+      propose: false,
+      edit: false,
+      approve: false,
+    });
+  });
+
 });

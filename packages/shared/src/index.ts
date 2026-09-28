@@ -2811,6 +2811,7 @@ export {
   FOUNDATION_SENSITIVITIES,
   type FoundationAuthorityLevel,
   type FoundationCategory,
+  type FoundationCapabilities,
   type FoundationChangeProposal,
   type FoundationDocument,
   type FoundationIndexResult,

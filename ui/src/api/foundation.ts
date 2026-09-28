@@ -1,5 +1,6 @@
 import type {
   CreateFoundationDocument,
+  FoundationCapabilities,
   FoundationChangeProposal,
   FoundationDocument,
   FoundationSearchResult,
@@ -25,6 +26,9 @@ export interface FoundationProposalDecisionResult {
 }
 
 export const foundationApi = {
+  capabilities: (companyId: string) =>
+    api.get<FoundationCapabilities>(`/companies/${companyId}/foundation/capabilities`),
+
   list: (companyId: string) =>
     api.get<FoundationDocument[]>(`/companies/${companyId}/foundation`),
 
