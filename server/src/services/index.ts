@@ -275,3 +275,8 @@ export { rankWorkflowCapabilities, workflowCapabilityResolverService } from "./w
 export { workflowDataSelectorService } from "./workflows/workflow-data-selector.js";
 
 export { workflowExecutorService, type WorkflowRunActor } from "./workflows/workflow-executor.js";
+export {
+  workflowWaitService,
+  createWorkflowWaitSignalToken,
+  hashWorkflowWaitSignalToken,
+} from "./workflows/workflow-wait-service.js";
