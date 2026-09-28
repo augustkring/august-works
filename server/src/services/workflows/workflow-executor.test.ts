@@ -21,6 +21,7 @@ import {
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { approvalService } from "../approvals.js";
 import { issueService } from "../issues.js";
+import { workflowStepIdempotencyKey } from "./workflow-execution-policy.js";
 import { workflowService } from "./workflow-service.js";
 import {
   scheduleWorkflowStepRetry,
@@ -1434,6 +1435,151 @@ describePg("Workflow executor V1", () => {
       status: "failed",
       errorCode: "workflow_task_cancelled",
     });
+  });
+
+  it("does not duplicate a Create Task side effect after executor crash recovery", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "task",
+          type: "work.create_task",
+          name: "Create once",
+          position: { x: 180, y: 0 },
+          config: {
+            title: "Crash-safe task",
+            description: null,
+            projectId: null,
+            assigneeAgentId: null,
+            assigneeUserId: null,
+            waitForCompletion: false,
+          },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "task" }],
+      variables: [],
+      settings: {},
+    });
+    const now = new Date("2026-09-28T20:30:00.000Z");
+    const old = new Date(now.getTime() - 120_000);
+    const [run] = await db.insert(workflowRuns).values({
+      companyId: seeded.companyId,
+      workflowId: seeded.workflow.id,
+      workflowRevisionId: seeded.workflow.publishedRevisionId!,
+      status: "running",
+      source: "manual",
+      triggerPayload: {},
+      responsibleUserId: seeded.userId,
+      correlationId: randomUUID(),
+      executionOwnerId: "dead-worker",
+      leaseExpiresAt: new Date(now.getTime() - 60_000),
+      ownerHeartbeatAt: old,
+      startedAt: old,
+      createdAt: old,
+      updatedAt: old,
+    }).returning();
+
+    await db.insert(workflowStepRuns).values([
+      {
+        companyId: seeded.companyId,
+        workflowRunId: run!.id,
+        nodeId: "start",
+        attempt: 1,
+        status: "succeeded",
+        inputJson: {},
+        outputJson: {},
+        startedAt: old,
+        finishedAt: new Date(old.getTime() + 10),
+        durationMs: 10,
+        createdAt: old,
+        updatedAt: old,
+      },
+      {
+        companyId: seeded.companyId,
+        workflowRunId: run!.id,
+        nodeId: "task",
+        attempt: 1,
+        status: "running",
+        inputJson: {
+          title: "Crash-safe task",
+          description: null,
+          projectId: null,
+          assigneeAgentId: null,
+          assigneeUserId: null,
+          waitForCompletion: false,
+        },
+        startedAt: new Date(old.getTime() + 20),
+        createdAt: new Date(old.getTime() + 20),
+        updatedAt: new Date(old.getTime() + 20),
+      },
+    ]);
+
+    const idempotencyKey = workflowStepIdempotencyKey(run!.id, "task");
+    const existingTask = await issueService(db).create(seeded.companyId, {
+      title: "Crash-safe task",
+      description: null,
+      status: "backlog",
+      originKind: "workflow_task",
+      originId: seeded.workflow.id,
+      originRunId: run!.id,
+      originFingerprint: idempotencyKey,
+      responsibleUserId: seeded.userId,
+      createdByUserId: seeded.userId,
+      idempotencyKey,
+      allowDuplicate: true,
+      actorResponsibleUserId: seeded.userId,
+      trustExplicitResponsibleUserId: true,
+    });
+
+    const recovery = await workflowExecutorService(db).recoverExpiredRuns(
+      10,
+      now,
+    );
+    expect(recovery).toMatchObject({
+      recovered: 1,
+      failedRunIds: [],
+    });
+
+    const completed = await workflowExecutorService(db).getRun(
+      seeded.companyId,
+      run!.id,
+    );
+    expect(completed?.run.status).toBe("succeeded");
+    const taskAttempts = completed!.steps
+      .filter((step) => step.nodeId === "task")
+      .sort((left, right) => left.attempt - right.attempt);
+    expect(taskAttempts).toHaveLength(2);
+    expect(taskAttempts[0]).toMatchObject({
+      attempt: 1,
+      status: "failed",
+      errorCode: "workflow_execution_interrupted",
+    });
+    expect(taskAttempts[1]).toMatchObject({
+      attempt: 2,
+      status: "succeeded",
+      outputJson: expect.objectContaining({
+        issueId: existingTask.id,
+      }),
+    });
+
+    const tasks = await db
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.companyId, seeded.companyId),
+          eq(issues.originRunId, run!.id),
+        ),
+      );
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]!.id).toBe(existingTask.id);
   });
 
   it("resumes a task-completion wait from the committed task terminal event", async () => {
