@@ -9,6 +9,7 @@ import {
   companyMemberships,
   createDb,
   instanceSettings,
+  issues,
   principalPermissionGrants,
   workflowRevisions,
   workflowRuns,
@@ -37,6 +38,7 @@ describePg("Workflow routes", () => {
 
   afterEach(async () => {
     await db.delete(activityLog);
+    await db.delete(issues);
     await db.delete(workflowStepRuns);
     await db.delete(workflowRuns);
     await db.delete(workflowRevisions);
@@ -470,6 +472,197 @@ describePg("Workflow routes", () => {
           status: "succeeded",
           source: "manual",
         });
+      });
+  });
+
+  it("invokes a published Workflow from an active task with authoritative task context and idempotency", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+    const http = request(app(localBoard));
+    const created = await http
+      .post(`/api/companies/${company.id}/workflows`)
+      .send({ name: "Task helper" })
+      .expect(201);
+    const updated = await http
+      .patch(`/api/companies/${company.id}/workflows/${created.body.id}/draft`)
+      .send({
+        expectedRevisionId: created.body.draftRevisionId,
+        graph: {
+          version: 1,
+          nodes: [{
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Task start",
+            position: { x: 0, y: 0 },
+            config: {},
+          }],
+          edges: [],
+          variables: [],
+          settings: {},
+        },
+      })
+      .expect(200);
+    await http
+      .post(`/api/companies/${company.id}/workflows/${created.body.id}/publish`)
+      .send({
+        expectedDraftRevisionId: updated.body.draftRevisionId,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      })
+      .expect(200);
+
+    const [task] = await db.insert(issues).values({
+      companyId: company.id,
+      title: "Prepare onboarding",
+      status: "todo",
+      assigneeUserId: "board",
+      responsibleUserId: "board",
+    }).returning();
+
+    const first = await http
+      .post(
+        `/api/companies/${company.id}/issues/${task!.id}/workflows/${created.body.id}/run`,
+      )
+      .set("Idempotency-Key", "task-workflow-route-1")
+      .send({
+        input: {
+          customerId: "customer-1",
+          task: { id: "spoofed", title: "Spoofed task" },
+        },
+      })
+      .expect(201);
+
+    expect(first.body.run).toMatchObject({
+      workflowId: created.body.id,
+      source: "task",
+      status: "succeeded",
+    });
+    expect(first.body.run.triggerPayload).toMatchObject({
+      customerId: "customer-1",
+      task: {
+        id: task!.id,
+        title: "Prepare onboarding",
+        status: "todo",
+        assigneeUserId: "board",
+      },
+    });
+    expect(first.body.run.triggerPayload.task.id).not.toBe("spoofed");
+
+    const replay = await http
+      .post(
+        `/api/companies/${company.id}/issues/${task!.id}/workflows/${created.body.id}/run`,
+      )
+      .set("Idempotency-Key", "task-workflow-route-1")
+      .send({
+        input: {
+          customerId: "customer-1",
+          task: { id: "different-spoof" },
+        },
+      })
+      .expect(201);
+    expect(replay.body.run.id).toBe(first.body.run.id);
+
+    const actions = (await db.select().from(activityLog)).map((row) => row.action);
+    expect(actions).toContain("workflow.task_invoked");
+  });
+
+  it("does not invoke a Workflow through a task from another company", async () => {
+    const alpha = await seedCompany("Task Alpha");
+    const beta = await seedCompany("Task Beta");
+    await enableWorkflows();
+    const http = request(app(localBoard));
+    const workflow = await http
+      .post(`/api/companies/${beta.id}/workflows`)
+      .send({ name: "Beta workflow" })
+      .expect(201);
+    const [foreignTask] = await db.insert(issues).values({
+      companyId: alpha.id,
+      title: "Alpha task",
+      status: "todo",
+    }).returning();
+
+    await http
+      .post(
+        `/api/companies/${beta.id}/issues/${foreignTask!.id}/workflows/${workflow.body.id}/run`,
+      )
+      .send({ input: {} })
+      .expect(404);
+  });
+
+  it("requires task mutation access before using a task to invoke a Workflow", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+    const workflow = await request(app(localBoard))
+      .post(`/api/companies/${company.id}/workflows`)
+      .send({ name: "Restricted task workflow" })
+      .expect(201);
+
+    const userId = "task-viewer";
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "viewer",
+    });
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: userId,
+      permissionKey: "workflows:run",
+      scope: null,
+    });
+    const [task] = await db.insert(issues).values({
+      companyId: company.id,
+      title: "Visible but not mutable",
+      status: "todo",
+    }).returning();
+    const actor: Express.Request["actor"] = {
+      type: "board",
+      userId,
+      source: "session",
+      isInstanceAdmin: false,
+      companyIds: [company.id],
+      memberships: [{
+        companyId: company.id,
+        membershipRole: "viewer",
+        status: "active",
+      }],
+    };
+
+    await request(app(actor))
+      .post(
+        `/api/companies/${company.id}/issues/${task!.id}/workflows/${workflow.body.id}/run`,
+      )
+      .send({ input: {} })
+      .expect(403)
+      .expect((response) => {
+        expect(response.body.code).toBe("permission_denied");
+      });
+  });
+
+  it("refuses Task to Workflow invocation after the task is terminal", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+    const workflow = await request(app(localBoard))
+      .post(`/api/companies/${company.id}/workflows`)
+      .send({ name: "Terminal task workflow" })
+      .expect(201);
+    const [task] = await db.insert(issues).values({
+      companyId: company.id,
+      title: "Already done",
+      status: "done",
+      completedAt: new Date(),
+    }).returning();
+
+    await request(app(localBoard))
+      .post(
+        `/api/companies/${company.id}/issues/${task!.id}/workflows/${workflow.body.id}/run`,
+      )
+      .send({ input: {} })
+      .expect(422)
+      .expect((response) => {
+        expect(response.body.code).toBe("workflow_task_not_active");
       });
   });
 
