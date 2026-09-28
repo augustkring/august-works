@@ -9,6 +9,7 @@ import { ConferenceRoomChatGate } from "./components/ConferenceRoomChatGate";
 import { TaskChatLab } from "./pages/TaskChatLab";
 import { PipelinesExperimentalGate } from "./components/PipelinesExperimentalGate";
 import { FoundationExperimentalGate } from "./components/FoundationExperimentalGate";
+import { WorkflowBuilderExperimentalGate } from "./components/WorkflowBuilderExperimentalGate";
 import { CasesExperimentalGate } from "./components/CasesExperimentalGate";
 import { StatusCardsExperimentalGate } from "./components/StatusCardsExperimentalGate";
 import { CloudManagedPageGate } from "./components/CloudManagedPageGate";
@@ -41,6 +42,8 @@ import { AgentChat } from "./pages/AgentChat";
 import { IssueChatLongThreadPerf } from "./pages/IssueChatLongThreadPerf";
 import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
+import { Workflows } from "./pages/Workflows";
+import { WorkflowBuilder } from "./pages/WorkflowBuilder";
 import { Learnings, PipelineItemDetail, PipelineItemLegacyRedirect, Pipelines, ReviewQueue } from "./pages/Pipelines";
 import { PipelineSettings } from "./pages/PipelineSettings";
 import { StatusCards } from "./pages/StatusCards";
@@ -318,6 +321,14 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route
         path="foundation/:foundationDocumentId"
         element={<FoundationExperimentalGate><Foundation /></FoundationExperimentalGate>}
+      />
+      <Route
+        path="workflows"
+        element={<WorkflowBuilderExperimentalGate><Workflows /></WorkflowBuilderExperimentalGate>}
+      />
+      <Route
+        path="workflows/:workflowId"
+        element={<WorkflowBuilderExperimentalGate><WorkflowBuilder /></WorkflowBuilderExperimentalGate>}
       />
       <Route path="routines" element={streamlinedUiEnabled ? <Routines /> : <ProductionSurface><ProductionRoutines /></ProductionSurface>} />
       <Route

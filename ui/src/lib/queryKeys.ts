@@ -434,6 +434,16 @@ export const queryKeys = {
     search: (companyId: string, q: string, scope: "approved" | "working") =>
       ["foundation", companyId, "search", q, scope] as const,
   },
+  workflows: {
+    capabilities: (companyId: string) => ["workflows", companyId, "capabilities"] as const,
+    list: (companyId: string) => ["workflows", companyId, "list"] as const,
+    detail: (companyId: string, workflowId: string) =>
+      ["workflows", companyId, "detail", workflowId] as const,
+    revisions: (companyId: string, workflowId: string) =>
+      ["workflows", companyId, "detail", workflowId, "revisions"] as const,
+    nodeRegistry: (companyId: string) =>
+      ["workflows", companyId, "node-registry"] as const,
+  },
   routines: {
     list: (companyId: string, filters?: { projectId?: string | null }) =>
       [

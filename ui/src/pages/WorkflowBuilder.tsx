@@ -1,0 +1,904 @@
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Background,
+  Controls,
+  Handle,
+  MiniMap,
+  Position,
+  ReactFlow,
+  applyEdgeChanges,
+  applyNodeChanges,
+  type Connection,
+  type Edge,
+  type EdgeChange,
+  type Node,
+  type NodeChange,
+  type NodeProps,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Check,
+  GitBranch,
+  Plus,
+  Save,
+  Trash2,
+} from "lucide-react";
+import type {
+  WorkflowDetail,
+  WorkflowEdgeV1,
+  WorkflowGraphV1,
+  WorkflowNodeDefinitionDescriptor,
+  WorkflowNodeV1,
+} from "@paperclipai/shared";
+import { workflowsApi } from "@/api/workflows";
+import { ApiError } from "@/api/client";
+import { useCompany } from "@/context/CompanyContext";
+import { useBreadcrumbs } from "@/context/BreadcrumbContext";
+import { useToastActions } from "@/context/ToastContext";
+import { useNavigate, useParams } from "@/lib/router";
+import { queryKeys } from "@/lib/queryKeys";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/EmptyState";
+import { PageSkeleton } from "@/components/PageSkeleton";
+
+type BuilderNodeData = {
+  workflowNode: WorkflowNodeV1;
+  definition: WorkflowNodeDefinitionDescriptor | null;
+};
+type BuilderNode = Node<BuilderNodeData, "workflow-node">;
+type BuilderEdgeData = { workflowEdge: WorkflowEdgeV1 };
+type BuilderEdge = Edge<BuilderEdgeData>;
+
+const ADDABLE_TYPES = new Set([
+  "core.manual_trigger",
+  "core.transform",
+  "core.condition",
+  "work.create_task",
+  "human.approval",
+]);
+
+function defaultConfig(type: string): Record<string, unknown> | null {
+  switch (type) {
+    case "core.manual_trigger":
+      return {};
+    case "core.transform":
+      return { mapping: { value: "{{input.value}}" } };
+    case "core.condition":
+      return { expression: "true" };
+    case "work.create_task":
+      return { title: "New task" };
+    case "human.approval":
+      return {
+        summary: "Approval required",
+        consequence: "Review this step before the workflow continues.",
+      };
+    default:
+      return null;
+  }
+}
+
+function randomId(prefix: string) {
+  const suffix = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${suffix}`;
+}
+
+function definitionMap(definitions: WorkflowNodeDefinitionDescriptor[]) {
+  return new Map(definitions.map((definition) => [definition.type, definition]));
+}
+
+function toFlowNodes(
+  graph: WorkflowGraphV1,
+  definitions: Map<string, WorkflowNodeDefinitionDescriptor>,
+): BuilderNode[] {
+  return graph.nodes.map((workflowNode) => ({
+    id: workflowNode.id,
+    type: "workflow-node",
+    position: workflowNode.position,
+    data: {
+      workflowNode,
+      definition: definitions.get(workflowNode.type) ?? null,
+    },
+  }));
+}
+
+function toFlowEdges(graph: WorkflowGraphV1): BuilderEdge[] {
+  return graph.edges.map((workflowEdge) => ({
+    id: workflowEdge.id,
+    source: workflowEdge.source,
+    target: workflowEdge.target,
+    sourceHandle: workflowEdge.sourceHandle ?? undefined,
+    targetHandle: workflowEdge.targetHandle ?? undefined,
+    label: workflowEdge.label ?? undefined,
+    data: { workflowEdge },
+  }));
+}
+
+function toGraph(
+  nodes: BuilderNode[],
+  edges: BuilderEdge[],
+  base: Pick<WorkflowGraphV1, "variables" | "settings">,
+): WorkflowGraphV1 {
+  return {
+    version: 1,
+    nodes: nodes.map((node) => ({
+      ...node.data.workflowNode,
+      position: { x: node.position.x, y: node.position.y },
+    })),
+    edges: edges.map((edge) => ({
+      ...(edge.data?.workflowEdge ?? {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+      }),
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle ?? null,
+      targetHandle: edge.targetHandle ?? null,
+      label: typeof edge.label === "string"
+        ? edge.label
+        : edge.data?.workflowEdge.label ?? null,
+    })),
+    variables: base.variables,
+    settings: base.settings,
+  };
+}
+
+function workflowErrorMessage(error: unknown) {
+  if (error instanceof ApiError) {
+    const body = error.body as {
+      code?: string;
+      details?: { reason?: string; blockedReason?: string };
+      reason?: string;
+    } | null;
+    if (body?.code === "revision_conflict") {
+      return "A newer workflow revision exists. Your local graph is preserved.";
+    }
+    if (body?.code === "workflow_node_invalid") {
+      const reason = body.details?.blockedReason ?? body.details?.reason ?? body.reason;
+      return reason
+        ? `This draft cannot be published yet: ${reason.replaceAll("_", " ")}.`
+        : "A workflow node is not valid for publishing yet.";
+    }
+  }
+  return error instanceof Error ? error.message : "The workflow change could not be completed.";
+}
+
+function WorkflowNodeCard({ data, selected }: NodeProps<BuilderNode>) {
+  const definition = data.definition;
+  return (
+    <div
+      tabIndex={0}
+      aria-label={`${data.workflowNode.name}, ${definition?.displayName ?? data.workflowNode.type}`}
+      className={cn(
+        "min-w-44 rounded-lg border bg-background px-3 py-2.5 shadow-sm outline-none transition",
+        selected ? "border-foreground/50 ring-2 ring-ring/30" : "border-border",
+      )}
+    >
+      <Handle type="target" position={Position.Left} />
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{data.workflowNode.name}</p>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            {definition?.displayName ?? data.workflowNode.type}
+          </p>
+        </div>
+        {definition?.publishState === "draft_only" ? (
+          <span className="shrink-0 text-[10px] text-muted-foreground">draft</span>
+        ) : null}
+      </div>
+      <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
+
+const NODE_TYPES = { "workflow-node": WorkflowNodeCard };
+
+export function WorkflowBuilder() {
+  const { selectedCompanyId } = useCompany();
+  const { workflowId } = useParams();
+  const { setBreadcrumbs } = useBreadcrumbs();
+  const { pushToast } = useToastActions();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const [nodes, setNodes] = useState<BuilderNode[]>([]);
+  const [edges, setEdges] = useState<BuilderEdge[]>([]);
+  const [variables, setVariables] = useState<WorkflowGraphV1["variables"]>([]);
+  const [settings, setSettings] = useState<WorkflowGraphV1["settings"]>({});
+  const [baseRevisionId, setBaseRevisionId] = useState<string | null>(null);
+  const [publishedRevisionId, setPublishedRevisionId] = useState<string | null>(null);
+  const [loadedWorkflowId, setLoadedWorkflowId] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [conflicted, setConflicted] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [nodeTypeToAdd, setNodeTypeToAdd] = useState("core.manual_trigger");
+  const [connectTargetId, setConnectTargetId] = useState("");
+
+  useEffect(() => {
+    setBreadcrumbs([
+      { label: "Workflows", href: "/workflows" },
+      { label: "Builder" },
+    ]);
+  }, [setBreadcrumbs]);
+
+  const detailQuery = useQuery({
+    queryKey: queryKeys.workflows.detail(selectedCompanyId!, workflowId ?? ""),
+    queryFn: () => workflowsApi.get(selectedCompanyId!, workflowId!),
+    enabled: !!selectedCompanyId && !!workflowId,
+  });
+  const capabilitiesQuery = useQuery({
+    queryKey: queryKeys.workflows.capabilities(selectedCompanyId!),
+    queryFn: () => workflowsApi.capabilities(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
+  });
+  const registryQuery = useQuery({
+    queryKey: queryKeys.workflows.nodeRegistry(selectedCompanyId!),
+    queryFn: () => workflowsApi.nodeRegistry(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
+  });
+  const definitions = useMemo(
+    () => definitionMap(registryQuery.data ?? []),
+    [registryQuery.data],
+  );
+
+  const hydrate = useCallback((detail: WorkflowDetail) => {
+    if (!detail.draftRevision || !detail.draftRevisionId) return;
+    setNodes(toFlowNodes(detail.draftRevision.graph, definitions));
+    setEdges(toFlowEdges(detail.draftRevision.graph));
+    setVariables(detail.draftRevision.graph.variables);
+    setSettings(detail.draftRevision.graph.settings);
+    setBaseRevisionId(detail.draftRevisionId);
+    setPublishedRevisionId(detail.publishedRevisionId);
+    setLoadedWorkflowId(detail.id);
+    setDirty(false);
+    setConflicted(false);
+    setSelectedNodeId(null);
+    setConnectTargetId("");
+  }, [definitions]);
+
+  useEffect(() => {
+    const detail = detailQuery.data;
+    if (!detail?.draftRevision || !detail.draftRevisionId) return;
+    if (loadedWorkflowId !== detail.id || baseRevisionId === null) {
+      hydrate(detail);
+      return;
+    }
+    if (detail.draftRevisionId !== baseRevisionId) {
+      if (dirty) setConflicted(true);
+      else hydrate(detail);
+    }
+  }, [
+    baseRevisionId,
+    detailQuery.data?.draftRevisionId,
+    detailQuery.data?.id,
+    dirty,
+    hydrate,
+    loadedWorkflowId,
+  ]);
+
+  useEffect(() => {
+    setNodes((current) => current.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        definition: definitions.get(node.data.workflowNode.type) ?? null,
+      },
+    })));
+  }, [definitions]);
+
+  const markDirty = () => setDirty(true);
+
+  const onNodesChange = (changes: NodeChange<BuilderNode>[]) => {
+    setNodes((current) => applyNodeChanges(changes, current));
+    if (changes.some((change) => change.type !== "select" && change.type !== "dimensions")) {
+      markDirty();
+    }
+  };
+
+  const onEdgesChange = (changes: EdgeChange<BuilderEdge>[]) => {
+    setEdges((current) => applyEdgeChanges(changes, current));
+    if (changes.some((change) => change.type !== "select")) markDirty();
+  };
+
+  const onConnect = (connection: Connection) => {
+    if (!connection.source || !connection.target) return;
+    const workflowEdge: WorkflowEdgeV1 = {
+      id: randomId("edge"),
+      source: connection.source,
+      target: connection.target,
+      sourceHandle: connection.sourceHandle ?? null,
+      targetHandle: connection.targetHandle ?? null,
+      label: "Next",
+    };
+    setEdges((current) => [
+      ...current,
+      {
+        id: workflowEdge.id,
+        source: workflowEdge.source,
+        target: workflowEdge.target,
+        sourceHandle: workflowEdge.sourceHandle ?? undefined,
+        targetHandle: workflowEdge.targetHandle ?? undefined,
+        label: workflowEdge.label ?? undefined,
+        data: { workflowEdge },
+      },
+    ]);
+    markDirty();
+  };
+
+  const currentGraph = () => toGraph(nodes, edges, { variables, settings });
+
+  const invalidate = async () => {
+    if (!selectedCompanyId || !workflowId) return;
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workflows.detail(selectedCompanyId, workflowId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workflows.list(selectedCompanyId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workflows.revisions(selectedCompanyId, workflowId),
+      }),
+    ]);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedCompanyId || !workflowId || !baseRevisionId) {
+        throw new Error("Workflow draft is not ready.");
+      }
+      if (conflicted) throw new Error("Reload the latest revision before saving.");
+      return workflowsApi.updateDraft(selectedCompanyId, workflowId, {
+        expectedRevisionId: baseRevisionId,
+        graph: currentGraph(),
+        changeSummary: "Updated in visual builder",
+      });
+    },
+    onSuccess: async (detail) => {
+      hydrate(detail);
+      await invalidate();
+      pushToast({ title: "Workflow draft saved", tone: "success" });
+    },
+    onError: async (error) => {
+      if (
+        error instanceof ApiError &&
+        (error.body as { code?: string } | null)?.code === "revision_conflict"
+      ) {
+        setConflicted(true);
+        await detailQuery.refetch();
+      }
+      pushToast({
+        title: "Could not save workflow",
+        body: workflowErrorMessage(error),
+        tone: "error",
+      });
+    },
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedCompanyId || !workflowId || !baseRevisionId) {
+        throw new Error("Workflow draft is not ready.");
+      }
+      if (dirty) throw new Error("Save the draft before publishing.");
+      if (conflicted) throw new Error("Reload the latest revision before publishing.");
+      return workflowsApi.publish(selectedCompanyId, workflowId, {
+        expectedDraftRevisionId: baseRevisionId,
+        expectedPublishedRevisionId: publishedRevisionId,
+        approvalId: null,
+      });
+    },
+    onSuccess: async (detail) => {
+      hydrate(detail);
+      await invalidate();
+      pushToast({ title: "Workflow revision published", tone: "success" });
+    },
+    onError: async (error) => {
+      if (
+        error instanceof ApiError &&
+        (error.body as { code?: string } | null)?.code === "revision_conflict"
+      ) {
+        setConflicted(true);
+        await detailQuery.refetch();
+      }
+      pushToast({
+        title: "Could not publish workflow",
+        body: workflowErrorMessage(error),
+        tone: "error",
+      });
+    },
+  });
+
+  const addNode = () => {
+    const config = defaultConfig(nodeTypeToAdd);
+    const definition = definitions.get(nodeTypeToAdd);
+    if (!config || !definition) return;
+    const workflowNode: WorkflowNodeV1 = {
+      id: randomId("node"),
+      type: definition.type,
+      name: definition.displayName,
+      position: {
+        x: 100 + (nodes.length % 3) * 220,
+        y: 80 + Math.floor(nodes.length / 3) * 140,
+      },
+      config,
+    };
+    setNodes((current) => [
+      ...current,
+      {
+        id: workflowNode.id,
+        type: "workflow-node",
+        position: workflowNode.position,
+        data: { workflowNode, definition },
+      },
+    ]);
+    setSelectedNodeId(workflowNode.id);
+    markDirty();
+  };
+
+  const updateSelectedNode = (patch: Partial<WorkflowNodeV1>) => {
+    if (!selectedNodeId) return;
+    setNodes((current) => current.map((node) => (
+      node.id === selectedNodeId
+        ? {
+            ...node,
+            data: {
+              ...node.data,
+              workflowNode: { ...node.data.workflowNode, ...patch },
+            },
+          }
+        : node
+    )));
+    markDirty();
+  };
+
+  const removeNode = (nodeId: string) => {
+    setNodes((current) => current.filter((node) => node.id !== nodeId));
+    setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    if (selectedNodeId === nodeId) setSelectedNodeId(null);
+    markDirty();
+  };
+
+  const moveNode = (nodeId: string, dy: number) => {
+    setNodes((current) => current.map((node) => (
+      node.id === nodeId
+        ? { ...node, position: { ...node.position, y: Math.max(0, node.position.y + dy) } }
+        : node
+    )));
+    markDirty();
+  };
+
+  const connectSelected = () => {
+    if (!selectedNodeId || !connectTargetId || selectedNodeId === connectTargetId) return;
+    onConnect({
+      source: selectedNodeId,
+      target: connectTargetId,
+      sourceHandle: null,
+      targetHandle: null,
+    });
+  };
+
+  const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const capabilities = capabilitiesQuery.data;
+  const addableDefinitions = (registryQuery.data ?? []).filter((definition) =>
+    ADDABLE_TYPES.has(definition.type),
+  );
+
+  if (!selectedCompanyId) {
+    return <EmptyState icon={GitBranch} message="Select a company to open this workflow." />;
+  }
+  if (detailQuery.isLoading || registryQuery.isLoading) return <PageSkeleton />;
+  if (detailQuery.error || !detailQuery.data) {
+    return (
+      <div className="p-6">
+        <div className="border-l-2 border-destructive pl-4">
+          <p className="font-medium">Workflow could not be loaded</p>
+          <Button className="mt-3" variant="outline" onClick={() => detailQuery.refetch()}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/workflows")}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Workflows
+          </Button>
+          <div className="min-w-0">
+            <h1 className="truncate text-sm font-semibold">{detailQuery.data.name}</h1>
+            <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Draft rev {detailQuery.data.draftRevision?.revisionNumber ?? "—"}</span>
+              {dirty ? <span>Unsaved</span> : <span>Saved</span>}
+              {detailQuery.data.publishedRevisionId ? <span>Published</span> : null}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {conflicted ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => detailQuery.data && hydrate(detailQuery.data)}
+            >
+              Reload latest
+            </Button>
+          ) : null}
+          {capabilities?.edit ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!dirty || conflicted || saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+            >
+              <Save className="mr-1.5 h-3.5 w-3.5" />
+              {saveMutation.isPending ? "Saving…" : "Save draft"}
+            </Button>
+          ) : null}
+          {capabilities?.publish ? (
+            <Button
+              size="sm"
+              disabled={dirty || conflicted || publishMutation.isPending}
+              onClick={() => publishMutation.mutate()}
+            >
+              <Check className="mr-1.5 h-3.5 w-3.5" />
+              {publishMutation.isPending ? "Publishing…" : "Publish"}
+            </Button>
+          ) : null}
+        </div>
+      </header>
+
+      {conflicted ? (
+        <div role="alert" className="border-b border-amber-500/30 bg-amber-500/5 px-5 py-2 text-sm">
+          A newer workflow revision exists. Your local graph is preserved. Reload the latest revision before saving.
+        </div>
+      ) : null}
+
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)_300px]">
+        <aside className="overflow-y-auto border-r border-border p-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Add step
+          </p>
+          <select
+            aria-label="Workflow node type"
+            value={nodeTypeToAdd}
+            onChange={(event) => setNodeTypeToAdd(event.target.value)}
+            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {addableDefinitions.map((definition) => (
+              <option key={definition.type} value={definition.type}>
+                {definition.displayName}
+                {definition.publishState === "draft_only" ? " · draft only" : ""}
+              </option>
+            ))}
+          </select>
+          <Button
+            className="mt-2 w-full"
+            variant="outline"
+            onClick={addNode}
+            disabled={!capabilities?.edit || addableDefinitions.length === 0}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            Add step
+          </Button>
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+            Connector and agent pickers arrive in the next workflow implementation wave. Existing nodes remain visible.
+          </p>
+
+          <div className="mt-6 border-t border-border pt-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Outline editor
+            </p>
+            <div className="space-y-1">
+              {nodes.map((node, index) => (
+                <div
+                  key={node.id}
+                  className={cn(
+                    "rounded-md border px-2 py-2",
+                    selectedNodeId === node.id ? "border-foreground/40 bg-accent" : "border-border",
+                  )}
+                >
+                  <button
+                    type="button"
+                    className="w-full truncate text-left text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => setSelectedNodeId(node.id)}
+                  >
+                    {index + 1}. {node.data.workflowNode.name}
+                  </button>
+                  {capabilities?.edit ? (
+                    <div className="mt-2 flex items-center gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Move ${node.data.workflowNode.name} up`}
+                        onClick={() => moveNode(node.id, -80)}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Move ${node.data.workflowNode.name} down`}
+                        onClick={() => moveNode(node.id, 80)}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Delete ${node.data.workflowNode.name}`}
+                        onClick={() => removeNode(node.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+              {nodes.length === 0 ? (
+                <p className="py-3 text-xs text-muted-foreground">No steps yet.</p>
+              ) : null}
+            </div>
+
+            {selectedNodeId && nodes.length > 1 && capabilities?.edit ? (
+              <div className="mt-4 space-y-2">
+                <label className="block text-xs font-medium">
+                  Connect selected to
+                  <select
+                    value={connectTargetId}
+                    onChange={(event) => setConnectTargetId(event.target.value)}
+                    className="mt-1 h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                  >
+                    <option value="">Choose step</option>
+                    {nodes.filter((node) => node.id !== selectedNodeId).map((node) => (
+                      <option key={node.id} value={node.id}>
+                        {node.data.workflowNode.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={connectSelected}
+                  disabled={!connectTargetId}
+                >
+                  Connect
+                </Button>
+              </div>
+            ) : null}
+
+            {edges.length > 0 ? (
+              <div className="mt-5 space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Connections</p>
+                {edges.map((edge) => (
+                  <div key={edge.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate">
+                      {nodes.find((node) => node.id === edge.source)?.data.workflowNode.name ?? edge.source}
+                      {" → "}
+                      {nodes.find((node) => node.id === edge.target)?.data.workflowNode.name ?? edge.target}
+                    </span>
+                    {capabilities?.edit ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label="Delete connection"
+                        onClick={() => {
+                          setEdges((current) => current.filter((item) => item.id !== edge.id));
+                          markDirty();
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </aside>
+
+        <main className="relative hidden min-h-0 bg-muted/20 md:block">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={NODE_TYPES}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
+            fitView
+            minZoom={0.2}
+            maxZoom={1.5}
+            nodesDraggable={capabilities?.edit === true}
+            nodesConnectable={capabilities?.edit === true}
+            elementsSelectable
+          >
+            <Background gap={24} size={1} />
+            <Controls />
+            <MiniMap pannable zoomable />
+          </ReactFlow>
+        </main>
+
+        <aside className="min-h-0 overflow-y-auto border-l border-border p-4">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Inspector
+          </p>
+          {selectedNode ? (
+            <NodeInspector
+              node={selectedNode}
+              canEdit={capabilities?.edit === true}
+              onUpdate={updateSelectedNode}
+              onDelete={() => removeNode(selectedNode.id)}
+            />
+          ) : (
+            <div className="py-8 text-sm text-muted-foreground">
+              Select a step to inspect its contract and configuration.
+            </div>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function NodeInspector({
+  node,
+  canEdit,
+  onUpdate,
+  onDelete,
+}: {
+  node: BuilderNode;
+  canEdit: boolean;
+  onUpdate: (patch: Partial<WorkflowNodeV1>) => void;
+  onDelete: () => void;
+}) {
+  const workflowNode = node.data.workflowNode;
+  const definition = node.data.definition;
+  const config = (
+    workflowNode.config && typeof workflowNode.config === "object" && !Array.isArray(workflowNode.config)
+      ? workflowNode.config
+      : {}
+  ) as Record<string, unknown>;
+
+  const updateConfig = (patch: Record<string, unknown>) =>
+    onUpdate({ config: { ...config, ...patch } });
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="outline">{definition?.riskDefault ?? "—"}</Badge>
+          <Badge variant="outline">{definition?.sideEffectClass ?? "unknown"}</Badge>
+          {definition?.publishState === "draft_only" ? (
+            <Badge variant="outline">Draft only</Badge>
+          ) : (
+            <Badge variant="outline">Publish ready</Badge>
+          )}
+        </div>
+        <p className="mt-2 text-sm font-medium">
+          {definition?.displayName ?? workflowNode.type}
+        </p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          {definition?.description ?? "This node type is not present in the current registry."}
+        </p>
+      </div>
+
+      <label className="block space-y-1 text-xs font-medium">
+        Step name
+        <Input
+          value={workflowNode.name}
+          disabled={!canEdit}
+          onChange={(event) => onUpdate({ name: event.target.value })}
+        />
+      </label>
+
+      {workflowNode.type === "core.condition" ? (
+        <label className="block space-y-1 text-xs font-medium">
+          Condition
+          <Input
+            value={String(config.expression ?? "")}
+            disabled={!canEdit}
+            onChange={(event) => updateConfig({ expression: event.target.value })}
+          />
+        </label>
+      ) : null}
+
+      {workflowNode.type === "core.transform" ? (
+        <label className="block space-y-1 text-xs font-medium">
+          Output value expression
+          <Input
+            value={String(
+              config.mapping && typeof config.mapping === "object"
+                ? (config.mapping as Record<string, unknown>).value ?? ""
+                : "",
+            )}
+            disabled={!canEdit}
+            onChange={(event) => updateConfig({ mapping: { value: event.target.value } })}
+          />
+        </label>
+      ) : null}
+
+      {workflowNode.type === "work.create_task" ? (
+        <>
+          <label className="block space-y-1 text-xs font-medium">
+            Task title
+            <Input
+              value={String(config.title ?? "")}
+              disabled={!canEdit}
+              onChange={(event) => updateConfig({ title: event.target.value })}
+            />
+          </label>
+          <label className="block space-y-1 text-xs font-medium">
+            Task description
+            <Input
+              value={String(config.description ?? "")}
+              disabled={!canEdit}
+              onChange={(event) => updateConfig({ description: event.target.value || null })}
+            />
+          </label>
+        </>
+      ) : null}
+
+      {workflowNode.type === "human.approval" ? (
+        <>
+          <label className="block space-y-1 text-xs font-medium">
+            Approval summary
+            <Input
+              value={String(config.summary ?? "")}
+              disabled={!canEdit}
+              onChange={(event) => updateConfig({ summary: event.target.value })}
+            />
+          </label>
+          <label className="block space-y-1 text-xs font-medium">
+            Consequence
+            <Input
+              value={String(config.consequence ?? "")}
+              disabled={!canEdit}
+              onChange={(event) => updateConfig({ consequence: event.target.value })}
+            />
+          </label>
+        </>
+      ) : null}
+
+      {workflowNode.type === "connector.action" || workflowNode.type === "agent.task" ? (
+        <div className="border-l-2 border-border pl-3 text-xs leading-5 text-muted-foreground">
+          This node is readable in the builder. Its governed capability picker is implemented in the next workflow wave rather than exposing raw IDs or JSON.
+        </div>
+      ) : null}
+
+      {definition?.publishBlockedReason ? (
+        <div className="border-l-2 border-amber-500 pl-3 text-xs leading-5 text-muted-foreground">
+          Publish gate: {definition.publishBlockedReason.replaceAll("_", " ")}
+        </div>
+      ) : null}
+
+      {canEdit ? (
+        <Button variant="outline" size="sm" onClick={onDelete}>
+          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+          Delete step
+        </Button>
+      ) : null}
+    </div>
+  );
+}
