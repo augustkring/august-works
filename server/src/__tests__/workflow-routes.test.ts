@@ -458,6 +458,19 @@ describePg("Workflow routes", () => {
       .expect((response) => {
         expect(response.body.run.workflowId).toBe(created.body.id);
       });
+
+    await http
+      .get(`/api/companies/${company.id}/workflows/${created.body.id}/runs?limit=20`)
+      .expect(200)
+      .expect((response) => {
+        expect(response.body).toHaveLength(1);
+        expect(response.body[0]).toMatchObject({
+          id: first.body.run.id,
+          workflowId: created.body.id,
+          status: "succeeded",
+          source: "manual",
+        });
+      });
   });
 
 });
