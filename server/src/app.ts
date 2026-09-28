@@ -46,6 +46,7 @@ import { cloudRoutes } from "./routes/cloud.js";
 import { companyRoutes } from "./routes/companies.js";
 import { companySkillRoutes } from "./routes/company-skills.js";
 import { foundationRoutes } from "./routes/foundation.js";
+import { workflowRoutes } from "./routes/workflows.js";
 import { companySkillPolicyRoutes } from "./routes/company-skill-policy.js";
 import { inboxAgentPolicyRoutes } from "./routes/inbox-agent-policy.js";
 import { builtInAgentRoutes } from "./routes/built-in-agents.js";
@@ -658,6 +659,7 @@ export async function createApp(
   api.use(folderRoutes(db));
   api.use(companySkillRoutes(db));
   api.use(foundationRoutes(db));
+  api.use(workflowRoutes(db));
   api.use(companySkillPolicyRoutes(db));
   api.use(inboxAgentPolicyRoutes(db));
   api.use(builtInAgentRoutes(db));
