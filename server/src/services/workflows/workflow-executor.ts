@@ -2127,6 +2127,738 @@ function workflowTaskOutput(issue: {
   };
 }
 
+async function createWorkflowTask(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  node: WorkflowNode,
+  actor: WorkflowRunActor,
+) {
+  const config = createTaskNodeConfig(node);
+  await assertWorkflowTaskAssignmentAuthorized(db, run, actor, config);
+  const idempotencyKey = workflowStepIdempotencyKey(run.id, node.id);
+  const actorFields = workflowTaskActorFields(run, actor);
+  const responsibleUserId =
+    run.responsibleUserId ??
+    actor.responsibleUserId ??
+    (actor.principal.type === "agent"
+      ? actor.principal.responsibleUserId
+      : actor.principal.type === "user"
+        ? actor.principal.userId
+        : null);
+  let deduplicated = false;
+  const publications: ActivityPublication[] = [];
+
+  const issue = await db.transaction(async (tx) => {
+    const created = await issueService(db).create(
+      run.companyId,
+      {
+        title: config.title,
+        description: config.description,
+        projectId: config.projectId,
+        assigneeAgentId: config.assigneeAgentId,
+        assigneeUserId: config.assigneeUserId,
+        status: "backlog",
+        originKind: "workflow_task",
+        originId: run.workflowId,
+        originRunId: run.id,
+        originFingerprint: idempotencyKey,
+        responsibleUserId,
+        ...actorFields,
+        actorResponsibleUserId: responsibleUserId,
+        trustExplicitResponsibleUserId: Boolean(responsibleUserId),
+        idempotencyKey,
+        allowDuplicate: true,
+        onDeduplicated: () => {
+          deduplicated = true;
+        },
+      },
+      tx as unknown as Db,
+    );
+
+    if (!deduplicated) {
+      const { publication } = await persistWorkflowActivity(
+        tx as unknown as Db,
+        actor,
+        {
+          companyId: run.companyId,
+          action: "workflow.task_created",
+          entityType: "issue",
+          entityId: created.id,
+          details: {
+            workflowRunId: run.id,
+            workflowId: run.workflowId,
+            nodeId: node.id,
+            issueId: created.id,
+            identifier: created.identifier,
+            waitForCompletion: config.waitForCompletion,
+            idempotencyKey,
+          },
+        },
+      );
+      publications.push(publication);
+    }
+    return created;
+  });
+  publishActivities(publications);
+  return { issue, config, idempotencyKey };
+}
+
+async function scheduleTaskCompletionWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  node: WorkflowNode,
+  runningStep: WorkflowStepRow,
+  actor: WorkflowRunActor,
+): Promise<void> {
+  if (!run.executionOwnerId) {
+    throw conflict("Workflow run has no execution owner", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+
+  const config = createTaskNodeConfig(node);
+  await assertWorkflowTaskAssignmentAuthorized(db, run, actor, config);
+  const idempotencyKey = workflowStepIdempotencyKey(run.id, node.id);
+  const actorFields = workflowTaskActorFields(run, actor);
+  const responsibleUserId =
+    run.responsibleUserId ??
+    actor.responsibleUserId ??
+    (actor.principal.type === "agent"
+      ? actor.principal.responsibleUserId
+      : actor.principal.type === "user"
+        ? actor.principal.userId
+        : null);
+  const publications: ActivityPublication[] = [];
+
+  await db.transaction(async (tx) => {
+    let deduplicated = false;
+    const issue = await issueService(db).create(
+      run.companyId,
+      {
+        title: config.title,
+        description: config.description,
+        projectId: config.projectId,
+        assigneeAgentId: config.assigneeAgentId,
+        assigneeUserId: config.assigneeUserId,
+        status: "backlog",
+        originKind: "workflow_task",
+        originId: run.workflowId,
+        originRunId: run.id,
+        originFingerprint: idempotencyKey,
+        responsibleUserId,
+        ...actorFields,
+        actorResponsibleUserId: responsibleUserId,
+        trustExplicitResponsibleUserId: Boolean(responsibleUserId),
+        idempotencyKey,
+        allowDuplicate: true,
+        onDeduplicated: () => {
+          deduplicated = true;
+        },
+      },
+      tx as unknown as Db,
+    );
+
+    const now = new Date();
+    const [wait] = await tx
+      .insert(workflowWaits)
+      .values({
+        companyId: run.companyId,
+        workflowRunId: run.id,
+        nodeId: node.id,
+        waitKey: "primary",
+        kind: "task_completion",
+        status: "active",
+        referenceType: "issue",
+        referenceId: issue.id,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    if (!wait) {
+      throw conflict("Workflow task wait could not be created", {
+        code: "workflow_wait_create_conflict",
+        workflowRunId: run.id,
+        nodeId: node.id,
+      });
+    }
+
+    const [waitingStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "waiting",
+        outputJson: workflowTaskOutput(issue),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, runningStep.id),
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.status, "running"),
+        ),
+      )
+      .returning();
+    if (!waitingStep) {
+      throw conflict("Workflow task step changed while wait was being created", {
+        code: "workflow_wait_create_conflict",
+        workflowRunId: run.id,
+        nodeId: node.id,
+      });
+    }
+
+    const [waitingRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "waiting",
+        executionOwnerId: null,
+        leaseExpiresAt: null,
+        ownerHeartbeatAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "running"),
+          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+        ),
+      )
+      .returning();
+    if (!waitingRun) {
+      throw conflict("Workflow run ownership changed while task wait was created", {
+        code: "workflow_run_claim_lost",
+        workflowRunId: run.id,
+      });
+    }
+
+    if (!deduplicated) {
+      const taskCreated = await persistWorkflowActivity(
+        tx as unknown as Db,
+        actor,
+        {
+          companyId: run.companyId,
+          action: "workflow.task_created",
+          entityType: "issue",
+          entityId: issue.id,
+          details: {
+            workflowRunId: run.id,
+            workflowId: run.workflowId,
+            nodeId: node.id,
+            issueId: issue.id,
+            identifier: issue.identifier,
+            waitForCompletion: true,
+            idempotencyKey,
+          },
+        },
+      );
+      publications.push(taskCreated.publication);
+    }
+    const waitCreated = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.wait_created",
+        entityType: "workflow_wait",
+        entityId: wait.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: node.id,
+          kind: "task_completion",
+          issueId: issue.id,
+        },
+      },
+    );
+    const taskWaiting = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.task_waiting",
+        entityType: "workflow_step_run",
+        entityId: waitingStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: node.id,
+          attempt: waitingStep.attempt,
+          issueId: issue.id,
+          waitId: wait.id,
+        },
+      },
+    );
+    const runWaiting = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_waiting",
+        entityType: "workflow_run",
+        entityId: waitingRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          reason: "task_completion",
+          nodeId: node.id,
+          issueId: issue.id,
+          waitId: wait.id,
+        },
+      },
+    );
+    publications.push(
+      waitCreated.publication,
+      taskWaiting.publication,
+      runWaiting.publication,
+    );
+  });
+  publishActivities(publications);
+}
+
+async function issueForTaskWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+) {
+  if (wait.referenceType !== "issue" || !wait.referenceId) return null;
+  return db
+    .select({
+      id: issues.id,
+      identifier: issues.identifier,
+      status: issues.status,
+      title: issues.title,
+    })
+    .from(issues)
+    .where(
+      and(
+        eq(issues.companyId, run.companyId),
+        eq(issues.id, wait.referenceId),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+}
+
+async function resumeCompletedTaskWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+  issue: { id: string; identifier: string | null; status: string },
+  now: Date,
+) {
+  const actor: WorkflowRunActor = {
+    principal: { type: "system", service: "workflow-task" },
+    responsibleUserId: run.responsibleUserId,
+  };
+  const ownerId = `task:${randomUUID()}`;
+  const publications: ActivityPublication[] = [];
+
+  const resumed = await db.transaction(async (tx) => {
+    const [resolvedWait] = await tx
+      .update(workflowWaits)
+      .set({
+        status: "resolved",
+        resolutionJson: workflowTaskOutput(issue),
+        resolvedByType: "system",
+        resolvedById: "workflow-task",
+        resolvedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowWaits.id, wait.id),
+          eq(workflowWaits.companyId, run.companyId),
+          eq(workflowWaits.workflowRunId, run.id),
+          eq(workflowWaits.status, "active"),
+        ),
+      )
+      .returning();
+    if (!resolvedWait) return null;
+
+    const waitingStep = await tx
+      .select()
+      .from(workflowStepRuns)
+      .where(
+        and(
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.nodeId, wait.nodeId),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    if (!waitingStep) {
+      throw conflict("Workflow task step changed before completion", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+    const durationMs = Math.max(
+      0,
+      now.getTime() - (waitingStep.startedAt ?? now).getTime(),
+    );
+    const [completedStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "succeeded",
+        outputJson: workflowTaskOutput(issue),
+        finishedAt: now,
+        durationMs,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, waitingStep.id),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
+      .returning();
+    if (!completedStep) {
+      throw conflict("Workflow task step changed during completion", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+
+    const [runningRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "running",
+        executionOwnerId: ownerId,
+        ownerHeartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "waiting"),
+          sql`${workflowRuns.executionOwnerId} is null`,
+          sql`${workflowRuns.leaseExpiresAt} is null`,
+        ),
+      )
+      .returning();
+    if (!runningRun) {
+      throw conflict("Workflow run changed before task completion resume", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        waitId: wait.id,
+      });
+    }
+
+    const taskCompleted = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.task_completed",
+        entityType: "issue",
+        entityId: issue.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: wait.nodeId,
+          issueId: issue.id,
+          identifier: issue.identifier,
+        },
+      },
+    );
+    const waitResolved = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.wait_resolved",
+        entityType: "workflow_wait",
+        entityId: resolvedWait.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: wait.nodeId,
+          kind: "task_completion",
+          issueId: issue.id,
+          resolution: "done",
+        },
+      },
+    );
+    const stepCompleted = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_completed",
+        entityType: "workflow_step_run",
+        entityId: completedStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: completedStep.nodeId,
+          attempt: completedStep.attempt,
+          issueId: issue.id,
+        },
+      },
+    );
+    const runResumed = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_resumed",
+        entityType: "workflow_run",
+        entityId: runningRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          reason: "task_completed",
+          issueId: issue.id,
+          executionOwnerId: ownerId,
+        },
+      },
+    );
+    publications.push(
+      taskCompleted.publication,
+      waitResolved.publication,
+      stepCompleted.publication,
+      runResumed.publication,
+    );
+    return runningRun;
+  });
+  publishActivities(publications);
+  return resumed;
+}
+
+async function failTaskWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+  issue: { id: string; identifier: string | null; status: string } | null,
+  now: Date,
+  errorCode: "workflow_task_cancelled" | "workflow_task_missing",
+  errorMessage: string,
+) {
+  const actor: WorkflowRunActor = {
+    principal: { type: "system", service: "workflow-task" },
+    responsibleUserId: run.responsibleUserId,
+  };
+  const publications: ActivityPublication[] = [];
+
+  const changed = await db.transaction(async (tx) => {
+    const [resolvedWait] = await tx
+      .update(workflowWaits)
+      .set({
+        status: errorCode === "workflow_task_cancelled" ? "cancelled" : "timed_out",
+        resolutionJson: issue ? workflowTaskOutput(issue) : { errorCode },
+        resolvedByType: "system",
+        resolvedById: "workflow-task",
+        resolvedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowWaits.id, wait.id),
+          eq(workflowWaits.companyId, run.companyId),
+          eq(workflowWaits.workflowRunId, run.id),
+          eq(workflowWaits.status, "active"),
+        ),
+      )
+      .returning();
+    if (!resolvedWait) return false;
+
+    const waitingStep = await tx
+      .select()
+      .from(workflowStepRuns)
+      .where(
+        and(
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.nodeId, wait.nodeId),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    if (!waitingStep) {
+      throw conflict("Workflow task step changed before failure resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+    const durationMs = Math.max(
+      0,
+      now.getTime() - (waitingStep.startedAt ?? now).getTime(),
+    );
+    const [failedStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "failed",
+        outputJson: issue ? workflowTaskOutput(issue) : null,
+        finishedAt: now,
+        durationMs,
+        errorCode,
+        errorMessage,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, waitingStep.id),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
+      .returning();
+    if (!failedStep) {
+      throw conflict("Workflow task step changed during failure resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+
+    const [failedRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "failed",
+        finishedAt: now,
+        failureCode: errorCode,
+        failureMessage: errorMessage,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "waiting"),
+          sql`${workflowRuns.executionOwnerId} is null`,
+          sql`${workflowRuns.leaseExpiresAt} is null`,
+        ),
+      )
+      .returning();
+    if (!failedRun) {
+      throw conflict("Workflow run changed during task failure resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        waitId: wait.id,
+      });
+    }
+    await finalizeLinkedRoutineRun(
+      tx as unknown as Db,
+      failedRun,
+      {
+        status: "failed",
+        failureReason: errorMessage,
+        completedAt: now,
+      },
+    );
+
+    const waitResolved = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.wait_resolved",
+        entityType: "workflow_wait",
+        entityId: resolvedWait.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: wait.nodeId,
+          kind: "task_completion",
+          issueId: issue?.id ?? wait.referenceId,
+          resolution: errorCode,
+        },
+      },
+    );
+    const stepFailed = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_failed",
+        entityType: "workflow_step_run",
+        entityId: failedStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: failedStep.nodeId,
+          attempt: failedStep.attempt,
+          issueId: issue?.id ?? wait.referenceId,
+          errorCode,
+        },
+      },
+    );
+    const runFailed = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_failed",
+        entityType: "workflow_run",
+        entityId: failedRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          errorCode,
+          issueId: issue?.id ?? wait.referenceId,
+        },
+      },
+    );
+    publications.push(
+      waitResolved.publication,
+      stepFailed.publication,
+      runFailed.publication,
+    );
+    return true;
+  });
+  publishActivities(publications);
+  return changed;
+}
+
+async function resolveTaskCompletionWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+  now: Date,
+): Promise<"recovered" | "raced" | "deferred"> {
+  const issue = await issueForTaskWait(db, run, wait);
+  if (!issue) {
+    const changed = await failTaskWait(
+      db,
+      run,
+      wait,
+      null,
+      now,
+      "workflow_task_missing",
+      "Task referenced by the workflow wait no longer exists",
+    );
+    return changed ? "recovered" : "raced";
+  }
+  if (issue.status === "done") {
+    const resumed = await resumeCompletedTaskWait(db, run, wait, issue, now);
+    if (!resumed) return "raced";
+    await executeClaimedRun(
+      db,
+      resumed,
+      {
+        principal: { type: "system", service: "workflow-task" },
+        responsibleUserId: run.responsibleUserId,
+      },
+    );
+    return "recovered";
+  }
+  if (issue.status === "cancelled") {
+    const changed = await failTaskWait(
+      db,
+      run,
+      wait,
+      issue,
+      now,
+      "workflow_task_cancelled",
+      "Task was cancelled before workflow continuation",
+    );
+    return changed ? "recovered" : "raced";
+  }
+  return "deferred";
+}
+
 type HumanApprovalConfig = {
   summary: string;
   consequence: string;
