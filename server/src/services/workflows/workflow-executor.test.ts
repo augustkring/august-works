@@ -3,10 +3,12 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import {
   activityLog,
+  agents,
   approvals,
   companies,
   companyMemberships,
   createDb,
+  heartbeatRuns,
   issues,
   principalPermissionGrants,
   workflowRevisions,
@@ -15,6 +17,7 @@ import {
   workflows,
 } from "@paperclipai/db";
 import type { WorkflowGraphV1 } from "@paperclipai/shared";
+import type { IssueAssignmentWakeupDeps } from "../issue-assignment-wakeup.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -46,11 +49,13 @@ describePg("Workflow executor V1", () => {
     await db.delete(approvals);
     await db.delete(issues);
     await db.delete(workflowStepRuns);
+    await db.delete(heartbeatRuns);
     await db.delete(workflowRuns);
     await db.delete(workflowRevisions);
     await db.delete(workflows);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(agents);
     await db.delete(companies);
   });
 
@@ -108,6 +113,153 @@ describePg("Workflow executor V1", () => {
       actor,
     );
     return { companyId, userId, workflow: published };
+  }
+
+  async function seedPublishedAgentTaskWorkflow(input: {
+    waitForCompletion: boolean;
+  }) {
+    const companyId = randomUUID();
+    const userId = `user-${companyId}`;
+    const agentId = randomUUID();
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Agent Task Co",
+      issuePrefix: `A${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "owner",
+    });
+    await db.insert(agents).values({
+      id: agentId,
+      companyId,
+      name: "Research Agent",
+      role: "research",
+      status: "idle",
+      adapterType: "process",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    });
+
+    const actor = { principal: { type: "user" as const, userId } };
+    const svc = workflowService(db);
+    const created = await svc.create(
+      companyId,
+      { name: "Agent delegation workflow" },
+      actor,
+    );
+    const graph: WorkflowGraphV1 = {
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "delegate",
+          type: "agent.task",
+          name: "Delegate research",
+          position: { x: 180, y: 0 },
+          config: {
+            agentId,
+            objective: "Research the account and produce the accountable task outcome.",
+            waitForCompletion: input.waitForCompletion,
+            expectedOutputSchema: null,
+          },
+        },
+        ...(input.waitForCompletion
+          ? [
+              {
+                id: "after",
+                type: "core.condition",
+                name: "Continue",
+                position: { x: 360, y: 0 },
+                config: { expression: "true" },
+              },
+            ]
+          : []),
+      ],
+      edges: input.waitForCompletion
+        ? [
+            { id: "e1", source: "start", target: "delegate" },
+            { id: "e2", source: "delegate", target: "after" },
+          ]
+        : [{ id: "e1", source: "start", target: "delegate" }],
+      variables: [],
+      settings: {},
+    };
+    const updated = await svc.updateDraft(
+      companyId,
+      created.id,
+      {
+        expectedRevisionId: created.draftRevisionId!,
+        graph,
+      },
+      actor,
+    );
+    const published = await svc.publish(
+      companyId,
+      created.id,
+      {
+        expectedDraftRevisionId: updated.draftRevisionId!,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      },
+      actor,
+    );
+    return {
+      companyId,
+      userId,
+      agentId,
+      workflow: published,
+    };
+  }
+
+  function fakeHeartbeat(input: {
+    companyId: string;
+    agentId: string;
+    runId?: string;
+    fail?: boolean;
+  }): IssueAssignmentWakeupDeps {
+    const runId = input.runId ?? randomUUID();
+    return {
+      wakeup: vi.fn(async (agentId, options) => {
+        if (input.fail) throw new Error("heartbeat transport unavailable");
+        await db
+          .insert(heartbeatRuns)
+          .values({
+            id: runId,
+            companyId: input.companyId,
+            agentId,
+            invocationSource: options.source ?? "assignment",
+            triggerDetail: options.triggerDetail ?? "system",
+            status: "queued",
+            responsibleUserId: null,
+            contextSnapshot: options.contextSnapshot ?? {},
+          })
+          .onConflictDoNothing();
+        const issueId =
+          typeof options.contextSnapshot?.issueId === "string"
+            ? options.contextSnapshot.issueId
+            : null;
+        return {
+          status: "skipped",
+          reason: "already_queued",
+          message: null,
+          issueId,
+          executionRunId: runId,
+          executionAgentId: input.agentId,
+          executionAgentName: "Research Agent",
+        };
+      }),
+    };
   }
 
   async function seedPublishedGraph(graph: WorkflowGraphV1) {
