@@ -852,7 +852,10 @@ export function WorkflowBuilder() {
                     Branch
                     <select
                       value={connectBranch}
-                      onChange={(event) => setConnectBranch(event.target.value as "true" | "false")}
+                      onChange={(event) => {
+                        const branch = event.target.value;
+                        if (branch === "true" || branch === "false") setConnectBranch(branch);
+                      }}
                       className="mt-1 h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
                     >
                       <option value="true">True</option>
