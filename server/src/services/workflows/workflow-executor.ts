@@ -4295,6 +4295,111 @@ export function workflowExecutorService(db: Db) {
       return detail;
     },
 
+    startTaskRun: async (
+      companyId: string,
+      issueId: string,
+      workflowId: string,
+      rawInput: StartWorkflowRun,
+      actor: WorkflowRunActor,
+      idempotencyKey: string | null,
+    ): Promise<WorkflowRunDetail> => {
+      const parsed = startWorkflowRunSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid workflow run request", parsed.error.issues);
+      }
+      const input = parsed.data;
+      await assertActorCompanyScope(db, companyId, actor);
+
+      const issue = await db
+        .select({
+          id: issues.id,
+          identifier: issues.identifier,
+          title: issues.title,
+          status: issues.status,
+          projectId: issues.projectId,
+          assigneeAgentId: issues.assigneeAgentId,
+          assigneeUserId: issues.assigneeUserId,
+          responsibleUserId: issues.responsibleUserId,
+        })
+        .from(issues)
+        .where(
+          and(
+            eq(issues.companyId, companyId),
+            eq(issues.id, issueId),
+          ),
+        )
+        .then((rows) => rows[0] ?? null);
+      if (!issue) throw notFound("Task not found");
+      if (issue.status === "done" || issue.status === "cancelled") {
+        throw conflict("Task is already terminal", {
+          code: "workflow_task_not_active",
+          issueId: issue.id,
+          status: issue.status,
+        });
+      }
+
+      const resolved = await resolveWorkflowExecutionRevision(
+        db,
+        companyId,
+        workflowId,
+        input.revisionId ?? null,
+      );
+      const triggerPayload = {
+        ...input.input,
+        task: {
+          id: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+          status: issue.status,
+          projectId: issue.projectId,
+          assigneeAgentId: issue.assigneeAgentId,
+          assigneeUserId: issue.assigneeUserId,
+        },
+      };
+      const queued = await createQueuedRun(db, {
+        companyId,
+        workflowId,
+        revisionId: resolved.revision.id,
+        nodeId: resolved.triggerNodeId,
+        triggerId: null,
+        source: "task",
+        triggerPayload,
+        responsibleUserId:
+          actor.responsibleUserId ??
+          issue.responsibleUserId ??
+          (actor.principal.type === "user"
+            ? actor.principal.userId
+            : actor.principal.type === "agent"
+              ? actor.principal.responsibleUserId
+              : null),
+        idempotencyKey,
+        correlationId: `task:${issue.id}:${randomUUID()}`,
+        actor,
+      });
+
+      if (queued.created) {
+        const ownerId = `inline:${randomUUID()}`;
+        const claimed = await claimQueuedRun(
+          db,
+          companyId,
+          queued.run.id,
+          ownerId,
+          actor,
+        );
+        if (!claimed) {
+          throw conflict("Workflow run could not be claimed", {
+            code: "workflow_run_claim_conflict",
+            workflowRunId: queued.run.id,
+          });
+        }
+        await executeClaimedRun(db, claimed, actor);
+      }
+
+      const detail = await getRunDetail(db, companyId, queued.run.id);
+      if (!detail) throw new Error("Workflow run disappeared after task invocation");
+      return detail;
+    },
+
     recoverExpiredRuns: async (
       limit = 20,
       now = new Date(),
