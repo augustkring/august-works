@@ -118,12 +118,42 @@ type PipelineRouteDb = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 const intakeFieldTypes = new Set(["select", "text", "multiline"]);
 
-function stageAutomationRoutineId(config: unknown) {
+function stageAutomationTarget(config: unknown):
+  | { kind: "routine"; routineId: string }
+  | { kind: "workflow"; workflowId: string }
+  | null {
   if (!config || typeof config !== "object" || Array.isArray(config)) return null;
   const onEnter = (config as { onEnter?: unknown }).onEnter;
   if (!onEnter || typeof onEnter !== "object" || Array.isArray(onEnter)) return null;
   const record = onEnter as Record<string, unknown>;
-  return record.type === "run_routine" && typeof record.routineId === "string" ? record.routineId : null;
+  if (record.type === "run_routine" && typeof record.routineId === "string") {
+    return { kind: "routine", routineId: record.routineId };
+  }
+  if (
+    record.type === "run_target" &&
+    record.target &&
+    typeof record.target === "object" &&
+    !Array.isArray(record.target)
+  ) {
+    const target = record.target as Record<string, unknown>;
+    if (target.kind === "routine" && typeof target.routineId === "string") {
+      return { kind: "routine", routineId: target.routineId };
+    }
+    if (target.kind === "workflow" && typeof target.workflowId === "string") {
+      return { kind: "workflow", workflowId: target.workflowId };
+    }
+  }
+  return null;
+}
+
+function stageAutomationRoutineId(config: unknown) {
+  const target = stageAutomationTarget(config);
+  return target?.kind === "routine" ? target.routineId : null;
+}
+
+function stageAutomationWorkflowId(config: unknown) {
+  const target = stageAutomationTarget(config);
+  return target?.kind === "workflow" ? target.workflowId : null;
 }
 
 function readAutomationContextValue(value: unknown): string | null {
@@ -157,19 +187,51 @@ function withDerivedStageAutomation(
     latestRevisionId: string | null;
     latestRevisionNumber: number;
   }>,
+  workflowById: Map<string, {
+    name: string;
+    description: string | null;
+  }> = new Map(),
 ) {
   const config = stage.config && typeof stage.config === "object" && !Array.isArray(stage.config)
     ? { ...(stage.config as Record<string, unknown>) }
     : {};
-  const routineId = stageAutomationRoutineId(config);
-  const routine = routineId ? routineById.get(routineId) : null;
+  const target = stageAutomationTarget(config);
+  if (!target) return { ...stage, config };
+  if (target.kind === "workflow") {
+    const workflow = workflowById.get(target.workflowId);
+    if (!workflow) return { ...stage, config };
+    return {
+      ...stage,
+      config: {
+        ...config,
+        automation: {
+          routineId: null,
+          targetKind: "workflow",
+          targetRef: target.workflowId,
+          workflowId: target.workflowId,
+          assigneeAgentId: null,
+          titleTemplate: workflow.name,
+          instructionsBody: workflow.description ?? "",
+          ...stageAutomationContext(config),
+          env: null,
+          latestRoutineRevisionId: null,
+          latestRoutineRevisionNumber: 0,
+        },
+      },
+    };
+  }
+
+  const routine = routineById.get(target.routineId);
   if (!routine) return { ...stage, config };
   return {
     ...stage,
     config: {
       ...config,
       automation: {
-        routineId,
+        routineId: target.routineId,
+        targetKind: "routine",
+        targetRef: target.routineId,
+        workflowId: null,
         assigneeAgentId: routine.assigneeAgentId,
         titleTemplate: routine.title,
         instructionsBody: routine.description ?? "",
