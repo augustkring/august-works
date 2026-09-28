@@ -306,9 +306,22 @@ export function WorkflowRun() {
                 : stepStatusLabel(activeStep.status)} · attempt {activeStep.attempt}
             </p>
             {activeWait && activeWait.nodeId === activeStep.nodeId ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {waitDescription(activeWait)}
-              </p>
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {waitDescription(activeWait)}
+                </p>
+                {activeWait.kind === "human_interaction" &&
+                activeWait.referenceType === "approval" &&
+                activeWait.referenceId ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/approvals/${activeWait.referenceId}`)}
+                  >
+                    Open approval
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
           </section>
         ) : null}
