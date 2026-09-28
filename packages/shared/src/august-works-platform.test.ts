@@ -46,7 +46,7 @@ describe("August Works V4 platform feature flags", () => {
       expect(contract.owner).toBe("August Works Platform");
       expect(contract.scope).toBe("instance");
       expect(contract.rollbackBehavior.trim().length, key).toBeGreaterThan(0);
-      expect(contract.reviewDate, key).toMatch(/^\\d{4}-\\d{2}-\\d{2}$/);
+      expect(contract.reviewDate, key).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(contract.cleanupCondition.trim().length, key).toBeGreaterThan(0);
     }
   });
@@ -74,7 +74,7 @@ describe("AUGUST_WORKS_AUDIT_ACTIONS", () => {
   it("reserves unique stable dot-namespaced actions", () => {
     expect(new Set(AUGUST_WORKS_AUDIT_ACTIONS).size).toBe(AUGUST_WORKS_AUDIT_ACTIONS.length);
     for (const action of AUGUST_WORKS_AUDIT_ACTIONS) {
-      expect(action).toMatch(/^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$/);
+      expect(action).toMatch(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/);
     }
   });
 });
