@@ -2700,22 +2700,53 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       : availableTargetStages[0] ?? null;
     const targetStage = input.scope === "current_stage" ? detail.stage : selectedUpstreamStage;
     const automation = targetStage ? stageAutomation(targetStage) : null;
-    const routine = automation
-      ? await dbOrTx
-        .select({
-          id: routines.id,
-          title: routines.title,
-          assigneeAgentId: routines.assigneeAgentId,
-          assigneeAgentName: agents.name,
-          assigneeAgentRole: agents.role,
-          assigneeAgentTitle: agents.title,
-        })
-        .from(routines)
-        .leftJoin(agents, and(eq(agents.companyId, input.companyId), eq(agents.id, routines.assigneeAgentId)))
-        .where(and(eq(routines.companyId, input.companyId), eq(routines.id, automation.routineId)))
-        .limit(1)
-        .then((rows) => rows[0] ?? null)
-      : null;
+    const routine =
+      automation?.target.kind === "routine"
+        ? await dbOrTx
+            .select({
+              id: routines.id,
+              title: routines.title,
+              assigneeAgentId: routines.assigneeAgentId,
+              assigneeAgentName: agents.name,
+              assigneeAgentRole: agents.role,
+              assigneeAgentTitle: agents.title,
+            })
+            .from(routines)
+            .leftJoin(
+              agents,
+              and(
+                eq(agents.companyId, input.companyId),
+                eq(agents.id, routines.assigneeAgentId),
+              ),
+            )
+            .where(
+              and(
+                eq(routines.companyId, input.companyId),
+                eq(routines.id, automation.target.routineId),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows[0] ?? null)
+        : null;
+    const workflow =
+      automation?.target.kind === "workflow"
+        ? await dbOrTx
+            .select({
+              id: workflows.id,
+              name: workflows.name,
+              status: workflows.status,
+              publishedRevisionId: workflows.publishedRevisionId,
+            })
+            .from(workflows)
+            .where(
+              and(
+                eq(workflows.companyId, input.companyId),
+                eq(workflows.id, automation.target.workflowId),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows[0] ?? null)
+        : null;
     const previousAttempt = automation
       ? await dbOrTx
         .select()
@@ -2759,8 +2790,20 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           },
         }
         : { kind: "previous_stage_not_found", message: "No previous automated stage was found for this item." });
-    } else if (!automation || !routine) {
-      blockers.push({ kind: "automation_not_configured", message: "Target stage does not have compatible automation configured." });
+    } else if (
+      !automation ||
+      (automation.target.kind === "routine" && !routine) ||
+      (automation.target.kind === "workflow" &&
+        (
+          !workflow ||
+          workflow.status !== "active" ||
+          !workflow.publishedRevisionId
+        ))
+    ) {
+      blockers.push({
+        kind: "automation_not_configured",
+        message: "Target stage does not have a runnable automation target configured.",
+      });
     }
     if (effects.unresolvedBlockerCaseIds.length > 0) {
       blockers.push({
@@ -2776,7 +2819,11 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         issueIds: effects.activeWorkIssueIds,
       });
     }
-    if (targetStage && automation && routine) {
+    if (
+      targetStage &&
+      automation?.target.kind === "routine" &&
+      routine
+    ) {
       const breakdownConfig = readBreakdownConfig(stageConfig(targetStage));
       if (breakdownConfig) {
         try {
@@ -2818,20 +2865,40 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       targetStage: targetStage ? stageRef(targetStage) : null,
       availableTargetStages: availableTargetStages.map(stageRef),
       automationId: automation?.id ?? null,
+      target: automation
+        ? automation.target.kind === "routine"
+          ? {
+              kind: "routine",
+              id: automation.target.routineId,
+              label: routine?.title ?? "Routine",
+            }
+          : {
+              kind: "workflow",
+              id: automation.target.workflowId,
+              label: workflow?.name ?? "Workflow",
+            }
+        : null,
       routine: routine
         ? {
-          id: routine.id,
-          title: routine.title,
-          assigneeAgentId: routine.assigneeAgentId,
-          assigneeAgent: routine.assigneeAgentId && routine.assigneeAgentName
-            ? {
-              id: routine.assigneeAgentId,
-              name: routine.assigneeAgentName,
-              role: routine.assigneeAgentRole ?? "",
-              title: routine.assigneeAgentTitle,
-            }
-            : null,
-        }
+            id: routine.id,
+            title: routine.title,
+            assigneeAgentId: routine.assigneeAgentId,
+            assigneeAgent:
+              routine.assigneeAgentId && routine.assigneeAgentName
+                ? {
+                    id: routine.assigneeAgentId,
+                    name: routine.assigneeAgentName,
+                    role: routine.assigneeAgentRole ?? "",
+                    title: routine.assigneeAgentTitle,
+                  }
+                : null,
+          }
+        : null,
+      workflow: workflow
+        ? {
+            id: workflow.id,
+            name: workflow.name,
+          }
         : null,
       previousAttemptId: previousAttempt?.id ?? null,
       generation: (previousAttempt?.generation ?? 0) + 1,
@@ -2845,7 +2912,11 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       defaultCleanup: defaultRetryCleanup(),
       blockers,
       targetStageRow: targetStage,
-      automationRoutineId: automation?.routineId ?? null,
+      automationTarget: automation?.target ?? null,
+      automationRoutineId:
+        automation?.target.kind === "routine"
+          ? automation.target.routineId
+          : null,
     };
   }
 
