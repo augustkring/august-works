@@ -315,4 +315,38 @@ describe("Workflow Node Registry", () => {
     });
   });
 
+  it("rejects publish-time failure behavior that the executor does not implement", async () => {
+    const registry = workflowNodeRegistryService({} as Db);
+    const graph = {
+      version: 1 as const,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+          continueOnFailure: true,
+        },
+      ],
+      edges: [],
+      variables: [],
+      settings: {},
+    };
+
+    await expect(
+      registry.validatePublishGraph(
+        "22222222-2222-4222-8222-222222222222",
+        graph,
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: expect.objectContaining({
+        code: "workflow_node_invalid",
+        reason: "workflow_failure_policy_not_ready",
+        nodeId: "start",
+      }),
+    });
+  });
+
 });
