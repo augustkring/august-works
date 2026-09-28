@@ -1,7 +1,7 @@
 # Workflows V1 API contract
 
 **Feature flag:** `enableWorkflowsV1` (default off)
-**Scope:** PR 11–18 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API and deterministic Condition branching. Advanced durability nodes remain gated.
+**Scope:** PR 11–19 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic Condition branching and lease-based checkpoint/replay recovery. Advanced side-effect retry and waitpoint nodes remain gated.
 
 ## Authorization
 
@@ -70,6 +70,11 @@ A Condition may be terminal or may expose exactly one `true` and one `false` bra
 - `workflow_condition_reference_missing`
 - `workflow_condition_type_invalid`
 - `workflow_condition_branch_missing`
+- `workflow_checkpoint_invalid`
+- `workflow_checkpoint_path_conflict`
+- `workflow_checkpoint_state_invalid`
+- `workflow_execution_interrupted`
+- `workflow_revision_unavailable_for_recovery`
 
 ## Current execution boundary
 
@@ -77,8 +82,14 @@ PR 16 introduced durable run/step records, manual-run idempotency and lease-base
 
 Condition expressions intentionally do not execute host JavaScript and never call an LLM. The current grammar supports boolean literals, boolean references, strict equality/inequality and finite numeric ordered comparisons over `trigger`, `variables` and prior `steps` outputs. Missing references or invalid runtime types fail closed into a durable failed step/run.
 
-Live execution remains deliberately fail-closed for every other node type until its executor, authorization, retry/idempotency and recovery semantics land in the ordered durability PRs. A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
+PR 19 adds checkpoint/replay recovery. Every running workflow carries an execution owner, heartbeat and expiring lease. The server reconciliation loop reclaims expired `RUNNING`/`RECOVERING` runs and abandoned `QUEUED` runs after a grace period. Recovery reloads the immutable published-or-superseded revision bound to the run, reuses `SUCCEEDED` step outputs as checkpoints, preserves a step interrupted by process loss as a failed attempt with `workflow_execution_interrupted`, and resumes that node as attempt `n+1`. A valid live lease is never stolen.
+
+Live execution remains deliberately fail-closed for every other node type until its executor, authorization and side-effect retry/idempotency semantics land in the ordered durability PRs. A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
 The run-history endpoint reads the existing authoritative `workflow_runs` state;
 it does not create a second history store. Cancellation/retry endpoints are not
 advertised until their durability semantics are implemented.
+
+## Recovery assurance boundary
+
+The recovery service has integration coverage for expired-lease takeover, successful-step checkpoint reuse, interrupted-attempt preservation and abandoned queued-run recovery. A real process-kill run remains a required release-gate verification before Wave 3–4 can be called fully durable; test code and static review are not represented as executed process-kill evidence.
