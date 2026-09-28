@@ -842,9 +842,49 @@ function readAutomationExecutionContext(
   };
 }
 
+function readPipelineAutomationTarget(value: unknown): PipelineAutomationTarget | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (record.kind === "routine") {
+    const routineId = readOptionalTrimmedString(record.routineId);
+    return routineId ? { kind: "routine", routineId } : null;
+  }
+  if (record.kind === "workflow") {
+    const workflowId = readOptionalTrimmedString(record.workflowId);
+    return workflowId ? { kind: "workflow", workflowId } : null;
+  }
+  return null;
+}
+
+function stageAutomationTargetFromConfig(
+  config?: PipelineStageConfig | null,
+): PipelineAutomationTarget | null {
+  const onEnter = config?.onEnter;
+  if (!onEnter) return null;
+  if (onEnter.type === "run_target") {
+    return readPipelineAutomationTarget(onEnter.target);
+  }
+  if (onEnter.type === "run_routine") {
+    const routineId = readOptionalTrimmedString(onEnter.routineId);
+    return routineId ? { kind: "routine", routineId } : null;
+  }
+  return null;
+}
+
 function readStageAutomationRequest(config?: PipelineStageConfig | null) {
   const automation = config?.automation;
   if (!automation || typeof automation !== "object" || Array.isArray(automation)) return null;
+  const targetKind = automation.targetKind;
+  const targetRef = readOptionalTrimmedString(
+    automation.targetRef ??
+      (targetKind === "workflow" ? automation.workflowId : automation.routineId),
+  );
+  const target: PipelineAutomationTarget | null =
+    targetKind === "workflow" && targetRef
+      ? { kind: "workflow", workflowId: targetRef }
+      : targetKind === "routine" && targetRef
+        ? { kind: "routine", routineId: targetRef }
+        : null;
   const assigneeAgentId = readOptionalTrimmedString(automation.assigneeAgentId);
   const titleTemplate =
     typeof automation.titleTemplate === "string" && automation.titleTemplate.trim().length > 0
@@ -853,6 +893,7 @@ function readStageAutomationRequest(config?: PipelineStageConfig | null) {
   const instructionsBody =
     typeof automation.instructionsBody === "string" ? automation.instructionsBody : "";
   return {
+    target,
     assigneeAgentId,
     titleTemplate,
     instructionsBody,
@@ -1122,11 +1163,15 @@ function targetStageKeyForReviewDecision(config: PipelineStageConfig, decision: 
 }
 
 function stageAutomation(stage: typeof pipelineStages.$inferSelect) {
-  const onEnter = stageConfig(stage).onEnter;
-  if (!onEnter || onEnter.type !== "run_routine" || !onEnter.routineId) return null;
+  const config = stageConfig(stage);
+  const onEnter = config.onEnter;
+  const target = stageAutomationTargetFromConfig(config);
+  if (!onEnter || !target) return null;
   return {
     id: onEnter.id ?? `${stage.id}:on_enter`,
-    routineId: onEnter.routineId,
+    target,
+    routineId: target.kind === "routine" ? target.routineId : null,
+    workflowId: target.kind === "workflow" ? target.workflowId : null,
     ...readAutomationExecutionContext(onEnter),
   };
 }
@@ -1149,6 +1194,9 @@ function derivedStageAutomationPayload(
 ): PipelineStageAutomation {
   return {
     routineId: routine.id,
+    targetKind: "routine",
+    targetRef: routine.id,
+    workflowId: null,
     assigneeAgentId: routine.assigneeAgentId,
     titleTemplate: routine.title,
     instructionsBody: routine.description ?? "",
@@ -1156,6 +1204,25 @@ function derivedStageAutomationPayload(
     env: routine.env ?? null,
     latestRoutineRevisionId: routine.latestRevisionId,
     latestRoutineRevisionNumber: routine.latestRevisionNumber,
+  };
+}
+
+function derivedWorkflowStageAutomationPayload(
+  workflow: Pick<typeof workflows.$inferSelect, "id" | "name" | "description">,
+  executionContext: PipelineAutomationExecutionContext = readAutomationExecutionContext(),
+): PipelineStageAutomation {
+  return {
+    routineId: null,
+    targetKind: "workflow",
+    targetRef: workflow.id,
+    workflowId: workflow.id,
+    assigneeAgentId: null,
+    titleTemplate: workflow.name,
+    instructionsBody: workflow.description ?? "",
+    ...executionContext,
+    env: null,
+    latestRoutineRevisionId: null,
+    latestRoutineRevisionNumber: 0,
   };
 }
 
@@ -1170,10 +1237,34 @@ function secretRefsFromEnv(env: Record<string, EnvBinding> | null | undefined) {
 }
 
 function stageAutomationRoutineIdFromConfig(config?: PipelineStageConfig | null) {
-  const onEnter = config?.onEnter;
-  return onEnter?.type === "run_routine" && typeof onEnter.routineId === "string"
-    ? onEnter.routineId
-    : null;
+  const target = stageAutomationTargetFromConfig(config);
+  return target?.kind === "routine" ? target.routineId : null;
+}
+
+function stageAutomationWorkflowIdFromConfig(config?: PipelineStageConfig | null) {
+  const target = stageAutomationTargetFromConfig(config);
+  return target?.kind === "workflow" ? target.workflowId : null;
+}
+
+function withStageAutomationTarget(
+  config: PipelineStageConfig,
+  target: PipelineAutomationTarget,
+  executionContext: PipelineAutomationExecutionContext,
+): PipelineStageConfig {
+  const { automation: _automation, ...persisted } = config;
+  const existingId =
+    typeof config.onEnter?.id === "string" && config.onEnter.id.trim().length > 0
+      ? config.onEnter.id.trim()
+      : undefined;
+  return {
+    ...persisted,
+    onEnter: {
+      type: "run_target",
+      target,
+      ...(existingId ? { id: existingId } : {}),
+      ...executionContext,
+    },
+  };
 }
 
 function routineRevisionSnapshotRoutine(routine: typeof routines.$inferSelect): RoutineRevisionSnapshotV1["routine"] {
