@@ -97,6 +97,48 @@ describePg("Workflow executor V1", () => {
     return { companyId, userId, workflow: published };
   }
 
+  async function seedPublishedGraph(
+    graph: Parameters<ReturnType<typeof workflowService>["updateDraft"]>[2]["graph"],
+  ) {
+    const companyId = randomUUID();
+    const userId = `user-${companyId}`;
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Branch Executor Co",
+      issuePrefix: `B${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "owner",
+    });
+    const actor = { principal: { type: "user" as const, userId } };
+    const svc = workflowService(db);
+    const created = await svc.create(companyId, { name: "Branch workflow" }, actor);
+    const updated = await svc.updateDraft(
+      companyId,
+      created.id,
+      {
+        expectedRevisionId: created.draftRevisionId!,
+        graph,
+      },
+      actor,
+    );
+    const published = await svc.publish(
+      companyId,
+      created.id,
+      {
+        expectedDraftRevisionId: updated.draftRevisionId!,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      },
+      actor,
+    );
+    return { companyId, userId, workflow: published };
+  }
+
   it("persists a manual run and its trigger step before returning success", async () => {
     const seeded = await seedPublishedManualWorkflow();
     const result = await workflowExecutorService(db).startManualRun(
@@ -299,6 +341,129 @@ describePg("Workflow executor V1", () => {
     expect(replay.run.id).toBe(first.run.id);
     expect(replay.run.workflowRevisionId).toBe(first.run.workflowRevisionId);
     expect(await db.select().from(workflowRuns)).toHaveLength(1);
+  });
+
+  it("executes only the selected condition branch and records the other branch as skipped", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "branch",
+          type: "core.condition",
+          name: "Large deal?",
+          position: { x: 180, y: 0 },
+          config: { expression: "{{trigger.amount}} >= 50000" },
+        },
+        {
+          id: "true-leaf",
+          type: "core.condition",
+          name: "True leaf",
+          position: { x: 360, y: -80 },
+          config: { expression: "true" },
+        },
+        {
+          id: "false-leaf",
+          type: "core.condition",
+          name: "False leaf",
+          position: { x: 360, y: 80 },
+          config: { expression: "false" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "start", target: "branch" },
+        {
+          id: "e2",
+          source: "branch",
+          target: "true-leaf",
+          sourceHandle: "true",
+          label: "true",
+        },
+        {
+          id: "e3",
+          source: "branch",
+          target: "false-leaf",
+          sourceHandle: "false",
+          label: "false",
+        },
+      ],
+      variables: [],
+      settings: {},
+    });
+
+    const result = await workflowExecutorService(db).startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: { amount: 75_000 } },
+      { principal: { type: "user", userId: seeded.userId } },
+      "branch-true",
+    );
+
+    expect(result.run.status).toBe("succeeded");
+    const byNode = new Map(result.steps.map((step) => [step.nodeId, step]));
+    expect(byNode.get("start")).toMatchObject({ status: "succeeded" });
+    expect(byNode.get("branch")).toMatchObject({
+      status: "succeeded",
+      outputJson: { result: true },
+    });
+    expect(byNode.get("true-leaf")).toMatchObject({
+      status: "succeeded",
+      outputJson: { result: true },
+    });
+    expect(byNode.get("false-leaf")).toMatchObject({ status: "skipped" });
+
+    const actions = (await db.select().from(activityLog)).map((row) => row.action);
+    expect(actions).toContain("workflow.step_skipped");
+  });
+
+  it("fails the durable run when a condition reference cannot be resolved", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "branch",
+          type: "core.condition",
+          name: "Missing value",
+          position: { x: 180, y: 0 },
+          config: { expression: "{{trigger.missing}}" },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "branch" }],
+      variables: [],
+      settings: {},
+    });
+
+    const result = await workflowExecutorService(db).startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      { principal: { type: "user", userId: seeded.userId } },
+      "branch-failure",
+    );
+
+    expect(result.run).toMatchObject({
+      status: "failed",
+      failureCode: "workflow_condition_reference_missing",
+      executionOwnerId: null,
+      leaseExpiresAt: null,
+    });
+    expect(result.steps.find((step) => step.nodeId === "branch")).toMatchObject({
+      status: "failed",
+      errorCode: "workflow_condition_reference_missing",
+    });
   });
 
 });
