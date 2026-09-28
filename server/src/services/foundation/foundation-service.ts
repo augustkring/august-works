@@ -134,12 +134,12 @@ function mapFoundationRow(row: {
     status: row.foundation.status as FoundationDocument["status"],
     sensitivity: (row.foundation.draftMetadata?.sensitivity ?? row.foundation.sensitivity) as FoundationDocument["sensitivity"],
     ownerUserId: row.foundation.draftMetadata?.ownerUserId ?? row.foundation.ownerUserId,
-    ownerAgentId: row.foundation.ownerAgentId,
+    ownerAgentId: row.foundation.draftMetadata?.ownerAgentId ?? row.foundation.ownerAgentId,
     reviewFrequencyDays: row.foundation.draftMetadata?.reviewFrequencyDays ?? row.foundation.reviewFrequencyDays,
     lastReviewedAt: row.foundation.lastReviewedAt,
     nextReviewAt: row.foundation.nextReviewAt,
-    validFrom: row.foundation.draftMetadata?.validFrom ?? row.foundation.validFrom,
-    validUntil: row.foundation.draftMetadata?.validUntil ?? row.foundation.validUntil,
+    validFrom: row.foundation.draftMetadata?.validFrom ? new Date(row.foundation.draftMetadata.validFrom) : row.foundation.validFrom,
+    validUntil: row.foundation.draftMetadata?.validUntil ? new Date(row.foundation.draftMetadata.validUntil) : row.foundation.validUntil,
     createdAt: row.foundation.createdAt,
     updatedAt: row.foundation.updatedAt,
     title: row.document.title,
@@ -448,13 +448,18 @@ export function foundationService(db: Db) {
           validFrom: nextValidFrom,
           validUntil: nextValidUntil,
         };
+        const draftGovernance = {
+          ...nextGovernance,
+          validFrom: nextGovernance.validFrom?.toISOString() ?? null,
+          validUntil: nextGovernance.validUntil?.toISOString() ?? null,
+        };
 
         const hasApprovedBaseline = existing.approvedRevisionId !== null;
         await txDb
           .update(foundationDocuments)
           .set({
             ...(hasApprovedBaseline
-              ? { draftMetadata: nextGovernance }
+              ? { draftMetadata: draftGovernance }
               : {
                   category: nextGovernance.category,
                   documentType: nextGovernance.documentType,
@@ -578,8 +583,8 @@ export function foundationService(db: Db) {
                   ownerUserId: pendingGovernance.ownerUserId,
                   ownerAgentId: pendingGovernance.ownerAgentId,
                   reviewFrequencyDays: pendingGovernance.reviewFrequencyDays,
-                  validFrom: pendingGovernance.validFrom,
-                  validUntil: pendingGovernance.validUntil,
+                  validFrom: parseDate(pendingGovernance.validFrom),
+                  validUntil: parseDate(pendingGovernance.validUntil),
                 }
               : {}),
             draftMetadata: null,

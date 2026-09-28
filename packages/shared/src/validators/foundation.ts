@@ -97,7 +97,7 @@ export const createFoundationChangeProposalSchema = z
   })
   .strict();
 
-export type CreateFoundationDocument = z.infer<typeof createFoundationDocumentSchema>;
+export type CreateFoundationDocument = z.input<typeof createFoundationDocumentSchema>;
 export type UpdateFoundationDraft = z.infer<typeof updateFoundationDraftSchema>;
 export type TransitionFoundationDocument = z.infer<typeof transitionFoundationDocumentSchema>;
 export type CreateFoundationChangeProposal = z.infer<typeof createFoundationChangeProposalSchema>;

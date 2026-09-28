@@ -199,7 +199,10 @@ describeEmbeddedPostgres("Foundation service", () => {
       .from(foundationDocuments)
       .where(eq(foundationDocuments.id, nextDraft.id));
     expect(storedDraft?.sensitivity).toBe("internal");
-    expect(storedDraft?.draftMetadata).toMatchObject({ sensitivity: "restricted" });
+    expect(storedDraft?.draftMetadata).toMatchObject({
+      sensitivity: "restricted",
+      validFrom: "2026-10-01T00:00:00.000Z",
+    });
 
     const reviewedDraft = await svc.submitForReview(
       company.id,

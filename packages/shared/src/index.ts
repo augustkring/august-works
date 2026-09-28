@@ -2813,6 +2813,7 @@ export {
   type FoundationCategory,
   type FoundationChangeProposal,
   type FoundationDocument,
+  type FoundationDraftGovernance,
   type FoundationDocumentStatus,
   type FoundationProposalStatus,
   type FoundationRevisionView,

@@ -51,6 +51,18 @@ export interface FoundationGovernanceSnapshot {
   validUntil: Date | null;
 }
 
+export interface FoundationDraftGovernance {
+  category: FoundationCategory;
+  documentType: string;
+  authorityLevel: FoundationAuthorityLevel;
+  sensitivity: FoundationSensitivity;
+  ownerUserId: string | null;
+  ownerAgentId: string | null;
+  reviewFrequencyDays: number | null;
+  validFrom: string | null;
+  validUntil: string | null;
+}
+
 export interface FoundationRevisionView {
   id: string;
   revisionNumber: number;
