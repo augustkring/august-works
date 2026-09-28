@@ -4700,7 +4700,7 @@ async function recoverWaitingCandidate(
     actor,
   );
   if (!claimed) return "raced";
-  await executeClaimedRun(db, claimed, actor);
+  await executeClaimedRun(db, claimed, actor, runtimeDeps);
   return "recovered";
 }
 
@@ -4728,7 +4728,7 @@ async function recoverCandidate(
       actor,
     );
     if (!claimed) return "raced";
-    await executeClaimedRun(db, claimed, actor);
+    await executeClaimedRun(db, claimed, actor, runtimeDeps);
     return "recovered";
   }
 
@@ -4741,7 +4741,7 @@ async function recoverCandidate(
   );
   if (!recovering) return "raced";
   const resumed = await resumeRecoveredRun(db, recovering, actor);
-  await executeClaimedRun(db, resumed, actor);
+  await executeClaimedRun(db, resumed, actor, runtimeDeps);
   return "recovered";
 }
 
