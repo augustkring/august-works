@@ -101,7 +101,10 @@ export function routineRoutes(
     companyId: string,
     input: {
       assigneeAgentId?: string | null;
-      executionTarget?: { kind: "agent_task"; agentId: string } | { kind: "workflow"; workflowId: string };
+      executionTarget?:
+        | { kind: "agent_task"; agentId: string }
+        | { kind: "workflow"; workflowId: string }
+        | null;
     },
   ) {
     assertCompanyAccess(req, companyId);
