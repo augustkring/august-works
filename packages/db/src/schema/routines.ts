@@ -1,6 +1,7 @@
 import {
   type AnyPgColumn,
   boolean,
+  check,
   foreignKey,
   index,
   integer,
@@ -72,11 +73,12 @@ export const routines = pgTable(
       table.executionTargetKind,
       table.executionTargetRef,
     ),
-    executionTargetPairCheck: sql`CONSTRAINT routines_execution_target_pair_check CHECK (
-      (${table.executionTargetKind} is null and ${table.executionTargetRef} is null)
-      or
-      (${table.executionTargetKind} in ('agent_task', 'workflow') and ${table.executionTargetRef} is not null)
-    )`,
+    executionTargetPairCheck: check(
+      "routines_execution_target_pair_check",
+      sql`(${table.executionTargetKind} is null and ${table.executionTargetRef} is null)
+        or
+        (${table.executionTargetKind} in ('agent_task', 'workflow') and ${table.executionTargetRef} is not null)`,
+    ),
     companyProjectIdx: index("routines_company_project_idx").on(table.companyId, table.projectId),
     companyFolderIdx: index("routines_company_folder_idx").on(table.companyId, table.folderId),
     companyResponsibleUserIdx: index("routines_company_responsible_user_idx").on(table.companyId, table.responsibleUserId),
@@ -203,7 +205,7 @@ export const routineRuns = pgTable(
       columns: [table.companyId, table.linkedWorkflowRunId],
       foreignColumns: [workflowRuns.companyId, workflowRuns.id],
       name: "routine_runs_company_linked_workflow_run_fk",
-    }).onDelete("set null"),
+    }),
     idempotencyIdx: index("routine_runs_trigger_idempotency_idx").on(table.triggerId, table.idempotencyKey),
   }),
 );
