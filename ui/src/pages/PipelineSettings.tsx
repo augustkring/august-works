@@ -1846,6 +1846,14 @@ export function PipelineSettings() {
   const saveStage = useMutation({
     mutationFn: async () => {
       if (!pipelineId || !selectedStage || !pipeline) return null;
+      if (stageExecutionTargetKind === "workflow" && !stageWorkflowId) {
+        throw new Error("Choose an active published workflow before saving this stage.");
+      }
+      if (stageExecutionTargetKind === "workflow" && breakdownEnabled) {
+        throw new Error(
+          "Break into smaller pieces currently requires Agent automation.",
+        );
+      }
       if (
         stageExecutionTargetKind === "agent_task" &&
         stageProjectId &&
@@ -1996,6 +2004,11 @@ export function PipelineSettings() {
     mutationFn: async () => {
       if (!pipelineId || !selectedStage) return null;
       const detail = stageAutomationDetail(selectedStage);
+      if (detail.targetKind === "workflow") {
+        throw new Error(
+          "Workflow automation uses the Workflow's own connections and secret grants.",
+        );
+      }
       const env = Object.keys(stageEnv).length > 0 ? stageEnv : null;
       await pipelinesApi.updateStageAutomationEnv(pipelineId, selectedStage.id, {
         env,
@@ -2241,6 +2254,12 @@ export function PipelineSettings() {
     stageExecutionTargetKind === "workflow" && !stageWorkflowId;
   const workflowBreakdownConflict =
     stageExecutionTargetKind === "workflow" && breakdownEnabled;
+  const canSaveStage =
+    Boolean(stageName.trim()) &&
+    !reviewTargetsMissing &&
+    canSaveAutomationWorkspace &&
+    !workflowTargetMissing &&
+    !workflowBreakdownConflict;
 
   const savedStageForm = selectedStage
     ? computeStageForm(selectedStage, pipeline.transitions ?? [])
@@ -2816,7 +2835,9 @@ export function PipelineSettings() {
               className="space-y-5"
               onSubmit={(event: FormEvent<HTMLFormElement>) => {
                 event.preventDefault();
-                saveStage.mutate();
+                if (!saveStage.isPending && canSaveStage) {
+                  saveStage.mutate();
+                }
               }}
             >
               <div className="flex flex-col gap-5 md:flex-row md:gap-0">
@@ -3336,7 +3357,7 @@ export function PipelineSettings() {
                               contentClassName="min-h-(--sz-120px) text-sm leading-7"
                               mentions={mentionOptions}
                               onSubmit={() => {
-                                if (!saveStage.isPending && stageName.trim() && !reviewTargetsMissing && canSaveAutomationWorkspace) {
+                                if (!saveStage.isPending && canSaveStage) {
                                   saveStage.mutate();
                                 }
                               }}
@@ -3375,29 +3396,55 @@ export function PipelineSettings() {
 
                   {activeStageSection === "secrets" ? (
                     <div className="w-full max-w-3xl">
-                      {(() => {
-                        const detail = stageAutomationDetail(selectedStage);
-                        const automationAgent = detail.assigneeAgentId
-                          ? agentById.get(detail.assigneeAgentId) ?? null
-                          : null;
-                        return (
-                          <StageSecretsPanel
-                            hasAutomation={Boolean(detail.routineId && detail.assigneeAgentId)}
-                            agentName={automationAgent?.name ?? null}
-                            agentIcon={automationAgent?.icon ?? null}
-                            agent={automationAgent ?? undefined}
-                            secrets={secretsQuery.data ?? []}
-                            secretsLoading={secretsQuery.isLoading}
-                            value={stageEnv}
-                            onChange={setStageEnv}
-                            onCreateSecret={async (name, value) => createSecret.mutateAsync({ name, value })}
-                            onSetupAutomation={() => setActiveStageSection("instructions")}
-                            onSave={() => saveStageEnv.mutate()}
-                            saving={saveStageEnv.isPending}
-                            dirty={stageEnvDirty}
-                          />
-                        );
-                      })()}
+                      {stageExecutionTargetKind === "workflow" ? (
+                        <div className="rounded-lg border border-border bg-muted/20 p-5">
+                          <div className="flex items-start gap-3">
+                            <GitBranch
+                              className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-foreground">
+                                Connections and secrets are owned by the Workflow
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                This stage does not create a separate secret scope. Configure connection grants and secrets on the Workflow nodes that use them.
+                              </p>
+                              {selectedAutomationWorkflow ? (
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link to={`/workflows/${selectedAutomationWorkflow.id}`}>
+                                    Open workflow
+                                  </Link>
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        (() => {
+                          const detail = stageAutomationDetail(selectedStage);
+                          const automationAgent = detail.assigneeAgentId
+                            ? agentById.get(detail.assigneeAgentId) ?? null
+                            : null;
+                          return (
+                            <StageSecretsPanel
+                              hasAutomation={Boolean(detail.routineId && detail.assigneeAgentId)}
+                              agentName={automationAgent?.name ?? null}
+                              agentIcon={automationAgent?.icon ?? null}
+                              agent={automationAgent ?? undefined}
+                              secrets={secretsQuery.data ?? []}
+                              secretsLoading={secretsQuery.isLoading}
+                              value={stageEnv}
+                              onChange={setStageEnv}
+                              onCreateSecret={async (name, value) => createSecret.mutateAsync({ name, value })}
+                              onSetupAutomation={() => setActiveStageSection("instructions")}
+                              onSave={() => saveStageEnv.mutate()}
+                              saving={saveStageEnv.isPending}
+                              dirty={stageEnvDirty}
+                            />
+                          );
+                        })()
+                      )}
                     </div>
                   ) : null}
 
@@ -3538,7 +3585,7 @@ export function PipelineSettings() {
                   </span>
                   <Button
                     type="submit"
-                    disabled={saveStage.isPending || !stageName.trim() || reviewTargetsMissing || !canSaveAutomationWorkspace}
+                    disabled={saveStage.isPending || !canSaveStage}
                   >
                     {saveStage.isPending ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
                     {saveStage.isPending ? "Saving..." : "Save stage"}
