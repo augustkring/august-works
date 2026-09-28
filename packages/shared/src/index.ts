@@ -2973,12 +2973,17 @@ export {
   WORKFLOW_RUN_SOURCES,
   WORKFLOW_RUN_STATUSES,
   WORKFLOW_STEP_RUN_STATUSES,
+  WORKFLOW_WAIT_KINDS,
+  WORKFLOW_WAIT_STATUSES,
   type WorkflowRun,
   type WorkflowRunDetail,
   type WorkflowRunSource,
   type WorkflowRunStatus,
   type WorkflowStepRun,
   type WorkflowStepRunStatus,
+  type WorkflowWait,
+  type WorkflowWaitKind,
+  type WorkflowWaitStatus,
 } from "./types/workflow.js";
 export {
   startWorkflowRunSchema,
