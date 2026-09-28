@@ -46,6 +46,7 @@ import { authApi } from "../api/auth";
 import { executionWorkspacesApi } from "../api/execution-workspaces";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { projectsApi } from "../api/projects";
+import { workflowsApi } from "../api/workflows";
 import { secretsApi } from "../api/secrets";
 import { ApiError } from "../api/client";
 import type {
@@ -127,6 +128,9 @@ type StageConfig = {
   disabled?: boolean;
   disabledReason?: string | null;
   automation?: {
+    targetKind?: "routine" | "workflow" | null;
+    targetRef?: string | null;
+    workflowId?: string | null;
     assigneeAgentId?: string | null;
     titleTemplate?: string | null;
     instructionsBody?: string | null;
@@ -357,6 +361,8 @@ export function syncPipelineStageAutomationVariables(
 }
 
 export function buildStageAutomationForSave(input: {
+  executionTargetKind: "agent_task" | "workflow";
+  workflowId: string;
   assigneeAgentId: string;
   titleTemplate: string;
   instructionsBody: string;
@@ -366,7 +372,26 @@ export function buildStageAutomationForSave(input: {
   executionWorkspacePreference: ExecutionWorkspaceMode | "";
   executionWorkspaceSettings: IssueExecutionWorkspaceSettings | null;
 }) {
+  if (input.executionTargetKind === "workflow") {
+    return {
+      targetKind: "workflow" as const,
+      targetRef: input.workflowId || null,
+      workflowId: input.workflowId || null,
+      assigneeAgentId: null,
+      titleTemplate: "",
+      instructionsBody: "",
+      projectId: null,
+      projectWorkspaceId: null,
+      executionWorkspaceId: null,
+      executionWorkspacePreference: null,
+      executionWorkspaceSettings: null,
+    };
+  }
+
   return {
+    targetKind: null,
+    targetRef: null,
+    workflowId: null,
     assigneeAgentId: input.assigneeAgentId || null,
     titleTemplate: pipelineAutomationTitleTemplate(input.titleTemplate),
     instructionsBody: input.instructionsBody,
@@ -398,6 +423,8 @@ function stageAutomation(stage: PipelineStage | null | undefined) {
   const automation = stageConfig(stage).automation;
   if (!automation || typeof automation !== "object" || Array.isArray(automation)) {
     return {
+      executionTargetKind: "agent_task" as const,
+      workflowId: "",
       assigneeAgentId: "",
       titleTemplate: PIPELINE_AUTOMATION_DEFAULT_TITLE_TEMPLATE,
       instructionsBody: null as string | null,
@@ -409,7 +436,14 @@ function stageAutomation(stage: PipelineStage | null | undefined) {
     };
   }
   const executionWorkspaceSettings = nullableExecutionWorkspaceSettings(automation.executionWorkspaceSettings);
+  const isWorkflowTarget =
+    automation.targetKind === "workflow" &&
+    typeof (automation.workflowId ?? automation.targetRef) === "string";
   return {
+    executionTargetKind: isWorkflowTarget ? "workflow" as const : "agent_task" as const,
+    workflowId: isWorkflowTarget
+      ? nullableString(automation.workflowId ?? automation.targetRef)
+      : "",
     assigneeAgentId: nullableString(automation.assigneeAgentId),
     titleTemplate: pipelineAutomationTitleTemplate(automation.titleTemplate),
     instructionsBody: typeof automation.instructionsBody === "string" ? automation.instructionsBody : null,
@@ -437,9 +471,23 @@ function stageNewEntriesDisabled(stage: PipelineStage | null | undefined) {
 function stageAutomationDetail(stage: PipelineStage | null | undefined) {
   const automation = stageConfig(stage).automation;
   if (!automation || typeof automation !== "object" || Array.isArray(automation)) {
-    return { routineId: "", assigneeAgentId: "", env: {} as RoutineEnvConfig, latestRoutineRevisionId: null as string | null };
+    return {
+      targetKind: "agent_task" as const,
+      workflowId: "",
+      routineId: "",
+      assigneeAgentId: "",
+      env: {} as RoutineEnvConfig,
+      latestRoutineRevisionId: null as string | null,
+    };
   }
+  const isWorkflowTarget =
+    automation.targetKind === "workflow" &&
+    typeof (automation.workflowId ?? automation.targetRef) === "string";
   return {
+    targetKind: isWorkflowTarget ? "workflow" as const : "agent_task" as const,
+    workflowId: isWorkflowTarget
+      ? nullableString(automation.workflowId ?? automation.targetRef)
+      : "",
     routineId: typeof automation.routineId === "string" ? automation.routineId : "",
     assigneeAgentId: typeof automation.assigneeAgentId === "string" ? automation.assigneeAgentId : "",
     env: (automation.env ?? {}) as RoutineEnvConfig,
@@ -719,6 +767,8 @@ type StageFormValues = {
   newEntriesDisabled: boolean;
   disableReason: string;
   assigneeAgentId: string;
+  executionTargetKind: "agent_task" | "workflow";
+  workflowId: string;
   approvalRequired: boolean;
   approval: string;
   approveTarget: string;
@@ -760,6 +810,8 @@ function computeStageForm(
     newEntriesDisabled: stageNewEntriesDisabled(stage),
     disableReason: config.disabledReason ?? "",
     assigneeAgentId: automation.assigneeAgentId,
+    executionTargetKind: automation.executionTargetKind,
+    workflowId: automation.workflowId,
     approvalRequired: Boolean(config.requireApproval),
     approval: approvalValue(config),
     approveTarget: config.approveToStageKey ?? "",
