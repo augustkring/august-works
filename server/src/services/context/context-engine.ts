@@ -396,97 +396,116 @@ function foundationProvider(db: Db): ContextProvider {
 }
 
 function taskProvider(db: Db): ContextProvider {
-  const access = accessService(db);
   return {
     key: "task",
     requirement: "mandatory",
     async retrieve({ request }) {
       if (!request.issueId) return { evidence: [] };
-      const issue = await db
-        .select({
-          id: issues.id,
-          identifier: issues.identifier,
-          title: issues.title,
-          description: issues.description,
-          status: issues.status,
-          priority: issues.priority,
-          projectId: issues.projectId,
-          parentId: issues.parentId,
-          assigneeAgentId: issues.assigneeAgentId,
-          assigneeUserId: issues.assigneeUserId,
-          originKind: issues.originKind,
-          originId: issues.originId,
-          updatedAt: issues.updatedAt,
-        })
-        .from(issues)
-        .where(and(eq(issues.companyId, request.companyId), eq(issues.id, request.issueId)))
-        .then((rows) => rows[0] ?? null);
-      if (!issue) throw notFound("Context task not found");
 
-      const decision = await access.decide({
-        actor: {
-          type: "agent",
-          agentId: request.agentId,
-          companyId: request.companyId,
-          runId: request.runId ?? null,
-          onBehalfOfUserId: request.responsibleUserId ?? null,
-          source: "agent_jwt",
-        },
-        action: "issue:read",
-        resource: {
-          type: "issue",
-          companyId: request.companyId,
-          issueId: issue.id,
-          projectId: issue.projectId,
-          parentIssueId: issue.parentId,
-          assigneeAgentId: issue.assigneeAgentId,
-          assigneeUserId: issue.assigneeUserId,
-          originKind: issue.originKind,
-          originId: issue.originId,
-          status: issue.status,
-        },
-      });
-      if (!decision.allowed) {
-        throw forbidden("Agent is not authorized to read the Context task", {
-          code: "permission_denied",
-          reason: decision.reason,
-        });
-      }
+      return db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        const access = accessService(txDb);
 
-      const updatedAt = issue.updatedAt.toISOString();
-      return {
-        evidence: [{
-          id: `task:${issue.id}`,
-          companyId: request.companyId,
-          sourceClass: "task",
-          sourceProvider: "august_works_tasks",
-          sourceType: "issue",
-          sourceRef: `issue://${issue.id}`,
-          title: issue.identifier ? `${issue.identifier}: ${issue.title}` : issue.title,
-          excerpt: (
-            [
-              `Status: ${issue.status}`,
-              `Priority: ${issue.priority}`,
-              issue.description?.trim() ? `Description: ${issue.description.trim()}` : null,
-            ].filter(Boolean).join("\n") || issue.title
-          ).slice(0, 60_000),
-          sourceVersion: updatedAt,
-          sourceUpdatedAt: updatedAt,
-          observedAt: new Date().toISOString(),
-          validFrom: null,
-          validUntil: null,
-          authorityDomain: "task_state",
-          trustLevel: "high",
-          sensitivity: "internal",
-          citation: { label: issue.identifier ?? issue.title },
-          metadata: {
-            issueId: issue.id,
-            projectId: issue.projectId,
-            status: issue.status,
-            priority: issue.priority,
+        // Read only the minimum authorization shape before touching task prose.
+        // This keeps sensitive title/description content outside the retrieval
+        // universe until issue:read has succeeded for this principal.
+        const issueScope = await txDb
+          .select({
+            id: issues.id,
+            status: issues.status,
+            projectId: issues.projectId,
+            parentId: issues.parentId,
+            assigneeAgentId: issues.assigneeAgentId,
+            assigneeUserId: issues.assigneeUserId,
+            originKind: issues.originKind,
+            originId: issues.originId,
+          })
+          .from(issues)
+          .where(and(eq(issues.companyId, request.companyId), eq(issues.id, request.issueId)))
+          .then((rows) => rows[0] ?? null);
+        if (!issueScope) throw notFound("Context task not found");
+
+        const decision = await access.decide({
+          actor: {
+            type: "agent",
+            agentId: request.agentId,
+            companyId: request.companyId,
+            runId: request.runId ?? null,
+            onBehalfOfUserId: request.responsibleUserId ?? null,
+            source: "agent_jwt",
           },
-        }],
-      };
+          action: "issue:read",
+          resource: {
+            type: "issue",
+            companyId: request.companyId,
+            issueId: issueScope.id,
+            projectId: issueScope.projectId,
+            parentIssueId: issueScope.parentId,
+            assigneeAgentId: issueScope.assigneeAgentId,
+            assigneeUserId: issueScope.assigneeUserId,
+            originKind: issueScope.originKind,
+            originId: issueScope.originId,
+            status: issueScope.status,
+          },
+        });
+        if (!decision.allowed) {
+          throw forbidden("Agent is not authorized to read the Context task", {
+            code: "permission_denied",
+            reason: decision.reason,
+          });
+        }
+
+        const issue = await txDb
+          .select({
+            id: issues.id,
+            identifier: issues.identifier,
+            title: issues.title,
+            description: issues.description,
+            status: issues.status,
+            priority: issues.priority,
+            projectId: issues.projectId,
+            updatedAt: issues.updatedAt,
+          })
+          .from(issues)
+          .where(and(eq(issues.companyId, request.companyId), eq(issues.id, issueScope.id)))
+          .then((rows) => rows[0] ?? null);
+        if (!issue) throw notFound("Context task not found");
+
+        const updatedAt = issue.updatedAt.toISOString();
+        return {
+          evidence: [{
+            id: `task:${issue.id}`,
+            companyId: request.companyId,
+            sourceClass: "task",
+            sourceProvider: "august_works_tasks",
+            sourceType: "issue",
+            sourceRef: `issue://${issue.id}`,
+            title: issue.identifier ? `${issue.identifier}: ${issue.title}` : issue.title,
+            excerpt: (
+              [
+                `Status: ${issue.status}`,
+                `Priority: ${issue.priority}`,
+                issue.description?.trim() ? `Description: ${issue.description.trim()}` : null,
+              ].filter(Boolean).join("\n") || issue.title
+            ).slice(0, 60_000),
+            sourceVersion: updatedAt,
+            sourceUpdatedAt: updatedAt,
+            observedAt: new Date().toISOString(),
+            validFrom: null,
+            validUntil: null,
+            authorityDomain: "task_state",
+            trustLevel: "high",
+            sensitivity: "internal",
+            citation: { label: issue.identifier ?? issue.title },
+            metadata: {
+              issueId: issue.id,
+              projectId: issue.projectId,
+              status: issue.status,
+              priority: issue.priority,
+            },
+          }],
+        };
+      });
     },
   };
 }
