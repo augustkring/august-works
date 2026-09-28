@@ -11,6 +11,7 @@ import type {
   RoutineVariableType,
 } from "../constants.js";
 import type { EnvBinding } from "./secrets.js";
+import type { WorkflowRunStatus } from "./workflow.js";
 import type { ExecutionWorkspaceMode, IssueExecutionWorkspaceSettings } from "./workspace-runtime.js";
 
 export interface RoutineDescriptionDocument {
@@ -239,6 +240,7 @@ export interface RoutineRun {
   linkedIssueId: string | null;
   linkedWorkflowRunId: string | null;
   linkedWorkflowId?: string | null;
+  linkedWorkflowRunStatus?: WorkflowRunStatus | null;
   coalescedIntoRunId: string | null;
   failureReason: string | null;
   completedAt: Date | null;
