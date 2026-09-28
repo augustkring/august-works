@@ -50,6 +50,10 @@ export const workflows = pgTable(
       "workflows_archive_check",
       sql`(${table.status} = 'archived') = (${table.archivedAt} is not null)`,
     ),
+    distinctRevisionPointersCheck: check(
+      "workflows_distinct_revision_pointers_check",
+      sql`${table.publishedRevisionId} is null or ${table.draftRevisionId} is null or ${table.publishedRevisionId} <> ${table.draftRevisionId}`,
+    ),
   }),
 );
 
@@ -84,6 +88,12 @@ export const workflowRevisions = pgTable(
       table.workflowId,
       table.state,
     ),
+    oneDraftUq: uniqueIndex("workflow_revisions_one_draft_uq")
+      .on(table.workflowId)
+      .where(sql`${table.state} = 'draft'`),
+    onePublishedUq: uniqueIndex("workflow_revisions_one_published_uq")
+      .on(table.workflowId)
+      .where(sql`${table.state} = 'published'`),
     stateCheck: check(
       "workflow_revisions_state_check",
       sql`${table.state} in ('draft', 'published', 'superseded', 'discarded')`,

@@ -1025,6 +1025,10 @@ export const PERMISSION_KEYS = [
   "foundation:propose",
   "foundation:edit",
   "foundation:approve",
+  "workflows:read",
+  "workflows:edit",
+  "workflows:publish",
+  "workflows:run",
   "joins:approve",
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
