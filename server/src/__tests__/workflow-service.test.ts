@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
@@ -314,4 +315,78 @@ describePg("Workflow service", () => {
       }),
     });
   });
+  it("rejects direct mutation of an immutable workflow revision snapshot", async () => {
+    const company = await seedCompany("Alpha");
+    const created = await createWorkflow(company.id, company.userId);
+
+    await expect(
+      db
+        .update(workflowRevisions)
+        .set({
+          graph: {
+            version: 1,
+            nodes: [{
+              id: "illegal",
+              type: "core.manual_trigger",
+              name: "Illegal in-place edit",
+              position: { x: 0, y: 0 },
+              config: {},
+            }],
+            edges: [],
+            variables: [],
+            settings: {},
+          },
+        })
+        .where(eq(workflowRevisions.id, created.draftRevisionId!)),
+    ).rejects.toBeTruthy();
+
+    const stored = await workflowService(db).getDetail(company.id, created.id);
+    expect(stored?.draftRevision?.graph).toEqual({
+      version: 1,
+      nodes: [],
+      edges: [],
+      variables: [],
+      settings: {},
+    });
+  });
+
+  it("rejects a workflow pointer to a revision owned by another workflow", async () => {
+    const company = await seedCompany("Alpha");
+    const first = await createWorkflow(company.id, company.userId);
+    const second = await workflowService(db).create(
+      company.id,
+      { name: "Second workflow", description: null, projectId: null },
+      actor(company.userId),
+    );
+
+    await expect(
+      db
+        .update(workflows)
+        .set({ draftRevisionId: second.draftRevisionId })
+        .where(eq(workflows.id, first.id)),
+    ).rejects.toBeTruthy();
+
+    const stored = await workflowService(db).getDetail(company.id, first.id);
+    expect(stored?.draftRevisionId).toBe(first.draftRevisionId);
+  });
+
+  it("rejects a revision state change that is not reflected by the workflow pointer", async () => {
+    const company = await seedCompany("Alpha");
+    const created = await createWorkflow(company.id, company.userId);
+
+    await expect(
+      db
+        .update(workflowRevisions)
+        .set({ state: "published" })
+        .where(eq(workflowRevisions.id, created.draftRevisionId!)),
+    ).rejects.toBeTruthy();
+
+    const stored = await workflowService(db).getDetail(company.id, created.id);
+    expect(stored?.draftRevision).toMatchObject({
+      id: created.draftRevisionId,
+      state: "draft",
+    });
+    expect(stored?.publishedRevisionId).toBeNull();
+  });
+
 });
