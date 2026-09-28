@@ -16,6 +16,10 @@ import {
 } from "@paperclipai/shared";
 import { unprocessable } from "../../errors.js";
 import { parseWorkflowConditionExpression } from "./workflow-condition-expression.js";
+import {
+  descriptorRetryIsStructurallySafe,
+  effectiveWorkflowRetryPolicy,
+} from "./workflow-execution-policy.js";
 
 type NodeConfigSchema = z.ZodType;
 
@@ -698,6 +702,29 @@ export function workflowNodeRegistryService(db: Db) {
         nodeType: node.type,
         blockedReason: entry.descriptor.publishBlockedReason,
       });
+    }
+
+    if (mode === "publish") {
+      const retryPolicy = effectiveWorkflowRetryPolicy(
+        node.retryPolicy,
+        entry.descriptor,
+      );
+      if (!descriptorRetryIsStructurallySafe(entry.descriptor, retryPolicy)) {
+        invalidNode("Workflow node retry policy is unsafe for its side effects", {
+          reason: "workflow_step_retry_unsafe",
+          nodeId: node.id,
+          nodeType: node.type,
+          sideEffectClass: entry.descriptor.sideEffectClass,
+          idempotencyStrategy: entry.descriptor.idempotencyStrategy,
+        });
+      }
+      if (node.continueOnFailure === true) {
+        invalidNode("Continue-on-failure is not implemented for published workflows yet", {
+          reason: "workflow_failure_policy_not_ready",
+          nodeId: node.id,
+          nodeType: node.type,
+        });
+      }
     }
   }
 
