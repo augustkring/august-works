@@ -297,4 +297,27 @@ describePg("Workflow routes", () => {
     );
   });
 
+  it("searches deterministic Workflow capabilities for authorized readers", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+
+    const response = await request(app(localBoard))
+      .get(`/api/companies/${company.id}/workflows/capability-search`)
+      .query({ q: "condition", limit: 10 })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      query: "condition",
+      candidates: [
+        expect.objectContaining({
+          id: "core:core.condition",
+          kind: "core_node",
+          nodeType: "core.condition",
+          executionMode: "deterministic",
+          availability: { status: "available", reason: null },
+        }),
+      ],
+    });
+  });
+
 });

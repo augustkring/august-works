@@ -269,3 +269,5 @@ export {
 export { workflowService, type WorkflowMutationActor } from "./workflows/workflow-service.js";
 
 export { workflowNodeDefinitions, workflowNodeRegistryService } from "./workflows/workflow-node-registry.js";
+
+export { rankWorkflowCapabilities, workflowCapabilityResolverService } from "./workflows/workflow-capability-resolver.js";

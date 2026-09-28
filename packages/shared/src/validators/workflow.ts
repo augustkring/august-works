@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  WORKFLOW_CAPABILITY_KINDS,
   WORKFLOW_RETRY_MODES,
   WORKFLOW_REVISION_STATES,
   WORKFLOW_STATUSES,
@@ -186,3 +187,14 @@ export const publishWorkflowSchema = z
 export type CreateWorkflow = z.infer<typeof createWorkflowSchema>;
 export type UpdateWorkflowDraft = z.infer<typeof updateWorkflowDraftSchema>;
 export type PublishWorkflow = z.infer<typeof publishWorkflowSchema>;
+
+export const workflowCapabilitySearchQuerySchema = z
+  .object({
+    q: z.string().trim().max(200).optional().default(""),
+    limit: z.coerce.number().int().min(1).max(50).optional().default(30),
+    kind: z.enum(WORKFLOW_CAPABILITY_KINDS).optional(),
+  })
+  .strict();
+
+export type WorkflowCapabilitySearchQuery =
+  z.infer<typeof workflowCapabilitySearchQuerySchema>;

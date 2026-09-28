@@ -203,3 +203,70 @@ export interface WorkflowNodeDefinitionDescriptor {
   publishState: WorkflowNodePublishState;
   publishBlockedReason: string | null;
 }
+
+export const WORKFLOW_CAPABILITY_KINDS = [
+  "core_node",
+  "connected_tool",
+  "agent",
+] as const;
+export type WorkflowCapabilityKind = (typeof WORKFLOW_CAPABILITY_KINDS)[number];
+
+export const WORKFLOW_CAPABILITY_AVAILABILITY = [
+  "available",
+  "degraded",
+  "unavailable",
+] as const;
+export type WorkflowCapabilityAvailabilityStatus =
+  (typeof WORKFLOW_CAPABILITY_AVAILABILITY)[number];
+
+export type WorkflowCapabilityExecutionMode = "deterministic" | "agent";
+
+export interface WorkflowCapabilityAvailability {
+  status: WorkflowCapabilityAvailabilityStatus;
+  reason: string | null;
+}
+
+export interface WorkflowCapabilityOperationalProfile {
+  reliabilityBasis: "static_contract" | "connection_health" | "agent_status";
+  reliabilitySignal: string;
+  latencyProfile: string | null;
+  costProfile: string | null;
+}
+
+export interface WorkflowCapabilitySource {
+  registryNodeType?: string;
+  catalogEntryId?: string;
+  connectionId?: string;
+  applicationId?: string | null;
+  applicationName?: string | null;
+  connectionName?: string;
+  toolName?: string;
+  agentId?: string;
+  adapterType?: string;
+  agentRole?: string;
+}
+
+export interface WorkflowCapabilityCandidate {
+  id: string;
+  kind: WorkflowCapabilityKind;
+  title: string;
+  description: string | null;
+  nodeType: string;
+  configTemplate: Record<string, unknown>;
+  executionMode: WorkflowCapabilityExecutionMode;
+  sideEffectClass: WorkflowSideEffectClass;
+  riskClass: WorkflowRiskClass;
+  inputSchema: WorkflowJsonSchema | null;
+  outputSchema: WorkflowJsonSchema | null;
+  requiredPermissions: string[];
+  availability: WorkflowCapabilityAvailability;
+  operationalProfile: WorkflowCapabilityOperationalProfile;
+  publishState: WorkflowNodePublishState;
+  publishBlockedReason: string | null;
+  source: WorkflowCapabilitySource;
+}
+
+export interface WorkflowCapabilitySearchResult {
+  query: string;
+  candidates: WorkflowCapabilityCandidate[];
+}

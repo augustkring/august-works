@@ -2886,6 +2886,8 @@ export {
 } from "./validators/context.js";
 
 export {
+  WORKFLOW_CAPABILITY_AVAILABILITY,
+  WORKFLOW_CAPABILITY_KINDS,
   WORKFLOW_NODE_CANCELLATION_MODES,
   WORKFLOW_NODE_CATEGORIES,
   WORKFLOW_NODE_IDEMPOTENCY_STRATEGIES,
@@ -2898,6 +2900,14 @@ export {
   WORKFLOW_STATUSES,
   type Workflow,
   type WorkflowCapabilities,
+  type WorkflowCapabilityAvailability,
+  type WorkflowCapabilityAvailabilityStatus,
+  type WorkflowCapabilityCandidate,
+  type WorkflowCapabilityExecutionMode,
+  type WorkflowCapabilityKind,
+  type WorkflowCapabilityOperationalProfile,
+  type WorkflowCapabilitySearchResult,
+  type WorkflowCapabilitySource,
   type WorkflowDetail,
   type WorkflowEdgeV1,
   type WorkflowGraphV1,
@@ -2927,6 +2937,7 @@ export {
   emptyWorkflowGraphV1,
   publishWorkflowSchema,
   updateWorkflowDraftSchema,
+  workflowCapabilitySearchQuerySchema,
   workflowEdgeV1Schema,
   workflowGraphV1Schema,
   workflowJsonSchemaSchema,
@@ -2938,5 +2949,6 @@ export {
   workflowVariableV1Schema,
   type CreateWorkflow,
   type PublishWorkflow,
+  type WorkflowCapabilitySearchQuery,
   type UpdateWorkflowDraft,
 } from "./validators/workflow.js";
