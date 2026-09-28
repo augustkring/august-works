@@ -5522,15 +5522,24 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       const routineIds = [...new Set(automationEvents
         .map((row) => payloadString(row.event.payload, "routineId"))
         .filter((id): id is string => Boolean(id)))];
+      const workflowIds = [...new Set(automationEvents
+        .map((row) => payloadString(row.event.payload, "workflowId"))
+        .filter((id): id is string => Boolean(id)))];
       const issueIds = [...new Set(automationEvents
         .map((row) => payloadString(row.event.payload, "issueId"))
         .filter((id): id is string => Boolean(id)))];
-      const [routineRows, issueRowsForEvents, pipelineStageRows] = await Promise.all([
+      const [routineRows, workflowRows, issueRowsForEvents, pipelineStageRows] = await Promise.all([
         routineIds.length > 0
           ? db
             .select({ id: routines.id, title: routines.title })
             .from(routines)
             .where(and(eq(routines.companyId, companyId), inArray(routines.id, routineIds)))
+          : Promise.resolve([]),
+        workflowIds.length > 0
+          ? db
+            .select({ id: workflows.id, name: workflows.name })
+            .from(workflows)
+            .where(and(eq(workflows.companyId, companyId), inArray(workflows.id, workflowIds)))
           : Promise.resolve([]),
         issueIds.length > 0
           ? db
@@ -5546,25 +5555,34 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           : Promise.resolve([]),
       ]);
       const routinesById = new Map(routineRows.map((routine) => [routine.id, routine]));
+      const workflowsById = new Map(workflowRows.map((workflow) => [workflow.id, workflow]));
       const issuesById = new Map(issueRowsForEvents.map((issue) => [issue.id, issue]));
       const stagesByAutomationId = new Map<string, typeof pipelineStages.$inferSelect>();
       const stagesByRoutineId = new Map<string, typeof pipelineStages.$inferSelect>();
+      const stagesByWorkflowId = new Map<string, typeof pipelineStages.$inferSelect>();
       for (const stage of pipelineStageRows) {
         const automation = stageAutomation(stage);
         if (!automation) continue;
         stagesByAutomationId.set(automation.id, stage);
-        stagesByRoutineId.set(automation.routineId, stage);
+        if (automation.target.kind === "routine") {
+          stagesByRoutineId.set(automation.target.routineId, stage);
+        } else {
+          stagesByWorkflowId.set(automation.target.workflowId, stage);
+        }
       }
       const items = pageRows.map((row) => {
         const routineId = payloadString(row.event.payload, "routineId");
+        const workflowId = payloadString(row.event.payload, "workflowId");
         const issueId = payloadString(row.event.payload, "issueId");
         const automationId = payloadString(row.event.payload, "automationId");
         const automationStage = (
           (automationId ? stagesByAutomationId.get(automationId) : undefined) ??
           (routineId ? stagesByRoutineId.get(routineId) : undefined) ??
+          (workflowId ? stagesByWorkflowId.get(workflowId) : undefined) ??
           detail.stage
         );
         const routine = routineId ? routinesById.get(routineId) ?? null : null;
+        const workflow = workflowId ? workflowsById.get(workflowId) ?? null : null;
         const issue = issueId ? issuesById.get(issueId) ?? null : null;
         return {
           ...row.event,
@@ -5574,8 +5592,10 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           automation: row.event.type === "automation_executed" || row.event.type === "automation_failed"
             ? {
               routine: routine ? { id: routine.id, title: routine.title } : null,
+              workflow: workflow ? { id: workflow.id, name: workflow.name } : null,
               issue: issue ? { id: issue.id, identifier: issue.identifier, title: issue.title, status: issue.status } : null,
               routineRunId: payloadString(row.event.payload, "routineRunId"),
+              workflowRunId: payloadString(row.event.payload, "workflowRunId"),
               stage: automationStage
                 ? { id: automationStage.id, key: automationStage.key, name: automationStage.name, kind: automationStage.kind }
                 : null,
