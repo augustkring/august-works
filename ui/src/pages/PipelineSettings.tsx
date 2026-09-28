@@ -142,7 +142,7 @@ type StageConfig = {
     // Derived (read-only) fields the server adds from the backing automation
     // routine. They are never persisted into stage config — stage secrets live
     // on `routines.env` and are saved through the automation-env route.
-    routineId?: string;
+    routineId?: string | null;
     env?: RoutineEnvConfig | null;
     latestRoutineRevisionId?: string | null;
     latestRoutineRevisionNumber?: number;
@@ -3010,44 +3010,174 @@ export function PipelineSettings() {
                       <div className="overflow-x-auto overscroll-x-contain">
                         <div className="inline-flex min-w-full flex-wrap items-center gap-2 text-sm text-muted-foreground sm:min-w-max sm:flex-nowrap">
                           <span>When an item enters this step</span>
-                          <InlineEntitySelector
-                            value={stageAssigneeOptionId(stageAssigneeAgentId)}
-                            options={stageAssigneeOptions}
-                            recentOptionIds={recentAssigneeOptionIds}
-                            placeholder="Pick agent"
-                            noneLabel="No automation"
-                            searchPlaceholder="Search agents..."
-                            emptyMessage="No agents found."
-                            onChange={(value) => setStageAssigneeAgentId(stageAssigneeIdFromOption(value))}
-                            renderTriggerValue={(option) => {
-                              if (!option) return <span className="text-muted-foreground">Pick agent</span>;
-                              const agent = stageAssigneeIdFromOption(option.id)
-                                ? agentById.get(stageAssigneeIdFromOption(option.id))
-                                : null;
-                              return (
+                          <Select
+                            value={stageExecutionTargetKind}
+                            onValueChange={(value) => {
+                              const next = value as "agent_task" | "workflow";
+                              setStageExecutionTargetKind(next);
+                            }}
+                          >
+                            <SelectTrigger
+                              className="h-8 w-[118px]"
+                              aria-label="Automation target type"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="agent_task">Agent</SelectItem>
+                              <SelectItem value="workflow">Workflow</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {stageExecutionTargetKind === "agent_task" ? (
+                            <InlineEntitySelector
+                              value={stageAssigneeOptionId(stageAssigneeAgentId)}
+                              options={stageAssigneeOptions}
+                              recentOptionIds={recentAssigneeOptionIds}
+                              placeholder="Pick agent"
+                              noneLabel="No automation"
+                              searchPlaceholder="Search agents..."
+                              emptyMessage="No agents found."
+                              onChange={(value) =>
+                                setStageAssigneeAgentId(
+                                  stageAssigneeIdFromOption(value),
+                                )
+                              }
+                              renderTriggerValue={(option) => {
+                                if (!option) {
+                                  return (
+                                    <span className="text-muted-foreground">
+                                      Pick agent
+                                    </span>
+                                  );
+                                }
+                                const agent = stageAssigneeIdFromOption(option.id)
+                                  ? agentById.get(
+                                      stageAssigneeIdFromOption(option.id),
+                                    )
+                                  : null;
+                                return (
+                                  <>
+                                    {agent ? (
+                                      <AgentAvatar
+                                        agent={agent}
+                                        size={16}
+                                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                      />
+                                    ) : null}
+                                    <span className="truncate">
+                                      {option.label}
+                                    </span>
+                                  </>
+                                );
+                              }}
+                              renderOption={(option) => {
+                                if (!option.id) {
+                                  return (
+                                    <span className="truncate">
+                                      {option.label}
+                                    </span>
+                                  );
+                                }
+                                const agentId = stageAssigneeIdFromOption(option.id);
+                                const agent = agentId
+                                  ? agentById.get(agentId)
+                                  : null;
+                                return (
+                                  <>
+                                    {agent ? (
+                                      <AgentAvatar
+                                        agent={agent}
+                                        size={16}
+                                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                      />
+                                    ) : null}
+                                    <span className="truncate">
+                                      {option.label}
+                                    </span>
+                                  </>
+                                );
+                              }}
+                            />
+                          ) : (
+                            <InlineEntitySelector
+                              value={stageWorkflowId}
+                              options={workflowOptions}
+                              placeholder="Pick workflow"
+                              noneLabel="No workflow"
+                              searchPlaceholder="Search workflows..."
+                              emptyMessage="No active published workflows found."
+                              onChange={setStageWorkflowId}
+                              renderTriggerValue={(option) =>
+                                option ? (
+                                  <>
+                                    <GitBranch
+                                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                      aria-hidden="true"
+                                    />
+                                    <span className="truncate">
+                                      {option.label}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    Pick workflow
+                                  </span>
+                                )
+                              }
+                              renderOption={(option) => (
                                 <>
-                                  {agent ? <AgentAvatar agent={agent} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/> : null}
+                                  <GitBranch
+                                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                    aria-hidden="true"
+                                  />
                                   <span className="truncate">{option.label}</span>
                                 </>
-                              );
-                            }}
-                            renderOption={(option) => {
-                              if (!option.id) return <span className="truncate">{option.label}</span>;
-                              const agentId = stageAssigneeIdFromOption(option.id);
-                              const agent = agentId ? agentById.get(agentId) : null;
-                              return (
-                                <>
-                                  {agent ? <AgentAvatar agent={agent} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/> : null}
-                                  <span className="truncate">{option.label}</span>
-                                </>
-                              );
-                            }}
-                          />
-                          <span>runs these instructions, then moves the item to the next step.</span>
+                              )}
+                            />
+                          )}
+                          <span>
+                            {stageExecutionTargetKind === "workflow"
+                              ? "runs with this pipeline item as input."
+                              : "runs these instructions, then moves the item to the next step."}
+                          </span>
                         </div>
                       </div>
 
-                      {selectedAutomationAgent ? (
+                      {stageExecutionTargetKind === "workflow" ? (
+                        selectedAutomationWorkflow ? (
+                          <div className="space-y-4">
+                            <div className="rounded-lg border border-border bg-muted/20 p-4">
+                              <div className="flex items-start gap-3">
+                                <GitBranch
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                                  aria-hidden="true"
+                                />
+                                <div className="min-w-0 space-y-1">
+                                  <Link
+                                    to={`/workflows/${selectedAutomationWorkflow.id}`}
+                                    className="text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  >
+                                    {selectedAutomationWorkflow.name}
+                                  </Link>
+                                  <p className="text-sm text-muted-foreground">
+                                    The workflow owns its steps, approvals, waits, connections, and execution policy. This pipeline stage supplies the current item context when it starts.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            {workflowBreakdownConflict ? (
+                              <p className="text-sm text-amber-700 dark:text-amber-300">
+                                Break into smaller pieces currently requires Agent automation. Turn off breakdown or switch this stage back to Agent before saving.
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <EmptyState
+                            icon={GitBranch}
+                            message="Choose an active published workflow to run when an item enters this step."
+                          />
+                        )
+                      ) : selectedAutomationAgent ? (
                         <>
                           <div className="divide-y divide-border border-y border-border">
                             <FieldRow label="Project context">
@@ -3227,16 +3357,18 @@ export function PipelineSettings() {
                           message="Nothing runs here automatically. Items wait until a person moves them, or you can pick an agent to run this step."
                         />
                       )}
-                      <div className="space-y-3">
-                        <RoutineVariablesHint />
-                        <RoutineVariablesEditor
-                          key={selectedStage?.id ?? "stage"}
-                          title={issueTitleTemplate}
-                          description={instructionsBody}
-                          value={instructionsVariables}
-                          onChange={setInstructionsVariables}
-                        />
-                      </div>
+                      {stageExecutionTargetKind === "agent_task" ? (
+                        <div className="space-y-3">
+                          <RoutineVariablesHint />
+                          <RoutineVariablesEditor
+                            key={selectedStage?.id ?? "stage"}
+                            title={issueTitleTemplate}
+                            description={instructionsBody}
+                            value={instructionsVariables}
+                            onChange={setInstructionsVariables}
+                          />
+                        </div>
+                      ) : null}
                       {breakdownSettingsCard}
                     </div>
                   ) : null}
