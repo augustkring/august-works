@@ -19,6 +19,7 @@ import {
   type WorkflowGraphV1,
   type WorkflowRun,
   type WorkflowRunDetail,
+  type WorkflowRunSource,
   type WorkflowStepRun,
   type WorkflowWait,
 } from "@paperclipai/shared";
@@ -263,81 +264,110 @@ function assertIdempotentRequestMatches(
   }
 }
 
-async function createQueuedManualRun(
-  db: Db,
-  input: {
-    companyId: string;
-    workflowId: string;
-    revisionId: string;
-    nodeId: string;
-    triggerPayload: Record<string, unknown>;
-    responsibleUserId: string | null;
-    idempotencyKey: string | null;
-    correlationId: string;
-    actor: WorkflowRunActor;
-  },
-) {
+export interface EnqueueWorkflowRunInput {
+  companyId: string;
+  workflowId: string;
+  revisionId: string;
+  nodeId: string;
+  triggerId?: string | null;
+  source: WorkflowRunSource;
+  triggerPayload: Record<string, unknown>;
+  responsibleUserId: string | null;
+  idempotencyKey: string | null;
+  correlationId: string;
+  actor: WorkflowRunActor;
+}
+
+export async function enqueueWorkflowRunInTransaction(
+  executor: Db,
+  input: EnqueueWorkflowRunInput,
+): Promise<{
+  run: typeof workflowRuns.$inferSelect;
+  created: boolean;
+  publications: ActivityPublication[];
+}> {
   if (input.idempotencyKey) {
-    const existing = await getIdempotentRun(db, input.companyId, input.idempotencyKey);
+    const existing = await getIdempotentRun(
+      executor,
+      input.companyId,
+      input.idempotencyKey,
+    );
     if (existing) {
       assertIdempotentRequestMatches(existing, input);
-      return { run: existing, created: false };
+      return { run: existing, created: false, publications: [] };
     }
   }
 
-  try {
-    return await db.transaction(async (tx) => {
-      const now = new Date();
-      const [run] = await tx
-        .insert(workflowRuns)
-        .values({
-          companyId: input.companyId,
-          workflowId: input.workflowId,
-          workflowRevisionId: input.revisionId,
-          status: "queued",
-          source: "manual",
-          triggerPayload: input.triggerPayload,
-          responsibleUserId: input.responsibleUserId,
-          idempotencyKey: input.idempotencyKey,
-          correlationId: input.correlationId,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning();
+  const now = new Date();
+  const [run] = await executor
+    .insert(workflowRuns)
+    .values({
+      companyId: input.companyId,
+      workflowId: input.workflowId,
+      workflowRevisionId: input.revisionId,
+      triggerId: input.triggerId ?? null,
+      status: "queued",
+      source: input.source,
+      triggerPayload: input.triggerPayload,
+      responsibleUserId: input.responsibleUserId,
+      idempotencyKey: input.idempotencyKey,
+      correlationId: input.correlationId,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+  if (!run) throw new Error("Workflow run insert returned no row");
 
-      await tx.insert(workflowStepRuns).values({
-        companyId: input.companyId,
-        workflowRunId: run!.id,
-        nodeId: input.nodeId,
-        attempt: 1,
-        status: "pending",
-        inputJson: input.triggerPayload,
-        createdAt: now,
-        updatedAt: now,
-      });
-      const { publication } = await persistWorkflowActivity(
-        tx as unknown as Db,
-        input.actor,
-        {
-          companyId: input.companyId,
-          action: "workflow.run_queued",
-          entityType: "workflow_run",
-          entityId: run!.id,
-          details: {
-            workflowId: input.workflowId,
-            workflowRevisionId: input.revisionId,
-            source: "manual",
-          },
-        },
-      );
-      return { run: run!, created: true, publications: [publication] };
-    }).then((result) => {
-      publishActivities(result.publications);
-      return { run: result.run, created: result.created };
-    });
+  await executor.insert(workflowStepRuns).values({
+    companyId: input.companyId,
+    workflowRunId: run.id,
+    nodeId: input.nodeId,
+    attempt: 1,
+    status: "pending",
+    inputJson: input.triggerPayload,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const { publication } = await persistWorkflowActivity(
+    executor,
+    input.actor,
+    {
+      companyId: input.companyId,
+      action: "workflow.run_queued",
+      entityType: "workflow_run",
+      entityId: run.id,
+      details: {
+        workflowId: input.workflowId,
+        workflowRevisionId: input.revisionId,
+        source: input.source,
+        triggerId: input.triggerId ?? null,
+      },
+    },
+  );
+  return { run, created: true, publications: [publication] };
+}
+
+async function createQueuedRun(
+  db: Db,
+  input: EnqueueWorkflowRunInput,
+) {
+  try {
+    const result = await db.transaction(async (tx) =>
+      enqueueWorkflowRunInTransaction(tx as unknown as Db, input)
+    );
+    publishActivities(result.publications);
+    return { run: result.run, created: result.created };
   } catch (error) {
-    if (input.idempotencyKey && isUniqueViolation(error, "workflow_runs_company_idempotency_uq")) {
-      const existing = await getIdempotentRun(db, input.companyId, input.idempotencyKey);
+    if (
+      input.idempotencyKey &&
+      isUniqueViolation(error, "workflow_runs_company_idempotency_uq")
+    ) {
+      const existing = await getIdempotentRun(
+        db,
+        input.companyId,
+        input.idempotencyKey,
+      );
       if (!existing) throw error;
       assertIdempotentRequestMatches(existing, input);
       return { run: existing, created: false };
@@ -3112,11 +3142,13 @@ export function workflowExecutorService(db: Db) {
         );
       }
 
-      const queued = await createQueuedManualRun(db, {
+      const queued = await createQueuedRun(db, {
         companyId,
         workflowId,
         revisionId,
         nodeId: triggers[0]!.id,
+        triggerId: null,
+        source: "manual",
         triggerPayload: input.input,
         responsibleUserId:
           actor.responsibleUserId ??
