@@ -191,6 +191,7 @@ export function buildRoutineGroups(
   projectById: Map<string, { name: string }>,
   agentById: Map<string, { name: string }>,
   folderById: Map<string, RoutineFolderGroupMeta>,
+  workflowById: Map<string, { name: string }> = new Map(),
 ): RoutineGroup[] {
   if (groupByValue === "none") {
     return [{ key: "__all", label: null, items: routines }];
@@ -241,16 +242,29 @@ export function buildRoutineGroups(
       }));
   }
 
-  const groups = groupBy(routines, (routine) => routine.assigneeAgentId ?? "__unassigned");
+  const groups = groupBy(routines, (routine) => {
+    if (routine.executionTargetKind === "workflow" && routine.executionTargetRef) {
+      return `workflow:${routine.executionTargetRef}`;
+    }
+    return routine.assigneeAgentId ?? "__unassigned";
+  });
+  const targetLabel = (key: string) => {
+    if (key === "__unassigned") return "No execution target";
+    if (key.startsWith("workflow:")) {
+      const workflowId = key.slice("workflow:".length);
+      return workflowById.get(workflowId)?.name ?? "Workflow";
+    }
+    return agentById.get(key)?.name ?? "Unknown agent";
+  };
   return Object.keys(groups)
-    .sort((left, right) => {
-      const leftLabel = left === "__unassigned" ? "Unassigned" : (agentById.get(left)?.name ?? "Unknown agent");
-      const rightLabel = right === "__unassigned" ? "Unassigned" : (agentById.get(right)?.name ?? "Unknown agent");
-      return leftLabel.localeCompare(rightLabel);
-    })
+    .sort((left, right) =>
+      targetLabel(left).localeCompare(targetLabel(right), undefined, {
+        sensitivity: "base",
+      }),
+    )
     .map((key) => ({
       key,
-      label: key === "__unassigned" ? "Unassigned" : (agentById.get(key)?.name ?? "Unknown agent"),
+      label: targetLabel(key),
       items: groups[key]!,
     }));
 }
@@ -265,10 +279,18 @@ export function buildRoutineSections(
   projectById: Map<string, { name: string }>,
   agentById: Map<string, { name: string }>,
   folderById: Map<string, { name: string }>,
+  workflowById: Map<string, { name: string }> = new Map(),
 ): RoutineGroup[] {
   const builtInRoutines = routines.filter(isBuiltInRoutine);
   const customRoutines = routines.filter((routine) => !isBuiltInRoutine(routine));
-  const customGroups = buildRoutineGroups(customRoutines, groupByValue, projectById, agentById, folderById)
+  const customGroups = buildRoutineGroups(
+    customRoutines,
+    groupByValue,
+    projectById,
+    agentById,
+    folderById,
+    workflowById,
+  )
     .filter((group) => group.items.length > 0)
     .map((group) => (
       builtInRoutines.length > 0 && groupByValue === "none" && group.key === "__all"
@@ -422,13 +444,18 @@ export function Routines() {
     queryFn: () => projectsApi.list(selectedCompanyId!, { includeArchived: true }),
     enabled: !!selectedCompanyId,
   });
+  const hasWorkflowTarget = (routines ?? []).some(
+    (routine) => routine.executionTargetKind === "workflow",
+  );
   const { data: workflows = [] } = useQuery({
     queryKey: queryKeys.workflows.list(selectedCompanyId!),
     queryFn: () => workflowsApi.list(selectedCompanyId!),
     enabled:
       !!selectedCompanyId &&
-      composerOpen &&
-      draft.executionTargetKind === "workflow",
+      (
+        hasWorkflowTarget ||
+        (composerOpen && draft.executionTargetKind === "workflow")
+      ),
     retry: false,
   });
   const { data: companyMembers } = useQuery({
@@ -694,6 +721,10 @@ export function Routines() {
     () => new Map((projects ?? []).map((project) => [project.id, project])),
     [projects],
   );
+  const workflowById = useMemo(
+    () => new Map(workflows.map((workflow) => [workflow.id, workflow])),
+    [workflows],
+  );
   const folderById = useMemo(
     () => new Map((routineFolders?.folders ?? []).map((folder) => [folder.id, folder])),
     [routineFolders],
@@ -756,8 +787,23 @@ export function Routines() {
     [folderFilteredRoutines, routineViewState.sortDir, routineViewState.sortField],
   );
   const routineSections = useMemo(
-    () => buildRoutineSections(sortedRoutines, routineViewState.groupBy, projectById, agentById, folderById),
-    [agentById, folderById, projectById, routineViewState.groupBy, sortedRoutines],
+    () =>
+      buildRoutineSections(
+        sortedRoutines,
+        routineViewState.groupBy,
+        projectById,
+        agentById,
+        folderById,
+        workflowById,
+      ),
+    [
+      agentById,
+      folderById,
+      projectById,
+      routineViewState.groupBy,
+      sortedRoutines,
+      workflowById,
+    ],
   );
   const currentAssignee =
     draft.executionTargetKind === "agent_task" && draft.assigneeAgentId
@@ -998,7 +1044,7 @@ export function Routines() {
                     {([
                       ["folder", "Folder"],
                       ["project", "Project"],
-                      ["assignee", "Agent"],
+                      ["assignee", "Execution target"],
                       ["none", "None"],
                     ] as const).map(([value, label]) => (
                       <button
@@ -1524,6 +1570,7 @@ export function Routines() {
                           routine={routine}
                           projectById={projectById}
                           agentById={agentById}
+                          workflowById={workflowById}
                           runningRoutineId={runningRoutineId}
                           statusMutationRoutineId={statusMutationRoutineId}
                           href={`/routines/${routine.id}`}
