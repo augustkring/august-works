@@ -65,7 +65,7 @@ vi.mock("@/components/MarkdownBody", () => ({
   MarkdownBody: ({ children }: { children: string }) => <div data-testid="markdown-body">{children}</div>,
 }));
 
-const document: FoundationDocument = {
+const foundationDocument: FoundationDocument = {
   id: "foundation-1",
   companyId: "company-1",
   documentId: "document-1",
@@ -130,8 +130,8 @@ describe("Foundation page", () => {
       edit: true,
       approve: true,
     });
-    apiMock.list.mockResolvedValue([document]);
-    apiMock.get.mockResolvedValue(document);
+    apiMock.list.mockResolvedValue([foundationDocument]);
+    apiMock.get.mockResolvedValue(foundationDocument);
     apiMock.search.mockResolvedValue([]);
     apiMock.revisions.mockResolvedValue([]);
     apiMock.listProposals.mockResolvedValue([]);
@@ -170,7 +170,7 @@ describe("Foundation page", () => {
   });
   it("preserves edits and blocks stale retry after a revision conflict", async () => {
     const newerDocument: FoundationDocument = {
-      ...document,
+      ...foundationDocument,
       body: "Concurrent working truth",
       latestRevisionId: "revision-3",
       latestRevisionNumber: 3,
@@ -178,7 +178,7 @@ describe("Foundation page", () => {
     };
 
     apiMock.get
-      .mockResolvedValueOnce(document)
+      .mockResolvedValueOnce(foundationDocument)
       .mockResolvedValue(newerDocument);
     apiMock.updateDraft.mockRejectedValueOnce(
       new ApiError("Foundation document was updated by someone else", 409, {
