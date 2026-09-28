@@ -51,26 +51,30 @@ describe("workflow condition expression", () => {
   });
 
   it("fails closed on missing references and invalid runtime types", () => {
-    expect(() =>
-      evaluateWorkflowConditionExpression("{{trigger.missing}}", context),
-    ).toThrowError(
-      expect.objectContaining({ code: "workflow_condition_reference_missing" }),
-    );
-    expect(() =>
-      evaluateWorkflowConditionExpression("{{trigger.amount}}", context),
-    ).toThrowError(
-      expect.objectContaining({ code: "workflow_condition_type_invalid" }),
-    );
+    try {
+      evaluateWorkflowConditionExpression("{{trigger.missing}}", context);
+      throw new Error("Expected missing reference to fail");
+    } catch (error) {
+      expect(error).toMatchObject({ code: "workflow_condition_reference_missing" });
+    }
+
+    try {
+      evaluateWorkflowConditionExpression("{{trigger.amount}}", context);
+      throw new Error("Expected non-boolean reference to fail");
+    } catch (error) {
+      expect(error).toMatchObject({ code: "workflow_condition_type_invalid" });
+    }
   });
 
   it("requires numeric operands for ordered comparisons", () => {
-    expect(() =>
+    try {
       evaluateWorkflowConditionExpression(
         '{{trigger.customer.tier}} > "basic"',
         context,
-      ),
-    ).toThrowError(
-      expect.objectContaining({ code: "workflow_condition_type_invalid" }),
-    );
+      );
+      throw new Error("Expected ordered string comparison to fail");
+    } catch (error) {
+      expect(error).toMatchObject({ code: "workflow_condition_type_invalid" });
+    }
   });
 });
