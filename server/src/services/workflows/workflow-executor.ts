@@ -8,6 +8,7 @@ import {
   workflowRevisions,
   workflowRuns,
   workflowStepRuns,
+  workflowWaits,
   workflows,
 } from "@paperclipai/db";
 import {
@@ -18,6 +19,7 @@ import {
   type WorkflowRun,
   type WorkflowRunDetail,
   type WorkflowStepRun,
+  type WorkflowWait,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
@@ -131,6 +133,15 @@ function mapStep(row: typeof workflowStepRuns.$inferSelect): WorkflowStepRun {
   };
 }
 
+function mapWait(row: typeof workflowWaits.$inferSelect): WorkflowWait {
+  return {
+    ...row,
+    kind: row.kind as WorkflowWait["kind"],
+    status: row.status as WorkflowWait["status"],
+    resolutionJson: row.resolutionJson ?? null,
+  };
+}
+
 async function assertActorCompanyScope(
   db: Db,
   companyId: string,
@@ -185,17 +196,33 @@ async function getRunDetail(
     .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)))
     .then((rows) => rows[0] ?? null);
   if (!run) return null;
-  const steps = await db
-    .select()
-    .from(workflowStepRuns)
-    .where(
-      and(
-        eq(workflowStepRuns.companyId, companyId),
-        eq(workflowStepRuns.workflowRunId, runId),
-      ),
-    )
-    .orderBy(asc(workflowStepRuns.createdAt), asc(workflowStepRuns.attempt));
-  return { run: mapRun(run), steps: steps.map(mapStep) };
+  const [steps, waits] = await Promise.all([
+    db
+      .select()
+      .from(workflowStepRuns)
+      .where(
+        and(
+          eq(workflowStepRuns.companyId, companyId),
+          eq(workflowStepRuns.workflowRunId, runId),
+        ),
+      )
+      .orderBy(asc(workflowStepRuns.createdAt), asc(workflowStepRuns.attempt)),
+    db
+      .select()
+      .from(workflowWaits)
+      .where(
+        and(
+          eq(workflowWaits.companyId, companyId),
+          eq(workflowWaits.workflowRunId, runId),
+        ),
+      )
+      .orderBy(asc(workflowWaits.createdAt)),
+  ]);
+  return {
+    run: mapRun(run),
+    steps: steps.map(mapStep),
+    waits: waits.map(mapWait),
+  };
 }
 
 async function getIdempotentRun(
@@ -1439,6 +1466,362 @@ async function revisionForRun(
     .then((rows) => rows[0] ?? null);
 }
 
+function waitDurationSeconds(node: WorkflowNode): number {
+  const config = node.config;
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    throw new WorkflowCheckpointError(
+      "workflow_wait_config_invalid",
+      "Published Wait node is missing its duration",
+    );
+  }
+  const raw = Reflect.get(config, "durationSeconds");
+  if (
+    typeof raw !== "number" ||
+    !Number.isInteger(raw) ||
+    raw < 1 ||
+    raw > 604_800
+  ) {
+    throw new WorkflowCheckpointError(
+      "workflow_wait_config_invalid",
+      "Published Wait node duration is invalid",
+    );
+  }
+  return raw;
+}
+
+async function scheduleDelayWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  graph: WorkflowGraphV1,
+  node: WorkflowNode,
+  runningStep: WorkflowStepRow,
+  actor: WorkflowRunActor,
+): Promise<void> {
+  if (!run.executionOwnerId) {
+    throw conflict("Workflow run has no execution owner", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+
+  const durationSeconds = waitDurationSeconds(node);
+  const now = new Date();
+  const delayMs = durationSeconds * 1_000;
+  const remainingDeadlineMs = remainingWorkflowDeadlineMs(run, graph, now);
+  if (remainingDeadlineMs !== null && remainingDeadlineMs < delayMs) {
+    throw new WorkflowCheckpointError(
+      "workflow_wait_deadline_exceeded",
+      `Wait node ${node.id} would exceed the workflow deadline`,
+    );
+  }
+  const wakeAt = new Date(now.getTime() + delayMs);
+  const waitKey = "primary";
+  const publications: ActivityPublication[] = [];
+
+  await db.transaction(async (tx) => {
+    const [wait] = await tx
+      .insert(workflowWaits)
+      .values({
+        companyId: run.companyId,
+        workflowRunId: run.id,
+        nodeId: node.id,
+        waitKey,
+        kind: "delay",
+        status: "active",
+        wakeAt,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    if (!wait) {
+      throw conflict("Workflow delay wait could not be created", {
+        code: "workflow_wait_create_conflict",
+        workflowRunId: run.id,
+        nodeId: node.id,
+      });
+    }
+
+    const [waitingStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "waiting",
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, runningStep.id),
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.status, "running"),
+        ),
+      )
+      .returning();
+    if (!waitingStep) {
+      throw conflict("Workflow step changed while wait was being created", {
+        code: "workflow_wait_create_conflict",
+        workflowRunId: run.id,
+        nodeId: node.id,
+      });
+    }
+
+    const [waitingRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "waiting",
+        executionOwnerId: null,
+        leaseExpiresAt: null,
+        ownerHeartbeatAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "running"),
+          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+        ),
+      )
+      .returning();
+    if (!waitingRun) {
+      throw conflict("Workflow run ownership changed while wait was being created", {
+        code: "workflow_run_claim_lost",
+        workflowRunId: run.id,
+      });
+    }
+
+    const waitActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.wait_created",
+        entityType: "workflow_wait",
+        entityId: wait.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: node.id,
+          kind: "delay",
+          wakeAt: wakeAt.toISOString(),
+        },
+      },
+    );
+    const stepActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_waiting",
+        entityType: "workflow_step_run",
+        entityId: waitingStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: node.id,
+          attempt: waitingStep.attempt,
+          waitId: wait.id,
+          waitKind: "delay",
+        },
+      },
+    );
+    const runActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_waiting",
+        entityType: "workflow_run",
+        entityId: waitingRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          reason: "delay",
+          nodeId: node.id,
+          waitId: wait.id,
+          wakeAt: wakeAt.toISOString(),
+        },
+      },
+    );
+    publications.push(
+      waitActivity.publication,
+      stepActivity.publication,
+      runActivity.publication,
+    );
+  });
+  publishActivities(publications);
+}
+
+async function activeWaitForRun(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+) {
+  return db
+    .select()
+    .from(workflowWaits)
+    .where(
+      and(
+        eq(workflowWaits.companyId, run.companyId),
+        eq(workflowWaits.workflowRunId, run.id),
+        eq(workflowWaits.status, "active"),
+      ),
+    )
+    .orderBy(asc(workflowWaits.createdAt))
+    .limit(1)
+    .then((rows) => rows[0] ?? null);
+}
+
+async function resolveDueDelayWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+  now: Date,
+): Promise<typeof workflowRuns.$inferSelect | null> {
+  if (wait.kind !== "delay" || !wait.wakeAt || wait.wakeAt.getTime() > now.getTime()) {
+    return null;
+  }
+  const actor: WorkflowRunActor = {
+    principal: { type: "system", service: "workflow-wait" },
+  };
+  const ownerId = `wait:${randomUUID()}`;
+  const publications: ActivityPublication[] = [];
+
+  const resumed = await db.transaction(async (tx) => {
+    const [resolvedWait] = await tx
+      .update(workflowWaits)
+      .set({
+        status: "resolved",
+        resolutionJson: {
+          reason: "delay_elapsed",
+          resumedAt: now.toISOString(),
+        },
+        resolvedByType: "system",
+        resolvedById: "workflow-wait",
+        resolvedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowWaits.id, wait.id),
+          eq(workflowWaits.companyId, run.companyId),
+          eq(workflowWaits.workflowRunId, run.id),
+          eq(workflowWaits.status, "active"),
+        ),
+      )
+      .returning();
+    if (!resolvedWait) return null;
+
+    const [completedStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "succeeded",
+        outputJson: resolvedWait.resolutionJson,
+        finishedAt: now,
+        durationMs: sql<number>`greatest(0, floor(extract(epoch from (${now} - ${workflowStepRuns.startedAt})) * 1000))::integer`,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.nodeId, wait.nodeId),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
+      .returning();
+    if (!completedStep) {
+      throw conflict("Workflow wait step changed before delay resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+
+    const [runningRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "running",
+        executionOwnerId: ownerId,
+        ownerHeartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "waiting"),
+          sql`${workflowRuns.executionOwnerId} is null`,
+          sql`${workflowRuns.leaseExpiresAt} is null`,
+        ),
+      )
+      .returning();
+    if (!runningRun) {
+      throw conflict("Workflow run changed before delay resolution", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        waitId: wait.id,
+      });
+    }
+
+    const waitActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.wait_resolved",
+        entityType: "workflow_wait",
+        entityId: resolvedWait.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: wait.nodeId,
+          kind: wait.kind,
+          resolution: "delay_elapsed",
+        },
+      },
+    );
+    const stepActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_completed",
+        entityType: "workflow_step_run",
+        entityId: completedStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: completedStep.nodeId,
+          attempt: completedStep.attempt,
+          waitId: resolvedWait.id,
+        },
+      },
+    );
+    const runActivity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_resumed",
+        entityType: "workflow_run",
+        entityId: runningRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          reason: "delay_elapsed",
+          waitId: resolvedWait.id,
+          executionOwnerId: ownerId,
+        },
+      },
+    );
+    publications.push(
+      waitActivity.publication,
+      stepActivity.publication,
+      runActivity.publication,
+    );
+    return runningRun;
+  });
+  publishActivities(publications);
+  return resumed;
+}
+
 async function executeWorkflowGraph(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
@@ -1518,6 +1901,35 @@ async function executeWorkflowGraph(
           });
           output = { result: conditionResult };
           await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
+      } else if (current.type === "core.wait") {
+        const durationSeconds = waitDurationSeconds(current);
+        const prepared = await prepareRunnableStep(
+          db,
+          ownedRun,
+          current.id,
+          { durationSeconds },
+          actor,
+        );
+        if (prepared.checkpoint) {
+          output = prepared.checkpoint.outputJson;
+        } else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) {
+            throw new WorkflowCheckpointError(
+              "workflow_checkpoint_state_invalid",
+              `Wait ${current.id} produced no runnable attempt`,
+            );
+          }
+          await scheduleDelayWait(
+            db,
+            ownedRun,
+            graph,
+            current,
+            runningStep,
+            actor,
+          );
+          return;
         }
       } else {
         await failRun(
@@ -1644,7 +2056,8 @@ async function executeClaimedRun(
         .filter(
           (node) =>
             node.type !== "core.manual_trigger" &&
-            node.type !== "core.condition",
+            node.type !== "core.condition" &&
+            node.type !== "core.wait",
         )
         .map((node) => node.type),
     ),
@@ -1663,13 +2076,30 @@ async function executeClaimedRun(
   await executeWorkflowGraph(db, run, revision.graph, actor);
 }
 
-async function recoverWaitingRetryCandidate(
+async function recoverWaitingCandidate(
   db: Db,
   candidate: typeof workflowRuns.$inferSelect,
   now: Date,
 ): Promise<"recovered" | "raced" | "deferred"> {
   const scheduledStep = await retryScheduledStepForRun(db, candidate);
-  if (!scheduledStep) return "deferred";
+  if (!scheduledStep) {
+    const wait = await activeWaitForRun(db, candidate);
+    if (!wait) return "deferred";
+    if (wait.timeoutAt && wait.timeoutAt.getTime() <= now.getTime()) {
+      return "deferred";
+    }
+    if (wait.kind !== "delay" || !wait.wakeAt || wait.wakeAt.getTime() > now.getTime()) {
+      return "deferred";
+    }
+    const resumed = await resolveDueDelayWait(db, candidate, wait, now);
+    if (!resumed) return "raced";
+    await executeClaimedRun(
+      db,
+      resumed,
+      { principal: { type: "system", service: "workflow-wait" } },
+    );
+    return "recovered";
+  }
 
   const revision = await revisionForRun(db, candidate);
   if (!revision) {
@@ -1770,7 +2200,7 @@ async function recoverCandidate(
   now: Date,
 ): Promise<"recovered" | "raced" | "deferred"> {
   if (candidate.status === "waiting") {
-    return recoverWaitingRetryCandidate(db, candidate, now);
+    return recoverWaitingCandidate(db, candidate, now);
   }
 
   const actor: WorkflowRunActor = {
@@ -1934,7 +2364,8 @@ export function workflowExecutorService(db: Db) {
       const executableNodes = revision.graph.nodes.filter(
         (node) =>
           node.type !== "core.manual_trigger" &&
-          node.type !== "core.condition",
+          node.type !== "core.condition" &&
+          node.type !== "core.wait",
       );
       const triggers = revision.graph.nodes.filter(
         (node) => node.type === "core.manual_trigger",
