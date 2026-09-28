@@ -17,6 +17,7 @@ import {
 import { envConfigSchema } from "./secret.js";
 import { isValidRoutineDateString } from "../routine-variables.js";
 import { objectWithoutDefaults } from "./partial.js";
+import { ROUTINE_EXECUTION_TARGET_KINDS } from "../types/routine.js";
 
 const routineVariableValueSchema = z.union([z.string(), z.number().finite(), z.boolean()]);
 
@@ -62,6 +63,17 @@ export const routineVariableSchema = z.object({
   }
 });
 
+export const routineExecutionTargetSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("agent_task"),
+    agentId: z.string().guid(),
+  }).strict(),
+  z.object({
+    kind: z.literal("workflow"),
+    workflowId: z.string().guid(),
+  }).strict(),
+]);
+
 export const createRoutineSchema = z.object({
   projectId: z.string().guid().optional().nullable(),
   folderId: z.string().guid().optional().nullable(),
@@ -70,6 +82,7 @@ export const createRoutineSchema = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().optional().nullable(),
   assigneeAgentId: z.string().guid().optional().nullable(),
+  executionTarget: routineExecutionTargetSchema.optional(),
   priority: z.enum(ISSUE_PRIORITIES).optional().default("medium"),
   status: z.enum(ROUTINE_STATUSES).optional().default("active"),
   concurrencyPolicy: z.enum(ROUTINE_CONCURRENCY_POLICIES).optional().default("coalesce_if_active"),
@@ -78,6 +91,30 @@ export const createRoutineSchema = z.object({
   activityGateScope: z.enum(ROUTINE_ACTIVITY_GATE_SCOPES).optional(),
   variables: z.array(routineVariableSchema).optional().default([]),
   env: envConfigSchema.optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (
+    value.executionTarget?.kind === "workflow" &&
+    value.assigneeAgentId !== undefined &&
+    value.assigneeAgentId !== null
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["assigneeAgentId"],
+      message: "Workflow-target routines cannot also override an assignee agent",
+    });
+  }
+  if (
+    value.executionTarget?.kind === "agent_task" &&
+    value.assigneeAgentId !== undefined &&
+    value.assigneeAgentId !== null &&
+    value.assigneeAgentId !== value.executionTarget.agentId
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["executionTarget"],
+      message: "Agent execution target must match assigneeAgentId when both are supplied",
+    });
+  }
 });
 
 export type CreateRoutine = z.infer<typeof createRoutineSchema>;
@@ -97,6 +134,8 @@ export const routineRevisionSnapshotRoutineV1Schema = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().nullable(),
   assigneeAgentId: z.string().guid().nullable(),
+  executionTargetKind: z.enum(ROUTINE_EXECUTION_TARGET_KINDS).nullable().optional(),
+  executionTargetRef: z.string().guid().nullable().optional(),
   priority: z.enum(ISSUE_PRIORITIES),
   status: z.enum(ROUTINE_STATUSES),
   concurrencyPolicy: z.enum(ROUTINE_CONCURRENCY_POLICIES),
