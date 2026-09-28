@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -93,6 +94,7 @@ export const workflowRuns = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    companyIdUq: unique("workflow_runs_company_id_uq").on(table.companyId, table.id),
     companyWorkflowCreatedIdx: index("workflow_runs_company_workflow_created_idx").on(
       table.companyId,
       table.workflowId,
