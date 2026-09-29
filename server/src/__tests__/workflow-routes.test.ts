@@ -475,6 +475,106 @@ describePg("Workflow routes", () => {
       });
   });
 
+  it("retries a failed Workflow run through HTTP with immutable lineage and request idempotency", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+    const http = request(app(localBoard));
+
+    const created = await http
+      .post(`/api/companies/${company.id}/workflows`)
+      .send({ name: "Retryable route workflow" })
+      .expect(201);
+    const updated = await http
+      .patch(`/api/companies/${company.id}/workflows/${created.body.id}/draft`)
+      .send({
+        expectedRevisionId: created.body.draftRevisionId,
+        graph: {
+          version: 1,
+          nodes: [
+            {
+              id: "start",
+              type: "core.manual_trigger",
+              name: "Manual start",
+              position: { x: 0, y: 0 },
+              config: {},
+            },
+            {
+              id: "fail",
+              type: "core.condition",
+              name: "Missing input",
+              position: { x: 180, y: 0 },
+              config: { expression: "{{trigger.missing}}" },
+            },
+          ],
+          edges: [{ id: "e1", source: "start", target: "fail" }],
+          variables: [],
+          settings: {},
+        },
+      })
+      .expect(200);
+    await http
+      .post(`/api/companies/${company.id}/workflows/${created.body.id}/publish`)
+      .send({
+        expectedDraftRevisionId: updated.body.draftRevisionId,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      })
+      .expect(200);
+
+    const failed = await http
+      .post(`/api/companies/${company.id}/workflows/${created.body.id}/run`)
+      .set("Idempotency-Key", "route-retry-source")
+      .send({ input: { accountId: "acme" } })
+      .expect(201);
+    expect(failed.body.run.status).toBe("failed");
+
+    await http
+      .post(
+        `/api/companies/${company.id}/workflow-runs/${failed.body.run.id}/retry`,
+      )
+      .send({ reason: "Retry exact historical run" })
+      .expect(422)
+      .expect((response) => {
+        expect(response.body.details?.code ?? response.body.code).toBe(
+          "idempotency_key_required",
+        );
+      });
+
+    const retried = await http
+      .post(
+        `/api/companies/${company.id}/workflow-runs/${failed.body.run.id}/retry`,
+      )
+      .set("Idempotency-Key", "route-retry-request")
+      .send({ reason: "Retry exact historical run" })
+      .expect(201);
+
+    expect(retried.body.run.id).not.toBe(failed.body.run.id);
+    expect(retried.body.run).toMatchObject({
+      status: "failed",
+      workflowRevisionId: failed.body.run.workflowRevisionId,
+      triggerPayload: failed.body.run.triggerPayload,
+      retryOfRunId: failed.body.run.id,
+      idempotencyRootRunId: failed.body.run.id,
+      source: "manual",
+    });
+
+    const replay = await http
+      .post(
+        `/api/companies/${company.id}/workflow-runs/${failed.body.run.id}/retry`,
+      )
+      .set("Idempotency-Key", "route-retry-request")
+      .send({ reason: "Retry exact historical run" })
+      .expect(201);
+    expect(replay.body.run.id).toBe(retried.body.run.id);
+
+    const actions = (await db.select().from(activityLog)).map(
+      (row) => row.action,
+    );
+    expect(
+      actions.filter((action) => action === "workflow.run_retry_created"),
+    ).toHaveLength(1);
+  });
+
   it("invokes a published Workflow from an active task with authoritative task context and idempotency", async () => {
     const company = await seedCompany();
     await enableWorkflows();

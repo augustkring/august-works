@@ -961,12 +961,14 @@ describePg("Workflow executor V1", () => {
         );
       expect(tasksBeforeKill).toHaveLength(1);
 
-      child.kill("SIGKILL");
-      const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-        (resolve) => {
-          child.once("exit", (code, signal) => resolve({ code, signal }));
-        },
-      );
+      const exitPromise = new Promise<{
+        code: number | null;
+        signal: NodeJS.Signals | null;
+      }>((resolve) => {
+        child.once("exit", (code, signal) => resolve({ code, signal }));
+      });
+      expect(child.kill("SIGKILL")).toBe(true);
+      const exit = await exitPromise;
       expect(exit.signal).toBe("SIGKILL");
 
       // Advance only the durable lease clock so this test does not sleep for the
