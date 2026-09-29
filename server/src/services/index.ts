@@ -292,6 +292,11 @@ export {
   type FreshNativeGovernedContextInput,
 } from "./context/context-runtime.js";
 
+export {
+  memoryService,
+  type MemoryMutationActor,
+} from "./memory/memory-service.js";
+
 export { workflowService, type WorkflowMutationActor } from "./workflows/workflow-service.js";
 
 export { workflowNodeDefinitions, workflowNodeRegistryService } from "./workflows/workflow-node-registry.js";
