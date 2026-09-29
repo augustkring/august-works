@@ -111,7 +111,7 @@ ALTER TABLE "memory_binding_targets" ADD CONSTRAINT "memory_binding_targets_comp
 --> statement-breakpoint
 ALTER TABLE "memory_records" ADD CONSTRAINT "memory_records_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "memory_records" ADD CONSTRAINT "memory_records_company_binding_fk" FOREIGN KEY ("company_id","binding_id") REFERENCES "public"."memory_bindings"("company_id","id") ON DELETE restrict ON UPDATE no action;
+ALTER TABLE "memory_records" ADD CONSTRAINT "memory_records_company_binding_fk" FOREIGN KEY ("company_id","binding_id") REFERENCES "public"."memory_bindings"("company_id","id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "memory_records" ADD CONSTRAINT "memory_records_owner_agent_id_agents_id_fk" FOREIGN KEY ("owner_agent_id") REFERENCES "public"."agents"("id") ON DELETE restrict ON UPDATE no action;
 --> statement-breakpoint
@@ -121,7 +121,7 @@ ALTER TABLE "memory_records" ADD CONSTRAINT "memory_records_superseded_by_fk" FO
 --> statement-breakpoint
 ALTER TABLE "memory_evidence" ADD CONSTRAINT "memory_evidence_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "memory_evidence" ADD CONSTRAINT "memory_evidence_company_record_fk" FOREIGN KEY ("company_id","memory_record_id") REFERENCES "public"."memory_records"("company_id","id") ON DELETE restrict ON UPDATE no action;
+ALTER TABLE "memory_evidence" ADD CONSTRAINT "memory_evidence_company_record_fk" FOREIGN KEY ("company_id","memory_record_id") REFERENCES "public"."memory_records"("company_id","id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 CREATE UNIQUE INDEX "memory_bindings_company_key_uq" ON "memory_bindings" ("company_id","key");
 --> statement-breakpoint

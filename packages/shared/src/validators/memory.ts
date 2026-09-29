@@ -109,7 +109,7 @@ export const memoryEvidenceInputSchema = z
     }
   });
 
-export const memoryCandidateInputSchema = z
+const memoryCandidateBaseSchema = z
   .object({
     bindingId: z.string().guid(),
     memoryType: z.enum(MEMORY_TYPES),
@@ -131,36 +131,50 @@ export const memoryCandidateInputSchema = z
     metadata: z.record(z.string(), z.unknown()).default({}),
     evidence: z.array(memoryEvidenceInputSchema).min(1).max(64),
   })
-  .strict()
-  .superRefine((value, ctx) => {
-    if (!value.evidence.some((item) => item.relation === "supports")) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["evidence"],
-        message: "Durable memory requires at least one supporting evidence item",
-      });
-    }
-    if (
-      value.validFrom &&
-      value.validUntil &&
-      new Date(value.validUntil).getTime() <= new Date(value.validFrom).getTime()
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["validUntil"],
-        message: "validUntil must be later than validFrom",
-      });
-    }
-    if (
-      value.expiresAt &&
-      new Date(value.expiresAt).getTime() <= new Date(value.observedAt).getTime()
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["expiresAt"],
-        message: "expiresAt must be later than observedAt",
-      });
-    }
+  .strict();
+
+type MemoryCandidateBaseValue = z.infer<typeof memoryCandidateBaseSchema>;
+
+function refineMemoryEvidenceAndDates(
+  value: Pick<
+    MemoryCandidateBaseValue,
+    "evidence" | "validFrom" | "validUntil" | "observedAt" | "expiresAt"
+  >,
+  ctx: z.RefinementCtx,
+) {
+  if (!value.evidence.some((item) => item.relation === "supports")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["evidence"],
+      message: "Durable memory requires at least one supporting evidence item",
+    });
+  }
+  if (
+    value.validFrom &&
+    value.validUntil &&
+    new Date(value.validUntil).getTime() <= new Date(value.validFrom).getTime()
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["validUntil"],
+      message: "validUntil must be later than validFrom",
+    });
+  }
+  if (
+    value.expiresAt &&
+    new Date(value.expiresAt).getTime() <= new Date(value.observedAt).getTime()
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["expiresAt"],
+      message: "expiresAt must be later than observedAt",
+    });
+  }
+}
+
+export const memoryCandidateInputSchema = memoryCandidateBaseSchema.superRefine(
+  (value, ctx) => {
+    refineMemoryEvidenceAndDates(value, ctx);
     if (value.scope.type === "agent") {
       if (!value.ownerAgentId || value.ownerAgentId !== value.scope.id) {
         ctx.addIssue({
@@ -176,12 +190,12 @@ export const memoryCandidateInputSchema = z
         message: "Shared organizational memory must not have an owner agent",
       });
     }
-  });
+  },
+);
 
 export const memoryReviewInputSchema = z
   .object({
     decision: z.enum(["accept", "reject"]),
-    verificationState: z.enum(MEMORY_VERIFICATION_STATES).optional(),
     reason: nullableBounded(2000).optional(),
   })
   .strict()
@@ -195,7 +209,7 @@ export const memoryReviewInputSchema = z
     }
   });
 
-export const memoryCorrectionInputSchema = memoryCandidateInputSchema
+export const memoryCorrectionInputSchema = memoryCandidateBaseSchema
   .omit({
     bindingId: true,
     scope: true,
@@ -204,7 +218,10 @@ export const memoryCorrectionInputSchema = memoryCandidateInputSchema
   .extend({
     reason: z.string().trim().min(1).max(2000),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    refineMemoryEvidenceAndDates(value, ctx);
+  });
 
 export const memoryRevokeInputSchema = z
   .object({

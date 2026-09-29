@@ -134,7 +134,7 @@ export const memoryRecords = pgTable(
       name: "memory_records_company_binding_fk",
       columns: [table.companyId, table.bindingId],
       foreignColumns: [memoryBindings.companyId, memoryBindings.id],
-    }).onDelete("restrict"),
+    }).onDelete("cascade"),
     supersedesFk: foreignKey({
       name: "memory_records_supersedes_fk",
       columns: [table.companyId, table.supersedesRecordId],
@@ -271,7 +271,7 @@ export const memoryEvidence = pgTable(
       name: "memory_evidence_company_record_fk",
       columns: [table.companyId, table.memoryRecordId],
       foreignColumns: [memoryRecords.companyId, memoryRecords.id],
-    }).onDelete("restrict"),
+    }).onDelete("cascade"),
     recordIdx: index("memory_evidence_memory_record_idx").on(table.memoryRecordId),
     companySourceIdx: index("memory_evidence_company_source_idx").on(
       table.companyId,

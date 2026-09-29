@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import {
   activityLog,
   agents,
@@ -230,6 +231,15 @@ describePg("Memory Core service", () => {
       ),
     ).rejects.toMatchObject({ status: 403 });
 
+    await expect(
+      svc.reviewCandidate(
+        seeded.companyId,
+        created.record.id,
+        { decision: "accept", verificationState: "system_verified" },
+        { principal: { type: "user", userId: seeded.userId } },
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+
     const accepted = await svc.reviewCandidate(
       seeded.companyId,
       created.record.id,
@@ -307,6 +317,66 @@ describePg("Memory Core service", () => {
     expect(await svc.listEligible(seeded.companyId)).toEqual([
       expect.objectContaining({ id: acceptedCorrection.record.id }),
     ]);
+  });
+
+  it("excludes private agent memory from unscoped eligibility and requires explicit owner scope", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+
+    const privateCandidate = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        scope: { type: "agent", id: seeded.agent.id },
+        ownerAgentId: seeded.agent.id,
+      }),
+      { principal: { type: "agent", agentId: seeded.agent.id } },
+    );
+    await svc.reviewCandidate(
+      seeded.companyId,
+      privateCandidate.record.id,
+      { decision: "accept" },
+      { principal: { type: "user", userId: seeded.userId } },
+    );
+
+    expect(await svc.listEligible(seeded.companyId)).toEqual([]);
+    expect(
+      await svc.listEligible(seeded.companyId, {
+        scopeType: "agent",
+        scopeId: seeded.agent.id,
+      }),
+    ).toEqual([expect.objectContaining({ id: privateCandidate.record.id })]);
+
+    await expect(
+      svc.listEligible(seeded.companyId, { scopeType: "agent" }),
+    ).rejects.toMatchObject({ status: 422 });
+    await expect(
+      svc.listEligible(seeded.companyId, { scopeId: seeded.agent.id }),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("allows company deletion to cascade through bindings, records, and evidence", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const created = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id),
+      { principal: { type: "agent", agentId: seeded.agent.id } },
+    );
+
+    expect(created.evidence).toHaveLength(1);
+    await db.delete(companies).where(eq(companies.id, seeded.companyId));
+
+    expect(
+      await db.select().from(memoryBindings).where(eq(memoryBindings.companyId, seeded.companyId)),
+    ).toEqual([]);
+    expect(
+      await db.select().from(memoryRecords).where(eq(memoryRecords.companyId, seeded.companyId)),
+    ).toEqual([]);
+    expect(
+      await db.select().from(memoryEvidence).where(eq(memoryEvidence.companyId, seeded.companyId)),
+    ).toEqual([]);
   });
 
   it("revokes accepted memory durably and excludes it from eligible recall", async () => {

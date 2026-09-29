@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, ne, or } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -555,12 +555,11 @@ export function memoryService(db: Db) {
         }
 
         const nextVerification =
-          parsed.data.verificationState ??
-          (actor.principal.type === "user"
+          actor.principal.type === "user"
             ? "human_verified"
             : actor.principal.type === "system"
               ? "system_verified"
-              : "unverified");
+              : "unverified";
         const now = new Date();
 
         if (parsed.data.decision === "accept" && record.supersedesRecordId) {
@@ -723,6 +722,13 @@ export function memoryService(db: Db) {
         limit?: number;
       } = {},
     ) => {
+      if (input.scopeId !== undefined && !input.scopeType) {
+        throw unprocessable("Memory scope id requires an explicit scope type");
+      }
+      if (input.scopeType === "agent" && !input.scopeId) {
+        throw unprocessable("Agent memory eligibility requires the owning agent id");
+      }
+
       const asOf = input.asOf ?? new Date();
       const limit = Math.min(100, Math.max(1, input.limit ?? 50));
       return db
@@ -739,7 +745,9 @@ export function memoryService(db: Db) {
             or(isNull(memoryRecords.validFrom), lte(memoryRecords.validFrom, asOf)),
             or(isNull(memoryRecords.validUntil), gt(memoryRecords.validUntil, asOf)),
             or(isNull(memoryRecords.expiresAt), gt(memoryRecords.expiresAt, asOf)),
-            ...(input.scopeType ? [eq(memoryRecords.scopeType, input.scopeType)] : []),
+            ...(input.scopeType
+              ? [eq(memoryRecords.scopeType, input.scopeType)]
+              : [ne(memoryRecords.scopeType, "agent")]),
             ...(input.scopeId !== undefined
               ? input.scopeId === null
                 ? [isNull(memoryRecords.scopeId)]
