@@ -128,6 +128,12 @@ export { documentAnnotationComments } from "./document_annotation_comments.js";
 export { documentAnnotationAnchorSnapshots } from "./document_annotation_anchor_snapshots.js";
 export { contextManifests, contextManifestItems } from "./context_manifests.js";
 export {
+  memoryBindings,
+  memoryBindingTargets,
+  memoryRecords,
+  memoryEvidence,
+} from "./memory.js";
+export {
   workflows,
   workflowRevisions,
   workflowRuns,
