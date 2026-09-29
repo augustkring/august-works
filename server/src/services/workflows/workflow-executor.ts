@@ -785,6 +785,19 @@ async function finalizeLinkedRoutineRun(
     );
 }
 
+function requireWorkflowExecutionOwnerId(
+  run: typeof workflowRuns.$inferSelect,
+): string {
+  const executionOwnerId = run.executionOwnerId;
+  if (!executionOwnerId) {
+    throw conflict("Workflow run has no execution owner", {
+      code: "workflow_run_claim_lost",
+      workflowRunId: run.id,
+    });
+  }
+  return executionOwnerId;
+}
+
 async function finishRun(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
@@ -814,7 +827,7 @@ async function finishRun(
           eq(workflowRuns.id, run.id),
           eq(workflowRuns.companyId, run.companyId),
           eq(workflowRuns.status, "running"),
-          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+          eq(workflowRuns.executionOwnerId, requireWorkflowExecutionOwnerId(run)),
         ),
       )
       .returning();
@@ -930,7 +943,7 @@ async function failRun(
           eq(workflowRuns.id, run.id),
           eq(workflowRuns.companyId, run.companyId),
           eq(workflowRuns.status, "running"),
-          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+          eq(workflowRuns.executionOwnerId, requireWorkflowExecutionOwnerId(run)),
         ),
       )
       .returning();
@@ -1121,7 +1134,7 @@ async function renewRunLease(
         eq(workflowRuns.id, run.id),
         eq(workflowRuns.companyId, run.companyId),
         eq(workflowRuns.status, "running"),
-        eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+        eq(workflowRuns.executionOwnerId, requireWorkflowExecutionOwnerId(run)),
       ),
     )
     .returning();
@@ -1331,7 +1344,7 @@ export async function scheduleWorkflowStepRetry(
           eq(workflowRuns.id, run.id),
           eq(workflowRuns.companyId, run.companyId),
           eq(workflowRuns.status, "running"),
-          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+          eq(workflowRuns.executionOwnerId, requireWorkflowExecutionOwnerId(run)),
         ),
       )
       .returning();
@@ -1594,7 +1607,7 @@ async function resumeRecoveredRun(
           eq(workflowRuns.id, run.id),
           eq(workflowRuns.companyId, run.companyId),
           eq(workflowRuns.status, "recovering"),
-          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+          eq(workflowRuns.executionOwnerId, requireWorkflowExecutionOwnerId(run)),
         ),
       )
       .returning();
@@ -1757,7 +1770,7 @@ async function scheduleDelayWait(
           eq(workflowRuns.id, run.id),
           eq(workflowRuns.companyId, run.companyId),
           eq(workflowRuns.status, "running"),
-          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+          eq(workflowRuns.executionOwnerId, requireWorkflowExecutionOwnerId(run)),
         ),
       )
       .returning();
@@ -3650,7 +3663,7 @@ async function scheduleExternalAgentRunWait(
           eq(workflowRuns.id, run.id),
           eq(workflowRuns.companyId, run.companyId),
           eq(workflowRuns.status, "running"),
-          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+          eq(workflowRuns.executionOwnerId, requireWorkflowExecutionOwnerId(run)),
         ),
       )
       .returning();
@@ -4044,7 +4057,7 @@ async function scheduleAgentTaskCompletionWait(
           eq(workflowRuns.id, run.id),
           eq(workflowRuns.companyId, run.companyId),
           eq(workflowRuns.status, "running"),
-          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+          eq(workflowRuns.executionOwnerId, requireWorkflowExecutionOwnerId(run)),
         ),
       )
       .returning();
@@ -4298,7 +4311,7 @@ async function scheduleTaskCompletionWait(
           eq(workflowRuns.id, run.id),
           eq(workflowRuns.companyId, run.companyId),
           eq(workflowRuns.status, "running"),
-          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+          eq(workflowRuns.executionOwnerId, requireWorkflowExecutionOwnerId(run)),
         ),
       )
       .returning();
@@ -4421,6 +4434,7 @@ async function ensureAgentTaskWakeupForWait(
   wait: typeof workflowWaits.$inferSelect,
   issue: {
     id: string;
+    identifier: string | null;
     status: string;
     assigneeAgentId: string | null;
   },
@@ -5153,7 +5167,7 @@ async function scheduleHumanApprovalWait(
           eq(workflowRuns.id, run.id),
           eq(workflowRuns.companyId, run.companyId),
           eq(workflowRuns.status, "running"),
-          eq(workflowRuns.executionOwnerId, run.executionOwnerId),
+          eq(workflowRuns.executionOwnerId, requireWorkflowExecutionOwnerId(run)),
         ),
       )
       .returning();
@@ -7702,7 +7716,7 @@ export function workflowExecutorService(
           (actor.principal.type === "user"
             ? actor.principal.userId
             : actor.principal.type === "agent"
-              ? actor.principal.responsibleUserId
+              ? actor.principal.responsibleUserId ?? null
               : null),
         idempotencyKey,
         correlationId: `task:${issue.id}:${randomUUID()}`,

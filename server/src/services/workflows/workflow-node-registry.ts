@@ -806,8 +806,12 @@ export function validateWorkflowPublishTopology(graph: WorkflowGraphV1): void {
     });
   }
 
-  const incoming = new Map(graph.nodes.map((node) => [node.id, 0] as const));
-  const outgoing = new Map(graph.nodes.map((node) => [node.id, [] as string[]] as const));
+  const incoming = new Map<string, number>(
+    graph.nodes.map((node): [string, number] => [node.id, 0]),
+  );
+  const outgoing = new Map<string, string[]>(
+    graph.nodes.map((node): [string, string[]] => [node.id, []]),
+  );
 
   for (const edge of graph.edges) {
     incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);

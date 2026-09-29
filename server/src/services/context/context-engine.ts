@@ -214,16 +214,14 @@ export async function runContextProviders(
             reason: error instanceof ProviderDeadlineError ? "timeout" : "provider_failed",
           });
         }
-        return {
-          evidence: [],
-          warnings: [{
-            providerKey: provider.key,
-            code: error instanceof ProviderDeadlineError ? "provider_timeout" : "provider_failed",
-            message: error instanceof ProviderDeadlineError
-              ? `Optional source ${provider.key} timed out and was omitted.`
-              : `Optional source ${provider.key} failed and was omitted.`,
-          }],
+        const warning: ContextProviderWarning = {
+          providerKey: provider.key,
+          code: error instanceof ProviderDeadlineError ? "provider_timeout" : "provider_failed",
+          message: error instanceof ProviderDeadlineError
+            ? `Optional source ${provider.key} timed out and was omitted.`
+            : `Optional source ${provider.key} failed and was omitted.`,
         };
+        return { evidence: [] as EvidenceItem[], warnings: [warning] };
       }
     }),
   );
@@ -400,7 +398,8 @@ function taskProvider(db: Db): ContextProvider {
     key: "task",
     requirement: "mandatory",
     async retrieve({ request }) {
-      if (!request.issueId) return { evidence: [] };
+      const issueId = request.issueId;
+      if (!issueId) return { evidence: [] };
 
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
@@ -421,7 +420,7 @@ function taskProvider(db: Db): ContextProvider {
             originId: issues.originId,
           })
           .from(issues)
-          .where(and(eq(issues.companyId, request.companyId), eq(issues.id, request.issueId)))
+          .where(and(eq(issues.companyId, request.companyId), eq(issues.id, issueId)))
           .then((rows) => rows[0] ?? null);
         if (!issueScope) throw notFound("Context task not found");
 

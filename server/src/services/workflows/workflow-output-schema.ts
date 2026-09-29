@@ -1,5 +1,5 @@
-import Ajv, { type ErrorObject, type ValidateFunction } from "ajv";
-import addFormats from "ajv-formats";
+import Ajv from "ajv/dist/2020.js";
+import type { ErrorObject, ValidateFunction } from "ajv";
 
 const MAX_SCHEMA_BYTES = 32 * 1024;
 const MAX_ERROR_ITEMS = 8;
@@ -11,7 +11,6 @@ const ajv = new Ajv({
   allowUnionTypes: true,
   loadSchema: undefined,
 });
-addFormats(ajv);
 
 const cache = new Map<string, ValidateFunction>();
 

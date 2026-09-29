@@ -147,6 +147,9 @@ export type PipelineStageConfig = Record<string, unknown> & {
   }>;
   automation?: {
     routineId?: string | null;
+    targetKind?: "routine" | "workflow" | null;
+    targetRef?: string | null;
+    workflowId?: string | null;
     assigneeAgentId?: string | null;
     titleTemplate?: string | null;
     instructionsBody?: string | null;

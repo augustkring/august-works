@@ -422,7 +422,7 @@ describePg("Workflow executor V1", () => {
             ? options.contextSnapshot.issueId
             : null;
         return {
-          status: "skipped",
+          status: "skipped" as const,
           reason: "already_queued",
           message: null,
           issueId,
@@ -2316,7 +2316,7 @@ describePg("Workflow executor V1", () => {
           contextSnapshot: options.contextSnapshot ?? {},
         });
         return {
-          status: "skipped",
+          status: "skipped" as const,
           reason: "already_queued",
           message: null,
           issueId:

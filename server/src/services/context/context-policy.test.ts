@@ -8,12 +8,12 @@ import {
   filterEligibleEvidence,
   orderEvidenceByAuthority,
   resolveEvidenceAuthority,
-} from "../services/context/context-authority.js";
+} from "./context-authority.js";
 import {
   evidenceBucket,
   estimateEvidenceTokens,
   fitEvidenceToBudget,
-} from "../services/context/context-budget.js";
+} from "./context-budget.js";
 
 const companyId = "22222222-2222-4222-8222-222222222222";
 
