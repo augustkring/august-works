@@ -1,10 +1,16 @@
-import Ajv from "ajv/dist/2020.js";
+import Ajv2020Module from "ajv/dist/2020.js";
 import type { ErrorObject, ValidateFunction } from "ajv";
+
+type Ajv2020Constructor = new (options?: Record<string, unknown>) => {
+  compile(schema: Record<string, unknown>): ValidateFunction;
+};
+
+const Ajv2020 = Ajv2020Module as unknown as Ajv2020Constructor;
 
 const MAX_SCHEMA_BYTES = 32 * 1024;
 const MAX_ERROR_ITEMS = 8;
 
-const ajv = new Ajv({
+const ajv = new Ajv2020({
   allErrors: true,
   strict: false,
   validateFormats: false,

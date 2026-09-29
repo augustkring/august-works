@@ -1,9 +1,18 @@
 import { logger } from "../middleware/logger.js";
-import type { AgentWakeupResponse } from "@paperclipai/shared";
 import type { DurableChatWakeupRequest } from "./durable-chat-wakeup.js";
 
 type WakeupTriggerDetail = "manual" | "ping" | "callback" | "system";
 type WakeupSource = "timer" | "assignment" | "on_demand" | "automation";
+
+export interface IssueAssignmentWakeupResponse {
+  status: string;
+  id?: string;
+  agentId?: string;
+  reason?: string;
+  message?: string | null;
+  executionRunId?: string | null;
+  executionAgentId?: string | null;
+}
 
 export interface IssueAssignmentWakeupDeps {
   wakeup: (
@@ -20,7 +29,7 @@ export interface IssueAssignmentWakeupDeps {
       contextSnapshot?: Record<string, unknown>;
       durableChatRequest?: DurableChatWakeupRequest;
     },
-  ) => Promise<AgentWakeupResponse | null | undefined>;
+  ) => Promise<IssueAssignmentWakeupResponse | null | undefined>;
 }
 
 export function queueIssueAssignmentWakeup(input: {

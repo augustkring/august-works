@@ -2683,10 +2683,14 @@ async function wakeWorkflowExternalAgent(
           "External Agent wakeup was skipped",
       );
     }
-    if (response.agentId !== config.agentId) {
+    if (
+      typeof response.agentId !== "string" ||
+      response.agentId !== config.agentId ||
+      typeof response.id !== "string"
+    ) {
       throw new WorkflowCheckpointError(
         "workflow_external_agent_binding_invalid",
-        "External Agent wakeup resolved to an unexpected agent",
+        "External Agent wakeup resolved to an unexpected agent or run",
       );
     }
     return response.id;
@@ -3862,10 +3866,14 @@ async function wakeWorkflowAgentTask(
         response.message ?? response.reason ?? "Agent Task wakeup was skipped",
       );
     }
-    if (response.agentId !== agentId) {
+    if (
+      typeof response.agentId !== "string" ||
+      response.agentId !== agentId ||
+      typeof response.id !== "string"
+    ) {
       throw new WorkflowCheckpointError(
         "workflow_agent_unavailable",
-        "Agent Task wakeup resolved to an unexpected agent",
+        "Agent Task wakeup resolved to an unexpected agent or run",
       );
     }
     return response.id;

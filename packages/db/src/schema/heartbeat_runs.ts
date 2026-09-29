@@ -16,21 +16,15 @@ import {
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { agentWakeupRequests } from "./agent_wakeup_requests.js";
-import type {
-  HeartbeatInvocationSource,
-  HeartbeatRunStatus,
-  WakeupTriggerDetail,
-} from "@paperclipai/shared";
-
 export const heartbeatRuns = pgTable(
   "heartbeat_runs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id),
     agentId: uuid("agent_id").notNull().references(() => agents.id),
-    invocationSource: text("invocation_source").$type<HeartbeatInvocationSource>().notNull().default("on_demand"),
-    triggerDetail: text("trigger_detail").$type<WakeupTriggerDetail>(),
-    status: text("status").$type<HeartbeatRunStatus>().notNull().default("queued"),
+    invocationSource: text("invocation_source").notNull().default("on_demand"),
+    triggerDetail: text("trigger_detail"),
+    status: text("status").notNull().default("queued"),
     responsibleUserId: text("responsible_user_id"),
     // The service validates the company/run boundary; avoid a cyclic schema import.
     activeIdentityContextId: uuid("active_identity_context_id"),
