@@ -43,6 +43,8 @@ describe("pipeline automation issue title templates", () => {
   it("includes a custom issue title template in the stage automation save payload", () => {
     expect(
       buildStageAutomationForSave({
+        executionTargetKind: "agent_task",
+        workflowId: "",
         assigneeAgentId: "agent-1",
         titleTemplate: "Review {{case_key}} for {{market}}",
         instructionsBody: "Score {{market}} and move the item forward.",
@@ -53,6 +55,9 @@ describe("pipeline automation issue title templates", () => {
         executionWorkspaceSettings: { mode: "isolated_workspace" },
       }),
     ).toEqual({
+      targetKind: null,
+      targetRef: null,
+      workflowId: null,
       assigneeAgentId: "agent-1",
       titleTemplate: "Review {{case_key}} for {{market}}",
       instructionsBody: "Score {{market}} and move the item forward.",
@@ -61,6 +66,35 @@ describe("pipeline automation issue title templates", () => {
       executionWorkspaceId: "execution-workspace-1",
       executionWorkspacePreference: "reuse_existing",
       executionWorkspaceSettings: { mode: "isolated_workspace" },
+    });
+  });
+
+  it("persists a Workflow target without agent-specific execution settings", () => {
+    expect(
+      buildStageAutomationForSave({
+        executionTargetKind: "workflow",
+        workflowId: "11111111-1111-4111-8111-111111111111",
+        assigneeAgentId: "agent-1",
+        titleTemplate: "Ignored issue title",
+        instructionsBody: "Ignored agent instructions",
+        projectId: "project-1",
+        projectWorkspaceId: "workspace-1",
+        executionWorkspaceId: "execution-workspace-1",
+        executionWorkspacePreference: "reuse_existing",
+        executionWorkspaceSettings: { mode: "isolated_workspace" },
+      }),
+    ).toEqual({
+      targetKind: "workflow",
+      targetRef: "11111111-1111-4111-8111-111111111111",
+      workflowId: "11111111-1111-4111-8111-111111111111",
+      assigneeAgentId: null,
+      titleTemplate: "",
+      instructionsBody: "",
+      projectId: null,
+      projectWorkspaceId: null,
+      executionWorkspaceId: null,
+      executionWorkspacePreference: null,
+      executionWorkspaceSettings: null,
     });
   });
 

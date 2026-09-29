@@ -24,6 +24,11 @@ import {
   projects,
   routineRuns,
   routines,
+  workflowRevisions,
+  workflowRuns,
+  workflowStepRuns,
+  workflowWaits,
+  workflows,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -62,6 +67,11 @@ describeEmbeddedPostgres("pipelineService", () => {
 
   afterEach(async () => {
     await db.delete(pipelineAutomationExecutions);
+    await db.delete(workflowWaits);
+    await db.delete(workflowStepRuns);
+    await db.delete(workflowRuns);
+    await db.delete(workflowRevisions);
+    await db.delete(workflows);
     await db.delete(pipelineCaseBlockers);
     await db.delete(pipelineCaseIssueLinks);
     await db.delete(pipelineCaseEvents);
@@ -132,6 +142,53 @@ describeEmbeddedPostgres("pipelineService", () => {
       concurrencyPolicy: "always_enqueue",
       catchUpPolicy: "skip_missed",
     }, {});
+  }
+
+  async function seedPublishedWorkflow(companyId: string, name = "Pipeline workflow") {
+    const [workflow] = await db
+      .insert(workflows)
+      .values({
+        companyId,
+        name,
+        status: "active",
+      })
+      .returning();
+    const [revision] = await db
+      .insert(workflowRevisions)
+      .values({
+        companyId,
+        workflowId: workflow!.id,
+        revisionNumber: 1,
+        state: "published",
+        graph: {
+          version: 1,
+          nodes: [
+            {
+              id: "start",
+              type: "core.manual_trigger",
+              name: "Start",
+              position: { x: 0, y: 0 },
+              config: {},
+            },
+            {
+              id: "condition",
+              type: "core.condition",
+              name: "Continue",
+              position: { x: 180, y: 0 },
+              config: { expression: "true" },
+            },
+          ],
+          edges: [{ id: "e1", source: "start", target: "condition" }],
+          variables: [],
+          settings: {},
+        },
+      })
+      .returning();
+    await db
+      .update(workflows)
+      .set({ publishedRevisionId: revision!.id })
+      .where(eq(workflows.id, workflow!.id));
+    return { workflow: workflow!, revision: revision! };
   }
 
   async function eventCount(caseId: string) {
@@ -1375,6 +1432,160 @@ describeEmbeddedPostgres("pipelineService", () => {
       .from(pipelineCaseIssueLinks)
       .where(eq(pipelineCaseIssueLinks.issueId, crashExecutions[0]!.executionIssueId!));
     expect(crashLinks).toHaveLength(1);
+  });
+
+  it("dispatches a stage-entry Workflow through the existing automation ledger", async () => {
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true });
+    const company = await seedCompany();
+    const published = await seedPublishedWorkflow(company.id);
+    const pipeline = await svc.createPipeline({
+      companyId: company.id,
+      key: "workflow-automation",
+      name: "Workflow automation",
+      actor: userActor,
+      stages: [
+        { key: "intake", name: "Intake", kind: "open" },
+        {
+          key: "drafting",
+          name: "Drafting",
+          kind: "working",
+          config: {
+            onEnter: {
+              type: "run_target",
+              target: {
+                kind: "workflow",
+                workflowId: published.workflow.id,
+              },
+            },
+          },
+        },
+        { key: "done", name: "Done", kind: "done" },
+        { key: "cancelled", name: "Cancelled", kind: "cancelled" },
+      ],
+    });
+    const created = await svc.ingestCase({
+      companyId: company.id,
+      pipelineId: pipeline.id,
+      caseKey: "workflow-automation",
+      title: "Workflow automation case",
+      actor: userActor,
+    });
+
+    const moved = await svc.transitionCase({
+      companyId: company.id,
+      caseId: created.case.id,
+      toStageKey: "drafting",
+      expectedVersion: 1,
+      actor: userActor,
+    });
+
+    expect(moved.automationExecution.status).toBe("succeeded");
+    expect(moved.automationLedger).toMatchObject({
+      targetKind: "workflow",
+      targetRef: published.workflow.id,
+      routineId: null,
+      status: "failed",
+    });
+
+    const ledgers = await db
+      .select()
+      .from(pipelineAutomationExecutions)
+      .where(eq(pipelineAutomationExecutions.caseId, created.case.id));
+    expect(ledgers).toHaveLength(1);
+    expect(ledgers[0]).toMatchObject({
+      targetKind: "workflow",
+      targetRef: published.workflow.id,
+      routineId: null,
+      status: "succeeded",
+      executionIssueId: null,
+    });
+    expect(ledgers[0]!.workflowRunId).toEqual(expect.any(String));
+
+    const workflowRun = await db
+      .select()
+      .from(workflowRuns)
+      .where(eq(workflowRuns.id, ledgers[0]!.workflowRunId!))
+      .then((rows) => rows[0] ?? null);
+    expect(workflowRun).toMatchObject({
+      companyId: company.id,
+      workflowId: published.workflow.id,
+      workflowRevisionId: published.revision.id,
+      source: "pipeline",
+      status: "succeeded",
+    });
+    expect(workflowRun?.triggerPayload).toMatchObject({
+      pipeline: { id: pipeline.id },
+      case: { id: created.case.id },
+      stage: { key: "drafting" },
+      triggeringEventId: moved.event.id,
+      automation: {
+        automationId: moved.automationLedger!.automationId,
+        automationExecutionId: moved.automationLedger!.id,
+        generation: 1,
+      },
+    });
+
+    expect(
+      await db
+        .select()
+        .from(pipelineCaseIssueLinks)
+        .where(eq(pipelineCaseIssueLinks.caseId, created.case.id)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(issues)
+        .where(eq(issues.companyId, company.id)),
+    ).toHaveLength(0);
+
+    const duplicate = await svc.retryAutomation({
+      companyId: company.id,
+      caseId: created.case.id,
+      automationId: moved.automationLedger!.automationId,
+      actor: userActor,
+    });
+    expect(duplicate.status).toBe("succeeded");
+    expect(
+      await db
+        .select()
+        .from(workflowRuns)
+        .where(eq(workflowRuns.workflowId, published.workflow.id)),
+    ).toHaveLength(1);
+  });
+
+  it("rejects a cross-company Workflow automation target before pipeline creation", async () => {
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true });
+    const company = await seedCompany();
+    const otherCompany = await seedCompany();
+    const published = await seedPublishedWorkflow(otherCompany.id, "Other company workflow");
+
+    await expect(
+      svc.createPipeline({
+        companyId: company.id,
+        key: "cross-company-workflow",
+        name: "Cross-company workflow",
+        actor: userActor,
+        stages: [
+          { key: "intake", name: "Intake", kind: "open" },
+          {
+            key: "drafting",
+            name: "Drafting",
+            kind: "working",
+            config: {
+              onEnter: {
+                type: "run_target",
+                target: {
+                  kind: "workflow",
+                  workflowId: published.workflow.id,
+                },
+              },
+            },
+          },
+          { key: "done", name: "Done", kind: "done" },
+          { key: "cancelled", name: "Cancelled", kind: "cancelled" },
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 404 });
   });
 
   it("carries saved stage automation workspace context into the execution issue", async () => {

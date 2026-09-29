@@ -65,6 +65,7 @@ import {
 import { agentsApi } from "../api/agents";
 import { authApi } from "../api/auth";
 import { projectsApi } from "../api/projects";
+import { workflowsApi } from "../api/workflows";
 import { executionWorkspacesApi } from "../api/execution-workspaces";
 import { useCompany } from "../context/CompanyContext";
 import { useDialogActions } from "../context/DialogContext";
@@ -321,6 +322,7 @@ import {
   ScanEye,
   Flag,
   FileCode2,
+  GitBranch,
   ListTree,
   MessageSquare,
   MoreHorizontal,
@@ -2892,6 +2894,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const { pushToast } = useToastActions();
   const { isMobile } = useSidebar();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [taskWorkflowOpen, setTaskWorkflowOpen] = useState(false);
+  const taskWorkflowIdempotencyRef = useRef<{
+    workflowId: string;
+    key: string;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
   const [mobilePropsOpen, setMobilePropsOpen] = useState(false);
   const [artifactsOpenRequest, setArtifactsOpenRequest] = useState<{
@@ -3021,6 +3028,75 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     !hasLegacyIssueDetailQuery(location.search)
   ));
   const resolvedCompanyId = issue?.companyId ?? selectedCompanyId;
+  const taskWorkflowsQuery = useQuery({
+    queryKey: queryKeys.workflows.list(resolvedCompanyId!),
+    queryFn: () => workflowsApi.list(resolvedCompanyId!),
+    enabled:
+      taskWorkflowOpen &&
+      !!resolvedCompanyId &&
+      !!issue &&
+      issue.status !== "done" &&
+      issue.status !== "cancelled",
+    retry: false,
+  });
+  const taskRunnableWorkflows = useMemo(
+    () =>
+      (taskWorkflowsQuery.data ?? []).filter(
+        (workflow) =>
+          workflow.status === "active" &&
+          Boolean(workflow.publishedRevisionId),
+      ),
+    [taskWorkflowsQuery.data],
+  );
+  const runTaskWorkflow = useMutation({
+    mutationFn: async (workflowId: string) => {
+      if (!resolvedCompanyId || !issue) {
+        throw new Error("Task context is unavailable.");
+      }
+      const existingAttempt = taskWorkflowIdempotencyRef.current;
+      const fallbackSuffix = `${Date.now().toString(36)}-${Math.round(
+        performance.now() * 1_000,
+      ).toString(36)}`;
+      const key =
+        existingAttempt?.workflowId === workflowId
+          ? existingAttempt.key
+          : `task-ui:${issue.id}:${workflowId}:${
+              typeof globalThis.crypto?.randomUUID === "function"
+                ? globalThis.crypto.randomUUID()
+                : fallbackSuffix
+            }`;
+      taskWorkflowIdempotencyRef.current = { workflowId, key };
+      return workflowsApi.startTaskRun(
+        resolvedCompanyId,
+        issue.id,
+        workflowId,
+        { input: {} },
+        key,
+      );
+    },
+    onSuccess: (detail) => {
+      taskWorkflowIdempotencyRef.current = null;
+      setTaskWorkflowOpen(false);
+      pushToast({
+        title: "Workflow started",
+        body: "Opened the workflow run for this task.",
+        tone: "success",
+      });
+      navigate(
+        `/workflows/${detail.run.workflowId}/runs/${detail.run.id}`,
+      );
+    },
+    onError: (mutationError) => {
+      pushToast({
+        title: "Could not run workflow",
+        body:
+          mutationError instanceof Error
+            ? mutationError.message
+            : "The workflow could not be started from this task.",
+        tone: "error",
+      });
+    },
+  });
   const externalObjectsState = useIssueExternalObjects(conversation && !conversation.issue ? null : issue?.id ?? null);
   // A closed isolated workspace no longer blocks the composer. The server reopens
   // the workspace when the next comment or resume arrives, so the composer stays
@@ -7226,6 +7302,18 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                     ) : null}
                   </>
                 ) : null}
+                {!isTerminalIssue ? (
+                  <button
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-accent/50"
+                    onClick={() => {
+                      setTaskWorkflowOpen(true);
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <GitBranch className="h-3 w-3" aria-hidden="true" />
+                    Run workflow
+                  </button>
+                ) : null}
                 <TaskTreeControlMenuItems
                   scope={treeControlScope}
                   canPause={
@@ -8103,6 +8191,96 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
               })
             }
           />
+
+          <Dialog
+            open={taskWorkflowOpen}
+            onOpenChange={(open) => {
+              if (!runTaskWorkflow.isPending) setTaskWorkflowOpen(open);
+            }}
+          >
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Run workflow</DialogTitle>
+                <DialogDescription>
+                  Use a published workflow as deterministic automation while
+                  completing this task. The task is passed as authoritative
+                  workflow context.
+                </DialogDescription>
+              </DialogHeader>
+
+              {taskWorkflowsQuery.isLoading ? (
+                <div className="space-y-2 py-2" aria-label="Loading workflows">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : taskWorkflowsQuery.isError ? (
+                <div role="alert" className="space-y-3 py-2">
+                  <p className="text-sm font-medium">
+                    Workflows could not be loaded
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    No workflow has been started. Retry when the workflow
+                    service is available.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => taskWorkflowsQuery.refetch()}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : taskRunnableWorkflows.length === 0 ? (
+                <p className="py-4 text-sm text-muted-foreground">
+                  No active published workflows are available for this company.
+                </p>
+              ) : (
+                <div className="divide-y divide-border border-y border-border">
+                  {taskRunnableWorkflows.map((workflow) => (
+                    <button
+                      key={workflow.id}
+                      type="button"
+                      disabled={runTaskWorkflow.isPending}
+                      onClick={() => runTaskWorkflow.mutate(workflow.id)}
+                      className="flex w-full items-center gap-3 px-2 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <GitBranch
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {workflow.name}
+                        </span>
+                        {workflow.description ? (
+                          <span className="mt-0.5 block line-clamp-1 text-xs text-muted-foreground">
+                            {workflow.description}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {runTaskWorkflow.isPending &&
+                        runTaskWorkflow.variables === workflow.id
+                          ? "Starting…"
+                          : "Run"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setTaskWorkflowOpen(false)}
+                  disabled={runTaskWorkflow.isPending}
+                >
+                  Cancel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Mobile properties drawer */}
           <Sheet open={mobilePropsOpen} onOpenChange={setMobilePropsOpen}>

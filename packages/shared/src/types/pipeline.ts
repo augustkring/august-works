@@ -25,8 +25,22 @@ export interface PipelineCaseConversationSource {
   sourceRunId?: string | null;
 }
 
+export const PIPELINE_AUTOMATION_TARGET_KINDS = [
+  "routine",
+  "workflow",
+] as const;
+export type PipelineAutomationTargetKind =
+  (typeof PIPELINE_AUTOMATION_TARGET_KINDS)[number];
+
+export type PipelineAutomationTarget =
+  | { kind: "routine"; routineId: string }
+  | { kind: "workflow"; workflowId: string };
+
 export interface PipelineStageAutomation {
-  routineId: string;
+  routineId: string | null;
+  targetKind?: PipelineAutomationTargetKind;
+  targetRef?: string;
+  workflowId?: string | null;
   assigneeAgentId: string | null;
   titleTemplate: string;
   instructionsBody: string;
@@ -75,6 +89,9 @@ export interface PipelineCaseLiveness {
   automation?: {
     automationId?: string | null;
     routineId?: string | null;
+    targetKind?: PipelineAutomationTargetKind | null;
+    targetRef?: string | null;
+    workflowRunId?: string | null;
     executionId?: string | null;
     error?: string | null;
     fingerprint?: string | null;
@@ -98,6 +115,17 @@ export interface PipelineAutomationRetryStageRef {
   id: string;
   key: string;
   name: string;
+}
+
+export interface PipelineAutomationRetryWorkflowRef {
+  id: string;
+  name: string;
+}
+
+export interface PipelineAutomationRetryTargetRef {
+  kind: PipelineAutomationTargetKind;
+  id: string;
+  label: string;
 }
 
 export interface PipelineAutomationRetryRoutineRef {
@@ -145,7 +173,9 @@ export interface PipelineAutomationRetryPlan {
   targetStage: PipelineAutomationRetryStageRef | null;
   availableTargetStages: PipelineAutomationRetryStageRef[];
   automationId: string | null;
+  target?: PipelineAutomationRetryTargetRef | null;
   routine: PipelineAutomationRetryRoutineRef | null;
+  workflow?: PipelineAutomationRetryWorkflowRef | null;
   previousAttemptId: string | null;
   generation: number;
   effectCounts: PipelineAutomationRetryEffectCounts;

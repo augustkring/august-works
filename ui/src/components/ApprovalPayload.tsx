@@ -1,4 +1,4 @@
-import { UserPlus, Lightbulb, ShieldAlert, ShieldCheck } from "lucide-react";
+import { GitBranch, UserPlus, Lightbulb, ShieldAlert, ShieldCheck } from "lucide-react";
 import { MarkdownBody } from "./MarkdownBody";
 import { formatCents } from "../lib/utils";
 
@@ -7,6 +7,7 @@ export const typeLabel: Record<string, string> = {
   approve_ceo_strategy: "CEO Strategy",
   budget_override_required: "Budget Override",
   request_board_approval: "Board Approval",
+  workflow_step_approval: "Workflow Approval",
 };
 
 function firstNonEmptyString(...values: unknown[]): string | null {
@@ -42,6 +43,7 @@ export const typeIcon: Record<string, typeof UserPlus> = {
   approve_ceo_strategy: Lightbulb,
   budget_override_required: ShieldAlert,
   request_board_approval: ShieldCheck,
+  workflow_step_approval: GitBranch,
 };
 
 export const defaultTypeIcon = ShieldCheck;
@@ -238,6 +240,56 @@ function BoardApprovalPayloadContent({ payload }: { payload: Record<string, unkn
   );
 }
 
+export function WorkflowStepApprovalPayload({
+  payload,
+}: {
+  payload: Record<string, unknown>;
+}) {
+  const summary = firstNonEmptyString(payload.summary, payload.title);
+  const consequence = firstNonEmptyString(
+    payload.consequence,
+    payload.nextActionOnApproval,
+  );
+  const reversibility = firstNonEmptyString(payload.reversibility);
+  const riskLevel = firstNonEmptyString(payload.riskLevel);
+  const requestedBy = firstNonEmptyString(payload.requestedByPrincipal);
+
+  return (
+    <div className="mt-4 space-y-3.5 text-sm">
+      {summary ? (
+        <div className="space-y-1">
+          <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-muted-foreground">
+            Reason
+          </p>
+          <MarkdownBody className="leading-6 text-foreground/90">{summary}</MarkdownBody>
+        </div>
+      ) : null}
+      {consequence ? (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3.5 py-3">
+          <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-amber-700 dark:text-amber-300">
+            What approval allows
+          </p>
+          <MarkdownBody className="mt-1 leading-6 text-foreground">{consequence}</MarkdownBody>
+        </div>
+      ) : null}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <PayloadField label="Risk" value={riskLevel} />
+        <PayloadField label="Requested by" value={requestedBy} />
+        <PayloadField label="Workflow" value={payload.workflowId} />
+        <PayloadField label="Run" value={payload.workflowRunId} />
+      </div>
+      {reversibility ? (
+        <div className="space-y-1">
+          <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-muted-foreground">
+            Reversibility
+          </p>
+          <p className="leading-6 text-muted-foreground">{reversibility}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ApprovalPayloadRenderer({
   type,
   payload,
@@ -251,6 +303,9 @@ export function ApprovalPayloadRenderer({
   if (type === "budget_override_required") return <BudgetOverridePayload payload={payload} />;
   if (type === "request_board_approval") {
     return <BoardApprovalPayload payload={payload} hideTitle={hidePrimaryTitle} />;
+  }
+  if (type === "workflow_step_approval") {
+    return <WorkflowStepApprovalPayload payload={payload} />;
   }
   return <CeoStrategyPayload payload={payload} />;
 }

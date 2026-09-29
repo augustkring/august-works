@@ -82,6 +82,7 @@ import {
   routineService,
   statusCardService,
   toolAccessService,
+  workflowExecutorService,
   workspaceOperationService,
 } from "./services/index.js";
 import { questionResponseDeliveryService } from "./services/question-response-delivery.js";
@@ -1154,12 +1155,40 @@ async function startServerWithDatabaseTeardown(
     }
   };
   const executionControlSweepsInFlight = new Set<string>();
+  const workflowRecoveryExecutor = workflowExecutorService(db);
   const executionControlSweeps = [
     ["finalization", () => reconcileAbandonedExecutionControl(db)],
     ["replacement", () => heartbeat ? reconcileSafeNativeReplacements(db, new Date(), { verifyStoppedSession: run => verifyStoppedNativeSessionForReplacement(db, run) }) : undefined],
     ["reconciliation_delivery", () => heartbeat ? deliverReconciledExecutions(db, heartbeat.wakeup) : undefined],
     ["status_delivery", () => deliverExecutionStatuses(db)],
     ["automatic_disposition", () => settleUnrecoverableExecutions(db)],
+    ["workflow_recovery", async () => {
+      const experimental = await instanceSettingsService(db).getExperimental();
+      if (experimental.enableWorkflowsV1 !== true) return;
+      const result = await workflowRecoveryExecutor.recoverExpiredRuns(20);
+      if (result.failedRunIds.length > 0) {
+        logger.error(
+          {
+            checked: result.checked,
+            recovered: result.recovered,
+            raced: result.raced,
+            deferred: result.deferred,
+            failedRunIds: result.failedRunIds,
+          },
+          "workflow recovery sweep completed with failures",
+        );
+      } else if (result.recovered > 0 || result.raced > 0) {
+        logger.info(
+          {
+            checked: result.checked,
+            recovered: result.recovered,
+            raced: result.raced,
+            deferred: result.deferred,
+          },
+          "workflow recovery sweep completed",
+        );
+      }
+    }],
     ["local_ai_login_cleanup", () => localAiLoginService(db).reapExpired()],
   ] as const;
   const sweepExecutionControl = () => {

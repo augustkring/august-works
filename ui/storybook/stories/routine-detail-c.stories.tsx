@@ -249,6 +249,13 @@ function makeContext(
     description: routineDetail.description ?? "",
     projectId: routineDetail.projectId ?? "",
     assigneeAgentId: routineDetail.assigneeAgentId ?? "",
+    executionTargetKind:
+      routineDetail.executionTargetKind === "workflow" ? "workflow" : "agent_task",
+    executionTargetRef:
+      routineDetail.executionTargetRef ??
+      (routineDetail.executionTargetKind === "workflow"
+        ? ""
+        : routineDetail.assigneeAgentId ?? ""),
     priority: routineDetail.priority,
     concurrencyPolicy: routineDetail.concurrencyPolicy,
     catchUpPolicy: routineDetail.catchUpPolicy,
@@ -297,15 +304,19 @@ function makeContext(
     createSecret: stubMutation(),
     agents: storybookAgents,
     projects: storybookProjects,
+    workflows: [],
     agentById: new Map(storybookAgents.map((a) => [a.id, a])),
     projectById: new Map(storybookProjects.map((p) => [p.id, p])),
+    workflowById: new Map(),
     assigneeOptions: storybookAgents.map((a) => ({ id: a.id, label: a.name, searchText: a.name })),
     projectOptions: storybookProjects.map((p) => ({ id: p.id, label: p.name, searchText: p.name })),
+    workflowOptions: [],
     recentAssigneeIds: [],
     recentProjectIds: [],
     mentionOptions: [],
     currentAssignee: storybookAgents[0] ?? null,
     currentProject: storybookProjects[0] ?? null,
+    currentWorkflow: null,
     routineRuns,
     activity,
     hasLiveRun: false,

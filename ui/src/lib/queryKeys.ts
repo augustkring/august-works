@@ -422,6 +422,36 @@ export const queryKeys = {
     fileResourceAvailability: (issueId: string, refKeys: readonly string[]) =>
       ["issues", "file-resources", issueId, "availability", refKeys] as const,
   },
+  foundation: {
+    capabilities: (companyId: string) => ["foundation", companyId, "capabilities"] as const,
+    list: (companyId: string) => ["foundation", companyId, "list"] as const,
+    detail: (companyId: string, id: string) =>
+      ["foundation", companyId, "detail", id] as const,
+    revisions: (companyId: string, id: string) =>
+      ["foundation", companyId, "detail", id, "revisions"] as const,
+    proposals: (companyId: string, id: string) =>
+      ["foundation", companyId, "detail", id, "proposals"] as const,
+    search: (companyId: string, q: string, scope: "approved" | "working") =>
+      ["foundation", companyId, "search", q, scope] as const,
+  },
+  workflows: {
+    capabilitySearch: (companyId: string, q: string, kind?: string) =>
+      ["workflows", companyId, "capability-search", q, kind ?? "__all"] as const,
+    dataSelector: (companyId: string, targetNodeId: string, graphKey: string) =>
+      ["workflows", companyId, "data-selector", targetNodeId, graphKey] as const,
+    capabilities: (companyId: string) => ["workflows", companyId, "capabilities"] as const,
+    list: (companyId: string) => ["workflows", companyId, "list"] as const,
+    detail: (companyId: string, workflowId: string) =>
+      ["workflows", companyId, "detail", workflowId] as const,
+    revisions: (companyId: string, workflowId: string) =>
+      ["workflows", companyId, "detail", workflowId, "revisions"] as const,
+    runs: (companyId: string, workflowId: string) =>
+      ["workflows", companyId, "detail", workflowId, "runs"] as const,
+    run: (companyId: string, runId: string) =>
+      ["workflows", companyId, "run", runId] as const,
+    nodeRegistry: (companyId: string) =>
+      ["workflows", companyId, "node-registry"] as const,
+  },
   routines: {
     list: (companyId: string, filters?: { projectId?: string | null }) =>
       [

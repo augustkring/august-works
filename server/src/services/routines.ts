@@ -28,6 +28,8 @@ import {
   routines,
   routineTriggers,
   routineWebhookTestReceipts,
+  workflowRuns,
+  workflows,
 } from "@paperclipai/db";
 import type {
   CreateRoutine,
@@ -37,6 +39,7 @@ import type {
   RoutineDescriptionDocument,
   RoutineListItem,
   RoutineManagedByPlugin,
+  RoutineExecutionTarget,
   RoutineRevision,
   RoutineRevisionSnapshotV1,
   RoutineRunSummary,
@@ -78,7 +81,17 @@ import {
   type WorktreeRunExecutionActivationState,
 } from "./instance-settings.js";
 import { queueIssueAssignmentWakeup, type IssueAssignmentWakeupDeps } from "./issue-assignment-wakeup.js";
-import { logActivity } from "./activity-log.js";
+import {
+  logActivity,
+  publishActivity,
+  type ActivityPublication,
+} from "./activity-log.js";
+import {
+  enqueueWorkflowRunInTransaction,
+  resolveWorkflowExecutionRevision,
+  workflowExecutorService,
+  type WorkflowRunActor,
+} from "./workflows/workflow-executor.js";
 import type { PluginWorkerManager } from "./plugin-worker-manager.js";
 import { runtimePublicOrigin } from "./cloud-runtime-identity.js";
 
@@ -413,20 +426,79 @@ function assertScheduleCompatibleVariables(variables: RoutineVariable[]) {
   }
 }
 
-function statusRequiresDefaultAgent(status: string) {
+function resolveRoutineExecutionTarget(
+  routine: Pick<
+    RoutineRow,
+    "executionTargetKind" | "executionTargetRef" | "assigneeAgentId"
+  >,
+): RoutineExecutionTarget | null {
+  if (routine.executionTargetKind === "workflow" && routine.executionTargetRef) {
+    return { kind: "workflow", workflowId: routine.executionTargetRef };
+  }
+  if (
+    routine.executionTargetKind === "agent_task" &&
+    routine.executionTargetRef
+  ) {
+    return { kind: "agent_task", agentId: routine.executionTargetRef };
+  }
+  if (routine.assigneeAgentId) {
+    return { kind: "agent_task", agentId: routine.assigneeAgentId };
+  }
+  return null;
+}
+
+function requestedRoutineExecutionTarget(input: {
+  executionTarget?: RoutineExecutionTarget | null;
+  assigneeAgentId?: string | null;
+}): RoutineExecutionTarget | null {
+  if (input.executionTarget) return input.executionTarget;
+  return input.assigneeAgentId
+    ? { kind: "agent_task", agentId: input.assigneeAgentId }
+    : null;
+}
+
+function executionTargetStorage(target: RoutineExecutionTarget | null) {
+  if (!target) {
+    return {
+      assigneeAgentId: null,
+      executionTargetKind: null,
+      executionTargetRef: null,
+    };
+  }
+  if (target.kind === "agent_task") {
+    return {
+      assigneeAgentId: target.agentId,
+      executionTargetKind: "agent_task" as const,
+      executionTargetRef: target.agentId,
+    };
+  }
+  return {
+    assigneeAgentId: null,
+    executionTargetKind: "workflow" as const,
+    executionTargetRef: target.workflowId,
+  };
+}
+
+function statusRequiresExecutionTarget(status: string) {
   return status === "active";
 }
 
-function normalizeDraftRoutineStatus(status: string, assigneeAgentId: string | null | undefined) {
-  if (statusRequiresDefaultAgent(status) && !assigneeAgentId) {
+function normalizeDraftRoutineStatus(
+  status: string,
+  target: RoutineExecutionTarget | null,
+) {
+  if (statusRequiresExecutionTarget(status) && !target) {
     return "paused";
   }
   return status;
 }
 
-function assertRoutineCanEnable(status: string, assigneeAgentId: string | null | undefined) {
-  if (statusRequiresDefaultAgent(status) && !assigneeAgentId) {
-    throw unprocessable("Default agent required");
+function assertRoutineCanEnable(
+  status: string,
+  target: RoutineExecutionTarget | null,
+) {
+  if (statusRequiresExecutionTarget(status) && !target) {
+    throw unprocessable("Routine execution target required");
   }
 }
 
@@ -521,6 +593,7 @@ function createRoutineDispatchFingerprint(input: {
   projectId: string | null;
   projectWorkspaceId: string | null;
   assigneeAgentId: string | null;
+  executionTarget: RoutineExecutionTarget;
   routineRevisionId: string | null;
   routineEnvFingerprint: string | null;
   executionWorkspaceId?: string | null;
@@ -563,6 +636,8 @@ function routineRevisionSnapshotRoutine(routine: RoutineRow): RoutineRevisionSna
     title: routine.title,
     description: routine.description,
     assigneeAgentId: routine.assigneeAgentId,
+    executionTargetKind: routine.executionTargetKind,
+    executionTargetRef: routine.executionTargetRef,
     priority: routine.priority as RoutineRevisionSnapshotV1["routine"]["priority"],
     status: routine.status as RoutineRevisionSnapshotV1["routine"]["status"],
     concurrencyPolicy: routine.concurrencyPolicy as RoutineRevisionSnapshotV1["routine"]["concurrencyPolicy"],
@@ -687,6 +762,116 @@ export function routineService(
       .from(routines)
       .where(eq(routines.id, id))
       .then((rows) => rows[0] ?? null);
+  }
+
+  async function assertRoutineExecutionTarget(
+    companyId: string,
+    target: RoutineExecutionTarget | null,
+    options: { requireRunnable: boolean },
+  ) {
+    if (!target) {
+      if (options.requireRunnable) {
+        throw unprocessable("Routine execution target required");
+      }
+      return;
+    }
+
+    if (target.kind === "agent_task") {
+      await assertAssignableAgent(db, companyId, target.agentId, {
+        kind: "routine",
+      });
+      return;
+    }
+
+    if (options.requireRunnable) {
+      const experimental = await instanceSettings.getExperimental();
+      if (experimental.enableWorkflowsV1 !== true) {
+        throw conflict("Workflows are disabled", {
+          code: "workflows_disabled",
+        });
+      }
+      await resolveWorkflowExecutionRevision(
+        db,
+        companyId,
+        target.workflowId,
+      );
+      return;
+    }
+
+    const workflow = await db
+      .select({ id: workflows.id })
+      .from(workflows)
+      .where(
+        and(
+          eq(workflows.companyId, companyId),
+          eq(workflows.id, target.workflowId),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    if (!workflow) {
+      throw unprocessable("Routine workflow target is not available in this company", {
+        code: "routine_execution_target_invalid",
+        targetKind: target.kind,
+        targetRef: target.workflowId,
+      });
+    }
+  }
+
+  function resolveUpdatedRoutineExecutionTarget(
+    existing: RoutineRow,
+    patch: UpdateRoutine,
+  ): RoutineExecutionTarget | null {
+    if (patch.executionTarget !== undefined) {
+      return patch.executionTarget;
+    }
+    if (patch.assigneeAgentId !== undefined) {
+      const current = resolveRoutineExecutionTarget(existing);
+      if (
+        current?.kind === "workflow" &&
+        patch.assigneeAgentId === null
+      ) {
+        return current;
+      }
+      return patch.assigneeAgentId
+        ? { kind: "agent_task", agentId: patch.assigneeAgentId }
+        : null;
+    }
+    return resolveRoutineExecutionTarget(existing);
+  }
+
+  function workflowActorForRoutine(
+    source: "schedule" | "manual" | "api" | "webhook",
+    actor: Actor | undefined,
+    responsibleUserId: string | null,
+  ): WorkflowRunActor {
+    if (source === "manual" && actor?.userId) {
+      return {
+        principal: { type: "user", userId: actor.userId },
+        responsibleUserId,
+      };
+    }
+    if (source === "manual" && actor?.agentId) {
+      return {
+        principal: {
+          type: "agent",
+          agentId: actor.agentId,
+          responsibleUserId,
+        },
+        responsibleUserId,
+      };
+    }
+    return {
+      principal: {
+        type: "system",
+        service:
+          source === "schedule"
+            ? "routine-scheduler"
+            : source === "webhook"
+              ? "routine-webhook"
+              : "routine-api",
+      },
+      responsibleUserId,
+    };
   }
 
   async function getRoutineAgentSummary(
@@ -1085,6 +1270,9 @@ export function routineService(
         dispatchFingerprint: routineRuns.dispatchFingerprint,
         routineRevisionId: routineRuns.routineRevisionId,
         linkedIssueId: routineRuns.linkedIssueId,
+        linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
+        linkedWorkflowId: workflowRuns.workflowId,
+        linkedWorkflowRunStatus: workflowRuns.status,
         coalescedIntoRunId: routineRuns.coalescedIntoRunId,
         failureReason: routineRuns.failureReason,
         completedAt: routineRuns.completedAt,
@@ -1101,6 +1289,13 @@ export function routineService(
       .from(routineRuns)
       .leftJoin(routineTriggers, eq(routineRuns.triggerId, routineTriggers.id))
       .leftJoin(issues, eq(routineRuns.linkedIssueId, issues.id))
+      .leftJoin(
+        workflowRuns,
+        and(
+          eq(workflowRuns.companyId, routineRuns.companyId),
+          eq(workflowRuns.id, routineRuns.linkedWorkflowRunId),
+        ),
+      )
       .where(and(eq(routineRuns.companyId, companyId), inArray(routineRuns.routineId, routineIds)))
       .orderBy(routineRuns.routineId, desc(routineRuns.createdAt), desc(routineRuns.id));
 
@@ -1119,6 +1314,10 @@ export function routineService(
         dispatchFingerprint: row.dispatchFingerprint,
         routineRevisionId: row.routineRevisionId,
         linkedIssueId: row.linkedIssueId,
+        linkedWorkflowRunId: row.linkedWorkflowRunId,
+        linkedWorkflowId: row.linkedWorkflowId,
+        linkedWorkflowRunStatus:
+          row.linkedWorkflowRunStatus as RoutineRunSummary["linkedWorkflowRunStatus"],
         coalescedIntoRunId: row.coalescedIntoRunId,
         failureReason: row.failureReason,
         completedAt: row.completedAt,
@@ -1571,6 +1770,44 @@ export function routineService(
       .then((rows) => rows[0]?.issues ?? null);
   }
 
+  async function findLiveWorkflowExecution(
+    routine: typeof routines.$inferSelect,
+    dispatchFingerprint: string,
+    executor: Db = db,
+  ) {
+    return executor
+      .select({
+        routineRunId: routineRuns.id,
+        workflowRunId: workflowRuns.id,
+        workflowStatus: workflowRuns.status,
+      })
+      .from(routineRuns)
+      .innerJoin(
+        workflowRuns,
+        and(
+          eq(workflowRuns.companyId, routineRuns.companyId),
+          eq(workflowRuns.id, routineRuns.linkedWorkflowRunId),
+        ),
+      )
+      .where(
+        and(
+          eq(routineRuns.companyId, routine.companyId),
+          eq(routineRuns.routineId, routine.id),
+          eq(routineRuns.dispatchFingerprint, dispatchFingerprint),
+          inArray(workflowRuns.status, [
+            "queued",
+            "running",
+            "waiting",
+            "recovering",
+            "cancelling",
+          ]),
+        ),
+      )
+      .orderBy(desc(routineRuns.createdAt), desc(routineRuns.id))
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+  }
+
   async function finalizeRun(runId: string, patch: Partial<typeof routineRuns.$inferInsert>, executor: Db = db) {
     return executor
       .update(routineRuns)
@@ -1729,11 +1966,31 @@ export function routineService(
   }) {
     const projectId = input.projectId ?? input.routine.projectId ?? null;
     const projectWorkspaceId = input.projectWorkspaceId ?? null;
-    const assigneeAgentId = input.assigneeAgentId ?? input.routine.assigneeAgentId ?? null;
-    if (!assigneeAgentId) {
-      throw unprocessable("Default agent required");
+    const configuredExecutionTarget = resolveRoutineExecutionTarget(input.routine);
+    if (
+      configuredExecutionTarget?.kind === "workflow" &&
+      input.assigneeAgentId
+    ) {
+      throw unprocessable(
+        "Workflow-target routines cannot override an assignee agent at run time",
+      );
     }
-    await assertAssignableAgent(db, input.routine.companyId, assigneeAgentId, { kind: "routine" });
+    const executionTarget: RoutineExecutionTarget | null =
+      input.assigneeAgentId
+        ? { kind: "agent_task", agentId: input.assigneeAgentId }
+        : configuredExecutionTarget;
+    if (!executionTarget) {
+      throw unprocessable("Routine execution target required");
+    }
+    await assertRoutineExecutionTarget(
+      input.routine.companyId,
+      executionTarget,
+      { requireRunnable: true },
+    );
+    const assigneeAgentId =
+      executionTarget.kind === "agent_task"
+        ? executionTarget.agentId
+        : null;
     const automaticVariables: Record<string, string | number | boolean> = {};
     if (input.executionWorkspaceId && routineUsesWorkspaceBranch(input.routine)) {
       const workspace = await db
@@ -1777,6 +2034,7 @@ export function routineService(
       projectId,
       projectWorkspaceId,
       assigneeAgentId,
+      executionTarget,
       routineRevisionId: input.routine.latestRevisionId,
       routineEnvFingerprint: createRoutineEnvFingerprint(input.routine.env),
       executionWorkspaceId: input.executionWorkspaceId ?? null,
@@ -1786,6 +2044,9 @@ export function routineService(
       description,
     });
     let reusedExistingRun = false;
+    const workflowPublications: ActivityPublication[] = [];
+    let queuedWorkflowRunId: string | null = null;
+    let queuedWorkflowActor: WorkflowRunActor | null = null;
     const run = await db.transaction(async (tx) => {
       const txDb = tx as unknown as Db;
       await tx.execute(
@@ -1869,6 +2130,104 @@ export function routineService(
         : input.trigger?.kind === "schedule" && input.trigger.cronExpression && input.trigger.timezone
           ? nextCronTickInTimeZone(input.trigger.cronExpression, input.trigger.timezone, triggeredAt)
           : undefined;
+
+      if (executionTarget.kind === "workflow") {
+        const activeWorkflow = await findLiveWorkflowExecution(
+          input.routine,
+          dispatchFingerprint,
+          txDb,
+        );
+        if (
+          activeWorkflow &&
+          input.routine.concurrencyPolicy !== "always_enqueue"
+        ) {
+          const status =
+            input.routine.concurrencyPolicy === "skip_if_active"
+              ? "skipped"
+              : "coalesced";
+          const updated = await finalizeRun(
+            createdRun.id,
+            {
+              status,
+              linkedWorkflowRunId: activeWorkflow.workflowRunId,
+              coalescedIntoRunId: activeWorkflow.routineRunId,
+              completedAt: triggeredAt,
+            },
+            txDb,
+          );
+          await updateRoutineTouchedState(
+            {
+              routineId: input.routine.id,
+              triggerId: input.trigger?.id ?? null,
+              triggeredAt,
+              status,
+              nextRunAt,
+            },
+            txDb,
+          );
+          return updated ?? createdRun;
+        }
+
+        const resolvedWorkflow = await resolveWorkflowExecutionRevision(
+          txDb,
+          input.routine.companyId,
+          executionTarget.workflowId,
+        );
+        const workflowActor = workflowActorForRoutine(
+          input.source,
+          input.actor,
+          responsibleUserId,
+        );
+        const workflowPayload = {
+          ...(triggerPayload ?? {}),
+          routine: {
+            routineId: input.routine.id,
+            routineRunId: createdRun.id,
+            routineRevisionId: input.routine.latestRevisionId,
+            triggerId: input.trigger?.id ?? null,
+            source: input.source,
+          },
+        };
+        const queuedWorkflow = await enqueueWorkflowRunInTransaction(
+          txDb,
+          {
+            companyId: input.routine.companyId,
+            workflowId: executionTarget.workflowId,
+            revisionId: resolvedWorkflow.revision.id,
+            nodeId: resolvedWorkflow.triggerNodeId,
+            triggerId: null,
+            source: "routine",
+            triggerPayload: workflowPayload,
+            responsibleUserId,
+            idempotencyKey: `routine-run:${createdRun.id}`,
+            correlationId: `routine:${createdRun.id}`,
+            actor: workflowActor,
+          },
+        );
+        queuedWorkflowRunId = queuedWorkflow.run.id;
+        queuedWorkflowActor = workflowActor;
+        workflowPublications.push(...queuedWorkflow.publications);
+
+        const updated = await finalizeRun(
+          createdRun.id,
+          {
+            status: "workflow_started",
+            linkedWorkflowRunId: queuedWorkflow.run.id,
+          },
+          txDb,
+        );
+        await updateRoutineTouchedState(
+          {
+            routineId: input.routine.id,
+            triggerId: input.trigger?.id ?? null,
+            triggeredAt,
+            status: "workflow_started",
+            nextRunAt,
+          },
+          txDb,
+        );
+        return updated ?? createdRun;
+      }
 
       let createdIssue: Awaited<ReturnType<typeof issueSvc.create>> | null = null;
       try {
@@ -2014,6 +2373,35 @@ export function routineService(
       }
     });
 
+    for (const publication of workflowPublications) {
+      publishActivity(publication);
+    }
+
+    if (
+      !reusedExistingRun &&
+      run.status === "workflow_started" &&
+      queuedWorkflowRunId &&
+      queuedWorkflowActor
+    ) {
+      try {
+        await workflowExecutorService(db).executeQueuedRun(
+          input.routine.companyId,
+          queuedWorkflowRunId,
+          queuedWorkflowActor,
+        );
+      } catch (error) {
+        logger.error(
+          {
+            err: error,
+            routineId: input.routine.id,
+            routineRunId: run.id,
+            workflowRunId: queuedWorkflowRunId,
+          },
+          "workflow routine run was durably queued but inline execution failed; reconciliation will retry",
+        );
+      }
+    }
+
     if (!reusedExistingRun && (input.source === "schedule" || input.source === "webhook")) {
       const actorId = input.source === "schedule" ? "routine-scheduler" : "routine-webhook";
       try {
@@ -2117,6 +2505,9 @@ export function routineService(
             dispatchFingerprint: routineRuns.dispatchFingerprint,
             routineRevisionId: routineRuns.routineRevisionId,
             linkedIssueId: routineRuns.linkedIssueId,
+            linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
+            linkedWorkflowId: workflowRuns.workflowId,
+            linkedWorkflowRunStatus: workflowRuns.status,
             coalescedIntoRunId: routineRuns.coalescedIntoRunId,
             failureReason: routineRuns.failureReason,
             completedAt: routineRuns.completedAt,
@@ -2133,6 +2524,13 @@ export function routineService(
           .from(routineRuns)
           .leftJoin(routineTriggers, eq(routineRuns.triggerId, routineTriggers.id))
           .leftJoin(issues, eq(routineRuns.linkedIssueId, issues.id))
+          .leftJoin(
+            workflowRuns,
+            and(
+              eq(workflowRuns.companyId, routineRuns.companyId),
+              eq(workflowRuns.id, routineRuns.linkedWorkflowRunId),
+            ),
+          )
           .where(eq(routineRuns.routineId, row.id))
           .orderBy(desc(routineRuns.createdAt))
           .limit(25)
@@ -2150,6 +2548,10 @@ export function routineService(
               dispatchFingerprint: run.dispatchFingerprint,
               routineRevisionId: run.routineRevisionId,
               linkedIssueId: run.linkedIssueId,
+              linkedWorkflowRunId: run.linkedWorkflowRunId,
+              linkedWorkflowId: run.linkedWorkflowId,
+              linkedWorkflowRunStatus:
+                run.linkedWorkflowRunStatus as RoutineRunSummary["linkedWorkflowRunStatus"],
               coalescedIntoRunId: run.coalescedIntoRunId,
               failureReason: run.failureReason,
               completedAt: run.completedAt,
@@ -2199,7 +2601,12 @@ export function routineService(
     create: async (companyId: string, input: CreateRoutine, actor: Actor): Promise<Routine> => {
       await assertProject(companyId, input.projectId ?? null);
       await assertRoutineFolder(companyId, input.folderId ?? null);
-      await assertAssignableAgent(db, companyId, input.assigneeAgentId ?? null, { kind: "routine" });
+      const executionTarget = requestedRoutineExecutionTarget(input);
+      const targetStorage = executionTargetStorage(executionTarget);
+      const status = normalizeDraftRoutineStatus(input.status, executionTarget);
+      await assertRoutineExecutionTarget(companyId, executionTarget, {
+        requireRunnable: status === "active",
+      });
       if (input.goalId) await assertGoal(companyId, input.goalId);
       if (input.parentIssueId) await assertParentIssue(companyId, input.parentIssueId);
       const env = input.env === undefined || input.env === null
@@ -2213,7 +2620,6 @@ export function routineService(
         sanitizeRoutineVariableInputs(input.variables),
       );
       assertRoutineVariableDefinitions(variables);
-      const status = normalizeDraftRoutineStatus(input.status, input.assigneeAgentId);
       const responsibleUserId = await resolveRoutineResponsibleUserId(db, companyId, actor.userId, input.parentIssueId ?? null);
       if (!responsibleUserId) {
         throw unprocessable("Routine requires a responsible user");
@@ -2230,7 +2636,9 @@ export function routineService(
             parentIssueId: input.parentIssueId ?? null,
             title: input.title,
             description: input.description ?? null,
-            assigneeAgentId: input.assigneeAgentId ?? null,
+            assigneeAgentId: targetStorage.assigneeAgentId,
+            executionTargetKind: targetStorage.executionTargetKind,
+            executionTargetRef: targetStorage.executionTargetRef,
             priority: input.priority,
             status,
             concurrencyPolicy: input.concurrencyPolicy,
@@ -2267,7 +2675,13 @@ export function routineService(
       if (!existing) return null;
       const nextProjectId = patch.projectId === undefined ? existing.projectId : patch.projectId;
       const nextFolderId = patch.folderId === undefined ? existing.folderId : patch.folderId;
-      const nextAssigneeAgentId = patch.assigneeAgentId === undefined ? existing.assigneeAgentId : patch.assigneeAgentId;
+      const existingExecutionTarget = resolveRoutineExecutionTarget(existing);
+      const nextExecutionTarget = resolveUpdatedRoutineExecutionTarget(existing, patch);
+      const nextTargetStorage = executionTargetStorage(nextExecutionTarget);
+      const nextAssigneeAgentId = nextTargetStorage.assigneeAgentId;
+      const targetChanged =
+        JSON.stringify(existingExecutionTarget) !==
+        JSON.stringify(nextExecutionTarget);
       const nextTitle = patch.title ?? existing.title;
       const nextDescription = patch.description === undefined ? existing.description : patch.description;
       const nextEnv = patch.env === undefined
@@ -2280,19 +2694,27 @@ export function routineService(
             });
       const requestedStatus = patch.status ?? existing.status;
       if (patch.status === "active") {
-        assertRoutineCanEnable(patch.status, nextAssigneeAgentId);
+        assertRoutineCanEnable(patch.status, nextExecutionTarget);
       }
-      const nextStatus = patch.assigneeAgentId === undefined
-        ? requestedStatus
-        : normalizeDraftRoutineStatus(requestedStatus, nextAssigneeAgentId);
+      const nextStatus =
+        patch.status !== undefined || targetChanged
+          ? normalizeDraftRoutineStatus(
+              requestedStatus,
+              nextExecutionTarget,
+            )
+          : requestedStatus;
       const nextVariables = syncRoutineVariablesWithTemplate(
         [nextTitle, nextDescription],
         patch.variables === undefined ? existing.variables : sanitizeRoutineVariableInputs(patch.variables),
       );
       if (patch.projectId !== undefined) await assertProject(existing.companyId, nextProjectId);
       if (patch.folderId !== undefined) await assertRoutineFolder(existing.companyId, nextFolderId);
-      if (patch.assigneeAgentId !== undefined || patch.status === "active") {
-        await assertAssignableAgent(db, existing.companyId, nextAssigneeAgentId, { kind: "routine" });
+      if (targetChanged || patch.status === "active") {
+        await assertRoutineExecutionTarget(
+          existing.companyId,
+          nextExecutionTarget,
+          { requireRunnable: nextStatus === "active" },
+        );
       }
       if (patch.goalId) await assertGoal(existing.companyId, patch.goalId);
       if (patch.parentIssueId) await assertParentIssue(existing.companyId, patch.parentIssueId);
@@ -2347,6 +2769,8 @@ export function routineService(
           title: nextTitle,
           description: nextDescription,
           assigneeAgentId: nextAssigneeAgentId,
+          executionTargetKind: nextTargetStorage.executionTargetKind,
+          executionTargetRef: nextTargetStorage.executionTargetRef,
           priority: patch.priority ?? locked.priority,
           status: nextStatus,
           concurrencyPolicy: patch.concurrencyPolicy ?? locked.concurrencyPolicy,
@@ -2412,6 +2836,8 @@ export function routineService(
             title: candidate.title,
             description: candidate.description,
             assigneeAgentId: candidate.assigneeAgentId,
+            executionTargetKind: candidate.executionTargetKind,
+            executionTargetRef: candidate.executionTargetRef,
             priority: candidate.priority,
             status: candidate.status,
             concurrencyPolicy: candidate.concurrencyPolicy,
@@ -2705,7 +3131,40 @@ export function routineService(
 
       const snapshot = routineRevisionSnapshotSchema.parse(targetRevision.snapshot) as RoutineRevisionSnapshotV1;
       const routineSnapshot = snapshot.routine;
-      await assertRestorableAssignee(existingRoutine.companyId, routineSnapshot.assigneeAgentId, actor);
+      const restoredExecutionTarget: RoutineExecutionTarget | null =
+        routineSnapshot.executionTargetKind === "workflow" &&
+        routineSnapshot.executionTargetRef
+          ? {
+              kind: "workflow",
+              workflowId: routineSnapshot.executionTargetRef,
+            }
+          : routineSnapshot.executionTargetKind === "agent_task" &&
+              routineSnapshot.executionTargetRef
+            ? {
+                kind: "agent_task",
+                agentId: routineSnapshot.executionTargetRef,
+              }
+            : routineSnapshot.assigneeAgentId
+              ? {
+                  kind: "agent_task",
+                  agentId: routineSnapshot.assigneeAgentId,
+                }
+              : null;
+      const restoredTargetStorage = executionTargetStorage(
+        restoredExecutionTarget,
+      );
+      if (restoredExecutionTarget?.kind === "agent_task") {
+        await assertRestorableAssignee(
+          existingRoutine.companyId,
+          restoredExecutionTarget.agentId,
+          actor,
+        );
+      }
+      await assertRoutineExecutionTarget(
+        existingRoutine.companyId,
+        restoredExecutionTarget,
+        { requireRunnable: routineSnapshot.status === "active" },
+      );
 
       const result = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
@@ -2753,7 +3212,9 @@ export function routineService(
             parentIssueId: routineSnapshot.parentIssueId,
             title: routineSnapshot.title,
             description: routineSnapshot.description,
-            assigneeAgentId: routineSnapshot.assigneeAgentId,
+            assigneeAgentId: restoredTargetStorage.assigneeAgentId,
+            executionTargetKind: restoredTargetStorage.executionTargetKind,
+            executionTargetRef: restoredTargetStorage.executionTargetRef,
             priority: routineSnapshot.priority,
             status: routineSnapshot.status,
             concurrencyPolicy: routineSnapshot.concurrencyPolicy,
@@ -2855,8 +3316,6 @@ export function routineService(
       if (!routine) throw notFound("Routine not found");
       if (routine.status === "archived") throw conflict("Routine is archived");
       await assertProject(routine.companyId, input.projectId ?? null);
-      const assigneeAgentId = input.assigneeAgentId ?? routine.assigneeAgentId ?? null;
-      await assertAssignableAgent(db, routine.companyId, assigneeAgentId, { kind: "routine" });
       const trigger = input.triggerId ? await getTriggerById(input.triggerId) : null;
       if (trigger && trigger.routineId !== routine.id) throw forbidden("Trigger does not belong to routine");
       if (trigger && !trigger.enabled) throw conflict("Routine trigger is not active");
@@ -2883,8 +3342,6 @@ export function routineService(
       if (!routine) throw notFound("Routine not found");
       if (routine.status === "archived") throw conflict("Routine is archived");
       await assertProject(routine.companyId, input.projectId ?? null);
-      const assigneeAgentId = input.assigneeAgentId ?? routine.assigneeAgentId ?? null;
-      await assertAssignableAgent(db, routine.companyId, assigneeAgentId, { kind: "routine" });
       return dispatchRoutineRun({
         routine,
         trigger: null,
@@ -3114,6 +3571,9 @@ export function routineService(
           dispatchFingerprint: routineRuns.dispatchFingerprint,
           routineRevisionId: routineRuns.routineRevisionId,
           linkedIssueId: routineRuns.linkedIssueId,
+          linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
+          linkedWorkflowId: workflowRuns.workflowId,
+          linkedWorkflowRunStatus: workflowRuns.status,
           coalescedIntoRunId: routineRuns.coalescedIntoRunId,
           failureReason: routineRuns.failureReason,
           completedAt: routineRuns.completedAt,
@@ -3130,6 +3590,13 @@ export function routineService(
         .from(routineRuns)
         .leftJoin(routineTriggers, eq(routineRuns.triggerId, routineTriggers.id))
         .leftJoin(issues, eq(routineRuns.linkedIssueId, issues.id))
+        .leftJoin(
+          workflowRuns,
+          and(
+            eq(workflowRuns.companyId, routineRuns.companyId),
+            eq(workflowRuns.id, routineRuns.linkedWorkflowRunId),
+          ),
+        )
         .where(eq(routineRuns.routineId, routineId))
         .orderBy(desc(routineRuns.createdAt))
         .limit(cappedLimit);
@@ -3147,6 +3614,10 @@ export function routineService(
         dispatchFingerprint: row.dispatchFingerprint,
         routineRevisionId: row.routineRevisionId,
         linkedIssueId: row.linkedIssueId,
+        linkedWorkflowRunId: row.linkedWorkflowRunId,
+        linkedWorkflowId: row.linkedWorkflowId,
+        linkedWorkflowRunStatus:
+          row.linkedWorkflowRunStatus as RoutineRunSummary["linkedWorkflowRunStatus"],
         coalescedIntoRunId: row.coalescedIntoRunId,
         failureReason: row.failureReason,
         completedAt: row.completedAt,

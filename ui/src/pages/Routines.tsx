@@ -2,11 +2,12 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useSearchParams } from "@/lib/router";
-import { ArrowUpDown, Check, ChevronDown, ChevronRight, Layers, Plus, Repeat } from "lucide-react";
+import { ArrowUpDown, Check, ChevronDown, ChevronRight, GitBranch, Layers, Plus, Repeat } from "lucide-react";
 import { routinesApi } from "../api/routines";
 import { foldersApi } from "../api/folders";
 import { agentsApi } from "../api/agents";
 import { projectsApi } from "../api/projects";
+import { workflowsApi } from "../api/workflows";
 import { issuesApi } from "../api/issues";
 import { heartbeatsApi } from "../api/heartbeats";
 import { accessApi } from "../api/access";
@@ -145,17 +146,42 @@ function buildRoutineMutationPayload(input: {
   projectId: string;
   folderId: string | null;
   assigneeAgentId: string;
+  executionTargetKind: "agent_task" | "workflow";
+  executionTargetRef: string;
   priority: string;
   concurrencyPolicy: string;
   catchUpPolicy: string;
   variables: RoutineVariable[];
 }) {
+  const executionTarget =
+    input.executionTargetKind === "workflow"
+      ? input.executionTargetRef
+        ? {
+            kind: "workflow" as const,
+            workflowId: input.executionTargetRef,
+          }
+        : null
+      : input.assigneeAgentId
+        ? {
+            kind: "agent_task" as const,
+            agentId: input.assigneeAgentId,
+          }
+        : null;
+
   return {
-    ...input,
+    title: input.title,
     description: input.description.trim() || null,
     projectId: input.projectId || null,
     folderId: input.folderId || null,
-    assigneeAgentId: input.assigneeAgentId || null,
+    assigneeAgentId:
+      executionTarget?.kind === "agent_task"
+        ? executionTarget.agentId
+        : null,
+    executionTarget,
+    priority: input.priority,
+    concurrencyPolicy: input.concurrencyPolicy,
+    catchUpPolicy: input.catchUpPolicy,
+    variables: input.variables,
   };
 }
 
@@ -165,6 +191,7 @@ export function buildRoutineGroups(
   projectById: Map<string, { name: string }>,
   agentById: Map<string, { name: string }>,
   folderById: Map<string, RoutineFolderGroupMeta>,
+  workflowById: Map<string, { name: string }> = new Map(),
 ): RoutineGroup[] {
   if (groupByValue === "none") {
     return [{ key: "__all", label: null, items: routines }];
@@ -215,16 +242,29 @@ export function buildRoutineGroups(
       }));
   }
 
-  const groups = groupBy(routines, (routine) => routine.assigneeAgentId ?? "__unassigned");
+  const groups = groupBy(routines, (routine) => {
+    if (routine.executionTargetKind === "workflow" && routine.executionTargetRef) {
+      return `workflow:${routine.executionTargetRef}`;
+    }
+    return routine.assigneeAgentId ?? "__unassigned";
+  });
+  const targetLabel = (key: string) => {
+    if (key === "__unassigned") return "No execution target";
+    if (key.startsWith("workflow:")) {
+      const workflowId = key.slice("workflow:".length);
+      return workflowById.get(workflowId)?.name ?? "Workflow";
+    }
+    return agentById.get(key)?.name ?? "Unknown agent";
+  };
   return Object.keys(groups)
-    .sort((left, right) => {
-      const leftLabel = left === "__unassigned" ? "Unassigned" : (agentById.get(left)?.name ?? "Unknown agent");
-      const rightLabel = right === "__unassigned" ? "Unassigned" : (agentById.get(right)?.name ?? "Unknown agent");
-      return leftLabel.localeCompare(rightLabel);
-    })
+    .sort((left, right) =>
+      targetLabel(left).localeCompare(targetLabel(right), undefined, {
+        sensitivity: "base",
+      }),
+    )
     .map((key) => ({
       key,
-      label: key === "__unassigned" ? "Unassigned" : (agentById.get(key)?.name ?? "Unknown agent"),
+      label: targetLabel(key),
       items: groups[key]!,
     }));
 }
@@ -239,10 +279,18 @@ export function buildRoutineSections(
   projectById: Map<string, { name: string }>,
   agentById: Map<string, { name: string }>,
   folderById: Map<string, { name: string }>,
+  workflowById: Map<string, { name: string }> = new Map(),
 ): RoutineGroup[] {
   const builtInRoutines = routines.filter(isBuiltInRoutine);
   const customRoutines = routines.filter((routine) => !isBuiltInRoutine(routine));
-  const customGroups = buildRoutineGroups(customRoutines, groupByValue, projectById, agentById, folderById)
+  const customGroups = buildRoutineGroups(
+    customRoutines,
+    groupByValue,
+    projectById,
+    agentById,
+    folderById,
+    workflowById,
+  )
     .filter((group) => group.items.length > 0)
     .map((group) => (
       builtInRoutines.length > 0 && groupByValue === "none" && group.key === "__all"
@@ -343,6 +391,8 @@ export function Routines() {
     projectId: string;
     folderId: string | null;
     assigneeAgentId: string;
+    executionTargetKind: "agent_task" | "workflow";
+    executionTargetRef: string;
     priority: string;
     concurrencyPolicy: string;
     catchUpPolicy: string;
@@ -353,6 +403,8 @@ export function Routines() {
     projectId: "",
     folderId: null,
     assigneeAgentId: "",
+    executionTargetKind: "agent_task",
+    executionTargetRef: "",
     priority: "medium",
     concurrencyPolicy: "coalesce_if_active",
     catchUpPolicy: "skip_missed",
@@ -391,6 +443,20 @@ export function Routines() {
     queryKey: queryKeys.projects.list(selectedCompanyId!, { includeArchived: true }),
     queryFn: () => projectsApi.list(selectedCompanyId!, { includeArchived: true }),
     enabled: !!selectedCompanyId,
+  });
+  const hasWorkflowTarget = (routines ?? []).some(
+    (routine) => routine.executionTargetKind === "workflow",
+  );
+  const { data: workflows = [] } = useQuery({
+    queryKey: queryKeys.workflows.list(selectedCompanyId!),
+    queryFn: () => workflowsApi.list(selectedCompanyId!),
+    enabled:
+      !!selectedCompanyId &&
+      (
+        hasWorkflowTarget ||
+        (composerOpen && draft.executionTargetKind === "workflow")
+      ),
+    retry: false,
   });
   const { data: companyMembers } = useQuery({
     queryKey: queryKeys.access.companyUserDirectory(selectedCompanyId!),
@@ -440,6 +506,8 @@ export function Routines() {
         projectId: "",
         folderId: null,
         assigneeAgentId: "",
+        executionTargetKind: "agent_task",
+        executionTargetRef: "",
         priority: "medium",
         concurrencyPolicy: "coalesce_if_active",
         catchUpPolicy: "skip_missed",
@@ -450,9 +518,9 @@ export function Routines() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.routines.list(selectedCompanyId!) });
       pushToast({
         title: "Routine created",
-        body: routine.assigneeAgentId
-          ? "Add the first trigger to turn it into a live workflow."
-          : "Draft saved. Add a default agent before enabling automation.",
+        body: (routine.executionTargetRef ?? routine.assigneeAgentId)
+          ? "Add the first trigger when you are ready to automate it."
+          : "Draft saved. Choose an execution target before enabling automation.",
         tone: "success",
       });
       navigate(routineDetailHref(routine.id, "triggers"));
@@ -630,6 +698,21 @@ export function Routines() {
       })),
     [projects],
   );
+  const workflowOptions = useMemo<InlineEntityOption[]>(
+    () =>
+      workflows
+        .filter(
+          (workflow) =>
+            workflow.status === "active" &&
+            Boolean(workflow.publishedRevisionId),
+        )
+        .map((workflow) => ({
+          id: workflow.id,
+          label: workflow.name,
+          searchText: workflow.description ?? "",
+        })),
+    [workflows],
+  );
   const agentById = useMemo(
     () => new Map((agents ?? []).map((agent) => [agent.id, agent])),
     [agents],
@@ -637,6 +720,10 @@ export function Routines() {
   const projectById = useMemo(
     () => new Map((projects ?? []).map((project) => [project.id, project])),
     [projects],
+  );
+  const workflowById = useMemo(
+    () => new Map(workflows.map((workflow) => [workflow.id, workflow])),
+    [workflows],
   );
   const folderById = useMemo(
     () => new Map((routineFolders?.folders ?? []).map((folder) => [folder.id, folder])),
@@ -700,10 +787,28 @@ export function Routines() {
     [folderFilteredRoutines, routineViewState.sortDir, routineViewState.sortField],
   );
   const routineSections = useMemo(
-    () => buildRoutineSections(sortedRoutines, routineViewState.groupBy, projectById, agentById, folderById),
-    [agentById, folderById, projectById, routineViewState.groupBy, sortedRoutines],
+    () =>
+      buildRoutineSections(
+        sortedRoutines,
+        routineViewState.groupBy,
+        projectById,
+        agentById,
+        folderById,
+        workflowById,
+      ),
+    [
+      agentById,
+      folderById,
+      projectById,
+      routineViewState.groupBy,
+      sortedRoutines,
+      workflowById,
+    ],
   );
-  const currentAssignee = draft.assigneeAgentId ? agentById.get(draft.assigneeAgentId) ?? null : null;
+  const currentAssignee =
+    draft.executionTargetKind === "agent_task" && draft.assigneeAgentId
+      ? agentById.get(draft.assigneeAgentId) ?? null
+      : null;
   const currentProject = draft.projectId ? projectById.get(draft.projectId) ?? null : null;
   const activeFolder = selectedFolderFromList(routineFolders?.folders ?? [], folderSelection);
   const hasRoutineFolders = (routineFolders?.folders.length ?? 0) > 0;
@@ -767,10 +872,13 @@ export function Routines() {
   }
 
   function handleToggleEnabled(routine: RoutineListItem, enabled: boolean) {
-    if (!enabled && !routine.assigneeAgentId) {
+    if (
+      !enabled &&
+      !(routine.executionTargetRef ?? routine.assigneeAgentId)
+    ) {
       pushToast({
-        title: "Default agent required",
-        body: "Set a default agent before enabling routine automation.",
+        title: "Execution target required",
+        body: "Choose an agent or workflow before enabling routine automation.",
         tone: "warn",
       });
       return;
@@ -936,7 +1044,7 @@ export function Routines() {
                     {([
                       ["folder", "Folder"],
                       ["project", "Project"],
-                      ["assignee", "Agent"],
+                      ["assignee", "Execution target"],
                       ["none", "None"],
                     ] as const).map(([value, label]) => (
                       <button
@@ -996,7 +1104,7 @@ export function Routines() {
             <div>
               <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">New routine</p>
               <p className="text-sm text-muted-foreground">
-                Define the recurring work first. Default project and agent are optional for draft routines.
+                Define the recurring work first. Project and execution target are optional for draft routines.
               </p>
             </div>
             <Button
@@ -1032,13 +1140,17 @@ export function Routines() {
                   }
                   if (event.key === "Tab" && !event.shiftKey) {
                     event.preventDefault();
-                    if (draft.assigneeAgentId) {
+                    const hasTarget =
+                      draft.executionTargetKind === "workflow"
+                        ? Boolean(draft.executionTargetRef)
+                        : Boolean(draft.assigneeAgentId);
+                    if (hasTarget) {
                       if (draft.projectId) {
                         descriptionEditorRef.current?.focus();
                       } else {
                         projectSelectorRef.current?.focus();
                       }
-                    } else {
+                    } else if (draft.executionTargetKind === "agent_task") {
                       assigneeSelectorRef.current?.focus();
                     }
                   }
@@ -1050,52 +1162,145 @@ export function Routines() {
             <div className="px-5 pb-3">
               <div className="overflow-x-auto overscroll-x-contain">
                 <div className="inline-flex min-w-full flex-wrap items-center gap-2 text-sm text-muted-foreground sm:min-w-max sm:flex-nowrap">
-                  <span>For</span>
-                  <InlineEntitySelector
-                    ref={assigneeSelectorRef}
-                    value={draft.assigneeAgentId}
-                    options={assigneeOptions}
-                    recentOptionIds={recentAssigneeIds}
-                    placeholder="Responsible"
-                    noneLabel="No responsible"
-                    searchPlaceholder="Search responsible..."
-                    emptyMessage="No responsible found."
-                    onChange={(assigneeAgentId) => {
-                      if (assigneeAgentId) trackRecentAssignee(assigneeAgentId);
-                      setDraft((current) => ({ ...current, assigneeAgentId }));
-                    }}
-                    onConfirm={() => {
-                      if (draft.projectId) {
-                        descriptionEditorRef.current?.focus();
-                      } else {
-                        projectSelectorRef.current?.focus();
+                  <span>Run with</span>
+                  <Select
+                    value={draft.executionTargetKind}
+                    onValueChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        executionTargetKind:
+                          value as "agent_task" | "workflow",
+                        executionTargetRef:
+                          value === "agent_task"
+                            ? current.assigneeAgentId
+                            : current.executionTargetKind === "workflow"
+                              ? current.executionTargetRef
+                              : "",
+                      }))
+                    }
+                  >
+                    <SelectTrigger
+                      className="h-8 w-[118px]"
+                      aria-label="Execution target type"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="agent_task">Agent</SelectItem>
+                      <SelectItem value="workflow">Workflow</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {draft.executionTargetKind === "agent_task" ? (
+                    <InlineEntitySelector
+                      ref={assigneeSelectorRef}
+                      value={draft.assigneeAgentId}
+                      options={assigneeOptions}
+                      recentOptionIds={recentAssigneeIds}
+                      placeholder="Agent"
+                      noneLabel="No agent"
+                      searchPlaceholder="Search agents..."
+                      emptyMessage="No agents found."
+                      onChange={(assigneeAgentId) => {
+                        if (assigneeAgentId) {
+                          trackRecentAssignee(assigneeAgentId);
+                        }
+                        setDraft((current) => ({
+                          ...current,
+                          assigneeAgentId,
+                          executionTargetRef: assigneeAgentId,
+                        }));
+                      }}
+                      onConfirm={() => {
+                        if (draft.projectId) {
+                          descriptionEditorRef.current?.focus();
+                        } else {
+                          projectSelectorRef.current?.focus();
+                        }
+                      }}
+                      renderTriggerValue={(option) =>
+                        option ? (
+                          currentAssignee ? (
+                            <>
+                              <AgentAvatar
+                                agent={currentAssignee}
+                                size={16}
+                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                              />
+                              <span className="truncate">{option.label}</span>
+                            </>
+                          ) : (
+                            <span className="truncate">{option.label}</span>
+                          )
+                        ) : (
+                          <span className="text-muted-foreground">Agent</span>
+                        )
                       }
-                    }}
-                    renderTriggerValue={(option) =>
-                      option ? (
-                        currentAssignee ? (
+                      renderOption={(option) => {
+                        if (!option.id) {
+                          return (
+                            <span className="truncate">{option.label}</span>
+                          );
+                        }
+                        const assignee = agentById.get(option.id);
+                        return (
                           <>
-                            <AgentAvatar agent={currentAssignee} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/>
+                            {assignee ? (
+                              <AgentAvatar
+                                agent={assignee}
+                                size={16}
+                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                              />
+                            ) : null}
+                            <span className="truncate">{option.label}</span>
+                          </>
+                        );
+                      }}
+                    />
+                  ) : (
+                    <InlineEntitySelector
+                      value={draft.executionTargetRef}
+                      options={workflowOptions}
+                      placeholder="Workflow"
+                      noneLabel="No workflow"
+                      searchPlaceholder="Search workflows..."
+                      emptyMessage="No active published workflows found."
+                      onChange={(workflowId) =>
+                        setDraft((current) => ({
+                          ...current,
+                          executionTargetRef: workflowId,
+                        }))
+                      }
+                      onConfirm={() => {
+                        if (draft.projectId) {
+                          descriptionEditorRef.current?.focus();
+                        } else {
+                          projectSelectorRef.current?.focus();
+                        }
+                      }}
+                      renderTriggerValue={(option) =>
+                        option ? (
+                          <>
+                            <GitBranch
+                              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                              aria-hidden="true"
+                            />
                             <span className="truncate">{option.label}</span>
                           </>
                         ) : (
-                          <span className="truncate">{option.label}</span>
+                          <span className="text-muted-foreground">Workflow</span>
                         )
-                      ) : (
-                        <span className="text-muted-foreground">Responsible</span>
-                      )
-                    }
-                    renderOption={(option) => {
-                      if (!option.id) return <span className="truncate">{option.label}</span>;
-                      const assignee = agentById.get(option.id);
-                      return (
+                      }
+                      renderOption={(option) => (
                         <>
-                          {assignee ? <AgentAvatar agent={assignee} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/> : null}
+                          <GitBranch
+                            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
                           <span className="truncate">{option.label}</span>
                         </>
-                      );
-                    }}
-                  />
+                      )}
+                    />
+                  )}
                   <span>in</span>
                   <InlineEntitySelector
                     ref={projectSelectorRef}
@@ -1172,7 +1377,7 @@ export function Routines() {
                 contentClassName="min-h-(--sz-160px) text-sm text-muted-foreground"
                 mentions={mentionOptions}
                 onSubmit={() => {
-                  if (!createRoutine.isPending && draft.title.trim() && draft.projectId && draft.assigneeAgentId) {
+                  if (!createRoutine.isPending && draft.title.trim()) {
                     createRoutine.mutate();
                   }
                 }}
@@ -1232,7 +1437,7 @@ export function Routines() {
 
           <div className="shrink-0 flex flex-col gap-3 border-t border-border/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm text-muted-foreground">
-              After creation, Paperclip takes you straight to trigger setup. Draft routines stay paused until you add a default agent.
+              After creation, Paperclip takes you straight to trigger setup. Draft routines stay paused until you choose an execution target.
             </div>
             <div className="flex flex-col gap-2 sm:items-end">
               <Button
@@ -1365,6 +1570,7 @@ export function Routines() {
                           routine={routine}
                           projectById={projectById}
                           agentById={agentById}
+                          workflowById={workflowById}
                           runningRoutineId={runningRoutineId}
                           statusMutationRoutineId={statusMutationRoutineId}
                           href={`/routines/${routine.id}`}
@@ -1459,7 +1665,16 @@ export function Routines() {
         agents={agents ?? []}
         projects={projects ?? []}
         defaultProjectId={runDialogRoutine?.projectId ?? null}
-        defaultAssigneeAgentId={runDialogRoutine?.assigneeAgentId ?? null}
+        defaultAssigneeAgentId={
+          runDialogRoutine?.executionTargetKind === "workflow"
+            ? null
+            : runDialogRoutine?.assigneeAgentId ?? null
+        }
+        executionTargetKind={
+          runDialogRoutine?.executionTargetKind === "workflow"
+            ? "workflow"
+            : "agent_task"
+        }
         variables={runDialogRoutine?.variables ?? []}
         isPending={runRoutine.isPending}
         onSubmit={(data) => {

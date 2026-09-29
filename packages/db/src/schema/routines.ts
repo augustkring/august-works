@@ -1,6 +1,9 @@
+import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   boolean,
+  check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -18,7 +21,14 @@ import { projects } from "./projects.js";
 import { goals } from "./goals.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
 import { folders } from "./folders.js";
-import type { RoutineEnvConfig, RoutineRevisionSnapshotV1, RoutineVariable, RoutineWebhookDelivery } from "@paperclipai/shared";
+import type {
+  RoutineEnvConfig,
+  RoutineExecutionTargetKind,
+  RoutineRevisionSnapshotV1,
+  RoutineVariable,
+  RoutineWebhookDelivery,
+} from "@paperclipai/shared";
+import { workflowRuns } from "./workflows.js";
 
 export const routines = pgTable(
   "routines",
@@ -32,6 +42,8 @@ export const routines = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     assigneeAgentId: uuid("assignee_agent_id").references(() => agents.id),
+    executionTargetKind: text("execution_target_kind").$type<RoutineExecutionTargetKind>(),
+    executionTargetRef: uuid("execution_target_ref"),
     priority: text("priority").notNull().default("medium"),
     status: text("status").notNull().default("active"),
     concurrencyPolicy: text("concurrency_policy").notNull().default("coalesce_if_active"),
@@ -57,6 +69,17 @@ export const routines = pgTable(
   (table) => ({
     companyStatusIdx: index("routines_company_status_idx").on(table.companyId, table.status),
     companyAssigneeIdx: index("routines_company_assignee_idx").on(table.companyId, table.assigneeAgentId),
+    companyExecutionTargetIdx: index("routines_company_execution_target_idx").on(
+      table.companyId,
+      table.executionTargetKind,
+      table.executionTargetRef,
+    ),
+    executionTargetPairCheck: check(
+      "routines_execution_target_pair_check",
+      sql`(${table.executionTargetKind} is null and ${table.executionTargetRef} is null)
+        or
+        (${table.executionTargetKind} in ('agent_task', 'workflow') and ${table.executionTargetRef} is not null)`,
+    ),
     companyProjectIdx: index("routines_company_project_idx").on(table.companyId, table.projectId),
     companyFolderIdx: index("routines_company_folder_idx").on(table.companyId, table.folderId),
     companyResponsibleUserIdx: index("routines_company_responsible_user_idx").on(table.companyId, table.responsibleUserId),
@@ -157,6 +180,7 @@ export const routineRuns = pgTable(
     triggerPayload: jsonb("trigger_payload").$type<Record<string, unknown>>(),
     dispatchFingerprint: text("dispatch_fingerprint"),
     linkedIssueId: uuid("linked_issue_id").references(() => issues.id, { onDelete: "set null" }),
+    linkedWorkflowRunId: uuid("linked_workflow_run_id"),
     coalescedIntoRunId: uuid("coalesced_into_run_id"),
     failureReason: text("failure_reason"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -174,6 +198,15 @@ export const routineRuns = pgTable(
     triggerIdx: index("routine_runs_trigger_idx").on(table.triggerId, table.createdAt),
     dispatchFingerprintIdx: index("routine_runs_dispatch_fingerprint_idx").on(table.routineId, table.dispatchFingerprint),
     linkedIssueIdx: index("routine_runs_linked_issue_idx").on(table.linkedIssueId),
+    linkedWorkflowRunIdx: index("routine_runs_linked_workflow_run_idx").on(
+      table.companyId,
+      table.linkedWorkflowRunId,
+    ),
+    linkedWorkflowRunFk: foreignKey({
+      columns: [table.companyId, table.linkedWorkflowRunId],
+      foreignColumns: [workflowRuns.companyId, workflowRuns.id],
+      name: "routine_runs_company_linked_workflow_run_fk",
+    }),
     idempotencyIdx: index("routine_runs_trigger_idempotency_idx").on(table.triggerId, table.idempotencyKey),
   }),
 );

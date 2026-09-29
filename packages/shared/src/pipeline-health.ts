@@ -126,11 +126,35 @@ function agentLabel(agent: PipelineHealthAgentRef | undefined): string {
   return name && name.length > 0 ? name : "a teammate";
 }
 
-function hasOnEnterRoutineAutomation(config: StageConfig): boolean {
+function hasOnEnterAutomationTarget(config: StageConfig): boolean {
   const onEnter = config.onEnter;
   if (!onEnter || typeof onEnter !== "object" || Array.isArray(onEnter)) return false;
   const record = onEnter as Record<string, unknown>;
-  return record.type === "run_routine" && typeof record.routineId === "string" && record.routineId.trim().length > 0;
+  if (
+    record.type === "run_routine" &&
+    typeof record.routineId === "string" &&
+    record.routineId.trim().length > 0
+  ) {
+    return true;
+  }
+  if (
+    record.type !== "run_target" ||
+    !record.target ||
+    typeof record.target !== "object" ||
+    Array.isArray(record.target)
+  ) {
+    return false;
+  }
+  const target = record.target as Record<string, unknown>;
+  return (
+    target.kind === "routine" &&
+    typeof target.routineId === "string" &&
+    target.routineId.trim().length > 0
+  ) || (
+    target.kind === "workflow" &&
+    typeof target.workflowId === "string" &&
+    target.workflowId.trim().length > 0
+  );
 }
 
 function hasChildrenGateAutoAdvance(config: StageConfig): boolean {
@@ -143,7 +167,7 @@ function hasChildrenGateAutoAdvance(config: StageConfig): boolean {
 
 /** True when a stage has saved automation that can move work forward. */
 function hasRunnableStageAutomation(config: StageConfig): boolean {
-  return readBreakdownConfig(config) !== null || hasOnEnterRoutineAutomation(config) || hasChildrenGateAutoAdvance(config);
+  return readBreakdownConfig(config) !== null || hasOnEnterAutomationTarget(config) || hasChildrenGateAutoAdvance(config);
 }
 
 function automationAssigneeAgentId(config: StageConfig): string | null {

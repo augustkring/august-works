@@ -38,6 +38,12 @@ export function buildNativeExecutionInput(input: {
     workMode: string;
   };
   taskPrompt: string;
+  /**
+   * Server-assembled, authorized and budgeted August Works context. This is
+   * injected only after Context Engine policy resolution; it must never carry
+   * credentials or grant authority by itself.
+   */
+  governedContextMarkdown?: string | null;
   initialCommunicationGuidance?: string | null;
   /**
    * The already-sanitized Paperclip wake envelope for this run. Native drivers
@@ -165,6 +171,7 @@ export function buildNativeExecutionInput(input: {
     externalChatTurn && wake?.externalChatProvider === "github"
       ? NATIVE_GITHUB_ATTACHMENT_RECOVERY_GUIDANCE
       : "",
+    input.governedContextMarkdown?.trim() ?? "",
     input.taskPrompt.trim(),
   ]
     .filter((section) => section.length > 0)

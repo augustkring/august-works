@@ -4,6 +4,16 @@ import type { DurableChatWakeupRequest } from "./durable-chat-wakeup.js";
 type WakeupTriggerDetail = "manual" | "ping" | "callback" | "system";
 type WakeupSource = "timer" | "assignment" | "on_demand" | "automation";
 
+export interface IssueAssignmentWakeupResponse {
+  status: string;
+  id?: string;
+  agentId?: string;
+  reason?: string;
+  message?: string | null;
+  executionRunId?: string | null;
+  executionAgentId?: string | null;
+}
+
 export interface IssueAssignmentWakeupDeps {
   wakeup: (
     agentId: string,
@@ -19,7 +29,7 @@ export interface IssueAssignmentWakeupDeps {
       contextSnapshot?: Record<string, unknown>;
       durableChatRequest?: DurableChatWakeupRequest;
     },
-  ) => Promise<unknown>;
+  ) => Promise<IssueAssignmentWakeupResponse | null | undefined>;
 }
 
 export function queueIssueAssignmentWakeup(input: {
@@ -31,6 +41,8 @@ export function queueIssueAssignmentWakeup(input: {
   requestedByActorType?: "user" | "agent" | "system";
   requestedByActorId?: string | null;
   taskKey?: string | null;
+  idempotencyKey?: string | null;
+  allowRunCoalescing?: boolean;
   /** Latest issue comment that caused this wakeup. Included in both payload
    * and context so the heartbeat can build the exact turn that was requested. */
   wakeCommentId?: string | null;
@@ -55,6 +67,8 @@ export function queueIssueAssignmentWakeup(input: {
       },
       requestedByActorType: input.requestedByActorType,
       requestedByActorId: input.requestedByActorId ?? null,
+      idempotencyKey: input.idempotencyKey ?? null,
+      allowRunCoalescing: input.allowRunCoalescing,
       ...(input.durableChatRequest
         ? { durableChatRequest: input.durableChatRequest }
         : {}),

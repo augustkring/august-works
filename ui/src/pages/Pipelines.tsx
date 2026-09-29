@@ -134,6 +134,7 @@ type PipelineConversationActionableInteraction =
   | RequestCheckboxConfirmationInteraction;
 
 type PipelineBoardAutomationAgent = Pick<Agent, "id" | "name" | "icon" | "urlKey">;
+type PipelineBoardAutomationWorkflow = { id: string; name: string };
 
 export function normalizePipelineConversationComments(value: unknown): IssueChatComment[] {
   return Array.isArray(value) ? value : [];
@@ -228,13 +229,60 @@ function itemCountLabel(count: number) {
   return `${count} ${count === 1 ? "item" : "items"}`;
 }
 
-function currentStageAutomation(stage: PipelineStage) {
+function currentStageAutomation(stage: Pick<PipelineStage, "config">):
+  | { kind: "routine"; routineId: string }
+  | { kind: "workflow"; workflowId: string }
+  | null {
   const onEnter = stage.config?.onEnter;
   if (!onEnter || typeof onEnter !== "object" || Array.isArray(onEnter)) return null;
   const config = onEnter as Record<string, unknown>;
-  return config.type === "run_routine" && typeof config.routineId === "string" && config.routineId.trim()
-    ? { routineId: config.routineId }
-    : null;
+  if (
+    config.type === "run_routine" &&
+    typeof config.routineId === "string" &&
+    config.routineId.trim()
+  ) {
+    return { kind: "routine", routineId: config.routineId.trim() };
+  }
+  if (
+    config.type === "run_target" &&
+    config.target &&
+    typeof config.target === "object" &&
+    !Array.isArray(config.target)
+  ) {
+    const target = config.target as Record<string, unknown>;
+    if (
+      target.kind === "routine" &&
+      typeof target.routineId === "string" &&
+      target.routineId.trim()
+    ) {
+      return { kind: "routine", routineId: target.routineId.trim() };
+    }
+    if (
+      target.kind === "workflow" &&
+      typeof target.workflowId === "string" &&
+      target.workflowId.trim()
+    ) {
+      return { kind: "workflow", workflowId: target.workflowId.trim() };
+    }
+  }
+  return null;
+}
+
+function readPipelineStageAutomationWorkflow(
+  stage: Pick<PipelineStage, "config">,
+): { id: string; name: string } | null {
+  const target = currentStageAutomation(stage);
+  if (target?.kind !== "workflow") return null;
+  const automation = stage.config?.automation;
+  const name =
+    automation &&
+    typeof automation === "object" &&
+    !Array.isArray(automation) &&
+    typeof (automation as Record<string, unknown>).titleTemplate === "string" &&
+    ((automation as Record<string, unknown>).titleTemplate as string).trim()
+      ? ((automation as Record<string, unknown>).titleTemplate as string).trim()
+      : "Workflow";
+  return { id: target.workflowId, name };
 }
 
 function readNonEmptyConfigString(value: unknown) {
@@ -1295,6 +1343,7 @@ function PipelineBoardColumn({
   warningCount,
   breakdownTarget,
   automationAgent,
+  automationWorkflow,
   automationHref,
   onColumnEmpty,
   isDragTargeted,
@@ -1307,6 +1356,7 @@ function PipelineBoardColumn({
   warningCount?: number;
   breakdownTarget?: { pipelineId: string; name: string } | null;
   automationAgent?: PipelineBoardAutomationAgent | null;
+  automationWorkflow?: PipelineBoardAutomationWorkflow | null;
   automationHref?: string | null;
   onColumnEmpty?: (stage: PipelineStage) => string;
   isDragTargeted?: boolean;
@@ -1355,7 +1405,7 @@ function PipelineBoardColumn({
           ) : null}
         </span>
       </div>
-      {breakdownTarget || automationAgent ? (
+      {breakdownTarget || automationAgent || automationWorkflow ? (
         <div className={cn("flex flex-wrap items-center gap-1.5 border-b px-3 py-1.5", tone.meta)}>
           {automationAgent && automationHref ? (
             <Link
@@ -1365,6 +1415,16 @@ function PipelineBoardColumn({
             >
               <AgentAvatar agent={automationAgent} size={16} className="h-3.5 w-3.5 shrink-0"/>
               <span className="truncate">{automationAgent.name}</span>
+            </Link>
+          ) : null}
+          {automationWorkflow ? (
+            <Link
+              to={`/workflows/${automationWorkflow.id}`}
+              className="inline-flex max-w-full items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              title={`Open ${automationWorkflow.name}`}
+            >
+              <GitBranch className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{automationWorkflow.name}</span>
             </Link>
           ) : null}
           {breakdownTarget ? (
@@ -1794,7 +1854,11 @@ function PipelineBoard({ pipelineId }: { pipelineId: string }) {
                 ? resolvePipelineTargetStageId(activeOverId, columnsById, boardColumns.caseToColumn)
                 : null;
               const automationAssigneeAgentId = readPipelineStageAutomationAssigneeAgentId(stage);
-              const automationAgent = automationAssigneeAgentId
+              const automationWorkflow = readPipelineStageAutomationWorkflow(stage);
+              const automationAgent =
+                automationWorkflow
+                  ? null
+                  : automationAssigneeAgentId
                 ? agentById.get(automationAssigneeAgentId) ?? {
                     id: automationAssigneeAgentId,
                     name: `Agent ${automationAssigneeAgentId.slice(0, 8)}`,
@@ -1818,6 +1882,7 @@ function PipelineBoard({ pipelineId }: { pipelineId: string }) {
                   warningCount={healthWarningsByStage[stage.id]?.length ?? 0}
                   breakdownTarget={breakdownTargetByStageId.get(stage.id) ?? null}
                   automationAgent={automationAgent}
+                  automationWorkflow={automationWorkflow}
                   automationHref={
                     stage.id === UNASSIGNED_STAGE_ID ? null : pipelineStageAutomationSettingsHref(pipelineId, stage.id)
                   }
@@ -2598,8 +2663,12 @@ export function PipelineItemDetailView({ pipelineId, caseId }: { pipelineId: str
   // inline so a 403/409 is never silently dropped.
   const retryLiveness = useMutation({
     mutationFn: (kind: LivenessRetryKind) => {
-      const automationId = detail?.liveness?.automation?.automationId ?? null;
-      if (kind === "automation" && automationId) {
+      const automation = detail?.liveness?.automation ?? null;
+      const automationId = automation?.automationId ?? null;
+      const workflowBacked =
+        automation?.targetKind === "workflow" ||
+        Boolean(automation?.workflowRunId);
+      if (kind === "automation" && automationId && !workflowBacked) {
         return pipelinesApi.retryAutomation(caseId, automationId);
       }
       return pipelinesApi.rerunCurrentStageAutomation(caseId);
@@ -3022,7 +3091,15 @@ export function PipelineItemDetailView({ pipelineId, caseId }: { pipelineId: str
                 <div className="sm:col-span-2">
                   <div className="text-xs font-medium uppercase text-muted-foreground">Automation</div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-1 text-foreground">
-                    {retryPlan.data.routine ? (
+                    {retryPlan.data.workflow ? (
+                      <Link
+                        to={`/workflows/${retryPlan.data.workflow.id}`}
+                        className="inline-flex items-center gap-1.5 font-medium underline-offset-2 hover:underline"
+                      >
+                        <GitBranch className="h-3.5 w-3.5" aria-hidden="true" />
+                        {retryPlan.data.workflow.name}
+                      </Link>
+                    ) : retryPlan.data.routine ? (
                       <>
                         <Link
                           to={`/routines/${retryPlan.data.routine.id}`}
@@ -3043,7 +3120,7 @@ export function PipelineItemDetailView({ pipelineId, caseId }: { pipelineId: str
                         )}
                       </>
                     ) : (
-                      "No routine configured"
+                      "No automation target configured"
                     )}
                   </div>
                 </div>
@@ -3733,11 +3810,27 @@ function PipelineEventText({
 }) {
   const kind = event.type.startsWith("case.") ? event.type.slice("case.".length) : event.type;
   if (kind === "automation_executed" && event.automation) {
-    const routineName = event.automation.routine?.title ?? "the automation";
+    const workflow = event.automation.workflow;
+    const routineName = event.automation.routine?.title ?? null;
+    const targetName = workflow?.name ?? routineName ?? "the automation";
     const issue = event.automation.issue;
+    const workflowRunHref =
+      workflow && event.automation.workflowRunId
+        ? `/workflows/${workflow.id}/runs/${event.automation.workflowRunId}`
+        : null;
     return (
       <>
-        Automation completed — ran <span className="font-medium">{routineName}</span>
+        Automation started —{" "}
+        {workflowRunHref ? (
+          <Link
+            to={workflowRunHref}
+            className="font-medium text-foreground hover:underline"
+          >
+            {targetName}
+          </Link>
+        ) : (
+          <span className="font-medium">{targetName}</span>
+        )}
         {issue ? (
           <>
             {" -> "}

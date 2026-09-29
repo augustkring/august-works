@@ -122,7 +122,7 @@ export function PipelineLivenessBanner({
               on the target pipeline.
             </p>
           ) : null}
-          {view.blockerLink || view.automationLink ? (
+          {view.blockerLink || view.automationLink || view.workflowRunLink ? (
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               {view.blockerLink ? (
                 <Link
@@ -141,6 +141,15 @@ export function PipelineLivenessBanner({
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                   {automationLinkLabel(view.automationLink)}
+                </Link>
+              ) : null}
+              {view.workflowRunLink ? (
+                <Link
+                  to={view.workflowRunLink.href}
+                  className={cn("inline-flex items-center gap-1 font-medium underline-offset-2 hover:underline", palette.link)}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  {view.workflowRunLink.label}
                 </Link>
               ) : null}
             </p>

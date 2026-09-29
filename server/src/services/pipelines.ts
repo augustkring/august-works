@@ -22,6 +22,8 @@ import {
   pipelines,
   routineRevisions,
   routines,
+  workflowRuns,
+  workflows,
 } from "@paperclipai/db";
 import {
   extractRoutineVariableNames,
@@ -31,6 +33,7 @@ import {
   type PipelineAutomationRetryCleanupOptions,
   type PipelineAutomationRetryPlan,
   type PipelineAutomationRetryScope,
+  type PipelineAutomationTarget,
   type PipelineCaseConversationSourceKind,
   type PipelineCaseConversationSourceLinkRole,
   type PipelineCaseConversationSourceReason,
@@ -46,9 +49,20 @@ import { conflict, HttpError, notFound, unprocessable } from "../errors.js";
 import { routineService } from "./routines.js";
 import { secretService } from "./secrets.js";
 import type { IssueAssignmentWakeupDeps } from "./issue-assignment-wakeup.js";
-import { logActivity } from "./activity-log.js";
+import {
+  logActivity,
+  publishActivity,
+  type ActivityPublication,
+} from "./activity-log.js";
+import {
+  enqueueWorkflowRunInTransaction,
+  resolveWorkflowExecutionRevision,
+  workflowExecutorService,
+  type WorkflowRunActor,
+} from "./workflows/workflow-executor.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
 import { authorizationService } from "./authorization.js";
+import { instanceSettingsService } from "./instance-settings.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import type { IssuePostCommitAction } from "./issues.js";
 import {
@@ -133,6 +147,9 @@ export type PipelineStageConfig = Record<string, unknown> & {
   }>;
   automation?: {
     routineId?: string | null;
+    targetKind?: "routine" | "workflow" | null;
+    targetRef?: string | null;
+    workflowId?: string | null;
     assigneeAgentId?: string | null;
     titleTemplate?: string | null;
     instructionsBody?: string | null;
@@ -156,8 +173,9 @@ export type PipelineStageConfig = Record<string, unknown> & {
     whenFinishedMoveTo?: unknown;
   };
   onEnter?: {
-    type?: "run_routine";
+    type?: "run_routine" | "run_target";
     routineId?: string;
+    target?: PipelineAutomationTarget;
     id?: string;
     projectId?: string | null;
     projectWorkspaceId?: string | null;
@@ -178,6 +196,7 @@ type PipelineDb = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 type PipelineRetryPlanInternal = PipelineAutomationRetryPlan & {
   targetStageRow: typeof pipelineStages.$inferSelect | null;
+  automationTarget: PipelineAutomationTarget | null;
   automationRoutineId: string | null;
 };
 
@@ -827,9 +846,49 @@ function readAutomationExecutionContext(
   };
 }
 
+function readPipelineAutomationTarget(value: unknown): PipelineAutomationTarget | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (record.kind === "routine") {
+    const routineId = readOptionalTrimmedString(record.routineId);
+    return routineId ? { kind: "routine", routineId } : null;
+  }
+  if (record.kind === "workflow") {
+    const workflowId = readOptionalTrimmedString(record.workflowId);
+    return workflowId ? { kind: "workflow", workflowId } : null;
+  }
+  return null;
+}
+
+function stageAutomationTargetFromConfig(
+  config?: PipelineStageConfig | null,
+): PipelineAutomationTarget | null {
+  const onEnter = config?.onEnter;
+  if (!onEnter) return null;
+  if (onEnter.type === "run_target") {
+    return readPipelineAutomationTarget(onEnter.target);
+  }
+  if (onEnter.type === "run_routine") {
+    const routineId = readOptionalTrimmedString(onEnter.routineId);
+    return routineId ? { kind: "routine", routineId } : null;
+  }
+  return null;
+}
+
 function readStageAutomationRequest(config?: PipelineStageConfig | null) {
   const automation = config?.automation;
   if (!automation || typeof automation !== "object" || Array.isArray(automation)) return null;
+  const targetKind = automation.targetKind;
+  const targetRef = readOptionalTrimmedString(
+    automation.targetRef ??
+      (targetKind === "workflow" ? automation.workflowId : automation.routineId),
+  );
+  const target: PipelineAutomationTarget | null =
+    targetKind === "workflow" && targetRef
+      ? { kind: "workflow", workflowId: targetRef }
+      : targetKind === "routine" && targetRef
+        ? { kind: "routine", routineId: targetRef }
+        : null;
   const assigneeAgentId = readOptionalTrimmedString(automation.assigneeAgentId);
   const titleTemplate =
     typeof automation.titleTemplate === "string" && automation.titleTemplate.trim().length > 0
@@ -838,6 +897,7 @@ function readStageAutomationRequest(config?: PipelineStageConfig | null) {
   const instructionsBody =
     typeof automation.instructionsBody === "string" ? automation.instructionsBody : "";
   return {
+    target,
     assigneeAgentId,
     titleTemplate,
     instructionsBody,
@@ -1107,11 +1167,15 @@ function targetStageKeyForReviewDecision(config: PipelineStageConfig, decision: 
 }
 
 function stageAutomation(stage: typeof pipelineStages.$inferSelect) {
-  const onEnter = stageConfig(stage).onEnter;
-  if (!onEnter || onEnter.type !== "run_routine" || !onEnter.routineId) return null;
+  const config = stageConfig(stage);
+  const onEnter = config.onEnter;
+  const target = stageAutomationTargetFromConfig(config);
+  if (!onEnter || !target) return null;
   return {
     id: onEnter.id ?? `${stage.id}:on_enter`,
-    routineId: onEnter.routineId,
+    target,
+    routineId: target.kind === "routine" ? target.routineId : null,
+    workflowId: target.kind === "workflow" ? target.workflowId : null,
     ...readAutomationExecutionContext(onEnter),
   };
 }
@@ -1134,6 +1198,9 @@ function derivedStageAutomationPayload(
 ): PipelineStageAutomation {
   return {
     routineId: routine.id,
+    targetKind: "routine",
+    targetRef: routine.id,
+    workflowId: null,
     assigneeAgentId: routine.assigneeAgentId,
     titleTemplate: routine.title,
     instructionsBody: routine.description ?? "",
@@ -1155,10 +1222,29 @@ function secretRefsFromEnv(env: Record<string, EnvBinding> | null | undefined) {
 }
 
 function stageAutomationRoutineIdFromConfig(config?: PipelineStageConfig | null) {
-  const onEnter = config?.onEnter;
-  return onEnter?.type === "run_routine" && typeof onEnter.routineId === "string"
-    ? onEnter.routineId
-    : null;
+  const target = stageAutomationTargetFromConfig(config);
+  return target?.kind === "routine" ? target.routineId : null;
+}
+
+function withStageAutomationTarget(
+  config: PipelineStageConfig,
+  target: PipelineAutomationTarget,
+  executionContext: PipelineAutomationExecutionContext,
+): PipelineStageConfig {
+  const { automation: _automation, ...persisted } = config;
+  const existingId =
+    typeof config.onEnter?.id === "string" && config.onEnter.id.trim().length > 0
+      ? config.onEnter.id.trim()
+      : undefined;
+  return {
+    ...persisted,
+    onEnter: {
+      type: "run_target",
+      target,
+      ...(existingId ? { id: existingId } : {}),
+      ...executionContext,
+    },
+  };
 }
 
 function routineRevisionSnapshotRoutine(routine: typeof routines.$inferSelect): RoutineRevisionSnapshotV1["routine"] {
@@ -1171,6 +1257,8 @@ function routineRevisionSnapshotRoutine(routine: typeof routines.$inferSelect): 
     title: routine.title,
     description: routine.description,
     assigneeAgentId: routine.assigneeAgentId,
+    executionTargetKind: routine.executionTargetKind,
+    executionTargetRef: routine.executionTargetRef,
     priority: routine.priority as RoutineRevisionSnapshotV1["routine"]["priority"],
     status: routine.status as RoutineRevisionSnapshotV1["routine"]["status"],
     concurrencyPolicy: routine.concurrencyPolicy as RoutineRevisionSnapshotV1["routine"]["concurrencyPolicy"],
@@ -2149,6 +2237,28 @@ function pipelineBatchError(error: unknown, fallbackCode = "unknown") {
   };
 }
 
+function pipelineAutomationTargetFromExecution(
+  execution: typeof pipelineAutomationExecutions.$inferSelect,
+): PipelineAutomationTarget | null {
+  if (execution.targetKind === "workflow" && execution.targetRef) {
+    return { kind: "workflow", workflowId: execution.targetRef };
+  }
+  if (execution.targetKind === "routine" && execution.targetRef) {
+    return { kind: "routine", routineId: execution.targetRef };
+  }
+  if (execution.routineId) {
+    return { kind: "routine", routineId: execution.routineId };
+  }
+  return null;
+}
+
+function workflowActorForPipeline(actor: PipelineActor): WorkflowRunActor {
+  return {
+    principal: { type: "system", service: "pipeline-automation" },
+    responsibleUserId: actor.type === "user" ? actor.userId : null,
+  };
+}
+
 async function enqueueStageAutomationLedger(
   db: PipelineDb,
   input: {
@@ -2169,7 +2279,15 @@ async function enqueueStageAutomationLedger(
       caseId: input.caseId,
       automationId: automation.id,
       triggeringEventId: input.eventId,
-      routineId: automation.routineId,
+      targetKind: automation.target.kind,
+      targetRef:
+        automation.target.kind === "routine"
+          ? automation.target.routineId
+          : automation.target.workflowId,
+      routineId:
+        automation.target.kind === "routine"
+          ? automation.target.routineId
+          : null,
       status: "failed",
       retryOfExecutionId: input.retryOfExecutionId ?? null,
       generation: input.generation ?? 1,
@@ -2229,6 +2347,16 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
   const outputsSvc = pipelineCaseOutputsService(db);
   const authorization = authorizationService(db);
   const secretsSvc = secretService(db);
+  const instanceSettings = instanceSettingsService(db);
+
+  async function assertWorkflowsEnabledForPipelineAutomation() {
+    const experimental = await instanceSettings.getExperimental();
+    if (experimental.enableWorkflowsV1 !== true) {
+      throw notFound("Workflows are not enabled", {
+        code: "workflows_disabled",
+      });
+    }
+  }
 
   async function assertRoutineInCompany(companyId: string, routineId: string) {
     const routine = await db
@@ -2244,10 +2372,32 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     return routine;
   }
 
+  async function assertPipelineAutomationTarget(
+    companyId: string,
+    target: PipelineAutomationTarget,
+  ) {
+    if (target.kind === "routine") {
+      await assertRoutineInCompany(companyId, target.routineId);
+      return;
+    }
+    await assertWorkflowsEnabledForPipelineAutomation();
+    await resolveWorkflowExecutionRevision(
+      db,
+      companyId,
+      target.workflowId,
+    );
+  }
+
   async function validateStageAutomationConfig(companyId: string, config?: PipelineStageConfig | null) {
-    const onEnter = config?.onEnter;
-    if (!onEnter || onEnter.type !== "run_routine" || !onEnter.routineId) return;
-    await assertRoutineInCompany(companyId, onEnter.routineId);
+    const target = stageAutomationTargetFromConfig(config);
+    if (!target) return;
+    if (target.kind === "workflow" && readBreakdownConfig(config ?? {})) {
+      throw unprocessable(
+        "Breakdown stage automation requires the existing routine/agent target until pipeline-native workflow breakdown actions are implemented",
+        { code: "pipeline_workflow_breakdown_not_ready" },
+      );
+    }
+    await assertPipelineAutomationTarget(companyId, target);
   }
 
   async function loadBreakdownTarget(
@@ -2526,22 +2676,53 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       : availableTargetStages[0] ?? null;
     const targetStage = input.scope === "current_stage" ? detail.stage : selectedUpstreamStage;
     const automation = targetStage ? stageAutomation(targetStage) : null;
-    const routine = automation
-      ? await dbOrTx
-        .select({
-          id: routines.id,
-          title: routines.title,
-          assigneeAgentId: routines.assigneeAgentId,
-          assigneeAgentName: agents.name,
-          assigneeAgentRole: agents.role,
-          assigneeAgentTitle: agents.title,
-        })
-        .from(routines)
-        .leftJoin(agents, and(eq(agents.companyId, input.companyId), eq(agents.id, routines.assigneeAgentId)))
-        .where(and(eq(routines.companyId, input.companyId), eq(routines.id, automation.routineId)))
-        .limit(1)
-        .then((rows) => rows[0] ?? null)
-      : null;
+    const routine =
+      automation?.target.kind === "routine"
+        ? await dbOrTx
+            .select({
+              id: routines.id,
+              title: routines.title,
+              assigneeAgentId: routines.assigneeAgentId,
+              assigneeAgentName: agents.name,
+              assigneeAgentRole: agents.role,
+              assigneeAgentTitle: agents.title,
+            })
+            .from(routines)
+            .leftJoin(
+              agents,
+              and(
+                eq(agents.companyId, input.companyId),
+                eq(agents.id, routines.assigneeAgentId),
+              ),
+            )
+            .where(
+              and(
+                eq(routines.companyId, input.companyId),
+                eq(routines.id, automation.target.routineId),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows[0] ?? null)
+        : null;
+    const workflow =
+      automation?.target.kind === "workflow"
+        ? await dbOrTx
+            .select({
+              id: workflows.id,
+              name: workflows.name,
+              status: workflows.status,
+              publishedRevisionId: workflows.publishedRevisionId,
+            })
+            .from(workflows)
+            .where(
+              and(
+                eq(workflows.companyId, input.companyId),
+                eq(workflows.id, automation.target.workflowId),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows[0] ?? null)
+        : null;
     const previousAttempt = automation
       ? await dbOrTx
         .select()
@@ -2585,8 +2766,20 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           },
         }
         : { kind: "previous_stage_not_found", message: "No previous automated stage was found for this item." });
-    } else if (!automation || !routine) {
-      blockers.push({ kind: "automation_not_configured", message: "Target stage does not have compatible automation configured." });
+    } else if (
+      !automation ||
+      (automation.target.kind === "routine" && !routine) ||
+      (automation.target.kind === "workflow" &&
+        (
+          !workflow ||
+          workflow.status !== "active" ||
+          !workflow.publishedRevisionId
+        ))
+    ) {
+      blockers.push({
+        kind: "automation_not_configured",
+        message: "Target stage does not have a runnable automation target configured.",
+      });
     }
     if (effects.unresolvedBlockerCaseIds.length > 0) {
       blockers.push({
@@ -2602,7 +2795,11 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         issueIds: effects.activeWorkIssueIds,
       });
     }
-    if (targetStage && automation && routine) {
+    if (
+      targetStage &&
+      automation?.target.kind === "routine" &&
+      routine
+    ) {
       const breakdownConfig = readBreakdownConfig(stageConfig(targetStage));
       if (breakdownConfig) {
         try {
@@ -2644,20 +2841,40 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       targetStage: targetStage ? stageRef(targetStage) : null,
       availableTargetStages: availableTargetStages.map(stageRef),
       automationId: automation?.id ?? null,
+      target: automation
+        ? automation.target.kind === "routine"
+          ? {
+              kind: "routine",
+              id: automation.target.routineId,
+              label: routine?.title ?? "Routine",
+            }
+          : {
+              kind: "workflow",
+              id: automation.target.workflowId,
+              label: workflow?.name ?? "Workflow",
+            }
+        : null,
       routine: routine
         ? {
-          id: routine.id,
-          title: routine.title,
-          assigneeAgentId: routine.assigneeAgentId,
-          assigneeAgent: routine.assigneeAgentId && routine.assigneeAgentName
-            ? {
-              id: routine.assigneeAgentId,
-              name: routine.assigneeAgentName,
-              role: routine.assigneeAgentRole ?? "",
-              title: routine.assigneeAgentTitle,
-            }
-            : null,
-        }
+            id: routine.id,
+            title: routine.title,
+            assigneeAgentId: routine.assigneeAgentId,
+            assigneeAgent:
+              routine.assigneeAgentId && routine.assigneeAgentName
+                ? {
+                    id: routine.assigneeAgentId,
+                    name: routine.assigneeAgentName,
+                    role: routine.assigneeAgentRole ?? "",
+                    title: routine.assigneeAgentTitle,
+                  }
+                : null,
+          }
+        : null,
+      workflow: workflow
+        ? {
+            id: workflow.id,
+            name: workflow.name,
+          }
         : null,
       previousAttemptId: previousAttempt?.id ?? null,
       generation: (previousAttempt?.generation ?? 0) + 1,
@@ -2671,7 +2888,11 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       defaultCleanup: defaultRetryCleanup(),
       blockers,
       targetStageRow: targetStage,
-      automationRoutineId: automation?.routineId ?? null,
+      automationTarget: automation?.target ?? null,
+      automationRoutineId:
+        automation?.target.kind === "routine"
+          ? automation.target.routineId
+          : null,
     };
   }
 
@@ -2765,6 +2986,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           title,
           description,
           assigneeAgentId: input.assigneeAgentId,
+          executionTargetKind: "agent_task",
+          executionTargetRef: input.assigneeAgentId,
           status: "active",
           originKind: "pipeline_automation",
           originId: input.pipelineId,
@@ -2799,6 +3022,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         title,
         description,
         assigneeAgentId: input.assigneeAgentId,
+        executionTargetKind: "agent_task",
+        executionTargetRef: input.assigneeAgentId,
         status: "active",
         priority: "medium",
         concurrencyPolicy: "coalesce_if_active",
@@ -2868,8 +3093,17 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       .innerJoin(pipelines, eq(pipelineStages.pipelineId, pipelines.id))
       .where(and(
         eq(pipelines.companyId, input.companyId),
-        sql`${pipelineStages.config}->'onEnter'->>'type' = 'run_routine'`,
-        sql`${pipelineStages.config}->'onEnter'->>'routineId' = ${input.routineId}`,
+        or(
+          and(
+            sql`${pipelineStages.config}->'onEnter'->>'type' = 'run_routine'`,
+            sql`${pipelineStages.config}->'onEnter'->>'routineId' = ${input.routineId}`,
+          ),
+          and(
+            sql`${pipelineStages.config}->'onEnter'->>'type' = 'run_target'`,
+            sql`${pipelineStages.config}->'onEnter'->'target'->>'kind' = 'routine'`,
+            sql`${pipelineStages.config}->'onEnter'->'target'->>'routineId' = ${input.routineId}`,
+          ),
+        ),
         input.exceptStageId ? ne(pipelineStages.id, input.exceptStageId) : undefined,
       ))
       .limit(1);
@@ -2927,8 +3161,24 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       .limit(1)
       .then((rows) => rows[0] ?? null);
     if (!execution) throw notFound("Pipeline automation execution not found");
-    if (execution.status === "succeeded" && execution.executionIssueId) {
+    if (
+      execution.status === "succeeded" &&
+      (execution.executionIssueId || execution.workflowRunId)
+    ) {
       return { status: "succeeded", execution };
+    }
+    const executionTarget = pipelineAutomationTargetFromExecution(execution);
+    if (!executionTarget) {
+      const [failed] = await db
+        .update(pipelineAutomationExecutions)
+        .set({
+          status: "failed",
+          error: "automation_target_missing",
+          updatedAt: nowDate(),
+        })
+        .where(eq(pipelineAutomationExecutions.id, execution.id))
+        .returning();
+      return { status: "failed", execution: failed! };
     }
 
     const detail = await getCaseWithStageOrThrow(db, execution.companyId, execution.caseId);
@@ -2950,13 +3200,125 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     }
 
     try {
-      const routine = await assertRoutineInCompany(execution.companyId, execution.routineId);
       const outputSummaries = summarizePipelineCaseOutputsForContext(
         await outputsSvc.listCaseOutputs(execution.companyId, execution.caseId),
       );
       const contextPack = buildPipelineCaseContextPack({ ...detail, outputSummaries });
       const variables = buildPipelineCaseVariables(detail);
       const breakdownConfig = readBreakdownConfig(stageConfig(detail.stage));
+
+      if (executionTarget.kind === "workflow") {
+        await assertWorkflowsEnabledForPipelineAutomation();
+        if (breakdownConfig) {
+          throw unprocessable(
+            "Workflow-target pipeline automation does not yet support pipeline breakdown mechanics",
+            { code: "pipeline_workflow_breakdown_not_ready" },
+          );
+        }
+
+        const resolved = await resolveWorkflowExecutionRevision(
+          db,
+          execution.companyId,
+          executionTarget.workflowId,
+        );
+        const workflowActor = workflowActorForPipeline(actor);
+        const workflowPublications: ActivityPublication[] = [];
+        const workflowPayload = {
+          pipeline: contextPack.pipeline,
+          case: contextPack.case,
+          stage: contextPack.stage,
+          triggeringEventId: execution.triggeringEventId,
+          automation: {
+            automationId: execution.automationId,
+            automationExecutionId: execution.id,
+            generation: execution.generation,
+          },
+          contextPack,
+          variables,
+        };
+
+        const queued = await db.transaction(async (tx) => {
+          const txDb = tx as unknown as Db;
+          const workflowRun = await enqueueWorkflowRunInTransaction(
+            txDb,
+            {
+              companyId: execution.companyId,
+              workflowId: executionTarget.workflowId,
+              revisionId: resolved.revision.id,
+              nodeId: resolved.triggerNodeId,
+              triggerId: null,
+              source: "pipeline",
+              triggerPayload: workflowPayload,
+              responsibleUserId:
+                actor.type === "user" ? actor.userId : null,
+              idempotencyKey: `pipeline-automation:${execution.id}`,
+              correlationId:
+                `pipeline:${execution.caseId}:${execution.automationId}:${execution.triggeringEventId}`,
+              actor: workflowActor,
+            },
+          );
+          workflowPublications.push(...workflowRun.publications);
+          const [updatedExecution] = await txDb
+            .update(pipelineAutomationExecutions)
+            .set({
+              status: "succeeded",
+              workflowRunId: workflowRun.run.id,
+              error: null,
+              updatedAt: nowDate(),
+            })
+            .where(eq(pipelineAutomationExecutions.id, execution.id))
+            .returning();
+          if (!updatedExecution) {
+            throw notFound("Pipeline automation execution disappeared during Workflow dispatch");
+          }
+          return {
+            execution: updatedExecution,
+            workflowRun: workflowRun.run,
+          };
+        });
+
+        for (const publication of workflowPublications) {
+          publishActivity(publication);
+        }
+
+        let deferredExecutionError: string | null = null;
+        try {
+          await workflowExecutorService(db).executeQueuedRun(
+            execution.companyId,
+            queued.workflowRun.id,
+            workflowActor,
+          );
+        } catch (error) {
+          deferredExecutionError =
+            error instanceof Error ? error.message : String(error);
+        }
+
+        await writeCaseEvent(db, {
+          companyId: execution.companyId,
+          caseId: execution.caseId,
+          type: "automation_executed",
+          actor,
+          payload: {
+            automationId: execution.automationId,
+            targetKind: "workflow",
+            workflowId: executionTarget.workflowId,
+            workflowRunId: queued.workflowRun.id,
+            status: "workflow_started",
+            ...(deferredExecutionError
+              ? {
+                executionDeferred: true,
+                deferredExecutionError,
+              }
+              : {}),
+          },
+        });
+        return { status: "succeeded", execution: queued.execution };
+      }
+
+      const routine = await assertRoutineInCompany(
+        execution.companyId,
+        executionTarget.routineId,
+      );
       if (breakdownConfig) {
         const { targetPipeline } = await loadBreakdownTarget(db, execution.companyId, breakdownConfig);
         await assertAutomationAssigneeCanWriteTargetPipeline({
@@ -2975,7 +3337,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
             config: breakdownConfig,
           })
         : null;
-      const run = await routinesSvc.runPipelineStageEntryRoutine(execution.routineId, {
+      const run = await routinesSvc.runPipelineStageEntryRoutine(executionTarget.routineId, {
         source: "api",
         assigneeAgentId: routine.assigneeAgentId,
         idempotencyKey: `pipeline:${execution.caseId}:${execution.automationId}:${execution.triggeringEventId}`,
@@ -3042,7 +3404,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         actor,
         payload: {
           automationId: execution.automationId,
-          routineId: execution.routineId,
+          targetKind: "routine",
+          routineId: executionTarget.routineId,
           routineRunId: run.id,
           issueId: run.linkedIssueId,
           status: run.status,
@@ -3073,7 +3436,14 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         actor,
         payload: {
           automationId: execution.automationId,
-          routineId: execution.routineId,
+          targetKind: executionTarget.kind,
+          targetRef:
+            executionTarget.kind === "routine"
+              ? executionTarget.routineId
+              : executionTarget.workflowId,
+          ...(executionTarget.kind === "routine"
+            ? { routineId: executionTarget.routineId }
+            : { workflowId: executionTarget.workflowId }),
           error: message,
           ...(permissionPreflight
             ? {
@@ -3486,10 +3856,22 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
             ...stage,
             kind: normalizeStageKind(stage.kind),
           }));
-        const stageInputs = stageInputsBase.map((stage) => ({
-          ...stage,
-          config: normalizeStageConfig(stage.kind, "config" in stage ? stage.config : {}),
-        }));
+        const stageInputs = stageInputsBase.map((stage) => {
+          const rawConfig = "config" in stage ? stage.config : {};
+          const automationRequest = readStageAutomationRequest(rawConfig);
+          let config = normalizeStageConfig(stage.kind, rawConfig);
+          if (automationRequest?.target?.kind === "workflow") {
+            config = withStageAutomationTarget(
+              config,
+              automationRequest.target,
+              automationRequest.executionContext,
+            );
+          }
+          return {
+            ...stage,
+            config,
+          };
+        });
         const stageKeys = new Set(stageInputs.map((stage) => stage.key));
         for (const stage of stageInputs) {
           assertReviewTargetsInSet(stage.kind, stage.config, stageKeys);
@@ -3573,7 +3955,15 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       actor?: PipelineActor;
     }) {
       await getPipelineOrThrow(db, input.companyId, input.pipelineId);
-      const config = normalizeStageConfig(input.kind, input.config);
+      const automationRequest = readStageAutomationRequest(input.config);
+      let config = normalizeStageConfig(input.kind, input.config);
+      if (automationRequest?.target?.kind === "workflow") {
+        config = withStageAutomationTarget(
+          config,
+          automationRequest.target,
+          automationRequest.executionContext,
+        );
+      }
       const kind = normalizeStageKind(input.kind);
       await validateStageTargets(input.companyId, input.pipelineId, input.kind, config);
       await validateStageAutomationConfig(input.companyId, config);
@@ -3643,7 +4033,13 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         : null;
       const stageName = input.patch.name ?? existing.name;
       let config = normalizeStageConfig(kind, input.patch.config !== undefined ? input.patch.config : stageConfig(existing));
-      if (automationRequest) {
+      if (automationRequest?.target?.kind === "workflow") {
+        config = withStageAutomationTarget(
+          config,
+          automationRequest.target,
+          automationRequest.executionContext,
+        );
+      } else if (automationRequest) {
         config = reconcilePipelineStageConfigVariables(config, [
           automationRequest.titleTemplate ?? PIPELINE_AUTOMATION_DEFAULT_TITLE_TEMPLATE,
           automationRequest.instructionsBody,
@@ -3652,21 +4048,24 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       await validateStageTargets(input.companyId, input.pipelineId, kind, config);
       await validateStageAutomationConfig(input.companyId, config);
       return db.transaction(async (tx) => {
-        const nextConfig = automationRequest
-          ? await syncPipelineStageAutomation(tx, {
-              companyId: input.companyId,
-              pipelineId: input.pipelineId,
-              stage: { ...existing, name: stageName, kind },
-              previousStageName: existing.name,
-              previousRoutineId,
-              config,
-              assigneeAgentId: automationRequest.assigneeAgentId,
-              titleTemplate: automationRequest.titleTemplate,
-              instructionsBody: automationRequest.instructionsBody,
-              executionContext: automationRequest.executionContext,
-              actor: input.actor ?? { type: "system" },
-            })
-          : config;
+        const nextConfig =
+          automationRequest?.target?.kind === "workflow"
+            ? config
+            : automationRequest
+              ? await syncPipelineStageAutomation(tx, {
+                  companyId: input.companyId,
+                  pipelineId: input.pipelineId,
+                  stage: { ...existing, name: stageName, kind },
+                  previousStageName: existing.name,
+                  previousRoutineId,
+                  config,
+                  assigneeAgentId: automationRequest.assigneeAgentId,
+                  titleTemplate: automationRequest.titleTemplate,
+                  instructionsBody: automationRequest.instructionsBody,
+                  executionContext: automationRequest.executionContext,
+                  actor: input.actor ?? { type: "system" },
+                })
+              : config;
         const nextRoutineId = stageAutomationRoutineIdFromConfig(nextConfig);
         const [updated] = await tx
           .update(pipelineStages)
@@ -4489,8 +4888,12 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       scope: PipelineAutomationRetryScope;
       targetStageId?: string | null;
     }) {
-      const { targetStageRow: _targetStageRow, automationRoutineId: _automationRoutineId, ...plan } =
-        await buildAutomationRetryPlan(db, input);
+      const {
+        targetStageRow: _targetStageRow,
+        automationTarget: _automationTarget,
+        automationRoutineId: _automationRoutineId,
+        ...plan
+      } = await buildAutomationRetryPlan(db, input);
       return plan;
     },
 
@@ -4521,7 +4924,12 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           scope: input.scope,
           targetStageId: input.targetStageId,
         });
-        if (!plan.allowed || !plan.targetStageRow || !plan.automationId || !plan.automationRoutineId) {
+        if (
+          !plan.allowed ||
+          !plan.targetStageRow ||
+          !plan.automationId ||
+          !plan.automationTarget
+        ) {
           throw unprocessable("Pipeline automation retry is not currently allowed", {
             code: "automation_retry_not_allowed",
             blockers: plan.blockers,
@@ -4702,7 +5110,14 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           toStageId: plan.targetStageRow.id,
           payload: {
             automationId: plan.automationId,
-            routineId: plan.automationRoutineId,
+            targetKind: plan.automationTarget.kind,
+            targetRef:
+              plan.automationTarget.kind === "routine"
+                ? plan.automationTarget.routineId
+                : plan.automationTarget.workflowId,
+            ...(plan.automationTarget.kind === "routine"
+              ? { routineId: plan.automationTarget.routineId }
+              : { workflowId: plan.automationTarget.workflowId }),
             targetStageId: plan.targetStageRow.id,
             targetStageKey: plan.targetStageRow.key,
             retryAttemptId: ledger.id,
@@ -4722,7 +5137,12 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       });
       await executeIssuePostCommitActions(db, postCommitIssueActions);
       const automationExecution = await executeAutomationLedger(result.ledger.id, input.actor);
-      const { targetStageRow: _targetStageRow, automationRoutineId: _automationRoutineId, ...plan } = result.plan;
+      const {
+        targetStageRow: _targetStageRow,
+        automationTarget: _automationTarget,
+        automationRoutineId: _automationRoutineId,
+        ...plan
+      } = result.plan;
       return {
         case: result.case,
         plan,
@@ -4754,7 +5174,14 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           payload: {
             action: "stage_automation_rerun_requested",
             automationId: automation.id,
-            routineId: automation.routineId,
+            targetKind: automation.target.kind,
+            targetRef:
+              automation.target.kind === "routine"
+                ? automation.target.routineId
+                : automation.target.workflowId,
+            ...(automation.target.kind === "routine"
+              ? { routineId: automation.target.routineId }
+              : { workflowId: automation.target.workflowId }),
             stageId: detail.stage.id,
             stageKey: detail.stage.key,
           },
@@ -5092,15 +5519,24 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       const routineIds = [...new Set(automationEvents
         .map((row) => payloadString(row.event.payload, "routineId"))
         .filter((id): id is string => Boolean(id)))];
+      const workflowIds = [...new Set(automationEvents
+        .map((row) => payloadString(row.event.payload, "workflowId"))
+        .filter((id): id is string => Boolean(id)))];
       const issueIds = [...new Set(automationEvents
         .map((row) => payloadString(row.event.payload, "issueId"))
         .filter((id): id is string => Boolean(id)))];
-      const [routineRows, issueRowsForEvents, pipelineStageRows] = await Promise.all([
+      const [routineRows, workflowRows, issueRowsForEvents, pipelineStageRows] = await Promise.all([
         routineIds.length > 0
           ? db
             .select({ id: routines.id, title: routines.title })
             .from(routines)
             .where(and(eq(routines.companyId, companyId), inArray(routines.id, routineIds)))
+          : Promise.resolve([]),
+        workflowIds.length > 0
+          ? db
+            .select({ id: workflows.id, name: workflows.name })
+            .from(workflows)
+            .where(and(eq(workflows.companyId, companyId), inArray(workflows.id, workflowIds)))
           : Promise.resolve([]),
         issueIds.length > 0
           ? db
@@ -5116,25 +5552,34 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           : Promise.resolve([]),
       ]);
       const routinesById = new Map(routineRows.map((routine) => [routine.id, routine]));
+      const workflowsById = new Map(workflowRows.map((workflow) => [workflow.id, workflow]));
       const issuesById = new Map(issueRowsForEvents.map((issue) => [issue.id, issue]));
       const stagesByAutomationId = new Map<string, typeof pipelineStages.$inferSelect>();
       const stagesByRoutineId = new Map<string, typeof pipelineStages.$inferSelect>();
+      const stagesByWorkflowId = new Map<string, typeof pipelineStages.$inferSelect>();
       for (const stage of pipelineStageRows) {
         const automation = stageAutomation(stage);
         if (!automation) continue;
         stagesByAutomationId.set(automation.id, stage);
-        stagesByRoutineId.set(automation.routineId, stage);
+        if (automation.target.kind === "routine") {
+          stagesByRoutineId.set(automation.target.routineId, stage);
+        } else {
+          stagesByWorkflowId.set(automation.target.workflowId, stage);
+        }
       }
       const items = pageRows.map((row) => {
         const routineId = payloadString(row.event.payload, "routineId");
+        const workflowId = payloadString(row.event.payload, "workflowId");
         const issueId = payloadString(row.event.payload, "issueId");
         const automationId = payloadString(row.event.payload, "automationId");
         const automationStage = (
           (automationId ? stagesByAutomationId.get(automationId) : undefined) ??
           (routineId ? stagesByRoutineId.get(routineId) : undefined) ??
+          (workflowId ? stagesByWorkflowId.get(workflowId) : undefined) ??
           detail.stage
         );
         const routine = routineId ? routinesById.get(routineId) ?? null : null;
+        const workflow = workflowId ? workflowsById.get(workflowId) ?? null : null;
         const issue = issueId ? issuesById.get(issueId) ?? null : null;
         return {
           ...row.event,
@@ -5144,8 +5589,10 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           automation: row.event.type === "automation_executed" || row.event.type === "automation_failed"
             ? {
               routine: routine ? { id: routine.id, title: routine.title } : null,
+              workflow: workflow ? { id: workflow.id, name: workflow.name } : null,
               issue: issue ? { id: issue.id, identifier: issue.identifier, title: issue.title, status: issue.status } : null,
               routineRunId: payloadString(row.event.payload, "routineRunId"),
+              workflowRunId: payloadString(row.event.payload, "workflowRunId"),
               stage: automationStage
                 ? { id: automationStage.id, key: automationStage.key, name: automationStage.name, kind: automationStage.kind }
                 : null,

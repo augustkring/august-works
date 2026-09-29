@@ -52,6 +52,8 @@ import {
   pipelineTransitions,
   pipelines,
   routines,
+  workflowRuns,
+  workflows,
 } from "@paperclipai/db";
 import { validate } from "../middleware/validate.js";
 import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized, unprocessable } from "../errors.js";
@@ -118,12 +120,61 @@ type PipelineRouteDb = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 const intakeFieldTypes = new Set(["select", "text", "multiline"]);
 
-function stageAutomationRoutineId(config: unknown) {
+function stageAutomationTarget(config: unknown):
+  | { kind: "routine"; routineId: string }
+  | { kind: "workflow"; workflowId: string }
+  | null {
   if (!config || typeof config !== "object" || Array.isArray(config)) return null;
   const onEnter = (config as { onEnter?: unknown }).onEnter;
   if (!onEnter || typeof onEnter !== "object" || Array.isArray(onEnter)) return null;
   const record = onEnter as Record<string, unknown>;
-  return record.type === "run_routine" && typeof record.routineId === "string" ? record.routineId : null;
+  if (record.type === "run_routine" && typeof record.routineId === "string") {
+    return { kind: "routine", routineId: record.routineId };
+  }
+  if (
+    record.type === "run_target" &&
+    record.target &&
+    typeof record.target === "object" &&
+    !Array.isArray(record.target)
+  ) {
+    const target = record.target as Record<string, unknown>;
+    if (target.kind === "routine" && typeof target.routineId === "string") {
+      return { kind: "routine", routineId: target.routineId };
+    }
+    if (target.kind === "workflow" && typeof target.workflowId === "string") {
+      return { kind: "workflow", workflowId: target.workflowId };
+    }
+  }
+  return null;
+}
+
+function stageAutomationRoutineId(config: unknown) {
+  const target = stageAutomationTarget(config);
+  return target?.kind === "routine" ? target.routineId : null;
+}
+
+function stageAutomationWorkflowId(config: unknown) {
+  const target = stageAutomationTarget(config);
+  return target?.kind === "workflow" ? target.workflowId : null;
+}
+
+function requestedStageWorkflowAutomationId(config: unknown) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return null;
+  const record = config as Record<string, unknown>;
+  const automation = record.automation;
+  if (automation && typeof automation === "object" && !Array.isArray(automation)) {
+    const automationRecord = automation as Record<string, unknown>;
+    if (automationRecord.targetKind === "workflow") {
+      const workflowId =
+        typeof automationRecord.workflowId === "string"
+          ? automationRecord.workflowId.trim()
+          : typeof automationRecord.targetRef === "string"
+            ? automationRecord.targetRef.trim()
+            : "";
+      if (workflowId) return workflowId;
+    }
+  }
+  return stageAutomationWorkflowId(config);
 }
 
 function readAutomationContextValue(value: unknown): string | null {
@@ -157,19 +208,51 @@ function withDerivedStageAutomation(
     latestRevisionId: string | null;
     latestRevisionNumber: number;
   }>,
+  workflowById: Map<string, {
+    name: string;
+    description: string | null;
+  }> = new Map(),
 ) {
   const config = stage.config && typeof stage.config === "object" && !Array.isArray(stage.config)
     ? { ...(stage.config as Record<string, unknown>) }
     : {};
-  const routineId = stageAutomationRoutineId(config);
-  const routine = routineId ? routineById.get(routineId) : null;
+  const target = stageAutomationTarget(config);
+  if (!target) return { ...stage, config };
+  if (target.kind === "workflow") {
+    const workflow = workflowById.get(target.workflowId);
+    if (!workflow) return { ...stage, config };
+    return {
+      ...stage,
+      config: {
+        ...config,
+        automation: {
+          routineId: null,
+          targetKind: "workflow",
+          targetRef: target.workflowId,
+          workflowId: target.workflowId,
+          assigneeAgentId: null,
+          titleTemplate: workflow.name,
+          instructionsBody: workflow.description ?? "",
+          ...stageAutomationContext(config),
+          env: null,
+          latestRoutineRevisionId: null,
+          latestRoutineRevisionNumber: 0,
+        },
+      },
+    };
+  }
+
+  const routine = routineById.get(target.routineId);
   if (!routine) return { ...stage, config };
   return {
     ...stage,
     config: {
       ...config,
       automation: {
-        routineId,
+        routineId: target.routineId,
+        targetKind: "routine",
+        targetRef: target.routineId,
+        workflowId: null,
         assigneeAgentId: routine.assigneeAgentId,
         titleTemplate: routine.title,
         instructionsBody: routine.description ?? "",
@@ -701,6 +784,34 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
   const outputsSvc = pipelineCaseOutputsService(db);
   const access = accessService(db);
   const issuesSvc = issueService(db);
+
+  async function assertWorkflowAutomationRunPermission(
+    req: Request,
+    companyId: string,
+    config: unknown,
+  ) {
+    const workflowId = requestedStageWorkflowAutomationId(config);
+    if (!workflowId) return;
+    if (
+      req.actor.type === "board" &&
+      (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin)
+    ) {
+      return;
+    }
+    const decision = await access.decide({
+      actor: req.actor,
+      action: "workflows:run",
+      resource: { type: "company", companyId },
+    });
+    if (!decision.allowed) {
+      throw forbidden(decision.explanation, {
+        code: "permission_denied",
+        reason: decision.reason,
+        permission: "workflows:run",
+        workflowId,
+      });
+    }
+  }
   const documentAnnotationsSvc = documentAnnotationService(db);
 
   router.get("/companies/:companyId/pipelines", async (req, res) => {
@@ -789,6 +900,13 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         reason: decision.reason,
       });
     }
+    for (const stage of req.body.stages ?? []) {
+      await assertWorkflowAutomationRunPermission(
+        req,
+        companyId,
+        stage.config,
+      );
+    }
     try {
       const created = await svc.createPipeline({
         companyId,
@@ -868,20 +986,36 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
       const routineId = stageAutomationRoutineId(stage.config);
       return routineId ? [routineId] : [];
     });
-    const routineRows = automationRoutineIds.length > 0
-      ? await db
-          .select({
-            id: routines.id,
-            assigneeAgentId: routines.assigneeAgentId,
-            title: routines.title,
-            description: routines.description,
-            env: routines.env,
-            latestRevisionId: routines.latestRevisionId,
-            latestRevisionNumber: routines.latestRevisionNumber,
-          })
-          .from(routines)
-          .where(and(eq(routines.companyId, companyId), inArray(routines.id, automationRoutineIds)))
-      : [];
+    const automationWorkflowIds = stages.flatMap((stage) => {
+      const workflowId = stageAutomationWorkflowId(stage.config);
+      return workflowId ? [workflowId] : [];
+    });
+    const [routineRows, workflowRows] = await Promise.all([
+      automationRoutineIds.length > 0
+        ? db
+            .select({
+              id: routines.id,
+              assigneeAgentId: routines.assigneeAgentId,
+              title: routines.title,
+              description: routines.description,
+              env: routines.env,
+              latestRevisionId: routines.latestRevisionId,
+              latestRevisionNumber: routines.latestRevisionNumber,
+            })
+            .from(routines)
+            .where(and(eq(routines.companyId, companyId), inArray(routines.id, automationRoutineIds)))
+        : Promise.resolve([]),
+      automationWorkflowIds.length > 0
+        ? db
+            .select({
+              id: workflows.id,
+              name: workflows.name,
+              description: workflows.description,
+            })
+            .from(workflows)
+            .where(and(eq(workflows.companyId, companyId), inArray(workflows.id, automationWorkflowIds)))
+        : Promise.resolve([]),
+    ]);
     const routineById = new Map(routineRows.map((row) => [
       row.id,
       {
@@ -893,7 +1027,21 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         latestRevisionNumber: row.latestRevisionNumber,
       },
     ]));
-    res.json({ ...pipeline, stages: stages.map((stage) => withDerivedStageAutomation(stage, routineById)), transitions, documentKeys });
+    const workflowById = new Map(workflowRows.map((row) => [
+      row.id,
+      {
+        name: row.name,
+        description: row.description,
+      },
+    ]));
+    res.json({
+      ...pipeline,
+      stages: stages.map((stage) =>
+        withDerivedStageAutomation(stage, routineById, workflowById)
+      ),
+      transitions,
+      documentKeys,
+    });
   });
 
   // Setup-health warnings: surface any configuration that won't actually run
@@ -960,7 +1108,12 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
       const routineId = stageAutomationRoutineId(stage.config);
       return routineId ? [routineId] : [];
     });
-    const routineRows = automationRoutineIds.length > 0
+    const automationWorkflowIds = stages.flatMap((stage) => {
+      const workflowId = stageAutomationWorkflowId(stage.config);
+      return workflowId ? [workflowId] : [];
+    });
+    const [routineRows, workflowRows] = await Promise.all([
+      automationRoutineIds.length > 0
       ? await db
           .select({
             id: routines.id,
@@ -973,7 +1126,18 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
           })
           .from(routines)
           .where(and(eq(routines.companyId, companyId), inArray(routines.id, automationRoutineIds)))
-      : [];
+      : [],
+      automationWorkflowIds.length > 0
+        ? db
+            .select({
+              id: workflows.id,
+              name: workflows.name,
+              description: workflows.description,
+            })
+            .from(workflows)
+            .where(and(eq(workflows.companyId, companyId), inArray(workflows.id, automationWorkflowIds)))
+        : Promise.resolve([]),
+    ]);
     const routineById = new Map(routineRows.map((row) => [
       row.id,
       {
@@ -983,6 +1147,13 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         env: row.env,
         latestRevisionId: row.latestRevisionId,
         latestRevisionNumber: row.latestRevisionNumber,
+      },
+    ]));
+    const workflowById = new Map(workflowRows.map((row) => [
+      row.id,
+      {
+        name: row.name,
+        description: row.description,
       },
     ]));
 
@@ -1012,7 +1183,11 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     }
 
     const healthStages: PipelineHealthStageInput[] = stages.map((stage) => {
-      const stageWithAutomation = withDerivedStageAutomation(stage, routineById);
+      const stageWithAutomation = withDerivedStageAutomation(
+        stage,
+        routineById,
+        workflowById,
+      );
       const automation = (stageWithAutomation.config as { automation?: { instructionsBody?: string | null } }).automation;
       return {
         id: stage.id,
@@ -1076,6 +1251,11 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const companyId = await assertPipelineAccess(db, req, pipelineId);
     await assertPipelineWriteAccess(req, { access, companyId, pipelineId });
     const actor = actorForMutation(req);
+    await assertWorkflowAutomationRunPermission(
+      req,
+      companyId,
+      req.body.config,
+    );
     try {
       const stage = await svc.createStage({
         companyId,
@@ -1099,6 +1279,13 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const companyId = await assertPipelineAccess(db, req, pipelineId);
     await assertPipelineWriteAccess(req, { access, companyId, pipelineId });
     const actor = actorForMutation(req);
+    if (req.body.config !== undefined) {
+      await assertWorkflowAutomationRunPermission(
+        req,
+        companyId,
+        req.body.config,
+      );
+    }
     try {
       res.json(await svc.updateStage({ companyId, pipelineId, stageId, patch: req.body, actor }));
     } catch (error) {
@@ -2237,9 +2424,12 @@ function stageAutomationId(stage: typeof pipelineStages.$inferSelect) {
   const config = stage.config && typeof stage.config === "object" && !Array.isArray(stage.config)
     ? stage.config as PipelineStageConfig
     : null;
+  const target = stageAutomationTarget(config);
+  if (!target) return null;
   const onEnter = config?.onEnter;
-  if (!onEnter || onEnter.type !== "run_routine" || !onEnter.routineId) return null;
-  return typeof onEnter.id === "string" ? onEnter.id : `${stage.id}:on_enter`;
+  return typeof onEnter?.id === "string"
+    ? onEnter.id
+    : `${stage.id}:on_enter`;
 }
 
 async function loadBuiltFromAutomation(
@@ -2353,13 +2543,13 @@ function stageHasChildrenTerminalGate(config: unknown) {
 }
 
 function readStageAutomationId(stage: typeof pipelineStages.$inferSelect) {
+  const target = stageAutomationTarget(stage.config);
+  if (!target) return null;
   if (!stage.config || typeof stage.config !== "object" || Array.isArray(stage.config)) return null;
   const onEnterValue = (stage.config as Record<string, unknown>).onEnter;
   if (!onEnterValue || typeof onEnterValue !== "object" || Array.isArray(onEnterValue)) return null;
   const onEnter = onEnterValue as Record<string, unknown>;
   const rawId = typeof onEnter.id === "string" ? onEnter.id.trim() : "";
-  const routineId = typeof onEnter.routineId === "string" ? onEnter.routineId.trim() : "";
-  if (onEnter.type !== "run_routine" || routineId.length === 0) return null;
   return rawId.length > 0 ? rawId : `${stage.id}:on_enter`;
 }
 
@@ -2576,6 +2766,85 @@ async function derivePipelineCaseLiveness(
     .orderBy(desc(pipelineAutomationExecutions.updatedAt), desc(pipelineAutomationExecutions.createdAt))
     .limit(1)
     .then((rows) => rows[0] ?? null);
+  if (
+    latestAutomation?.targetKind === "workflow" &&
+    latestAutomation.workflowRunId
+  ) {
+    const workflowRun = await db
+      .select({
+        id: workflowRuns.id,
+        status: workflowRuns.status,
+        failureCode: workflowRuns.failureCode,
+        failureMessage: workflowRuns.failureMessage,
+      })
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.companyId, companyId),
+          eq(workflowRuns.id, latestAutomation.workflowRunId),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+
+    if (
+      workflowRun &&
+      ["queued", "running", "recovering", "cancelling"].includes(workflowRun.status)
+    ) {
+      return {
+        state: "live",
+        reason: "lease_active",
+        message: `Linked Workflow run is ${workflowRun.status}.`,
+        automation: {
+          automationId: latestAutomation.automationId,
+          targetKind: "workflow",
+          targetRef: latestAutomation.targetRef,
+          workflowRunId: workflowRun.id,
+          executionId: latestAutomation.id,
+          error: null,
+        },
+      };
+    }
+    if (workflowRun?.status === "waiting") {
+      return {
+        state: "waiting",
+        reason: "linked_issue_waiting",
+        message: "Linked Workflow run is waiting for a durable continuation.",
+        automation: {
+          automationId: latestAutomation.automationId,
+          targetKind: "workflow",
+          targetRef: latestAutomation.targetRef,
+          workflowRunId: workflowRun.id,
+          executionId: latestAutomation.id,
+          error: null,
+        },
+      };
+    }
+    if (
+      workflowRun &&
+      (workflowRun.status === "failed" || workflowRun.status === "cancelled")
+    ) {
+      return {
+        state: "attention",
+        reason: "automation_failed",
+        message:
+          workflowRun.failureMessage ??
+          `Linked Workflow run ${workflowRun.status}.`,
+        automation: {
+          automationId: latestAutomation.automationId,
+          targetKind: "workflow",
+          targetRef: latestAutomation.targetRef,
+          workflowRunId: workflowRun.id,
+          executionId: latestAutomation.id,
+          error:
+            workflowRun.failureCode ??
+            workflowRun.failureMessage ??
+            workflowRun.status,
+        },
+      };
+    }
+  }
+
   if (latestAutomation?.status === "failed") {
     const fingerprint = latestAutomation.error?.startsWith("permission_preflight_failed:")
       ? latestAutomation.error.slice("permission_preflight_failed:".length)
@@ -2601,6 +2870,9 @@ async function derivePipelineCaseLiveness(
           automation: {
             automationId: latestAutomation.automationId,
             routineId: latestAutomation.routineId,
+            targetKind: latestAutomation.targetKind,
+            targetRef: latestAutomation.targetRef,
+            workflowRunId: latestAutomation.workflowRunId,
             executionId: latestAutomation.id,
             error: latestAutomation.error,
             fingerprint,
@@ -2617,6 +2889,9 @@ async function derivePipelineCaseLiveness(
       automation: {
         automationId: latestAutomation.automationId,
         routineId: latestAutomation.routineId,
+        targetKind: latestAutomation.targetKind,
+        targetRef: latestAutomation.targetRef,
+        workflowRunId: latestAutomation.workflowRunId,
         executionId: latestAutomation.id,
         error: latestAutomation.error,
         fingerprint,

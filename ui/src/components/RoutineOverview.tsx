@@ -6,7 +6,7 @@ import type {
   RoutineTrigger,
 } from "@paperclipai/shared";
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@paperclipai/shared";
-import { CalendarClock, Clock3, Play, Repeat, UserRound } from "lucide-react";
+import { CalendarClock, Clock3, GitBranch, Play, Repeat, UserRound } from "lucide-react";
 import { IssueRow } from "@/components/IssueRow";
 import { MarkdownBody } from "@/components/MarkdownBody";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -138,7 +138,13 @@ function OverviewFact({
 }
 
 export function RoutineOverview() {
-  const { routine, routineRuns, currentAssignee, hasLiveRun } = useRoutineDetail();
+  const {
+    routine,
+    routineRuns,
+    currentAssignee,
+    currentWorkflow,
+    hasLiveRun,
+  } = useRoutineDetail();
   const schedule = summarizeRoutineSchedule(routine.triggers);
   const hasWebhook = routine.triggers.some((trigger) => trigger.kind === "webhook" && trigger.enabled);
   const sortedRuns = [...(routineRuns ?? [])].sort(
@@ -151,9 +157,12 @@ export function RoutineOverview() {
     routineDetailHref(routine.id),
     "issues",
   );
+  const hasExecutionTarget = Boolean(
+    routine.executionTargetRef ?? routine.assigneeAgentId,
+  );
   const automationState = routine.status === "archived"
     ? "archived"
-    : !routine.assigneeAgentId
+    : !hasExecutionTarget
       ? "draft"
       : routine.status;
 
@@ -186,9 +195,19 @@ export function RoutineOverview() {
         />
       </div>
 
-      <section className="flex flex-col gap-2" aria-labelledby="routine-agent-heading">
-        <h2 id="routine-agent-heading" className="text-sm font-semibold">Default agent</h2>
-        {currentAssignee ? (
+      <section className="flex flex-col gap-2" aria-labelledby="routine-execution-target-heading">
+        <h2 id="routine-execution-target-heading" className="text-sm font-semibold">
+          Execution target
+        </h2>
+        {routine.executionTargetKind === "workflow" && routine.executionTargetRef ? (
+          <Link
+            to={`/workflows/${routine.executionTargetRef}`}
+            className="flex w-fit items-center gap-2 rounded-md text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <GitBranch className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            {currentWorkflow?.name ?? "Workflow"}
+          </Link>
+        ) : currentAssignee ? (
           <Link
             to={`/agents/${currentAssignee.urlKey ?? currentAssignee.id}`}
             className="flex w-fit items-center gap-2 rounded-md text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -197,7 +216,9 @@ export function RoutineOverview() {
             {currentAssignee.name}
           </Link>
         ) : (
-          <p className="text-sm text-muted-foreground">No default agent. Automatic triggers remain paused.</p>
+          <p className="text-sm text-muted-foreground">
+            No execution target. Automatic triggers remain paused.
+          </p>
         )}
       </section>
 
@@ -225,26 +246,62 @@ export function RoutineOverview() {
           </p>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {recentRuns.map((run) => run.linkedIssue ? (
-              <IssueRow
-                key={run.id}
-                issue={routineRunIssue(run.linkedIssue, run, routine.companyId, routine.projectId)}
-                issueLinkState={detailOrigin}
-                presentation="task"
-                metadata={(
-                  <span className="flex items-center gap-2">
-                    <StatusBadge status={run.status} />
-                    <span className="font-mono text-xs text-muted-foreground">{formatRoutineTimestamp(run.triggeredAt)}</span>
+            {recentRuns.map((run) =>
+              run.linkedIssue ? (
+                <IssueRow
+                  key={run.id}
+                  issue={routineRunIssue(
+                    run.linkedIssue,
+                    run,
+                    routine.companyId,
+                    routine.projectId,
+                  )}
+                  issueLinkState={detailOrigin}
+                  presentation="task"
+                  metadata={(
+                    <span className="flex items-center gap-2">
+                      <StatusBadge status={run.status} />
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {formatRoutineTimestamp(run.triggeredAt)}
+                      </span>
+                    </span>
+                  )}
+                />
+              ) : run.linkedWorkflowRunId && run.linkedWorkflowId ? (
+                <Link
+                  key={run.id}
+                  to={`/workflows/${run.linkedWorkflowId}/runs/${run.linkedWorkflowRunId}`}
+                  className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <GitBranch
+                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <StatusBadge
+                    status={run.linkedWorkflowRunStatus ?? run.status}
+                  />
+                  <span className="min-w-0 flex-1 truncate">
+                    {run.trigger?.label ?? "Workflow run"}
                   </span>
-                )}
-              />
-            ) : (
-              <div key={run.id} className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-sm">
-                <StatusBadge status={run.status} />
-                <span className="min-w-0 flex-1 truncate">{run.trigger?.label ?? "Routine run"}</span>
-                <span className="shrink-0 font-mono text-xs text-muted-foreground">{formatRoutineTimestamp(run.triggeredAt)}</span>
-              </div>
-            ))}
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                    {formatRoutineTimestamp(run.triggeredAt)}
+                  </span>
+                </Link>
+              ) : (
+                <div
+                  key={run.id}
+                  className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-sm"
+                >
+                  <StatusBadge status={run.status} />
+                  <span className="min-w-0 flex-1 truncate">
+                    {run.trigger?.label ?? "Routine run"}
+                  </span>
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                    {formatRoutineTimestamp(run.triggeredAt)}
+                  </span>
+                </div>
+              ),
+            )}
           </div>
         )}
         <Button variant="link" size="sm" className="w-fit px-0" asChild>

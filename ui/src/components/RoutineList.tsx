@@ -1,7 +1,7 @@
 import type { AgentAppearance } from "@paperclipai/shared";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import type { ReactNode } from "react";
-import { MoreHorizontal, Play } from "lucide-react";
+import { GitBranch, MoreHorizontal, Play } from "lucide-react";
 import { Link } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +31,8 @@ export type RoutineListRowItem = {
   status: string;
   projectId: string | null;
   assigneeAgentId: string | null;
+  executionTargetKind?: "agent_task" | "workflow" | null;
+  executionTargetRef?: string | null;
   lastRun?: {
     triggeredAt?: Date | string | null;
     status?: string | null;
@@ -56,6 +58,7 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
   routine,
   projectById,
   agentById,
+  workflowById = new Map(),
   runningRoutineId,
   statusMutationRoutineId,
   href,
@@ -78,6 +81,7 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
   routine: TRoutine;
   projectById: Map<string, RoutineListProjectSummary>;
   agentById: Map<string, RoutineListAgentSummary>;
+  workflowById?: Map<string, { name: string }>;
   runningRoutineId: string | null;
   statusMutationRoutineId: string | null;
   href: string;
@@ -103,7 +107,14 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
   const isStatusPending = statusMutationRoutineId === routine.id;
   const project = routine.projectId ? projectById.get(routine.projectId) ?? null : null;
   const agent = routine.assigneeAgentId ? agentById.get(routine.assigneeAgentId) ?? null : null;
-  const isDraft = !isArchived && !routine.assigneeAgentId;
+  const workflow =
+    routine.executionTargetKind === "workflow" && routine.executionTargetRef
+      ? workflowById.get(routine.executionTargetRef) ?? null
+      : null;
+  const hasExecutionTarget = Boolean(
+    routine.executionTargetRef ?? routine.assigneeAgentId,
+  );
+  const isDraft = !isArchived && !hasExecutionTarget;
   const runDisabled = runningRoutineId === routine.id || isArchived || disableRunNow;
 
   return (
@@ -151,8 +162,27 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
             <span>{routine.projectId ? (project?.name ?? "Unknown project") : "No project"}</span>
           </span>
           <span className="flex items-center gap-2">
-            {routine.assigneeAgentId ? <AgentAvatar agent={{ ...agent, id: routine.assigneeAgentId }} size={16} className="h-3.5 w-3.5 shrink-0"/> : null}
-            <span>{routine.assigneeAgentId ? (agent?.name ?? "Unknown agent") : "No default agent"}</span>
+            {routine.executionTargetKind === "workflow" &&
+            routine.executionTargetRef ? (
+              <>
+                <GitBranch
+                  className="h-3.5 w-3.5 shrink-0"
+                  aria-hidden="true"
+                />
+                <span>{workflow?.name ?? "Workflow"}</span>
+              </>
+            ) : routine.assigneeAgentId ? (
+              <>
+                <AgentAvatar
+                  agent={{ ...agent, id: routine.assigneeAgentId }}
+                  size={16}
+                  className="h-3.5 w-3.5 shrink-0"
+                />
+                <span>{agent?.name ?? "Unknown agent"}</span>
+              </>
+            ) : (
+              <span>No execution target</span>
+            )}
           </span>
           <span>
             {formatLastRunTimestamp(routine.lastRun?.triggeredAt)}

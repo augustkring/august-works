@@ -855,8 +855,11 @@ export type {
   ApproveSecretProposalInput,
   RejectSecretProposalInput,
 } from "./secrets.js";
+export { ROUTINE_EXECUTION_TARGET_KINDS } from "./routine.js";
 export type {
   Routine,
+  RoutineExecutionTarget,
+  RoutineExecutionTargetKind,
   RoutineEnvConfig,
   RoutineManagedByPlugin,
   RoutineDescriptionDocument,

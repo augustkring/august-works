@@ -356,6 +356,7 @@ export const ONBOARDING_FIRST_TASK_ORIGIN_KIND = "onboarding_first_task";
 export const ISSUE_ORIGIN_KINDS = [
   "manual",
   "routine_execution",
+  "workflow_task",
   "stale_active_run_evaluation",
   "harness_liveness_escalation",
   // Historical origin only; automatic productivity reviews have been retired.
@@ -659,6 +660,7 @@ export const ROUTINE_RUN_STATUSES = [
   "coalesced",
   "skipped",
   "issue_created",
+  "workflow_started",
   "completed",
   "failed",
  ] as const;
@@ -1021,6 +1023,14 @@ export const PERMISSION_KEYS = [
   "tasks:assign_scope",
   "tasks:manage_active_checkouts",
   "pipelines:write",
+  "foundation:read",
+  "foundation:propose",
+  "foundation:edit",
+  "foundation:approve",
+  "workflows:read",
+  "workflows:edit",
+  "workflows:publish",
+  "workflows:run",
   "joins:approve",
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

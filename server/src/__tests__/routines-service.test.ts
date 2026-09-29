@@ -25,6 +25,11 @@ import {
   routines,
   routineTriggers,
   secretAccessEvents,
+  workflowRevisions,
+  workflowRuns,
+  workflowStepRuns,
+  workflowWaits,
+  workflows,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -68,6 +73,11 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     await db.delete(secretAccessEvents);
     await db.delete(companySecretBindings);
     await db.delete(routineRuns);
+    await db.delete(workflowWaits);
+    await db.delete(workflowStepRuns);
+    await db.delete(workflowRuns);
+    await db.delete(workflowRevisions);
+    await db.delete(workflows);
     await db.delete(routineTriggers);
     await db.delete(routines);
     await db.delete(folders);
@@ -2871,4 +2881,222 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
 
     expect(run).toMatchObject({ source: "webhook", status: "issue_created" });
   });
+  it("dispatches a workflow execution target without creating an issue or heartbeat run", async () => {
+    const { companyId, projectId, svc, wakeups } = await seedFixture();
+    await db.insert(instanceSettings).values({
+      singletonKey: "default",
+      general: {},
+      experimental: { enableWorkflowsV1: true },
+    });
+
+    const [workflow] = await db.insert(workflows).values({
+      companyId,
+      name: "Routine workflow",
+      status: "active",
+    }).returning();
+    const [revision] = await db.insert(workflowRevisions).values({
+      companyId,
+      workflowId: workflow!.id,
+      revisionNumber: 1,
+      state: "published",
+      graph: {
+        version: 1,
+        nodes: [
+          {
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Start",
+            position: { x: 0, y: 0 },
+            config: {},
+          },
+          {
+            id: "condition",
+            type: "core.condition",
+            name: "Continue",
+            position: { x: 180, y: 0 },
+            config: { expression: "true" },
+          },
+        ],
+        edges: [{ id: "e1", source: "start", target: "condition" }],
+        variables: [],
+        settings: {},
+      },
+      createdAt: new Date(),
+    }).returning();
+    await db.update(workflows)
+      .set({ publishedRevisionId: revision!.id })
+      .where(eq(workflows.id, workflow!.id));
+
+    const routine = await svc.create(
+      companyId,
+      {
+        projectId,
+        title: "Run workflow",
+        description: "Use deterministic workflow execution",
+        executionTarget: {
+          kind: "workflow",
+          workflowId: workflow!.id,
+        },
+        priority: "medium",
+        status: "active",
+        concurrencyPolicy: "coalesce_if_active",
+        catchUpPolicy: "skip_missed",
+      },
+      {},
+    );
+
+    expect(routine).toMatchObject({
+      assigneeAgentId: null,
+      executionTargetKind: "workflow",
+      executionTargetRef: workflow!.id,
+      status: "active",
+    });
+
+    const run = await svc.runRoutine(routine.id, {
+      source: "manual",
+      payload: { customerId: "acme" },
+    });
+
+    expect(run.status).toBe("workflow_started");
+    expect(run.linkedIssueId).toBeNull();
+    expect(run.linkedWorkflowRunId).toEqual(expect.any(String));
+    expect(wakeups).toHaveLength(0);
+
+    const issuesForRoutine = await db
+      .select()
+      .from(issues)
+      .where(eq(issues.originId, routine.id));
+    expect(issuesForRoutine).toHaveLength(0);
+    expect(await db.select().from(heartbeatRuns)).toHaveLength(0);
+
+    const workflowRun = await db
+      .select()
+      .from(workflowRuns)
+      .where(eq(workflowRuns.id, run.linkedWorkflowRunId!))
+      .then((rows) => rows[0]);
+    expect(workflowRun).toMatchObject({
+      companyId,
+      workflowId: workflow!.id,
+      workflowRevisionId: revision!.id,
+      source: "routine",
+      status: "succeeded",
+    });
+    expect(workflowRun?.triggerPayload).toMatchObject({
+      customerId: "acme",
+      routine: {
+        routineId: routine.id,
+        routineRunId: run.id,
+        source: "manual",
+      },
+    });
+    const settledRoutineRun = await db
+      .select()
+      .from(routineRuns)
+      .where(eq(routineRuns.id, run.id))
+      .then((rows) => rows[0]);
+    expect(settledRoutineRun).toMatchObject({
+      status: "completed",
+      linkedWorkflowRunId: run.linkedWorkflowRunId,
+      failureReason: null,
+    });
+    expect(settledRoutineRun?.completedAt).not.toBeNull();
+  });
+
+  it("coalesces a matching routine dispatch into an active workflow run", async () => {
+    const { companyId, projectId, svc, wakeups } = await seedFixture();
+    await db.insert(instanceSettings).values({
+      singletonKey: "default",
+      general: {},
+      experimental: { enableWorkflowsV1: true },
+    });
+
+    const [workflow] = await db.insert(workflows).values({
+      companyId,
+      name: "Waiting workflow",
+      status: "active",
+    }).returning();
+    const [revision] = await db.insert(workflowRevisions).values({
+      companyId,
+      workflowId: workflow!.id,
+      revisionNumber: 1,
+      state: "published",
+      graph: {
+        version: 1,
+        nodes: [
+          {
+            id: "start",
+            type: "core.manual_trigger",
+            name: "Start",
+            position: { x: 0, y: 0 },
+            config: {},
+          },
+          {
+            id: "wait",
+            type: "core.wait",
+            name: "Wait",
+            position: { x: 180, y: 0 },
+            config: { durationSeconds: 60 },
+          },
+        ],
+        edges: [{ id: "e1", source: "start", target: "wait" }],
+        variables: [],
+        settings: {},
+      },
+      createdAt: new Date(),
+    }).returning();
+    await db.update(workflows)
+      .set({ publishedRevisionId: revision!.id })
+      .where(eq(workflows.id, workflow!.id));
+
+    const routine = await svc.create(
+      companyId,
+      {
+        projectId,
+        title: "Waiting workflow routine",
+        executionTarget: {
+          kind: "workflow",
+          workflowId: workflow!.id,
+        },
+        priority: "medium",
+        status: "active",
+        concurrencyPolicy: "coalesce_if_active",
+        catchUpPolicy: "skip_missed",
+      },
+      {},
+    );
+
+    const first = await svc.runRoutine(routine.id, {
+      source: "manual",
+      payload: { accountId: "same" },
+    });
+    expect(first).toMatchObject({
+      status: "workflow_started",
+      linkedIssueId: null,
+    });
+    const firstWorkflowRun = await db
+      .select()
+      .from(workflowRuns)
+      .where(eq(workflowRuns.id, first.linkedWorkflowRunId!))
+      .then((rows) => rows[0]);
+    expect(firstWorkflowRun?.status).toBe("waiting");
+
+    const second = await svc.runRoutine(routine.id, {
+      source: "manual",
+      payload: { accountId: "same" },
+    });
+    expect(second).toMatchObject({
+      status: "coalesced",
+      linkedIssueId: null,
+      linkedWorkflowRunId: first.linkedWorkflowRunId,
+      coalescedIntoRunId: first.id,
+    });
+    expect(
+      await db
+        .select()
+        .from(workflowRuns)
+        .where(eq(workflowRuns.workflowId, workflow!.id)),
+    ).toHaveLength(1);
+    expect(wakeups).toHaveLength(0);
+  });
+
 });

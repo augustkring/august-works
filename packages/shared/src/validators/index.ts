@@ -689,6 +689,7 @@ export {
   createRoutineTriggerSchema,
   updateRoutineTriggerSchema,
   routineVariableSchema,
+  routineExecutionTargetSchema,
   routineRevisionSnapshotRoutineV1Schema,
   routineRevisionSnapshotTriggerV1Schema,
   routineRevisionSnapshotV1Schema,
@@ -726,6 +727,7 @@ export {
 export {
   pipelineAutomationRetryCleanupOptionsSchema,
   pipelineAutomationRetryRequestSchema,
+  pipelineAutomationTargetSchema,
   pipelineAutomationRetryScopeSchema,
   pipelineStageAutomationSchema,
   pipelineStageApproverSchema,
@@ -736,6 +738,7 @@ export {
   type PipelineAutomationRetryCleanupOptions,
   type PipelineAutomationRetryRequest,
   type PipelineAutomationRetryScope,
+  type PipelineAutomationTarget,
   type PipelineStageAutomationConfig,
   type PipelineStageApprover,
   type PipelineStageConfig,

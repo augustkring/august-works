@@ -27,6 +27,65 @@ describe("LCA-05 explicit native work mode", () => {
       expect(input.task.title).toBe(text);
     }
   });
+
+  it("places governed context between runtime controls and the current task", () => {
+    const governedContext = [
+      "## August Works governed context",
+      "### Approved Foundation",
+      "- **Strategy** [source=foundation; provider=august_works_foundation; trust=high; sensitivity=internal]",
+      "  - Focus on durable customer value.",
+    ].join("\n");
+    const currentTask = "Prepare the launch recommendation.";
+
+    const input = buildNativeExecutionInput({
+      companyId: "10000000-0000-4000-8000-000000000001",
+      runId: "50000000-0000-4000-8000-000000000005",
+      agentId: "30000000-0000-4000-8000-000000000003",
+      issue: {
+        id: "20000000-0000-4000-8000-000000000002",
+        identifier: "CTX-1",
+        title: "Launch recommendation",
+        description: null,
+        workMode: "standard",
+      },
+      taskPrompt: currentTask,
+      governedContextMarkdown: governedContext,
+      workspace: {
+        id: "40000000-0000-4000-8000-000000000004",
+        cwd: "/workspace",
+        repoUrl: null,
+        repoRef: null,
+        branchName: null,
+      },
+      normalizedSessionId: null,
+      provider: "codex",
+      completionContract: {
+        id: "70000000-0000-4000-8000-000000000007",
+        sha256: `sha256:${"a".repeat(64)}`,
+        schemaVersion: "paperclip.run-result.v1",
+        contract: {
+          revision: "1",
+          objective: currentTask,
+          criteria: [{ id: "output", requirement: "Return the recommendation." }],
+        },
+      },
+      runtimeContext: nativeRuntimeContextFixture(),
+    });
+
+    expect(input.task.prompt).toContain(governedContext);
+    expect(input.task.prompt.indexOf(governedContext)).toBeLessThan(
+      input.task.prompt.indexOf(currentTask),
+    );
+    expect(input.task.prompt).toContain(
+      "Use Paperclip's request_human_input for durable task questions.",
+    );
+    expect(
+      input.task.prompt.indexOf(
+        "Use Paperclip's request_human_input for durable task questions.",
+      ),
+    ).toBeLessThan(input.task.prompt.indexOf(governedContext));
+  });
+
 });
 
 describe("native execution input external-chat framing", () => {

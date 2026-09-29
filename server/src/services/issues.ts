@@ -240,12 +240,19 @@ const ISSUE_WAKE_DIAGNOSTICS_ACTIVITY_ACTIONS = [
   "issue.tree_hold_wakeup_deferred",
 ] as const;
 
-export type IssuePostCommitAction = {
-  type: "cancel_native_question_run";
-  runId: string;
-  issueId: string;
-  issueStatus: string;
-};
+export type IssuePostCommitAction =
+  | {
+      type: "cancel_native_question_run";
+      runId: string;
+      issueId: string;
+      issueStatus: string;
+    }
+  | {
+      type: "resume_workflow_task_wait";
+      companyId: string;
+      issueId: string;
+      issueStatus: "done" | "cancelled";
+    };
 
 /** Execute side effects that must never run before the issue transaction commits. */
 export async function executeIssuePostCommitActions(
@@ -253,30 +260,65 @@ export async function executeIssuePostCommitActions(
   actions: readonly IssuePostCommitAction[],
 ): Promise<void> {
   if (actions.length === 0) return;
-  const { heartbeatService } = await import("./heartbeat.js");
-  const heartbeat = heartbeatService(db);
+
   const cancelledRunIds = new Set<string>();
+  const resumedWorkflowIssueKeys = new Set<string>();
+  let heartbeat: ReturnType<typeof import("./heartbeat.js")["heartbeatService"]> | null = null;
+  let workflowExecutor:
+    | ReturnType<typeof import("./workflows/workflow-executor.js")["workflowExecutorService"]>
+    | null = null;
+
   for (const action of actions) {
-    if (cancelledRunIds.has(action.runId)) continue;
-    cancelledRunIds.add(action.runId);
-    try {
-      await heartbeat.cancelRun(
-        action.runId,
-        "Task closed while waiting for operator input",
-        {
-          resultJson: {
-            cancelledByIssueStatus: action.issueStatus,
-            cancelledIssueId: action.issueId,
+    if (action.type === "cancel_native_question_run") {
+      if (cancelledRunIds.has(action.runId)) continue;
+      cancelledRunIds.add(action.runId);
+      try {
+        if (!heartbeat) {
+          const { heartbeatService } = await import("./heartbeat.js");
+          heartbeat = heartbeatService(db);
+        }
+        await heartbeat.cancelRun(
+          action.runId,
+          "Task closed while waiting for operator input",
+          {
+            resultJson: {
+              cancelledByIssueStatus: action.issueStatus,
+              cancelledIssueId: action.issueId,
+            },
           },
-        },
+        );
+      } catch (err) {
+        logger.warn(
+          { err, runId: action.runId, issueId: action.issueId },
+          "native question cancellation deferred to recovery sweep",
+        );
+      }
+      continue;
+    }
+
+    const key = `${action.companyId}:${action.issueId}`;
+    if (resumedWorkflowIssueKeys.has(key)) continue;
+    resumedWorkflowIssueKeys.add(key);
+    try {
+      if (!workflowExecutor) {
+        const { workflowExecutorService } = await import(
+          "./workflows/workflow-executor.js"
+        );
+        workflowExecutor = workflowExecutorService(db);
+      }
+      await workflowExecutor.resumeTaskWaitsForIssue(
+        action.companyId,
+        action.issueId,
       );
     } catch (err) {
-      // The durable marker written by the issue transaction remains available
-      // to startup and periodic recovery. Do not report a post-commit failure
-      // as though the already-committed issue transition had rolled back.
       logger.warn(
-        { err, runId: action.runId, issueId: action.issueId },
-        "native question cancellation deferred to recovery sweep",
+        {
+          err,
+          companyId: action.companyId,
+          issueId: action.issueId,
+          issueStatus: action.issueStatus,
+        },
+        "workflow task wait continuation deferred to reconciliation",
       );
     }
   }
@@ -10974,6 +11016,12 @@ export function issueService(db: Db) {
             }
           }
           if (updated.status === "done" || updated.status === "cancelled") {
+            queuedPostCommitActions.push({
+              type: "resume_workflow_task_wait",
+              companyId: updated.companyId,
+              issueId: updated.id,
+              issueStatus: updated.status,
+            });
             await finalizeSummarySlotsForTerminalIssue(tx, updated);
             // Every terminal transition funnels through here, including direct
             // service callers (tree control, recovery, pipelines, status cards)

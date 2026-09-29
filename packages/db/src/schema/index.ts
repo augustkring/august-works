@@ -117,6 +117,7 @@ export { issueReadStates } from "./issue_read_states.js";
 export { assets } from "./assets.js";
 export { issueAttachments } from "./issue_attachments.js";
 export { documents } from "./documents.js";
+export { foundationDocuments, foundationSections, foundationChangeProposals } from "./foundation.js";
 export { documentRevisions } from "./document_revisions.js";
 export { issueDocuments } from "./issue_documents.js";
 export { summarySlots } from "./summary_slots.js";
@@ -125,6 +126,14 @@ export { routineDocuments } from "./routine_documents.js";
 export { documentAnnotationThreads } from "./document_annotation_threads.js";
 export { documentAnnotationComments } from "./document_annotation_comments.js";
 export { documentAnnotationAnchorSnapshots } from "./document_annotation_anchor_snapshots.js";
+export { contextManifests, contextManifestItems } from "./context_manifests.js";
+export {
+  workflows,
+  workflowRevisions,
+  workflowRuns,
+  workflowStepRuns,
+  workflowWaits,
+} from "./workflows.js";
 export { heartbeatRuns } from "./heartbeat_runs.js";
 export { heartbeatRunEvents } from "./heartbeat_run_events.js";
 export { providerTraceRecords } from "./provider_trace_records.js";

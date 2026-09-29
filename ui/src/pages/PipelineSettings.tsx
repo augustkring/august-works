@@ -46,6 +46,7 @@ import { authApi } from "../api/auth";
 import { executionWorkspacesApi } from "../api/execution-workspaces";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { projectsApi } from "../api/projects";
+import { workflowsApi } from "../api/workflows";
 import { secretsApi } from "../api/secrets";
 import { ApiError } from "../api/client";
 import type {
@@ -82,6 +83,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
@@ -127,6 +135,9 @@ type StageConfig = {
   disabled?: boolean;
   disabledReason?: string | null;
   automation?: {
+    targetKind?: "routine" | "workflow" | null;
+    targetRef?: string | null;
+    workflowId?: string | null;
     assigneeAgentId?: string | null;
     titleTemplate?: string | null;
     instructionsBody?: string | null;
@@ -138,7 +149,7 @@ type StageConfig = {
     // Derived (read-only) fields the server adds from the backing automation
     // routine. They are never persisted into stage config — stage secrets live
     // on `routines.env` and are saved through the automation-env route.
-    routineId?: string;
+    routineId?: string | null;
     env?: RoutineEnvConfig | null;
     latestRoutineRevisionId?: string | null;
     latestRoutineRevisionNumber?: number;
@@ -357,6 +368,8 @@ export function syncPipelineStageAutomationVariables(
 }
 
 export function buildStageAutomationForSave(input: {
+  executionTargetKind: "agent_task" | "workflow";
+  workflowId: string;
   assigneeAgentId: string;
   titleTemplate: string;
   instructionsBody: string;
@@ -366,7 +379,26 @@ export function buildStageAutomationForSave(input: {
   executionWorkspacePreference: ExecutionWorkspaceMode | "";
   executionWorkspaceSettings: IssueExecutionWorkspaceSettings | null;
 }) {
+  if (input.executionTargetKind === "workflow") {
+    return {
+      targetKind: "workflow" as const,
+      targetRef: input.workflowId || null,
+      workflowId: input.workflowId || null,
+      assigneeAgentId: null,
+      titleTemplate: "",
+      instructionsBody: "",
+      projectId: null,
+      projectWorkspaceId: null,
+      executionWorkspaceId: null,
+      executionWorkspacePreference: null,
+      executionWorkspaceSettings: null,
+    };
+  }
+
   return {
+    targetKind: null,
+    targetRef: null,
+    workflowId: null,
     assigneeAgentId: input.assigneeAgentId || null,
     titleTemplate: pipelineAutomationTitleTemplate(input.titleTemplate),
     instructionsBody: input.instructionsBody,
@@ -398,6 +430,8 @@ function stageAutomation(stage: PipelineStage | null | undefined) {
   const automation = stageConfig(stage).automation;
   if (!automation || typeof automation !== "object" || Array.isArray(automation)) {
     return {
+      executionTargetKind: "agent_task" as const,
+      workflowId: "",
       assigneeAgentId: "",
       titleTemplate: PIPELINE_AUTOMATION_DEFAULT_TITLE_TEMPLATE,
       instructionsBody: null as string | null,
@@ -409,7 +443,14 @@ function stageAutomation(stage: PipelineStage | null | undefined) {
     };
   }
   const executionWorkspaceSettings = nullableExecutionWorkspaceSettings(automation.executionWorkspaceSettings);
+  const isWorkflowTarget =
+    automation.targetKind === "workflow" &&
+    typeof (automation.workflowId ?? automation.targetRef) === "string";
   return {
+    executionTargetKind: isWorkflowTarget ? "workflow" as const : "agent_task" as const,
+    workflowId: isWorkflowTarget
+      ? nullableString(automation.workflowId ?? automation.targetRef)
+      : "",
     assigneeAgentId: nullableString(automation.assigneeAgentId),
     titleTemplate: pipelineAutomationTitleTemplate(automation.titleTemplate),
     instructionsBody: typeof automation.instructionsBody === "string" ? automation.instructionsBody : null,
@@ -437,9 +478,23 @@ function stageNewEntriesDisabled(stage: PipelineStage | null | undefined) {
 function stageAutomationDetail(stage: PipelineStage | null | undefined) {
   const automation = stageConfig(stage).automation;
   if (!automation || typeof automation !== "object" || Array.isArray(automation)) {
-    return { routineId: "", assigneeAgentId: "", env: {} as RoutineEnvConfig, latestRoutineRevisionId: null as string | null };
+    return {
+      targetKind: "agent_task" as const,
+      workflowId: "",
+      routineId: "",
+      assigneeAgentId: "",
+      env: {} as RoutineEnvConfig,
+      latestRoutineRevisionId: null as string | null,
+    };
   }
+  const isWorkflowTarget =
+    automation.targetKind === "workflow" &&
+    typeof (automation.workflowId ?? automation.targetRef) === "string";
   return {
+    targetKind: isWorkflowTarget ? "workflow" as const : "agent_task" as const,
+    workflowId: isWorkflowTarget
+      ? nullableString(automation.workflowId ?? automation.targetRef)
+      : "",
     routineId: typeof automation.routineId === "string" ? automation.routineId : "",
     assigneeAgentId: typeof automation.assigneeAgentId === "string" ? automation.assigneeAgentId : "",
     env: (automation.env ?? {}) as RoutineEnvConfig,
@@ -719,6 +774,8 @@ type StageFormValues = {
   newEntriesDisabled: boolean;
   disableReason: string;
   assigneeAgentId: string;
+  executionTargetKind: "agent_task" | "workflow";
+  workflowId: string;
   approvalRequired: boolean;
   approval: string;
   approveTarget: string;
@@ -760,6 +817,8 @@ function computeStageForm(
     newEntriesDisabled: stageNewEntriesDisabled(stage),
     disableReason: config.disabledReason ?? "",
     assigneeAgentId: automation.assigneeAgentId,
+    executionTargetKind: automation.executionTargetKind,
+    workflowId: automation.workflowId,
     approvalRequired: Boolean(config.requireApproval),
     approval: approvalValue(config),
     approveTarget: config.approveToStageKey ?? "",
@@ -1287,6 +1346,9 @@ export function PipelineSettings() {
   const [stageKind, setStageKind] = useState("open");
   const [newEntriesDisabled, setNewEntriesDisabled] = useState(false);
   const [disableReason, setDisableReason] = useState("");
+  const [stageExecutionTargetKind, setStageExecutionTargetKind] =
+    useState<"agent_task" | "workflow">("agent_task");
+  const [stageWorkflowId, setStageWorkflowId] = useState("");
   const [stageAssigneeAgentId, setStageAssigneeAgentId] = useState("");
   const [stageProjectId, setStageProjectId] = useState("");
   const [stageProjectWorkspaceId, setStageProjectWorkspaceId] = useState("");
@@ -1370,6 +1432,22 @@ export function PipelineSettings() {
     queryKey: selectedCompanyId ? queryKeys.projects.list(selectedCompanyId) : ["projects", "none"],
     queryFn: () => projectsApi.list(selectedCompanyId!),
     enabled: !!selectedCompanyId,
+  });
+  const workflowsQuery = useQuery({
+    queryKey: selectedCompanyId
+      ? queryKeys.workflows.list(selectedCompanyId)
+      : ["workflows", "none"],
+    queryFn: () => workflowsApi.list(selectedCompanyId!),
+    enabled:
+      !!selectedCompanyId &&
+      (
+        stageExecutionTargetKind === "workflow" ||
+        (pipelineQuery.data?.stages ?? []).some(
+          (stage) =>
+            stageAutomation(stage).executionTargetKind === "workflow",
+        )
+      ),
+    retry: false,
   });
   const currentUserId = sessionQuery.data?.user?.id ?? sessionQuery.data?.session?.userId ?? null;
   const activeProjects = useMemo(
@@ -1677,6 +1755,8 @@ export function PipelineSettings() {
     setStageKind(form.kind);
     setNewEntriesDisabled(form.newEntriesDisabled);
     setDisableReason(form.disableReason);
+    setStageExecutionTargetKind(form.executionTargetKind);
+    setStageWorkflowId(form.workflowId);
     setStageAssigneeAgentId(form.assigneeAgentId);
     setStageProjectId(form.automationProjectId);
     setStageProjectWorkspaceId(form.automationProjectWorkspaceId);
@@ -1773,7 +1853,16 @@ export function PipelineSettings() {
   const saveStage = useMutation({
     mutationFn: async () => {
       if (!pipelineId || !selectedStage || !pipeline) return null;
+      if (stageExecutionTargetKind === "workflow" && !stageWorkflowId) {
+        throw new Error("Choose an active published workflow before saving this stage.");
+      }
+      if (stageExecutionTargetKind === "workflow" && breakdownEnabled) {
+        throw new Error(
+          "Break into smaller pieces currently requires Agent automation.",
+        );
+      }
       if (
+        stageExecutionTargetKind === "agent_task" &&
         stageProjectId &&
         selectedProjectSupportsExecutionWorkspace &&
         stageExecutionWorkspacePreference === "reuse_existing" &&
@@ -1789,6 +1878,8 @@ export function PipelineSettings() {
         disabled: newEntriesDisabled,
         disabledReason: newEntriesDisabled ? disableReason.trim() || null : null,
         automation: buildStageAutomationForSave({
+          executionTargetKind: stageExecutionTargetKind,
+          workflowId: stageWorkflowId,
           assigneeAgentId: stageAssigneeAgentId,
           titleTemplate: issueTitleTemplate,
           instructionsBody,
@@ -1920,6 +2011,11 @@ export function PipelineSettings() {
     mutationFn: async () => {
       if (!pipelineId || !selectedStage) return null;
       const detail = stageAutomationDetail(selectedStage);
+      if (detail.targetKind === "workflow") {
+        throw new Error(
+          "Workflow automation uses the Workflow's own connections and secret grants.",
+        );
+      }
       const env = Object.keys(stageEnv).length > 0 ? stageEnv : null;
       await pipelinesApi.updateStageAutomationEnv(pipelineId, selectedStage.id, {
         env,
@@ -2157,9 +2253,20 @@ export function PipelineSettings() {
         )
       : null;
   const canSaveAutomationWorkspace =
+    stageExecutionTargetKind !== "agent_task" ||
     !selectedProjectSupportsExecutionWorkspace ||
     stageExecutionWorkspacePreference !== "reuse_existing" ||
     Boolean(stageExecutionWorkspaceId);
+  const workflowTargetMissing =
+    stageExecutionTargetKind === "workflow" && !stageWorkflowId;
+  const workflowBreakdownConflict =
+    stageExecutionTargetKind === "workflow" && breakdownEnabled;
+  const canSaveStage =
+    Boolean(stageName.trim()) &&
+    !reviewTargetsMissing &&
+    canSaveAutomationWorkspace &&
+    !workflowTargetMissing &&
+    !workflowBreakdownConflict;
 
   const savedStageForm = selectedStage
     ? computeStageForm(selectedStage, pipeline.transitions ?? [])
@@ -2171,6 +2278,8 @@ export function PipelineSettings() {
         newEntriesDisabled,
         disableReason,
         assigneeAgentId: stageAssigneeAgentId,
+        executionTargetKind: stageExecutionTargetKind,
+        workflowId: stageWorkflowId,
         approvalRequired: stageKind === "review",
         approval: selectedApproval,
         approveTarget,
@@ -2208,8 +2317,31 @@ export function PipelineSettings() {
     selectedStage != null &&
     JSON.stringify(stripVariablesByName(stripVariableEditorMetadata(instructionsVariables), resolvedAutomationVariableKeys)) !==
       JSON.stringify(stripVariablesByName(savedInstructionsVariables, resolvedAutomationVariableKeys));
-  const selectedAutomationAgent = stageAssigneeAgentId ? agentById.get(stageAssigneeAgentId) ?? null : null;
-  const stageEnvDirty = selectedStage != null && JSON.stringify(stageEnv) !== savedStageEnvKey;
+  const selectedAutomationAgent =
+    stageExecutionTargetKind === "agent_task" && stageAssigneeAgentId
+      ? agentById.get(stageAssigneeAgentId) ?? null
+      : null;
+  const selectedAutomationWorkflow =
+    stageExecutionTargetKind === "workflow" && stageWorkflowId
+      ? (workflowsQuery.data ?? []).find(
+          (workflow) => workflow.id === stageWorkflowId,
+        ) ?? null
+      : null;
+  const workflowOptions: InlineEntityOption[] = (workflowsQuery.data ?? [])
+    .filter(
+      (workflow) =>
+        workflow.status === "active" &&
+        Boolean(workflow.publishedRevisionId),
+    )
+    .map((workflow) => ({
+      id: workflow.id,
+      label: workflow.name,
+      searchText: workflow.description ?? "",
+    }));
+  const stageEnvDirty =
+    stageExecutionTargetKind === "agent_task" &&
+    selectedStage != null &&
+    JSON.stringify(stageEnv) !== savedStageEnvKey;
   const stageDirty =
     (savedStageForm != null &&
       currentStageForm != null &&
@@ -2710,7 +2842,9 @@ export function PipelineSettings() {
               className="space-y-5"
               onSubmit={(event: FormEvent<HTMLFormElement>) => {
                 event.preventDefault();
-                saveStage.mutate();
+                if (!saveStage.isPending && canSaveStage) {
+                  saveStage.mutate();
+                }
               }}
             >
               <div className="flex flex-col gap-5 md:flex-row md:gap-0">
@@ -2904,44 +3038,174 @@ export function PipelineSettings() {
                       <div className="overflow-x-auto overscroll-x-contain">
                         <div className="inline-flex min-w-full flex-wrap items-center gap-2 text-sm text-muted-foreground sm:min-w-max sm:flex-nowrap">
                           <span>When an item enters this step</span>
-                          <InlineEntitySelector
-                            value={stageAssigneeOptionId(stageAssigneeAgentId)}
-                            options={stageAssigneeOptions}
-                            recentOptionIds={recentAssigneeOptionIds}
-                            placeholder="Pick agent"
-                            noneLabel="No automation"
-                            searchPlaceholder="Search agents..."
-                            emptyMessage="No agents found."
-                            onChange={(value) => setStageAssigneeAgentId(stageAssigneeIdFromOption(value))}
-                            renderTriggerValue={(option) => {
-                              if (!option) return <span className="text-muted-foreground">Pick agent</span>;
-                              const agent = stageAssigneeIdFromOption(option.id)
-                                ? agentById.get(stageAssigneeIdFromOption(option.id))
-                                : null;
-                              return (
+                          <Select
+                            value={stageExecutionTargetKind}
+                            onValueChange={(value) => {
+                              const next = value as "agent_task" | "workflow";
+                              setStageExecutionTargetKind(next);
+                            }}
+                          >
+                            <SelectTrigger
+                              className="h-8 w-[118px]"
+                              aria-label="Automation target type"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="agent_task">Agent</SelectItem>
+                              <SelectItem value="workflow">Workflow</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {stageExecutionTargetKind === "agent_task" ? (
+                            <InlineEntitySelector
+                              value={stageAssigneeOptionId(stageAssigneeAgentId)}
+                              options={stageAssigneeOptions}
+                              recentOptionIds={recentAssigneeOptionIds}
+                              placeholder="Pick agent"
+                              noneLabel="No automation"
+                              searchPlaceholder="Search agents..."
+                              emptyMessage="No agents found."
+                              onChange={(value) =>
+                                setStageAssigneeAgentId(
+                                  stageAssigneeIdFromOption(value),
+                                )
+                              }
+                              renderTriggerValue={(option) => {
+                                if (!option) {
+                                  return (
+                                    <span className="text-muted-foreground">
+                                      Pick agent
+                                    </span>
+                                  );
+                                }
+                                const agent = stageAssigneeIdFromOption(option.id)
+                                  ? agentById.get(
+                                      stageAssigneeIdFromOption(option.id),
+                                    )
+                                  : null;
+                                return (
+                                  <>
+                                    {agent ? (
+                                      <AgentAvatar
+                                        agent={agent}
+                                        size={16}
+                                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                      />
+                                    ) : null}
+                                    <span className="truncate">
+                                      {option.label}
+                                    </span>
+                                  </>
+                                );
+                              }}
+                              renderOption={(option) => {
+                                if (!option.id) {
+                                  return (
+                                    <span className="truncate">
+                                      {option.label}
+                                    </span>
+                                  );
+                                }
+                                const agentId = stageAssigneeIdFromOption(option.id);
+                                const agent = agentId
+                                  ? agentById.get(agentId)
+                                  : null;
+                                return (
+                                  <>
+                                    {agent ? (
+                                      <AgentAvatar
+                                        agent={agent}
+                                        size={16}
+                                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                      />
+                                    ) : null}
+                                    <span className="truncate">
+                                      {option.label}
+                                    </span>
+                                  </>
+                                );
+                              }}
+                            />
+                          ) : (
+                            <InlineEntitySelector
+                              value={stageWorkflowId}
+                              options={workflowOptions}
+                              placeholder="Pick workflow"
+                              noneLabel="No workflow"
+                              searchPlaceholder="Search workflows..."
+                              emptyMessage="No active published workflows found."
+                              onChange={setStageWorkflowId}
+                              renderTriggerValue={(option) =>
+                                option ? (
+                                  <>
+                                    <GitBranch
+                                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                      aria-hidden="true"
+                                    />
+                                    <span className="truncate">
+                                      {option.label}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    Pick workflow
+                                  </span>
+                                )
+                              }
+                              renderOption={(option) => (
                                 <>
-                                  {agent ? <AgentAvatar agent={agent} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/> : null}
+                                  <GitBranch
+                                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                    aria-hidden="true"
+                                  />
                                   <span className="truncate">{option.label}</span>
                                 </>
-                              );
-                            }}
-                            renderOption={(option) => {
-                              if (!option.id) return <span className="truncate">{option.label}</span>;
-                              const agentId = stageAssigneeIdFromOption(option.id);
-                              const agent = agentId ? agentById.get(agentId) : null;
-                              return (
-                                <>
-                                  {agent ? <AgentAvatar agent={agent} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/> : null}
-                                  <span className="truncate">{option.label}</span>
-                                </>
-                              );
-                            }}
-                          />
-                          <span>runs these instructions, then moves the item to the next step.</span>
+                              )}
+                            />
+                          )}
+                          <span>
+                            {stageExecutionTargetKind === "workflow"
+                              ? "runs with this pipeline item as input."
+                              : "runs these instructions, then moves the item to the next step."}
+                          </span>
                         </div>
                       </div>
 
-                      {selectedAutomationAgent ? (
+                      {stageExecutionTargetKind === "workflow" ? (
+                        selectedAutomationWorkflow ? (
+                          <div className="space-y-4">
+                            <div className="rounded-lg border border-border bg-muted/20 p-4">
+                              <div className="flex items-start gap-3">
+                                <GitBranch
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                                  aria-hidden="true"
+                                />
+                                <div className="min-w-0 space-y-1">
+                                  <Link
+                                    to={`/workflows/${selectedAutomationWorkflow.id}`}
+                                    className="text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  >
+                                    {selectedAutomationWorkflow.name}
+                                  </Link>
+                                  <p className="text-sm text-muted-foreground">
+                                    The workflow owns its steps, approvals, waits, connections, and execution policy. This pipeline stage supplies the current item context when it starts.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            {workflowBreakdownConflict ? (
+                              <p className="text-sm text-amber-700 dark:text-amber-300">
+                                Break into smaller pieces currently requires Agent automation. Turn off breakdown or switch this stage back to Agent before saving.
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <EmptyState
+                            icon={GitBranch}
+                            message="Choose an active published workflow to run when an item enters this step."
+                          />
+                        )
+                      ) : selectedAutomationAgent ? (
                         <>
                           <div className="divide-y divide-border border-y border-border">
                             <FieldRow label="Project context">
@@ -3100,7 +3364,7 @@ export function PipelineSettings() {
                               contentClassName="min-h-(--sz-120px) text-sm leading-7"
                               mentions={mentionOptions}
                               onSubmit={() => {
-                                if (!saveStage.isPending && stageName.trim() && !reviewTargetsMissing && canSaveAutomationWorkspace) {
+                                if (!saveStage.isPending && canSaveStage) {
                                   saveStage.mutate();
                                 }
                               }}
@@ -3121,45 +3385,73 @@ export function PipelineSettings() {
                           message="Nothing runs here automatically. Items wait until a person moves them, or you can pick an agent to run this step."
                         />
                       )}
-                      <div className="space-y-3">
-                        <RoutineVariablesHint />
-                        <RoutineVariablesEditor
-                          key={selectedStage?.id ?? "stage"}
-                          title={issueTitleTemplate}
-                          description={instructionsBody}
-                          value={instructionsVariables}
-                          onChange={setInstructionsVariables}
-                        />
-                      </div>
+                      {stageExecutionTargetKind === "agent_task" ? (
+                        <div className="space-y-3">
+                          <RoutineVariablesHint />
+                          <RoutineVariablesEditor
+                            key={selectedStage?.id ?? "stage"}
+                            title={issueTitleTemplate}
+                            description={instructionsBody}
+                            value={instructionsVariables}
+                            onChange={setInstructionsVariables}
+                          />
+                        </div>
+                      ) : null}
                       {breakdownSettingsCard}
                     </div>
                   ) : null}
 
                   {activeStageSection === "secrets" ? (
                     <div className="w-full max-w-3xl">
-                      {(() => {
-                        const detail = stageAutomationDetail(selectedStage);
-                        const automationAgent = detail.assigneeAgentId
-                          ? agentById.get(detail.assigneeAgentId) ?? null
-                          : null;
-                        return (
-                          <StageSecretsPanel
-                            hasAutomation={Boolean(detail.routineId && detail.assigneeAgentId)}
-                            agentName={automationAgent?.name ?? null}
-                            agentIcon={automationAgent?.icon ?? null}
-                            agent={automationAgent ?? undefined}
-                            secrets={secretsQuery.data ?? []}
-                            secretsLoading={secretsQuery.isLoading}
-                            value={stageEnv}
-                            onChange={setStageEnv}
-                            onCreateSecret={async (name, value) => createSecret.mutateAsync({ name, value })}
-                            onSetupAutomation={() => setActiveStageSection("instructions")}
-                            onSave={() => saveStageEnv.mutate()}
-                            saving={saveStageEnv.isPending}
-                            dirty={stageEnvDirty}
-                          />
-                        );
-                      })()}
+                      {stageExecutionTargetKind === "workflow" ? (
+                        <div className="rounded-lg border border-border bg-muted/20 p-5">
+                          <div className="flex items-start gap-3">
+                            <GitBranch
+                              className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-foreground">
+                                Connections and secrets are owned by the Workflow
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                This stage does not create a separate secret scope. Configure connection grants and secrets on the Workflow nodes that use them.
+                              </p>
+                              {selectedAutomationWorkflow ? (
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link to={`/workflows/${selectedAutomationWorkflow.id}`}>
+                                    Open workflow
+                                  </Link>
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        (() => {
+                          const detail = stageAutomationDetail(selectedStage);
+                          const automationAgent = detail.assigneeAgentId
+                            ? agentById.get(detail.assigneeAgentId) ?? null
+                            : null;
+                          return (
+                            <StageSecretsPanel
+                              hasAutomation={Boolean(detail.routineId && detail.assigneeAgentId)}
+                              agentName={automationAgent?.name ?? null}
+                              agentIcon={automationAgent?.icon ?? null}
+                              agent={automationAgent ?? undefined}
+                              secrets={secretsQuery.data ?? []}
+                              secretsLoading={secretsQuery.isLoading}
+                              value={stageEnv}
+                              onChange={setStageEnv}
+                              onCreateSecret={async (name, value) => createSecret.mutateAsync({ name, value })}
+                              onSetupAutomation={() => setActiveStageSection("instructions")}
+                              onSave={() => saveStageEnv.mutate()}
+                              saving={saveStageEnv.isPending}
+                              dirty={stageEnvDirty}
+                            />
+                          );
+                        })()
+                      )}
                     </div>
                   ) : null}
 
@@ -3300,7 +3592,7 @@ export function PipelineSettings() {
                   </span>
                   <Button
                     type="submit"
-                    disabled={saveStage.isPending || !stageName.trim() || reviewTargetsMissing || !canSaveAutomationWorkspace}
+                    disabled={saveStage.isPending || !canSaveStage}
                   >
                     {saveStage.isPending ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
                     {saveStage.isPending ? "Saving..." : "Save stage"}

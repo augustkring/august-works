@@ -16,7 +16,6 @@ import {
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { agentWakeupRequests } from "./agent_wakeup_requests.js";
-
 export const heartbeatRuns = pgTable(
   "heartbeat_runs",
   {

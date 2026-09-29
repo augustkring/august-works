@@ -101,6 +101,19 @@ export interface InstanceExperimentalSettings {
    * behavior change outside interaction wording.
    */
   enableSimplifiedEnglishInteractions: boolean;
+  enableFoundationV1: boolean;
+  enableContextEngineV1: boolean;
+  enableWorkflowsV1: boolean;
+  enableWorkflowBuilderV1: boolean;
+  enableWorkflowAgentNodes: boolean;
+  enableWorkflowExternalAgentNodes: boolean;
+  enableCollectiveMemoryV1: boolean;
+  enablePrivateAgentMemoryV1: boolean;
+  enableAutomationArtifactsV1: boolean;
+  enableWorkflowOptimizerSuggestions: boolean;
+  enableWorkflowOptimizerShadow: boolean;
+  enableWorkflowOptimizerPromotion: boolean;
+  enableAiWorkflowAuthoring: boolean;
   /**
    * When the user's first onboarding request is a single task, the chief of
    * staff proposes with a short plan document and a checkbox card instead of a

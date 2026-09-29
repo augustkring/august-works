@@ -22,19 +22,42 @@ export const pipelineStageApproverSchema = z.object({
   }
 });
 
-export const pipelineStageOnEnterSchema = z.object({
-  type: z.literal("run_routine"),
-  routineId: z.string().guid(),
+export const pipelineAutomationTargetSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("routine"),
+    routineId: z.string().guid(),
+  }).strict(),
+  z.object({
+    kind: z.literal("workflow"),
+    workflowId: z.string().guid(),
+  }).strict(),
+]);
+
+const pipelineAutomationExecutionContextSchema = z.object({
   id: z.string().trim().min(1).max(200).optional(),
   projectId: z.string().guid().optional().nullable(),
   projectWorkspaceId: z.string().guid().optional().nullable(),
   executionWorkspaceId: z.string().guid().optional().nullable(),
   executionWorkspacePreference: z.enum(ISSUE_EXECUTION_WORKSPACE_PREFERENCES).optional().nullable(),
   executionWorkspaceSettings: issueExecutionWorkspaceSettingsSchema.optional().nullable(),
-}).passthrough();
+});
+
+export const pipelineStageOnEnterSchema = z.union([
+  pipelineAutomationExecutionContextSchema.extend({
+    type: z.literal("run_routine"),
+    routineId: z.string().guid(),
+  }).passthrough(),
+  pipelineAutomationExecutionContextSchema.extend({
+    type: z.literal("run_target"),
+    target: pipelineAutomationTargetSchema,
+  }).passthrough(),
+]);
 
 export const pipelineStageAutomationSchema = z.object({
   routineId: z.string().guid().optional().nullable(),
+  targetKind: z.enum(["routine", "workflow"]).optional().nullable(),
+  targetRef: z.string().guid().optional().nullable(),
+  workflowId: z.string().guid().optional().nullable(),
   assigneeAgentId: z.string().guid().optional().nullable(),
   instructionsBody: z.string().optional().nullable(),
   projectId: z.string().guid().optional().nullable(),
@@ -146,6 +169,7 @@ export const pipelineAutomationRetryRequestSchema = z.object({
   }),
 });
 
+export type PipelineAutomationTarget = z.infer<typeof pipelineAutomationTargetSchema>;
 export type PipelineStageKind = z.infer<typeof pipelineStageKindSchema>;
 export type PipelineStageApprover = z.infer<typeof pipelineStageApproverSchema>;
 export type PipelineStageOnEnter = z.infer<typeof pipelineStageOnEnterSchema>;

@@ -217,3 +217,66 @@ export {
   type RemoteAgentProfileInput,
   type RemoteAgentService,
 } from "./remote-agent-profiles.js";
+
+export { approvedFoundationView, foundationService, type FoundationMutationActor } from "./foundation/foundation-service.js";
+
+export { foundationIndexService, extractFoundationSections, replaceFoundationRevisionSections } from "./foundation/foundation-index.js";
+
+export {
+  evidenceIsTemporallyApplicable,
+  evidenceWithinSensitivityCeiling,
+  filterEligibleEvidence,
+  orderEvidenceByAuthority,
+  resolveEvidenceAuthority,
+} from "./context/context-authority.js";
+export {
+  evidenceBucket,
+  estimateEvidenceTokens,
+  fitEvidenceToBudget,
+} from "./context/context-budget.js";
+
+export {
+  contextManifestService,
+  hashContextPolicySnapshot,
+  hashContextQuery,
+  hashEvidenceContent,
+  type ContextManifestSelectedEvidence,
+  type CreateContextManifestInput,
+} from "./context/context-manifest.js";
+
+export {
+  contextEngineService,
+  runContextProviders,
+  serializeContextPacket,
+  DEFAULT_CONTEXT_AUTHORITY_POLICY,
+  DEFAULT_CONTEXT_BUDGET,
+  DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS,
+  DEFAULT_CONTEXT_TOTAL_DEADLINE_MS,
+  type AssembleContextInput,
+  type ContextAssemblyResult,
+  type ContextProvider,
+  type ContextProviderInput,
+  type ContextProviderResult,
+  type ContextProviderRunResult,
+} from "./context/context-engine.js";
+
+export {
+  assembleFreshNativeGovernedContext,
+  type ContextAssemble,
+  type FreshNativeGovernedContextInput,
+} from "./context/context-runtime.js";
+
+export { workflowService, type WorkflowMutationActor } from "./workflows/workflow-service.js";
+
+export { workflowNodeDefinitions, workflowNodeRegistryService } from "./workflows/workflow-node-registry.js";
+
+export { rankWorkflowCapabilities, workflowCapabilityResolverService } from "./workflows/workflow-capability-resolver.js";
+
+export { workflowDataSelectorService } from "./workflows/workflow-data-selector.js";
+
+export { workflowExecutorService, type WorkflowRunActor } from "./workflows/workflow-executor.js";
+export {
+  workflowWaitService,
+  createWorkflowWaitSignalToken,
+  hashWorkflowWaitSignalToken,
+} from "./workflows/workflow-wait-service.js";

@@ -14,6 +14,7 @@ import { type RoutineHistoryDirtyFieldDescriptor } from "../components/RoutineHi
 import { heartbeatsApi } from "../api/heartbeats";
 import { agentsApi } from "../api/agents";
 import { projectsApi } from "../api/projects";
+import { workflowsApi } from "../api/workflows";
 import { accessApi } from "../api/access";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
@@ -144,11 +145,31 @@ function getLocalTimezone(): string {
 }
 
 function buildRoutineMutationPayload(input: RoutineEditDraft) {
+  const {
+    executionTargetKind,
+    executionTargetRef,
+    ...editable
+  } = input;
+  const targetRef = executionTargetRef.trim();
+  const executionTarget =
+    executionTargetKind === "workflow"
+      ? targetRef
+        ? { kind: "workflow" as const, workflowId: targetRef }
+        : null
+      : targetRef || input.assigneeAgentId
+        ? {
+            kind: "agent_task" as const,
+            agentId: targetRef || input.assigneeAgentId,
+          }
+        : null;
+
   return {
-    ...input,
+    ...editable,
     description: input.description.trim() || null,
     projectId: input.projectId || null,
-    assigneeAgentId: input.assigneeAgentId || null,
+    assigneeAgentId:
+      executionTarget?.kind === "agent_task" ? executionTarget.agentId : null,
+    executionTarget,
     env: input.env && Object.keys(input.env).length > 0 ? input.env : null,
   };
 }
@@ -174,6 +195,8 @@ export function RoutineDetail() {
     description: "",
     projectId: "",
     assigneeAgentId: "",
+    executionTargetKind: "agent_task",
+    executionTargetRef: "",
     priority: "medium",
     concurrencyPolicy: "coalesce_if_active",
     catchUpPolicy: "skip_missed",
@@ -239,6 +262,11 @@ export function RoutineDetail() {
     queryFn: () => projectsApi.list(selectedCompanyId!, { includeArchived: true }),
     enabled: !!selectedCompanyId,
   });
+  const { data: workflows = [] } = useQuery({
+    queryKey: queryKeys.workflows.list(selectedCompanyId!),
+    queryFn: () => workflowsApi.list(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
+  });
   const { data: companyMembers } = useQuery({
     queryKey: queryKeys.access.companyUserDirectory(selectedCompanyId!),
     queryFn: () => accessApi.listUserDirectory(selectedCompanyId!),
@@ -268,6 +296,13 @@ export function RoutineDetail() {
             description: routine.description ?? "",
             projectId: routine.projectId ?? "",
             assigneeAgentId: routine.assigneeAgentId ?? "",
+            executionTargetKind:
+              routine.executionTargetKind === "workflow" ? "workflow" : "agent_task",
+            executionTargetRef:
+              routine.executionTargetRef ??
+              (routine.executionTargetKind === "workflow"
+                ? ""
+                : routine.assigneeAgentId ?? ""),
             priority: routine.priority,
             concurrencyPolicy: routine.concurrencyPolicy,
             catchUpPolicy: routine.catchUpPolicy,
@@ -291,6 +326,12 @@ export function RoutineDetail() {
     }
     if (editDraft.assigneeAgentId !== routineDefaults.assigneeAgentId) {
       result.push({ key: "assigneeAgentId", label: "the default agent" });
+    }
+    if (editDraft.executionTargetKind !== routineDefaults.executionTargetKind) {
+      result.push({ key: "executionTargetKind", label: "the execution target type" });
+    }
+    if (editDraft.executionTargetRef !== routineDefaults.executionTargetRef) {
+      result.push({ key: "executionTargetRef", label: "the execution target" });
     }
     if (editDraft.priority !== routineDefaults.priority) {
       result.push({ key: "priority", label: "the priority" });
@@ -575,6 +616,10 @@ export function RoutineDetail() {
 
   const agentById = useMemo(() => new Map((agents ?? []).map((agent) => [agent.id, agent])), [agents]);
   const projectById = useMemo(() => new Map((projects ?? []).map((project) => [project.id, project])), [projects]);
+  const workflowById = useMemo(
+    () => new Map(workflows.map((workflow) => [workflow.id, workflow])),
+    [workflows],
+  );
   const recentAssigneeIds = useMemo(() => getRecentAssigneeIds(), [routine?.id]);
   const recentProjectIds = useMemo(() => getRecentProjectIds(), [routine?.id]);
   const assigneeOptions = useMemo<InlineEntityOption[]>(
@@ -592,6 +637,20 @@ export function RoutineDetail() {
   const projectOptions = useMemo<InlineEntityOption[]>(
     () => buildRoutineProjectOptions(projects ?? []),
     [projects],
+  );
+  const workflowOptions = useMemo<InlineEntityOption[]>(
+    () =>
+      workflows
+        .filter(
+          (workflow) =>
+            workflow.status === "active" && Boolean(workflow.publishedRevisionId),
+        )
+        .map((workflow) => ({
+          id: workflow.id,
+          label: workflow.name,
+          searchText: workflow.description ?? "",
+        })),
+    [workflows],
   );
   const mentionOptions = useMemo<MentionOption[]>(
     () => buildMarkdownMentionOptions({
@@ -618,6 +677,10 @@ export function RoutineDetail() {
 
   const currentAssignee = editDraft.assigneeAgentId ? agentById.get(editDraft.assigneeAgentId) ?? null : null;
   const currentProject = editDraft.projectId ? projectById.get(editDraft.projectId) ?? null : null;
+  const currentWorkflow =
+    editDraft.executionTargetKind === "workflow" && editDraft.executionTargetRef
+      ? workflowById.get(editDraft.executionTargetRef) ?? null
+      : null;
 
   const reloadLatest = useCallback(() => {
     setSaveConflict(false);
@@ -661,6 +724,15 @@ export function RoutineDetail() {
         description: response.routine.description ?? "",
         projectId: response.routine.projectId ?? "",
         assigneeAgentId: response.routine.assigneeAgentId ?? "",
+        executionTargetKind:
+          response.routine.executionTargetKind === "workflow"
+            ? "workflow"
+            : "agent_task",
+        executionTargetRef:
+          response.routine.executionTargetRef ??
+          (response.routine.executionTargetKind === "workflow"
+            ? ""
+            : response.routine.assigneeAgentId ?? ""),
         priority: response.routine.priority,
         concurrencyPolicy: response.routine.concurrencyPolicy,
         catchUpPolicy: response.routine.catchUpPolicy,
@@ -709,10 +781,14 @@ export function RoutineDetail() {
 
   const automationEnabled = routine.status === "active";
   const automationToggleDisabled = updateRoutineStatus.isPending || routine.status === "archived";
+  const hasSavedExecutionTarget =
+    routine.executionTargetKind === "workflow"
+      ? Boolean(routine.executionTargetRef)
+      : Boolean(routine.executionTargetRef ?? routine.assigneeAgentId);
   const automationLabel =
     routine.status === "archived"
       ? "Archived"
-      : !routine.assigneeAgentId
+      : !hasSavedExecutionTarget
         ? "Draft"
         : automationEnabled
           ? "Active"
@@ -744,10 +820,10 @@ export function RoutineDetail() {
     automationLabelClassName,
     automationToggleDisabled,
     onToggleAutomation: () => {
-      if (!automationEnabled && !routine.assigneeAgentId) {
+      if (!automationEnabled && !hasSavedExecutionTarget) {
         pushToast({
-          title: "Default agent required",
-          body: "Set a default agent before enabling routine automation.",
+          title: "Execution target required",
+          body: "Choose an agent or a published workflow before enabling routine automation.",
           tone: "warn",
         });
         return;
@@ -769,15 +845,19 @@ export function RoutineDetail() {
     createSecret,
     agents: agents ?? [],
     projects: projects ?? [],
+    workflows,
     agentById,
     projectById,
+    workflowById,
     assigneeOptions,
     projectOptions,
+    workflowOptions,
     recentAssigneeIds,
     recentProjectIds,
     mentionOptions,
     currentAssignee,
     currentProject,
+    currentWorkflow,
     routineRuns,
     activity,
     hasLiveRun,

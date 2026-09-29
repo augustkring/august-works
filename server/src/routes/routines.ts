@@ -96,11 +96,28 @@ export function routineRoutes(
     }
   }
 
-  function assertCanManageCompanyRoutine(req: Request, companyId: string, assigneeAgentId?: string | null) {
+  function assertCanManageCompanyRoutine(
+    req: Request,
+    companyId: string,
+    input: {
+      assigneeAgentId?: string | null;
+      executionTarget?:
+        | { kind: "agent_task"; agentId: string }
+        | { kind: "workflow"; workflowId: string }
+        | null;
+    },
+  ) {
     assertCompanyAccess(req, companyId);
     if (req.actor.type === "board") return;
     if (req.actor.type !== "agent" || !req.actor.agentId) throw unauthorized();
-    if (assigneeAgentId !== req.actor.agentId) {
+    if (input.executionTarget?.kind === "workflow") {
+      throw forbidden("Agents cannot assign routines to workflows");
+    }
+    const targetAgentId =
+      input.executionTarget?.kind === "agent_task"
+        ? input.executionTarget.agentId
+        : input.assigneeAgentId;
+    if (targetAgentId !== req.actor.agentId) {
       throw forbidden("Agents can only manage routines assigned to themselves");
     }
   }
@@ -157,7 +174,10 @@ export function routineRoutes(
   router.post("/companies/:companyId/routines", validate(createRoutineSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertBoardCanAssignTasks(req, companyId);
-    assertCanManageCompanyRoutine(req, companyId, req.body.assigneeAgentId);
+    assertCanManageCompanyRoutine(req, companyId, {
+      assigneeAgentId: req.body.assigneeAgentId,
+      executionTarget: req.body.executionTarget,
+    });
     const created = await svc.create(companyId, req.body, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
@@ -174,7 +194,12 @@ export function routineRoutes(
       action: "routine.created",
       entityType: "routine",
       entityId: created.id,
-      details: { title: created.title, assigneeAgentId: created.assigneeAgentId },
+      details: {
+        title: created.title,
+        assigneeAgentId: created.assigneeAgentId,
+        executionTargetKind: created.executionTargetKind,
+        executionTargetRef: created.executionTargetRef,
+      },
     });
     const telemetryClient = getTelemetryClient();
     if (telemetryClient) {
@@ -369,7 +394,9 @@ export function routineRoutes(
     const assigneeWillChange =
       req.body.assigneeAgentId !== undefined &&
       req.body.assigneeAgentId !== routine.assigneeAgentId;
-    if (assigneeWillChange) {
+    const executionTargetWillChange =
+      req.body.executionTarget !== undefined;
+    if (assigneeWillChange || executionTargetWillChange) {
       await assertBoardCanAssignTasks(req, routine.companyId);
     }
     const statusWillActivate =
@@ -379,12 +406,21 @@ export function routineRoutes(
     if (statusWillActivate) {
       await assertBoardCanAssignTasks(req, routine.companyId);
     }
-    if (
-      req.actor.type === "agent" &&
-      req.body.assigneeAgentId !== undefined &&
-      req.body.assigneeAgentId !== req.actor.agentId
-    ) {
-      throw forbidden("Agents can only assign routines to themselves");
+    if (req.actor.type === "agent") {
+      if (req.body.executionTarget?.kind === "workflow") {
+        throw forbidden("Agents cannot assign routines to workflows");
+      }
+      const requestedAgentId =
+        req.body.executionTarget?.kind === "agent_task"
+          ? req.body.executionTarget.agentId
+          : req.body.assigneeAgentId;
+      if (
+        requestedAgentId !== undefined &&
+        requestedAgentId !== null &&
+        requestedAgentId !== req.actor.agentId
+      ) {
+        throw forbidden("Agents can only assign routines to themselves");
+      }
     }
     const updated = await svc.update(routine.id, req.body, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
@@ -402,7 +438,13 @@ export function routineRoutes(
       action: "routine.updated",
       entityType: "routine",
       entityId: routine.id,
-      details: { title: updated?.title ?? routine.title },
+      details: {
+        title: updated?.title ?? routine.title,
+        executionTargetKind:
+          updated?.executionTargetKind ?? routine.executionTargetKind,
+        executionTargetRef:
+          updated?.executionTargetRef ?? routine.executionTargetRef,
+      },
     });
     if (updated && updated.latestRevisionId !== routine.latestRevisionId) {
       await remapRoutineDescriptionAnnotations(req, routine.id);
