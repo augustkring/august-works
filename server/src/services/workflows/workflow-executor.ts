@@ -2338,7 +2338,7 @@ function workflowWakeRequester(actor: WorkflowRunActor): {
 async function workflowAgentHeartbeat(
   db: Db,
   runtimeDeps: WorkflowExecutorRuntimeDeps,
-): Promise<IssueAssignmentWakeupDeps> {
+): Promise<WorkflowHeartbeatRuntime> {
   if (runtimeDeps.heartbeat) return runtimeDeps.heartbeat;
   const { heartbeatService } = await import("../heartbeat.js");
   return heartbeatService(db);
