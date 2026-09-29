@@ -53,6 +53,12 @@ export const memoryApi = {
   createBinding: (companyId: string, input: MemoryBindingInput) =>
     api.post<MemoryBinding>(`/companies/${companyId}/memory/bindings`, input),
 
+  createCompanyBinding: (companyId: string, input: MemoryBindingInput) =>
+    api.post<MemoryBinding>(
+      `/companies/${companyId}/memory/bindings/company`,
+      input,
+    ),
+
   addBindingTarget: (
     companyId: string,
     bindingId: string,

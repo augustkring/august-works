@@ -393,6 +393,52 @@ export function memoryService(db: Db) {
       return detail;
     },
 
+    createCompanyBinding: async (
+      companyId: string,
+      rawInput: unknown,
+      actor: MemoryMutationActor,
+    ) => {
+      const parsed = memoryBindingInputSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid memory binding", parsed.error.issues);
+      }
+      requireHumanOrSystem(actor, "configure");
+      await assertActorCompanyScope(db, companyId, actor);
+
+      try {
+        return await db.transaction(async (tx) => {
+          const [binding] = await tx
+            .insert(memoryBindings)
+            .values({
+              companyId,
+              key: parsed.data.key,
+              name: parsed.data.name,
+              providerKey: parsed.data.providerKey,
+              config: parsed.data.config,
+              enabled: parsed.data.enabled,
+            })
+            .returning();
+          if (!binding) {
+            throw new Error("Memory binding insert returned no row");
+          }
+          await tx.insert(memoryBindingTargets).values({
+            companyId,
+            bindingId: binding.id,
+            targetType: "company",
+            targetId: companyId,
+          });
+          return binding;
+        });
+      } catch (error) {
+        if (isUniqueViolation(error, "memory_bindings_company_key_uq")) {
+          throw conflict("Memory binding key already exists", {
+            code: "memory_binding_key_conflict",
+          });
+        }
+        throw error;
+      }
+    },
+
     createBinding: async (
       companyId: string,
       rawInput: unknown,

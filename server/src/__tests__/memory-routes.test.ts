@@ -139,7 +139,7 @@ describePg("Memory routes", () => {
     const http = request(app(board(seeded.userId, seeded.companyId)));
 
     const binding = await http
-      .post(`/api/companies/${seeded.companyId}/memory/bindings`)
+      .post(`/api/companies/${seeded.companyId}/memory/bindings/company`)
       .send({
         key: "local-memory",
         name: "Local memory",
@@ -147,11 +147,6 @@ describePg("Memory routes", () => {
         config: {},
         enabled: true,
       })
-      .expect(201);
-
-    await http
-      .post(`/api/companies/${seeded.companyId}/memory/bindings/${binding.body.id}/targets`)
-      .send({ targetType: "company", targetId: seeded.companyId })
       .expect(201);
 
     const content = "Acme procurement requires a security review.";

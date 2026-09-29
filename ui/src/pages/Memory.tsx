@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Brain,
@@ -242,18 +242,13 @@ export function Memory() {
   const bindingMutation = useMutation({
     mutationFn: async () => {
       if (!selectedCompanyId) throw new Error("Select a company first.");
-      const created = await memoryApi.createBinding(selectedCompanyId, {
+      return memoryApi.createCompanyBinding(selectedCompanyId, {
         key: bindingKey.trim(),
         name: bindingName.trim(),
         providerKey: bindingProvider.trim(),
         config: {},
         enabled: true,
       });
-      await memoryApi.addBindingTarget(selectedCompanyId, created.id, {
-        targetType: "company",
-        targetId: selectedCompanyId,
-      });
-      return created;
     },
     onSuccess: async () => {
       setBindingKey("");
@@ -546,13 +541,7 @@ export function Memory() {
   if (listQuery.isLoading) return <PageSkeleton />;
 
   const records = listQuery.data ?? [];
-  const counts = useMemo(
-    () => ({
-      bindings: bindingsQuery.data?.length ?? 0,
-      records: records.length,
-    }),
-    [bindingsQuery.data?.length, records.length],
-  );
+  const bindingCount = bindingsQuery.data?.length ?? 0;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -578,7 +567,7 @@ export function Memory() {
             </Button>
             <Button variant="outline" onClick={() => setBindingsOpen(true)}>
               <Database className="mr-1.5 h-4 w-4" />
-              Bindings {counts.bindings > 0 ? `(${counts.bindings})` : ""}
+              Bindings {bindingCount > 0 ? `(${bindingCount})` : ""}
             </Button>
           </div>
         </header>

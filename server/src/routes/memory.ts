@@ -172,6 +172,22 @@ export function memoryRoutes(db: Db) {
   });
 
   router.post(
+    "/companies/:companyId/memory/bindings/company",
+    validate(memoryBindingInputSchema),
+    async (req, res) => {
+      await assertMemoryEnabled();
+      const companyId = req.params.companyId as string;
+      assertBoardCompany(req, companyId);
+      const created = await svc.createCompanyBinding(
+        companyId,
+        req.body,
+        boardActor(req),
+      );
+      res.status(201).json(created);
+    },
+  );
+
+  router.post(
     "/companies/:companyId/memory/bindings",
     validate(memoryBindingInputSchema),
     async (req, res) => {
