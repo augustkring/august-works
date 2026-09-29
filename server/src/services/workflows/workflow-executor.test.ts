@@ -2339,4 +2339,435 @@ describePg("Workflow executor V1", () => {
     expect(heartbeat.wakeup).toHaveBeenCalledTimes(2);
   });
 
+  it("executes External Agent with scoped OpenClaw context and validates its structured result", async () => {
+    const expectedOutputSchema = {
+      type: "object",
+      required: ["score"],
+      properties: {
+        score: { type: "number" },
+      },
+      additionalProperties: false,
+    };
+    const seeded = await seedPublishedExternalAgentWorkflow({
+      expectedOutputSchema,
+    });
+    const heartbeatRunId = randomUUID();
+    const heartbeat = fakeExternalHeartbeat({
+      companyId: seeded.companyId,
+      agentId: seeded.agentId,
+      runId: heartbeatRunId,
+    });
+    const executor = workflowExecutorService(db, { heartbeat });
+
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: { requestedBy: "test" } },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "external-agent-success",
+    );
+
+    expect(waiting.run.status).toBe("waiting");
+    expect(waiting.waits).toEqual([
+      expect.objectContaining({
+        nodeId: "external",
+        kind: "external_agent_run",
+        status: "active",
+        referenceType: "issue",
+      }),
+    ]);
+    expect(
+      waiting.steps.find((step) => step.nodeId === "external"),
+    ).toMatchObject({
+      status: "waiting",
+      agentId: seeded.agentId,
+      heartbeatRunId,
+    });
+
+    const wakeCall = heartbeat.wakeup.mock.calls[0];
+    expect(wakeCall?.[0]).toBe(seeded.agentId);
+    expect(wakeCall?.[1]).toMatchObject({
+      source: "automation",
+      triggerDetail: "system",
+      reason: "workflow_external_agent",
+      allowRunCoalescing: false,
+      idempotencyKey: expect.stringMatching(
+        /^workflow-external-agent:workflow-step:/,
+      ),
+    });
+    const wakeContext = wakeCall?.[1].contextSnapshot ?? {};
+    expect(wakeContext).toMatchObject({
+      source: "workflow.external_agent",
+      workflowExternalAgent: {
+        companyId: seeded.companyId,
+        externalAgentBindingId: seeded.agentId,
+        objective: "Research the account and return the requested structured result.",
+        structuredInput: {
+          accountId: "account-1",
+          requestedFields: ["score"],
+        },
+        expectedOutputSchema,
+        timeoutSeconds: 120,
+        allowedCapabilityScope: "binding_grants",
+        workflowRunId: waiting.run.id,
+        workflowNodeId: "external",
+      },
+    });
+    const externalContract =
+      wakeContext.workflowExternalAgent as Record<string, unknown>;
+    expect(Object.keys(externalContract).sort()).toEqual([
+      "allowedCapabilityScope",
+      "companyId",
+      "correlationId",
+      "expectedOutputSchema",
+      "externalAgentBindingId",
+      "objective",
+      "responsibleUser",
+      "structuredInput",
+      "timeoutSeconds",
+      "workflowNodeId",
+      "workflowRunId",
+    ].sort());
+    expect(externalContract).not.toHaveProperty("foundation");
+    expect(externalContract).not.toHaveProperty("memory");
+    expect(externalContract).not.toHaveProperty("credentials");
+    expect(externalContract).not.toHaveProperty("taskHistory");
+
+    const accountableTasks = await db
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.companyId, seeded.companyId),
+          eq(issues.originRunId, waiting.run.id),
+        ),
+      );
+    expect(accountableTasks).toHaveLength(1);
+    expect(accountableTasks[0]).toMatchObject({
+      assigneeAgentId: seeded.agentId,
+      originKind: "workflow_task",
+      originId: seeded.workflow.id,
+    });
+
+    const completedAt = new Date();
+    await db
+      .update(heartbeatRuns)
+      .set({
+        status: "succeeded",
+        finishedAt: completedAt,
+        resultJson: {
+          status: "ok",
+          runId: "remote-run-1",
+          result: {
+            output: { score: 91 },
+            artifacts: [{ id: "artifact-1", type: "research_report" }],
+          },
+        },
+        usageJson: {
+          inputTokens: 120,
+          outputTokens: 42,
+        },
+        updatedAt: completedAt,
+      })
+      .where(eq(heartbeatRuns.id, heartbeatRunId));
+
+    const recovery = await executor.recoverExpiredRuns(
+      20,
+      new Date(completedAt.getTime() + 1),
+    );
+    expect(recovery).toMatchObject({
+      recovered: 1,
+      failedRunIds: [],
+    });
+
+    const completed = await executor.getRun(
+      seeded.companyId,
+      waiting.run.id,
+    );
+    expect(completed?.run.status).toBe("succeeded");
+    expect(completed?.waits[0]).toMatchObject({
+      status: "resolved",
+      resolutionJson: expect.objectContaining({
+        status: "succeeded",
+        output: { score: 91 },
+        externalRunId: "remote-run-1",
+        issueId: accountableTasks[0]!.id,
+        agentId: seeded.agentId,
+        heartbeatRunId,
+      }),
+    });
+    expect(
+      completed?.steps.find((step) => step.nodeId === "external"),
+    ).toMatchObject({
+      status: "succeeded",
+      agentId: seeded.agentId,
+      heartbeatRunId,
+      outputJson: expect.objectContaining({
+        status: "succeeded",
+        output: { score: 91 },
+        artifacts: [{ id: "artifact-1", type: "research_report" }],
+        usage: {
+          inputTokens: 120,
+          outputTokens: 42,
+        },
+        externalRunId: "remote-run-1",
+      }),
+    });
+    expect(
+      completed?.steps.find((step) => step.nodeId === "after"),
+    ).toMatchObject({
+      status: "succeeded",
+      outputJson: { result: true },
+    });
+
+    const actions = (await db.select().from(activityLog)).map(
+      (row) => row.action,
+    );
+    expect(actions).toContain("workflow.external_agent_requested");
+    expect(actions).toContain("workflow.external_agent_dispatched");
+    expect(actions).toContain("workflow.external_agent_completed");
+  });
+
+  it("fails External Agent output that does not match the declared schema", async () => {
+    const seeded = await seedPublishedExternalAgentWorkflow({
+      expectedOutputSchema: {
+        type: "object",
+        required: ["score"],
+        properties: {
+          score: { type: "number" },
+        },
+        additionalProperties: false,
+      },
+    });
+    const heartbeatRunId = randomUUID();
+    const heartbeat = fakeExternalHeartbeat({
+      companyId: seeded.companyId,
+      agentId: seeded.agentId,
+      runId: heartbeatRunId,
+    });
+    const executor = workflowExecutorService(db, { heartbeat });
+
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "external-agent-schema-mismatch",
+    );
+
+    const completedAt = new Date();
+    await db
+      .update(heartbeatRuns)
+      .set({
+        status: "succeeded",
+        finishedAt: completedAt,
+        resultJson: {
+          status: "ok",
+          runId: "remote-run-bad-output",
+          result: {
+            output: { score: "not-a-number" },
+          },
+        },
+        updatedAt: completedAt,
+      })
+      .where(eq(heartbeatRuns.id, heartbeatRunId));
+
+    await executor.recoverExpiredRuns(
+      20,
+      new Date(completedAt.getTime() + 1),
+    );
+
+    const failed = await executor.getRun(
+      seeded.companyId,
+      waiting.run.id,
+    );
+    expect(failed?.run).toMatchObject({
+      status: "failed",
+      failureCode: "workflow_output_schema_mismatch",
+    });
+    expect(
+      failed?.steps.find((step) => step.nodeId === "external"),
+    ).toMatchObject({
+      status: "failed",
+      errorCode: "workflow_output_schema_mismatch",
+    });
+  });
+
+  it("times out External Agent work and records unconfirmed remote cancellation truthfully", async () => {
+    const seeded = await seedPublishedExternalAgentWorkflow({
+      timeoutSeconds: 1,
+    });
+    const heartbeatRunId = randomUUID();
+    const heartbeat = fakeExternalHeartbeat({
+      companyId: seeded.companyId,
+      agentId: seeded.agentId,
+      runId: heartbeatRunId,
+      confirmCancellation: false,
+    });
+    const executor = workflowExecutorService(db, { heartbeat });
+
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "external-agent-timeout",
+    );
+
+    await db
+      .update(heartbeatRuns)
+      .set({
+        status: "running",
+        startedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(heartbeatRuns.id, heartbeatRunId));
+
+    const timeoutAt = waiting.waits[0]!.timeoutAt!;
+    await executor.recoverExpiredRuns(
+      20,
+      new Date(new Date(timeoutAt).getTime() + 10),
+    );
+
+    expect(heartbeat.cancelRun).toHaveBeenCalledWith(
+      heartbeatRunId,
+      "External Agent workflow step exceeded its timeout",
+      { errorCode: "workflow_external_agent_timeout" },
+    );
+    const failed = await executor.getRun(
+      seeded.companyId,
+      waiting.run.id,
+    );
+    expect(failed?.run).toMatchObject({
+      status: "failed",
+      failureCode: "workflow_external_agent_timeout",
+    });
+    expect(failed?.waits[0]).toMatchObject({
+      status: "timed_out",
+      resolutionJson: expect.objectContaining({
+        cancellationRequested: true,
+        cancellationConfirmed: false,
+        heartbeatRunId,
+      }),
+    });
+    const remoteRun = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, heartbeatRunId))
+      .then((rows) => rows[0]);
+    expect(remoteRun?.status).toBe("running");
+  });
+
+  it("fails closed when External Agent binding is not an OpenClaw gateway agent", async () => {
+    const seeded = await seedPublishedExternalAgentWorkflow();
+    await db
+      .update(agents)
+      .set({
+        adapterType: "process",
+        updatedAt: new Date(),
+      })
+      .where(eq(agents.id, seeded.agentId));
+    const heartbeat = fakeExternalHeartbeat({
+      companyId: seeded.companyId,
+      agentId: seeded.agentId,
+    });
+    const executor = workflowExecutorService(db, { heartbeat });
+
+    const failed = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "external-agent-invalid-binding",
+    );
+
+    expect(failed.run).toMatchObject({
+      status: "failed",
+      failureCode: "workflow_external_agent_binding_invalid",
+    });
+    expect(failed.waits).toHaveLength(0);
+    expect(heartbeat.wakeup).not.toHaveBeenCalled();
+  });
+
+  it("replays External Agent dispatch with the same idempotency key after runtime binding loss", async () => {
+    const seeded = await seedPublishedExternalAgentWorkflow();
+    const heartbeatRunId = randomUUID();
+    const heartbeat = fakeExternalHeartbeat({
+      companyId: seeded.companyId,
+      agentId: seeded.agentId,
+      runId: heartbeatRunId,
+    });
+    const executor = workflowExecutorService(db, { heartbeat });
+
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      {
+        principal: { type: "user", userId: seeded.userId },
+        responsibleUserId: seeded.userId,
+      },
+      "external-agent-replay",
+    );
+    const externalStep = waiting.steps.find(
+      (step) => step.nodeId === "external",
+    )!;
+    await db
+      .update(workflowStepRuns)
+      .set({
+        heartbeatRunId: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(workflowStepRuns.id, externalStep.id));
+    await db
+      .delete(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, heartbeatRunId));
+
+    const recovery = await executor.recoverExpiredRuns(20, new Date());
+    expect(recovery).toMatchObject({
+      recovered: 0,
+      deferred: 1,
+      failedRunIds: [],
+    });
+    expect(heartbeat.wakeup).toHaveBeenCalledTimes(2);
+    const firstKey = heartbeat.wakeup.mock.calls[0]?.[1].idempotencyKey;
+    const replayKey = heartbeat.wakeup.mock.calls[1]?.[1].idempotencyKey;
+    expect(replayKey).toBe(firstKey);
+
+    const accountableTasks = await db
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.companyId, seeded.companyId),
+          eq(issues.originRunId, waiting.run.id),
+        ),
+      );
+    expect(accountableTasks).toHaveLength(1);
+
+    const rebound = await executor.getRun(
+      seeded.companyId,
+      waiting.run.id,
+    );
+    expect(
+      rebound?.steps.find((step) => step.nodeId === "external"),
+    ).toMatchObject({
+      status: "waiting",
+      heartbeatRunId,
+      agentId: seeded.agentId,
+    });
+  });
+
 });
