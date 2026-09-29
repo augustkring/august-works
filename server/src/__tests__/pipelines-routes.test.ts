@@ -30,7 +30,6 @@ import {
   projects,
   routineRuns,
   routines,
-  workflowRevisions,
   workflows,
 } from "@paperclipai/db";
 import {
@@ -46,6 +45,7 @@ import {
   PIPELINE_CONTEXT_PACK_EVENT_LIMIT,
 } from "../services/pipelines.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { workflowService } from "../services/workflows/workflow-service.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe.sequential : describe.skip;
@@ -85,7 +85,7 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await db.delete(executionWorkspaces);
     await db.delete(pipelines);
     await db.delete(routines);
-    await db.delete(workflowRevisions);
+    // Published workflow revisions are immutable; reset through the parent cascade.
     await db.delete(workflows);
     await db.delete(projectWorkspaces);
     await db.delete(projects);
@@ -122,37 +122,48 @@ describeEmbeddedPostgres("pipeline routes", () => {
   }
 
   async function seedPublishedWorkflow(companyId: string) {
-    const [workflow] = await db.insert(workflows).values({
+    const svc = workflowService(db);
+    const actor = {
+      principal: { type: "system" as const, service: "pipeline-route-test" },
+    };
+    const created = await svc.create(
       companyId,
-      name: "Pipeline target workflow",
-      status: "active",
-    }).returning();
-    const [revision] = await db.insert(workflowRevisions).values({
+      { name: "Pipeline target workflow" },
+      actor,
+    );
+    const updated = await svc.updateDraft(
       companyId,
-      workflowId: workflow!.id,
-      revisionNumber: 1,
-      state: "published",
-      graph: {
-        version: 1,
-        nodes: [
-          {
-            id: "start",
-            type: "core.manual_trigger",
-            name: "Start",
-            position: { x: 0, y: 0 },
-            config: {},
-          },
-        ],
-        edges: [],
-        variables: [],
-        settings: {},
+      created.id,
+      {
+        expectedRevisionId: created.draftRevisionId!,
+        graph: {
+          version: 1,
+          nodes: [
+            {
+              id: "start",
+              type: "core.manual_trigger",
+              name: "Start",
+              position: { x: 0, y: 0 },
+              config: {},
+            },
+          ],
+          edges: [],
+          variables: [],
+          settings: {},
+        },
       },
-    }).returning();
-    await db
-      .update(workflows)
-      .set({ publishedRevisionId: revision!.id })
-      .where(eq(workflows.id, workflow!.id));
-    return workflow!;
+      actor,
+    );
+    return svc.publish(
+      companyId,
+      created.id,
+      {
+        expectedDraftRevisionId: updated.draftRevisionId!,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      },
+      actor,
+    );
   }
 
   async function seedAutomationAgent(companyId: string) {
