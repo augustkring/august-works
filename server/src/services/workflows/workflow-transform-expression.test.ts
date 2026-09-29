@@ -65,37 +65,37 @@ describe("workflow transform expression", () => {
   });
 
   it("fails closed for missing references", () => {
-    expect(() =>
-      evaluateWorkflowTransformExpression("{{input.missing}}", context),
-    ).toThrowError(
-      expect.objectContaining({
+    try {
+      evaluateWorkflowTransformExpression("{{input.missing}}", context);
+      throw new Error("Expected a missing transform reference to fail");
+    } catch (error) {
+      expect(error).toMatchObject({
         code: "workflow_transform_reference_missing",
-      }),
-    );
+      });
+    }
   });
 
   it("rejects object interpolation inside a string template", () => {
-    expect(() =>
-      evaluateWorkflowTransformExpression("payload={{input.payload}}", context),
-    ).toThrowError(
-      expect.objectContaining({
+    try {
+      evaluateWorkflowTransformExpression("payload={{input.payload}}", context);
+      throw new Error("Expected object interpolation to fail");
+    } catch (error) {
+      expect(error).toMatchObject({
         code: "workflow_transform_interpolation_type_invalid",
-      }),
-    );
+      });
+    }
   });
 
   it("rejects unsupported roots and incomplete delimiters", () => {
-    expect(() => parseWorkflowTransformExpression("{{process.env.SECRET}}"))
-      .toThrowError(
-        expect.objectContaining({
+    for (const expression of ["{{process.env.SECRET}}", "{{input.value}"]) {
+      try {
+        parseWorkflowTransformExpression(expression);
+        throw new Error("Expected an invalid transform expression to fail");
+      } catch (error) {
+        expect(error).toMatchObject({
           code: "workflow_transform_expression_invalid",
-        }),
-      );
-    expect(() => parseWorkflowTransformExpression("{{input.value}"))
-      .toThrowError(
-        expect.objectContaining({
-          code: "workflow_transform_expression_invalid",
-        }),
-      );
+        });
+      }
+    }
   });
 });
