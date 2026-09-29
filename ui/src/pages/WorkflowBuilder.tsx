@@ -91,6 +91,86 @@ function boundedInteger(
   return Math.min(maximum, Math.max(minimum, parsed));
 }
 
+function formatJsonObjectValue(value: unknown, allowNull: boolean) {
+  if (value === null || value === undefined) return allowNull ? "" : "{}";
+  if (!isRecord(value)) return "{}";
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return "{}";
+  }
+}
+
+function JsonObjectTextarea({
+  value,
+  disabled,
+  allowNull = false,
+  rows = 5,
+  ariaLabel,
+  onCommit,
+}: {
+  value: unknown;
+  disabled: boolean;
+  allowNull?: boolean;
+  rows?: number;
+  ariaLabel: string;
+  onCommit: (value: Record<string, unknown> | null) => void;
+}) {
+  const serialized = formatJsonObjectValue(value, allowNull);
+  const [draft, setDraft] = useState(serialized);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(serialized);
+    setError(null);
+  }, [serialized]);
+
+  const validate = (raw: string) => {
+    if (allowNull && raw.trim().length === 0) {
+      setError(null);
+      return null;
+    }
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!isRecord(parsed)) {
+        setError("Enter a JSON object.");
+        return undefined;
+      }
+      setError(null);
+      return parsed;
+    } catch {
+      setError("Enter valid JSON.");
+      return undefined;
+    }
+  };
+
+  return (
+    <div>
+      <textarea
+        value={draft}
+        disabled={disabled}
+        rows={rows}
+        aria-label={ariaLabel}
+        aria-invalid={error ? true : undefined}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          validate(event.target.value);
+        }}
+        onBlur={() => {
+          const parsed = validate(draft);
+          if (parsed !== undefined) onCommit(parsed);
+        }}
+        className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      />
+      {error ? (
+        <p role="alert" className="mt-1 text-[11px] leading-4 text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function defaultConfig(type: string): Record<string, unknown> | null {
   switch (type) {
     case "core.manual_trigger":
@@ -114,6 +194,16 @@ function defaultConfig(type: string): Record<string, unknown> | null {
       return {
         summary: "Approval required",
         consequence: "Review this step before the workflow continues.",
+      };
+    case "agent.external":
+      return {
+        agentId: "",
+        objective: "Delegate this bounded external workflow step",
+        structuredInput: {},
+        expectedOutputSchema: null,
+        timeoutSeconds: 120,
+        allowedCapabilityScope: "binding_grants",
+        fallbackPolicy: "fail",
       };
     default:
       return null;
@@ -1029,6 +1119,7 @@ function NodeInspector({
     NO_RETRY_POLICY;
   const isCreateTaskNode = workflowNode.type === "work.create_task";
   const isAgentTaskNode = workflowNode.type === "agent.task";
+  const isExternalAgentNode = workflowNode.type === "agent.external";
   const { data: taskProjects = [] } = useQuery({
     queryKey: queryKeys.projects.list(companyId, { includeArchived: false }),
     queryFn: () => projectsApi.list(companyId, { includeArchived: false }),
@@ -1037,7 +1128,7 @@ function NodeInspector({
   const { data: taskAgents = [] } = useQuery({
     queryKey: queryKeys.agents.list(companyId),
     queryFn: () => agentsApi.list(companyId),
-    enabled: isCreateTaskNode || isAgentTaskNode,
+    enabled: isCreateTaskNode || isAgentTaskNode || isExternalAgentNode,
   });
   const { data: taskUserDirectory } = useQuery({
     queryKey: queryKeys.access.companyUserDirectory(companyId),
@@ -1365,6 +1456,111 @@ function NodeInspector({
               output schema before publishing.
             </div>
           ) : null}
+        </>
+      ) : null}
+
+      {workflowNode.type === "agent.external" ? (
+        <>
+          <label className="block space-y-1 text-xs font-medium">
+            OpenClaw agent binding
+            <select
+              value={String(config.agentId ?? "")}
+              disabled={!canEdit}
+              onChange={(event) =>
+                updateConfig({ agentId: event.target.value })
+              }
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="" disabled>
+                Select OpenClaw agent
+              </option>
+              {taskAgents
+                .filter(
+                  (agent) =>
+                    agent.status !== "terminated" &&
+                    agent.adapterType === "openclaw_gateway",
+                )
+                .map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+
+          <label className="block space-y-1 text-xs font-medium">
+            Objective
+            <textarea
+              value={String(config.objective ?? "")}
+              disabled={!canEdit}
+              rows={4}
+              onChange={(event) =>
+                updateConfig({ objective: event.target.value })
+              }
+              className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </label>
+
+          <label className="block space-y-1 text-xs font-medium">
+            Structured input
+            <JsonObjectTextarea
+              value={config.structuredInput}
+              disabled={!canEdit}
+              ariaLabel="External Agent structured input JSON"
+              onCommit={(value) =>
+                updateConfig({ structuredInput: value ?? {} })
+              }
+            />
+          </label>
+
+          <label className="block space-y-1 text-xs font-medium">
+            Expected output schema
+            <JsonObjectTextarea
+              value={config.expectedOutputSchema}
+              disabled={!canEdit}
+              allowNull
+              rows={6}
+              ariaLabel="External Agent expected output schema JSON"
+              onCommit={(value) =>
+                updateConfig({ expectedOutputSchema: value })
+              }
+            />
+            <span className="block text-[11px] font-normal leading-4 text-muted-foreground">
+              Optional JSON Schema. The workflow resumes only after the
+              OpenClaw result matches this schema.
+            </span>
+          </label>
+
+          <label className="block space-y-1 text-xs font-medium">
+            Timeout (seconds)
+            <Input
+              type="number"
+              min={1}
+              max={3600}
+              value={String(config.timeoutSeconds ?? 120)}
+              disabled={!canEdit}
+              onChange={(event) =>
+                updateConfig({
+                  timeoutSeconds: boundedInteger(
+                    event.target.value,
+                    1,
+                    3600,
+                    typeof config.timeoutSeconds === "number"
+                      ? config.timeoutSeconds
+                      : 120,
+                  ),
+                })
+              }
+            />
+          </label>
+
+          <div className="border-l-2 border-border pl-3 text-xs leading-5 text-muted-foreground">
+            Capabilities are limited to grants on this OpenClaw binding.
+            Parent-agent credentials, hidden runtime state, Foundation,
+            Shared Memory and unrelated task history are not inherited.
+            V1 fallback is fail-closed; a missing native connector is never
+            silently replaced without a workflow revision.
+          </div>
         </>
       ) : null}
 
