@@ -75,6 +75,7 @@ export interface AssembleContextInput {
   runId?: string | null;
   issueId?: string | null;
   projectId?: string | null;
+  subjectRefs?: string[];
   query: string;
   intent?: string | null;
   includeFoundation?: boolean;
