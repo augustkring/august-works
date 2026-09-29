@@ -95,7 +95,19 @@ export const memoryEvidenceInputSchema = z
     trustLevel: z.enum(EVIDENCE_TRUST_LEVELS),
     relation: z.enum(MEMORY_EVIDENCE_RELATIONS),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (
+      value.sourceClass === "external_untrusted" &&
+      value.trustLevel !== "untrusted"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["trustLevel"],
+        message: "External untrusted memory evidence must remain untrusted",
+      });
+    }
+  });
 
 export const memoryCandidateInputSchema = z
   .object({
@@ -121,6 +133,13 @@ export const memoryCandidateInputSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (!value.evidence.some((item) => item.relation === "supports")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["evidence"],
+        message: "Durable memory requires at least one supporting evidence item",
+      });
+    }
     if (
       value.validFrom &&
       value.validUntil &&

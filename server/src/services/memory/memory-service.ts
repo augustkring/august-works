@@ -384,6 +384,7 @@ export function memoryService(db: Db) {
         .from(memoryBindingTargets)
         .where(
           and(
+            eq(memoryBindingTargets.companyId, companyId),
             eq(memoryBindingTargets.bindingId, bindingId),
             eq(memoryBindingTargets.targetType, parsed.data.targetType),
             eq(memoryBindingTargets.targetId, parsed.data.targetId),
