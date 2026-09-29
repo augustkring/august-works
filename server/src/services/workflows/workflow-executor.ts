@@ -6708,6 +6708,7 @@ export async function resolveWorkflowExecutionRevision(
         .filter(
           (node) =>
             node.type !== "core.manual_trigger" &&
+            node.type !== "core.transform" &&
             node.type !== "core.condition" &&
             node.type !== "core.wait" &&
             node.type !== "human.approval" &&
