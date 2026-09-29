@@ -16,6 +16,7 @@ import {
 } from "@paperclipai/shared";
 import { unprocessable } from "../../errors.js";
 import { parseWorkflowConditionExpression } from "./workflow-condition-expression.js";
+import { parseWorkflowTransformExpression } from "./workflow-transform-expression.js";
 import {
   descriptorRetryIsStructurallySafe,
   effectiveWorkflowRetryPolicy,
@@ -57,11 +58,23 @@ const emptyObjectSchema = {
 
 const manualTriggerConfig = z.object({}).strict();
 const transformConfig = z.object({
-  mapping: z.record(z.string(), z.string()).refine(
+  mapping: z.record(z.string(), z.string().max(10_000)).refine(
     (mapping) => Object.keys(mapping).length >= 1 && Object.keys(mapping).length <= 100,
     "Transform mapping must contain between 1 and 100 fields",
   ),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  for (const [field, expression] of Object.entries(value.mapping)) {
+    try {
+      parseWorkflowTransformExpression(expression);
+    } catch (error) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mapping", field],
+        message: error instanceof Error ? error.message : "Invalid transform expression",
+      });
+    }
+  }
+});
 const conditionConfig = z.object({
   expression: z.string().trim().min(1).max(5_000),
 }).strict().superRefine((value, ctx) => {
@@ -297,7 +310,11 @@ const REGISTRY: RegisteredWorkflowNode[] = [
       idempotencyStrategy: "not_required",
       cancellationSupport: "none",
       testMode: "safe",
-      failureOutputs: ["expression_invalid"],
+      failureOutputs: [
+        "workflow_transform_expression_invalid",
+        "workflow_transform_reference_missing",
+        "workflow_transform_interpolation_type_invalid",
+      ],
       auditEvents: [],
       uiComponent: "transform",
       accessibilityContract: {
@@ -306,8 +323,8 @@ const REGISTRY: RegisteredWorkflowNode[] = [
         supportsKeyboardInsert: true,
         supportsOutlineEdit: true,
       },
-      publishState: "draft_only",
-      publishBlockedReason: "expression_engine_not_ready",
+      publishState: "ready",
+      publishBlockedReason: null,
     }),
     configValidator: transformConfig,
   },
