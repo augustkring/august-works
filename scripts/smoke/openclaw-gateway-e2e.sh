@@ -56,6 +56,15 @@ OPENCLAW_ADAPTER_WAIT_TIMEOUT_MS="${OPENCLAW_ADAPTER_WAIT_TIMEOUT_MS:-120000}"
 PAIRING_AUTO_APPROVE="${PAIRING_AUTO_APPROVE:-1}"
 PAYLOAD_TEMPLATE_MESSAGE_APPEND="${PAYLOAD_TEMPLATE_MESSAGE_APPEND:-}"
 
+# Gate 27.5 workflow evidence. The success case is opt-in so the established
+# OpenClaw smoke remains backwards-compatible. Cancellation and process-loss
+# are separately destructive and therefore require explicit opt-in.
+WORKFLOW_CASES="${WORKFLOW_CASES:-0}"
+WORKFLOW_CANCELLATION_CASE="${WORKFLOW_CANCELLATION_CASE:-0}"
+WORKFLOW_PROCESS_LOSS_CASE="${WORKFLOW_PROCESS_LOSS_CASE:-0}"
+WORKFLOW_RUN_TIMEOUT_SEC="${WORKFLOW_RUN_TIMEOUT_SEC:-300}"
+WORKFLOW_PROCESS_LOSS_TIMEOUT_SEC="${WORKFLOW_PROCESS_LOSS_TIMEOUT_SEC:-90}"
+
 AUTH_HEADERS=()
 if [[ -n "${PAPERCLIP_AUTH_HEADER:-}" ]]; then
   AUTH_HEADERS+=( -H "Authorization: ${PAPERCLIP_AUTH_HEADER}" )
@@ -80,10 +89,16 @@ CASE_B_ISSUE_ID=""
 CASE_C_ISSUE_ID=""
 CASE_C_CREATED_ISSUE_ID=""
 
+WORKFLOW_ID=""
+WORKFLOW_RUN_ID=""
+WORKFLOW_EXTERNAL_ISSUE_ID=""
+WORKFLOW_EXTERNAL_HEARTBEAT_RUN_ID=""
+
 api_request() {
   local method="$1"
   local path="$2"
   local data="${3-}"
+  local idempotency_key="${4-}"
   local tmp
   tmp="$(mktemp)"
 
@@ -96,18 +111,15 @@ api_request() {
     url="${API_BASE}${path}"
   fi
 
+  local request_headers=("${AUTH_HEADERS[@]}")
+  if [[ -n "$idempotency_key" ]]; then
+    request_headers+=( -H "Idempotency-Key: ${idempotency_key}" )
+  fi
+
   if [[ -n "$data" ]]; then
-    if (( ${#AUTH_HEADERS[@]} > 0 )); then
-      RESPONSE_CODE="$(curl -sS -o "$tmp" -w "%{http_code}" -X "$method" "${AUTH_HEADERS[@]}" -H "Content-Type: application/json" "$url" --data "$data")"
-    else
-      RESPONSE_CODE="$(curl -sS -o "$tmp" -w "%{http_code}" -X "$method" -H "Content-Type: application/json" "$url" --data "$data")"
-    fi
+    RESPONSE_CODE="$(curl -sS -o "$tmp" -w "%{http_code}" -X "$method" "${request_headers[@]}" -H "Content-Type: application/json" "$url" --data "$data")"
   else
-    if (( ${#AUTH_HEADERS[@]} > 0 )); then
-      RESPONSE_CODE="$(curl -sS -o "$tmp" -w "%{http_code}" -X "$method" "${AUTH_HEADERS[@]}" "$url")"
-    else
-      RESPONSE_CODE="$(curl -sS -o "$tmp" -w "%{http_code}" -X "$method" "$url")"
-    fi
+    RESPONSE_CODE="$(curl -sS -o "$tmp" -w "%{http_code}" -X "$method" "${request_headers[@]}" "$url")"
   fi
 
   RESPONSE_BODY="$(cat "$tmp")"
@@ -743,6 +755,256 @@ find_issue_by_query() {
   jq -r '.[] | .id' <<<"$RESPONSE_BODY" | head -n1
 }
 
+ensure_workflow_smoke_enabled() {
+  api_request "PATCH" "/instance/settings/experimental"     '{"enableWorkflowsV1":true,"enableWorkflowExternalAgentNodes":true}'
+  assert_status "200"
+
+  local workflows_enabled external_enabled
+  workflows_enabled="$(jq -r '.enableWorkflowsV1 // false' <<<"$RESPONSE_BODY")"
+  external_enabled="$(jq -r '.enableWorkflowExternalAgentNodes // false' <<<"$RESPONSE_BODY")"
+  [[ "$workflows_enabled" == "true" ]] || fail "workflow smoke could not enable Workflows V1"
+  [[ "$external_enabled" == "true" ]] || fail "workflow smoke could not enable External Agent workflow nodes"
+}
+
+wait_for_workflow_run_terminal() {
+  local run_id="$1"
+  local timeout_sec="$2"
+  local started_at now status
+  started_at="$(date +%s)"
+
+  while true; do
+    api_request "GET" "/companies/${COMPANY_ID}/workflow-runs/${run_id}"
+    if [[ "$RESPONSE_CODE" != "200" ]]; then
+      echo "$RESPONSE_BODY" >&2
+      fail "workflow run ${run_id} read failed with HTTP ${RESPONSE_CODE}"
+    fi
+    status="$(jq -r '.run.status // "unknown"' <<<"$RESPONSE_BODY")"
+    case "$status" in
+      succeeded|failed|cancelled)
+        echo "$status"
+        return 0
+        ;;
+    esac
+
+    now="$(date +%s)"
+    if (( now - started_at >= timeout_sec )); then
+      echo "$status"
+      return 0
+    fi
+    sleep 1
+  done
+}
+
+capture_workflow_diagnostics() {
+  local run_id="$1"
+  local label="${2:-workflow}"
+  mkdir -p "$OPENCLAW_DIAG_DIR"
+  api_request "GET" "/companies/${COMPANY_ID}/workflow-runs/${run_id}"
+  if [[ "$RESPONSE_CODE" == "200" ]]; then
+    printf "%s\n" "$RESPONSE_BODY" > "${OPENCLAW_DIAG_DIR}/${label}-${run_id}.json"
+  fi
+}
+
+create_external_agent_workflow() {
+  local marker="$1"
+  local timeout_seconds="$2"
+  local objective="$3"
+
+  api_request "POST" "/companies/${COMPANY_ID}/workflows"     "$(jq -nc --arg marker "$marker"       '{name:("[OpenClaw Gateway Smoke] External Agent " + $marker),description:"Gate 27.5 live External Agent workflow evidence"}')"
+  assert_status "201"
+
+  WORKFLOW_ID="$(jq -r '.id // empty' <<<"$RESPONSE_BODY")"
+  local draft_revision_id
+  draft_revision_id="$(jq -r '.draftRevisionId // empty' <<<"$RESPONSE_BODY")"
+  [[ -n "$WORKFLOW_ID" && -n "$draft_revision_id" ]] || fail "workflow create missing id or draft revision"
+
+  local patch_payload
+  patch_payload="$(jq -nc     --arg expected "$draft_revision_id"     --arg agentId "$AGENT_ID"     --arg marker "$marker"     --arg objective "$objective"     --argjson timeout "$timeout_seconds"     '{
+      expectedRevisionId:$expected,
+      changeSummary:"Gate 27.5 OpenClaw External Agent smoke",
+      graph:{
+        version:1,
+        nodes:[
+          {
+            id:"start",
+            type:"core.manual_trigger",
+            name:"Manual start",
+            position:{x:0,y:0},
+            config:{}
+          },
+          {
+            id:"external",
+            type:"agent.external",
+            name:"OpenClaw External Agent",
+            position:{x:180,y:0},
+            config:{
+              agentId:$agentId,
+              objective:$objective,
+              structuredInput:{marker:$marker,score:7},
+              expectedOutputSchema:{
+                type:"object",
+                properties:{
+                  marker:{type:"string",const:$marker},
+                  score:{type:"number",const:7}
+                },
+                required:["marker","score"],
+                additionalProperties:false
+              },
+              timeoutSeconds:$timeout,
+              allowedCapabilityScope:"binding_grants",
+              fallbackPolicy:"fail"
+            }
+          },
+          {
+            id:"after",
+            type:"core.condition",
+            name:"Continue after OpenClaw",
+            position:{x:360,y:0},
+            config:{expression:"true"}
+          }
+        ],
+        edges:[
+          {id:"e1",source:"start",target:"external"},
+          {id:"e2",source:"external",target:"after"}
+        ],
+        variables:[],
+        settings:{}
+      }
+    }')"
+
+  api_request "PATCH" "/companies/${COMPANY_ID}/workflows/${WORKFLOW_ID}/draft" "$patch_payload"
+  assert_status "200"
+  draft_revision_id="$(jq -r '.draftRevisionId // empty' <<<"$RESPONSE_BODY")"
+  [[ -n "$draft_revision_id" ]] || fail "workflow update missing draftRevisionId"
+
+  local publish_payload
+  publish_payload="$(jq -nc --arg draft "$draft_revision_id"     '{expectedDraftRevisionId:$draft,expectedPublishedRevisionId:null,approvalId:null}')"
+  api_request "POST" "/companies/${COMPANY_ID}/workflows/${WORKFLOW_ID}/publish" "$publish_payload"
+  assert_status "200"
+  [[ "$(jq -r '.publishedRevision.state // empty' <<<"$RESPONSE_BODY")" == "published" ]]     || fail "workflow publication did not return a published revision"
+}
+
+start_external_agent_workflow() {
+  local marker="$1"
+  local request_key="$2"
+
+  local run_payload
+  run_payload="$(jq -nc --arg marker "$marker" '{input:{marker:$marker},revisionId:null}')"
+  api_request "POST" "/companies/${COMPANY_ID}/workflows/${WORKFLOW_ID}/run" "$run_payload" "$request_key"
+  assert_status "201"
+
+  WORKFLOW_RUN_ID="$(jq -r '.run.id // empty' <<<"$RESPONSE_BODY")"
+  WORKFLOW_EXTERNAL_ISSUE_ID="$(jq -r '[.steps[] | select(.nodeId=="external")][0].outputJson.issueId // empty' <<<"$RESPONSE_BODY")"
+  WORKFLOW_EXTERNAL_HEARTBEAT_RUN_ID="$(jq -r '[.steps[] | select(.nodeId=="external")][0].outputJson.heartbeatRunId // empty' <<<"$RESPONSE_BODY")"
+  [[ -n "$WORKFLOW_RUN_ID" ]] || fail "workflow run response missing run id"
+}
+
+assert_external_agent_workflow_success() {
+  local marker="$1"
+  local label="${2:-workflow-external}"
+  local status
+  status="$(wait_for_workflow_run_terminal "$WORKFLOW_RUN_ID" "$WORKFLOW_RUN_TIMEOUT_SEC")"
+  log "${label} run ${WORKFLOW_RUN_ID} status=${status}"
+
+  api_request "GET" "/companies/${COMPANY_ID}/workflow-runs/${WORKFLOW_RUN_ID}"
+  assert_status "200"
+  local external_status returned_marker returned_score
+  external_status="$(jq -r '[.steps[] | select(.nodeId=="external")][0].status // empty' <<<"$RESPONSE_BODY")"
+  returned_marker="$(jq -r '[.steps[] | select(.nodeId=="external")][0].outputJson.output.marker // empty' <<<"$RESPONSE_BODY")"
+  returned_score="$(jq -r '[.steps[] | select(.nodeId=="external")][0].outputJson.output.score // empty' <<<"$RESPONSE_BODY")"
+  WORKFLOW_EXTERNAL_ISSUE_ID="$(jq -r '[.steps[] | select(.nodeId=="external")][0].outputJson.issueId // empty' <<<"$RESPONSE_BODY")"
+  WORKFLOW_EXTERNAL_HEARTBEAT_RUN_ID="$(jq -r '[.steps[] | select(.nodeId=="external")][0].outputJson.heartbeatRunId // empty' <<<"$RESPONSE_BODY")"
+
+  if [[ "$status" != "succeeded" || "$external_status" != "succeeded" || "$returned_marker" != "$marker" || "$returned_score" != "7" ]]; then
+    capture_workflow_diagnostics "$WORKFLOW_RUN_ID" "$label"
+    [[ -n "$WORKFLOW_EXTERNAL_ISSUE_ID" ]] && capture_issue_diagnostics "$WORKFLOW_EXTERNAL_ISSUE_ID" "$label"
+    [[ -n "$WORKFLOW_EXTERNAL_HEARTBEAT_RUN_ID" ]] && capture_run_diagnostics "$WORKFLOW_EXTERNAL_HEARTBEAT_RUN_ID" "$label"
+    capture_openclaw_container_logs
+    fail "${label} did not return the governed structured result"
+  fi
+}
+
+run_workflow_external_agent_case() {
+  local marker="OPENCLAW_WORKFLOW_OK_$(date +%s)"
+  local objective
+  objective="Return ONLY this JSON object as your final answer, with no markdown or prose: {\"marker\":\"${marker}\",\"score\":7}. Do not alter the marker or score."
+
+  log "workflow success case: building External Agent workflow"
+  create_external_agent_workflow "$marker" 180 "$objective"
+  start_external_agent_workflow "$marker" "openclaw-workflow-success-${marker}"
+  assert_external_agent_workflow_success "$marker" "workflow-success"
+}
+
+run_workflow_cancellation_case() {
+  local marker="OPENCLAW_WORKFLOW_CANCEL_$(date +%s)"
+  local objective
+  objective="Perform a careful multi-step review of the structured input. Before giving a final answer, verify the marker and score twice. Final answer must be ONLY JSON: {\"marker\":\"${marker}\",\"score\":7}."
+
+  log "workflow cancellation case: starting live External Agent work"
+  create_external_agent_workflow "$marker" 180 "$objective"
+  start_external_agent_workflow "$marker" "openclaw-workflow-cancel-${marker}"
+
+  api_request "POST" "/companies/${COMPANY_ID}/workflow-runs/${WORKFLOW_RUN_ID}/cancel"     '{"reason":"Gate 27.5 live cancellation exercise"}'
+  assert_status "200"
+
+  local status
+  status="$(wait_for_workflow_run_terminal "$WORKFLOW_RUN_ID" 90)"
+  log "workflow cancellation case run ${WORKFLOW_RUN_ID} status=${status}"
+  if [[ "$status" != "cancelled" ]]; then
+    capture_workflow_diagnostics "$WORKFLOW_RUN_ID" "workflow-cancel"
+    [[ -n "$WORKFLOW_EXTERNAL_HEARTBEAT_RUN_ID" ]] && capture_run_diagnostics "$WORKFLOW_EXTERNAL_HEARTBEAT_RUN_ID" "workflow-cancel"
+    capture_openclaw_container_logs
+    fail "workflow cancellation case did not reach cancelled"
+  fi
+}
+
+run_workflow_process_loss_case() {
+  local marker="OPENCLAW_WORKFLOW_PROCESS_LOSS_$(date +%s)"
+  local objective
+  objective="Return ONLY JSON when complete: {\"marker\":\"${marker}\",\"score\":7}. Validate the structured input before replying."
+
+  log "workflow process-loss case: starting External Agent run"
+  create_external_agent_workflow "$marker" 30 "$objective"
+  start_external_agent_workflow "$marker" "openclaw-workflow-process-loss-${marker}"
+
+  local container
+  container="$(detect_openclaw_container || true)"
+  [[ -n "$container" ]] || fail "workflow process-loss case could not find OpenClaw gateway container"
+
+  log "workflow process-loss case: SIGKILL gateway container ${container}"
+  docker kill --signal=KILL "$container" >/dev/null
+  sleep 2
+  docker start "$container" >/dev/null
+  wait_http_ready "http://127.0.0.1:18789/" "$OPENCLAW_WAIT_SECONDS"     || fail "OpenClaw gateway did not recover after process-loss exercise"
+
+  local gateway_token
+  gateway_token="$(detect_gateway_token || true)"
+  [[ -n "$gateway_token" ]] || fail "could not resolve gateway token after restart"
+  probe_gateway_ws "$OPENCLAW_GATEWAY_URL" "$gateway_token"
+
+  local status
+  status="$(wait_for_workflow_run_terminal "$WORKFLOW_RUN_ID" "$WORKFLOW_PROCESS_LOSS_TIMEOUT_SEC")"
+  log "workflow process-loss original run ${WORKFLOW_RUN_ID} status=${status}"
+
+  if [[ "$status" == "succeeded" ]]; then
+    assert_external_agent_workflow_success "$marker" "workflow-process-loss-auto-recovery"
+    return
+  fi
+  if [[ "$status" != "failed" ]]; then
+    capture_workflow_diagnostics "$WORKFLOW_RUN_ID" "workflow-process-loss"
+    capture_openclaw_container_logs
+    fail "workflow process-loss run neither recovered nor failed truthfully"
+  fi
+
+  local failed_run_id="$WORKFLOW_RUN_ID"
+  api_request "POST" "/companies/${COMPANY_ID}/workflow-runs/${failed_run_id}/retry"     '{"reason":"Retry after live OpenClaw gateway process loss"}'     "openclaw-workflow-process-loss-retry-${marker}"
+  assert_status "201"
+  WORKFLOW_RUN_ID="$(jq -r '.run.id // empty' <<<"$RESPONSE_BODY")"
+  [[ -n "$WORKFLOW_RUN_ID" && "$WORKFLOW_RUN_ID" != "$failed_run_id" ]]     || fail "process-loss retry did not create a new workflow run"
+
+  assert_external_agent_workflow_success "$marker" "workflow-process-loss-retry"
+}
+
 run_case_a() {
   local marker="OPENCLAW_CASE_A_OK_$(date +%s)"
   local description
@@ -935,6 +1197,17 @@ main() {
   done
   [[ "$connect_status" == "succeeded" ]] || fail "connectivity wake run did not succeed after retries"
 
+  if [[ "$WORKFLOW_CASES" == "1" ]]; then
+    ensure_workflow_smoke_enabled
+    run_workflow_external_agent_case
+    if [[ "$WORKFLOW_CANCELLATION_CASE" == "1" ]]; then
+      run_workflow_cancellation_case
+    fi
+    if [[ "$WORKFLOW_PROCESS_LOSS_CASE" == "1" ]]; then
+      run_workflow_process_loss_case
+    fi
+  fi
+
   run_case_a
   run_case_b
   run_case_c
@@ -948,6 +1221,12 @@ main() {
   log "caseB_issueId=${CASE_B_ISSUE_ID}"
   log "caseC_issueId=${CASE_C_ISSUE_ID}"
   log "caseC_createdIssueId=${CASE_C_CREATED_ISSUE_ID:-none}"
+  if [[ "$WORKFLOW_CASES" == "1" ]]; then
+    log "workflowId=${WORKFLOW_ID:-none}"
+    log "workflowRunId=${WORKFLOW_RUN_ID:-none}"
+    log "workflowExternalIssueId=${WORKFLOW_EXTERNAL_ISSUE_ID:-none}"
+    log "workflowExternalHeartbeatRunId=${WORKFLOW_EXTERNAL_HEARTBEAT_RUN_ID:-none}"
+  fi
   log "agentApiKeyPrefix=${AGENT_API_KEY:0:12}..."
 }
 
