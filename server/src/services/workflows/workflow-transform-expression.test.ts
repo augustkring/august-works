@@ -1,0 +1,101 @@
+import { describe, expect, it } from "vitest";
+import {
+  evaluateWorkflowTransformExpression,
+  evaluateWorkflowTransformMapping,
+  parseWorkflowTransformExpression,
+} from "./workflow-transform-expression.js";
+
+const context = {
+  input: {
+    value: 42,
+    payload: { id: "lead-1", tags: ["priority"] },
+  },
+  trigger: {
+    label: "Acme",
+    active: true,
+  },
+  variables: {
+    region: "DK",
+  },
+  steps: {
+    start: {
+      value: 42,
+    },
+  },
+};
+
+describe("workflow transform expression", () => {
+  it("preserves the native value when the expression is exactly one reference", () => {
+    expect(
+      evaluateWorkflowTransformExpression("{{input.payload}}", context),
+    ).toEqual({ id: "lead-1", tags: ["priority"] });
+    expect(
+      evaluateWorkflowTransformExpression("{{input.value}}", context),
+    ).toBe(42);
+  });
+
+  it("interpolates scalar references into deterministic strings", () => {
+    expect(
+      evaluateWorkflowTransformExpression(
+        "Lead {{trigger.label}} / {{variables.region}} / {{steps.start.value}}",
+        context,
+      ),
+    ).toBe("Lead Acme / DK / 42");
+  });
+
+  it("keeps strings without references as literal values", () => {
+    expect(evaluateWorkflowTransformExpression("fixed", context)).toBe("fixed");
+  });
+
+  it("evaluates a mapping without executing host JavaScript", () => {
+    expect(
+      evaluateWorkflowTransformMapping(
+        {
+          amount: "{{input.value}}",
+          account: "{{trigger.label}}",
+          summary: "{{trigger.label}} in {{variables.region}}",
+        },
+        context,
+      ),
+    ).toEqual({
+      amount: 42,
+      account: "Acme",
+      summary: "Acme in DK",
+    });
+  });
+
+  it("fails closed for missing references", () => {
+    expect(() =>
+      evaluateWorkflowTransformExpression("{{input.missing}}", context),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "workflow_transform_reference_missing",
+      }),
+    );
+  });
+
+  it("rejects object interpolation inside a string template", () => {
+    expect(() =>
+      evaluateWorkflowTransformExpression("payload={{input.payload}}", context),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "workflow_transform_interpolation_type_invalid",
+      }),
+    );
+  });
+
+  it("rejects unsupported roots and incomplete delimiters", () => {
+    expect(() => parseWorkflowTransformExpression("{{process.env.SECRET}}"))
+      .toThrowError(
+        expect.objectContaining({
+          code: "workflow_transform_expression_invalid",
+        }),
+      );
+    expect(() => parseWorkflowTransformExpression("{{input.value}"))
+      .toThrowError(
+        expect.objectContaining({
+          code: "workflow_transform_expression_invalid",
+        }),
+      );
+  });
+});
