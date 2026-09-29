@@ -263,9 +263,15 @@ export const memoryShareInputSchema = z
   })
   .strict();
 
-export const memoryPrivateCorrectionInputSchema = memoryCorrectionInputSchema
-  .omit({ createdByOperationId: true })
+export const memoryPrivateCorrectionInputSchema = memoryCandidateBaseSchema
+  .omit({
+    bindingId: true,
+    scope: true,
+    ownerAgentId: true,
+    createdByOperationId: true,
+  })
   .extend({
+    reason: z.string().trim().min(1).max(2000),
     createdByOperationId: z.string().trim().min(1).max(500),
   })
   .strict()
