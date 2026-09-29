@@ -3082,6 +3082,389 @@ async function failExternalAgentWait(
   return changed;
 }
 
+function externalAgentWaitingStep(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+) {
+  return db
+    .select()
+    .from(workflowStepRuns)
+    .where(
+      and(
+        eq(workflowStepRuns.companyId, run.companyId),
+        eq(workflowStepRuns.workflowRunId, run.id),
+        eq(workflowStepRuns.nodeId, wait.nodeId),
+        eq(workflowStepRuns.status, "waiting"),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+}
+
+function parseJsonValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
+function externalAgentResultRecord(
+  value: unknown,
+): Record<string, unknown> | null {
+  return isRecordValue(value) ? value : null;
+}
+
+function externalAgentResultOutput(
+  resultJson: Record<string, unknown> | null,
+  expectedOutputSchema: Record<string, unknown> | null,
+): unknown {
+  if (!resultJson) {
+    if (expectedOutputSchema) {
+      throw new WorkflowCheckpointError(
+        "workflow_external_agent_result_missing",
+        "External Agent completed without a result payload",
+      );
+    }
+    return null;
+  }
+
+  const nestedResult = externalAgentResultRecord(resultJson.result);
+  const candidates: unknown[] = [
+    resultJson.output,
+    nestedResult?.output,
+    resultJson.result,
+    resultJson.summary,
+    resultJson.message,
+  ];
+
+  let output: unknown = undefined;
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null) continue;
+    const parsed = parseJsonValue(candidate);
+    if (parsed !== undefined && parsed !== null && parsed !== "") {
+      output = parsed;
+      break;
+    }
+  }
+
+  if (output === undefined) {
+    if (expectedOutputSchema) {
+      throw new WorkflowCheckpointError(
+        "workflow_external_agent_result_missing",
+        "External Agent did not return structured output",
+      );
+    }
+    output = resultJson;
+  }
+
+  try {
+    validateWorkflowOutput(expectedOutputSchema, output);
+  } catch (error) {
+    if (error instanceof WorkflowOutputSchemaError) {
+      throw new WorkflowCheckpointError(error.code, error.message);
+    }
+    throw error;
+  }
+
+  return output;
+}
+
+function externalAgentArtifacts(
+  resultJson: Record<string, unknown> | null,
+): Record<string, unknown>[] {
+  const nestedResult = externalAgentResultRecord(resultJson?.result);
+  const raw = Array.isArray(resultJson?.artifacts)
+    ? resultJson?.artifacts
+    : Array.isArray(nestedResult?.artifacts)
+      ? nestedResult?.artifacts
+      : [];
+  return raw.filter(isRecordValue);
+}
+
+function externalAgentUsage(
+  heartbeat: typeof heartbeatRuns.$inferSelect,
+): Record<string, unknown> {
+  if (isRecordValue(heartbeat.usageJson)) return heartbeat.usageJson;
+  const resultJson = externalAgentResultRecord(heartbeat.resultJson);
+  const nestedResult = externalAgentResultRecord(resultJson?.result);
+  const fromResult =
+    externalAgentResultRecord(resultJson?.usage) ??
+    externalAgentResultRecord(nestedResult?.usage);
+  return fromResult ?? {};
+}
+
+function externalAgentRemoteRunId(
+  heartbeat: typeof heartbeatRuns.$inferSelect,
+): string {
+  const resultJson = externalAgentResultRecord(heartbeat.resultJson);
+  const nestedResult = externalAgentResultRecord(resultJson?.result);
+  const candidates = [
+    heartbeat.externalRunId,
+    resultJson?.externalRunId,
+    resultJson?.runId,
+    nestedResult?.externalRunId,
+    nestedResult?.runId,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+  throw new WorkflowCheckpointError(
+    "workflow_external_agent_result_missing",
+    "External Agent completed without an external run identifier",
+  );
+}
+
+function externalAgentSuccessEnvelope(
+  heartbeat: typeof heartbeatRuns.$inferSelect,
+  issueId: string,
+  agentId: string,
+  expectedOutputSchema: Record<string, unknown> | null,
+) {
+  const resultJson = externalAgentResultRecord(heartbeat.resultJson);
+  return {
+    status: "succeeded" as const,
+    output: externalAgentResultOutput(resultJson, expectedOutputSchema),
+    artifacts: externalAgentArtifacts(resultJson),
+    usage: externalAgentUsage(heartbeat),
+    externalRunId: externalAgentRemoteRunId(heartbeat),
+    issueId,
+    agentId,
+    heartbeatRunId: heartbeat.id,
+  };
+}
+
+async function resumeCompletedExternalAgentWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+  heartbeat: typeof heartbeatRuns.$inferSelect,
+  issueId: string,
+  config: ExternalAgentConfig,
+  now: Date,
+  runtimeDeps: WorkflowExecutorRuntimeDeps,
+): Promise<"recovered" | "raced"> {
+  let envelope: ReturnType<typeof externalAgentSuccessEnvelope>;
+  try {
+    envelope = externalAgentSuccessEnvelope(
+      heartbeat,
+      issueId,
+      config.agentId,
+      config.expectedOutputSchema,
+    );
+  } catch (error) {
+    if (error instanceof WorkflowCheckpointError) {
+      const changed = await failExternalAgentWait(
+        db,
+        run,
+        wait,
+        error.code,
+        error.message,
+        now,
+        {
+          issueId,
+          agentId: config.agentId,
+          heartbeatRunId: heartbeat.id,
+          externalRunId: heartbeat.externalRunId,
+        },
+      );
+      return changed ? "recovered" : "raced";
+    }
+    throw error;
+  }
+
+  const actor: WorkflowRunActor = {
+    principal: { type: "system", service: "workflow-external-agent" },
+    responsibleUserId: run.responsibleUserId,
+  };
+  const ownerId = `external-agent:${randomUUID()}`;
+  const publications: ActivityPublication[] = [];
+
+  const resumed = await db.transaction(async (tx) => {
+    const [resolvedWait] = await tx
+      .update(workflowWaits)
+      .set({
+        status: "resolved",
+        resolutionJson: envelope,
+        resolvedByType: "system",
+        resolvedById: "workflow-external-agent",
+        resolvedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowWaits.id, wait.id),
+          eq(workflowWaits.companyId, run.companyId),
+          eq(workflowWaits.workflowRunId, run.id),
+          eq(workflowWaits.status, "active"),
+        ),
+      )
+      .returning();
+    if (!resolvedWait) return null;
+
+    const waitingStep = await externalAgentWaitingStep(
+      tx as unknown as Db,
+      run,
+      wait,
+    );
+    if (!waitingStep) {
+      throw conflict("External Agent step changed before completion", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+
+    const durationMs = Math.max(
+      0,
+      now.getTime() - (waitingStep.startedAt ?? now).getTime(),
+    );
+    const [completedStep] = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "succeeded",
+        outputJson: envelope,
+        heartbeatRunId: heartbeat.id,
+        finishedAt: now,
+        durationMs,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.id, waitingStep.id),
+          eq(workflowStepRuns.status, "waiting"),
+        ),
+      )
+      .returning();
+    if (!completedStep) {
+      throw conflict("External Agent step changed during completion", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        nodeId: wait.nodeId,
+        waitId: wait.id,
+      });
+    }
+
+    const [runningRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "running",
+        executionOwnerId: ownerId,
+        ownerHeartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.status, "waiting"),
+          sql`${workflowRuns.executionOwnerId} is null`,
+          sql`${workflowRuns.leaseExpiresAt} is null`,
+        ),
+      )
+      .returning();
+    if (!runningRun) {
+      throw conflict("Workflow run changed before External Agent completion", {
+        code: "workflow_wait_resolution_conflict",
+        workflowRunId: run.id,
+        waitId: wait.id,
+      });
+    }
+
+    const externalCompleted = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.external_agent_completed",
+        entityType: "workflow_step_run",
+        entityId: completedStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: completedStep.nodeId,
+          attempt: completedStep.attempt,
+          issueId,
+          agentId: config.agentId,
+          heartbeatRunId: heartbeat.id,
+          externalRunId: envelope.externalRunId,
+          outcome: "succeeded",
+        },
+      },
+    );
+    const waitResolved = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.wait_resolved",
+        entityType: "workflow_wait",
+        entityId: resolvedWait.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: wait.nodeId,
+          kind: "external_agent_run",
+          issueId,
+          heartbeatRunId: heartbeat.id,
+          externalRunId: envelope.externalRunId,
+          outcome: "succeeded",
+        },
+      },
+    );
+    const stepCompleted = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.step_completed",
+        entityType: "workflow_step_run",
+        entityId: completedStep.id,
+        details: {
+          workflowRunId: run.id,
+          nodeId: completedStep.nodeId,
+          attempt: completedStep.attempt,
+          heartbeatRunId: heartbeat.id,
+        },
+      },
+    );
+    const runResumed = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_resumed",
+        entityType: "workflow_run",
+        entityId: runningRun.id,
+        details: {
+          workflowId: run.workflowId,
+          workflowRevisionId: run.workflowRevisionId,
+          reason: "external_agent_completed",
+          heartbeatRunId: heartbeat.id,
+          executionOwnerId: ownerId,
+        },
+      },
+    );
+    publications.push(
+      externalCompleted.publication,
+      waitResolved.publication,
+      stepCompleted.publication,
+      runResumed.publication,
+    );
+    return runningRun;
+  });
+  publishActivities(publications);
+
+  if (!resumed) return "raced";
+  await executeClaimedRun(db, resumed, actor, runtimeDeps);
+  return "recovered";
+}
+
 async function scheduleExternalAgentRunWait(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
