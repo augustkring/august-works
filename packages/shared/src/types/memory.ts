@@ -119,3 +119,85 @@ export interface MemoryCorrectionInput
 export interface MemoryRevokeInput {
   reason: string;
 }
+
+
+export interface MemoryBinding {
+  id: string;
+  companyId: string;
+  key: string;
+  name: string;
+  providerKey: string;
+  config: Record<string, unknown>;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface MemoryRecord {
+  id: string;
+  companyId: string;
+  bindingId: string;
+  providerKey: string;
+  memoryType: MemoryType;
+  scopeType: MemoryScopeType;
+  scopeId: string | null;
+  subjectType: string | null;
+  subjectId: string | null;
+  ownerAgentId: string | null;
+  title: string | null;
+  content: string;
+  summary: string | null;
+  reviewState: MemoryReviewState;
+  verificationState: MemoryVerificationState;
+  sensitivityLabel: EvidenceSensitivity;
+  importance: number;
+  confidenceScore: number;
+  validFrom: Date | null;
+  validUntil: Date | null;
+  observedAt: Date;
+  retentionPolicy: string;
+  expiresAt: Date | null;
+  retentionState: MemoryRetentionState;
+  supersedesRecordId: string | null;
+  supersededByRecordId: string | null;
+  revokedAt: Date | null;
+  revokedByActorType: "user" | "agent" | "system" | null;
+  revokedByActorId: string | null;
+  revocationReason: string | null;
+  createdByActorType: "user" | "agent" | "system";
+  createdByActorId: string;
+  createdByOperationId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+}
+
+export interface MemoryEvidence {
+  id: string;
+  companyId: string;
+  memoryRecordId: string;
+  sourceClass: EvidenceSourceClass;
+  sourceProvider: string;
+  sourceType: string;
+  sourceRef: string;
+  sourceVersion: string | null;
+  sourceUpdatedAt: Date | null;
+  observedAt: Date;
+  excerptHash: string;
+  citationJson: EvidenceCitation;
+  trustLevel: EvidenceTrustLevel;
+  supportsOrContradicts: MemoryEvidenceRelation;
+  createdAt: Date;
+}
+
+export interface MemoryRecordDetail {
+  record: MemoryRecord;
+  evidence: MemoryEvidence[];
+}
+
+export interface MemoryRecordListQuery {
+  reviewState?: MemoryReviewState;
+  memoryType?: MemoryType;
+  limit: number;
+}

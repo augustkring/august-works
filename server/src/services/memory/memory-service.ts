@@ -314,6 +314,73 @@ async function insertCandidate(
 
 export function memoryService(db: Db) {
   return {
+    listBindings: async (
+      companyId: string,
+      actor: MemoryMutationActor,
+    ) => {
+      requireHumanOrSystem(actor, "inspect");
+      await assertActorCompanyScope(db, companyId, actor);
+      return db
+        .select()
+        .from(memoryBindings)
+        .where(eq(memoryBindings.companyId, companyId))
+        .orderBy(memoryBindings.key);
+    },
+
+    listReviewable: async (
+      companyId: string,
+      input: {
+        reviewState?: "pending" | "accepted" | "rejected";
+        memoryType?: MemoryCandidateInputParsed["memoryType"];
+        limit: number;
+      },
+      actor: MemoryMutationActor,
+    ) => {
+      requireHumanOrSystem(actor, "inspect");
+      await assertActorCompanyScope(db, companyId, actor);
+      return db
+        .select()
+        .from(memoryRecords)
+        .where(
+          and(
+            eq(memoryRecords.companyId, companyId),
+            ne(memoryRecords.scopeType, "agent"),
+            isNull(memoryRecords.deletedAt),
+            ...(input.reviewState
+              ? [eq(memoryRecords.reviewState, input.reviewState)]
+              : []),
+            ...(input.memoryType
+              ? [eq(memoryRecords.memoryType, input.memoryType)]
+              : []),
+          ),
+        )
+        .orderBy(memoryRecords.updatedAt.desc())
+        .limit(input.limit);
+    },
+
+    getShared: async (
+      companyId: string,
+      recordId: string,
+      actor: MemoryMutationActor,
+    ) => {
+      requireHumanOrSystem(actor, "inspect");
+      await assertActorCompanyScope(db, companyId, actor);
+      const visible = await db
+        .select({ id: memoryRecords.id })
+        .from(memoryRecords)
+        .where(
+          and(
+            eq(memoryRecords.companyId, companyId),
+            eq(memoryRecords.id, recordId),
+            ne(memoryRecords.scopeType, "agent"),
+            isNull(memoryRecords.deletedAt),
+          ),
+        )
+        .then((rows) => rows[0] ?? null);
+      if (!visible) return null;
+      return getRecordDetail(db, companyId, visible.id);
+    },
+
     get: async (
       companyId: string,
       recordId: string,

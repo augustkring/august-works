@@ -235,3 +235,19 @@ export type MemoryCandidateInputParsed = z.infer<typeof memoryCandidateInputSche
 export type MemoryReviewInputParsed = z.infer<typeof memoryReviewInputSchema>;
 export type MemoryCorrectionInputParsed = z.infer<typeof memoryCorrectionInputSchema>;
 export type MemoryRevokeInputParsed = z.infer<typeof memoryRevokeInputSchema>;
+
+export const memoryRecordListQuerySchema = z
+  .object({
+    reviewState: z.enum(["pending", "accepted", "rejected"]).optional(),
+    memoryType: z.enum(MEMORY_TYPES).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(100),
+  })
+  .strict();
+
+export const memoryReviewReasonSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(2000).optional(),
+  })
+  .strict();
+
+export type MemoryRecordListQueryParsed = z.infer<typeof memoryRecordListQuerySchema>;
