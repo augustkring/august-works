@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import {
@@ -866,6 +868,171 @@ describePg("Workflow executor V1", () => {
       errorCode: "workflow_condition_reference_missing",
     });
   });
+
+  it("recovers after a real worker SIGKILL without duplicating an Agent Task side effect", async () => {
+    if (process.platform === "win32") return;
+
+    const seeded = await seedPublishedAgentTaskWorkflow({
+      waitForCompletion: false,
+    });
+    const fixturePath = fileURLToPath(
+      new URL(
+        "../../__tests__/fixtures/workflow-process-kill-worker.ts",
+        import.meta.url,
+      ),
+    );
+    const child = spawn(
+      process.execPath,
+      ["--import", "tsx", fixturePath],
+      {
+        env: {
+          ...process.env,
+          WORKFLOW_PROCESS_KILL_DATABASE_URL: tempDb!.connectionString,
+          WORKFLOW_PROCESS_KILL_COMPANY_ID: seeded.companyId,
+          WORKFLOW_PROCESS_KILL_WORKFLOW_ID: seeded.workflow.id,
+          WORKFLOW_PROCESS_KILL_USER_ID: seeded.userId,
+          WORKFLOW_PROCESS_KILL_IDEMPOTENCY_KEY: "process-kill-run",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+
+    let stdout = "";
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.stdout.setEncoding("utf8");
+
+    const ready = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(
+          new Error(
+            `workflow process-kill fixture did not reach its kill point: ${stderr}`,
+          ),
+        );
+      }, 15_000);
+      timer.unref?.();
+
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+        if (!stdout.includes("WORKFLOW_PROCESS_KILL_READY")) return;
+        clearTimeout(timer);
+        resolve();
+      });
+      child.once("exit", (code, signal) => {
+        if (stdout.includes("WORKFLOW_PROCESS_KILL_READY")) return;
+        clearTimeout(timer);
+        reject(
+          new Error(
+            `workflow process-kill fixture exited before kill point (code=${code}, signal=${signal}): ${stderr}`,
+          ),
+        );
+      });
+    });
+
+    try {
+      await ready;
+
+      const runBeforeKill = await db
+        .select()
+        .from(workflowRuns)
+        .where(
+          and(
+            eq(workflowRuns.companyId, seeded.companyId),
+            eq(workflowRuns.idempotencyKey, "process-kill-run"),
+          ),
+        )
+        .then((rows) => rows[0] ?? null);
+      expect(runBeforeKill).toMatchObject({
+        status: "running",
+      });
+
+      const tasksBeforeKill = await db
+        .select()
+        .from(issues)
+        .where(
+          and(
+            eq(issues.companyId, seeded.companyId),
+            eq(issues.originKind, "workflow_task"),
+            eq(issues.originRunId, runBeforeKill!.id),
+          ),
+        );
+      expect(tasksBeforeKill).toHaveLength(1);
+
+      child.kill("SIGKILL");
+      const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+        (resolve) => {
+          child.once("exit", (code, signal) => resolve({ code, signal }));
+        },
+      );
+      expect(exit.signal).toBe("SIGKILL");
+
+      // Advance only the durable lease clock so this test does not sleep for the
+      // full production lease. The process death itself above is real.
+      const recoveryNow = new Date();
+      const expiredAt = new Date(recoveryNow.getTime() - 1_000);
+      await db
+        .update(workflowRuns)
+        .set({
+          leaseExpiresAt: expiredAt,
+          ownerHeartbeatAt: expiredAt,
+          updatedAt: expiredAt,
+        })
+        .where(eq(workflowRuns.id, runBeforeKill!.id));
+
+      const heartbeat = fakeHeartbeat({
+        companyId: seeded.companyId,
+        agentId: seeded.agentId,
+      });
+      const recovery = await workflowExecutorService(db, {
+        heartbeat,
+      }).recoverExpiredRuns(20, recoveryNow);
+
+      expect(recovery).toMatchObject({
+        recovered: 1,
+        failedRunIds: [],
+      });
+
+      const recovered = await workflowExecutorService(db).getRun(
+        seeded.companyId,
+        runBeforeKill!.id,
+      );
+      expect(recovered?.run.status).toBe("succeeded");
+
+      const delegateAttempts = recovered!.steps
+        .filter((step) => step.nodeId === "delegate")
+        .sort((left, right) => left.attempt - right.attempt);
+      expect(delegateAttempts).toHaveLength(2);
+      expect(delegateAttempts[0]).toMatchObject({
+        attempt: 1,
+        status: "failed",
+        errorCode: "workflow_execution_interrupted",
+      });
+      expect(delegateAttempts[1]).toMatchObject({
+        attempt: 2,
+        status: "succeeded",
+      });
+
+      const tasksAfterRecovery = await db
+        .select()
+        .from(issues)
+        .where(
+          and(
+            eq(issues.companyId, seeded.companyId),
+            eq(issues.originKind, "workflow_task"),
+            eq(issues.originRunId, runBeforeKill!.id),
+          ),
+        );
+      expect(tasksAfterRecovery).toHaveLength(1);
+      expect(heartbeat.wakeup).toHaveBeenCalledTimes(1);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+      }
+    }
+  }, 30_000);
 
   it("recovers an expired run from the last succeeded checkpoint without replaying it", async () => {
     const seeded = await seedPublishedGraph({
