@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   agents,
+  authUsers,
   companies,
   companyMemberships,
   contextManifestItems,
@@ -54,6 +55,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
     await db.delete(agents);
+    await db.delete(authUsers);
     await db.delete(companies);
   });
 
@@ -70,6 +72,15 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       issuePrefix: `C${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: userId,
+    });
+    const userNow = new Date();
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Context Owner",
+      email: `context-${companyId}@example.test`,
+      emailVerified: true,
+      createdAt: userNow,
+      updatedAt: userNow,
     });
     await db.insert(companyMemberships).values({
       companyId,
