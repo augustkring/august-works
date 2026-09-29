@@ -6541,7 +6541,7 @@ async function requestWorkflowRunCancellation(
     if (!run) throw notFound("Workflow run not found");
 
     if (run.status === "cancelled") return run;
-    if (run.status === "succeeded" || run.status === "failed") {
+    if (workflowRunIsTerminal(run.status)) {
       throw conflict("Workflow run is already terminal", {
         code: "workflow_run_terminal",
         workflowRunId: run.id,
