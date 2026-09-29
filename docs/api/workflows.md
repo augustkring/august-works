@@ -49,7 +49,7 @@ PR 13 validates every draft node against a typed registry and company-scoped ref
 
 A registered node may be `ready` or `draft_only`. Publish fails closed with `workflow_node_invalid` / `node_not_publishable_yet` until the node's execution, authorization, retry/idempotency, and policy integration are implemented.
 
-`core.manual_trigger`, `core.condition`, bounded `core.wait`, `human.approval`, `work.create_task`, `agent.task`, and `agent.external` are publish-ready. Transform and Connector Action remain intentionally draft-only until their dependent implementation waves land. Agent Task with a non-null `expectedOutputSchema` remains publish-blocked until Tasks expose an authoritative structured-result channel. External Agent structured output is validated from the authoritative heartbeat/OpenClaw result channel instead.
+`core.manual_trigger`, `core.transform`, `core.condition`, bounded `core.wait`, `human.approval`, `work.create_task`, `agent.task`, and `agent.external` are publish-ready. Connector Action remains intentionally draft-only until its governed execution-time authorization and connector/tool integration path lands. Agent Task with a non-null `expectedOutputSchema` remains publish-blocked until Tasks expose an authoritative structured-result channel. External Agent structured output is validated from the authoritative heartbeat/OpenClaw result channel instead.
 
 A Condition may be terminal or may expose exactly one `true` and one `false` branch. Branch labels/source handles are part of the published graph contract; ambiguous or duplicate condition branches fail publish.
 
@@ -70,6 +70,9 @@ A Condition may be terminal or may expose exactly one `true` and one `false` bra
 - `workflow_condition_expression_invalid`
 - `workflow_condition_reference_missing`
 - `workflow_condition_type_invalid`
+- `workflow_transform_expression_invalid`
+- `workflow_transform_reference_missing`
+- `workflow_transform_interpolation_type_invalid`
 - `workflow_condition_branch_missing`
 - `workflow_checkpoint_invalid`
 - `workflow_checkpoint_path_conflict`
@@ -115,6 +118,8 @@ A Condition may be terminal or may expose exactly one `true` and one `false` bra
 ## Current execution boundary
 
 PR 16 introduced durable run/step records, manual-run idempotency and lease-based ownership. PR 18 adds deterministic `core.condition` execution and explicit true/false branch selection.
+
+Transform mappings are deterministic and sandbox-free. Each output field is either a literal string, a full `{{...}}` reference that preserves the referenced JSON value, or a string template that interpolates scalar references. References may read only the direct upstream `input`, original `trigger`, declared `variables`, or prior `steps` outputs. Missing references, malformed delimiters, unsupported roots, or object/array interpolation inside a string fail closed. Transform never executes host JavaScript and never invokes an LLM.
 
 Condition expressions intentionally do not execute host JavaScript and never call an LLM. The current grammar supports boolean literals, boolean references, strict equality/inequality and finite numeric ordered comparisons over `trigger`, `variables` and prior `steps` outputs. Missing references or invalid runtime types fail closed into a durable failed step/run.
 
