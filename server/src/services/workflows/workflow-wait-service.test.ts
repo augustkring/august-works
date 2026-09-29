@@ -34,6 +34,13 @@ describePg("Workflow wait service", () => {
   afterEach(async () => {
     await db.delete(workflowWaits);
     await db.delete(workflowRuns);
+    await db
+      .update(workflows)
+      .set({
+        publishedRevisionId: null,
+        draftRevisionId: null,
+        updatedAt: new Date(),
+      });
     await db.delete(workflowRevisions);
     await db.delete(workflows);
     await db.delete(companyMemberships);

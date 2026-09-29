@@ -53,6 +53,13 @@ describePg("Workflow executor V1", () => {
     await db.delete(workflowStepRuns);
     await db.delete(heartbeatRuns);
     await db.delete(workflowRuns);
+    await db
+      .update(workflows)
+      .set({
+        publishedRevisionId: null,
+        draftRevisionId: null,
+        updatedAt: new Date(),
+      });
     await db.delete(workflowRevisions);
     await db.delete(workflows);
     await db.delete(principalPermissionGrants);
@@ -258,12 +265,13 @@ describePg("Workflow executor V1", () => {
       permissions: {},
     });
 
-    const [workflow] = await db.insert(workflows).values({
+    const actor = { principal: { type: "user" as const, userId } };
+    const svc = workflowService(db);
+    const created = await svc.create(
       companyId,
-      name: "External agent workflow",
-      status: "active",
-      createdByUserId: userId,
-    }).returning();
+      { name: "External agent workflow" },
+      actor,
+    );
 
     const graph: WorkflowGraphV1 = {
       version: 1,
@@ -308,31 +316,38 @@ describePg("Workflow executor V1", () => {
       variables: [],
       settings: {},
     };
-    const [revision] = await db.insert(workflowRevisions).values({
+
+    const updated = await svc.updateDraft(
       companyId,
-      workflowId: workflow!.id,
-      revisionNumber: 1,
-      state: "published",
-      graph,
-      createdByUserId: userId,
-    }).returning();
-    await db
-      .update(workflows)
-      .set({
-        publishedRevisionId: revision!.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(workflows.id, workflow!.id));
+      created.id,
+      {
+        expectedRevisionId: created.draftRevisionId!,
+        graph,
+      },
+      actor,
+    );
+    const published = await svc.publish(
+      companyId,
+      created.id,
+      {
+        expectedDraftRevisionId: updated.draftRevisionId!,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      },
+      actor,
+    );
+    const revision = await db
+      .select()
+      .from(workflowRevisions)
+      .where(eq(workflowRevisions.id, published.publishedRevisionId!))
+      .then((rows) => rows[0]!);
 
     return {
       companyId,
       userId,
       agentId,
-      workflow: {
-        ...workflow!,
-        publishedRevisionId: revision!.id,
-      },
-      revision: revision!,
+      workflow: published,
+      revision,
     };
   }
 
