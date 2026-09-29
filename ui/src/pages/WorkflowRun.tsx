@@ -91,6 +91,8 @@ function waitDescription(wait: WorkflowWait) {
       return "Waiting for an authenticated external callback.";
     case "task_completion":
       return "Waiting for the linked task to reach its completion state.";
+    case "external_agent_run":
+      return "Waiting for the external OpenClaw agent run to finish.";
   }
 }
 
