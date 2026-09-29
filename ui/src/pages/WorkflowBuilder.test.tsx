@@ -14,6 +14,10 @@ import type {
 import { ApiError } from "@/api/client";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 
+const agentsApiMock = vi.hoisted(() => ({
+  list: vi.fn(),
+}));
+
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
   capabilities: vi.fn(),
@@ -25,6 +29,7 @@ const apiMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/workflows", () => ({ workflowsApi: apiMock }));
+vi.mock("@/api/agents", () => ({ agentsApi: agentsApiMock }));
 vi.mock("@/context/CompanyContext", () => ({
   useCompany: () => ({ selectedCompanyId: "company-1" }),
 }));
@@ -157,6 +162,26 @@ describe("WorkflowBuilder", () => {
       query: "",
       candidates: [manualCapability],
     });
+    agentsApiMock.list.mockResolvedValue([
+      {
+        id: "openclaw-agent-1",
+        companyId: "company-1",
+        name: "OpenClaw Research",
+        role: "research",
+        title: "External Research",
+        status: "idle",
+        adapterType: "openclaw_gateway",
+      },
+      {
+        id: "native-agent-1",
+        companyId: "company-1",
+        name: "Native Agent",
+        role: "research",
+        title: "Native Research",
+        status: "idle",
+        adapterType: "paperclip_runner",
+      },
+    ]);
   });
 
   afterEach(() => {
@@ -344,6 +369,140 @@ describe("WorkflowBuilder", () => {
       expect.stringMatching(/^ui-run-/),
     );
     expect(container.textContent).toContain("Run destination");
+
+    flushSync(() => root.unmount());
+  });
+
+  it("configures External Agent only through governed OpenClaw bindings", async () => {
+    const externalDefinition: WorkflowNodeDefinitionDescriptor = {
+      type: "agent.external",
+      version: 1,
+      category: "agent",
+      displayName: "External Agent",
+      description: "Run bounded work through OpenClaw",
+      inputSchema: { type: "object" },
+      outputSchema: { type: "object" },
+      configSchema: { type: "object" },
+      sideEffectClass: "write",
+      riskDefault: "C3",
+      authorizationRequirements: [
+        { permission: "tasks:assign", timing: "execution" },
+      ],
+      timeoutDefaultSeconds: 120,
+      retryPolicyDefault: {
+        mode: "exponential",
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        maxDelayMs: 5000,
+      },
+      idempotencyStrategy: "workflow_step_key",
+      cancellationSupport: "cooperative",
+      testMode: "mock_or_sandbox",
+      failureOutputs: [],
+      auditEvents: [
+        "workflow.external_agent_requested",
+        "workflow.external_agent_dispatched",
+        "workflow.external_agent_completed",
+      ],
+      uiComponent: "external_agent",
+      accessibilityContract: {
+        label: "External Agent",
+        description: "Run bounded work through OpenClaw",
+        supportsKeyboardInsert: true,
+        supportsOutlineEdit: true,
+      },
+      publishState: "ready",
+      publishBlockedReason: null,
+    };
+    const externalCapability: WorkflowCapabilityCandidate = {
+      id: "agent:openclaw-agent-1",
+      kind: "agent",
+      title: "OpenClaw Research",
+      description: "research",
+      nodeType: "agent.external",
+      configTemplate: {
+        agentId: "openclaw-agent-1",
+        objective: "Research the account",
+        structuredInput: { accountId: "acme" },
+        expectedOutputSchema: null,
+        timeoutSeconds: 120,
+        allowedCapabilityScope: "binding_grants",
+        fallbackPolicy: "fail",
+      },
+      executionMode: "agent",
+      sideEffectClass: "write",
+      riskClass: "C3",
+      inputSchema: { type: "object" },
+      outputSchema: { type: "object" },
+      requiredPermissions: ["tasks:assign"],
+      availability: { status: "available", reason: null },
+      operationalProfile: {
+        reliabilityBasis: "agent_status",
+        reliabilitySignal: "idle",
+        latencyProfile: null,
+        costProfile: "model_or_agent_runtime",
+      },
+      publishState: "ready",
+      publishBlockedReason: null,
+      source: {
+        agentId: "openclaw-agent-1",
+        adapterType: "openclaw_gateway",
+        mediation: "external_agent",
+      },
+    };
+
+    apiMock.nodeRegistry.mockResolvedValue([...registry, externalDefinition]);
+    apiMock.capabilitySearch.mockResolvedValue({
+      query: "",
+      candidates: [manualCapability, externalCapability],
+    });
+
+    const root = createRoot(container);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    flushSync(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/workflows/workflow-1"]}>
+            <Routes>
+              <Route
+                path="/workflows/:workflowId"
+                element={<WorkflowBuilder />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+
+    const addButton = container.querySelector(
+      'button[aria-label="Add OpenClaw Research"]',
+    ) as HTMLButtonElement | null;
+    expect(addButton).toBeTruthy();
+    flushSync(() => addButton!.click());
+    await flush();
+
+    expect(container.textContent).toContain("OpenClaw agent binding");
+    expect(container.textContent).toContain("OpenClaw Research");
+    expect(container.textContent).not.toContain("Native Agent");
+    expect(container.textContent).toContain("Objective");
+    expect(
+      container.querySelector(
+        'textarea[aria-label="External Agent structured input JSON"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(
+        'textarea[aria-label="External Agent expected output schema JSON"]',
+      ),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("Timeout (seconds)");
+    expect(container.textContent).toContain(
+      "Parent-agent credentials, hidden runtime state, Foundation",
+    );
+    expect(container.textContent).not.toContain("ws://127.0.0.1:18789");
 
     flushSync(() => root.unmount());
   });
