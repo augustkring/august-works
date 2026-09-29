@@ -5755,6 +5755,43 @@ async function executeWorkflowGraph(
             });
           }
         }
+      } else if (current.type === "agent.external") {
+        const config = externalAgentNodeConfig(current);
+        const prepared = await prepareRunnableStep(
+          db,
+          ownedRun,
+          current.id,
+          {
+            agentId: config.agentId,
+            objective: config.objective,
+            structuredInput: config.structuredInput,
+            expectedOutputSchema: config.expectedOutputSchema,
+            timeoutSeconds: config.timeoutSeconds,
+            allowedCapabilityScope: config.allowedCapabilityScope,
+            fallbackPolicy: config.fallbackPolicy,
+          },
+          actor,
+        );
+        if (prepared.checkpoint) {
+          output = prepared.checkpoint.outputJson;
+        } else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) {
+            throw new WorkflowCheckpointError(
+              "workflow_checkpoint_state_invalid",
+              `External Agent ${current.id} produced no runnable attempt`,
+            );
+          }
+          await scheduleExternalAgentRunWait(
+            db,
+            ownedRun,
+            current,
+            runningStep,
+            actor,
+            runtimeDeps,
+          );
+          return;
+        }
       } else if (current.type === "agent.task") {
         const config = agentTaskNodeConfig(current);
         const prepared = await prepareRunnableStep(
