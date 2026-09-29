@@ -342,11 +342,10 @@ describePg("Workflow executor V1", () => {
   }) {
     const runId = input.runId ?? randomUUID();
     return {
-      wakeup: vi.fn(async (agentId: string, options: {
-        source?: string;
-        triggerDetail?: string;
-        contextSnapshot?: Record<string, unknown>;
-      }) => {
+      wakeup: vi.fn(async (
+        agentId: string,
+        options: Parameters<IssueAssignmentWakeupDeps["wakeup"]>[1],
+      ) => {
         await db
           .insert(heartbeatRuns)
           .values({
