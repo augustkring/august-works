@@ -24,6 +24,13 @@ import {
 } from "./context-authority.js";
 import { fitEvidenceToBudget } from "./context-budget.js";
 import { contextManifestService } from "./context-manifest.js";
+import {
+  connectedKnowledgeContextProvider,
+  createConnectedKnowledgeRegistry,
+} from "../knowledge/connected-knowledge.js";
+import {
+  slackLiveConnectedKnowledgeProvider,
+} from "../knowledge/slack-live-connected-knowledge.js";
 
 export const DEFAULT_CONTEXT_TOTAL_DEADLINE_MS = 1_500;
 export const DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS = 900;
@@ -510,6 +517,31 @@ function taskProvider(db: Db): ContextProvider {
   };
 }
 
+export function defaultConnectedKnowledgeContextProviders(
+  db: Db,
+  input: AssembleContextInput,
+): ContextProvider[] {
+  if (
+    !input.runId ||
+    !input.issueId ||
+    !input.responsibleUserId?.trim()
+  ) {
+    return [];
+  }
+
+  const registry = createConnectedKnowledgeRegistry([
+    slackLiveConnectedKnowledgeProvider(db),
+  ]);
+
+  return [
+    connectedKnowledgeContextProvider(
+      registry,
+      "slack-live",
+      { requirement: "optional" },
+    ),
+  ];
+}
+
 export function contextEngineService(db: Db, options: { providers?: ContextProvider[] } = {}) {
   const manifests = contextManifestService(db);
   const access = accessService(db);
@@ -556,6 +588,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
       const providers = options.providers ?? [
         ...(input.issueId ? [taskProvider(db)] : []),
         ...(input.includeFoundation === false ? [] : [foundationProvider(db)]),
+        ...defaultConnectedKnowledgeContextProviders(db, input),
       ];
       const providerResult = await runContextProviders(providers, input, deadlineAt);
       const eligibility = filterEligibleEvidence(dedupeEvidence(providerResult.evidence), {

@@ -5,6 +5,41 @@ import * as caseSchemas from "./cases-schemas.js";
 import * as sharedSchemas from "@paperclipai/shared";
 
 export const experimentalApiPaths: readonly [string, string, z.ZodTypeAny | undefined][] = [
+  // August Works V4 Foundation.
+  ["get", "/api/companies/{companyId}/foundation", undefined],
+  ["get", "/api/companies/{companyId}/foundation/capabilities", undefined],
+  ["get", "/api/companies/{companyId}/foundation/search", undefined],
+  ["post", "/api/companies/{companyId}/foundation", sharedSchemas.createFoundationDocumentSchema],
+  ["get", "/api/companies/{companyId}/foundation/{foundationDocumentId}", undefined],
+  ["patch", "/api/companies/{companyId}/foundation/{foundationDocumentId}/draft", sharedSchemas.updateFoundationDraftSchema],
+  ["post", "/api/companies/{companyId}/foundation/{foundationDocumentId}/submit", sharedSchemas.transitionFoundationDocumentSchema],
+  ["post", "/api/companies/{companyId}/foundation/{foundationDocumentId}/approve", sharedSchemas.transitionFoundationDocumentSchema],
+  ["post", "/api/companies/{companyId}/foundation/{foundationDocumentId}/reject", sharedSchemas.transitionFoundationDocumentSchema],
+  ["post", "/api/companies/{companyId}/foundation/{foundationDocumentId}/archive", undefined],
+  ["get", "/api/companies/{companyId}/foundation/{foundationDocumentId}/revisions", undefined],
+  ["get", "/api/companies/{companyId}/foundation/{foundationDocumentId}/proposals", undefined],
+  ["post", "/api/companies/{companyId}/foundation/{foundationDocumentId}/proposals", sharedSchemas.createFoundationChangeProposalSchema],
+  ["post", "/api/companies/{companyId}/foundation/{foundationDocumentId}/proposals/{proposalId}/accept", undefined],
+  ["post", "/api/companies/{companyId}/foundation/{foundationDocumentId}/proposals/{proposalId}/reject", undefined],
+
+  // August Works V4 Workflows.
+  ["get", "/api/companies/{companyId}/workflows/capabilities", undefined],
+  ["get", "/api/companies/{companyId}/workflows/capability-search", undefined],
+  ["post", "/api/companies/{companyId}/workflows/data-selector", sharedSchemas.workflowDataSelectorRequestSchema],
+  ["get", "/api/companies/{companyId}/workflows/node-registry", undefined],
+  ["get", "/api/companies/{companyId}/workflows", undefined],
+  ["post", "/api/companies/{companyId}/workflows", sharedSchemas.createWorkflowSchema],
+  ["get", "/api/companies/{companyId}/workflows/{workflowId}/runs", undefined],
+  ["post", "/api/companies/{companyId}/issues/{issueId}/workflows/{workflowId}/run", sharedSchemas.startWorkflowRunSchema],
+  ["post", "/api/companies/{companyId}/workflows/{workflowId}/run", sharedSchemas.startWorkflowRunSchema],
+  ["get", "/api/companies/{companyId}/workflow-runs/{runId}", undefined],
+  ["post", "/api/companies/{companyId}/workflow-runs/{runId}/cancel", sharedSchemas.cancelWorkflowRunSchema],
+  ["post", "/api/companies/{companyId}/workflow-runs/{runId}/retry", sharedSchemas.retryWorkflowRunSchema],
+  ["get", "/api/companies/{companyId}/workflows/{workflowId}", undefined],
+  ["get", "/api/companies/{companyId}/workflows/{workflowId}/revisions", undefined],
+  ["patch", "/api/companies/{companyId}/workflows/{workflowId}/draft", sharedSchemas.updateWorkflowDraftSchema],
+  ["post", "/api/companies/{companyId}/workflows/{workflowId}/publish", sharedSchemas.publishWorkflowSchema],
+
   ["get", "/api/companies/{companyId}/pipelines", undefined],
   ["get", "/api/companies/{companyId}/pipelines-attention", undefined],
   ["get", "/api/companies/{companyId}/case-events", undefined],
@@ -95,6 +130,9 @@ export const experimentalApiPaths: readonly [string, string, z.ZodTypeAny | unde
 
 // Query contracts shared with the runtime parser where one exists.
 export const experimentalApiQueries: Record<string, z.ZodObject<any>> = {
+  "GET /api/companies/{companyId}/foundation/search": sharedSchemas.foundationSearchQuerySchema,
+  "GET /api/companies/{companyId}/workflows/capability-search": sharedSchemas.workflowCapabilitySearchQuerySchema,
+  "GET /api/companies/{companyId}/workflows/{workflowId}/runs": sharedSchemas.workflowRunListQuerySchema,
   "GET /api/companies/{companyId}/cases": caseSchemas.listCasesQuerySchema,
   "GET /api/cases/{id}/events": caseSchemas.listEventsQuerySchema,
   "GET /api/cases/{caseId}/automation/retry-plan": pipelineSchemas.retryAutomationQuerySchema,

@@ -97,6 +97,25 @@ describe("Slack live Connected Knowledge", () => {
     expect(d.searchAuthorizedResource).not.toHaveBeenCalled();
   });
 
+  it("treats an absent implicit Slack source as empty optional evidence", async () => {
+    const req = request({ subjectRefs: [] });
+    const d = deps();
+    d.listAuthorizedResources.mockResolvedValue([]);
+    const registry = createConnectedKnowledgeRegistry([
+      createSlackLiveConnectedKnowledgeProvider(d.value),
+    ]);
+
+    const result = await registry.retrieve({
+      providerKey: "slack-live",
+      request: req,
+      signal: new AbortController().signal,
+      deadlineAt: Date.now() + 1_000,
+    });
+
+    expect(result.evidence).toEqual([]);
+    expect(d.searchAuthorizedResource).not.toHaveBeenCalled();
+  });
+
   it("uses Slack subject refs only to narrow authorized channels, never to widen them", async () => {
     const req = request({
       subjectRefs: ["slack:channel:C999"],

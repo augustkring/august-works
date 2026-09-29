@@ -281,16 +281,18 @@ export function createSlackLiveConnectedKnowledgeProvider(
         };
       }
 
-      if (resources.length === 0) {
+      if (resources.length === 0 && selection.explicit) {
         return {
           allowed: false,
-          code: selection.explicit ? "scope_denied" : "permission_denied",
-          reason: selection.explicit
-            ? "The requested Slack channel is outside the current task and requester scope."
-            : "No active Slack source is authorized for this task and requester.",
+          code: "scope_denied",
+          reason:
+            "The requested Slack channel is outside the current task and requester scope.",
         };
       }
 
+      // Slack is an optional live source. If the current task did not explicitly
+      // request Slack and has no authorized Slack origin, admit an empty scope
+      // rather than turning ordinary non-Slack task context into a 403.
       const now = Date.now();
       return {
         allowed: true,
@@ -427,13 +429,13 @@ function contextBoundFetch(
   };
 }
 
-function parseSlackSearchResult(input: {
-  channelInfo: unknown;
-  searchResult: unknown;
-}): SlackLiveKnowledgeSearchResult {
-  const info = asRecord(input.channelInfo);
-  const channel = asRecord(info?.channel);
-  const search = asRecord(input.searchResult);
+function parseSlackSearchResult(
+  searchResult: unknown,
+): SlackLiveKnowledgeSearchResult {
+  const search = asRecord(searchResult);
+  const inspected = Array.isArray(search?.inspected)
+    ? asRecord(search.inspected[0])
+    : null;
   const rawMatches = Array.isArray(search?.matches)
     ? search.matches
     : [];
@@ -453,9 +455,9 @@ function parseSlackSearchResult(input: {
   });
 
   return {
-    channelName: stringOrNull(channel?.name),
-    privateChannel: channel?.private === true,
-    directMessage: channel?.direct === true,
+    channelName: stringOrNull(inspected?.name),
+    privateChannel: inspected?.private === true,
+    directMessage: inspected?.direct === true,
     retrievalMode: stringOrNull(search?.mode) ?? "bounded_history",
     exhaustive: search?.exhaustive === true,
     coverage: stringOrNull(search?.limitation) ??
@@ -506,16 +508,6 @@ export function slackLiveConnectedKnowledgeProvider(
         endpointId: resource.endpointId,
       };
 
-      const channelInfo = await executeSlackTool(
-        db,
-        binding,
-        "slack_channel_info",
-        {
-          endpointId: resource.endpointId,
-          channel: resource.channelId,
-        },
-        boundFetch,
-      );
       const searchResult = await executeSlackTool(
         db,
         binding,
@@ -529,10 +521,7 @@ export function slackLiveConnectedKnowledgeProvider(
         boundFetch,
       );
 
-      return parseSlackSearchResult({
-        channelInfo,
-        searchResult,
-      });
+      return parseSlackSearchResult(searchResult);
     },
   });
 }

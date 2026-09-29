@@ -320,7 +320,7 @@ describePg("Workflow service", () => {
     });
   });
 
-  it("fails closed when a registered draft-only node is not ready to publish", async () => {
+  it("publishes a registered deterministic Transform node through the service", async () => {
     const company = await seedCompany("Alpha");
     const svc = workflowService(db);
     const created = await createWorkflow(company.id, company.userId);
@@ -331,14 +331,23 @@ describePg("Workflow service", () => {
         expectedRevisionId: created.draftRevisionId!,
         graph: {
           version: 1,
-          nodes: [{
-            id: "transform",
-            type: "core.transform",
-            name: "Transform",
-            position: { x: 0, y: 0 },
-            config: { mapping: { normalized: "{{trigger.value}}" } },
-          }],
-          edges: [],
+          nodes: [
+            {
+              id: "start",
+              type: "core.manual_trigger",
+              name: "Start",
+              position: { x: 0, y: 0 },
+              config: {},
+            },
+            {
+              id: "transform",
+              type: "core.transform",
+              name: "Transform",
+              position: { x: 180, y: 0 },
+              config: { mapping: { normalized: "{{trigger.value}}" } },
+            },
+          ],
+          edges: [{ id: "e1", source: "start", target: "transform" }],
           variables: [],
           settings: {},
         },
@@ -346,27 +355,24 @@ describePg("Workflow service", () => {
       actor(company.userId),
     );
 
-    await expect(
-      svc.publish(
-        company.id,
-        created.id,
-        {
-          expectedDraftRevisionId: updated.draftRevisionId!,
-          expectedPublishedRevisionId: null,
-          approvalId: null,
-        },
-        actor(company.userId),
-      ),
-    ).rejects.toMatchObject({
-      status: 422,
-      details: expect.objectContaining({
-        code: "workflow_node_invalid",
-        reason: "node_not_publishable_yet",
-        nodeType: "core.transform",
-        blockedReason: "expression_engine_not_ready",
-      }),
-    });
+    const published = await svc.publish(
+      company.id,
+      created.id,
+      {
+        expectedDraftRevisionId: updated.draftRevisionId!,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      },
+      actor(company.userId),
+    );
+
+    expect(published.publishedRevisionId).toBe(updated.draftRevisionId);
+    expect(published.publishedRevision?.graph.nodes).toEqual([
+      expect.objectContaining({ id: "start", type: "core.manual_trigger" }),
+      expect.objectContaining({ id: "transform", type: "core.transform" }),
+    ]);
   });
+
   it("rejects direct mutation of an immutable workflow revision snapshot", async () => {
     const company = await seedCompany("Alpha");
     const created = await createWorkflow(company.id, company.userId);

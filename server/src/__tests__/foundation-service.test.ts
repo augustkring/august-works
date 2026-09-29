@@ -382,6 +382,8 @@ describeEmbeddedPostgres("Foundation service", () => {
       .from(foundationChangeProposals)
       .where(eq(foundationChangeProposals.id, proposal.id));
     expect(storedProposal?.status).toBe("superseded");
+    expect((await svc.get(company.id, draft.id))?.body).toBe("Current draft");
+  });
 
   it("keeps section hashes stable across revisions and searches approved truth only", async () => {
     const company = await seedCompany("Alpha");
@@ -476,8 +478,6 @@ describeEmbeddedPostgres("Foundation service", () => {
       limit: 10,
       scope: "approved",
     })).toHaveLength(1);
-  });
-    expect((await svc.get(company.id, draft.id))?.body).toBe("Current draft");
   });
 
   it("never returns another company's indexed sections", async () => {

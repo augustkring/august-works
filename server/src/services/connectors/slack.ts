@@ -325,7 +325,7 @@ export async function executeSlackTool(
     const matches: unknown[] = [];
     const inspected: unknown[] = [];
     for (const channel of channels) {
-      await readable(channel);
+      const authorizedChannel = await readable(channel);
       const result = await api("conversations.history", {
         channel,
         limit: 100,
@@ -367,6 +367,12 @@ export async function executeSlackTool(
       );
       inspected.push({
         channel,
+        name:
+          typeof authorizedChannel.name === "string"
+            ? authorizedChannel.name
+            : null,
+        private: authorizedChannel.is_private === true,
+        direct: authorizedChannel.is_im === true,
         matched: selected.length,
         omittedMatches: found.length - selected.length,
         ...(found.length > selected.length
