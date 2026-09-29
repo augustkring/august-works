@@ -229,12 +229,44 @@ export const memoryRevokeInputSchema = z
   })
   .strict();
 
+export const memoryPrivateInputSchema = memoryCandidateBaseSchema
+  .omit({
+    scope: true,
+    ownerAgentId: true,
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    refineMemoryEvidenceAndDates(value, ctx);
+  });
+
+export const sharedMemoryScopeSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("company"), id: z.null() }).strict(),
+  z.object({ type: z.literal("project"), id: z.string().guid() }).strict(),
+  z
+    .object({
+      type: z.literal("subject"),
+      id: z.string().trim().min(1).max(500),
+    })
+    .strict(),
+]);
+
+export const memoryShareInputSchema = z
+  .object({
+    targetBindingId: z.string().guid(),
+    targetScope: sharedMemoryScopeSchema,
+    reason: z.string().trim().min(1).max(2000),
+    createdByOperationId: nullableBounded(500).default(null),
+  })
+  .strict();
+
 export type MemoryBindingInputParsed = z.infer<typeof memoryBindingInputSchema>;
 export type MemoryBindingTargetInputParsed = z.infer<typeof memoryBindingTargetInputSchema>;
 export type MemoryCandidateInputParsed = z.infer<typeof memoryCandidateInputSchema>;
 export type MemoryReviewInputParsed = z.infer<typeof memoryReviewInputSchema>;
 export type MemoryCorrectionInputParsed = z.infer<typeof memoryCorrectionInputSchema>;
 export type MemoryRevokeInputParsed = z.infer<typeof memoryRevokeInputSchema>;
+export type MemoryPrivateInputParsed = z.infer<typeof memoryPrivateInputSchema>;
+export type MemoryShareInputParsed = z.infer<typeof memoryShareInputSchema>;
 
 export const memoryRecordListQuerySchema = z
   .object({

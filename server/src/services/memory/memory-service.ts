@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, desc, eq, gt, isNull, lte, ne, or } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -15,8 +16,10 @@ import {
   memoryBindingTargetInputSchema,
   memoryCandidateInputSchema,
   memoryCorrectionInputSchema,
+  memoryPrivateInputSchema,
   memoryReviewInputSchema,
   memoryRevokeInputSchema,
+  memoryShareInputSchema,
   type ExecutionPrincipal,
   type MemoryCandidateInputParsed,
 } from "@paperclipai/shared";
@@ -133,7 +136,12 @@ function targetMatchesScope(
   target: typeof memoryBindingTargets.$inferSelect,
   input: MemoryCandidateInputParsed,
 ) {
-  if (target.targetType === "company") return target.targetId === companyId;
+  if (target.targetType === "company") {
+    return (
+      target.targetId === companyId &&
+      (input.scope.type === "company" || input.scope.type === "subject")
+    );
+  }
   if (target.targetType === "agent") {
     return input.scope.type === "agent" && target.targetId === input.scope.id;
   }
@@ -178,6 +186,35 @@ async function assertAgentPrivateOwnership(
   ) {
     throw forbidden("An agent can only create private memory for itself");
   }
+}
+
+function assertPrivateMemoryWriter(
+  ownerAgentId: string,
+  actor: MemoryMutationActor,
+) {
+  if (actor.principal.type === "system") return;
+  if (
+    actor.principal.type === "agent" &&
+    actor.principal.agentId === ownerAgentId
+  ) {
+    return;
+  }
+  throw forbidden("Private agent memory can only be written by its owning agent or the system", {
+    code: "private_memory_write_denied",
+    ownerAgentId,
+  });
+}
+
+function privateMemoryEvidenceTrust(
+  verificationState: string,
+): "high" | "medium" | "low" {
+  if (
+    verificationState === "human_verified" ||
+    verificationState === "system_verified"
+  ) {
+    return "high";
+  }
+  return verificationState === "corroborated" ? "medium" : "low";
 }
 
 function recordDetail(
@@ -245,6 +282,14 @@ async function insertCandidate(
   input: MemoryCandidateInputParsed,
   actor: MemoryMutationActor,
   supersedesRecordId: string | null,
+  state: {
+    reviewState?: "pending" | "accepted";
+    verificationState?:
+      | "unverified"
+      | "corroborated"
+      | "human_verified"
+      | "system_verified";
+  } = {},
 ) {
   await assertActorCompanyScope(tx, companyId, actor);
   await assertScopeReferences(tx, companyId, input);
@@ -268,8 +313,8 @@ async function insertCandidate(
       title: input.title,
       content: input.content,
       summary: input.summary,
-      reviewState: "pending",
-      verificationState: "unverified",
+      reviewState: state.reviewState ?? "pending",
+      verificationState: state.verificationState ?? "unverified",
       sensitivityLabel: input.sensitivity,
       importance: input.importance,
       confidenceScore: input.confidenceScore,
@@ -531,6 +576,179 @@ export function memoryService(db: Db) {
           ),
         )
         .then((rows) => rows[0]!);
+    },
+
+    createPrivateMemory: async (
+      companyId: string,
+      ownerAgentId: string,
+      rawInput: unknown,
+      actor: MemoryMutationActor,
+    ) => {
+      const parsed = memoryPrivateInputSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid private memory", parsed.error.issues);
+      }
+      assertPrivateMemoryWriter(ownerAgentId, actor);
+
+      const candidate: MemoryCandidateInputParsed = {
+        ...parsed.data,
+        scope: { type: "agent", id: ownerAgentId },
+        ownerAgentId,
+      };
+
+      const publications: ActivityPublication[] = [];
+      const record = await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        const created = await insertCandidate(
+          txDb,
+          companyId,
+          candidate,
+          actor,
+          null,
+          {
+            reviewState: "accepted",
+            verificationState: "unverified",
+          },
+        );
+        publications.push(
+          await persistMemoryActivity(txDb, actor, {
+            companyId,
+            action: "memory.private_created",
+            recordId: created.id,
+            details: {
+              ownerAgentId,
+              memoryType: created.memoryType,
+            },
+          }),
+        );
+        return created;
+      });
+      publications.forEach(publishActivity);
+      return (await getRecordDetail(db, companyId, record.id))!;
+    },
+
+    sharePrivateMemory: async (
+      companyId: string,
+      recordId: string,
+      rawInput: unknown,
+      actor: MemoryMutationActor,
+    ) => {
+      const parsed = memoryShareInputSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid private memory share", parsed.error.issues);
+      }
+
+      const publications: ActivityPublication[] = [];
+      const shared = await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await assertActorCompanyScope(txDb, companyId, actor);
+
+        const source = await txDb
+          .select()
+          .from(memoryRecords)
+          .where(
+            and(
+              eq(memoryRecords.companyId, companyId),
+              eq(memoryRecords.id, recordId),
+              eq(memoryRecords.scopeType, "agent"),
+              isNull(memoryRecords.deletedAt),
+            ),
+          )
+          .for("update")
+          .then((rows) => rows[0] ?? null);
+        if (!source) throw notFound("Private memory record not found");
+
+        assertPrivateMemoryReadAllowed(source, actor);
+        const now = new Date();
+        if (
+          source.reviewState !== "accepted" ||
+          source.retentionState !== "active" ||
+          source.revokedAt ||
+          source.supersededByRecordId ||
+          (source.validFrom && source.validFrom.getTime() > now.getTime()) ||
+          (source.validUntil && source.validUntil.getTime() <= now.getTime()) ||
+          (source.expiresAt && source.expiresAt.getTime() <= now.getTime())
+        ) {
+          throw conflict("Only current active private memory can be shared", {
+            code: "private_memory_not_shareable",
+          });
+        }
+        if (!source.ownerAgentId) {
+          throw conflict("Private memory owner is missing", {
+            code: "private_memory_owner_missing",
+          });
+        }
+
+        const candidate: MemoryCandidateInputParsed = {
+          bindingId: parsed.data.targetBindingId,
+          memoryType: source.memoryType as MemoryCandidateInputParsed["memoryType"],
+          scope: parsed.data.targetScope,
+          subject:
+            source.subjectType && source.subjectId
+              ? { type: source.subjectType, id: source.subjectId }
+              : null,
+          ownerAgentId: null,
+          title: source.title,
+          content: source.content,
+          summary: source.summary,
+          sensitivity:
+            source.sensitivityLabel as MemoryCandidateInputParsed["sensitivity"],
+          importance: source.importance,
+          confidenceScore: source.confidenceScore,
+          validFrom: source.validFrom?.toISOString() ?? null,
+          validUntil: source.validUntil?.toISOString() ?? null,
+          observedAt: source.observedAt.toISOString(),
+          retentionPolicy: source.retentionPolicy,
+          expiresAt: source.expiresAt?.toISOString() ?? null,
+          createdByOperationId: parsed.data.createdByOperationId,
+          metadata: {
+            promotedFromPrivateRecordId: source.id,
+            promotedFromOwnerAgentId: source.ownerAgentId,
+            promotionReason: parsed.data.reason,
+          },
+          evidence: [
+            {
+              sourceClass: "private_memory",
+              sourceProvider: "august_works_memory",
+              sourceType: "memory_record",
+              sourceRef: `memory://private/${source.id}`,
+              sourceVersion: source.updatedAt.toISOString(),
+              sourceUpdatedAt: source.updatedAt.toISOString(),
+              observedAt: now.toISOString(),
+              excerptHash: createHash("sha256")
+                .update(source.content)
+                .digest("hex"),
+              citation: { label: "Agent-private memory" },
+              trustLevel: privateMemoryEvidenceTrust(source.verificationState),
+              relation: "supports",
+            },
+          ],
+        };
+
+        const created = await insertCandidate(
+          txDb,
+          companyId,
+          candidate,
+          actor,
+          null,
+        );
+        publications.push(
+          await persistMemoryActivity(txDb, actor, {
+            companyId,
+            action: "memory.share_candidate_created",
+            recordId: created.id,
+            details: {
+              sourcePrivateRecordId: source.id,
+              ownerAgentId: source.ownerAgentId,
+              targetScopeType: created.scopeType,
+              targetScopeId: created.scopeId,
+            },
+          }),
+        );
+        return created;
+      });
+      publications.forEach(publishActivity);
+      return (await getRecordDetail(db, companyId, shared.id))!;
     },
 
     createCandidate: async (

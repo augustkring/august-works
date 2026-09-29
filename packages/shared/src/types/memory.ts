@@ -52,6 +52,11 @@ export interface MemoryScope {
   id: string | null;
 }
 
+export type SharedMemoryScope =
+  | { type: "company"; id: null }
+  | { type: "project"; id: string }
+  | { type: "subject"; id: string };
+
 export interface MemorySubject {
   type: string;
   id: string;
@@ -118,6 +123,16 @@ export interface MemoryCorrectionInput
 
 export interface MemoryRevokeInput {
   reason: string;
+}
+
+export interface MemoryPrivateInput
+  extends Omit<MemoryCandidateInput, "scope" | "ownerAgentId"> {}
+
+export interface MemoryShareInput {
+  targetBindingId: string;
+  targetScope: SharedMemoryScope;
+  reason: string;
+  createdByOperationId: string | null;
 }
 
 
