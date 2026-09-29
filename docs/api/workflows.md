@@ -42,6 +42,7 @@ A successful publish supersedes the previous published revision, publishes the e
 | POST | `/companies/:companyId/workflows/:id/run` | run | `Idempotency-Key` | durable manual run bound to published revision | workflow run/step activity |
 | POST | `/companies/:companyId/issues/:issueId/workflows/:workflowId/run` | workflow run + task mutate | `Idempotency-Key` | task-sourced run with authoritative task context | `workflow.task_invoked` + workflow run/step activity |
 | GET | `/companies/:companyId/workflow-runs/:runId` | read | none | run + step attempts + durable waits | none |
+| POST | `/companies/:companyId/workflow-runs/:runId/cancel` | run | validated cancellation reason | current durable cancellation state | `workflow.run_cancel_requested` / `workflow.run_cancelled` |
 
 ## Current publish gate
 
@@ -65,6 +66,8 @@ A Condition may be terminal or may expose exactly one `true` and one `false` bra
 - `workflow_revision_not_published`
 - `workflow_executor_capability_not_ready`
 - `workflow_run_claim_conflict`
+- `workflow_run_cancel_conflict`
+- `workflow_run_terminal`
 - `idempotency_key_invalid`
 - `idempotency_key_reused`
 - `workflow_condition_expression_invalid`
@@ -145,7 +148,7 @@ Tasks can also invoke published Workflows through the existing task surface. The
 
 PR 26 makes `agent.task` the accountable August Works delegation node by composing existing primitives rather than creating another agent execution queue. Execution-time `tasks:assign` authorization runs against the selected company-scoped agent. The node creates/reuses one existing Task using the stable workflow-step idempotency key, assigns that Task to the selected agent, and invokes the existing assignment wakeup/heartbeat runtime with a second stable idempotency identity. The Workflow step persists both `agentId` and the real `heartbeatRunId`, so the run log links to the accountable Task and the concrete agent runtime. A transient wakeup failure never creates another Task: the attempt is durably retried or a waiting Agent Task is re-woken by reconciliation using the same identities.
 
-With `waitForCompletion=true`, Agent Task reuses the same durable `task_completion` wait from PR 25. The Workflow releases its execution lease while the agent works, Task terminal events are the primary continuation signal, and reconciliation remains the crash/recovery fallback. If assignment changes before a deferred wakeup is bound, execution fails closed instead of silently delegating to a different agent. Task cancellation fails the waiting Workflow explicitly. The node's declared cooperative cancellation reflects the underlying Task/agent runtime, but Workflow-level user cancellation is still not exposed as a public endpoint.
+With `waitForCompletion=true`, Agent Task reuses the same durable `task_completion` wait from PR 25. The Workflow releases its execution lease while the agent works, Task terminal events are the primary continuation signal, and reconciliation remains the crash/recovery fallback. If assignment changes before a deferred wakeup is bound, execution fails closed instead of silently delegating to a different agent. Task cancellation fails the waiting Workflow explicitly. The node's declared cooperative cancellation is now composed into whole-run cancellation. Cancelling a waiting Agent Task cancels its workflow wait, closes the workflow-owned accountable Task, requests cancellation of the bound heartbeat runtime, and keeps the parent run in `cancelling` until the bounded child is terminal.
 
 Agent Task currently returns Task/runtime provenance (`issueId`, `status`, `agentId`, `heartbeatRunId`). A configured `expectedOutputSchema` is intentionally publish-blocked: the existing Task system does not yet expose an authoritative structured-result channel that could safely satisfy such a schema. Likewise, a separate bounded Direct Agent Call node is not advertised yet. The existing heartbeat wake API has durable admission/idempotency, but arbitrary wake payload is not itself a documented request/response instruction contract; Workflow does not pretend otherwise.
 
@@ -158,7 +161,7 @@ Timeout attempts cancellation through the existing heartbeat control plane. The 
 A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
 The run-history endpoint reads the existing authoritative `workflow_runs` state;
-it does not create a second history store. Cancellation and user-initiated whole-run retry endpoints are not advertised yet. Automatic node retry durability is implemented; wait/cancel semantics land in the next ordered gates.
+it does not create a second history store. Whole-run cancellation is exposed through `POST /companies/:companyId/workflow-runs/:runId/cancel` and requires a non-empty reason. Cancellation is durable and truthful: queued runs may terminate directly; running/waiting/recovering runs enter `cancelling`, stop scheduling new work, cancel active waits and pending approvals, cancel workflow-owned active child Tasks, and propagate cancellation to bound Agent/OpenClaw heartbeat runs where supported. The API returns the current durable state and does not falsely claim remote termination before the child runtime is terminal. Reconciliation revisits `cancelling` runs and finalizes them once bounded children settle. Already completed side effects are preserved rather than silently rolled back. User-initiated whole-run retry is still not advertised yet; automatic node retry durability is implemented.
 
 ## Recovery assurance boundary
 
