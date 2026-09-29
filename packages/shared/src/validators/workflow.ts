@@ -243,3 +243,11 @@ export const startWorkflowRunSchema = z
   .strict();
 
 export type StartWorkflowRun = z.input<typeof startWorkflowRunSchema>;
+
+export const cancelWorkflowRunSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export type CancelWorkflowRun = z.input<typeof cancelWorkflowRunSchema>;
