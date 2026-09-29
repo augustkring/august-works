@@ -2,8 +2,10 @@ import { z } from "zod";
 import {
   CONNECTED_KNOWLEDGE_ACCESS_MODES,
   CONNECTED_KNOWLEDGE_DENIAL_CODES,
+  CONNECTED_KNOWLEDGE_FRESHNESS_STATES,
   CONNECTED_KNOWLEDGE_SOURCE_CLASSES,
   type ConnectedKnowledgeAccessDecision,
+  type ConnectedKnowledgeEvidenceProvenance,
   type ConnectedKnowledgeAuthorizedScope,
   type ConnectedKnowledgeProviderDescriptor,
   type ConnectedKnowledgeRequest,
@@ -17,6 +19,22 @@ const providerKeySchema = z
   .regex(/^[a-z0-9][a-z0-9._:-]*$/, "Provider key must be stable lowercase identifier text");
 
 const boundedNullableIdSchema = z.string().trim().min(1).max(500).nullable();
+
+export const connectedKnowledgeEvidenceProvenanceSchema: z.ZodType<ConnectedKnowledgeEvidenceProvenance> =
+  z
+    .object({
+      providerKey: providerKeySchema,
+      sourceProvider: z.string().trim().min(1).max(160),
+      accessMode: z.enum(CONNECTED_KNOWLEDGE_ACCESS_MODES),
+      aclFingerprint: z.string().trim().min(1).max(1_000).nullable(),
+      authorizedAt: z.string().datetime(),
+      expiresAt: z.string().datetime().nullable(),
+      sourceAuthority: z.literal("provider"),
+      freshness: z.enum(CONNECTED_KNOWLEDGE_FRESHNESS_STATES),
+      indexedAt: z.string().datetime(),
+      tombstone: z.boolean(),
+    })
+    .strict();
 
 export const connectedKnowledgeProviderDescriptorSchema: z.ZodType<ConnectedKnowledgeProviderDescriptor> =
   z
