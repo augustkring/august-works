@@ -54,6 +54,9 @@ jobs:
       - name: Verify migration numbering and safety
         run: pnpm --filter @paperclipai/db check:migrations
 
+      - name: Verify OpenClaw workflow smoke syntax
+        run: bash -n scripts/smoke/openclaw-gateway-e2e.sh
+
       - name: Typecheck
         run: pnpm typecheck
 
