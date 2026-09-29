@@ -261,6 +261,13 @@ export {
 } from "./context/context-engine.js";
 
 export {
+  slackLiveConnectedKnowledgeProvider,
+  createSlackLiveConnectedKnowledgeProvider,
+  type SlackLiveKnowledgeDependencies,
+  type SlackLiveKnowledgeSearchResult,
+} from "./knowledge/slack-live-connected-knowledge.js";
+
+export {
   connectedKnowledgeContextProvider,
   createConnectedKnowledgeRegistry,
   fingerprintConnectedKnowledgeRequest,
