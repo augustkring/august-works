@@ -223,6 +223,178 @@ describePg("Workflow executor V1", () => {
     };
   }
 
+  async function seedPublishedExternalAgentWorkflow(input: {
+    expectedOutputSchema?: Record<string, unknown> | null;
+    timeoutSeconds?: number;
+  } = {}) {
+    const companyId = randomUUID();
+    const userId = `user-${companyId}`;
+    const agentId = randomUUID();
+    await db.insert(companies).values({
+      id: companyId,
+      name: "External Agent Co",
+      issuePrefix: `X${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "owner",
+    });
+    await db.insert(agents).values({
+      id: agentId,
+      companyId,
+      name: "OpenClaw Research",
+      role: "research",
+      status: "idle",
+      adapterType: "openclaw_gateway",
+      adapterConfig: {
+        url: "ws://127.0.0.1:18789",
+      },
+      runtimeConfig: {},
+      permissions: {},
+    });
+
+    const [workflow] = await db.insert(workflows).values({
+      companyId,
+      name: "External agent workflow",
+      status: "active",
+      createdByUserId: userId,
+    }).returning();
+
+    const graph: WorkflowGraphV1 = {
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "external",
+          type: "agent.external",
+          name: "External research",
+          position: { x: 180, y: 0 },
+          config: {
+            agentId,
+            objective: "Research the account and return the requested structured result.",
+            structuredInput: {
+              accountId: "account-1",
+              requestedFields: ["score"],
+            },
+            expectedOutputSchema: input.expectedOutputSchema ?? null,
+            timeoutSeconds: input.timeoutSeconds ?? 120,
+            allowedCapabilityScope: "binding_grants",
+            fallbackPolicy: "fail",
+          },
+        },
+        {
+          id: "after",
+          type: "core.condition",
+          name: "Continue",
+          position: { x: 360, y: 0 },
+          config: { expression: "true" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "start", target: "external" },
+        { id: "e2", source: "external", target: "after" },
+      ],
+      variables: [],
+      settings: {},
+    };
+    const [revision] = await db.insert(workflowRevisions).values({
+      companyId,
+      workflowId: workflow!.id,
+      revisionNumber: 1,
+      state: "published",
+      graph,
+      createdByUserId: userId,
+    }).returning();
+    await db
+      .update(workflows)
+      .set({
+        publishedRevisionId: revision!.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(workflows.id, workflow!.id));
+
+    return {
+      companyId,
+      userId,
+      agentId,
+      workflow: {
+        ...workflow!,
+        publishedRevisionId: revision!.id,
+      },
+      revision: revision!,
+    };
+  }
+
+  function fakeExternalHeartbeat(input: {
+    companyId: string;
+    agentId: string;
+    runId?: string;
+    confirmCancellation?: boolean;
+  }) {
+    const runId = input.runId ?? randomUUID();
+    return {
+      wakeup: vi.fn(async (agentId: string, options: {
+        source?: string;
+        triggerDetail?: string;
+        contextSnapshot?: Record<string, unknown>;
+      }) => {
+        await db
+          .insert(heartbeatRuns)
+          .values({
+            id: runId,
+            companyId: input.companyId,
+            agentId,
+            invocationSource: options.source ?? "automation",
+            triggerDetail: options.triggerDetail ?? "system",
+            status: "queued",
+            responsibleUserId: null,
+            contextSnapshot: options.contextSnapshot ?? {},
+          })
+          .onConflictDoNothing();
+        return {
+          status: "skipped" as const,
+          reason: "already_queued",
+          message: null,
+          issueId:
+            typeof options.contextSnapshot?.issueId === "string"
+              ? options.contextSnapshot.issueId
+              : null,
+          executionRunId: runId,
+          executionAgentId: input.agentId,
+          executionAgentName: "OpenClaw Research",
+        };
+      }),
+      cancelRun: vi.fn(async (
+        heartbeatRunId: string,
+        reason?: string,
+        options?: { errorCode?: string },
+      ) => {
+        if (input.confirmCancellation) {
+          await db
+            .update(heartbeatRuns)
+            .set({
+              status: "cancelled",
+              finishedAt: new Date(),
+              error: reason ?? "cancelled",
+              errorCode: options?.errorCode ?? "cancelled",
+              updatedAt: new Date(),
+            })
+            .where(eq(heartbeatRuns.id, heartbeatRunId));
+        }
+        return null;
+      }),
+    };
+  }
+
   function fakeHeartbeat(input: {
     companyId: string;
     agentId: string;
