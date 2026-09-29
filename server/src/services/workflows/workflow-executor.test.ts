@@ -2836,4 +2836,271 @@ describePg("Workflow executor V1", () => {
     });
   });
 
+  it("cancels a durable wait and preserves the cancellation as terminal audit state", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "delay",
+          type: "core.wait",
+          name: "Wait",
+          position: { x: 180, y: 0 },
+          config: { durationSeconds: 3600 },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "delay" }],
+      variables: [],
+      settings: {},
+    });
+    const executor = workflowExecutorService(db);
+    const actor = {
+      principal: { type: "user" as const, userId: seeded.userId },
+      responsibleUserId: seeded.userId,
+    };
+
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      actor,
+      "cancel-delay-run",
+    );
+    expect(waiting.run.status).toBe("waiting");
+
+    const cancelled = await executor.cancelRun(
+      seeded.companyId,
+      waiting.run.id,
+      { reason: "Operator stopped the workflow" },
+      actor,
+    );
+
+    expect(cancelled.run.status).toBe("cancelled");
+    expect(cancelled.waits).toEqual([
+      expect.objectContaining({
+        nodeId: "delay",
+        status: "cancelled",
+        resolutionJson: expect.objectContaining({
+          parentCancellation: true,
+          errorCode: "workflow_parent_cancelled",
+          reason: "Operator stopped the workflow",
+        }),
+      }),
+    ]);
+    expect(
+      cancelled.steps.find((step) => step.nodeId === "delay"),
+    ).toMatchObject({
+      status: "cancelled",
+      errorCode: "workflow_parent_cancelled",
+    });
+
+    const actions = (await db.select().from(activityLog)).map((row) => row.action);
+    expect(actions).toContain("workflow.run_cancel_requested");
+    expect(actions).toContain("workflow.wait_cancelled");
+    expect(actions).toContain("workflow.step_cancelled");
+    expect(actions).toContain("workflow.run_cancelled");
+  });
+
+  it("cancels a pending Human Approval when its parent workflow is cancelled", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "approval",
+          type: "human.approval",
+          name: "Approve",
+          position: { x: 180, y: 0 },
+          config: {
+            summary: "Approve the consequential action",
+            consequence: "The workflow continues after approval.",
+          },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "approval" }],
+      variables: [],
+      settings: {},
+    });
+    const executor = workflowExecutorService(db);
+    const actor = {
+      principal: { type: "user" as const, userId: seeded.userId },
+      responsibleUserId: seeded.userId,
+    };
+
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      actor,
+      "cancel-approval-run",
+    );
+    const approvalId = waiting.waits[0]!.referenceId!;
+    expect((await approvalService(db).getById(approvalId))?.status).toBe("pending");
+
+    const cancelled = await executor.cancelRun(
+      seeded.companyId,
+      waiting.run.id,
+      { reason: "No longer required" },
+      actor,
+    );
+
+    expect(cancelled.run.status).toBe("cancelled");
+    expect((await approvalService(db).getById(approvalId))).toMatchObject({
+      status: "cancelled",
+      decisionNote: "Workflow run cancelled: No longer required",
+      decidedByUserId: seeded.userId,
+    });
+    expect(cancelled.waits[0]).toMatchObject({
+      status: "cancelled",
+      referenceType: "approval",
+      referenceId: approvalId,
+    });
+  });
+
+  it("propagates parent cancellation to External Agent work before finalizing the run", async () => {
+    const seeded = await seedPublishedExternalAgentWorkflow();
+    const heartbeatRunId = randomUUID();
+    const heartbeat = fakeExternalHeartbeat({
+      companyId: seeded.companyId,
+      agentId: seeded.agentId,
+      runId: heartbeatRunId,
+      confirmCancellation: true,
+    });
+    const executor = workflowExecutorService(db, { heartbeat });
+    const actor = {
+      principal: { type: "user" as const, userId: seeded.userId },
+      responsibleUserId: seeded.userId,
+    };
+
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      actor,
+      "cancel-external-agent-run",
+    );
+    const childIssueId = waiting.waits[0]!.referenceId!;
+
+    const cancelled = await executor.cancelRun(
+      seeded.companyId,
+      waiting.run.id,
+      { reason: "Operator cancelled external work" },
+      actor,
+    );
+
+    expect(heartbeat.cancelRun).toHaveBeenCalledWith(
+      heartbeatRunId,
+      "Operator cancelled external work",
+      { errorCode: "workflow_parent_cancelled" },
+    );
+    expect(cancelled.run.status).toBe("cancelled");
+    expect(
+      cancelled.steps.find((step) => step.nodeId === "external"),
+    ).toMatchObject({
+      status: "cancelled",
+      heartbeatRunId,
+      errorCode: "workflow_parent_cancelled",
+    });
+    expect(cancelled.waits[0]).toMatchObject({
+      status: "cancelled",
+      referenceType: "issue",
+      referenceId: childIssueId,
+    });
+
+    const childIssue = await db
+      .select()
+      .from(issues)
+      .where(eq(issues.id, childIssueId))
+      .then((rows) => rows[0]);
+    expect(childIssue?.status).toBe("cancelled");
+
+    const childHeartbeat = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, heartbeatRunId))
+      .then((rows) => rows[0]);
+    expect(childHeartbeat?.status).toBe("cancelled");
+  });
+
+  it("keeps a run cancelling until External Agent cancellation is confirmed, then recovery finalizes it", async () => {
+    const seeded = await seedPublishedExternalAgentWorkflow();
+    const heartbeatRunId = randomUUID();
+    const heartbeat = fakeExternalHeartbeat({
+      companyId: seeded.companyId,
+      agentId: seeded.agentId,
+      runId: heartbeatRunId,
+      confirmCancellation: false,
+    });
+    const executor = workflowExecutorService(db, { heartbeat });
+    const actor = {
+      principal: { type: "user" as const, userId: seeded.userId },
+      responsibleUserId: seeded.userId,
+    };
+
+    const waiting = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: {} },
+      actor,
+      "cancel-external-agent-unconfirmed",
+    );
+
+    const cancelling = await executor.cancelRun(
+      seeded.companyId,
+      waiting.run.id,
+      { reason: "Stop remote work" },
+      actor,
+    );
+
+    expect(cancelling.run.status).toBe("cancelling");
+    expect(
+      cancelling.steps.find((step) => step.nodeId === "external"),
+    ).toMatchObject({
+      status: "cancelling",
+      heartbeatRunId,
+    });
+    expect(cancelling.waits[0]?.status).toBe("cancelled");
+
+    await db
+      .update(heartbeatRuns)
+      .set({
+        status: "cancelled",
+        finishedAt: new Date(),
+        errorCode: "workflow_parent_cancelled",
+        updatedAt: new Date(),
+      })
+      .where(eq(heartbeatRuns.id, heartbeatRunId));
+
+    const recovery = await executor.recoverExpiredRuns(20, new Date());
+    expect(recovery).toMatchObject({
+      recovered: 1,
+      failedRunIds: [],
+    });
+
+    const cancelled = await executor.getRun(
+      seeded.companyId,
+      waiting.run.id,
+    );
+    expect(cancelled?.run.status).toBe("cancelled");
+    expect(
+      cancelled?.steps.find((step) => step.nodeId === "external"),
+    ).toMatchObject({
+      status: "cancelled",
+      errorCode: "workflow_parent_cancelled",
+    });
+  });
+
+
 });
