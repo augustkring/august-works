@@ -80,15 +80,35 @@ function authorizedAclVersion(
   );
 }
 
-function requestedSlackChannelIds(subjectRefs: string[]): string[] {
-  return [
-    ...new Set(
-      subjectRefs.flatMap((subjectRef) => {
-        const match = /^slack:channel:([CGD][A-Z0-9]+)$/.exec(subjectRef);
-        return match ? [match[1]!] : [];
-      }),
-    ),
-  ];
+interface SlackChannelSelection {
+  explicit: boolean;
+  malformed: boolean;
+  channelIds: string[];
+}
+
+function requestedSlackChannelSelection(
+  subjectRefs: string[],
+): SlackChannelSelection {
+  const explicitRefs = subjectRefs.filter((subjectRef) =>
+    subjectRef.startsWith("slack:channel:"),
+  );
+  const channelIds: string[] = [];
+  let malformed = false;
+
+  for (const subjectRef of explicitRefs) {
+    const match = /^slack:channel:([CGD][A-Z0-9]+)$/.exec(subjectRef);
+    if (!match) {
+      malformed = true;
+      continue;
+    }
+    channelIds.push(match[1]!);
+  }
+
+  return {
+    explicit: explicitRefs.length > 0,
+    malformed,
+    channelIds: [...new Set(channelIds)],
+  };
 }
 
 function constrainResources(
@@ -99,11 +119,14 @@ function constrainResources(
     (resource) =>
       resource.responsibleUserId === request.responsibleUserId,
   );
-  const requestedChannels = requestedSlackChannelIds(request.subjectRefs);
-  if (requestedChannels.length === 0) {
+  const selection = requestedSlackChannelSelection(request.subjectRefs);
+  if (!selection.explicit) {
     return samePrincipal.slice(0, MAX_AUTHORIZED_RESOURCES);
   }
-  const requested = new Set(requestedChannels);
+  if (selection.malformed || selection.channelIds.length === 0) {
+    return [];
+  }
+  const requested = new Set(selection.channelIds);
   return samePrincipal
     .filter((resource) => requested.has(resource.channelId))
     .slice(0, MAX_AUTHORIZED_RESOURCES);
@@ -246,20 +269,25 @@ export function createSlackLiveConnectedKnowledgeProvider(
       }
 
       const available = await deps.listAuthorizedResources({ request });
+      const selection = requestedSlackChannelSelection(request.subjectRefs);
       const resources = constrainResources(request, available);
-      const requestedChannels = requestedSlackChannelIds(request.subjectRefs);
+
+      if (selection.malformed) {
+        return {
+          allowed: false,
+          code: "scope_denied",
+          reason:
+            "The Slack channel subject reference is malformed and cannot widen the authorized retrieval scope.",
+        };
+      }
 
       if (resources.length === 0) {
         return {
           allowed: false,
-          code:
-            requestedChannels.length > 0
-              ? "scope_denied"
-              : "permission_denied",
-          reason:
-            requestedChannels.length > 0
-              ? "The requested Slack channel is outside the current task and requester scope."
-              : "No active Slack source is authorized for this task and requester.",
+          code: selection.explicit ? "scope_denied" : "permission_denied",
+          reason: selection.explicit
+            ? "The requested Slack channel is outside the current task and requester scope."
+            : "No active Slack source is authorized for this task and requester.",
         };
       }
 

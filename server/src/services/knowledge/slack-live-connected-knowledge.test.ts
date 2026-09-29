@@ -125,6 +125,34 @@ describe("Slack live Connected Knowledge", () => {
     expect(d.searchAuthorizedResource).not.toHaveBeenCalled();
   });
 
+  it("fails closed on malformed Slack channel subject refs instead of widening scope", async () => {
+    const req = request({
+      subjectRefs: ["slack:channel:not-a-valid-channel"],
+    });
+    const d = deps();
+    d.listAuthorizedResources.mockResolvedValue([
+      resource(req, { channelId: "C123" }),
+    ]);
+    const registry = createConnectedKnowledgeRegistry([
+      createSlackLiveConnectedKnowledgeProvider(d.value),
+    ]);
+
+    await expect(
+      registry.retrieve({
+        providerKey: "slack-live",
+        request: req,
+        signal: new AbortController().signal,
+        deadlineAt: Date.now() + 1_000,
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({
+        denialCode: "scope_denied",
+      }),
+    });
+    expect(d.searchAuthorizedResource).not.toHaveBeenCalled();
+  });
+
   it("normalizes live Slack messages as untrusted evidence with private sensitivity", async () => {
     const req = request({ limit: 3 });
     const allowed = resource(req);
