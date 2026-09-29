@@ -90,7 +90,7 @@ export const memoryRecords = pgTable(
     scopeId: text("scope_id"),
     subjectType: text("subject_type"),
     subjectId: text("subject_id"),
-    ownerAgentId: uuid("owner_agent_id").references(() => agents.id, { onDelete: "set null" }),
+    ownerAgentId: uuid("owner_agent_id").references(() => agents.id, { onDelete: "restrict" }),
 
     title: text("title"),
     content: text("content").notNull(),

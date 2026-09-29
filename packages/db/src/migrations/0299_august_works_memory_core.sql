@@ -99,6 +99,10 @@ CREATE TABLE "memory_evidence" (
   CONSTRAINT "memory_evidence_excerpt_hash_check" CHECK ("excerpt_hash" ~ '^[0-9a-f]{64}$')
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX "memory_bindings_company_id_id_uq" ON "memory_bindings" ("company_id","id");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "memory_records_company_id_id_uq" ON "memory_records" ("company_id","id");
+--> statement-breakpoint
 ALTER TABLE "memory_bindings" ADD CONSTRAINT "memory_bindings_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "memory_binding_targets" ADD CONSTRAINT "memory_binding_targets_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE cascade ON UPDATE no action;
@@ -109,7 +113,7 @@ ALTER TABLE "memory_records" ADD CONSTRAINT "memory_records_company_id_companies
 --> statement-breakpoint
 ALTER TABLE "memory_records" ADD CONSTRAINT "memory_records_company_binding_fk" FOREIGN KEY ("company_id","binding_id") REFERENCES "public"."memory_bindings"("company_id","id") ON DELETE restrict ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "memory_records" ADD CONSTRAINT "memory_records_owner_agent_id_agents_id_fk" FOREIGN KEY ("owner_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;
+ALTER TABLE "memory_records" ADD CONSTRAINT "memory_records_owner_agent_id_agents_id_fk" FOREIGN KEY ("owner_agent_id") REFERENCES "public"."agents"("id") ON DELETE restrict ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "memory_records" ADD CONSTRAINT "memory_records_supersedes_fk" FOREIGN KEY ("company_id","supersedes_record_id") REFERENCES "public"."memory_records"("company_id","id") ON DELETE restrict ON UPDATE no action;
 --> statement-breakpoint
@@ -119,8 +123,6 @@ ALTER TABLE "memory_evidence" ADD CONSTRAINT "memory_evidence_company_id_compani
 --> statement-breakpoint
 ALTER TABLE "memory_evidence" ADD CONSTRAINT "memory_evidence_company_record_fk" FOREIGN KEY ("company_id","memory_record_id") REFERENCES "public"."memory_records"("company_id","id") ON DELETE restrict ON UPDATE no action;
 --> statement-breakpoint
-CREATE UNIQUE INDEX "memory_bindings_company_id_id_uq" ON "memory_bindings" ("company_id","id");
---> statement-breakpoint
 CREATE UNIQUE INDEX "memory_bindings_company_key_uq" ON "memory_bindings" ("company_id","key");
 --> statement-breakpoint
 CREATE INDEX "memory_bindings_company_enabled_idx" ON "memory_bindings" ("company_id","enabled");
@@ -128,8 +130,6 @@ CREATE INDEX "memory_bindings_company_enabled_idx" ON "memory_bindings" ("compan
 CREATE UNIQUE INDEX "memory_binding_targets_binding_target_uq" ON "memory_binding_targets" ("binding_id","target_type","target_id");
 --> statement-breakpoint
 CREATE INDEX "memory_binding_targets_company_target_idx" ON "memory_binding_targets" ("company_id","target_type","target_id");
---> statement-breakpoint
-CREATE UNIQUE INDEX "memory_records_company_id_id_uq" ON "memory_records" ("company_id","id");
 --> statement-breakpoint
 CREATE INDEX "memory_records_company_review_retention_idx" ON "memory_records" ("company_id","review_state","retention_state");
 --> statement-breakpoint
