@@ -39,35 +39,49 @@ describe("Workflow Node Registry", () => {
     }
   });
 
-  it("allows draft-only nodes during draft validation but rejects them for publish", async () => {
+  it("publishes deterministic Transform nodes and keeps Connector Action gated", async () => {
     const registry = workflowNodeRegistryService({} as Db);
     const graph = {
       version: 1 as const,
-      nodes: [{
-        id: "transform",
-        type: "core.transform",
-        name: "Transform",
-        position: { x: 0, y: 0 },
-        config: { mapping: { value: "{{trigger.value}}" } },
-      }],
-      edges: [],
-      variables: [],
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "transform",
+          type: "core.transform",
+          name: "Transform",
+          position: { x: 180, y: 0 },
+          config: {
+            mapping: {
+              value: "{{input.value}}",
+              summary: "{{trigger.name}} / {{variables.region}}",
+            },
+          },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "transform" }],
+      variables: [{ name: "region", defaultValue: "DK" }],
       settings: {},
     };
 
     await expect(
-      registry.validateDraftGraph("22222222-2222-4222-8222-222222222222", graph),
+      registry.validatePublishGraph(
+        "22222222-2222-4222-8222-222222222222",
+        graph,
+      ),
     ).resolves.toEqual(graph);
 
-    await expect(
-      registry.validatePublishGraph("22222222-2222-4222-8222-222222222222", graph),
-    ).rejects.toMatchObject({
-      status: 422,
-      details: expect.objectContaining({
-        code: "workflow_node_invalid",
-        reason: "node_not_publishable_yet",
-        nodeType: "core.transform",
-      }),
+    const connector = workflowNodeDefinitions().find(
+      (definition) => definition.type === "connector.action",
+    );
+    expect(connector).toMatchObject({
+      publishState: "draft_only",
+      publishBlockedReason: "connector_execution_policy_not_ready",
     });
   });
 
