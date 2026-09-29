@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, lte, ne, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lte, ne, or } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -354,7 +354,7 @@ export function memoryService(db: Db) {
               : []),
           ),
         )
-        .orderBy(memoryRecords.updatedAt.desc())
+        .orderBy(desc(memoryRecords.updatedAt))
         .limit(input.limit);
     },
 
