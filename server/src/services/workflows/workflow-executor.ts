@@ -43,6 +43,10 @@ import {
   WorkflowConditionExpressionError,
 } from "./workflow-condition-expression.js";
 import {
+  evaluateWorkflowTransformMapping,
+  WorkflowTransformExpressionError,
+} from "./workflow-transform-expression.js";
+import {
   decideWorkflowRetry,
   effectiveWorkflowRetryPolicy,
   workflowRetryDelayMs,
@@ -980,6 +984,71 @@ function conditionExpression(node: WorkflowNode): string {
     );
   }
   return expression;
+}
+
+function transformMapping(node: WorkflowNode): Record<string, string> {
+  const config = node.config;
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    throw new WorkflowTransformExpressionError(
+      "workflow_transform_expression_invalid",
+      "Published Transform node is missing its mapping",
+    );
+  }
+
+  const rawMapping = Reflect.get(config, "mapping");
+  if (
+    typeof rawMapping !== "object" ||
+    rawMapping === null ||
+    Array.isArray(rawMapping)
+  ) {
+    throw new WorkflowTransformExpressionError(
+      "workflow_transform_expression_invalid",
+      "Published Transform node is missing its mapping",
+    );
+  }
+
+  const entries = Object.entries(rawMapping);
+  if (entries.length < 1 || entries.length > 100) {
+    throw new WorkflowTransformExpressionError(
+      "workflow_transform_expression_invalid",
+      "Published Transform mapping must contain between 1 and 100 fields",
+    );
+  }
+
+  const mapping: Record<string, string> = {};
+  for (const [key, value] of entries) {
+    if (typeof value !== "string" || value.length > 10_000) {
+      throw new WorkflowTransformExpressionError(
+        "workflow_transform_expression_invalid",
+        `Published Transform mapping field ${key} has an invalid expression`,
+      );
+    }
+    mapping[key] = value;
+  }
+  return mapping;
+}
+
+function transformInput(
+  graph: WorkflowGraphV1,
+  node: WorkflowNode,
+  outputs: Record<string, unknown>,
+): unknown {
+  const incoming = graph.edges.filter((edge) => edge.target === node.id);
+  if (incoming.length !== 1) {
+    throw new WorkflowCheckpointError(
+      "workflow_checkpoint_invalid",
+      `Transform node ${node.id} requires exactly one upstream node`,
+    );
+  }
+
+  const sourceNodeId = incoming[0]!.source;
+  if (!Object.prototype.hasOwnProperty.call(outputs, sourceNodeId)) {
+    throw new WorkflowCheckpointError(
+      "workflow_checkpoint_invalid",
+      `Transform node ${node.id} cannot resolve upstream output from ${sourceNodeId}`,
+    );
+  }
+  return outputs[sourceNodeId];
 }
 
 type WorkflowStepRow = typeof workflowStepRuns.$inferSelect;
@@ -5644,6 +5713,34 @@ async function executeWorkflowGraph(
           output = ownedRun.triggerPayload ?? {};
           await completeRunningStep(db, ownedRun, runningStep, output, actor);
         }
+      } else if (current.type === "core.transform") {
+        const mapping = transformMapping(current);
+        const input = transformInput(graph, current, outputs);
+        const prepared = await prepareRunnableStep(
+          db,
+          ownedRun,
+          current.id,
+          { mapping, input },
+          actor,
+        );
+        if (prepared.checkpoint) {
+          output = prepared.checkpoint.outputJson;
+        } else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) {
+            throw new WorkflowCheckpointError(
+              "workflow_checkpoint_state_invalid",
+              `Transform ${current.id} produced no runnable attempt`,
+            );
+          }
+          output = evaluateWorkflowTransformMapping(mapping, {
+            input,
+            trigger: ownedRun.triggerPayload ?? {},
+            variables,
+            steps: outputs,
+          });
+          await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
       } else if (current.type === "core.condition") {
         const expression = conditionExpression(current);
         const prepared = await prepareRunnableStep(
@@ -5941,6 +6038,7 @@ async function executeWorkflowGraph(
       }
       if (
         error instanceof WorkflowConditionExpressionError ||
+        error instanceof WorkflowTransformExpressionError ||
         error instanceof WorkflowCheckpointError
       ) {
         await failRun(
@@ -6033,6 +6131,7 @@ async function executeClaimedRun(
         .filter(
           (node) =>
             node.type !== "core.manual_trigger" &&
+            node.type !== "core.transform" &&
             node.type !== "core.condition" &&
             node.type !== "core.wait" &&
             node.type !== "human.approval" &&
