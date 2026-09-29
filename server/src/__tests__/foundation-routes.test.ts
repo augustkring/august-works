@@ -204,7 +204,7 @@ describeEmbeddedPostgres("Foundation routes", () => {
       companyId: company.id,
       source: "agent_key",
       keyId: "test-key",
-      runId: "test-run",
+      runId: randomUUID(),
     };
     const agentHttp = request(app(agentActor));
 
@@ -295,7 +295,7 @@ describeEmbeddedPostgres("Foundation routes", () => {
       companyId: company.id,
       source: "agent_key",
       keyId: "test-key",
-      runId: "test-run",
+      runId: randomUUID(),
     }))
       .post(`/api/companies/${company.id}/foundation/${created.body.id}/proposals`)
       .send({ sourceType: "agent_run", proposedBody: "Unauthorized proposal" })
@@ -455,7 +455,7 @@ describeEmbeddedPostgres("Foundation routes", () => {
       companyId: company.id,
       source: "agent_key",
       keyId: "read-key",
-      runId: "read-run",
+      runId: randomUUID(),
     }));
 
     const list = await agentHttp
@@ -535,7 +535,7 @@ describeEmbeddedPostgres("Foundation routes", () => {
       companyId: company.id,
       source: "agent_key",
       keyId: "read-key",
-      runId: "read-run",
+      runId: randomUUID(),
     }));
 
     await agentHttp

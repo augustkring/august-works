@@ -191,7 +191,7 @@ export function evaluateWorkflowTransformExpression(
   parseWorkflowTransformExpression(expression);
 
   const trimmed = expression.trim();
-  const fullReference = /^\{\{([\s\S]+)\}\}$/.exec(trimmed);
+  const fullReference = /^\{\{([^{}]+)\}\}$/.exec(trimmed);
   if (fullReference) {
     return resolveReference(fullReference[1]!, context);
   }

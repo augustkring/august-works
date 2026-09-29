@@ -45,6 +45,7 @@ const apiPrefixes: Record<string, string> = {
   "execution-workspaces.ts": "/api",
   "file-resources.ts": "/api",
   "folders.ts": "/api",
+  "foundation.ts": "/api",
   "goals.ts": "/api",
   "health.ts": "/api/health",
   "inbox-agent-policy.ts": "/api",
@@ -73,6 +74,7 @@ const apiPrefixes: Record<string, string> = {
   "tool-access.ts": "/api",
   "tool-gateway.ts": "/api",
   "user-profiles.ts": "/api",
+  "workflows.ts": "/api",
 };
 
 const ROUTE_LITERAL_PATTERN =
