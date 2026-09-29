@@ -370,8 +370,8 @@ export interface WorkflowRun {
   responsibleUserId: string | null;
   idempotencyKey: string | null;
   correlationId: string | null;
-  retryOfRunId: string | null;
-  idempotencyRootRunId: string | null;
+  retryOfRunId?: string | null;
+  idempotencyRootRunId?: string | null;
   executionOwnerId: string | null;
   leaseExpiresAt: Date | null;
   ownerHeartbeatAt: Date | null;

@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CircleStop, RefreshCw, Workflow as WorkflowIcon } from "lucide-react";
+import { ArrowLeft, CircleStop, RefreshCw, RotateCcw, Workflow as WorkflowIcon } from "lucide-react";
 import type {
   WorkflowRunStatus,
   WorkflowStepRun,
@@ -142,6 +142,14 @@ function issueIdFromStepOutput(value: unknown): string | null {
   return typeof issueId === "string" && issueId.length > 0 ? issueId : null;
 }
 
+function workflowMutationKey(prefix: string) {
+  const suffix =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${suffix}`;
+}
+
 function jsonPreview(value: unknown) {
   if (value === null || value === undefined) return null;
   try {
@@ -157,6 +165,7 @@ export function WorkflowRun() {
   const { setBreadcrumbs } = useBreadcrumbs();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const retryIdempotencyKeyRef = useRef<string | null>(null);
 
   const runQuery = useQuery({
     queryKey: queryKeys.workflows.run(selectedCompanyId!, runId ?? ""),
@@ -193,6 +202,27 @@ export function WorkflowRun() {
           queryKey: queryKeys.workflows.runs(selectedCompanyId!, workflowId),
         });
       }
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: () => {
+      retryIdempotencyKeyRef.current ??= workflowMutationKey("ui-workflow-retry");
+      return workflowsApi.retryRun(
+        selectedCompanyId!,
+        runId!,
+        { reason: "Retried by operator from workflow run view" },
+        retryIdempotencyKeyRef.current,
+      );
+    },
+    onSuccess: (detail) => {
+      retryIdempotencyKeyRef.current = null;
+      if (workflowId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.workflows.runs(selectedCompanyId!, workflowId),
+        });
+      }
+      navigate(`/workflows/${detail.run.workflowId}/runs/${detail.run.id}`);
     },
   });
 
@@ -295,6 +325,40 @@ export function WorkflowRun() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {run.status === "failed" || run.status === "cancelled" ? (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={retryMutation.isPending}
+                  >
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                    {retryMutation.isPending ? "Retrying…" : "Retry exact run"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      Retry this exact workflow revision?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      A new run will use the same immutable revision and trigger input.
+                      Existing side effects keep their original idempotency lineage, so
+                      completed actions are not intentionally duplicated. To use the
+                      latest published workflow instead, start a new run from the
+                      workflow page.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => retryMutation.mutate()}>
+                      Retry exact run
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : null}
             {live && run.status !== "cancelling" ? (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -365,6 +429,11 @@ export function WorkflowRun() {
             <p className="mt-1 text-sm">
               {revision ? `Revision ${revision.revisionNumber}` : run.workflowRevisionId.slice(0, 8)}
             </p>
+            {run.retryOfRunId ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Retry of run {run.retryOfRunId.slice(0, 8)}
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -377,6 +446,16 @@ export function WorkflowRun() {
             <p className="font-medium">Run cancellation could not be requested</p>
             <p className="mt-1 text-sm text-muted-foreground">
               The current run state is unchanged. Refresh the run before trying again.
+            </p>
+          </div>
+        ) : null}
+
+        {retryMutation.isError ? (
+          <div role="alert" className="mt-5 border-l-2 border-destructive pl-4">
+            <p className="font-medium">Workflow retry could not be started</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              The original run remains unchanged. Retrying again reuses the same
+              request identity until the server confirms a new run.
             </p>
           </div>
         ) : null}

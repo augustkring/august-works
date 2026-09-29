@@ -2,6 +2,7 @@ import type {
   CancelWorkflowRun,
   CreateWorkflow,
   PublishWorkflow,
+  RetryWorkflowRun,
   StartWorkflowRun,
   UpdateWorkflowDraft,
   Workflow,
@@ -105,6 +106,18 @@ export const workflowsApi = {
     api.post<WorkflowRunDetail>(
       `/companies/${companyId}/workflow-runs/${runId}/cancel`,
       input,
+    ),
+
+  retryRun: (
+    companyId: string,
+    runId: string,
+    input: RetryWorkflowRun,
+    idempotencyKey: string,
+  ) =>
+    api.post<WorkflowRunDetail>(
+      `/companies/${companyId}/workflow-runs/${runId}/retry`,
+      input,
+      { headers: { "Idempotency-Key": idempotencyKey } },
     ),
 
   nodeRegistry: (companyId: string) =>

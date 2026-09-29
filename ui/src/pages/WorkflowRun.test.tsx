@@ -10,6 +10,7 @@ import { WorkflowRun } from "./WorkflowRun";
 
 const apiMock = vi.hoisted(() => ({
   cancelRun: vi.fn(),
+  retryRun: vi.fn(),
   get: vi.fn(),
   getRun: vi.fn(),
   revisions: vi.fn(),
@@ -451,6 +452,77 @@ describe("WorkflowRun", () => {
     expect(container.textContent).toContain("Cancelled");
     expect(container.textContent).toContain(
       "Completed step history remains visible for audit and recovery.",
+    );
+
+    flushSync(() => root.unmount());
+  });
+
+
+  it("retries a failed run with a stable idempotency key and navigates to the new run", async () => {
+    const failedDetail: WorkflowRunDetail = {
+      ...runDetail,
+      run: {
+        ...runDetail.run,
+        status: "failed",
+        failureCode: "workflow_condition_reference_missing",
+        failureMessage: "Missing workflow input",
+      },
+    };
+    const retriedDetail: WorkflowRunDetail = {
+      ...runDetail,
+      run: {
+        ...runDetail.run,
+        id: "run-retry-87654321",
+        retryOfRunId: failedDetail.run.id,
+        idempotencyRootRunId: failedDetail.run.id,
+      },
+    };
+    apiMock.getRun.mockResolvedValue(failedDetail);
+    apiMock.retryRun.mockResolvedValue(retriedDetail);
+
+    const root = createRoot(container);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    flushSync(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/workflows/workflow-1/runs/run-12345678"]}>
+            <Routes>
+              <Route
+                path="/workflows/:workflowId/runs/:runId"
+                element={<WorkflowRun />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+
+    const trigger = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Retry exact run"),
+    );
+    expect(trigger).toBeDefined();
+    trigger!.click();
+    await flush();
+
+    expect(document.body.textContent).toContain(
+      "Retry this exact workflow revision?",
+    );
+    const confirm = Array.from(document.querySelectorAll("button")).find(
+      (button) =>
+        button.textContent?.trim() === "Retry exact run" && button !== trigger,
+    );
+    expect(confirm).toBeDefined();
+    confirm!.click();
+    await flush();
+
+    expect(apiMock.retryRun).toHaveBeenCalledWith(
+      "company-1",
+      "run-12345678",
+      { reason: "Retried by operator from workflow run view" },
+      expect.stringMatching(/^ui-workflow-retry-/),
     );
 
     flushSync(() => root.unmount());
