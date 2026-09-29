@@ -1,6 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { errorHandler } from "../middleware/error-handler.js";
 
 const mockSidebarPreferenceService = vi.hoisted(() => ({
   getCompanyOrder: vi.fn(),
@@ -18,10 +19,7 @@ function registerModuleMocks() {
 }
 
 async function createApp(actor: Record<string, unknown>) {
-  const [{ sidebarPreferenceRoutes }, { errorHandler }] = await Promise.all([
-    import("../routes/sidebar-preferences.js"),
-    import("../middleware/index.js"),
-  ]);
+  const { sidebarPreferenceRoutes } = await import("../routes/sidebar-preferences.js");
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
