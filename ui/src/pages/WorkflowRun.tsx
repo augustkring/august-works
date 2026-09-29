@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, RefreshCw, Workflow as WorkflowIcon } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, CircleStop, RefreshCw, Workflow as WorkflowIcon } from "lucide-react";
 import type {
   WorkflowRunStatus,
   WorkflowStepRun,
@@ -14,6 +14,17 @@ import { useNavigate, useParams } from "@/lib/router";
 import { queryKeys } from "@/lib/queryKeys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
 
@@ -145,6 +156,7 @@ export function WorkflowRun() {
   const { workflowId, runId } = useParams();
   const { setBreadcrumbs } = useBreadcrumbs();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const runQuery = useQuery({
     queryKey: queryKeys.workflows.run(selectedCompanyId!, runId ?? ""),
@@ -164,6 +176,24 @@ export function WorkflowRun() {
     queryKey: queryKeys.workflows.revisions(selectedCompanyId!, workflowId ?? ""),
     queryFn: () => workflowsApi.revisions(selectedCompanyId!, workflowId!),
     enabled: !!selectedCompanyId && !!workflowId,
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () =>
+      workflowsApi.cancelRun(selectedCompanyId!, runId!, {
+        reason: "Cancelled by operator from workflow run view",
+      }),
+    onSuccess: (detail) => {
+      queryClient.setQueryData(
+        queryKeys.workflows.run(selectedCompanyId!, runId!),
+        detail,
+      );
+      if (workflowId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.workflows.runs(selectedCompanyId!, workflowId),
+        });
+      }
+    },
   });
 
   useEffect(() => {
@@ -264,15 +294,55 @@ export function WorkflowRun() {
               </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => runQuery.refetch()}
-            disabled={runQuery.isFetching}
-          >
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-            {runQuery.isFetching ? "Refreshing…" : "Refresh"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {live && run.status !== "cancelling" ? (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={cancelMutation.isPending}
+                  >
+                    <CircleStop className="mr-1.5 h-3.5 w-3.5" />
+                    {cancelMutation.isPending ? "Cancelling…" : "Cancel run"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Cancel this workflow run?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      New workflow steps will stop. Active waits are cancelled, and
+                      bounded Agent/OpenClaw child work is asked to stop. Completed
+                      side effects are preserved rather than rolled back.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep running</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => cancelMutation.mutate()}
+                    >
+                      Cancel run
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : run.status === "cancelling" ? (
+              <Button variant="outline" size="sm" disabled>
+                <CircleStop className="mr-1.5 h-3.5 w-3.5" />
+                Cancelling…
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => runQuery.refetch()}
+              disabled={runQuery.isFetching}
+            >
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              {runQuery.isFetching ? "Refreshing…" : "Refresh"}
+            </Button>
+          </div>
         </header>
 
         <section aria-labelledby="run-summary" className="grid gap-4 border-b border-border py-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -301,6 +371,15 @@ export function WorkflowRun() {
         <div aria-live="polite" className="sr-only">
           {live ? `Run status: ${runStatusText}` : `Final run status: ${runStatusText}`}
         </div>
+
+        {cancelMutation.isError ? (
+          <div role="alert" className="mt-5 border-l-2 border-destructive pl-4">
+            <p className="font-medium">Run cancellation could not be requested</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              The current run state is unchanged. Refresh the run before trying again.
+            </p>
+          </div>
+        ) : null}
 
         {activeStep ? (
           <section className="border-b border-border py-4">
