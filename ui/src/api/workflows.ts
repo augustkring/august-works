@@ -1,4 +1,5 @@
 import type {
+  CancelWorkflowRun,
   CreateWorkflow,
   PublishWorkflow,
   StartWorkflowRun,
@@ -95,6 +96,16 @@ export const workflowsApi = {
 
   getRun: (companyId: string, runId: string) =>
     api.get<WorkflowRunDetail>(`/companies/${companyId}/workflow-runs/${runId}`),
+
+  cancelRun: (
+    companyId: string,
+    runId: string,
+    input: CancelWorkflowRun,
+  ) =>
+    api.post<WorkflowRunDetail>(
+      `/companies/${companyId}/workflow-runs/${runId}/cancel`,
+      input,
+    ),
 
   nodeRegistry: (companyId: string) =>
     api.get<WorkflowNodeDefinitionDescriptor[]>(
