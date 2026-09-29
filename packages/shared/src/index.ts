@@ -2895,6 +2895,27 @@ export {
 } from "./validators/context.js";
 
 export {
+  CONNECTED_KNOWLEDGE_ACCESS_MODES,
+  CONNECTED_KNOWLEDGE_DENIAL_CODES,
+  CONNECTED_KNOWLEDGE_SOURCE_CLASSES,
+  type ConnectedKnowledgeAccessDecision,
+  type ConnectedKnowledgeAccessMode,
+  type ConnectedKnowledgeAuthorizedScope,
+  type ConnectedKnowledgeDenialCode,
+  type ConnectedKnowledgeProviderDescriptor,
+  type ConnectedKnowledgeProviderResult,
+  type ConnectedKnowledgeRequest,
+  type ConnectedKnowledgeSourceClass,
+} from "./types/connected-knowledge.js";
+export {
+  connectedKnowledgeAccessDecisionSchema,
+  connectedKnowledgeAuthorizedScopeSchema,
+  connectedKnowledgeProviderDescriptorSchema,
+  connectedKnowledgeRequestSchema,
+  type ConnectedKnowledgeRequestInput,
+} from "./validators/connected-knowledge.js";
+
+export {
   WORKFLOW_CAPABILITY_AVAILABILITY,
   WORKFLOW_CAPABILITY_KINDS,
   WORKFLOW_NODE_CANCELLATION_MODES,

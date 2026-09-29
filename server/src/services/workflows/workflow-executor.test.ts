@@ -53,14 +53,9 @@ describePg("Workflow executor V1", () => {
     await db.delete(workflowStepRuns);
     await db.delete(heartbeatRuns);
     await db.delete(workflowRuns);
-    await db
-      .update(workflows)
-      .set({
-        publishedRevisionId: null,
-        draftRevisionId: null,
-        updatedAt: new Date(),
-      });
-    await db.delete(workflowRevisions);
+    // Production protects published revision history from direct deletion.
+    // Removing the parent workflow is the supported cascade boundary and lets
+    // the test harness reset without weakening that invariant.
     await db.delete(workflows);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);

@@ -261,6 +261,17 @@ export {
 } from "./context/context-engine.js";
 
 export {
+  connectedKnowledgeContextProvider,
+  createConnectedKnowledgeRegistry,
+  fingerprintConnectedKnowledgeRequest,
+  type ConnectedKnowledgeAuthorizationInput,
+  type ConnectedKnowledgeProvider,
+  type ConnectedKnowledgeRegistry,
+  type ConnectedKnowledgeRegistryRetrieveInput,
+  type ConnectedKnowledgeRetrievalInput,
+} from "./knowledge/connected-knowledge.js";
+
+export {
   assembleFreshNativeGovernedContext,
   type ContextAssemble,
   type FreshNativeGovernedContextInput,

@@ -40,6 +40,7 @@ import { instanceSettingsService } from "../services/instance-settings.ts";
 import * as providerRegistry from "../secrets/provider-registry.ts";
 import { routineService } from "../services/routines.ts";
 import { secretService } from "../services/secrets.ts";
+import { workflowService } from "../services/workflows/workflow-service.ts";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -76,7 +77,8 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     await db.delete(workflowWaits);
     await db.delete(workflowStepRuns);
     await db.delete(workflowRuns);
-    await db.delete(workflowRevisions);
+    // Published workflow revision history is immutable under direct DELETE.
+    // Delete the parent workflow so revisions follow the supported cascade.
     await db.delete(workflows);
     await db.delete(routineTriggers);
     await db.delete(routines);
@@ -1244,6 +1246,8 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
           payload: { issueId: run.linkedIssueId, mutation: "create" },
           requestedByActorType: undefined,
           requestedByActorId: null,
+          allowRunCoalescing: undefined,
+          idempotencyKey: null,
           contextSnapshot: { issueId: run.linkedIssueId, source: "routine.dispatch" },
         },
       },
@@ -1917,7 +1921,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     });
   });
 
-  it("rejects enabling automation for routines without a default agent", async () => {
+  it("rejects enabling automation for routines without an execution target", async () => {
     const { companyId, svc } = await seedFixture();
     const draftRoutine = await svc.create(
       companyId,
@@ -1938,7 +1942,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
 
     await expect(
       svc.update(draftRoutine.id, { status: "active" }, {}),
-    ).rejects.toThrow(/default agent required/i);
+    ).rejects.toThrow(/execution target required/i);
   });
 
   it("blocks schedule triggers when required variables do not have defaults", async () => {
@@ -2881,6 +2885,42 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
 
     expect(run).toMatchObject({ source: "webhook", status: "issue_created" });
   });
+  async function createPublishedWorkflowFixture(input: {
+    companyId: string;
+    name: string;
+    graph: Parameters<ReturnType<typeof workflowService>["updateDraft"]>[2]["graph"];
+  }) {
+    const svc = workflowService(db);
+    const actor = {
+      principal: { type: "system" as const, service: "routine-workflow-test" },
+    };
+    const created = await svc.create(
+      input.companyId,
+      { name: input.name },
+      actor,
+    );
+    const updated = await svc.updateDraft(
+      input.companyId,
+      created.id,
+      {
+        expectedRevisionId: created.draftRevisionId!,
+        graph: input.graph,
+      },
+      actor,
+    );
+    const published = await svc.publish(
+      input.companyId,
+      created.id,
+      {
+        expectedDraftRevisionId: updated.draftRevisionId!,
+        expectedPublishedRevisionId: null,
+        approvalId: null,
+      },
+      actor,
+    );
+    return published;
+  }
+
   it("dispatches a workflow execution target without creating an issue or heartbeat run", async () => {
     const { companyId, projectId, svc, wakeups } = await seedFixture();
     await db.insert(instanceSettings).values({
@@ -2889,16 +2929,9 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       experimental: { enableWorkflowsV1: true },
     });
 
-    const [workflow] = await db.insert(workflows).values({
+    const workflow = await createPublishedWorkflowFixture({
       companyId,
       name: "Routine workflow",
-      status: "active",
-    }).returning();
-    const [revision] = await db.insert(workflowRevisions).values({
-      companyId,
-      workflowId: workflow!.id,
-      revisionNumber: 1,
-      state: "published",
       graph: {
         version: 1,
         nodes: [
@@ -2921,11 +2954,8 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
         variables: [],
         settings: {},
       },
-      createdAt: new Date(),
-    }).returning();
-    await db.update(workflows)
-      .set({ publishedRevisionId: revision!.id })
-      .where(eq(workflows.id, workflow!.id));
+    });
+    const revision = workflow.publishedRevision!;
 
     const routine = await svc.create(
       companyId,
@@ -2935,7 +2965,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
         description: "Use deterministic workflow execution",
         executionTarget: {
           kind: "workflow",
-          workflowId: workflow!.id,
+          workflowId: workflow.id,
         },
         priority: "medium",
         status: "active",
@@ -2948,7 +2978,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     expect(routine).toMatchObject({
       assigneeAgentId: null,
       executionTargetKind: "workflow",
-      executionTargetRef: workflow!.id,
+      executionTargetRef: workflow.id,
       status: "active",
     });
 
@@ -2976,8 +3006,8 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       .then((rows) => rows[0]);
     expect(workflowRun).toMatchObject({
       companyId,
-      workflowId: workflow!.id,
-      workflowRevisionId: revision!.id,
+      workflowId: workflow.id,
+      workflowRevisionId: revision.id,
       source: "routine",
       status: "succeeded",
     });
@@ -3010,16 +3040,9 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       experimental: { enableWorkflowsV1: true },
     });
 
-    const [workflow] = await db.insert(workflows).values({
+    const workflow = await createPublishedWorkflowFixture({
       companyId,
       name: "Waiting workflow",
-      status: "active",
-    }).returning();
-    const [revision] = await db.insert(workflowRevisions).values({
-      companyId,
-      workflowId: workflow!.id,
-      revisionNumber: 1,
-      state: "published",
       graph: {
         version: 1,
         nodes: [
@@ -3042,11 +3065,8 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
         variables: [],
         settings: {},
       },
-      createdAt: new Date(),
-    }).returning();
-    await db.update(workflows)
-      .set({ publishedRevisionId: revision!.id })
-      .where(eq(workflows.id, workflow!.id));
+    });
+    const revision = workflow.publishedRevision!;
 
     const routine = await svc.create(
       companyId,
@@ -3055,7 +3075,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
         title: "Waiting workflow routine",
         executionTarget: {
           kind: "workflow",
-          workflowId: workflow!.id,
+          workflowId: workflow.id,
         },
         priority: "medium",
         status: "active",
@@ -3094,7 +3114,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       await db
         .select()
         .from(workflowRuns)
-        .where(eq(workflowRuns.workflowId, workflow!.id)),
+        .where(eq(workflowRuns.workflowId, workflow.id)),
     ).toHaveLength(1);
     expect(wakeups).toHaveLength(0);
   });

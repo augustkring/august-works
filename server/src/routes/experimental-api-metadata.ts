@@ -601,5 +601,35 @@ export const experimentalApiMetadata: Record<string, { successStatuses: number[]
     ],
     "boardOnly": true,
     "source": "server/src/routes/smoke-lab.ts"
+  },
+  "POST /api/companies/{companyId}/foundation": {
+    "successStatuses": [201],
+    "boardOnly": true,
+    "source": "server/src/routes/foundation.ts"
+  },
+  "POST /api/companies/{companyId}/foundation/{foundationDocumentId}/proposals": {
+    "successStatuses": [201],
+    "boardOnly": false,
+    "source": "server/src/routes/foundation.ts"
+  },
+  "POST /api/companies/{companyId}/workflows": {
+    "successStatuses": [201],
+    "boardOnly": true,
+    "source": "server/src/routes/workflows.ts"
+  },
+  "POST /api/companies/{companyId}/issues/{issueId}/workflows/{workflowId}/run": {
+    "successStatuses": [201],
+    "boardOnly": false,
+    "source": "server/src/routes/workflows.ts"
+  },
+  "POST /api/companies/{companyId}/workflows/{workflowId}/run": {
+    "successStatuses": [201],
+    "boardOnly": false,
+    "source": "server/src/routes/workflows.ts"
+  },
+  "POST /api/companies/{companyId}/workflow-runs/{runId}/retry": {
+    "successStatuses": [201],
+    "boardOnly": false,
+    "source": "server/src/routes/workflows.ts"
   }
 };

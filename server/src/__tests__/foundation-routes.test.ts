@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
+import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
@@ -13,6 +14,7 @@ import {
   foundationChangeProposals,
   foundationDocuments,
   foundationSections,
+  heartbeatRuns,
   instanceSettings,
   principalPermissionGrants,
 } from "@paperclipai/db";
@@ -42,6 +44,7 @@ describeEmbeddedPostgres("Foundation routes", () => {
     await db.delete(foundationSections);
     await db.delete(foundationDocuments);
     await db.delete(documentRevisions);
+    await db.delete(heartbeatRuns);
     await db.delete(documents);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
@@ -198,13 +201,21 @@ describeEmbeddedPostgres("Foundation routes", () => {
       scope: null,
     });
 
+    const runId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: runId,
+      companyId: company.id,
+      agentId: agent!.id,
+      status: "running",
+    });
+
     const agentActor: Express.Request["actor"] = {
       type: "agent",
       agentId: agent!.id,
       companyId: company.id,
       source: "agent_key",
       keyId: "test-key",
-      runId: "test-run",
+      runId,
     };
     const agentHttp = request(app(agentActor));
 
@@ -295,7 +306,7 @@ describeEmbeddedPostgres("Foundation routes", () => {
       companyId: company.id,
       source: "agent_key",
       keyId: "test-key",
-      runId: "test-run",
+      runId: randomUUID(),
     }))
       .post(`/api/companies/${company.id}/foundation/${created.body.id}/proposals`)
       .send({ sourceType: "agent_run", proposedBody: "Unauthorized proposal" })
@@ -455,7 +466,7 @@ describeEmbeddedPostgres("Foundation routes", () => {
       companyId: company.id,
       source: "agent_key",
       keyId: "read-key",
-      runId: "read-run",
+      runId: randomUUID(),
     }));
 
     const list = await agentHttp
@@ -535,7 +546,7 @@ describeEmbeddedPostgres("Foundation routes", () => {
       companyId: company.id,
       source: "agent_key",
       keyId: "read-key",
-      runId: "read-run",
+      runId: randomUUID(),
     }));
 
     await agentHttp
