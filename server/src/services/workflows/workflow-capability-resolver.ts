@@ -201,6 +201,9 @@ export function workflowCapabilityResolverService(db: Db) {
   const agentDefinition = workflowNodeDefinitions().find(
     (definition) => definition.type === "agent.task",
   );
+  const externalAgentDefinition = workflowNodeDefinitions().find(
+    (definition) => definition.type === "agent.external",
+  );
 
   return {
     search: async (
@@ -290,10 +293,6 @@ export function workflowCapabilityResolverService(db: Db) {
             and(
               eq(agents.companyId, companyId),
               ne(agents.status, "terminated"),
-              // OpenClaw/external agents require the dedicated attenuated
-              // external-agent node contract (V4 PR 27). Do not silently map
-              // them onto the native Agent Task node before that boundary exists.
-              ne(agents.adapterType, "openclaw_gateway"),
               ...searchTerms.map(agentTermPredicate),
             ),
           )
@@ -351,42 +350,68 @@ export function workflowCapabilityResolverService(db: Db) {
           })
         : [];
 
-      const agentCandidates: WorkflowCapabilityCandidate[] = agentDefinition
-        ? agentRows.map((agent) => ({
-            id: `agent:${agent.id}`,
-            kind: "agent",
-            title: agent.title?.trim() || agent.name,
-            description:
-              [agent.role, agent.capabilities?.trim()].filter(Boolean).join(" · ") || null,
-            nodeType: "agent.task",
-            configTemplate: {
-              agentId: agent.id,
-              objective: "Delegate this workflow step",
-              waitForCompletion: true,
-              expectedOutputSchema: null,
-            },
-            executionMode: "agent",
-            sideEffectClass: agentDefinition.sideEffectClass,
-            riskClass: agentDefinition.riskDefault,
-            inputSchema: agentDefinition.inputSchema,
-            outputSchema: agentDefinition.outputSchema,
-            requiredPermissions: ["tasks:assign"],
-            availability: agentAvailability(agent.status),
-            operationalProfile: {
-              reliabilityBasis: "agent_status",
-              reliabilitySignal: agent.status,
-              latencyProfile: null,
-              costProfile: "model_or_agent_runtime",
-            },
-            publishState: agentDefinition.publishState,
-            publishBlockedReason: agentDefinition.publishBlockedReason,
-            source: {
-              agentId: agent.id,
-              adapterType: agent.adapterType,
-              agentRole: agent.role,
-            },
-          }))
-        : [];
+      const agentCandidates: WorkflowCapabilityCandidate[] =
+        agentDefinition || externalAgentDefinition
+          ? agentRows.flatMap((agent) => {
+              const external = agent.adapterType === "openclaw_gateway";
+              const definition = external
+                ? externalAgentDefinition
+                : agentDefinition;
+              if (!definition) return [];
+
+              return [{
+                id: `agent:${agent.id}`,
+                kind: "agent" as const,
+                title: agent.title?.trim() || agent.name,
+                description:
+                  [agent.role, agent.capabilities?.trim()]
+                    .filter(Boolean)
+                    .join(" · ") || null,
+                nodeType: definition.type,
+                configTemplate: external
+                  ? {
+                      agentId: agent.id,
+                      objective: "Delegate this bounded external workflow step",
+                      structuredInput: {},
+                      expectedOutputSchema: null,
+                      timeoutSeconds: 120,
+                      allowedCapabilityScope: "binding_grants",
+                      fallbackPolicy: "fail",
+                    }
+                  : {
+                      agentId: agent.id,
+                      objective: "Delegate this workflow step",
+                      waitForCompletion: true,
+                      expectedOutputSchema: null,
+                    },
+                executionMode: "agent" as const,
+                sideEffectClass: definition.sideEffectClass,
+                riskClass: definition.riskDefault,
+                inputSchema: definition.inputSchema,
+                outputSchema: definition.outputSchema,
+                requiredPermissions: definition.authorizationRequirements.map(
+                  (item) => item.permission,
+                ),
+                availability: agentAvailability(agent.status),
+                operationalProfile: {
+                  reliabilityBasis: "agent_status" as const,
+                  reliabilitySignal: agent.status,
+                  latencyProfile: null,
+                  costProfile: "model_or_agent_runtime",
+                },
+                publishState: definition.publishState,
+                publishBlockedReason: definition.publishBlockedReason,
+                source: {
+                  agentId: agent.id,
+                  adapterType: agent.adapterType,
+                  agentRole: agent.role,
+                  mediation: external
+                    ? "external_agent"
+                    : "native_agent_task",
+                },
+              }];
+            })
+          : [];
 
       const core =
         parsed.kind && parsed.kind !== "core_node" ? [] : coreCandidates();
