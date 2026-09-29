@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   check,
   index,
   integer,
@@ -83,6 +84,14 @@ export const workflowRuns = pgTable(
     responsibleUserId: text("responsible_user_id"),
     idempotencyKey: text("idempotency_key"),
     correlationId: text("correlation_id"),
+    retryOfRunId: uuid("retry_of_run_id").references(
+      (): AnyPgColumn => workflowRuns.id,
+      { onDelete: "set null" },
+    ),
+    idempotencyRootRunId: uuid("idempotency_root_run_id").references(
+      (): AnyPgColumn => workflowRuns.id,
+      { onDelete: "set null" },
+    ),
     executionOwnerId: text("execution_owner_id"),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
     ownerHeartbeatAt: timestamp("owner_heartbeat_at", { withTimezone: true }),
@@ -105,6 +114,16 @@ export const workflowRuns = pgTable(
       table.status,
       table.createdAt,
     ),
+    companyRetryOfIdx: index("workflow_runs_company_retry_of_idx").on(
+      table.companyId,
+      table.retryOfRunId,
+      table.createdAt,
+    ),
+    companyIdempotencyRootIdx: index("workflow_runs_company_idempotency_root_idx").on(
+      table.companyId,
+      table.idempotencyRootRunId,
+      table.createdAt,
+    ),
     companyIdempotencyUq: uniqueIndex("workflow_runs_company_idempotency_uq")
       .on(table.companyId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} is not null`),
@@ -119,6 +138,10 @@ export const workflowRuns = pgTable(
     leasePairCheck: check(
       "workflow_runs_lease_pair_check",
       sql`(${table.executionOwnerId} is null) = (${table.leaseExpiresAt} is null)`,
+    ),
+    retryLineagePairCheck: check(
+      "workflow_runs_retry_lineage_pair_check",
+      sql`${table.retryOfRunId} is null or ${table.idempotencyRootRunId} is not null`,
     ),
     terminalLeaseCheck: check(
       "workflow_runs_terminal_lease_check",

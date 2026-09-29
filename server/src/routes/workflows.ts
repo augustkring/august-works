@@ -4,6 +4,7 @@ import {
   cancelWorkflowRunSchema,
   createWorkflowSchema,
   publishWorkflowSchema,
+  retryWorkflowRunSchema,
   startWorkflowRunSchema,
   updateWorkflowDraftSchema,
   workflowCapabilitySearchQuerySchema,
@@ -382,6 +383,30 @@ export function workflowRoutes(db: Db) {
       res.json(result);
     },
   );
+  router.post(
+    "/companies/:companyId/workflow-runs/:runId/retry",
+    validate(retryWorkflowRunSchema),
+    async (req, res) => {
+      await assertWorkflowsEnabled();
+      const companyId = req.params.companyId as string;
+      await assertPermission(req, companyId, "workflows:run");
+      const key = idempotencyKey(req);
+      if (!key) {
+        throw unprocessable("Idempotency-Key is required for workflow retry", {
+          code: "idempotency_key_required",
+        });
+      }
+      const result = await executor.retryRun(
+        companyId,
+        req.params.runId as string,
+        req.body,
+        runActor(req),
+        key,
+      );
+      res.status(201).json(result);
+    },
+  );
+
 
   router.get("/companies/:companyId/workflows/:workflowId", async (req, res) => {
     await assertWorkflowsEnabled();

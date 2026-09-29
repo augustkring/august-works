@@ -17,9 +17,11 @@ import {
 } from "@paperclipai/db";
 import {
   cancelWorkflowRunSchema,
+  retryWorkflowRunSchema,
   startWorkflowRunSchema,
   type CancelWorkflowRun,
   type ExecutionPrincipal,
+  type RetryWorkflowRun,
   type StartWorkflowRun,
   type WorkflowGraphV1,
   type WorkflowRun,
@@ -286,6 +288,8 @@ function assertIdempotentRequestMatches(
     source: WorkflowRunSource;
     triggerId?: string | null;
     triggerPayload: Record<string, unknown>;
+    retryOfRunId?: string | null;
+    idempotencyRootRunId?: string | null;
   },
 ) {
   if (
@@ -293,6 +297,8 @@ function assertIdempotentRequestMatches(
     existing.workflowRevisionId !== input.revisionId ||
     existing.source !== input.source ||
     existing.triggerId !== (input.triggerId ?? null) ||
+    existing.retryOfRunId !== (input.retryOfRunId ?? null) ||
+    existing.idempotencyRootRunId !== (input.idempotencyRootRunId ?? null) ||
     !isDeepStrictEqual(existing.triggerPayload ?? {}, input.triggerPayload)
   ) {
     throw conflict("Idempotency key was already used for a different workflow run request", {
@@ -313,6 +319,8 @@ export interface EnqueueWorkflowRunInput {
   responsibleUserId: string | null;
   idempotencyKey: string | null;
   correlationId: string;
+  retryOfRunId?: string | null;
+  idempotencyRootRunId?: string | null;
   actor: WorkflowRunActor;
 }
 
@@ -350,6 +358,8 @@ export async function enqueueWorkflowRunInTransaction(
       responsibleUserId: input.responsibleUserId,
       idempotencyKey: input.idempotencyKey,
       correlationId: input.correlationId,
+      retryOfRunId: input.retryOfRunId ?? null,
+      idempotencyRootRunId: input.idempotencyRootRunId ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -380,6 +390,8 @@ export async function enqueueWorkflowRunInTransaction(
         workflowRevisionId: input.revisionId,
         source: input.source,
         triggerId: input.triggerId ?? null,
+        retryOfRunId: input.retryOfRunId ?? null,
+        idempotencyRootRunId: input.idempotencyRootRunId ?? null,
       },
     },
   );
@@ -490,6 +502,12 @@ function remainingWorkflowDeadlineMs(
     0,
     run.startedAt.getTime() + totalDeadlineSeconds * 1_000 - now.getTime(),
   );
+}
+
+function workflowRunIdempotencyRootId(
+  run: typeof workflowRuns.$inferSelect,
+): string {
+  return run.idempotencyRootRunId ?? run.id;
 }
 
 function graphVariables(graph: WorkflowGraphV1): Record<string, unknown> {
@@ -1298,7 +1316,7 @@ export async function scheduleWorkflowStepRetry(
     finishedAt.getTime() - (runningStep.startedAt ?? finishedAt).getTime(),
   );
   const nextAttempt = runningStep.attempt + 1;
-  const idempotencyKey = workflowStepIdempotencyKey(run.id, node.id);
+  const idempotencyKey = workflowStepIdempotencyKey(workflowRunIdempotencyRootId(run), node.id);
   const publications: ActivityPublication[] = [];
 
   await db.transaction(async (tx) => {
@@ -2256,7 +2274,7 @@ async function createWorkflowTask(
 ) {
   const config = createTaskNodeConfig(node);
   await assertWorkflowTaskAssignmentAuthorized(db, run, actor, config);
-  const idempotencyKey = workflowStepIdempotencyKey(run.id, node.id);
+  const idempotencyKey = workflowStepIdempotencyKey(workflowRunIdempotencyRootId(run), node.id);
   const actorFields = workflowTaskActorFields(run, actor);
   const responsibleUserId =
     run.responsibleUserId ??
@@ -2636,7 +2654,7 @@ async function wakeWorkflowExternalAgent(
 
   const heartbeat = await workflowAgentHeartbeat(db, runtimeDeps);
   const requester = workflowWakeRequester(actor);
-  const stepKey = workflowStepIdempotencyKey(run.id, node.id);
+  const stepKey = workflowStepIdempotencyKey(workflowRunIdempotencyRootId(run), node.id);
   const contract = externalAgentWakeContract(run, node, config);
 
   try {
@@ -2766,7 +2784,7 @@ async function createWorkflowAgentTaskIssueInTransaction(
   publications: ActivityPublication[];
 }> {
   const taskConfig = agentTaskAsCreateTaskConfig(config);
-  const idempotencyKey = workflowStepIdempotencyKey(run.id, node.id);
+  const idempotencyKey = workflowStepIdempotencyKey(workflowRunIdempotencyRootId(run), node.id);
   const actorFields = workflowTaskActorFields(run, actor);
   const responsibleUserId =
     run.responsibleUserId ??
@@ -3831,7 +3849,7 @@ async function wakeWorkflowAgentTask(
 
   const heartbeat = await workflowAgentHeartbeat(db, runtimeDeps);
   const requester = workflowWakeRequester(actor);
-  const stepKey = workflowStepIdempotencyKey(run.id, nodeId);
+  const stepKey = workflowStepIdempotencyKey(workflowRunIdempotencyRootId(run), nodeId);
 
   try {
     const response = await queueIssueAssignmentWakeup({
@@ -4217,7 +4235,7 @@ async function scheduleTaskCompletionWait(
 
   const config = createTaskNodeConfig(node);
   await assertWorkflowTaskAssignmentAuthorized(db, run, actor, config);
-  const idempotencyKey = workflowStepIdempotencyKey(run.id, node.id);
+  const idempotencyKey = workflowStepIdempotencyKey(workflowRunIdempotencyRootId(run), node.id);
   const actorFields = workflowTaskActorFields(run, actor);
   const responsibleUserId =
     run.responsibleUserId ??
@@ -6892,13 +6910,25 @@ async function cancelWorkflowChildIssues(
   let allTerminal = true;
   const issueActor = cancellationIssueActorFields(actor);
   for (const issueId of issueIds) {
+    const wait = cancelledWaits.find(
+      (candidate) => candidate.referenceId === issueId,
+    );
+    const expectedFingerprint = wait
+      ? workflowStepIdempotencyKey(
+          workflowRunIdempotencyRootId(run),
+          wait.nodeId,
+        )
+      : null;
+
     let issue = await db
       .select({
         id: issues.id,
         companyId: issues.companyId,
         status: issues.status,
         originKind: issues.originKind,
+        originId: issues.originId,
         originRunId: issues.originRunId,
+        originFingerprint: issues.originFingerprint,
       })
       .from(issues)
       .where(
@@ -6910,10 +6940,20 @@ async function cancelWorkflowChildIssues(
       .then((rows) => rows[0] ?? null);
 
     if (!issue) continue;
-    if (issue.originKind !== "workflow_task" || issue.originRunId !== run.id) {
+    if (
+      issue.originKind !== "workflow_task" ||
+      issue.originId !== run.workflowId ||
+      !expectedFingerprint ||
+      issue.originFingerprint !== expectedFingerprint
+    ) {
       allTerminal = false;
       continue;
     }
+
+    // A whole-run retry can reuse a side effect created by an ancestor run.
+    // Cancelling the retry must not mutate that ancestor-owned Task.
+    if (issue.originRunId !== run.id) continue;
+
     if (issue.status !== "done" && issue.status !== "cancelled") {
       try {
         await issueService(db).update(issue.id, {
@@ -6933,7 +6973,9 @@ async function cancelWorkflowChildIssues(
           companyId: issues.companyId,
           status: issues.status,
           originKind: issues.originKind,
+          originId: issues.originId,
           originRunId: issues.originRunId,
+          originFingerprint: issues.originFingerprint,
         })
         .from(issues)
         .where(
@@ -7526,6 +7568,141 @@ export function workflowExecutorService(
 
       const detail = await getRunDetail(db, companyId, runId);
       if (!detail) throw new Error("Workflow run disappeared during cancellation");
+      return detail;
+    },
+
+    retryRun: async (
+      companyId: string,
+      runId: string,
+      rawInput: RetryWorkflowRun,
+      actor: WorkflowRunActor,
+      idempotencyKey: string | null,
+    ): Promise<WorkflowRunDetail> => {
+      const parsed = retryWorkflowRunSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid workflow retry request", parsed.error.issues);
+      }
+      if (!idempotencyKey) {
+        throw unprocessable("Idempotency-Key is required for workflow retry", {
+          code: "idempotency_key_required",
+        });
+      }
+      await assertActorCompanyScope(db, companyId, actor);
+
+      const sourceRun = await db
+        .select()
+        .from(workflowRuns)
+        .where(
+          and(
+            eq(workflowRuns.companyId, companyId),
+            eq(workflowRuns.id, runId),
+          ),
+        )
+        .then((rows) => rows[0] ?? null);
+      if (!sourceRun) throw notFound("Workflow run not found");
+      if (sourceRun.status !== "failed" && sourceRun.status !== "cancelled") {
+        throw conflict("Only failed or cancelled workflow runs can be retried", {
+          code: "workflow_run_not_retryable",
+          workflowRunId: sourceRun.id,
+          status: sourceRun.status,
+        });
+      }
+
+      const workflow = await db
+        .select({ id: workflows.id, status: workflows.status })
+        .from(workflows)
+        .where(
+          and(
+            eq(workflows.companyId, companyId),
+            eq(workflows.id, sourceRun.workflowId),
+          ),
+        )
+        .then((rows) => rows[0] ?? null);
+      if (!workflow) throw notFound("Workflow not found");
+      if (workflow.status !== "active") {
+        throw conflict("Workflow is not active", {
+          code: "workflow_invalid_transition",
+          status: workflow.status,
+        });
+      }
+
+      const revision = await revisionForRun(db, sourceRun);
+      if (!revision) {
+        throw unprocessable(
+          "The immutable workflow revision for this run is unavailable",
+          {
+            code: "workflow_revision_unavailable_for_retry",
+            workflowRunId: sourceRun.id,
+            workflowRevisionId: sourceRun.workflowRevisionId,
+          },
+        );
+      }
+      const trigger = revision.graph.nodes.find(
+        (node) => node.type === "core.manual_trigger",
+      );
+      if (!trigger) {
+        throw unprocessable(
+          "The historical workflow revision cannot be retried safely",
+          { code: "workflow_executor_capability_not_ready" },
+        );
+      }
+
+      const rootRunId = sourceRun.idempotencyRootRunId ?? sourceRun.id;
+      const queued = await createQueuedRun(db, {
+        companyId,
+        workflowId: sourceRun.workflowId,
+        revisionId: sourceRun.workflowRevisionId,
+        nodeId: trigger.id,
+        triggerId: sourceRun.triggerId,
+        source: "manual",
+        triggerPayload:
+          (sourceRun.triggerPayload ?? {}) as Record<string, unknown>,
+        responsibleUserId:
+          actor.responsibleUserId ??
+          (actor.principal.type === "user"
+            ? actor.principal.userId
+            : sourceRun.responsibleUserId),
+        idempotencyKey,
+        correlationId: randomUUID(),
+        retryOfRunId: sourceRun.id,
+        idempotencyRootRunId: rootRunId,
+        actor,
+      });
+
+      if (queued.created) {
+        const { publication } = await persistWorkflowActivity(db, actor, {
+          companyId,
+          action: "workflow.run_retry_created",
+          entityType: "workflow_run",
+          entityId: queued.run.id,
+          details: {
+            retryOfRunId: sourceRun.id,
+            idempotencyRootRunId: rootRunId,
+            workflowId: sourceRun.workflowId,
+            workflowRevisionId: sourceRun.workflowRevisionId,
+            reason: parsed.data.reason ?? null,
+          },
+        });
+        publishActivity(publication);
+
+        const claimed = await claimQueuedRun(
+          db,
+          companyId,
+          queued.run.id,
+          `inline:${randomUUID()}`,
+          actor,
+        );
+        if (!claimed) {
+          throw conflict("Workflow retry could not be claimed", {
+            code: "workflow_run_claim_conflict",
+            workflowRunId: queued.run.id,
+          });
+        }
+        await executeClaimedRun(db, claimed, actor, runtimeDeps);
+      }
+
+      const detail = await getRunDetail(db, companyId, queued.run.id);
+      if (!detail) throw new Error("Workflow retry disappeared after execution");
       return detail;
     },
 

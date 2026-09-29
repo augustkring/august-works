@@ -43,6 +43,7 @@ A successful publish supersedes the previous published revision, publishes the e
 | POST | `/companies/:companyId/issues/:issueId/workflows/:workflowId/run` | workflow run + task mutate | `Idempotency-Key` | task-sourced run with authoritative task context | `workflow.task_invoked` + workflow run/step activity |
 | GET | `/companies/:companyId/workflow-runs/:runId` | read | none | run + step attempts + durable waits | none |
 | POST | `/companies/:companyId/workflow-runs/:runId/cancel` | run | validated cancellation reason | current durable cancellation state | `workflow.run_cancel_requested` / `workflow.run_cancelled` |
+| POST | `/companies/:companyId/workflow-runs/:runId/retry` | run | `Idempotency-Key` + optional reason | new run pinned to original immutable revision/input | `workflow.run_retry_created` + normal run activity |
 
 ## Current publish gate
 
@@ -68,6 +69,9 @@ A Condition may be terminal or may expose exactly one `true` and one `false` bra
 - `workflow_run_claim_conflict`
 - `workflow_run_cancel_conflict`
 - `workflow_run_terminal`
+- `workflow_run_not_retryable`
+- `workflow_revision_unavailable_for_retry`
+- `idempotency_key_required`
 - `idempotency_key_invalid`
 - `idempotency_key_reused`
 - `workflow_condition_expression_invalid`
@@ -161,7 +165,7 @@ Timeout attempts cancellation through the existing heartbeat control plane. The 
 A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
 The run-history endpoint reads the existing authoritative `workflow_runs` state;
-it does not create a second history store. Whole-run cancellation is exposed through `POST /companies/:companyId/workflow-runs/:runId/cancel` and requires a non-empty reason. Cancellation is durable and truthful: queued runs may terminate directly; running/waiting/recovering runs enter `cancelling`, stop scheduling new work, cancel active waits and pending approvals, cancel workflow-owned active child Tasks, and propagate cancellation to bound Agent/OpenClaw heartbeat runs where supported. The API returns the current durable state and does not falsely claim remote termination before the child runtime is terminal. Reconciliation revisits `cancelling` runs and finalizes them once bounded children settle. Already completed side effects are preserved rather than silently rolled back. User-initiated whole-run retry is still not advertised yet; automatic node retry durability is implemented.
+it does not create a second history store. Whole-run cancellation is exposed through `POST /companies/:companyId/workflow-runs/:runId/cancel` and requires a non-empty reason. Cancellation is durable and truthful: queued runs may terminate directly; running/waiting/recovering runs enter `cancelling`, stop scheduling new work, cancel active waits and pending approvals, cancel workflow-owned active child Tasks, and propagate cancellation to bound Agent/OpenClaw heartbeat runs where supported. The API returns the current durable state and does not falsely claim remote termination before the child runtime is terminal. Reconciliation revisits `cancelling` runs and finalizes them once bounded children settle. Already completed side effects are preserved rather than silently rolled back. User-initiated whole-run retry is exposed through `POST /companies/:companyId/workflow-runs/:runId/retry`. Only terminal `failed` or `cancelled` runs are eligible. Retry requires an idempotency key and creates a new immutable run pinned to the original workflow revision and authoritative trigger payload. `retryOfRunId` records immediate lineage, while `idempotencyRootRunId` preserves the original logical side-effect identity across a retry chain so completed write nodes keep stable deduplication keys. The original run and step history are never reopened or rewritten. Automatic node retry remains a separate executor mechanism.
 
 ## Recovery assurance boundary
 

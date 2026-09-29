@@ -3103,4 +3103,127 @@ describePg("Workflow executor V1", () => {
   });
 
 
+  it("retries a failed run as a new immutable run while reusing completed task side effects", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+        {
+          id: "task",
+          type: "work.create_task",
+          name: "Create review task",
+          position: { x: 180, y: 0 },
+          config: {
+            title: "Review the account",
+            description: "Review the account once.",
+            projectId: null,
+            assigneeAgentId: null,
+            assigneeUserId: null,
+            waitForCompletion: false,
+          },
+        },
+        {
+          id: "fail",
+          type: "core.condition",
+          name: "Missing input",
+          position: { x: 360, y: 0 },
+          config: { expression: "{{trigger.missing}}" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "start", target: "task" },
+        { id: "e2", source: "task", target: "fail" },
+      ],
+      variables: [],
+      settings: {},
+    });
+    const executor = workflowExecutorService(db);
+    const actor = {
+      principal: { type: "user" as const, userId: seeded.userId },
+      responsibleUserId: seeded.userId,
+    };
+    const failed = await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      { input: { accountId: "acme" } },
+      actor,
+      "retry-root-run",
+    );
+    expect(failed.run.status).toBe("failed");
+    expect(
+      await db.select().from(issues).where(
+        and(
+          eq(issues.companyId, seeded.companyId),
+          eq(issues.originKind, "workflow_task"),
+        ),
+      ),
+    ).toHaveLength(1);
+
+    const retried = await executor.retryRun(
+      seeded.companyId,
+      failed.run.id,
+      { reason: "Retry after correcting the dependency" },
+      actor,
+      "retry-request-1",
+    );
+    expect(retried.run.id).not.toBe(failed.run.id);
+    expect(retried.run).toMatchObject({
+      status: "failed",
+      workflowRevisionId: failed.run.workflowRevisionId,
+      triggerPayload: failed.run.triggerPayload,
+      retryOfRunId: failed.run.id,
+      idempotencyRootRunId: failed.run.id,
+    });
+    expect(
+      await db.select().from(issues).where(
+        and(
+          eq(issues.companyId, seeded.companyId),
+          eq(issues.originKind, "workflow_task"),
+        ),
+      ),
+    ).toHaveLength(1);
+
+    const replay = await executor.retryRun(
+      seeded.companyId,
+      failed.run.id,
+      { reason: "Retry after correcting the dependency" },
+      actor,
+      "retry-request-1",
+    );
+    expect(replay.run.id).toBe(retried.run.id);
+    expect(await db.select().from(workflowRuns)).toHaveLength(2);
+    const actions=(await db.select().from(activityLog)).map((row)=>row.action);
+    expect(actions.filter((action)=>action==="workflow.run_retry_created")).toHaveLength(1);
+  });
+
+  it("rejects whole-run retry for a successful run", async () => {
+    const seeded=await seedPublishedManualWorkflow();
+    const executor=workflowExecutorService(db);
+    const actor={principal:{type:"user" as const,userId:seeded.userId}};
+    const completed=await executor.startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      {input:{}},
+      actor,
+      "successful-run",
+    );
+    expect(completed.run.status).toBe("succeeded");
+    await expect(
+      executor.retryRun(
+        seeded.companyId,
+        completed.run.id,
+        {},
+        actor,
+        "retry-successful-run",
+      ),
+    ).rejects.toMatchObject({
+      status:409,
+      details:expect.objectContaining({
+        code:"workflow_run_not_retryable",
+        status:"succeeded",
+      }),
+    });
+  });
+
+
 });

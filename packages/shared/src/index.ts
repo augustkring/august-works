@@ -2997,8 +2997,10 @@ export {
 export {
   startWorkflowRunSchema,
   cancelWorkflowRunSchema,
+  retryWorkflowRunSchema,
   workflowRunListQuerySchema,
   type StartWorkflowRun,
   type CancelWorkflowRun,
+  type RetryWorkflowRun,
   type WorkflowRunListQuery,
 } from "./validators/workflow.js";

@@ -251,3 +251,11 @@ export const cancelWorkflowRunSchema = z
   .strict();
 
 export type CancelWorkflowRun = z.input<typeof cancelWorkflowRunSchema>;
+
+export const retryWorkflowRunSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+export type RetryWorkflowRun = z.input<typeof retryWorkflowRunSchema>;
