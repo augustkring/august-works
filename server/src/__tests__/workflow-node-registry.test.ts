@@ -17,6 +17,7 @@ describe("Workflow Node Registry", () => {
         "connector.action",
         "work.create_task",
         "agent.task",
+        "agent.external",
         "human.approval",
       ]),
     );
