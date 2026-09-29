@@ -119,12 +119,15 @@ export function OverviewSection({
     setEditDraft,
     assigneeOptions,
     projectOptions,
+    workflowOptions,
     recentAssigneeIds,
     recentProjectIds,
     agentById,
     projectById,
+    workflowById,
     currentAssignee,
     currentProject,
+    currentWorkflow,
     mentionOptions,
     assigneeSelectorRef,
     projectSelectorRef,
@@ -155,18 +158,78 @@ export function OverviewSection({
       {/* Assignment row */}
       <div className="overflow-x-auto overscroll-x-contain">
         <div className="inline-flex min-w-full flex-wrap items-center gap-2 text-sm text-muted-foreground sm:min-w-max sm:flex-nowrap">
-          <span>For</span>
+          <span>Run</span>
+          <Select
+            value={editDraft.executionTargetKind}
+            onValueChange={(value: "agent_task" | "workflow") =>
+              setEditDraft((current) => ({
+                ...current,
+                executionTargetKind: value,
+                executionTargetRef:
+                  value === "agent_task" ? current.assigneeAgentId : "",
+                ...(value === "workflow" ? { assigneeAgentId: "" } : {}),
+              }))
+            }
+          >
+            <SelectTrigger className="h-8 w-[112px]" aria-label="Routine execution target type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="agent_task">Agent</SelectItem>
+              <SelectItem value="workflow">Workflow</SelectItem>
+            </SelectContent>
+          </Select>
           <InlineEntitySelector
             ref={assigneeSelectorRef}
-            value={editDraft.assigneeAgentId}
-            options={assigneeOptions}
-            recentOptionIds={recentAssigneeIds}
-            placeholder="Responsible"
-            noneLabel="No responsible"
-            searchPlaceholder="Search responsible..."
-            emptyMessage="No responsible found."
-            onChange={(assigneeAgentId) =>
-              setEditDraft((current) => ({ ...current, assigneeAgentId }))
+            value={
+              editDraft.executionTargetKind === "workflow"
+                ? editDraft.executionTargetRef
+                : editDraft.assigneeAgentId
+            }
+            options={
+              editDraft.executionTargetKind === "workflow"
+                ? workflowOptions
+                : assigneeOptions
+            }
+            recentOptionIds={
+              editDraft.executionTargetKind === "workflow"
+                ? []
+                : recentAssigneeIds
+            }
+            placeholder={
+              editDraft.executionTargetKind === "workflow"
+                ? "Workflow"
+                : "Responsible"
+            }
+            noneLabel={
+              editDraft.executionTargetKind === "workflow"
+                ? "No workflow"
+                : "No responsible"
+            }
+            searchPlaceholder={
+              editDraft.executionTargetKind === "workflow"
+                ? "Search workflows..."
+                : "Search responsible..."
+            }
+            emptyMessage={
+              editDraft.executionTargetKind === "workflow"
+                ? "No published workflows found."
+                : "No responsible found."
+            }
+            onChange={(targetId) =>
+              setEditDraft((current) =>
+                current.executionTargetKind === "workflow"
+                  ? {
+                      ...current,
+                      executionTargetRef: targetId,
+                      assigneeAgentId: "",
+                    }
+                  : {
+                      ...current,
+                      assigneeAgentId: targetId,
+                      executionTargetRef: targetId,
+                    },
+              )
             }
             onConfirm={() => {
               if (editDraft.projectId) {
@@ -175,27 +238,53 @@ export function OverviewSection({
                 projectSelectorRef.current?.focus();
               }
             }}
-            renderTriggerValue={(option) =>
-              option ? (
-                currentAssignee ? (
-                  <>
-                    <AgentAvatar agent={currentAssignee} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/>
-                    <span className="truncate">{option.label}</span>
-                  </>
-                ) : (
+            renderTriggerValue={(option) => {
+              if (!option) {
+                return (
+                  <span className="text-muted-foreground">
+                    {editDraft.executionTargetKind === "workflow"
+                      ? "Workflow"
+                      : "Responsible"}
+                  </span>
+                );
+              }
+              if (editDraft.executionTargetKind === "workflow") {
+                return (
+                  <span className="truncate">
+                    {currentWorkflow?.name ?? option.label}
+                  </span>
+                );
+              }
+              return currentAssignee ? (
+                <>
+                  <AgentAvatar
+                    agent={currentAssignee}
+                    size={16}
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  />
                   <span className="truncate">{option.label}</span>
-                )
+                </>
               ) : (
-                <span className="text-muted-foreground">Responsible</span>
-              )
-            }
+                <span className="truncate">{option.label}</span>
+              );
+            }}
             renderOption={(option) => {
               if (!option.id) return <span className="truncate">{option.label}</span>;
+              if (editDraft.executionTargetKind === "workflow") {
+                const workflow = workflowById.get(option.id);
+                return (
+                  <span className="truncate">{workflow?.name ?? option.label}</span>
+                );
+              }
               const assignee = agentById.get(option.id);
               return (
                 <>
                   {assignee ? (
-                    <AgentAvatar agent={assignee} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/>
+                    <AgentAvatar
+                      agent={assignee}
+                      size={16}
+                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    />
                   ) : null}
                   <span className="truncate">{option.label}</span>
                 </>
@@ -244,10 +333,14 @@ export function OverviewSection({
         </div>
       </div>
 
-      {!routine.assigneeAgentId ? (
+      {!(
+        routine.executionTargetKind === "workflow"
+          ? routine.executionTargetRef
+          : routine.executionTargetRef ?? routine.assigneeAgentId
+      ) ? (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-900 dark:text-amber-200">
-          Default agent required. This routine can stay as a draft and still run manually, but
-          automation stays paused until you assign a default agent.
+          Execution target required. This routine can stay as a draft and still run manually, but
+          automation stays paused until you choose an agent or a published workflow.
         </div>
       ) : null}
 

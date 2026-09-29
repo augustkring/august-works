@@ -437,6 +437,8 @@ export const queryKeys = {
   workflows: {
     capabilitySearch: (companyId: string, q: string, kind?: string) =>
       ["workflows", companyId, "capability-search", q, kind ?? "__all"] as const,
+    dataSelector: (companyId: string, targetNodeId: string, graphKey: string) =>
+      ["workflows", companyId, "data-selector", targetNodeId, graphKey] as const,
     capabilities: (companyId: string) => ["workflows", companyId, "capabilities"] as const,
     list: (companyId: string) => ["workflows", companyId, "list"] as const,
     detail: (companyId: string, workflowId: string) =>

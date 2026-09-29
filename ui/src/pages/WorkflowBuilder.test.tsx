@@ -386,7 +386,7 @@ describe("WorkflowBuilder", () => {
       sideEffectClass: "write",
       riskDefault: "C3",
       authorizationRequirements: [
-        { permission: "tasks:assign", timing: "execution" },
+        { permission: "tasks:assign", timing: "execution", description: "Assign work to the selected agent at execution." },
       ],
       timeoutDefaultSeconds: 120,
       retryPolicyDefault: {
@@ -397,7 +397,7 @@ describe("WorkflowBuilder", () => {
       },
       idempotencyStrategy: "workflow_step_key",
       cancellationSupport: "cooperative",
-      testMode: "mock_or_sandbox",
+      testMode: "sandbox",
       failureOutputs: [],
       auditEvents: [
         "workflow.external_agent_requested",
@@ -447,7 +447,6 @@ describe("WorkflowBuilder", () => {
       source: {
         agentId: "openclaw-agent-1",
         adapterType: "openclaw_gateway",
-        mediation: "external_agent",
       },
     };
 

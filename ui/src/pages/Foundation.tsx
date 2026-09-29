@@ -547,7 +547,9 @@ function FoundationDocumentWorkspace({
   });
 
   const transition = (kind: "submit" | "approve" | "reject") => {
-    if (!document.latestRevisionId) return;
+    if (!document.latestRevisionId) {
+      throw new Error("Foundation document has no current revision");
+    }
     const call =
       kind === "submit"
         ? foundationApi.submitForReview
