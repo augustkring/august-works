@@ -53,6 +53,15 @@ describe("MemoryExperimentalGate", () => {
     await flushReact();
   }
 
+  it("shows a legible error instead of redirecting when settings cannot be loaded", async () => {
+    mockApi.getExperimental.mockRejectedValue(new Error("settings unavailable"));
+    await renderGate();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "Memory availability could not be checked",
+    );
+    expect(container.querySelector('[data-testid="navigate"]')).toBeNull();
+  });
+
   it("redirects while Memory is disabled", async () => {
     mockApi.getExperimental.mockResolvedValue({ enableCollectiveMemoryV1: false });
     await renderGate();

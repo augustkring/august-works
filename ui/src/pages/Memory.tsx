@@ -283,7 +283,7 @@ export function Memory() {
           <div role="alert" className="border-l-2 border-destructive pl-4">
             <p className="font-medium">Memory record could not be loaded</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Private agent memory is intentionally not exposed on this surface.
+              The shared memory record is unavailable or could not be read. No memory state was changed.
             </p>
             <div className="mt-3 flex gap-2">
               <Button variant="outline" onClick={() => navigate("/memory")}>

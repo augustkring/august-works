@@ -267,5 +267,73 @@ describePg("Memory routes", () => {
     await http
       .get(`/api/companies/${seeded.companyId}/memory/records/${privateCandidate.record.id}`)
       .expect(404);
+
+    await http
+      .post(`/api/companies/${seeded.companyId}/memory/records/${privateCandidate.record.id}/accept`)
+      .send({})
+      .expect(404);
+
+    await http
+      .post(`/api/companies/${seeded.companyId}/memory/records/${privateCandidate.record.id}/reject`)
+      .send({ reason: "Board must not review private agent memory" })
+      .expect(404);
+
+    await http
+      .post(`/api/companies/${seeded.companyId}/memory/records/${privateCandidate.record.id}/revoke`)
+      .send({ reason: "Board must not revoke private agent memory" })
+      .expect(404);
+
+    await http
+      .post(`/api/companies/${seeded.companyId}/memory/records/${privateCandidate.record.id}/correct`)
+      .send({
+        memoryType: "preference",
+        subject: null,
+        title: "Private preference",
+        content: "Prefer detailed status updates.",
+        summary: null,
+        sensitivity: "internal",
+        importance: 50,
+        confidenceScore: 0.7,
+        validFrom: null,
+        validUntil: null,
+        observedAt: "2026-09-29T12:05:00.000Z",
+        retentionPolicy: "standard",
+        expiresAt: null,
+        createdByOperationId: null,
+        metadata: {},
+        evidence: supportingEvidence("Prefer detailed status updates."),
+        reason: "Private correction must remain agent-scoped",
+      })
+      .expect(404);
+
+    await http
+      .post(`/api/companies/${seeded.companyId}/memory/candidates`)
+      .send({
+        bindingId: binding.id,
+        memoryType: "preference",
+        scope: { type: "agent", id: seeded.agent.id },
+        subject: null,
+        ownerAgentId: seeded.agent.id,
+        title: "Board-created private preference",
+        content: "Do not allow this through the shared board API.",
+        summary: null,
+        sensitivity: "internal",
+        importance: 50,
+        confidenceScore: 0.7,
+        validFrom: null,
+        validUntil: null,
+        observedAt: "2026-09-29T12:10:00.000Z",
+        retentionPolicy: "standard",
+        expiresAt: null,
+        createdByOperationId: null,
+        metadata: {},
+        evidence: supportingEvidence("Do not allow this through the shared board API."),
+      })
+      .expect(422);
+
+    await http
+      .post(`/api/companies/${seeded.companyId}/memory/bindings/${binding.id}/targets`)
+      .send({ targetType: "agent", targetId: seeded.agent.id })
+      .expect(422);
   });
 });

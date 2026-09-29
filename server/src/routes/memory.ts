@@ -52,6 +52,31 @@ export function memoryRoutes(db: Db) {
     assertCompanyAccess(req, companyId);
   }
 
+  function assertSharedCandidateInput(input: {
+    scope: { type: string };
+    ownerAgentId: string | null;
+  }) {
+    if (input.scope.type === "agent" || input.ownerAgentId !== null) {
+      throw unprocessable(
+        "Private agent memory is not available on the board Memory surface",
+        { code: "private_memory_board_write_denied" },
+      );
+    }
+  }
+
+  async function assertSharedRecord(
+    companyId: string,
+    recordId: string,
+    actor: MemoryMutationActor,
+  ) {
+    const detail = await svc.getShared(companyId, recordId, actor);
+    if (!detail) {
+      throw notFound("Memory record not found", {
+        code: "shared_memory_record_not_found",
+      });
+    }
+  }
+
   router.get("/companies/:companyId/memory/records", async (req, res) => {
     await assertMemoryEnabled();
     const companyId = req.params.companyId as string;
@@ -83,6 +108,7 @@ export function memoryRoutes(db: Db) {
       await assertMemoryEnabled();
       const companyId = req.params.companyId as string;
       assertBoardCompany(req, companyId);
+      assertSharedCandidateInput(req.body);
       const created = await svc.createCandidate(companyId, req.body, boardActor(req));
       res.status(201).json(created);
     },
@@ -95,12 +121,15 @@ export function memoryRoutes(db: Db) {
       await assertMemoryEnabled();
       const companyId = req.params.companyId as string;
       assertBoardCompany(req, companyId);
+      const actor = boardActor(req);
+      const recordId = req.params.recordId as string;
+      await assertSharedRecord(companyId, recordId, actor);
       res.json(
         await svc.reviewCandidate(
           companyId,
-          req.params.recordId as string,
+          recordId,
           { decision: "accept", reason: req.body.reason ?? null },
-          boardActor(req),
+          actor,
         ),
       );
     },
@@ -118,12 +147,15 @@ export function memoryRoutes(db: Db) {
           code: "memory_rejection_reason_required",
         });
       }
+      const actor = boardActor(req);
+      const recordId = req.params.recordId as string;
+      await assertSharedRecord(companyId, recordId, actor);
       res.json(
         await svc.reviewCandidate(
           companyId,
-          req.params.recordId as string,
+          recordId,
           { decision: "reject", reason: req.body.reason },
-          boardActor(req),
+          actor,
         ),
       );
     },
@@ -136,11 +168,14 @@ export function memoryRoutes(db: Db) {
       await assertMemoryEnabled();
       const companyId = req.params.companyId as string;
       assertBoardCompany(req, companyId);
+      const actor = boardActor(req);
+      const recordId = req.params.recordId as string;
+      await assertSharedRecord(companyId, recordId, actor);
       const created = await svc.createCorrectionCandidate(
         companyId,
-        req.params.recordId as string,
+        recordId,
         req.body,
-        boardActor(req),
+        actor,
       );
       res.status(201).json(created);
     },
@@ -153,12 +188,15 @@ export function memoryRoutes(db: Db) {
       await assertMemoryEnabled();
       const companyId = req.params.companyId as string;
       assertBoardCompany(req, companyId);
+      const actor = boardActor(req);
+      const recordId = req.params.recordId as string;
+      await assertSharedRecord(companyId, recordId, actor);
       res.json(
         await svc.revoke(
           companyId,
-          req.params.recordId as string,
+          recordId,
           req.body,
-          boardActor(req),
+          actor,
         ),
       );
     },
@@ -206,6 +244,12 @@ export function memoryRoutes(db: Db) {
       await assertMemoryEnabled();
       const companyId = req.params.companyId as string;
       assertBoardCompany(req, companyId);
+      if (req.body.targetType === "agent") {
+        throw unprocessable(
+          "Private agent memory targets are not available on the board Memory surface",
+          { code: "private_memory_board_target_denied" },
+        );
+      }
       const created = await svc.addBindingTarget(
         companyId,
         req.params.bindingId as string,
