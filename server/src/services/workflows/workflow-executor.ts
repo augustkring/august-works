@@ -16,7 +16,9 @@ import {
   workflows,
 } from "@paperclipai/db";
 import {
+  cancelWorkflowRunSchema,
   startWorkflowRunSchema,
+  type CancelWorkflowRun,
   type ExecutionPrincipal,
   type StartWorkflowRun,
   type WorkflowGraphV1,
@@ -6153,7 +6155,24 @@ async function executeClaimedRun(
     return;
   }
 
-  await executeWorkflowGraph(db, run, revision.graph, actor, runtimeDeps);
+  try {
+    await executeWorkflowGraph(db, run, revision.graph, actor, runtimeDeps);
+  } catch (error) {
+    const current = await db
+      .select({ status: workflowRuns.status })
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.id, run.id),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    if (current?.status === "cancelling" || current?.status === "cancelled") {
+      return;
+    }
+    throw error;
+  }
 }
 
 function heartbeatRunIsActive(status: string) {
@@ -6464,6 +6483,700 @@ async function resolveExternalAgentWait(
   return changed ? "recovered" : "raced";
 }
 
+
+function workflowCancellationResolutionActor(actor: WorkflowRunActor) {
+  const activityActor = workflowActivityActor(actor);
+  return {
+    resolvedByType: activityActor.actorType,
+    resolvedById: activityActor.actorId,
+  };
+}
+
+function workflowRunIsTerminal(status: string) {
+  return status === "succeeded" || status === "failed" || status === "cancelled";
+}
+
+function cancellationIssueActorFields(actor: WorkflowRunActor) {
+  if (actor.principal.type === "user") {
+    return {
+      actorUserId: actor.principal.userId,
+      actorAgentId: null,
+      actorRunId: actor.runId ?? null,
+    };
+  }
+  if (actor.principal.type === "agent") {
+    return {
+      actorUserId: null,
+      actorAgentId: actor.principal.agentId,
+      actorRunId: actor.runId ?? null,
+    };
+  }
+  return {
+    actorUserId: null,
+    actorAgentId: null,
+    actorRunId: actor.runId ?? null,
+  };
+}
+
+async function requestWorkflowRunCancellation(
+  db: Db,
+  companyId: string,
+  runId: string,
+  reason: string,
+  actor: WorkflowRunActor,
+): Promise<typeof workflowRuns.$inferSelect> {
+  const publications: ActivityPublication[] = [];
+  const updated = await db.transaction(async (tx) => {
+    const run = await tx
+      .select()
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.companyId, companyId),
+          eq(workflowRuns.id, runId),
+        ),
+      )
+      .for("update")
+      .then((rows) => rows[0] ?? null);
+    if (!run) throw notFound("Workflow run not found");
+
+    if (run.status === "cancelled") return run;
+    if (run.status === "succeeded" || run.status === "failed") {
+      throw conflict("Workflow run is already terminal", {
+        code: "workflow_run_terminal",
+        workflowRunId: run.id,
+        status: run.status,
+      });
+    }
+    if (run.status === "cancelling") return run;
+
+    const now = new Date();
+    const resolutionActor = workflowCancellationResolutionActor(actor);
+    const activeWaits = await tx
+      .select()
+      .from(workflowWaits)
+      .where(
+        and(
+          eq(workflowWaits.companyId, companyId),
+          eq(workflowWaits.workflowRunId, run.id),
+          eq(workflowWaits.status, "active"),
+        ),
+      );
+
+    const directCancelledSteps = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "cancelled",
+        finishedAt: now,
+        errorCode: "workflow_parent_cancelled",
+        errorMessage: reason,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.companyId, companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          inArray(workflowStepRuns.status, ["pending", "retry_scheduled"]),
+        ),
+      )
+      .returning();
+
+    const cancellingSteps = await tx
+      .update(workflowStepRuns)
+      .set({
+        status: "cancelling",
+        errorCode: "workflow_parent_cancelled",
+        errorMessage: reason,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowStepRuns.companyId, companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          inArray(workflowStepRuns.status, ["running", "waiting"]),
+        ),
+      )
+      .returning();
+
+    const cancelledWaits = await tx
+      .update(workflowWaits)
+      .set({
+        status: "cancelled",
+        resolutionJson: {
+          status: "cancelled",
+          errorCode: "workflow_parent_cancelled",
+          reason,
+          parentCancellation: true,
+        },
+        resolvedByType: resolutionActor.resolvedByType,
+        resolvedById: resolutionActor.resolvedById,
+        resolvedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowWaits.companyId, companyId),
+          eq(workflowWaits.workflowRunId, run.id),
+          eq(workflowWaits.status, "active"),
+        ),
+      )
+      .returning();
+
+    for (const wait of activeWaits) {
+      if (
+        wait.kind !== "human_interaction" ||
+        wait.referenceType !== "approval" ||
+        !wait.referenceId
+      ) {
+        continue;
+      }
+      const [approval] = await tx
+        .update(approvals)
+        .set({
+          status: "cancelled",
+          decisionNote: `Workflow run cancelled: ${reason}`,
+          decidedByUserId:
+            actor.principal.type === "user" ? actor.principal.userId : null,
+          decidedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(approvals.companyId, companyId),
+            eq(approvals.id, wait.referenceId),
+            inArray(approvals.status, ["pending", "revision_requested"]),
+          ),
+        )
+        .returning();
+      if (approval) {
+        const activity = await persistWorkflowActivity(
+          tx as unknown as Db,
+          actor,
+          {
+            companyId,
+            action: "approval.cancelled",
+            entityType: "approval",
+            entityId: approval.id,
+            details: {
+              workflowRunId: run.id,
+              workflowNodeId: wait.nodeId,
+              reason: "parent_workflow_cancelled",
+            },
+          },
+        );
+        publications.push(activity.publication);
+      }
+    }
+
+    for (const wait of cancelledWaits) {
+      const activity = await persistWorkflowActivity(
+        tx as unknown as Db,
+        actor,
+        {
+          companyId,
+          action: "workflow.wait_cancelled",
+          entityType: "workflow_wait",
+          entityId: wait.id,
+          details: {
+            workflowRunId: run.id,
+            nodeId: wait.nodeId,
+            kind: wait.kind,
+            reason,
+          },
+        },
+      );
+      publications.push(activity.publication);
+    }
+
+    for (const step of directCancelledSteps) {
+      const activity = await persistWorkflowActivity(
+        tx as unknown as Db,
+        actor,
+        {
+          companyId,
+          action: "workflow.step_cancelled",
+          entityType: "workflow_step_run",
+          entityId: step.id,
+          details: {
+            workflowRunId: run.id,
+            nodeId: step.nodeId,
+            attempt: step.attempt,
+            reason,
+          },
+        },
+      );
+      publications.push(activity.publication);
+    }
+
+    for (const step of cancellingSteps) {
+      const activity = await persistWorkflowActivity(
+        tx as unknown as Db,
+        actor,
+        {
+          companyId,
+          action: "workflow.step_cancel_requested",
+          entityType: "workflow_step_run",
+          entityId: step.id,
+          details: {
+            workflowRunId: run.id,
+            nodeId: step.nodeId,
+            attempt: step.attempt,
+            reason,
+            heartbeatRunId: step.heartbeatRunId,
+          },
+        },
+      );
+      publications.push(activity.publication);
+    }
+
+    if (run.status === "queued") {
+      const [cancelledRun] = await tx
+        .update(workflowRuns)
+        .set({
+          status: "cancelled",
+          executionOwnerId: null,
+          leaseExpiresAt: null,
+          ownerHeartbeatAt: null,
+          finishedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workflowRuns.companyId, companyId),
+            eq(workflowRuns.id, run.id),
+            eq(workflowRuns.status, "queued"),
+          ),
+        )
+        .returning();
+      if (!cancelledRun) {
+        throw conflict("Workflow run changed during cancellation", {
+          code: "workflow_run_cancel_conflict",
+          workflowRunId: run.id,
+        });
+      }
+      await finalizeLinkedRoutineRun(
+        tx as unknown as Db,
+        cancelledRun,
+        {
+          status: "failed",
+          failureReason: `Workflow cancelled: ${reason}`,
+          completedAt: now,
+        },
+      );
+      const activity = await persistWorkflowActivity(
+        tx as unknown as Db,
+        actor,
+        {
+          companyId,
+          action: "workflow.run_cancelled",
+          entityType: "workflow_run",
+          entityId: cancelledRun.id,
+          details: {
+            workflowId: cancelledRun.workflowId,
+            workflowRevisionId: cancelledRun.workflowRevisionId,
+            source: cancelledRun.source,
+            reason,
+          },
+        },
+      );
+      publications.push(activity.publication);
+      return cancelledRun;
+    }
+
+    const [cancellingRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "cancelling",
+        executionOwnerId: null,
+        leaseExpiresAt: null,
+        ownerHeartbeatAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.companyId, companyId),
+          eq(workflowRuns.id, run.id),
+          inArray(workflowRuns.status, ["running", "waiting", "recovering"]),
+        ),
+      )
+      .returning();
+    if (!cancellingRun) {
+      throw conflict("Workflow run changed during cancellation", {
+        code: "workflow_run_cancel_conflict",
+        workflowRunId: run.id,
+      });
+    }
+
+    const activity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId,
+        action: "workflow.run_cancel_requested",
+        entityType: "workflow_run",
+        entityId: cancellingRun.id,
+        details: {
+          workflowId: cancellingRun.workflowId,
+          workflowRevisionId: cancellingRun.workflowRevisionId,
+          source: cancellingRun.source,
+          reason,
+        },
+      },
+    );
+    publications.push(activity.publication);
+    return cancellingRun;
+  });
+
+  publishActivities(publications);
+  return updated;
+}
+
+function isParentCancellationResolution(value: unknown): boolean {
+  return (
+    isRecordValue(value) &&
+    value.parentCancellation === true &&
+    value.errorCode === "workflow_parent_cancelled"
+  );
+}
+
+async function cancelWorkflowChildIssues(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  actor: WorkflowRunActor,
+): Promise<boolean> {
+  const cancelledWaits = await db
+    .select()
+    .from(workflowWaits)
+    .where(
+      and(
+        eq(workflowWaits.companyId, run.companyId),
+        eq(workflowWaits.workflowRunId, run.id),
+        eq(workflowWaits.status, "cancelled"),
+        eq(workflowWaits.referenceType, "issue"),
+      ),
+    );
+
+  const issueIds = [
+    ...new Set(
+      cancelledWaits.flatMap((wait) =>
+        wait.referenceId && isParentCancellationResolution(wait.resolutionJson)
+          ? [wait.referenceId]
+          : [],
+      ),
+    ),
+  ];
+  if (issueIds.length === 0) return true;
+
+  let allTerminal = true;
+  const issueActor = cancellationIssueActorFields(actor);
+  for (const issueId of issueIds) {
+    let issue = await db
+      .select({
+        id: issues.id,
+        companyId: issues.companyId,
+        status: issues.status,
+        originKind: issues.originKind,
+        originRunId: issues.originRunId,
+      })
+      .from(issues)
+      .where(
+        and(
+          eq(issues.companyId, run.companyId),
+          eq(issues.id, issueId),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+
+    if (!issue) continue;
+    if (issue.originKind !== "workflow_task" || issue.originRunId !== run.id) {
+      allTerminal = false;
+      continue;
+    }
+    if (issue.status !== "done" && issue.status !== "cancelled") {
+      try {
+        await issueService(db).update(issue.id, {
+          status: "cancelled",
+          companyGuard: run.companyId,
+          actorAgentId: issueActor.actorAgentId,
+          actorRunId: issueActor.actorRunId,
+          actorUserId: issueActor.actorUserId,
+        });
+      } catch {
+        allTerminal = false;
+        continue;
+      }
+      issue = await db
+        .select({
+          id: issues.id,
+          companyId: issues.companyId,
+          status: issues.status,
+          originKind: issues.originKind,
+          originRunId: issues.originRunId,
+        })
+        .from(issues)
+        .where(
+          and(
+            eq(issues.companyId, run.companyId),
+            eq(issues.id, issueId),
+          ),
+        )
+        .then((rows) => rows[0] ?? null);
+    }
+    if (issue && issue.status !== "done" && issue.status !== "cancelled") {
+      allTerminal = false;
+    }
+  }
+  return allTerminal;
+}
+
+async function cancelWorkflowHeartbeatChildren(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  reason: string,
+  runtimeDeps: WorkflowExecutorRuntimeDeps,
+): Promise<boolean> {
+  const childSteps = await db
+    .select({
+      heartbeatRunId: workflowStepRuns.heartbeatRunId,
+    })
+    .from(workflowStepRuns)
+    .where(
+      and(
+        eq(workflowStepRuns.companyId, run.companyId),
+        eq(workflowStepRuns.workflowRunId, run.id),
+        eq(workflowStepRuns.status, "cancelling"),
+        sql`${workflowStepRuns.heartbeatRunId} is not null`,
+      ),
+    );
+
+  const heartbeatRunIds = [
+    ...new Set(
+      childSteps.flatMap((step) =>
+        step.heartbeatRunId ? [step.heartbeatRunId] : [],
+      ),
+    ),
+  ];
+  if (heartbeatRunIds.length === 0) return true;
+
+  const heartbeatRuntime = await workflowAgentHeartbeat(db, runtimeDeps);
+  let allTerminal = true;
+  for (const heartbeatRunId of heartbeatRunIds) {
+    let heartbeat = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(
+        and(
+          eq(heartbeatRuns.companyId, run.companyId),
+          eq(heartbeatRuns.id, heartbeatRunId),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    if (!heartbeat) continue;
+
+    if (heartbeatRunIsActive(heartbeat.status)) {
+      if (!heartbeatRuntime.cancelRun) {
+        allTerminal = false;
+        continue;
+      }
+      try {
+        await heartbeatRuntime.cancelRun(
+          heartbeat.id,
+          reason,
+          { errorCode: "workflow_parent_cancelled" },
+        );
+      } catch {
+        allTerminal = false;
+        continue;
+      }
+      heartbeat =
+        (await db
+          .select()
+          .from(heartbeatRuns)
+          .where(
+            and(
+              eq(heartbeatRuns.companyId, run.companyId),
+              eq(heartbeatRuns.id, heartbeatRunId),
+            ),
+          )
+          .then((rows) => rows[0] ?? null)) ?? heartbeat;
+    }
+
+    if (!heartbeatRunIsTerminal(heartbeat.status)) {
+      allTerminal = false;
+    }
+  }
+  return allTerminal;
+}
+
+async function finalizeWorkflowRunCancellation(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  reason: string,
+  actor: WorkflowRunActor,
+): Promise<typeof workflowRuns.$inferSelect | null> {
+  const publications: ActivityPublication[] = [];
+  const result = await db.transaction(async (tx) => {
+    const current = await tx
+      .select()
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.id, run.id),
+        ),
+      )
+      .for("update")
+      .then((rows) => rows[0] ?? null);
+    if (!current) return null;
+    if (current.status === "cancelled") return current;
+    if (current.status !== "cancelling") return null;
+
+    const now = new Date();
+    const cancellingSteps = await tx
+      .select()
+      .from(workflowStepRuns)
+      .where(
+        and(
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          eq(workflowStepRuns.status, "cancelling"),
+        ),
+      );
+
+    for (const step of cancellingSteps) {
+      const durationMs = Math.max(
+        0,
+        now.getTime() - (step.startedAt ?? now).getTime(),
+      );
+      const [cancelledStep] = await tx
+        .update(workflowStepRuns)
+        .set({
+          status: "cancelled",
+          finishedAt: now,
+          durationMs,
+          errorCode: "workflow_parent_cancelled",
+          errorMessage: reason,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workflowStepRuns.id, step.id),
+            eq(workflowStepRuns.status, "cancelling"),
+          ),
+        )
+        .returning();
+      if (!cancelledStep) continue;
+      const activity = await persistWorkflowActivity(
+        tx as unknown as Db,
+        actor,
+        {
+          companyId: run.companyId,
+          action: "workflow.step_cancelled",
+          entityType: "workflow_step_run",
+          entityId: cancelledStep.id,
+          details: {
+            workflowRunId: run.id,
+            nodeId: cancelledStep.nodeId,
+            attempt: cancelledStep.attempt,
+            reason,
+          },
+        },
+      );
+      publications.push(activity.publication);
+    }
+
+    const [cancelledRun] = await tx
+      .update(workflowRuns)
+      .set({
+        status: "cancelled",
+        executionOwnerId: null,
+        leaseExpiresAt: null,
+        ownerHeartbeatAt: null,
+        finishedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.id, run.id),
+          eq(workflowRuns.status, "cancelling"),
+        ),
+      )
+      .returning();
+    if (!cancelledRun) return null;
+
+    await finalizeLinkedRoutineRun(
+      tx as unknown as Db,
+      cancelledRun,
+      {
+        status: "failed",
+        failureReason: `Workflow cancelled: ${reason}`,
+        completedAt: now,
+      },
+    );
+
+    const activity = await persistWorkflowActivity(
+      tx as unknown as Db,
+      actor,
+      {
+        companyId: run.companyId,
+        action: "workflow.run_cancelled",
+        entityType: "workflow_run",
+        entityId: cancelledRun.id,
+        details: {
+          workflowId: cancelledRun.workflowId,
+          workflowRevisionId: cancelledRun.workflowRevisionId,
+          source: cancelledRun.source,
+          reason,
+        },
+      },
+    );
+    publications.push(activity.publication);
+    return cancelledRun;
+  });
+
+  publishActivities(publications);
+  return result;
+}
+
+async function continueWorkflowRunCancellation(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  reason: string,
+  actor: WorkflowRunActor,
+  runtimeDeps: WorkflowExecutorRuntimeDeps,
+): Promise<"recovered" | "raced" | "deferred"> {
+  if (run.status === "cancelled") return "recovered";
+  if (run.status !== "cancelling") return "raced";
+
+  const [issuesTerminal, heartbeatChildrenTerminal] = await Promise.all([
+    cancelWorkflowChildIssues(db, run, actor),
+    cancelWorkflowHeartbeatChildren(db, run, reason, runtimeDeps),
+  ]);
+  if (!issuesTerminal || !heartbeatChildrenTerminal) return "deferred";
+
+  const finalized = await finalizeWorkflowRunCancellation(
+    db,
+    run,
+    reason,
+    actor,
+  );
+  if (!finalized) {
+    const current = await db
+      .select({ status: workflowRuns.status })
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.companyId, run.companyId),
+          eq(workflowRuns.id, run.id),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    return current?.status === "cancelled" ? "recovered" : "raced";
+  }
+  return "recovered";
+}
+
 async function recoverWaitingCandidate(
   db: Db,
   candidate: typeof workflowRuns.$inferSelect,
@@ -6611,6 +7324,18 @@ async function recoverCandidate(
   now: Date,
   runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ): Promise<"recovered" | "raced" | "deferred"> {
+  if (candidate.status === "cancelling") {
+    return continueWorkflowRunCancellation(
+      db,
+      candidate,
+      "Workflow cancellation recovery",
+      {
+        principal: { type: "system", service: "workflow-cancellation-recovery" },
+        responsibleUserId: candidate.responsibleUserId,
+      },
+      runtimeDeps,
+    );
+  }
   if (candidate.status === "waiting") {
     return recoverWaitingCandidate(db, candidate, now, runtimeDeps);
   }
@@ -6747,6 +7472,40 @@ export function workflowExecutorService(
   return {
     getRun: (companyId: string, runId: string) =>
       getRunDetail(db, companyId, runId),
+
+    cancelRun: async (
+      companyId: string,
+      runId: string,
+      rawInput: CancelWorkflowRun,
+      actor: WorkflowRunActor,
+    ): Promise<WorkflowRunDetail> => {
+      const parsed = cancelWorkflowRunSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid workflow cancellation request", parsed.error.issues);
+      }
+      await assertActorCompanyScope(db, companyId, actor);
+
+      const requested = await requestWorkflowRunCancellation(
+        db,
+        companyId,
+        runId,
+        parsed.data.reason,
+        actor,
+      );
+      if (requested.status === "cancelling") {
+        await continueWorkflowRunCancellation(
+          db,
+          requested,
+          parsed.data.reason,
+          actor,
+          runtimeDeps,
+        );
+      }
+
+      const detail = await getRunDetail(db, companyId, runId);
+      if (!detail) throw new Error("Workflow run disappeared during cancellation");
+      return detail;
+    },
 
     listRuns: async (
       companyId: string,
@@ -7067,6 +7826,7 @@ export function workflowExecutorService(
               lt(workflowRuns.leaseExpiresAt, now),
             ),
             eq(workflowRuns.status, "waiting"),
+            eq(workflowRuns.status, "cancelling"),
           ),
         )
         .orderBy(asc(workflowRuns.updatedAt))
