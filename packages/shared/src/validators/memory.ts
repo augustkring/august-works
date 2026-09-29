@@ -263,6 +263,16 @@ export const memoryShareInputSchema = z
   })
   .strict();
 
+export const memoryPrivateCorrectionInputSchema = memoryCorrectionInputSchema
+  .omit({ createdByOperationId: true })
+  .extend({
+    createdByOperationId: z.string().trim().min(1).max(500),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    refineMemoryEvidenceAndDates(value, ctx);
+  });
+
 export type MemoryBindingInputParsed = z.infer<typeof memoryBindingInputSchema>;
 export type MemoryBindingTargetInputParsed = z.infer<typeof memoryBindingTargetInputSchema>;
 export type MemoryCandidateInputParsed = z.infer<typeof memoryCandidateInputSchema>;
@@ -271,6 +281,9 @@ export type MemoryCorrectionInputParsed = z.infer<typeof memoryCorrectionInputSc
 export type MemoryRevokeInputParsed = z.infer<typeof memoryRevokeInputSchema>;
 export type MemoryPrivateInputParsed = z.infer<typeof memoryPrivateInputSchema>;
 export type MemoryShareInputParsed = z.infer<typeof memoryShareInputSchema>;
+export type MemoryPrivateCorrectionInputParsed = z.infer<
+  typeof memoryPrivateCorrectionInputSchema
+>;
 
 export const memoryRecordListQuerySchema = z
   .object({

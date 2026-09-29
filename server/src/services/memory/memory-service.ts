@@ -17,6 +17,7 @@ import {
   memoryCandidateInputSchema,
   memoryCorrectionInputSchema,
   memoryPrivateInputSchema,
+  memoryPrivateCorrectionInputSchema,
   memoryReviewInputSchema,
   memoryRevokeInputSchema,
   memoryShareInputSchema,
@@ -751,6 +752,166 @@ export function memoryService(db: Db) {
       });
       publications.forEach(publishActivity);
       return (await getRecordDetail(db, companyId, record.id))!;
+    },
+
+    correctPrivateMemory: async (
+      companyId: string,
+      recordId: string,
+      rawInput: unknown,
+      actor: MemoryMutationActor,
+    ) => {
+      const parsed = memoryPrivateCorrectionInputSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid private memory correction", parsed.error.issues);
+      }
+
+      const publications: ActivityPublication[] = [];
+      const corrected = await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await assertActorCompanyScope(txDb, companyId, actor);
+
+        const source = await txDb
+          .select()
+          .from(memoryRecords)
+          .where(
+            and(
+              eq(memoryRecords.companyId, companyId),
+              eq(memoryRecords.id, recordId),
+              eq(memoryRecords.scopeType, "agent"),
+              isNull(memoryRecords.deletedAt),
+            ),
+          )
+          .for("update")
+          .then((rows) => rows[0] ?? null);
+        if (!source) throw notFound("Private memory record not found");
+        assertPrivateMemoryReadAllowed(source, actor);
+        if (!source.ownerAgentId) {
+          throw conflict("Private memory owner is missing", {
+            code: "private_memory_owner_missing",
+          });
+        }
+        assertPrivateMemoryWriter(source.ownerAgentId, actor);
+
+        const operationFingerprint = memoryOperationFingerprint({
+          sourceRecordId: source.id,
+          input: parsed.data,
+        });
+        await lockMemoryOperation(
+          txDb,
+          companyId,
+          "private-correction",
+          parsed.data.createdByOperationId,
+        );
+        const existing = await memoryRecordForOperation(
+          txDb,
+          companyId,
+          parsed.data.createdByOperationId,
+        );
+        if (existing) {
+          if (
+            existing.scopeType !== "agent" ||
+            existing.ownerAgentId !== source.ownerAgentId ||
+            existing.supersedesRecordId !== source.id ||
+            metadataFingerprint(existing, "privateCorrectionFingerprint") !==
+              operationFingerprint
+          ) {
+            throw conflict("Memory operation id was reused with different private correction input", {
+              code: "memory_operation_conflict",
+              operationId: parsed.data.createdByOperationId,
+            });
+          }
+          return existing;
+        }
+
+        const now = new Date();
+        if (
+          source.reviewState !== "accepted" ||
+          source.retentionState !== "active" ||
+          source.revokedAt ||
+          source.supersededByRecordId ||
+          (source.validFrom && source.validFrom.getTime() > now.getTime()) ||
+          (source.validUntil && source.validUntil.getTime() <= now.getTime()) ||
+          (source.expiresAt && source.expiresAt.getTime() <= now.getTime())
+        ) {
+          throw conflict("Only current active private memory can be corrected", {
+            code: "private_memory_not_correctable",
+          });
+        }
+
+        const candidate: MemoryCandidateInputParsed = {
+          bindingId: source.bindingId,
+          memoryType: parsed.data.memoryType,
+          scope: { type: "agent", id: source.ownerAgentId },
+          subject: parsed.data.subject,
+          ownerAgentId: source.ownerAgentId,
+          title: parsed.data.title,
+          content: parsed.data.content,
+          summary: parsed.data.summary,
+          sensitivity: parsed.data.sensitivity,
+          importance: parsed.data.importance,
+          confidenceScore: parsed.data.confidenceScore,
+          validFrom: parsed.data.validFrom,
+          validUntil: parsed.data.validUntil,
+          observedAt: parsed.data.observedAt,
+          retentionPolicy: parsed.data.retentionPolicy,
+          expiresAt: parsed.data.expiresAt,
+          createdByOperationId: parsed.data.createdByOperationId,
+          metadata: {
+            ...parsed.data.metadata,
+            correctionReason: parsed.data.reason,
+            privateCorrectionFingerprint: operationFingerprint,
+          },
+          evidence: parsed.data.evidence,
+        };
+
+        const next = await insertCandidate(
+          txDb,
+          companyId,
+          candidate,
+          actor,
+          source.id,
+          {
+            reviewState: "accepted",
+            verificationState: "unverified",
+          },
+        );
+        const [superseded] = await txDb
+          .update(memoryRecords)
+          .set({
+            supersededByRecordId: next.id,
+            retentionState: "superseded",
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(memoryRecords.companyId, companyId),
+              eq(memoryRecords.id, source.id),
+              isNull(memoryRecords.supersededByRecordId),
+              eq(memoryRecords.retentionState, "active"),
+            ),
+          )
+          .returning({ id: memoryRecords.id });
+        if (!superseded) {
+          throw conflict("Private memory changed before correction could commit", {
+            code: "private_memory_correction_conflict",
+          });
+        }
+
+        publications.push(
+          await persistMemoryActivity(txDb, actor, {
+            companyId,
+            action: "memory.private_corrected",
+            recordId: next.id,
+            details: {
+              supersedesRecordId: source.id,
+              ownerAgentId: source.ownerAgentId,
+            },
+          }),
+        );
+        return next;
+      });
+      publications.forEach(publishActivity);
+      return (await getRecordDetail(db, companyId, corrected.id))!;
     },
 
     sharePrivateMemory: async (

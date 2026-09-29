@@ -140,6 +140,11 @@ export interface MemoryShareInput {
   createdByOperationId: string;
 }
 
+export interface MemoryPrivateCorrectionInput
+  extends Omit<MemoryCorrectionInput, "createdByOperationId"> {
+  createdByOperationId: string;
+}
+
 
 export interface MemoryBinding {
   id: string;
