@@ -910,7 +910,7 @@ export function memoryService(db: Db) {
               : []),
           ),
         )
-        .orderBy(memoryRecords.observedAt.desc())
+        .orderBy(desc(memoryRecords.observedAt))
         .limit(limit);
     },
   };
