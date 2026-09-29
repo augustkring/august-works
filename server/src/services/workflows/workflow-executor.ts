@@ -6037,7 +6037,8 @@ async function executeClaimedRun(
             node.type !== "core.wait" &&
             node.type !== "human.approval" &&
             node.type !== "work.create_task" &&
-            node.type !== "agent.task",
+            node.type !== "agent.task" &&
+            node.type !== "agent.external",
         )
         .map((node) => node.type),
     ),
@@ -6374,6 +6375,15 @@ async function recoverWaitingCandidate(
   if (!scheduledStep) {
     const wait = await activeWaitForRun(db, candidate);
     if (!wait) return "deferred";
+    if (wait.kind === "external_agent_run") {
+      return resolveExternalAgentWait(
+        db,
+        candidate,
+        wait,
+        now,
+        runtimeDeps,
+      );
+    }
     if (wait.timeoutAt && wait.timeoutAt.getTime() <= now.getTime()) {
       return "deferred";
     }
@@ -6603,7 +6613,8 @@ export async function resolveWorkflowExecutionRevision(
             node.type !== "core.wait" &&
             node.type !== "human.approval" &&
             node.type !== "work.create_task" &&
-            node.type !== "agent.task",
+            node.type !== "agent.task" &&
+            node.type !== "agent.external",
         )
         .map((node) => node.type),
     ),
