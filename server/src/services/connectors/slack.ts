@@ -29,11 +29,13 @@ import {
   recordSlackReadBoundary,
 } from "./slack-access.js";
 
-async function slackAssignedEndpoint(
+async function resolveEnabledSlackAssignedAuthority(
   db: Db,
   binding: Partial<SlackTaskBinding> & { companyId: string; agentId: string },
-) {
-  if (!binding.runId || !binding.issueId) return [];
+  options: { provisionCatalog: boolean },
+): Promise<Awaited<ReturnType<typeof resolveSlackTaskAuthority>> | null> {
+  if (!binding.runId || !binding.issueId) return null;
+
   let authority: Awaited<ReturnType<typeof resolveSlackTaskAuthority>>;
   try {
     authority = await resolveSlackTaskAuthority(
@@ -47,13 +49,18 @@ async function slackAssignedEndpoint(
       "status" in error &&
       error.status === 403
     )
-      return [];
+      return null;
     throw error;
   }
-  // Catalog updates are idempotent and preserve configured policies.
-  await db.transaction((tx) =>
-    syncSlackBotTools(tx, authority.endpoint, authority.userId, true),
-  );
+
+  if (options.provisionCatalog) {
+    // Tool-resource discovery may provision the idempotent Slack catalog. Pure
+    // knowledge retrieval uses provisionCatalog=false and remains read-only.
+    await db.transaction((tx) =>
+      syncSlackBotTools(tx, authority.endpoint, authority.userId, true),
+    );
+  }
+
   const [enabledProfile] = await db
     .select({ id: toolProfiles.id })
     .from(toolProfiles)
@@ -82,8 +89,24 @@ async function slackAssignedEndpoint(
       ),
     )
     .limit(1);
-  if (!enabledProfile) return [];
-  authority = await resolveSlackTaskAuthority(db, binding as SlackTaskBinding);
+  if (!enabledProfile) return null;
+
+  // Re-resolve after policy/profile inspection so a changed identity or
+  // connection revision cannot be carried into the read.
+  return resolveSlackTaskAuthority(db, binding as SlackTaskBinding);
+}
+
+async function slackAssignedEndpoint(
+  db: Db,
+  binding: Partial<SlackTaskBinding> & { companyId: string; agentId: string },
+) {
+  const authority = await resolveEnabledSlackAssignedAuthority(
+    db,
+    binding,
+    { provisionCatalog: true },
+  );
+  if (!authority) return [];
+
   return [
     {
       id: authority.endpoint.id,
@@ -101,6 +124,7 @@ async function slackAssignedEndpoint(
     },
   ];
 }
+
 export async function slackAssignedResource(
   db: Db,
   binding: Partial<SlackTaskBinding> & { companyId: string; agentId: string },
@@ -113,6 +137,54 @@ export async function slackAssignedResource(
         endpointId: endpoint.id,
       })),
     );
+  }
+  return resources;
+}
+
+export interface SlackConnectedKnowledgeResource {
+  endpointId: string;
+  connectionId: string;
+  workspaceId: string;
+  channelId: string;
+  responsibleUserId: string;
+  authorizationRevision: string;
+}
+
+/**
+ * Read-only Connected Knowledge admission.
+ *
+ * Unlike tool-resource discovery this never provisions catalog/profile state.
+ * It only exposes the current Slack origin channel after the existing task,
+ * requester, connection and active-profile checks have all succeeded.
+ */
+export async function slackConnectedKnowledgeResources(
+  db: Db,
+  binding: Partial<SlackTaskBinding> & { companyId: string; agentId: string },
+): Promise<SlackConnectedKnowledgeResource[]> {
+  const resources: SlackConnectedKnowledgeResource[] = [];
+  for (const endpoint of await slackEndpointCandidates(db, binding)) {
+    const authority = await resolveEnabledSlackAssignedAuthority(
+      db,
+      { ...binding, endpointId: endpoint.id },
+      { provisionCatalog: false },
+    );
+    if (!authority) continue;
+
+    const workspaceId = authority.endpoint.providerAccountId;
+    const channelId = authority.conversation?.externalConversationId.replace(
+      /^slack:/,
+      "",
+    );
+    if (!workspaceId || !channelId) continue;
+
+    resources.push({
+      endpointId: authority.endpoint.id,
+      connectionId: authority.endpoint.connectionId,
+      workspaceId,
+      channelId,
+      responsibleUserId: authority.userId,
+      authorizationRevision: authority.revision,
+    });
   }
   return resources;
 }
@@ -253,7 +325,7 @@ export async function executeSlackTool(
     const matches: unknown[] = [];
     const inspected: unknown[] = [];
     for (const channel of channels) {
-      await readable(channel);
+      const authorizedChannel = await readable(channel);
       const result = await api("conversations.history", {
         channel,
         limit: 100,
@@ -295,6 +367,12 @@ export async function executeSlackTool(
       );
       inspected.push({
         channel,
+        name:
+          typeof authorizedChannel.name === "string"
+            ? authorizedChannel.name
+            : null,
+        private: authorizedChannel.is_private === true,
+        direct: authorizedChannel.is_im === true,
         matched: selected.length,
         omittedMatches: found.length - selected.length,
         ...(found.length > selected.length

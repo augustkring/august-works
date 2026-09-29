@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { Db } from "@paperclipai/db";
 import { forbidden } from "../../errors.js";
 import type { ContextPacket, EvidenceItem } from "@paperclipai/shared";
 import {
+  defaultConnectedKnowledgeContextProviders,
   runContextProviders,
   serializeContextPacket,
   withContextStageDeadline,
@@ -251,5 +253,40 @@ describe("Context model serialization", () => {
     expect(markdown).toContain("Context warnings");
     expect(markdown).toContain("crm timed out");
     expect(markdown).not.toContain("all relevant sources checked");
+  });
+});
+
+describe("Context default Connected Knowledge providers", () => {
+  it("wires Slack live into task-bound Context Engine assembly", () => {
+    const providers = defaultConnectedKnowledgeContextProviders(
+      {} as Db,
+      {
+        companyId: request.companyId,
+        agentId: request.agentId,
+        responsibleUserId: "user-1",
+        runId: "33333333-3333-4333-8333-333333333333",
+        issueId: "44444444-4444-4444-8444-444444444444",
+        query: "renewal risk",
+      },
+    );
+
+    expect(providers).toHaveLength(1);
+    expect(providers[0]).toMatchObject({
+      key: "slack-live",
+      requirement: "optional",
+    });
+  });
+
+  it("does not probe Slack outside an accountable task/run principal", () => {
+    expect(
+      defaultConnectedKnowledgeContextProviders(
+        {} as Db,
+        {
+          companyId: request.companyId,
+          agentId: request.agentId,
+          query: "strategy",
+        },
+      ),
+    ).toEqual([]);
   });
 });
