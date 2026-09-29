@@ -1,7 +1,7 @@
 # Workflows V1 API contract
 
 **Feature flag:** `enableWorkflowsV1` (default off)
-**Scope:** PR 11–26 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries/waits, Human Approval, Routine/Pipeline/Task integration, and August Works Agent Task delegation. Connector-side execution, bounded direct-agent request/response, and external-agent execution remain gated.
+**Scope:** PR 11–27 persistence/API, typed Node Registry, manual executor V1, run-history/live-run API, deterministic branching, checkpoint/replay recovery, durable retries/waits, Human Approval, Routine/Pipeline/Task integration, August Works Agent Task delegation, and governed OpenClaw External Agent execution. Connector-side execution and any future unrestricted direct-agent request/response remain gated.
 
 ## Authorization
 
@@ -49,7 +49,7 @@ PR 13 validates every draft node against a typed registry and company-scoped ref
 
 A registered node may be `ready` or `draft_only`. Publish fails closed with `workflow_node_invalid` / `node_not_publishable_yet` until the node's execution, authorization, retry/idempotency, and policy integration are implemented.
 
-`core.manual_trigger`, `core.condition`, bounded `core.wait`, `human.approval`, `work.create_task`, and `agent.task` are publish-ready. Transform and Connector Action remain intentionally draft-only until their dependent implementation waves land. Agent Task with a non-null `expectedOutputSchema` remains publish-blocked until Tasks expose an authoritative structured-result channel.
+`core.manual_trigger`, `core.condition`, bounded `core.wait`, `human.approval`, `work.create_task`, `agent.task`, and `agent.external` are publish-ready. Transform and Connector Action remain intentionally draft-only until their dependent implementation waves land. Agent Task with a non-null `expectedOutputSchema` remains publish-blocked until Tasks expose an authoritative structured-result channel. External Agent structured output is validated from the authoritative heartbeat/OpenClaw result channel instead.
 
 A Condition may be terminal or may expose exactly one `true` and one `false` branch. Branch labels/source handles are part of the published graph contract; ambiguous or duplicate condition branches fail publish.
 
@@ -88,6 +88,16 @@ A Condition may be terminal or may expose exactly one `true` and one `false` bra
 - `workflow_human_approval_create_conflict`
 - `workflow_human_approval_rejected`
 - `workflow_human_approval_cancelled`
+- `workflow_external_agent_config_invalid`
+- `workflow_external_agent_binding_invalid`
+- `workflow_external_agent_binding_conflict`
+- `workflow_external_agent_unavailable`
+- `workflow_external_agent_failed`
+- `workflow_external_agent_timeout`
+- `workflow_external_agent_cancelled`
+- `workflow_external_agent_result_missing`
+- `workflow_output_schema_invalid`
+- `workflow_output_schema_mismatch`
 - `workflow_task_config_invalid`
 - `workflow_task_responsible_user_required`
 - `workflow_task_permission_denied`
@@ -134,6 +144,12 @@ With `waitForCompletion=true`, Agent Task reuses the same durable `task_completi
 
 Agent Task currently returns Task/runtime provenance (`issueId`, `status`, `agentId`, `heartbeatRunId`). A configured `expectedOutputSchema` is intentionally publish-blocked: the existing Task system does not yet expose an authoritative structured-result channel that could safely satisfy such a schema. Likewise, a separate bounded Direct Agent Call node is not advertised yet. The existing heartbeat wake API has durable admission/idempotency, but arbitrary wake payload is not itself a documented request/response instruction contract; Workflow does not pretend otherwise.
 
+PR 27 adds `agent.external` as the dedicated OpenClaw/external-agent boundary. The node may reference only a same-company, non-terminated `openclaw_gateway` agent binding and performs execution-time `tasks:assign` authorization. It creates/reuses one accountable Task, then dispatches through the existing heartbeat/OpenClaw adapter with a stable workflow-step idempotency identity. The wake contract carries only `company_id`, `external_agent_binding_id`, objective, structured input, expected output schema, bounded timeout, `binding_grants` capability scope, correlation id, responsible user and workflow run/node identity. It does not automatically inherit Foundation, Shared Memory, parent-agent credentials, hidden runtime state, all connections, or unrelated task history.
+
+The workflow persists a durable `external_agent_run` wait and releases its execution lease while OpenClaw runs. Recovery can re-dispatch a lost runtime binding with the same idempotency key without duplicating the accountable Task. A successful heartbeat result is normalized into `{status, output, artifacts, usage, externalRunId, issueId, agentId, heartbeatRunId}`; any configured JSON Schema is validated before downstream use. Missing external run identity or schema mismatch fails closed.
+
+Timeout attempts cancellation through the existing heartbeat control plane. The durable wait records whether cancellation was requested and whether remote termination could actually be confirmed; an unconfirmed cancellation is never represented as successful termination. Provider failure, interruption, cancellation and timeout become explicit workflow failure states. Capability Resolver labels OpenClaw candidates as `agent.external`; it never silently substitutes an external agent for a deterministic native connector in an already-published workflow.
+
 A run always binds to the published revision it started with; later draft edits or publishes do not rewrite that run.
 
 The run-history endpoint reads the existing authoritative `workflow_runs` state;
@@ -142,3 +158,5 @@ it does not create a second history store. Cancellation and user-initiated whole
 ## Recovery assurance boundary
 
 The recovery service has integration coverage for expired-lease takeover, successful-step checkpoint reuse, interrupted-attempt preservation and abandoned queued-run recovery. A real process-kill run remains a required release-gate verification before Wave 3–4 can be called fully durable; test code and static review are not represented as executed process-kill evidence.
+
+External Agent has code-level integration coverage for scoped wake context, stable replay identity, heartbeat result normalization, output-schema rejection and timeout/cancellation truthfulness. A live OpenClaw Gateway end-to-end run and cancellation/process-loss exercise remain release-gate evidence; they are not represented here as already executed merely because the automated test paths exist.
