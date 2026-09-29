@@ -78,6 +78,24 @@ function requireHumanOrSystem(actor: MemoryMutationActor, action: string) {
   }
 }
 
+function assertPrivateMemoryReadAllowed(
+  record: typeof memoryRecords.$inferSelect,
+  actor: MemoryMutationActor,
+) {
+  if (record.scopeType !== "agent") return;
+  if (actor.principal.type === "system") return;
+  if (
+    actor.principal.type === "agent" &&
+    record.ownerAgentId === actor.principal.agentId
+  ) {
+    return;
+  }
+  throw forbidden("Private agent memory is only visible to its owning agent", {
+    code: "private_memory_read_denied",
+    ownerAgentId: record.ownerAgentId,
+  });
+}
+
 async function bindingForCompany(db: Db, companyId: string, bindingId: string) {
   return db
     .select()
@@ -296,8 +314,17 @@ async function insertCandidate(
 
 export function memoryService(db: Db) {
   return {
-    get: (companyId: string, recordId: string) =>
-      getRecordDetail(db, companyId, recordId),
+    get: async (
+      companyId: string,
+      recordId: string,
+      actor: MemoryMutationActor,
+    ) => {
+      await assertActorCompanyScope(db, companyId, actor);
+      const detail = await getRecordDetail(db, companyId, recordId);
+      if (!detail) return null;
+      assertPrivateMemoryReadAllowed(detail.record, actor);
+      return detail;
+    },
 
     createBinding: async (
       companyId: string,
@@ -720,13 +747,28 @@ export function memoryService(db: Db) {
         scopeId?: string | null;
         asOf?: Date;
         limit?: number;
-      } = {},
+      },
+      actor: MemoryMutationActor,
     ) => {
+      await assertActorCompanyScope(db, companyId, actor);
       if (input.scopeId !== undefined && !input.scopeType) {
         throw unprocessable("Memory scope id requires an explicit scope type");
       }
       if (input.scopeType === "agent" && !input.scopeId) {
         throw unprocessable("Agent memory eligibility requires the owning agent id");
+      }
+      if (
+        input.scopeType === "agent" &&
+        actor.principal.type !== "system" &&
+        !(
+          actor.principal.type === "agent" &&
+          actor.principal.agentId === input.scopeId
+        )
+      ) {
+        throw forbidden("Private agent memory can only be recalled by its owning agent", {
+          code: "private_memory_read_denied",
+          scopeId: input.scopeId,
+        });
       }
 
       const asOf = input.asOf ?? new Date();

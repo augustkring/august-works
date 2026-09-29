@@ -125,6 +125,20 @@ describePg("Memory Core service", () => {
     return created;
   }
 
+  const userActor = (userId: string) => ({
+    principal: { type: "user" as const, userId },
+  });
+  const agentActor = (agentId: string, responsibleUserId?: string) => ({
+    principal: {
+      type: "agent" as const,
+      agentId,
+      responsibleUserId: responsibleUserId ?? null,
+    },
+  });
+  const systemActor = {
+    principal: { type: "system" as const, service: "memory-test" },
+  };
+
   function candidate(bindingId: string, overrides: Record<string, unknown> = {}) {
     return {
       bindingId,
@@ -171,7 +185,7 @@ describePg("Memory Core service", () => {
       ownerAgentId: null,
     });
     expect(created.evidence).toHaveLength(1);
-    expect(await svc.get(other.companyId, created.record.id)).toBeNull();
+    expect(await svc.get(other.companyId, created.record.id, userActor(other.userId))).toBeNull();
   });
 
   it("enforces the private-agent memory boundary at validation and tenant scope", async () => {
@@ -250,7 +264,7 @@ describePg("Memory Core service", () => {
       reviewState: "accepted",
       verificationState: "human_verified",
     });
-    expect(await svc.listEligible(seeded.companyId)).toEqual([
+    expect(await svc.listEligible(seeded.companyId, {}, userActor(seeded.userId))).toEqual([
       expect.objectContaining({ id: created.record.id }),
     ]);
   });
@@ -300,8 +314,8 @@ describePg("Memory Core service", () => {
       reviewState: "pending",
       supersedesRecordId: original.record.id,
     });
-    expect((await svc.get(seeded.companyId, original.record.id))?.record.supersededByRecordId).toBeNull();
-    expect(await svc.listEligible(seeded.companyId)).toEqual([
+    expect((await svc.get(seeded.companyId, original.record.id, userActor(seeded.userId)))?.record.supersededByRecordId).toBeNull();
+    expect(await svc.listEligible(seeded.companyId, {}, userActor(seeded.userId))).toEqual([
       expect.objectContaining({ id: original.record.id }),
     ]);
 
@@ -312,9 +326,9 @@ describePg("Memory Core service", () => {
       { principal: { type: "user", userId: seeded.userId } },
     );
     expect(
-      (await svc.get(seeded.companyId, original.record.id))?.record.supersededByRecordId,
+      (await svc.get(seeded.companyId, original.record.id, userActor(seeded.userId)))?.record.supersededByRecordId,
     ).toBe(acceptedCorrection.record.id);
-    expect(await svc.listEligible(seeded.companyId)).toEqual([
+    expect(await svc.listEligible(seeded.companyId, {}, userActor(seeded.userId))).toEqual([
       expect.objectContaining({ id: acceptedCorrection.record.id }),
     ]);
   });
@@ -339,20 +353,115 @@ describePg("Memory Core service", () => {
       { principal: { type: "user", userId: seeded.userId } },
     );
 
-    expect(await svc.listEligible(seeded.companyId)).toEqual([]);
+    expect(await svc.listEligible(seeded.companyId, {}, userActor(seeded.userId))).toEqual([]);
     expect(
-      await svc.listEligible(seeded.companyId, {
-        scopeType: "agent",
-        scopeId: seeded.agent.id,
-      }),
+      await svc.listEligible(
+        seeded.companyId,
+        {
+          scopeType: "agent",
+          scopeId: seeded.agent.id,
+        },
+        agentActor(seeded.agent.id, seeded.userId),
+      ),
     ).toEqual([expect.objectContaining({ id: privateCandidate.record.id })]);
 
     await expect(
-      svc.listEligible(seeded.companyId, { scopeType: "agent" }),
+      svc.listEligible(
+        seeded.companyId,
+        { scopeType: "agent" },
+        agentActor(seeded.agent.id, seeded.userId),
+      ),
     ).rejects.toMatchObject({ status: 422 });
     await expect(
-      svc.listEligible(seeded.companyId, { scopeId: seeded.agent.id }),
+      svc.listEligible(
+        seeded.companyId,
+        { scopeId: seeded.agent.id },
+        agentActor(seeded.agent.id, seeded.userId),
+      ),
     ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("denies private memory detail and recall to same-company non-owner principals", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const privateCandidate = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        scope: { type: "agent", id: seeded.agent.id },
+        ownerAgentId: seeded.agent.id,
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    await svc.reviewCandidate(
+      seeded.companyId,
+      privateCandidate.record.id,
+      { decision: "accept" },
+      userActor(seeded.userId),
+    );
+
+    const [otherAgent] = await db.insert(agents).values({
+      companyId: seeded.companyId,
+      name: "Memory Reader",
+      role: "analyst",
+      adapterType: "paperclip_runner",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    }).returning();
+    await db.insert(companyMemberships).values({
+      companyId: seeded.companyId,
+      principalType: "agent",
+      principalId: otherAgent!.id,
+      status: "active",
+      membershipRole: "member",
+    });
+
+    await expect(
+      svc.get(
+        seeded.companyId,
+        privateCandidate.record.id,
+        agentActor(otherAgent!.id, seeded.userId),
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({ code: "private_memory_read_denied" }),
+    });
+    await expect(
+      svc.get(
+        seeded.companyId,
+        privateCandidate.record.id,
+        userActor(seeded.userId),
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({ code: "private_memory_read_denied" }),
+    });
+    await expect(
+      svc.listEligible(
+        seeded.companyId,
+        { scopeType: "agent", scopeId: seeded.agent.id },
+        agentActor(otherAgent!.id, seeded.userId),
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({ code: "private_memory_read_denied" }),
+    });
+
+    await expect(
+      svc.get(
+        seeded.companyId,
+        privateCandidate.record.id,
+        agentActor(seeded.agent.id, seeded.userId),
+      ),
+    ).resolves.toMatchObject({
+      record: expect.objectContaining({ id: privateCandidate.record.id }),
+    });
+    await expect(
+      svc.get(seeded.companyId, privateCandidate.record.id, systemActor),
+    ).resolves.toMatchObject({
+      record: expect.objectContaining({ id: privateCandidate.record.id }),
+    });
   });
 
   it("allows company deletion to cascade through bindings, records, and evidence", async () => {
@@ -408,6 +517,6 @@ describePg("Memory Core service", () => {
       revokedByActorId: seeded.userId,
     });
     expect(revoked.record.revokedAt).toBeInstanceOf(Date);
-    expect(await svc.listEligible(seeded.companyId)).toEqual([]);
+    expect(await svc.listEligible(seeded.companyId, {}, userActor(seeded.userId))).toEqual([]);
   });
 });
