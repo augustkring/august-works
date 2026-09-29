@@ -708,8 +708,8 @@ const REGISTRY: RegisteredWorkflowNode[] = [
         supportsKeyboardInsert: true,
         supportsOutlineEdit: true,
       },
-      publishState: "ready",
-      publishBlockedReason: null,
+      publishState: "draft_only",
+      publishBlockedReason: "external_agent_executor_not_ready",
     }),
     configValidator: externalAgentConfig,
     validateReferences: async (db, companyId, nodeId, config) => {
