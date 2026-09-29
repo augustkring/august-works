@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   connectedKnowledgeAccessDecisionSchema,
   connectedKnowledgeAuthorizedScopeSchema,
+  connectedKnowledgeEvidenceProvenanceSchema,
   connectedKnowledgeProviderDescriptorSchema,
   connectedKnowledgeRequestSchema,
 } from "./connected-knowledge.js";
@@ -44,6 +45,35 @@ describe("Connected Knowledge validators", () => {
         authorizedAt: authorizedAt.toISOString(),
         expiresAt: authorizedAt.toISOString(),
         constraints: {},
+      }),
+    ).toThrow();
+  });
+
+  it("validates server-stamped Connected Knowledge evidence provenance", () => {
+    const parsed = connectedKnowledgeEvidenceProvenanceSchema.parse({
+      providerKey: "github-sync",
+      sourceProvider: "github",
+      accessMode: "synced",
+      aclFingerprint: "acl-v1",
+      authorizedAt: "2026-09-29T12:00:00.000Z",
+      expiresAt: "2026-09-29T12:00:30.000Z",
+      sourceAuthority: "provider",
+      freshness: "fresh",
+      indexedAt: "2026-09-29T11:59:00.000Z",
+      tombstone: false,
+    });
+
+    expect(parsed).toMatchObject({
+      providerKey: "github-sync",
+      accessMode: "synced",
+      freshness: "fresh",
+      tombstone: false,
+    });
+
+    expect(() =>
+      connectedKnowledgeEvidenceProvenanceSchema.parse({
+        ...parsed,
+        freshness: "maybe",
       }),
     ).toThrow();
   });

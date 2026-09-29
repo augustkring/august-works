@@ -154,6 +154,8 @@ export const CONTEXT_PROVIDER_WARNING_CODES = [
   "provider_timeout",
   "provider_failed",
   "provider_omitted",
+  "stale_source",
+  "source_unavailable",
 ] as const;
 export type ContextProviderWarningCode =
   (typeof CONTEXT_PROVIDER_WARNING_CODES)[number];

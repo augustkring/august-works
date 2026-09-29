@@ -287,6 +287,205 @@ describe("Connected Knowledge registry", () => {
     });
   });
 
+  it("stamps live evidence with server-owned ACL and source-authority provenance", async () => {
+    const p = provider();
+    const req = request();
+    p.authorize.mockImplementation(async ({ requestFingerprint }) => ({
+      allowed: true,
+      scope: scopeFor(req, p.descriptor.key, { requestFingerprint }),
+    }));
+    p.retrieveAuthorized.mockResolvedValue({
+      evidence: [evidenceFor(req, p.descriptor)],
+    });
+    const registry = createConnectedKnowledgeRegistry([p.value]);
+
+    const result = await registry.retrieve({
+      providerKey: p.descriptor.key,
+      request: req,
+      signal: new AbortController().signal,
+      deadlineAt: Date.now() + 1_000,
+    });
+
+    expect(result.evidence[0]?.metadata).toMatchObject({
+      aclFingerprint: "acl-v1",
+      freshness: "fresh",
+      tombstone: false,
+      connectedKnowledge: {
+        providerKey: "crm-live",
+        sourceProvider: "test_crm",
+        accessMode: "live",
+        aclFingerprint: "acl-v1",
+        sourceAuthority: "provider",
+        freshness: "fresh",
+        tombstone: false,
+      },
+    });
+  });
+
+  it("keeps stale synced evidence but emits a freshness warning", async () => {
+    const p = provider({ accessMode: "synced" });
+    const req = request();
+    p.authorize.mockImplementation(async ({ requestFingerprint }) => ({
+      allowed: true,
+      scope: scopeFor(req, p.descriptor.key, { requestFingerprint }),
+    }));
+    p.retrieveAuthorized.mockResolvedValue({
+      evidence: [
+        evidenceFor(req, p.descriptor, {
+          metadata: {
+            providerIsAuthority: true,
+            externalId: "account:acme",
+            objectType: "account",
+            remoteVersion: "42",
+            etag: "\"etag\"",
+            indexedAt: "2026-09-29T11:00:00.000Z",
+            contentHash: "a".repeat(64),
+            aclFingerprint: "acl-v1",
+            tombstone: false,
+            freshness: "stale",
+          },
+        }),
+      ],
+    });
+    const registry = createConnectedKnowledgeRegistry([p.value]);
+
+    const result = await registry.retrieve({
+      providerKey: p.descriptor.key,
+      request: req,
+      signal: new AbortController().signal,
+      deadlineAt: Date.now() + 1_000,
+    });
+
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0]?.metadata.connectedKnowledge).toMatchObject({
+      accessMode: "synced",
+      freshness: "stale",
+      aclFingerprint: "acl-v1",
+    });
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        providerKey: "crm-live",
+        code: "stale_source",
+      }),
+    ]);
+  });
+
+  it("omits synchronized evidence whose source is unreachable or needs reauthorization", async () => {
+    const p = provider({ accessMode: "synced" });
+    const req = request();
+    p.authorize.mockImplementation(async ({ requestFingerprint }) => ({
+      allowed: true,
+      scope: scopeFor(req, p.descriptor.key, { requestFingerprint }),
+    }));
+    p.retrieveAuthorized.mockResolvedValue({
+      evidence: [
+        evidenceFor(req, p.descriptor, {
+          metadata: {
+            providerIsAuthority: true,
+            externalId: "account:acme",
+            objectType: "account",
+            remoteVersion: "42",
+            etag: null,
+            indexedAt: "2026-09-29T11:00:00.000Z",
+            contentHash: "b".repeat(64),
+            aclFingerprint: "acl-v1",
+            tombstone: false,
+            freshness: "unreachable",
+          },
+        }),
+      ],
+    });
+    const registry = createConnectedKnowledgeRegistry([p.value]);
+
+    const result = await registry.retrieve({
+      providerKey: p.descriptor.key,
+      request: req,
+      signal: new AbortController().signal,
+      deadlineAt: Date.now() + 1_000,
+    });
+
+    expect(result.evidence).toEqual([]);
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        providerKey: "crm-live",
+        code: "source_unavailable",
+      }),
+    ]);
+  });
+
+  it("fails closed if a synced provider returns a mismatched ACL fingerprint", async () => {
+    const p = provider({ accessMode: "synced" });
+    const req = request();
+    p.authorize.mockImplementation(async ({ requestFingerprint }) => ({
+      allowed: true,
+      scope: scopeFor(req, p.descriptor.key, { requestFingerprint }),
+    }));
+    p.retrieveAuthorized.mockResolvedValue({
+      evidence: [
+        evidenceFor(req, p.descriptor, {
+          metadata: {
+            providerIsAuthority: true,
+            externalId: "account:acme",
+            objectType: "account",
+            remoteVersion: "42",
+            etag: null,
+            indexedAt: "2026-09-29T11:00:00.000Z",
+            contentHash: "c".repeat(64),
+            aclFingerprint: "different-acl",
+            tombstone: false,
+            freshness: "fresh",
+          },
+        }),
+      ],
+    });
+    const registry = createConnectedKnowledgeRegistry([p.value]);
+
+    await expect(
+      registry.retrieve({
+        providerKey: p.descriptor.key,
+        request: req,
+        signal: new AbortController().signal,
+        deadlineAt: Date.now() + 1_000,
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({
+        code: "connected_knowledge_acl_mismatch",
+      }),
+    });
+  });
+
+  it("fails closed if any provider attempts to surface tombstoned content", async () => {
+    const p = provider();
+    const req = request();
+    p.authorize.mockImplementation(async ({ requestFingerprint }) => ({
+      allowed: true,
+      scope: scopeFor(req, p.descriptor.key, { requestFingerprint }),
+    }));
+    p.retrieveAuthorized.mockResolvedValue({
+      evidence: [
+        evidenceFor(req, p.descriptor, {
+          metadata: { tombstone: true },
+        }),
+      ],
+    });
+    const registry = createConnectedKnowledgeRegistry([p.value]);
+
+    await expect(
+      registry.retrieve({
+        providerKey: p.descriptor.key,
+        request: req,
+        signal: new AbortController().signal,
+        deadlineAt: Date.now() + 1_000,
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({
+        code: "connected_knowledge_tombstone_leak",
+      }),
+    });
+  });
+
   it("adapts a registered provider into the existing Context Engine provider contract", async () => {
     const p = provider();
     p.authorize.mockImplementation(async ({ request: req, requestFingerprint }) => ({

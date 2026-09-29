@@ -2,15 +2,19 @@ import { createHash } from "node:crypto";
 import {
   connectedKnowledgeAccessDecisionSchema,
   connectedKnowledgeAuthorizedScopeSchema,
+  connectedKnowledgeEvidenceProvenanceSchema,
   connectedKnowledgeProviderDescriptorSchema,
   connectedKnowledgeRequestSchema,
   evidenceItemsSchema,
   type ConnectedKnowledgeAccessDecision,
   type ConnectedKnowledgeAuthorizedScope,
+  type ConnectedKnowledgeFreshnessState,
   type ConnectedKnowledgeProviderDescriptor,
   type ConnectedKnowledgeProviderResult,
   type ConnectedKnowledgeRequest,
   type ContextProviderRequirement,
+  type ContextProviderWarning,
+  type EvidenceItem,
 } from "@paperclipai/shared";
 import { forbidden } from "../../errors.js";
 import type {
@@ -159,6 +163,200 @@ function validateProviderEvidence(
   return evidence;
 }
 
+function metadataRecord(
+  item: EvidenceItem,
+): Record<string, unknown> {
+  return item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
+    ? item.metadata
+    : {};
+}
+
+function requireSyncedEvidenceInvariants(
+  descriptor: ConnectedKnowledgeProviderDescriptor,
+  scope: ConnectedKnowledgeAuthorizedScope,
+  item: EvidenceItem,
+): {
+  freshness: ConnectedKnowledgeFreshnessState;
+  indexedAt: string;
+} {
+  if (!scope.aclVersion) {
+    throw new Error(
+      `Connected Knowledge synced provider ${descriptor.key} did not produce an ACL fingerprint`,
+    );
+  }
+
+  const metadata = metadataRecord(item);
+  const freshness = metadata.freshness;
+  const indexedAt = metadata.indexedAt;
+  const contentHash = metadata.contentHash;
+  const aclFingerprint = metadata.aclFingerprint;
+
+  if (
+    typeof freshness !== "string" ||
+    ![
+      "fresh",
+      "stale",
+      "unknown",
+      "reauthorization_required",
+      "unreachable",
+    ].includes(freshness)
+  ) {
+    throw new Error(
+      `Connected Knowledge synced provider ${descriptor.key} returned invalid freshness metadata`,
+    );
+  }
+  if (
+    typeof indexedAt !== "string" ||
+    Number.isNaN(new Date(indexedAt).getTime())
+  ) {
+    throw new Error(
+      `Connected Knowledge synced provider ${descriptor.key} returned invalid indexedAt metadata`,
+    );
+  }
+  if (
+    metadata.providerIsAuthority !== true ||
+    typeof contentHash !== "string" ||
+    !/^[0-9a-f]{64}$/.test(contentHash) ||
+    typeof metadata.externalId !== "string" ||
+    typeof metadata.objectType !== "string" ||
+    !Object.prototype.hasOwnProperty.call(metadata, "remoteVersion") ||
+    !Object.prototype.hasOwnProperty.call(metadata, "etag") ||
+    typeof metadata.tombstone !== "boolean" ||
+    item.sourceUpdatedAt === null
+  ) {
+    throw new Error(
+      `Connected Knowledge synced provider ${descriptor.key} did not preserve required sync provenance`,
+    );
+  }
+  if (aclFingerprint !== scope.aclVersion) {
+    throw forbidden(
+      "Connected Knowledge evidence ACL fingerprint does not match the authorized scope",
+      {
+        code: "connected_knowledge_acl_mismatch",
+        providerKey: descriptor.key,
+        evidenceId: item.id,
+      },
+    );
+  }
+  if (metadata.tombstone === true) {
+    throw forbidden(
+      "Connected Knowledge provider attempted to surface tombstoned content",
+      {
+        code: "connected_knowledge_tombstone_leak",
+        providerKey: descriptor.key,
+        evidenceId: item.id,
+      },
+    );
+  }
+
+  return {
+    freshness: freshness as ConnectedKnowledgeFreshnessState,
+    indexedAt: new Date(indexedAt).toISOString(),
+  };
+}
+
+function hardenConnectedEvidence(input: {
+  descriptor: ConnectedKnowledgeProviderDescriptor;
+  scope: ConnectedKnowledgeAuthorizedScope;
+  evidence: EvidenceItem[];
+}): {
+  evidence: EvidenceItem[];
+  warnings: ContextProviderWarning[];
+} {
+  const hardened: EvidenceItem[] = [];
+  let staleCount = 0;
+  let unavailableCount = 0;
+
+  for (const item of input.evidence) {
+    const metadata = metadataRecord(item);
+    if (metadata.tombstone === true) {
+      throw forbidden(
+        "Connected Knowledge provider attempted to surface tombstoned content",
+        {
+          code: "connected_knowledge_tombstone_leak",
+          providerKey: input.descriptor.key,
+          evidenceId: item.id,
+        },
+      );
+    }
+
+    const synced =
+      input.descriptor.accessMode === "synced" ||
+      input.descriptor.accessMode === "hybrid";
+    const syncState = synced
+      ? requireSyncedEvidenceInvariants(
+          input.descriptor,
+          input.scope,
+          item,
+        )
+      : {
+          freshness: "fresh" as const,
+          indexedAt: item.observedAt,
+        };
+
+    if (
+      syncState.freshness === "reauthorization_required" ||
+      syncState.freshness === "unreachable"
+    ) {
+      unavailableCount += 1;
+      continue;
+    }
+    if (
+      syncState.freshness === "stale" ||
+      syncState.freshness === "unknown"
+    ) {
+      staleCount += 1;
+    }
+
+    const provenance = connectedKnowledgeEvidenceProvenanceSchema.parse({
+      providerKey: input.descriptor.key,
+      sourceProvider: input.descriptor.sourceProvider,
+      accessMode: input.descriptor.accessMode,
+      aclFingerprint: input.scope.aclVersion,
+      authorizedAt: input.scope.authorizedAt,
+      expiresAt: input.scope.expiresAt,
+      sourceAuthority: "provider",
+      freshness: syncState.freshness,
+      indexedAt: syncState.indexedAt,
+      tombstone: false,
+    });
+
+    hardened.push({
+      ...item,
+      metadata: {
+        ...metadata,
+        aclFingerprint: input.scope.aclVersion,
+        freshness: syncState.freshness,
+        indexedAt: syncState.indexedAt,
+        tombstone: false,
+        connectedKnowledge: provenance,
+      },
+    });
+  }
+
+  const warnings: ContextProviderWarning[] = [];
+  if (staleCount > 0) {
+    warnings.push({
+      providerKey: input.descriptor.key,
+      code: "stale_source",
+      message:
+        `${staleCount} Connected Knowledge result${staleCount === 1 ? "" : "s"} ` +
+        "came from a stale or freshness-unknown synchronized source.",
+    });
+  }
+  if (unavailableCount > 0) {
+    warnings.push({
+      providerKey: input.descriptor.key,
+      code: "source_unavailable",
+      message:
+        `${unavailableCount} Connected Knowledge result${unavailableCount === 1 ? "" : "s"} ` +
+        "were omitted because the synchronized source could not be freshly authorized or reached.",
+    });
+  }
+
+  return { evidence: hardened, warnings };
+}
+
 export function createConnectedKnowledgeRegistry(
   providers: ConnectedKnowledgeProvider[],
 ): ConnectedKnowledgeRegistry {
@@ -242,17 +440,25 @@ export function createConnectedKnowledgeRegistry(
         deadlineAt: rawInput.deadlineAt,
       });
 
-      const evidence = validateProviderEvidence(
+      const validated = validateProviderEvidence(
         found.descriptor,
         request,
         result.evidence,
       );
-      const warnings = (result.warnings ?? []).map((warning) => ({
+      const hardened = hardenConnectedEvidence({
+        descriptor: found.descriptor,
+        scope,
+        evidence: validated,
+      });
+      const warnings = [
+        ...(result.warnings ?? []),
+        ...hardened.warnings,
+      ].map((warning) => ({
         ...warning,
         providerKey: found.descriptor.key,
       }));
 
-      return { evidence, warnings };
+      return { evidence: hardened.evidence, warnings };
     },
   };
 }

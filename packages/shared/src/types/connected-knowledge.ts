@@ -13,6 +13,30 @@ export const CONNECTED_KNOWLEDGE_ACCESS_MODES = [
 export type ConnectedKnowledgeAccessMode =
   (typeof CONNECTED_KNOWLEDGE_ACCESS_MODES)[number];
 
+export const CONNECTED_KNOWLEDGE_FRESHNESS_STATES = [
+  "fresh",
+  "stale",
+  "unknown",
+  "reauthorization_required",
+  "unreachable",
+] as const;
+
+export type ConnectedKnowledgeFreshnessState =
+  (typeof CONNECTED_KNOWLEDGE_FRESHNESS_STATES)[number];
+
+export interface ConnectedKnowledgeEvidenceProvenance {
+  providerKey: string;
+  sourceProvider: string;
+  accessMode: ConnectedKnowledgeAccessMode;
+  aclFingerprint: string | null;
+  authorizedAt: string;
+  expiresAt: string | null;
+  sourceAuthority: "provider";
+  freshness: ConnectedKnowledgeFreshnessState;
+  indexedAt: string;
+  tombstone: boolean;
+}
+
 export const CONNECTED_KNOWLEDGE_SOURCE_CLASSES = [
   "system_of_record",
   "conversation",

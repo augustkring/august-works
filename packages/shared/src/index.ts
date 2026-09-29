@@ -2897,9 +2897,12 @@ export {
 export {
   CONNECTED_KNOWLEDGE_ACCESS_MODES,
   CONNECTED_KNOWLEDGE_DENIAL_CODES,
+  CONNECTED_KNOWLEDGE_FRESHNESS_STATES,
   CONNECTED_KNOWLEDGE_SOURCE_CLASSES,
   type ConnectedKnowledgeAccessDecision,
   type ConnectedKnowledgeAccessMode,
+  type ConnectedKnowledgeEvidenceProvenance,
+  type ConnectedKnowledgeFreshnessState,
   type ConnectedKnowledgeAuthorizedScope,
   type ConnectedKnowledgeDenialCode,
   type ConnectedKnowledgeProviderDescriptor,
@@ -2910,6 +2913,7 @@ export {
 export {
   connectedKnowledgeAccessDecisionSchema,
   connectedKnowledgeAuthorizedScopeSchema,
+  connectedKnowledgeEvidenceProvenanceSchema,
   connectedKnowledgeProviderDescriptorSchema,
   connectedKnowledgeRequestSchema,
   type ConnectedKnowledgeRequestInput,
