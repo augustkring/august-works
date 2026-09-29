@@ -245,7 +245,10 @@ function canonicalMemoryOperationValue(value: unknown): CanonicalValue {
     return value.map(canonicalMemoryOperationValue);
   }
   if (typeof value === "object") {
-    const result: Record<string, CanonicalValue> = {};
+    const result: Record<string, CanonicalValue> = Object.create(null) as Record<
+      string,
+      CanonicalValue
+    >;
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
       const entry = (value as Record<string, unknown>)[key];
       if (entry === undefined) continue;
@@ -265,12 +268,11 @@ function memoryOperationFingerprint(value: unknown): string {
 async function lockMemoryOperation(
   db: Db,
   companyId: string,
-  operationKind: string,
   operationId: string,
 ) {
   await db.execute(
     sql`select pg_advisory_xact_lock(
-      hashtextextended(${`memory:${operationKind}:${companyId}:${operationId}`}, 0)
+      hashtextextended(${`memory:operation:${companyId}:${operationId}`}, 0)
     )`,
   );
 }
@@ -388,6 +390,21 @@ async function insertCandidate(
   await assertScopeReferences(tx, companyId, input);
   await assertAgentPrivateOwnership(input, actor);
   const binding = await assertBindingAllowsCandidate(tx, companyId, input);
+  if (input.createdByOperationId) {
+    await lockMemoryOperation(tx, companyId, input.createdByOperationId);
+    const existingOperation = await memoryRecordForOperation(
+      tx,
+      companyId,
+      input.createdByOperationId,
+    );
+    if (existingOperation) {
+      throw conflict("Memory operation id is already associated with a record", {
+        code: "memory_operation_conflict",
+        operationId: input.createdByOperationId,
+        existingRecordId: existingOperation.id,
+      });
+    }
+  }
   const identity = actorIdentity(actor);
   const now = new Date();
 
@@ -703,7 +720,6 @@ export function memoryService(db: Db) {
         await lockMemoryOperation(
           txDb,
           companyId,
-          "private",
           parsed.data.createdByOperationId,
         );
         const existing = await memoryRecordForOperation(
@@ -799,7 +815,6 @@ export function memoryService(db: Db) {
         await lockMemoryOperation(
           txDb,
           companyId,
-          "private-correction",
           parsed.data.createdByOperationId,
         );
         const existing = await memoryRecordForOperation(
@@ -962,7 +977,6 @@ export function memoryService(db: Db) {
         await lockMemoryOperation(
           txDb,
           companyId,
-          "share",
           parsed.data.createdByOperationId,
         );
         const existing = await memoryRecordForOperation(

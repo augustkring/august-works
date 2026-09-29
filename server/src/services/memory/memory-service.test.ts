@@ -511,6 +511,86 @@ describePg("Memory Core service", () => {
     });
   });
 
+  it("keeps special metadata keys in private-memory idempotency fingerprints", async () => {
+    const seeded = await seed();
+    const agentBinding = await privateBinding(
+      seeded.companyId,
+      seeded.userId,
+      seeded.agent.id,
+    );
+    const svc = memoryService(db);
+    const firstMetadata = JSON.parse('{"__proto__":{"version":"one"}}') as Record<string, unknown>;
+    const secondMetadata = JSON.parse('{"__proto__":{"version":"two"}}') as Record<string, unknown>;
+
+    const first = await svc.createPrivateMemory(
+      seeded.companyId,
+      seeded.agent.id,
+      privateInput(agentBinding.id, {
+        createdByOperationId: "private-special-key-op",
+        metadata: firstMetadata,
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    expect(first.record.id).toEqual(expect.any(String));
+
+    await expect(
+      svc.createPrivateMemory(
+        seeded.companyId,
+        seeded.agent.id,
+        privateInput(agentBinding.id, {
+          createdByOperationId: "private-special-key-op",
+          metadata: secondMetadata,
+        }),
+        agentActor(seeded.agent.id, seeded.userId),
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({ code: "memory_operation_conflict" }),
+    });
+  });
+
+  it("serializes generic candidate writers on the same operation id", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const input = candidate(b.id, {
+      createdByOperationId: "generic-memory-operation",
+    });
+
+    const outcomes = await Promise.allSettled([
+      svc.createCandidate(
+        seeded.companyId,
+        input,
+        agentActor(seeded.agent.id, seeded.userId),
+      ),
+      svc.createCandidate(
+        seeded.companyId,
+        input,
+        agentActor(seeded.agent.id, seeded.userId),
+      ),
+    ]);
+
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    const rejected = outcomes.find(
+      (outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
+    );
+    expect(rejected?.reason).toMatchObject({
+      status: 409,
+      details: expect.objectContaining({ code: "memory_operation_conflict" }),
+    });
+    expect(
+      await db
+        .select()
+        .from(memoryRecords)
+        .where(
+          and(
+            eq(memoryRecords.companyId, seeded.companyId),
+            eq(memoryRecords.createdByOperationId, "generic-memory-operation"),
+          ),
+        ),
+    ).toHaveLength(1);
+  });
+
   it("creates active owner-bound private memory only through an agent-targeted binding", async () => {
     const seeded = await seed();
     const sharedBinding = await binding(seeded.companyId, seeded.userId);
