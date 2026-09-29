@@ -39,6 +39,7 @@ describe("Connected Knowledge validators", () => {
         agentId: randomUUID(),
         responsibleUserId: null,
         runId: null,
+        requestFingerprint: "0".repeat(64),
         aclVersion: "v1",
         authorizedAt: authorizedAt.toISOString(),
         expiresAt: authorizedAt.toISOString(),

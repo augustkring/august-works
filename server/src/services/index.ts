@@ -262,8 +262,8 @@ export {
 
 export {
   connectedKnowledgeContextProvider,
-  connectedKnowledgeSourceClass,
   createConnectedKnowledgeRegistry,
+  fingerprintConnectedKnowledgeRequest,
   type ConnectedKnowledgeAuthorizationInput,
   type ConnectedKnowledgeProvider,
   type ConnectedKnowledgeRegistry,

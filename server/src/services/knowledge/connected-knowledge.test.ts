@@ -42,6 +42,7 @@ function scopeFor(
     agentId: input.agentId,
     responsibleUserId: input.responsibleUserId,
     runId: input.runId,
+    requestFingerprint: "0".repeat(64),
     aclVersion: "acl-v1",
     authorizedAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
@@ -103,8 +104,11 @@ describe("Connected Knowledge registry", () => {
   it("requires authorization before retrieval and forwards only a request-bound scope", async () => {
     const p = provider();
     const req = request();
-    const authorizedScope = scopeFor(req, p.descriptor.key);
-    p.authorize.mockResolvedValue({ allowed: true, scope: authorizedScope });
+    let authorizedScope: ConnectedKnowledgeAuthorizedScope | null = null;
+    p.authorize.mockImplementation(async ({ requestFingerprint }) => {
+      authorizedScope = scopeFor(req, p.descriptor.key, { requestFingerprint });
+      return { allowed: true, scope: authorizedScope };
+    });
     p.retrieveAuthorized.mockResolvedValue({
       evidence: [evidenceFor(req, p.descriptor)],
     });
@@ -126,7 +130,10 @@ describe("Connected Knowledge registry", () => {
     expect(p.retrieveAuthorized).toHaveBeenCalledWith(
       expect.objectContaining({
         request: req,
-        authorizedScope,
+        requestFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+        authorizedScope: expect.objectContaining({
+          requestFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+        }),
       }),
     );
     expect(result.evidence).toHaveLength(1);
@@ -162,12 +169,13 @@ describe("Connected Knowledge registry", () => {
   it("rejects an authorization scope replayed for another tenant or principal", async () => {
     const p = provider();
     const req = request();
-    p.authorize.mockResolvedValue({
+    p.authorize.mockImplementation(async ({ requestFingerprint }) => ({
       allowed: true,
       scope: scopeFor(req, p.descriptor.key, {
         companyId: randomUUID(),
+        requestFingerprint,
       }),
-    });
+    }));
     const registry = createConnectedKnowledgeRegistry([p.value]);
 
     await expect(
@@ -186,13 +194,13 @@ describe("Connected Knowledge registry", () => {
     expect(p.retrieveAuthorized).not.toHaveBeenCalled();
   });
 
-  it("rejects cross-company and undeclared evidence instead of filtering it after retrieval", async () => {
+  it("rejects cross-company evidence instead of filtering it after retrieval", async () => {
     const p = provider();
     const req = request();
-    p.authorize.mockResolvedValue({
+    p.authorize.mockImplementation(async ({ requestFingerprint }) => ({
       allowed: true,
-      scope: scopeFor(req, p.descriptor.key),
-    });
+      scope: scopeFor(req, p.descriptor.key, { requestFingerprint }),
+    }));
     p.retrieveAuthorized.mockResolvedValue({
       evidence: [
         evidenceFor(req, p.descriptor, {
@@ -217,11 +225,73 @@ describe("Connected Knowledge registry", () => {
     });
   });
 
+  it("rejects evidence from an undeclared source provider", async () => {
+    const p = provider();
+    const req = request();
+    p.authorize.mockImplementation(async ({ requestFingerprint }) => ({
+      allowed: true,
+      scope: scopeFor(req, p.descriptor.key, { requestFingerprint }),
+    }));
+    p.retrieveAuthorized.mockResolvedValue({
+      evidence: [
+        evidenceFor(req, p.descriptor, {
+          sourceProvider: "different_crm",
+        }),
+      ],
+    });
+    const registry = createConnectedKnowledgeRegistry([p.value]);
+
+    await expect(
+      registry.retrieve({
+        providerKey: p.descriptor.key,
+        request: req,
+        signal: new AbortController().signal,
+        deadlineAt: Date.now() + 1_000,
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({
+        code: "connected_knowledge_source_provider_mismatch",
+      }),
+    });
+  });
+
+  it("rejects evidence outside the provider's declared source classes", async () => {
+    const p = provider({ sourceClasses: ["system_of_record"] });
+    const req = request();
+    p.authorize.mockImplementation(async ({ requestFingerprint }) => ({
+      allowed: true,
+      scope: scopeFor(req, p.descriptor.key, { requestFingerprint }),
+    }));
+    p.retrieveAuthorized.mockResolvedValue({
+      evidence: [
+        evidenceFor(req, p.descriptor, {
+          sourceClass: "conversation",
+        }),
+      ],
+    });
+    const registry = createConnectedKnowledgeRegistry([p.value]);
+
+    await expect(
+      registry.retrieve({
+        providerKey: p.descriptor.key,
+        request: req,
+        signal: new AbortController().signal,
+        deadlineAt: Date.now() + 1_000,
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({
+        code: "connected_knowledge_source_class_mismatch",
+      }),
+    });
+  });
+
   it("adapts a registered provider into the existing Context Engine provider contract", async () => {
     const p = provider();
-    p.authorize.mockImplementation(async ({ request: req }) => ({
+    p.authorize.mockImplementation(async ({ request: req, requestFingerprint }) => ({
       allowed: true,
-      scope: scopeFor(req, p.descriptor.key),
+      scope: scopeFor(req, p.descriptor.key, { requestFingerprint }),
     }));
     p.retrieveAuthorized.mockImplementation(async ({ request: req }) => ({
       evidence: [evidenceFor(req, p.descriptor)],

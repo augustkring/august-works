@@ -59,6 +59,7 @@ export interface ConnectedKnowledgeAuthorizedScope {
   agentId: string;
   responsibleUserId: string | null;
   runId: string | null;
+  requestFingerprint: string;
   aclVersion: string | null;
   authorizedAt: string;
   expiresAt: string | null;

@@ -64,6 +64,7 @@ export const connectedKnowledgeAuthorizedScopeSchema: z.ZodType<ConnectedKnowled
       agentId: z.string().guid(),
       responsibleUserId: boundedNullableIdSchema,
       runId: z.string().guid().nullable(),
+      requestFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
       aclVersion: z.string().trim().min(1).max(1_000).nullable(),
       authorizedAt: z.string().datetime(),
       expiresAt: z.string().datetime().nullable(),

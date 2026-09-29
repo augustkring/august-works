@@ -593,6 +593,8 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
               requirement: provider.requirement,
             })),
             includeFoundation: input.includeFoundation !== false,
+            intent: input.intent ?? null,
+            subjectRefs: [...new Set(input.subjectRefs ?? [])].sort(),
             asOf: asOf.toISOString(),
           },
           selected: budgeted.selected.map((decision) => {

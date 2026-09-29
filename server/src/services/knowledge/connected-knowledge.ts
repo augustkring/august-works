@@ -1,14 +1,15 @@
+import { createHash } from "node:crypto";
 import {
   connectedKnowledgeAccessDecisionSchema,
   connectedKnowledgeAuthorizedScopeSchema,
   connectedKnowledgeProviderDescriptorSchema,
   connectedKnowledgeRequestSchema,
   evidenceItemsSchema,
+  type ConnectedKnowledgeAccessDecision,
   type ConnectedKnowledgeAuthorizedScope,
   type ConnectedKnowledgeProviderDescriptor,
   type ConnectedKnowledgeProviderResult,
   type ConnectedKnowledgeRequest,
-  type ConnectedKnowledgeSourceClass,
   type ContextProviderRequirement,
 } from "@paperclipai/shared";
 import { forbidden } from "../../errors.js";
@@ -19,6 +20,7 @@ import type {
 
 export interface ConnectedKnowledgeAuthorizationInput {
   request: ConnectedKnowledgeRequest;
+  requestFingerprint: string;
   signal: AbortSignal;
   deadlineAt: number;
 }
@@ -32,7 +34,7 @@ export interface ConnectedKnowledgeProvider {
   descriptor: ConnectedKnowledgeProviderDescriptor;
   authorize(
     input: ConnectedKnowledgeAuthorizationInput,
-  ): Promise<unknown>;
+  ): Promise<ConnectedKnowledgeAccessDecision>;
   retrieveAuthorized(
     input: ConnectedKnowledgeRetrievalInput,
   ): Promise<ConnectedKnowledgeProviderResult>;
@@ -58,17 +60,40 @@ interface RegisteredProvider {
   provider: ConnectedKnowledgeProvider;
 }
 
+export function fingerprintConnectedKnowledgeRequest(
+  request: ConnectedKnowledgeRequest,
+): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        companyId: request.companyId,
+        agentId: request.agentId,
+        responsibleUserId: request.responsibleUserId,
+        runId: request.runId,
+        issueId: request.issueId,
+        projectId: request.projectId,
+        query: request.query,
+        intent: request.intent,
+        subjectRefs: [...request.subjectRefs].sort(),
+        asOf: request.asOf,
+      }),
+    )
+    .digest("hex");
+}
+
 function scopesMatch(
   scope: ConnectedKnowledgeAuthorizedScope,
   descriptor: ConnectedKnowledgeProviderDescriptor,
   request: ConnectedKnowledgeRequest,
+  requestFingerprint: string,
 ): boolean {
   return (
     scope.providerKey === descriptor.key &&
     scope.companyId === request.companyId &&
     scope.agentId === request.agentId &&
     scope.responsibleUserId === request.responsibleUserId &&
-    scope.runId === request.runId
+    scope.runId === request.runId &&
+    scope.requestFingerprint === requestFingerprint
   );
 }
 
@@ -76,8 +101,9 @@ function assertAuthorizedScope(
   scope: ConnectedKnowledgeAuthorizedScope,
   descriptor: ConnectedKnowledgeProviderDescriptor,
   request: ConnectedKnowledgeRequest,
+  requestFingerprint: string,
 ): void {
-  if (!scopesMatch(scope, descriptor, request)) {
+  if (!scopesMatch(scope, descriptor, request, requestFingerprint)) {
     throw forbidden("Connected Knowledge authorization scope is not bound to this request", {
       code: "connected_knowledge_scope_mismatch",
       providerKey: descriptor.key,
@@ -177,9 +203,11 @@ export function createConnectedKnowledgeRegistry(
       }
 
       const request = connectedKnowledgeRequestSchema.parse(rawInput.request);
+      const requestFingerprint = fingerprintConnectedKnowledgeRequest(request);
       const decision = connectedKnowledgeAccessDecisionSchema.parse(
         await found.provider.authorize({
           request,
+          requestFingerprint,
           signal: rawInput.signal,
           deadlineAt: rawInput.deadlineAt,
         }),
@@ -196,13 +224,19 @@ export function createConnectedKnowledgeRegistry(
       const scope = connectedKnowledgeAuthorizedScopeSchema.parse(
         decision.scope,
       );
-      assertAuthorizedScope(scope, found.descriptor, request);
+      assertAuthorizedScope(
+        scope,
+        found.descriptor,
+        request,
+        requestFingerprint,
+      );
 
       // Retrieval is deliberately unreachable until authorization has produced a
       // request-bound scope. Provider implementations must use this scope to
       // construct the permitted retrieval universe before search/ranking.
       const result = await found.provider.retrieveAuthorized({
         request,
+        requestFingerprint,
         authorizedScope: scope,
         signal: rawInput.signal,
         deadlineAt: rawInput.deadlineAt,
@@ -284,12 +318,3 @@ export function connectedKnowledgeContextProvider(
   };
 }
 
-export function connectedKnowledgeSourceClass(
-  value: string,
-): ConnectedKnowledgeSourceClass | null {
-  return value === "system_of_record" ||
-    value === "conversation" ||
-    value === "external_untrusted"
-    ? value
-    : null;
-}
