@@ -257,7 +257,7 @@ describe("Context model serialization", () => {
 });
 
 describe("Context default Connected Knowledge providers", () => {
-  it("wires Slack live into task-bound Context Engine assembly", () => {
+  it("wires GitHub synced and Slack live into accountable task/run context", () => {
     const providers = defaultConnectedKnowledgeContextProviders(
       {} as Db,
       {
@@ -270,14 +270,33 @@ describe("Context default Connected Knowledge providers", () => {
       },
     );
 
+    expect(providers).toHaveLength(2);
+    expect(providers.map((provider) => provider.key)).toEqual([
+      "github-sync",
+      "slack-live",
+    ]);
+    expect(providers.every((provider) => provider.requirement === "optional")).toBe(true);
+  });
+
+  it("wires GitHub synced for issue context without Slack run/requester prerequisites", () => {
+    const providers = defaultConnectedKnowledgeContextProviders(
+      {} as Db,
+      {
+        companyId: request.companyId,
+        agentId: request.agentId,
+        issueId: "44444444-4444-4444-8444-444444444444",
+        query: "critical bug",
+      },
+    );
+
     expect(providers).toHaveLength(1);
     expect(providers[0]).toMatchObject({
-      key: "slack-live",
+      key: "github-sync",
       requirement: "optional",
     });
   });
 
-  it("does not probe Slack outside an accountable task/run principal", () => {
+  it("does not add Connected Knowledge providers without an issue scope", () => {
     expect(
       defaultConnectedKnowledgeContextProviders(
         {} as Db,

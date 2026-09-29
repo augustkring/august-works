@@ -698,14 +698,15 @@ describePg("Workflow executor V1", () => {
       }),
     ).rejects.toBeTruthy();
   });
-  it("keeps idempotency bound to the original run after a later publish", async () => {
+  it("rejects reusing an idempotency key after the default published revision changes", async () => {
     const seeded = await seedPublishedManualWorkflow();
     const executor = workflowExecutorService(db);
+    const actor = { principal: { type: "user" as const, userId: seeded.userId } };
     const first = await executor.startManualRun(
       seeded.companyId,
       seeded.workflow.id,
       { input: { value: "original" } },
-      { principal: { type: "user", userId: seeded.userId } },
+      actor,
       "stable-key",
     );
 
@@ -730,7 +731,7 @@ describePg("Workflow executor V1", () => {
           settings: {},
         },
       },
-      { principal: { type: "user", userId: seeded.userId } },
+      actor,
     );
     const republished = await svc.publish(
       seeded.companyId,
@@ -740,19 +741,28 @@ describePg("Workflow executor V1", () => {
         expectedPublishedRevisionId: current!.publishedRevisionId,
         approvalId: null,
       },
-      { principal: { type: "user", userId: seeded.userId } },
+      actor,
     );
     expect(republished.publishedRevisionId).not.toBe(first.run.workflowRevisionId);
 
-    const replay = await executor.startManualRun(
-      seeded.companyId,
-      seeded.workflow.id,
-      { input: { value: "original" } },
-      { principal: { type: "user", userId: seeded.userId } },
-      "stable-key",
-    );
-    expect(replay.run.id).toBe(first.run.id);
-    expect(replay.run.workflowRevisionId).toBe(first.run.workflowRevisionId);
+    await expect(
+      executor.startManualRun(
+        seeded.companyId,
+        seeded.workflow.id,
+        { input: { value: "original" } },
+        actor,
+        "stable-key",
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: {
+        code: "idempotency_key_reused",
+        workflowRunId: first.run.id,
+      },
+    });
+
+    const persisted = await executor.getRun(seeded.companyId, first.run.id);
+    expect(persisted?.run.workflowRevisionId).toBe(first.run.workflowRevisionId);
     expect(await db.select().from(workflowRuns)).toHaveLength(1);
   });
 
@@ -893,7 +903,7 @@ describePg("Workflow executor V1", () => {
     );
     const child = spawn(
       process.execPath,
-      ["--import", "tsx", fixturePath],
+      ["--import", import.meta.resolve("tsx"), fixturePath],
       {
         env: {
           ...process.env,

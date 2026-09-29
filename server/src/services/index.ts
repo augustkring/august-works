@@ -268,6 +268,14 @@ export {
 } from "./knowledge/slack-live-connected-knowledge.js";
 
 export {
+  githubSyncedConnectedKnowledgeProvider,
+  createGitHubSyncedConnectedKnowledgeProvider,
+  type GitHubSyncedIssueAccess,
+  type GitHubSyncedKnowledgeDependencies,
+  type GitHubSyncedKnowledgeObject,
+} from "./knowledge/github-synced-connected-knowledge.js";
+
+export {
   connectedKnowledgeContextProvider,
   createConnectedKnowledgeRegistry,
   fingerprintConnectedKnowledgeRequest,

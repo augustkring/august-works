@@ -31,6 +31,9 @@ import {
 import {
   slackLiveConnectedKnowledgeProvider,
 } from "../knowledge/slack-live-connected-knowledge.js";
+import {
+  githubSyncedConnectedKnowledgeProvider,
+} from "../knowledge/github-synced-connected-knowledge.js";
 
 export const DEFAULT_CONTEXT_TOTAL_DEADLINE_MS = 1_500;
 export const DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS = 900;
@@ -521,25 +524,25 @@ export function defaultConnectedKnowledgeContextProviders(
   db: Db,
   input: AssembleContextInput,
 ): ContextProvider[] {
-  if (
-    !input.runId ||
-    !input.issueId ||
-    !input.responsibleUserId?.trim()
-  ) {
-    return [];
-  }
+  if (!input.issueId) return [];
 
-  const registry = createConnectedKnowledgeRegistry([
-    slackLiveConnectedKnowledgeProvider(db),
-  ]);
-
-  return [
-    connectedKnowledgeContextProvider(
-      registry,
-      "slack-live",
-      { requirement: "optional" },
+  const nativeProviders = [
+    githubSyncedConnectedKnowledgeProvider(db),
+    ...(
+      input.runId && input.responsibleUserId?.trim()
+        ? [slackLiveConnectedKnowledgeProvider(db)]
+        : []
     ),
   ];
+  const registry = createConnectedKnowledgeRegistry(nativeProviders);
+
+  return nativeProviders.map((provider) =>
+    connectedKnowledgeContextProvider(
+      registry,
+      provider.descriptor.key,
+      { requirement: "optional" },
+    ),
+  );
 }
 
 export function contextEngineService(db: Db, options: { providers?: ContextProvider[] } = {}) {

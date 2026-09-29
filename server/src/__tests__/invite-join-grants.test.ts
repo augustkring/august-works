@@ -79,6 +79,14 @@ describe("human invite roles", () => {
       { permissionKey: "tools:manage_runtime", scope: null },
       { permissionKey: "tools:use", scope: null },
       { permissionKey: "tools:admin", scope: null },
+      { permissionKey: "foundation:read", scope: null },
+      { permissionKey: "foundation:propose", scope: null },
+      { permissionKey: "foundation:edit", scope: null },
+      { permissionKey: "foundation:approve", scope: null },
+      { permissionKey: "workflows:read", scope: null },
+      { permissionKey: "workflows:edit", scope: null },
+      { permissionKey: "workflows:publish", scope: null },
+      { permissionKey: "workflows:run", scope: null },
     ]);
   });
 
@@ -95,6 +103,14 @@ describe("human invite roles", () => {
       { permissionKey: "tools:manage_runtime", scope: null },
       { permissionKey: "tools:use", scope: null },
       { permissionKey: "tools:admin", scope: null },
+      { permissionKey: "foundation:read", scope: null },
+      { permissionKey: "foundation:propose", scope: null },
+      { permissionKey: "foundation:edit", scope: null },
+      { permissionKey: "foundation:approve", scope: null },
+      { permissionKey: "workflows:read", scope: null },
+      { permissionKey: "workflows:edit", scope: null },
+      { permissionKey: "workflows:publish", scope: null },
+      { permissionKey: "workflows:run", scope: null },
     ]);
   });
 
@@ -116,6 +132,12 @@ describe("human invite roles", () => {
   it("falls back to role grants when human invite defaults omit explicit grants", () => {
     expect(humanJoinGrantsFromDefaults(null, "operator")).toEqual([
       { permissionKey: "tasks:assign", scope: null },
+      { permissionKey: "foundation:read", scope: null },
+      { permissionKey: "foundation:propose", scope: null },
+      { permissionKey: "foundation:edit", scope: null },
+      { permissionKey: "workflows:read", scope: null },
+      { permissionKey: "workflows:edit", scope: null },
+      { permissionKey: "workflows:run", scope: null },
     ]);
   });
 
