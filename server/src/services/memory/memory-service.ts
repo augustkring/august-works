@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, gt, isNull, lte, ne, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -215,6 +215,98 @@ function privateMemoryEvidenceTrust(
     return "high";
   }
   return verificationState === "corroborated" ? "medium" : "low";
+}
+
+type CanonicalValue =
+  | null
+  | boolean
+  | number
+  | string
+  | CanonicalValue[]
+  | { [key: string]: CanonicalValue };
+
+function canonicalMemoryOperationValue(value: unknown): CanonicalValue {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "string"
+  ) {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw unprocessable("Memory operation input contains a non-finite number");
+    }
+    return value;
+  }
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) {
+    return value.map(canonicalMemoryOperationValue);
+  }
+  if (typeof value === "object") {
+    const result: Record<string, CanonicalValue> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      const entry = (value as Record<string, unknown>)[key];
+      if (entry === undefined) continue;
+      result[key] = canonicalMemoryOperationValue(entry);
+    }
+    return result;
+  }
+  throw unprocessable("Memory operation input must be JSON-compatible");
+}
+
+function memoryOperationFingerprint(value: unknown): string {
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalMemoryOperationValue(value)))
+    .digest("hex");
+}
+
+async function lockMemoryOperation(
+  db: Db,
+  companyId: string,
+  operationKind: string,
+  operationId: string,
+) {
+  await db.execute(
+    sql`select pg_advisory_xact_lock(
+      hashtextextended(${`memory:${operationKind}:${companyId}:${operationId}`}, 0)
+    )`,
+  );
+}
+
+async function memoryRecordForOperation(
+  db: Db,
+  companyId: string,
+  operationId: string,
+) {
+  const rows = await db
+    .select()
+    .from(memoryRecords)
+    .where(
+      and(
+        eq(memoryRecords.companyId, companyId),
+        eq(memoryRecords.createdByOperationId, operationId),
+        isNull(memoryRecords.deletedAt),
+      ),
+    )
+    .limit(2);
+  if (rows.length > 1) {
+    throw conflict("Memory operation id is already associated with multiple records", {
+      code: "memory_operation_ambiguous",
+      operationId,
+    });
+  }
+  return rows[0] ?? null;
+}
+
+function metadataFingerprint(
+  record: typeof memoryRecords.$inferSelect,
+  key: string,
+): string | null {
+  const value = record.metadata[key];
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value)
+    ? value
+    : null;
 }
 
 function recordDetail(
@@ -590,15 +682,49 @@ export function memoryService(db: Db) {
       }
       assertPrivateMemoryWriter(ownerAgentId, actor);
 
+      const operationFingerprint = memoryOperationFingerprint({
+        ownerAgentId,
+        input: parsed.data,
+      });
       const candidate: MemoryCandidateInputParsed = {
         ...parsed.data,
         scope: { type: "agent", id: ownerAgentId },
         ownerAgentId,
+        metadata: {
+          ...parsed.data.metadata,
+          privateOperationFingerprint: operationFingerprint,
+        },
       };
 
       const publications: ActivityPublication[] = [];
       const record = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryOperation(
+          txDb,
+          companyId,
+          "private",
+          parsed.data.createdByOperationId,
+        );
+        const existing = await memoryRecordForOperation(
+          txDb,
+          companyId,
+          parsed.data.createdByOperationId,
+        );
+        if (existing) {
+          if (
+            existing.scopeType !== "agent" ||
+            existing.ownerAgentId !== ownerAgentId ||
+            metadataFingerprint(existing, "privateOperationFingerprint") !==
+              operationFingerprint
+          ) {
+            throw conflict("Memory operation id was reused with different private-memory input", {
+              code: "memory_operation_conflict",
+              operationId: parsed.data.createdByOperationId,
+            });
+          }
+          return existing;
+        }
+
         const created = await insertCandidate(
           txDb,
           companyId,
@@ -659,6 +785,44 @@ export function memoryService(db: Db) {
         if (!source) throw notFound("Private memory record not found");
 
         assertPrivateMemoryReadAllowed(source, actor);
+        if (!source.ownerAgentId) {
+          throw conflict("Private memory owner is missing", {
+            code: "private_memory_owner_missing",
+          });
+        }
+
+        const operationFingerprint = memoryOperationFingerprint({
+          sourceRecordId: source.id,
+          targetBindingId: parsed.data.targetBindingId,
+          targetScope: parsed.data.targetScope,
+          reason: parsed.data.reason,
+          createdByOperationId: parsed.data.createdByOperationId,
+        });
+        await lockMemoryOperation(
+          txDb,
+          companyId,
+          "share",
+          parsed.data.createdByOperationId,
+        );
+        const existing = await memoryRecordForOperation(
+          txDb,
+          companyId,
+          parsed.data.createdByOperationId,
+        );
+        if (existing) {
+          if (
+            existing.scopeType === "agent" ||
+            metadataFingerprint(existing, "shareOperationFingerprint") !==
+              operationFingerprint
+          ) {
+            throw conflict("Memory operation id was reused with different share input", {
+              code: "memory_operation_conflict",
+              operationId: parsed.data.createdByOperationId,
+            });
+          }
+          return existing;
+        }
+
         const now = new Date();
         if (
           source.reviewState !== "accepted" ||
@@ -673,12 +837,6 @@ export function memoryService(db: Db) {
             code: "private_memory_not_shareable",
           });
         }
-        if (!source.ownerAgentId) {
-          throw conflict("Private memory owner is missing", {
-            code: "private_memory_owner_missing",
-          });
-        }
-
         const candidate: MemoryCandidateInputParsed = {
           bindingId: parsed.data.targetBindingId,
           memoryType: source.memoryType as MemoryCandidateInputParsed["memoryType"],
@@ -705,6 +863,7 @@ export function memoryService(db: Db) {
             promotedFromPrivateRecordId: source.id,
             promotedFromOwnerAgentId: source.ownerAgentId,
             promotionReason: parsed.data.reason,
+            shareOperationFingerprint: operationFingerprint,
           },
           evidence: [
             {

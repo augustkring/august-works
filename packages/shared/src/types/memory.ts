@@ -126,13 +126,18 @@ export interface MemoryRevokeInput {
 }
 
 export interface MemoryPrivateInput
-  extends Omit<MemoryCandidateInput, "scope" | "ownerAgentId"> {}
+  extends Omit<
+    MemoryCandidateInput,
+    "scope" | "ownerAgentId" | "createdByOperationId"
+  > {
+  createdByOperationId: string;
+}
 
 export interface MemoryShareInput {
   targetBindingId: string;
   targetScope: SharedMemoryScope;
   reason: string;
-  createdByOperationId: string | null;
+  createdByOperationId: string;
 }
 
 

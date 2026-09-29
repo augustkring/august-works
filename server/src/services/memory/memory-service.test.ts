@@ -195,7 +195,10 @@ describePg("Memory Core service", () => {
     bindingId: string,
     overrides: Record<string, unknown> = {},
   ) {
-    const value = candidate(bindingId, overrides);
+    const value = candidate(bindingId, {
+      createdByOperationId: "private-operation-1",
+      ...overrides,
+    });
     const { scope: _scope, ownerAgentId: _ownerAgentId, ...input } = value;
     return input;
   }
@@ -547,6 +550,19 @@ describePg("Memory Core service", () => {
       reviewState: "accepted",
       verificationState: "unverified",
     });
+    const retriedPrivate = await svc.createPrivateMemory(
+      seeded.companyId,
+      seeded.agent.id,
+      privateInput(agentBinding.id, {
+        memoryType: "preference",
+        title: "Status style",
+        content: "Prefer concise status updates.",
+        summary: null,
+        evidence: evidence("Prefer concise status updates."),
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    expect(retriedPrivate.record.id).toBe(created.record.id);
     await expect(
       svc.listEligible(
         seeded.companyId,
@@ -615,7 +631,7 @@ describePg("Memory Core service", () => {
           targetBindingId: sharedBinding.id,
           targetScope: { type: "company", id: null },
           reason: "Useful across the company",
-          createdByOperationId: null,
+          createdByOperationId: "share-operation-other-agent",
         },
         agentActor(otherAgent!.id, seeded.userId),
       ),
@@ -659,6 +675,36 @@ describePg("Memory Core service", () => {
         citationJson: { label: "Agent-private memory" },
       }),
     ]);
+
+    const retriedShare = await svc.sharePrivateMemory(
+      seeded.companyId,
+      privateRecord.record.id,
+      {
+        targetBindingId: sharedBinding.id,
+        targetScope: { type: "company", id: null },
+        reason: "Useful across the company",
+        createdByOperationId: "share-operation-1",
+      },
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    expect(retriedShare.record.id).toBe(sharedCandidate.record.id);
+
+    await expect(
+      svc.sharePrivateMemory(
+        seeded.companyId,
+        privateRecord.record.id,
+        {
+          targetBindingId: sharedBinding.id,
+          targetScope: { type: "subject", id: "different-target" },
+          reason: "Changed target",
+          createdByOperationId: "share-operation-1",
+        },
+        agentActor(seeded.agent.id, seeded.userId),
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({ code: "memory_operation_conflict" }),
+    });
 
     const sourceAfterShare = await svc.get(
       seeded.companyId,

@@ -233,6 +233,10 @@ export const memoryPrivateInputSchema = memoryCandidateBaseSchema
   .omit({
     scope: true,
     ownerAgentId: true,
+    createdByOperationId: true,
+  })
+  .extend({
+    createdByOperationId: z.string().trim().min(1).max(500),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -255,7 +259,7 @@ export const memoryShareInputSchema = z
     targetBindingId: z.string().guid(),
     targetScope: sharedMemoryScopeSchema,
     reason: z.string().trim().min(1).max(2000),
-    createdByOperationId: nullableBounded(500).default(null),
+    createdByOperationId: z.string().trim().min(1).max(500),
   })
   .strict();
 
