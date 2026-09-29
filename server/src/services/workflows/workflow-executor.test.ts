@@ -514,6 +514,72 @@ describePg("Workflow executor V1", () => {
     ]);
   });
 
+  it("executes Transform deterministically with typed upstream, trigger, variables and prior-step context", async () => {
+    const seeded = await seedPublishedGraph({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "transform",
+          type: "core.transform",
+          name: "Map lead",
+          position: { x: 200, y: 0 },
+          config: {
+            mapping: {
+              amount: "{{input.value}}",
+              account: "{{trigger.label}}",
+              region: "{{variables.region}}",
+              priorAmount: "{{steps.start.value}}",
+              summary: "{{trigger.label}} / {{variables.region}}",
+              payload: "{{input.payload}}",
+              literal: "fixed",
+            },
+          },
+        },
+      ],
+      edges: [{ id: "e1", source: "start", target: "transform" }],
+      variables: [{ name: "region", defaultValue: "DK" }],
+      settings: {},
+    });
+
+    const result = await workflowExecutorService(db).startManualRun(
+      seeded.companyId,
+      seeded.workflow.id,
+      {
+        input: {
+          value: 42,
+          label: "Acme",
+          payload: { id: "lead-1", tags: ["priority"] },
+        },
+      },
+      { principal: { type: "user", userId: seeded.userId } },
+      "transform-run-1",
+    );
+
+    expect(result.run.status).toBe("succeeded");
+    expect(result.steps).toHaveLength(2);
+    expect(
+      result.steps.find((step) => step.nodeId === "transform"),
+    ).toMatchObject({
+      status: "succeeded",
+      outputJson: {
+        amount: 42,
+        account: "Acme",
+        region: "DK",
+        priorAmount: 42,
+        summary: "Acme / DK",
+        payload: { id: "lead-1", tags: ["priority"] },
+        literal: "fixed",
+      },
+    });
+  });
+
   it("returns the same durable run for a repeated idempotency key", async () => {
     const seeded = await seedPublishedManualWorkflow();
     const executor = workflowExecutorService(db);
