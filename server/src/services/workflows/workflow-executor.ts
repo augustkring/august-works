@@ -6019,6 +6019,314 @@ async function executeClaimedRun(
   await executeWorkflowGraph(db, run, revision.graph, actor, runtimeDeps);
 }
 
+function heartbeatRunIsActive(status: string) {
+  return status === "queued" ||
+    status === "scheduled_retry" ||
+    status === "running";
+}
+
+function heartbeatRunIsTerminal(status: string) {
+  return status === "succeeded" ||
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "timed_out" ||
+    status === "interrupted";
+}
+
+async function loadExternalAgentHeartbeat(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  heartbeatRunId: string,
+  agentId: string,
+) {
+  return db
+    .select()
+    .from(heartbeatRuns)
+    .where(
+      and(
+        eq(heartbeatRuns.companyId, run.companyId),
+        eq(heartbeatRuns.id, heartbeatRunId),
+        eq(heartbeatRuns.agentId, agentId),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+}
+
+async function resolveExternalAgentWait(
+  db: Db,
+  run: typeof workflowRuns.$inferSelect,
+  wait: typeof workflowWaits.$inferSelect,
+  now: Date,
+  runtimeDeps: WorkflowExecutorRuntimeDeps,
+): Promise<"recovered" | "raced" | "deferred"> {
+  const revision = await revisionForRun(db, run);
+  if (!revision) {
+    const changed = await failExternalAgentWait(
+      db,
+      run,
+      wait,
+      "workflow_revision_unavailable_for_recovery",
+      "Workflow revision bound to this External Agent run is unavailable",
+      now,
+    );
+    return changed ? "recovered" : "raced";
+  }
+
+  const node = revision.graph.nodes.find((item) => item.id === wait.nodeId);
+  if (!node || node.type !== "agent.external") {
+    const changed = await failExternalAgentWait(
+      db,
+      run,
+      wait,
+      "workflow_checkpoint_invalid",
+      "External Agent wait no longer resolves to an External Agent node",
+      now,
+    );
+    return changed ? "recovered" : "raced";
+  }
+
+  let config: ExternalAgentConfig;
+  try {
+    config = externalAgentNodeConfig(node);
+    await assertExternalAgentBindingAvailable(db, run, config);
+  } catch (error) {
+    const code =
+      error instanceof WorkflowCheckpointError
+        ? error.code
+        : "workflow_external_agent_binding_invalid";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "External Agent binding is unavailable";
+    const changed = await failExternalAgentWait(
+      db,
+      run,
+      wait,
+      code,
+      message,
+      now,
+    );
+    return changed ? "recovered" : "raced";
+  }
+
+  if (wait.referenceType !== "issue" || !wait.referenceId) {
+    const changed = await failExternalAgentWait(
+      db,
+      run,
+      wait,
+      "workflow_external_agent_result_missing",
+      "External Agent wait is missing its accountable task reference",
+      now,
+    );
+    return changed ? "recovered" : "raced";
+  }
+
+  const issue = await db
+    .select({
+      id: issues.id,
+      status: issues.status,
+      assigneeAgentId: issues.assigneeAgentId,
+    })
+    .from(issues)
+    .where(
+      and(
+        eq(issues.companyId, run.companyId),
+        eq(issues.id, wait.referenceId),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+  if (!issue) {
+    const changed = await failExternalAgentWait(
+      db,
+      run,
+      wait,
+      "workflow_external_agent_result_missing",
+      "External Agent accountable task is missing",
+      now,
+      { issueId: wait.referenceId },
+    );
+    return changed ? "recovered" : "raced";
+  }
+  if (issue.assigneeAgentId !== config.agentId) {
+    const changed = await failExternalAgentWait(
+      db,
+      run,
+      wait,
+      "workflow_external_agent_binding_invalid",
+      "External Agent task assignment changed before completion",
+      now,
+      { issueId: issue.id, expectedAgentId: config.agentId },
+    );
+    return changed ? "recovered" : "raced";
+  }
+
+  let waitingStep = await externalAgentWaitingStep(db, run, wait);
+  if (!waitingStep) return "raced";
+
+  if (!waitingStep.heartbeatRunId) {
+    const actor: WorkflowRunActor = {
+      principal: { type: "system", service: "workflow-external-agent" },
+      responsibleUserId: run.responsibleUserId,
+    };
+    try {
+      const heartbeatRunId = await wakeWorkflowExternalAgent(
+        db,
+        run,
+        node,
+        issue,
+        config,
+        actor,
+        runtimeDeps,
+      );
+      waitingStep = await bindExternalAgentExecution(
+        db,
+        run,
+        waitingStep,
+        issue.id,
+        config.agentId,
+        heartbeatRunId,
+        actor,
+      );
+    } catch (error) {
+      if (error instanceof WorkflowCheckpointError) {
+        const changed = await failExternalAgentWait(
+          db,
+          run,
+          wait,
+          error.code,
+          error.message,
+          now,
+          { issueId: issue.id, agentId: config.agentId },
+        );
+        return changed ? "recovered" : "raced";
+      }
+      return "deferred";
+    }
+  }
+
+  const heartbeatRunId = waitingStep.heartbeatRunId;
+  if (!heartbeatRunId) return "deferred";
+
+  let heartbeat = await loadExternalAgentHeartbeat(
+    db,
+    run,
+    heartbeatRunId,
+    config.agentId,
+  );
+  if (!heartbeat) {
+    return "deferred";
+  }
+
+  const completedWithinDeadline =
+    heartbeat.status === "succeeded" &&
+    (!wait.timeoutAt ||
+      (heartbeat.finishedAt !== null &&
+        heartbeat.finishedAt.getTime() <= wait.timeoutAt.getTime()));
+
+  if (completedWithinDeadline) {
+    return resumeCompletedExternalAgentWait(
+      db,
+      run,
+      wait,
+      heartbeat,
+      issue.id,
+      config,
+      now,
+      runtimeDeps,
+    );
+  }
+
+  if (wait.timeoutAt && wait.timeoutAt.getTime() <= now.getTime()) {
+    const heartbeatRuntime = await workflowAgentHeartbeat(db, runtimeDeps);
+    let cancellationRequested = false;
+    let cancellationError: string | null = null;
+
+    if (heartbeatRunIsActive(heartbeat.status) && heartbeatRuntime.cancelRun) {
+      cancellationRequested = true;
+      try {
+        await heartbeatRuntime.cancelRun(
+          heartbeat.id,
+          "External Agent workflow step exceeded its timeout",
+          { errorCode: "workflow_external_agent_timeout" },
+        );
+      } catch (error) {
+        cancellationError =
+          error instanceof Error ? error.message : String(error);
+      }
+      heartbeat =
+        (await loadExternalAgentHeartbeat(
+          db,
+          run,
+          heartbeat.id,
+          config.agentId,
+        )) ?? heartbeat;
+    }
+
+    const cancellationConfirmed =
+      heartbeat.status === "cancelled" ||
+      heartbeat.status === "timed_out";
+    const changed = await failExternalAgentWait(
+      db,
+      run,
+      wait,
+      "workflow_external_agent_timeout",
+      "External Agent workflow step exceeded its configured timeout",
+      now,
+      {
+        issueId: issue.id,
+        agentId: config.agentId,
+        heartbeatRunId: heartbeat.id,
+        externalRunId: heartbeat.externalRunId,
+        cancellationRequested,
+        cancellationConfirmed,
+        ...(cancellationError ? { cancellationError } : {}),
+      },
+    );
+    return changed ? "recovered" : "raced";
+  }
+
+  if (heartbeatRunIsActive(heartbeat.status)) {
+    return "deferred";
+  }
+
+  if (!heartbeatRunIsTerminal(heartbeat.status)) {
+    return "deferred";
+  }
+
+  const errorCode =
+    heartbeat.status === "cancelled"
+      ? "workflow_external_agent_cancelled"
+      : heartbeat.status === "timed_out"
+        ? "workflow_external_agent_timeout"
+        : "workflow_external_agent_failed";
+  const errorMessage =
+    heartbeat.error ??
+    heartbeat.errorCode ??
+    (heartbeat.status === "cancelled"
+      ? "External Agent run was cancelled"
+      : heartbeat.status === "timed_out"
+        ? "External Agent run timed out"
+        : "External Agent run failed");
+
+  const changed = await failExternalAgentWait(
+    db,
+    run,
+    wait,
+    errorCode,
+    errorMessage,
+    now,
+    {
+      issueId: issue.id,
+      agentId: config.agentId,
+      heartbeatRunId: heartbeat.id,
+      externalRunId: heartbeat.externalRunId,
+      heartbeatStatus: heartbeat.status,
+      heartbeatErrorCode: heartbeat.errorCode,
+    },
+  );
+  return changed ? "recovered" : "raced";
+}
+
 async function recoverWaitingCandidate(
   db: Db,
   candidate: typeof workflowRuns.$inferSelect,
