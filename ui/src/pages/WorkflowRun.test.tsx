@@ -244,4 +244,87 @@ describe("WorkflowRun", () => {
     flushSync(() => root.unmount());
   });
 
+  it("labels an External Agent wait as governed OpenClaw system work", async () => {
+    apiMock.getRun.mockResolvedValue({
+      ...runDetail,
+      run: {
+        ...runDetail.run,
+        status: "waiting",
+        finishedAt: null,
+      },
+      steps: [
+        {
+          ...runDetail.steps[0]!,
+          id: "step-external",
+          nodeId: "external",
+          status: "waiting",
+          agentId: "openclaw-agent-1",
+          heartbeatRunId: "heartbeat-1",
+          outputJson: {
+            status: "waiting",
+            issueId: "issue-1",
+            agentId: "openclaw-agent-1",
+            heartbeatRunId: "heartbeat-1",
+          },
+          finishedAt: null,
+          durationMs: null,
+        },
+      ],
+      waits: [
+        {
+          id: "wait-external",
+          companyId: "company-1",
+          workflowRunId: runDetail.run.id,
+          nodeId: "external",
+          waitKey: "primary",
+          kind: "external_agent_run",
+          status: "active",
+          wakeAt: null,
+          timeoutAt: new Date("2026-09-28T12:05:00Z"),
+          referenceType: "issue",
+          referenceId: "issue-1",
+          signalTokenHash: null,
+          resolutionJson: null,
+          resolvedByType: null,
+          resolvedById: null,
+          resolvedAt: null,
+          createdAt: new Date("2026-09-28T12:01:01Z"),
+          updatedAt: new Date("2026-09-28T12:01:01Z"),
+        },
+      ],
+    });
+
+    const root = createRoot(container);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    flushSync(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter
+            initialEntries={[
+              "/workflows/workflow-1/runs/run-12345678",
+            ]}
+          >
+            <Routes>
+              <Route
+                path="/workflows/:workflowId/runs/:runId"
+                element={<WorkflowRun />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Waiting on system");
+    expect(container.textContent).toContain(
+      "Waiting for the external OpenClaw agent run to finish.",
+    );
+    expect(container.textContent).toContain("Attempt 1 · Agent");
+
+    flushSync(() => root.unmount());
+  });
+
 });
