@@ -166,6 +166,18 @@ describePg("Workflow capability resolver", () => {
       permissions: {},
       status: "idle",
     }).returning();
+    const [externalAgent] = await db.insert(agents).values({
+      companyId: alpha.id,
+      name: "OpenClaw Researcher",
+      role: "research",
+      title: "External Researcher",
+      capabilities: "Research accounts through governed external tools",
+      adapterType: "openclaw_gateway",
+      adapterConfig: { url: "ws://127.0.0.1:18789" },
+      runtimeConfig: {},
+      permissions: {},
+      status: "idle",
+    }).returning();
     await db.insert(agents).values({
       companyId: beta.id,
       name: "Beta Researcher",
@@ -211,7 +223,30 @@ describePg("Workflow capability resolver", () => {
           nodeType: "agent.task",
           requiredPermissions: ["tasks:assign"],
           availability: { status: "available", reason: null },
-          source: expect.objectContaining({ agentId: agent!.id }),
+          source: expect.objectContaining({
+            agentId: agent!.id,
+            mediation: "native_agent_task",
+          }),
+        }),
+        expect.objectContaining({
+          id: `agent:${externalAgent!.id}`,
+          kind: "agent",
+          nodeType: "agent.external",
+          requiredPermissions: ["tasks:assign"],
+          availability: { status: "available", reason: null },
+          configTemplate: expect.objectContaining({
+            agentId: externalAgent!.id,
+            structuredInput: {},
+            expectedOutputSchema: null,
+            timeoutSeconds: 120,
+            allowedCapabilityScope: "binding_grants",
+            fallbackPolicy: "fail",
+          }),
+          source: expect.objectContaining({
+            agentId: externalAgent!.id,
+            adapterType: "openclaw_gateway",
+            mediation: "external_agent",
+          }),
         }),
       ]),
     );
