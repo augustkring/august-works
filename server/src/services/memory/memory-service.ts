@@ -1,4 +1,5 @@
-import { and, desc, eq, gt, isNull, lte, ne, or } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, desc, eq, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -15,8 +16,11 @@ import {
   memoryBindingTargetInputSchema,
   memoryCandidateInputSchema,
   memoryCorrectionInputSchema,
+  memoryPrivateInputSchema,
+  memoryPrivateCorrectionInputSchema,
   memoryReviewInputSchema,
   memoryRevokeInputSchema,
+  memoryShareInputSchema,
   type ExecutionPrincipal,
   type MemoryCandidateInputParsed,
 } from "@paperclipai/shared";
@@ -133,7 +137,12 @@ function targetMatchesScope(
   target: typeof memoryBindingTargets.$inferSelect,
   input: MemoryCandidateInputParsed,
 ) {
-  if (target.targetType === "company") return target.targetId === companyId;
+  if (target.targetType === "company") {
+    return (
+      target.targetId === companyId &&
+      (input.scope.type === "company" || input.scope.type === "subject")
+    );
+  }
   if (target.targetType === "agent") {
     return input.scope.type === "agent" && target.targetId === input.scope.id;
   }
@@ -178,6 +187,129 @@ async function assertAgentPrivateOwnership(
   ) {
     throw forbidden("An agent can only create private memory for itself");
   }
+}
+
+function assertPrivateMemoryWriter(
+  ownerAgentId: string,
+  actor: MemoryMutationActor,
+) {
+  if (actor.principal.type === "system") return;
+  if (
+    actor.principal.type === "agent" &&
+    actor.principal.agentId === ownerAgentId
+  ) {
+    return;
+  }
+  throw forbidden("Private agent memory can only be written by its owning agent or the system", {
+    code: "private_memory_write_denied",
+    ownerAgentId,
+  });
+}
+
+function privateMemoryEvidenceTrust(
+  verificationState: string,
+): "high" | "medium" | "low" {
+  if (
+    verificationState === "human_verified" ||
+    verificationState === "system_verified"
+  ) {
+    return "high";
+  }
+  return verificationState === "corroborated" ? "medium" : "low";
+}
+
+type CanonicalValue =
+  | null
+  | boolean
+  | number
+  | string
+  | CanonicalValue[]
+  | { [key: string]: CanonicalValue };
+
+function canonicalMemoryOperationValue(value: unknown): CanonicalValue {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "string"
+  ) {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw unprocessable("Memory operation input contains a non-finite number");
+    }
+    return value;
+  }
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) {
+    return value.map(canonicalMemoryOperationValue);
+  }
+  if (typeof value === "object") {
+    const result: Record<string, CanonicalValue> = Object.create(null) as Record<
+      string,
+      CanonicalValue
+    >;
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      const entry = (value as Record<string, unknown>)[key];
+      if (entry === undefined) continue;
+      result[key] = canonicalMemoryOperationValue(entry);
+    }
+    return result;
+  }
+  throw unprocessable("Memory operation input must be JSON-compatible");
+}
+
+function memoryOperationFingerprint(value: unknown): string {
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalMemoryOperationValue(value)))
+    .digest("hex");
+}
+
+async function lockMemoryOperation(
+  db: Db,
+  companyId: string,
+  operationId: string,
+) {
+  await db.execute(
+    sql`select pg_advisory_xact_lock(
+      hashtextextended(${`memory:operation:${companyId}:${operationId}`}, 0)
+    )`,
+  );
+}
+
+async function memoryRecordForOperation(
+  db: Db,
+  companyId: string,
+  operationId: string,
+) {
+  const rows = await db
+    .select()
+    .from(memoryRecords)
+    .where(
+      and(
+        eq(memoryRecords.companyId, companyId),
+        eq(memoryRecords.createdByOperationId, operationId),
+        isNull(memoryRecords.deletedAt),
+      ),
+    )
+    .limit(2);
+  if (rows.length > 1) {
+    throw conflict("Memory operation id is already associated with multiple records", {
+      code: "memory_operation_ambiguous",
+      operationId,
+    });
+  }
+  return rows[0] ?? null;
+}
+
+function metadataFingerprint(
+  record: typeof memoryRecords.$inferSelect,
+  key: string,
+): string | null {
+  const value = record.metadata[key];
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value)
+    ? value
+    : null;
 }
 
 function recordDetail(
@@ -245,11 +377,34 @@ async function insertCandidate(
   input: MemoryCandidateInputParsed,
   actor: MemoryMutationActor,
   supersedesRecordId: string | null,
+  state: {
+    reviewState?: "pending" | "accepted";
+    verificationState?:
+      | "unverified"
+      | "corroborated"
+      | "human_verified"
+      | "system_verified";
+  } = {},
 ) {
   await assertActorCompanyScope(tx, companyId, actor);
   await assertScopeReferences(tx, companyId, input);
   await assertAgentPrivateOwnership(input, actor);
   const binding = await assertBindingAllowsCandidate(tx, companyId, input);
+  if (input.createdByOperationId) {
+    await lockMemoryOperation(tx, companyId, input.createdByOperationId);
+    const existingOperation = await memoryRecordForOperation(
+      tx,
+      companyId,
+      input.createdByOperationId,
+    );
+    if (existingOperation) {
+      throw conflict("Memory operation id is already associated with a record", {
+        code: "memory_operation_conflict",
+        operationId: input.createdByOperationId,
+        existingRecordId: existingOperation.id,
+      });
+    }
+  }
   const identity = actorIdentity(actor);
   const now = new Date();
 
@@ -268,8 +423,8 @@ async function insertCandidate(
       title: input.title,
       content: input.content,
       summary: input.summary,
-      reviewState: "pending",
-      verificationState: "unverified",
+      reviewState: state.reviewState ?? "pending",
+      verificationState: state.verificationState ?? "unverified",
       sensitivityLabel: input.sensitivity,
       importance: input.importance,
       confidenceScore: input.confidenceScore,
@@ -531,6 +686,403 @@ export function memoryService(db: Db) {
           ),
         )
         .then((rows) => rows[0]!);
+    },
+
+    createPrivateMemory: async (
+      companyId: string,
+      ownerAgentId: string,
+      rawInput: unknown,
+      actor: MemoryMutationActor,
+    ) => {
+      const parsed = memoryPrivateInputSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid private memory", parsed.error.issues);
+      }
+      assertPrivateMemoryWriter(ownerAgentId, actor);
+
+      const operationFingerprint = memoryOperationFingerprint({
+        ownerAgentId,
+        input: parsed.data,
+      });
+      const candidate: MemoryCandidateInputParsed = {
+        ...parsed.data,
+        scope: { type: "agent", id: ownerAgentId },
+        ownerAgentId,
+        metadata: {
+          ...parsed.data.metadata,
+          privateOperationFingerprint: operationFingerprint,
+        },
+      };
+
+      const publications: ActivityPublication[] = [];
+      const record = await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await lockMemoryOperation(
+          txDb,
+          companyId,
+          parsed.data.createdByOperationId,
+        );
+        const existing = await memoryRecordForOperation(
+          txDb,
+          companyId,
+          parsed.data.createdByOperationId,
+        );
+        if (existing) {
+          if (
+            existing.scopeType !== "agent" ||
+            existing.ownerAgentId !== ownerAgentId ||
+            metadataFingerprint(existing, "privateOperationFingerprint") !==
+              operationFingerprint
+          ) {
+            throw conflict("Memory operation id was reused with different private-memory input", {
+              code: "memory_operation_conflict",
+              operationId: parsed.data.createdByOperationId,
+            });
+          }
+          return existing;
+        }
+
+        const created = await insertCandidate(
+          txDb,
+          companyId,
+          candidate,
+          actor,
+          null,
+          {
+            reviewState: "accepted",
+            verificationState: "unverified",
+          },
+        );
+        publications.push(
+          await persistMemoryActivity(txDb, actor, {
+            companyId,
+            action: "memory.private_created",
+            recordId: created.id,
+            details: {
+              ownerAgentId,
+              memoryType: created.memoryType,
+            },
+          }),
+        );
+        return created;
+      });
+      publications.forEach(publishActivity);
+      return (await getRecordDetail(db, companyId, record.id))!;
+    },
+
+    correctPrivateMemory: async (
+      companyId: string,
+      recordId: string,
+      rawInput: unknown,
+      actor: MemoryMutationActor,
+    ) => {
+      const parsed = memoryPrivateCorrectionInputSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid private memory correction", parsed.error.issues);
+      }
+
+      const publications: ActivityPublication[] = [];
+      const corrected = await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await assertActorCompanyScope(txDb, companyId, actor);
+
+        const source = await txDb
+          .select()
+          .from(memoryRecords)
+          .where(
+            and(
+              eq(memoryRecords.companyId, companyId),
+              eq(memoryRecords.id, recordId),
+              eq(memoryRecords.scopeType, "agent"),
+              isNull(memoryRecords.deletedAt),
+            ),
+          )
+          .for("update")
+          .then((rows) => rows[0] ?? null);
+        if (!source) throw notFound("Private memory record not found");
+        assertPrivateMemoryReadAllowed(source, actor);
+        if (!source.ownerAgentId) {
+          throw conflict("Private memory owner is missing", {
+            code: "private_memory_owner_missing",
+          });
+        }
+        assertPrivateMemoryWriter(source.ownerAgentId, actor);
+
+        const operationFingerprint = memoryOperationFingerprint({
+          sourceRecordId: source.id,
+          input: parsed.data,
+        });
+        await lockMemoryOperation(
+          txDb,
+          companyId,
+          parsed.data.createdByOperationId,
+        );
+        const existing = await memoryRecordForOperation(
+          txDb,
+          companyId,
+          parsed.data.createdByOperationId,
+        );
+        if (existing) {
+          if (
+            existing.scopeType !== "agent" ||
+            existing.ownerAgentId !== source.ownerAgentId ||
+            existing.supersedesRecordId !== source.id ||
+            metadataFingerprint(existing, "privateCorrectionFingerprint") !==
+              operationFingerprint
+          ) {
+            throw conflict("Memory operation id was reused with different private correction input", {
+              code: "memory_operation_conflict",
+              operationId: parsed.data.createdByOperationId,
+            });
+          }
+          return existing;
+        }
+
+        const now = new Date();
+        if (
+          source.reviewState !== "accepted" ||
+          source.retentionState !== "active" ||
+          source.revokedAt ||
+          source.supersededByRecordId ||
+          (source.validFrom && source.validFrom.getTime() > now.getTime()) ||
+          (source.validUntil && source.validUntil.getTime() <= now.getTime()) ||
+          (source.expiresAt && source.expiresAt.getTime() <= now.getTime())
+        ) {
+          throw conflict("Only current active private memory can be corrected", {
+            code: "private_memory_not_correctable",
+          });
+        }
+
+        const candidate: MemoryCandidateInputParsed = {
+          bindingId: source.bindingId,
+          memoryType: parsed.data.memoryType,
+          scope: { type: "agent", id: source.ownerAgentId },
+          subject: parsed.data.subject,
+          ownerAgentId: source.ownerAgentId,
+          title: parsed.data.title,
+          content: parsed.data.content,
+          summary: parsed.data.summary,
+          sensitivity: parsed.data.sensitivity,
+          importance: parsed.data.importance,
+          confidenceScore: parsed.data.confidenceScore,
+          validFrom: parsed.data.validFrom,
+          validUntil: parsed.data.validUntil,
+          observedAt: parsed.data.observedAt,
+          retentionPolicy: parsed.data.retentionPolicy,
+          expiresAt: parsed.data.expiresAt,
+          createdByOperationId: parsed.data.createdByOperationId,
+          metadata: {
+            ...parsed.data.metadata,
+            correctionReason: parsed.data.reason,
+            privateCorrectionFingerprint: operationFingerprint,
+          },
+          evidence: parsed.data.evidence,
+        };
+
+        const next = await insertCandidate(
+          txDb,
+          companyId,
+          candidate,
+          actor,
+          source.id,
+          {
+            reviewState: "accepted",
+            verificationState: "unverified",
+          },
+        );
+        const [superseded] = await txDb
+          .update(memoryRecords)
+          .set({
+            supersededByRecordId: next.id,
+            retentionState: "superseded",
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(memoryRecords.companyId, companyId),
+              eq(memoryRecords.id, source.id),
+              isNull(memoryRecords.supersededByRecordId),
+              eq(memoryRecords.retentionState, "active"),
+            ),
+          )
+          .returning({ id: memoryRecords.id });
+        if (!superseded) {
+          throw conflict("Private memory changed before correction could commit", {
+            code: "private_memory_correction_conflict",
+          });
+        }
+
+        publications.push(
+          await persistMemoryActivity(txDb, actor, {
+            companyId,
+            action: "memory.private_corrected",
+            recordId: next.id,
+            details: {
+              supersedesRecordId: source.id,
+              ownerAgentId: source.ownerAgentId,
+            },
+          }),
+        );
+        return next;
+      });
+      publications.forEach(publishActivity);
+      return (await getRecordDetail(db, companyId, corrected.id))!;
+    },
+
+    sharePrivateMemory: async (
+      companyId: string,
+      recordId: string,
+      rawInput: unknown,
+      actor: MemoryMutationActor,
+    ) => {
+      const parsed = memoryShareInputSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid private memory share", parsed.error.issues);
+      }
+
+      const publications: ActivityPublication[] = [];
+      const shared = await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await assertActorCompanyScope(txDb, companyId, actor);
+
+        const source = await txDb
+          .select()
+          .from(memoryRecords)
+          .where(
+            and(
+              eq(memoryRecords.companyId, companyId),
+              eq(memoryRecords.id, recordId),
+              eq(memoryRecords.scopeType, "agent"),
+              isNull(memoryRecords.deletedAt),
+            ),
+          )
+          .for("update")
+          .then((rows) => rows[0] ?? null);
+        if (!source) throw notFound("Private memory record not found");
+
+        assertPrivateMemoryReadAllowed(source, actor);
+        if (!source.ownerAgentId) {
+          throw conflict("Private memory owner is missing", {
+            code: "private_memory_owner_missing",
+          });
+        }
+
+        const operationFingerprint = memoryOperationFingerprint({
+          sourceRecordId: source.id,
+          targetBindingId: parsed.data.targetBindingId,
+          targetScope: parsed.data.targetScope,
+          reason: parsed.data.reason,
+          createdByOperationId: parsed.data.createdByOperationId,
+        });
+        await lockMemoryOperation(
+          txDb,
+          companyId,
+          parsed.data.createdByOperationId,
+        );
+        const existing = await memoryRecordForOperation(
+          txDb,
+          companyId,
+          parsed.data.createdByOperationId,
+        );
+        if (existing) {
+          if (
+            existing.scopeType === "agent" ||
+            metadataFingerprint(existing, "shareOperationFingerprint") !==
+              operationFingerprint
+          ) {
+            throw conflict("Memory operation id was reused with different share input", {
+              code: "memory_operation_conflict",
+              operationId: parsed.data.createdByOperationId,
+            });
+          }
+          return existing;
+        }
+
+        const now = new Date();
+        if (
+          source.reviewState !== "accepted" ||
+          source.retentionState !== "active" ||
+          source.revokedAt ||
+          source.supersededByRecordId ||
+          (source.validFrom && source.validFrom.getTime() > now.getTime()) ||
+          (source.validUntil && source.validUntil.getTime() <= now.getTime()) ||
+          (source.expiresAt && source.expiresAt.getTime() <= now.getTime())
+        ) {
+          throw conflict("Only current active private memory can be shared", {
+            code: "private_memory_not_shareable",
+          });
+        }
+        const candidate: MemoryCandidateInputParsed = {
+          bindingId: parsed.data.targetBindingId,
+          memoryType: source.memoryType as MemoryCandidateInputParsed["memoryType"],
+          scope: parsed.data.targetScope,
+          subject:
+            source.subjectType && source.subjectId
+              ? { type: source.subjectType, id: source.subjectId }
+              : null,
+          ownerAgentId: null,
+          title: source.title,
+          content: source.content,
+          summary: source.summary,
+          sensitivity:
+            source.sensitivityLabel as MemoryCandidateInputParsed["sensitivity"],
+          importance: source.importance,
+          confidenceScore: source.confidenceScore,
+          validFrom: source.validFrom?.toISOString() ?? null,
+          validUntil: source.validUntil?.toISOString() ?? null,
+          observedAt: source.observedAt.toISOString(),
+          retentionPolicy: source.retentionPolicy,
+          expiresAt: source.expiresAt?.toISOString() ?? null,
+          createdByOperationId: parsed.data.createdByOperationId,
+          metadata: {
+            promotedFromPrivateRecordId: source.id,
+            promotedFromOwnerAgentId: source.ownerAgentId,
+            promotionReason: parsed.data.reason,
+            shareOperationFingerprint: operationFingerprint,
+          },
+          evidence: [
+            {
+              sourceClass: "private_memory",
+              sourceProvider: "august_works_memory",
+              sourceType: "memory_record",
+              sourceRef: `memory://private/${source.id}`,
+              sourceVersion: source.updatedAt.toISOString(),
+              sourceUpdatedAt: source.updatedAt.toISOString(),
+              observedAt: now.toISOString(),
+              excerptHash: createHash("sha256")
+                .update(source.content)
+                .digest("hex"),
+              citation: { label: "Agent-private memory" },
+              trustLevel: privateMemoryEvidenceTrust(source.verificationState),
+              relation: "supports",
+            },
+          ],
+        };
+
+        const created = await insertCandidate(
+          txDb,
+          companyId,
+          candidate,
+          actor,
+          null,
+        );
+        publications.push(
+          await persistMemoryActivity(txDb, actor, {
+            companyId,
+            action: "memory.share_candidate_created",
+            recordId: created.id,
+            details: {
+              sourcePrivateRecordId: source.id,
+              ownerAgentId: source.ownerAgentId,
+              targetScopeType: created.scopeType,
+              targetScopeId: created.scopeId,
+            },
+          }),
+        );
+        return created;
+      });
+      publications.forEach(publishActivity);
+      return (await getRecordDetail(db, companyId, shared.id))!;
     },
 
     createCandidate: async (
