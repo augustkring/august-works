@@ -9,6 +9,7 @@ import { ConferenceRoomChatGate } from "./components/ConferenceRoomChatGate";
 import { TaskChatLab } from "./pages/TaskChatLab";
 import { PipelinesExperimentalGate } from "./components/PipelinesExperimentalGate";
 import { FoundationExperimentalGate } from "./components/FoundationExperimentalGate";
+import { MemoryExperimentalGate } from "./components/MemoryExperimentalGate";
 import { WorkflowBuilderExperimentalGate } from "./components/WorkflowBuilderExperimentalGate";
 import { CasesExperimentalGate } from "./components/CasesExperimentalGate";
 import { StatusCardsExperimentalGate } from "./components/StatusCardsExperimentalGate";
@@ -42,6 +43,7 @@ import { AgentChat } from "./pages/AgentChat";
 import { IssueChatLongThreadPerf } from "./pages/IssueChatLongThreadPerf";
 import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
+import { Memory } from "./pages/Memory";
 import { Workflows } from "./pages/Workflows";
 import { WorkflowBuilder } from "./pages/WorkflowBuilder";
 import { WorkflowRuns } from "./pages/WorkflowRuns";
@@ -323,6 +325,14 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route
         path="foundation/:foundationDocumentId"
         element={<FoundationExperimentalGate><Foundation /></FoundationExperimentalGate>}
+      />
+      <Route
+        path="memory"
+        element={<MemoryExperimentalGate><Memory /></MemoryExperimentalGate>}
+      />
+      <Route
+        path="memory/:recordId"
+        element={<MemoryExperimentalGate><Memory /></MemoryExperimentalGate>}
       />
       <Route
         path="workflows"

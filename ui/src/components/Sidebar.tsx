@@ -22,6 +22,7 @@ import {
   GanttChartSquare,
   LayoutGrid,
   Users,
+  Brain,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -93,6 +94,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
   const showWorkspacesLink = experimentalSettings?.enableIsolatedWorkspaces === true;
   const showPipelines = experimentalSettings?.enablePipelines === true;
   const showFoundation = experimentalSettings?.enableFoundationV1 === true;
+  const showMemory = experimentalSettings?.enableCollectiveMemoryV1 === true;
   const showWorkflows = experimentalSettings?.enableWorkflowsV1 === true && experimentalSettings?.enableWorkflowBuilderV1 === true;
   const showStatusCards = experimentalSettings?.enableStatusCards === true;
   const goalsLinkPending = experimentalSettings === undefined;
@@ -170,6 +172,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           <SidebarNavItem to="/search" label="Search" icon={Search} />
           <SidebarNavItem to="/dashboard" label="Dashboard" icon={LayoutDashboard} liveCount={liveRunCount} />
           {showFoundation ? <SidebarNavItem to="/foundation" label="Foundation" icon={BookOpen} /> : null}
+          {showMemory ? <SidebarNavItem to="/memory" label="Memory" icon={Brain} /> : null}
           <SidebarNavItem
             to="/inbox"
             label="Inbox"

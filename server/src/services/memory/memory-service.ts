@@ -314,6 +314,73 @@ async function insertCandidate(
 
 export function memoryService(db: Db) {
   return {
+    listBindings: async (
+      companyId: string,
+      actor: MemoryMutationActor,
+    ) => {
+      requireHumanOrSystem(actor, "inspect");
+      await assertActorCompanyScope(db, companyId, actor);
+      return db
+        .select()
+        .from(memoryBindings)
+        .where(eq(memoryBindings.companyId, companyId))
+        .orderBy(memoryBindings.key);
+    },
+
+    listReviewable: async (
+      companyId: string,
+      input: {
+        reviewState?: "pending" | "accepted" | "rejected";
+        memoryType?: MemoryCandidateInputParsed["memoryType"];
+        limit: number;
+      },
+      actor: MemoryMutationActor,
+    ) => {
+      requireHumanOrSystem(actor, "inspect");
+      await assertActorCompanyScope(db, companyId, actor);
+      return db
+        .select()
+        .from(memoryRecords)
+        .where(
+          and(
+            eq(memoryRecords.companyId, companyId),
+            ne(memoryRecords.scopeType, "agent"),
+            isNull(memoryRecords.deletedAt),
+            ...(input.reviewState
+              ? [eq(memoryRecords.reviewState, input.reviewState)]
+              : []),
+            ...(input.memoryType
+              ? [eq(memoryRecords.memoryType, input.memoryType)]
+              : []),
+          ),
+        )
+        .orderBy(desc(memoryRecords.updatedAt))
+        .limit(input.limit);
+    },
+
+    getShared: async (
+      companyId: string,
+      recordId: string,
+      actor: MemoryMutationActor,
+    ) => {
+      requireHumanOrSystem(actor, "inspect");
+      await assertActorCompanyScope(db, companyId, actor);
+      const visible = await db
+        .select({ id: memoryRecords.id })
+        .from(memoryRecords)
+        .where(
+          and(
+            eq(memoryRecords.companyId, companyId),
+            eq(memoryRecords.id, recordId),
+            ne(memoryRecords.scopeType, "agent"),
+            isNull(memoryRecords.deletedAt),
+          ),
+        )
+        .then((rows) => rows[0] ?? null);
+      if (!visible) return null;
+      return getRecordDetail(db, companyId, visible.id);
+    },
+
     get: async (
       companyId: string,
       recordId: string,
@@ -324,6 +391,52 @@ export function memoryService(db: Db) {
       if (!detail) return null;
       assertPrivateMemoryReadAllowed(detail.record, actor);
       return detail;
+    },
+
+    createCompanyBinding: async (
+      companyId: string,
+      rawInput: unknown,
+      actor: MemoryMutationActor,
+    ) => {
+      const parsed = memoryBindingInputSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid memory binding", parsed.error.issues);
+      }
+      requireHumanOrSystem(actor, "configure");
+      await assertActorCompanyScope(db, companyId, actor);
+
+      try {
+        return await db.transaction(async (tx) => {
+          const [binding] = await tx
+            .insert(memoryBindings)
+            .values({
+              companyId,
+              key: parsed.data.key,
+              name: parsed.data.name,
+              providerKey: parsed.data.providerKey,
+              config: parsed.data.config,
+              enabled: parsed.data.enabled,
+            })
+            .returning();
+          if (!binding) {
+            throw new Error("Memory binding insert returned no row");
+          }
+          await tx.insert(memoryBindingTargets).values({
+            companyId,
+            bindingId: binding.id,
+            targetType: "company",
+            targetId: companyId,
+          });
+          return binding;
+        });
+      } catch (error) {
+        if (isUniqueViolation(error, "memory_bindings_company_key_uq")) {
+          throw conflict("Memory binding key already exists", {
+            code: "memory_binding_key_conflict",
+          });
+        }
+        throw error;
+      }
     },
 
     createBinding: async (

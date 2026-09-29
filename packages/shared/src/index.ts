@@ -2943,6 +2943,11 @@ export {
   type MemorySubject,
   type MemoryType,
   type MemoryVerificationState,
+  type MemoryBinding,
+  type MemoryRecord,
+  type MemoryEvidence,
+  type MemoryRecordDetail,
+  type MemoryRecordListQuery,
 } from "./types/memory.js";
 export {
   memoryBindingInputSchema,
@@ -2960,6 +2965,9 @@ export {
   type MemoryCorrectionInputParsed,
   type MemoryReviewInputParsed,
   type MemoryRevokeInputParsed,
+  memoryRecordListQuerySchema,
+  memoryReviewReasonSchema,
+  type MemoryRecordListQueryParsed,
 } from "./validators/memory.js";
 
 export {

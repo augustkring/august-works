@@ -434,6 +434,17 @@ export const queryKeys = {
     search: (companyId: string, q: string, scope: "approved" | "working") =>
       ["foundation", companyId, "search", q, scope] as const,
   },
+  memory: {
+    list: (
+      companyId: string,
+      reviewState: string,
+      memoryType: string | null,
+    ) => ["memory", companyId, "list", reviewState, memoryType ?? "__all"] as const,
+    detail: (companyId: string, recordId: string) =>
+      ["memory", companyId, "detail", recordId] as const,
+    bindings: (companyId: string) =>
+      ["memory", companyId, "bindings"] as const,
+  },
   workflows: {
     capabilitySearch: (companyId: string, q: string, kind?: string) =>
       ["workflows", companyId, "capability-search", q, kind ?? "__all"] as const,
