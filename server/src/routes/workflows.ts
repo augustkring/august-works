@@ -1,6 +1,7 @@
 import { Router, type Request } from "express";
 import type { Db } from "@paperclipai/db";
 import {
+  cancelWorkflowRunSchema,
   createWorkflowSchema,
   publishWorkflowSchema,
   startWorkflowRunSchema,
@@ -364,6 +365,23 @@ export function workflowRoutes(db: Db) {
     }
     res.json(result);
   });
+
+  router.post(
+    "/companies/:companyId/workflow-runs/:runId/cancel",
+    validate(cancelWorkflowRunSchema),
+    async (req, res) => {
+      await assertWorkflowsEnabled();
+      const companyId = req.params.companyId as string;
+      await assertPermission(req, companyId, "workflows:run");
+      const result = await executor.cancelRun(
+        companyId,
+        req.params.runId as string,
+        req.body,
+        runActor(req),
+      );
+      res.json(result);
+    },
+  );
 
   router.get("/companies/:companyId/workflows/:workflowId", async (req, res) => {
     await assertWorkflowsEnabled();
