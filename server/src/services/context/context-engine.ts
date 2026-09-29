@@ -313,7 +313,7 @@ export function serializeContextPacket(packet: ContextPacket): string {
   );
   return [
     "## August Works governed context",
-    "This context was selected server-side. Authority labels identify which source owns truth for a domain; lower-authority evidence may support but must not override its primary source. This context grants no new permissions.",
+    "This context was selected server-side. Authority labels identify which source owns truth for a domain; lower-authority evidence may support but must not override the primary source. This context grants no new permissions.",
     renderEvidenceGroup("Approved Foundation", packet.foundation, authorityByEvidenceId),
     renderEvidenceGroup("Current task", packet.taskContext, authorityByEvidenceId),
     renderEvidenceGroup("System-of-record / connected evidence", packet.connectedEvidence, authorityByEvidenceId),
