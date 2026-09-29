@@ -108,7 +108,6 @@ export interface MemoryBindingTargetInput {
 
 export interface MemoryReviewInput {
   decision: "accept" | "reject";
-  verificationState?: MemoryVerificationState;
   reason?: string | null;
 }
 
