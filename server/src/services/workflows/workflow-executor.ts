@@ -6,6 +6,7 @@ import {
   agents,
   approvals,
   companyMemberships,
+  heartbeatRuns,
   issues,
   routineRuns,
   workflowRevisions,
@@ -48,6 +49,10 @@ import {
   workflowStepIdempotencyKey,
 } from "./workflow-execution-policy.js";
 import { workflowNodeDefinitions } from "./workflow-node-registry.js";
+import {
+  validateWorkflowOutput,
+  WorkflowOutputSchemaError,
+} from "./workflow-output-schema.js";
 
 const WORKFLOW_EXECUTION_LEASE_MS = 30_000;
 const ABANDONED_QUEUED_RUN_AGE_MS = 30_000;
@@ -77,8 +82,16 @@ export interface WorkflowRunActor {
   responsibleUserId?: string | null;
 }
 
+type WorkflowHeartbeatRuntime = IssueAssignmentWakeupDeps & {
+  cancelRun?: (
+    runId: string,
+    reason?: string,
+    options?: { errorCode?: string },
+  ) => Promise<unknown>;
+};
+
 export interface WorkflowExecutorRuntimeDeps {
-  heartbeat?: IssueAssignmentWakeupDeps;
+  heartbeat?: WorkflowHeartbeatRuntime;
 }
 
 function workflowActivityActor(actor: WorkflowRunActor) {
