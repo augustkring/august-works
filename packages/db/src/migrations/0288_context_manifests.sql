@@ -39,9 +39,9 @@ ALTER TABLE "context_manifests" ADD CONSTRAINT "context_manifests_company_id_com
 --> statement-breakpoint
 ALTER TABLE "context_manifest_items" ADD CONSTRAINT "context_manifest_items_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "context_manifest_items" ADD CONSTRAINT "context_manifest_items_company_manifest_fk" FOREIGN KEY ("company_id","manifest_id") REFERENCES "public"."context_manifests"("company_id","id") ON DELETE cascade ON UPDATE no action;
---> statement-breakpoint
 CREATE UNIQUE INDEX "context_manifests_company_id_id_uq" ON "context_manifests" USING btree ("company_id","id");
+--> statement-breakpoint
+ALTER TABLE "context_manifest_items" ADD CONSTRAINT "context_manifest_items_company_manifest_fk" FOREIGN KEY ("company_id","manifest_id") REFERENCES "public"."context_manifests"("company_id","id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 CREATE INDEX "context_manifests_company_run_created_idx" ON "context_manifests" USING btree ("company_id","run_id","created_at");
 --> statement-breakpoint
