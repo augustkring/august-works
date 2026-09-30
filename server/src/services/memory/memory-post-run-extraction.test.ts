@@ -325,11 +325,26 @@ describePg("Memory post-run extraction", () => {
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
   });
 
-  it("accepts only evidence refs present in the committed semantic result", async () => {
+  it("rejects model-authored evidence and artifact refs that are not server-verified", async () => {
     const seeded = await seed({
       candidates: [
         { ...BASE_CANDIDATE, evidenceRefs: ["task-source", "artifact://renewal"] },
       ],
+    });
+
+    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    expect(result).toMatchObject({
+      proposed: 1,
+      persisted: 0,
+      skipped: 1,
+      skipReasons: { evidence_ref_unverified: 1 },
+    });
+    expect(await db.select().from(memoryRecords)).toHaveLength(0);
+  });
+
+  it("accepts the server-verifiable current task evidence ref", async () => {
+    const seeded = await seed({
+      candidates: [{ ...BASE_CANDIDATE, evidenceRefs: ["task"] }],
     });
 
     const result = await memoryPostRunExtractionService(db).extract(seeded.run);
