@@ -186,7 +186,7 @@ export const PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA = {
       maxItems: 12,
       items: { type: "string", minLength: 1, maxLength: 500 },
       description:
-        "Evidence that supports the candidate. Use 'task' for the current task/run or exact refs already present in this result's evidence/artifacts. Never invent a reference.",
+        "Evidence that supports the candidate. For PR 36 use exactly 'task', which the server resolves to the current committed task/run. Do not invent or reuse model-authored evidence or artifact refs.",
     },
     rationale: {
       type: "string",
