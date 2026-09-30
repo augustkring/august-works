@@ -45,6 +45,10 @@ export const workflows = pgTable(
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (table) => ({
+    companyIdIdUq: uniqueIndex("workflows_company_id_id_uq").on(
+      table.companyId,
+      table.id,
+    ),
     companyStatusIdx: index("workflows_company_status_idx").on(table.companyId, table.status),
     companyUpdatedIdx: index("workflows_company_updated_idx").on(table.companyId, table.updatedAt),
     companyProjectIdx: index("workflows_company_project_idx").on(table.companyId, table.projectId),
