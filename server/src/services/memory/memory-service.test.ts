@@ -940,9 +940,12 @@ describePg("Memory Core service", () => {
     );
 
     expect(created.evidence).toHaveLength(1);
-    // Activity history and agent identity are separate lifecycle owners and
-    // are not part of the Memory-owned cascade being verified here.
+    // Activity history, project, membership, and agent identity are separate
+    // lifecycle owners and are not part of the Memory-owned cascade being
+    // verified here.
     await db.delete(activityLog).where(eq(activityLog.companyId, seeded.companyId));
+    await db.delete(projects).where(eq(projects.companyId, seeded.companyId));
+    await db.delete(companyMemberships).where(eq(companyMemberships.companyId, seeded.companyId));
     await db.delete(agents).where(eq(agents.companyId, seeded.companyId));
     await db.delete(companies).where(eq(companies.id, seeded.companyId));
 
