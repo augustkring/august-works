@@ -107,6 +107,105 @@ const verificationSchema = {
   },
 } as const;
 
+export const PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "memoryType",
+    "title",
+    "content",
+    "subjectType",
+    "subjectId",
+    "proposedScopeType",
+    "proposedScopeId",
+    "sensitivity",
+    "validFrom",
+    "validUntil",
+    "evidenceRefs",
+    "rationale",
+  ],
+  properties: {
+    memoryType: {
+      enum: [
+        "fact",
+        "observation",
+        "decision_reference",
+        "preference",
+        "lesson",
+        "outcome",
+        "relationship",
+        "constraint",
+      ],
+    },
+    title: {
+      anyOf: [
+        { type: "string", maxLength: 180 },
+        { type: "null" },
+      ],
+    },
+    content: { type: "string", minLength: 1, maxLength: 4000 },
+    subjectType: {
+      anyOf: [
+        { type: "string", minLength: 1, maxLength: 120 },
+        { type: "null" },
+      ],
+    },
+    subjectId: {
+      anyOf: [
+        { type: "string", minLength: 1, maxLength: 320 },
+        { type: "null" },
+      ],
+    },
+    proposedScopeType: {
+      enum: ["org", "team", "project", "subject", "agent"],
+    },
+    proposedScopeId: {
+      anyOf: [
+        { type: "string", minLength: 1, maxLength: 500 },
+        { type: "null" },
+      ],
+    },
+    sensitivity: {
+      enum: ["public", "internal", "confidential", "restricted"],
+    },
+    validFrom: {
+      anyOf: [
+        { type: "string", format: "date-time" },
+        { type: "null" },
+      ],
+    },
+    validUntil: {
+      anyOf: [
+        { type: "string", format: "date-time" },
+        { type: "null" },
+      ],
+    },
+    evidenceRefs: {
+      type: "array",
+      minItems: 1,
+      maxItems: 12,
+      items: { type: "string", minLength: 1, maxLength: 500 },
+      description:
+        "Evidence that supports the candidate. Use 'task' for the current task/run or exact refs already present in this result's evidence/artifacts. Never invent a reference.",
+    },
+    rationale: {
+      type: "string",
+      minLength: 1,
+      maxLength: 1000,
+      description:
+        "Short audit explanation for why this is durable future-useful memory. This is not hidden reasoning or chain-of-thought.",
+    },
+  },
+} as const;
+
+export const PRP_MEMORY_CANDIDATES_SCHEMA = {
+  type: "array",
+  maxItems: 8,
+  description:
+    "Optional durable-memory proposals from this completed task. Zero candidates is healthy and preferred when nothing is new, corrective, durable, future-useful, evidence-backed, and appropriate to retain. Never propose health, politics, religion, race/ethnicity, sexual orientation, trade-union, criminal-history, speculative mental-state, or speculative resignation inferences about a person.",
+  items: PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA,
+} as const;
+
 const attentionRequestsSchema = {
   type: "array",
   items: {
@@ -187,6 +286,7 @@ export const PRP_COMPLETION_RESULT_OUTPUT_SCHEMA = {
   properties: {
     ...commonResultProperties,
     reportedWorkDisposition: { enum: ["done", "needs_review", "yielded"] },
+    memoryCandidates: PRP_MEMORY_CANDIDATES_SCHEMA,
     continuation: responseWakeContinuationSchema,
   },
   allOf: [
@@ -353,6 +453,7 @@ export const PRP_COMPLETION_RESULT_PROVIDER_INPUT_SCHEMA = {
   properties: {
     ...providerCommonResultProperties,
     reportedWorkDisposition: { enum: ["done", "needs_review", "yielded", "completed"] },
+    memoryCandidates: PRP_MEMORY_CANDIDATES_SCHEMA,
     verification: providerVerificationCompatibilitySchema,
     attentionRequests: providerAttentionCompatibilitySchema,
     continuation: responseWakeContinuationSchema,
