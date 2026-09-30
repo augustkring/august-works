@@ -479,12 +479,12 @@ describeEmbeddedPostgres("pipeline routes", () => {
       .send(payload)
       .expect(403);
     expect(denied.body).toMatchObject({
-      error: expect.objectContaining({
-        details: expect.objectContaining({
-          code: "permission_denied",
-          permission: "workflows:run",
-          workflowId: workflow.id,
-        }),
+      error: "Missing permission: workflows:run.",
+      code: "permission_denied",
+      details: expect.objectContaining({
+        code: "permission_denied",
+        permission: "workflows:run",
+        workflowId: workflow.id,
       }),
     });
 

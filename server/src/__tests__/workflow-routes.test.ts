@@ -41,8 +41,10 @@ describePg("Workflow routes", () => {
     await db.delete(issues);
     await db.delete(workflowStepRuns);
     await db.delete(workflowRuns);
-    await db.delete(workflowRevisions);
+    // Workflow is the lifecycle owner. Deleting it is the supported path that
+    // cascades immutable revision history through the DB guard.
     await db.delete(workflows);
+    await db.delete(workflowRevisions);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
     await db.delete(agents);
@@ -199,7 +201,9 @@ describePg("Workflow routes", () => {
       .send({ name: "Denied create" })
       .expect(403)
       .expect((response) => {
-        expect(response.body.code).toBe("permission_denied");
+        expect(response.body).toEqual({
+          error: "Viewer access is read-only",
+        });
       });
   });
 
@@ -273,7 +277,6 @@ describePg("Workflow routes", () => {
       companyId: company.id,
       source: "agent_key",
       keyId: "workflow-agent-key",
-      runId: "workflow-agent-run",
     }))
       .get(`/api/companies/${company.id}/workflows/capabilities`)
       .expect(200);
@@ -737,7 +740,9 @@ describePg("Workflow routes", () => {
       .send({ input: {} })
       .expect(403)
       .expect((response) => {
-        expect(response.body.code).toBe("permission_denied");
+        expect(response.body).toEqual({
+          error: "Viewer access is read-only",
+        });
       });
   });
 

@@ -70,8 +70,9 @@ describeEmbeddedPostgres("pipelineService", () => {
     await db.delete(workflowWaits);
     await db.delete(workflowStepRuns);
     await db.delete(workflowRuns);
-    await db.delete(workflowRevisions);
+    // Workflow deletion owns the cascade of immutable revision history.
     await db.delete(workflows);
+    await db.delete(workflowRevisions);
     await db.delete(pipelineCaseBlockers);
     await db.delete(pipelineCaseIssueLinks);
     await db.delete(pipelineCaseEvents);
@@ -145,50 +146,53 @@ describeEmbeddedPostgres("pipelineService", () => {
   }
 
   async function seedPublishedWorkflow(companyId: string, name = "Pipeline workflow") {
-    const [workflow] = await db
-      .insert(workflows)
-      .values({
-        companyId,
-        name,
-        status: "active",
-      })
-      .returning();
-    const [revision] = await db
-      .insert(workflowRevisions)
-      .values({
-        companyId,
-        workflowId: workflow!.id,
-        revisionNumber: 1,
-        state: "published",
-        graph: {
-          version: 1,
-          nodes: [
-            {
-              id: "start",
-              type: "core.manual_trigger",
-              name: "Start",
-              position: { x: 0, y: 0 },
-              config: {},
-            },
-            {
-              id: "condition",
-              type: "core.condition",
-              name: "Continue",
-              position: { x: 180, y: 0 },
-              config: { expression: "true" },
-            },
-          ],
-          edges: [{ id: "e1", source: "start", target: "condition" }],
-          variables: [],
-          settings: {},
-        },
-      })
-      .returning();
-    await db
-      .update(workflows)
-      .set({ publishedRevisionId: revision!.id })
-      .where(eq(workflows.id, workflow!.id));
-    return { workflow: workflow!, revision: revision! };
+    const workflowId = randomUUID();
+    const revisionId = randomUUID();
+    return db.transaction(async (tx) => {
+      const [workflow] = await tx
+        .insert(workflows)
+        .values({
+          id: workflowId,
+          companyId,
+          name,
+          status: "active",
+          publishedRevisionId: revisionId,
+        })
+        .returning();
+      const [revision] = await tx
+        .insert(workflowRevisions)
+        .values({
+          id: revisionId,
+          companyId,
+          workflowId,
+          revisionNumber: 1,
+          state: "published",
+          graph: {
+            version: 1,
+            nodes: [
+              {
+                id: "start",
+                type: "core.manual_trigger",
+                name: "Start",
+                position: { x: 0, y: 0 },
+                config: {},
+              },
+              {
+                id: "condition",
+                type: "core.condition",
+                name: "Continue",
+                position: { x: 180, y: 0 },
+                config: { expression: "true" },
+              },
+            ],
+            edges: [{ id: "e1", source: "start", target: "condition" }],
+            variables: [],
+            settings: {},
+          },
+        })
+        .returning();
+      return { workflow: workflow!, revision: revision! };
+    });
   }
 
   async function eventCount(caseId: string) {

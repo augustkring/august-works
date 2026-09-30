@@ -218,6 +218,8 @@ export {
   type RemoteAgentService,
 } from "./remote-agent-profiles.js";
 
+export { memoryAgentToolsService, type MemoryAgentToolContext } from "./memory/memory-agent-tools.js";
+
 export { approvedFoundationView, foundationService, type FoundationMutationActor } from "./foundation/foundation-service.js";
 
 export { foundationIndexService, extractFoundationSections, replaceFoundationRevisionSections } from "./foundation/foundation-index.js";

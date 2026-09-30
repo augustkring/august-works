@@ -20,6 +20,7 @@ import {
   issues,
   projects,
   issueThreadInteractions,
+  instanceSettings,
   toolApplications,
   toolCatalogEntries,
   toolConnections,
@@ -193,6 +194,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
     await db.delete(toolApplications);
     await db.delete(companySecrets);
     await db.delete(toolPolicies);
+    await db.delete(instanceSettings);
     await db.delete(heartbeatRuns);
     await db.delete(issues);
     await db.delete(projects);
@@ -202,6 +204,64 @@ describeEmbeddedPostgres("tool gateway service", () => {
 
   afterAll(async () => {
     await tempDb?.cleanup();
+  });
+
+  it("exposes Memory self-tools only when the Memory feature gates are enabled", async () => {
+    const { company, agent, run } = await createRunFixture(db);
+    for (const toolName of [
+      "paperclip-self:recall",
+      "paperclip-self:remember",
+      "paperclip-self:correct_memory",
+      "paperclip-self:share_memory",
+    ]) {
+      await db.insert(toolPolicies).values({
+        companyId: company.id,
+        name: `Allow ${toolName}`,
+        policyType: "allow",
+        selectors: { toolName },
+      });
+    }
+
+    const gateway = createTestToolGatewayService(db);
+    const session = await gateway.createSession({
+      companyId: company.id,
+      agentId: agent.id,
+      runId: run.id,
+    });
+
+    const disabledNames = (await gateway.listToolsForSession(session.token))
+      .map((tool) => tool.name);
+    expect(disabledNames).not.toContain("paperclip-self:recall");
+    expect(disabledNames).not.toContain("paperclip-self:remember");
+    expect(disabledNames).not.toContain("paperclip-self:correct_memory");
+    expect(disabledNames).not.toContain("paperclip-self:share_memory");
+
+    const enabledMemoryExperimental = {
+      enableCollectiveMemoryV1: true,
+      enablePrivateAgentMemoryV1: true,
+    };
+    await db
+      .insert(instanceSettings)
+      .values({
+        singletonKey: "default",
+        general: {},
+        experimental: enabledMemoryExperimental,
+      })
+      .onConflictDoUpdate({
+        target: [instanceSettings.singletonKey],
+        set: { experimental: enabledMemoryExperimental },
+      });
+
+    const enabledNames = (await gateway.listToolsForSession(session.token))
+      .map((tool) => tool.name);
+    expect(enabledNames).toEqual(
+      expect.arrayContaining([
+        "paperclip-self:recall",
+        "paperclip-self:remember",
+        "paperclip-self:correct_memory",
+        "paperclip-self:share_memory",
+      ]),
+    );
   });
 
   it("gates write tools with an action request and executes only stored reviewed arguments once", async () => {

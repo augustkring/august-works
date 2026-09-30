@@ -86,6 +86,12 @@ import type {
   UpdateToolMcpGateway,
 } from "@paperclipai/shared";
 import {
+  memoryAgentCorrectInputJsonSchema,
+  memoryAgentRecallInputJsonSchema,
+  memoryAgentRememberInputJsonSchema,
+  memoryAgentShareInputJsonSchema,
+} from "@paperclipai/shared";
+import {
   isGitHubConnectorProfileId,
   isGoogleWorkspaceConnectorProfileId,
   type GitHubConnectorProfileId,
@@ -160,6 +166,8 @@ import {
   verifyToolArgumentsSignature,
 } from "./tool-content-guards.js";
 import { extendApprovedExecutionWaitDeadline } from "./approved-execution-wait.js";
+import { instanceSettingsService } from "./instance-settings.js";
+import { memoryAgentToolsService } from "./memory/memory-agent-tools.js";
 
 const DEFAULT_SESSION_TTL_MS = 15 * 60 * 1000;
 const MAX_SESSION_TTL_MS = 60 * 60 * 1000;
@@ -939,6 +947,46 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "read",
   },
   {
+    name: "paperclip-self:recall",
+    displayName: "Recall Memory",
+    description:
+      "Recall only accepted, active Memory authorized for this agent, the current project, company scope, and explicitly named subjects.",
+    parametersSchema: memoryAgentRecallInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "read",
+  },
+  {
+    name: "paperclip-self:remember",
+    displayName: "Remember",
+    description:
+      "Create governed Memory from the current task. Private Memory stays owner-bound; shared Memory enters review and is not automatically accepted.",
+    parametersSchema: memoryAgentRememberInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
+    name: "paperclip-self:correct_memory",
+    displayName: "Correct Memory",
+    description:
+      "Correct an accessible Memory record with task-backed evidence. Shared corrections enter review; owner-private corrections remain private.",
+    parametersSchema: memoryAgentCorrectInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
+    name: "paperclip-self:share_memory",
+    displayName: "Share Memory",
+    description:
+      "Promote owner-private Memory into shared review without mutating the private source record.",
+    parametersSchema: memoryAgentShareInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
     name: "paperclip-self:get_issue_context",
     displayName: "Get issue context",
     description:
@@ -1020,6 +1068,19 @@ const VIRTUAL_RUN_TOOL: ToolGatewayDescriptor = {
 };
 
 const VIRTUAL_TOOLS = [VIRTUAL_SEARCH_TOOLS, VIRTUAL_RUN_TOOL];
+
+const MEMORY_SELF_TOOL_NAMES = new Set([
+  "paperclip-self:recall",
+  "paperclip-self:remember",
+  "paperclip-self:correct_memory",
+  "paperclip-self:share_memory",
+]);
+
+function isMemorySelfToolName(name: string): boolean {
+  return MEMORY_SELF_TOOL_NAMES.has(name);
+}
+
+
 
 export function createToolGatewayService(
   db: Db,
@@ -1207,6 +1268,31 @@ export function createToolGatewayService(
 
   function allTools(): ToolGatewayDescriptor[] {
     return [...BUILTIN_TOOLS, ...pluginTools()];
+  }
+
+  async function memoryToolFlags() {
+    const experimental = await instanceSettingsService(db).getExperimental();
+    return {
+      shared: experimental.enableCollectiveMemoryV1 === true,
+      private: experimental.enablePrivateAgentMemoryV1 === true,
+    };
+  }
+
+  async function staticToolsForSession(
+    session: ToolGatewaySession,
+  ): Promise<ToolGatewayDescriptor[]> {
+    const tools = allTools();
+    if (!session.agentId) {
+      return tools.filter((tool) => tool.providerType !== "paperclip_self");
+    }
+    const flags = await memoryToolFlags();
+    return tools.filter((tool) => {
+      if (!isMemorySelfToolName(tool.name)) return true;
+      if (tool.name === "paperclip-self:share_memory") {
+        return flags.shared && flags.private;
+      }
+      return flags.shared || flags.private;
+    });
   }
 
   async function connectedMcpToolsForCompany(
@@ -2651,7 +2737,7 @@ export function createToolGatewayService(
     const hasOnDemandTargets = connectedTools.some(isOnDemandRemoteTool);
     const virtualTools = hasOnDemandTargets ? VIRTUAL_TOOLS : [];
     const githubBotTools = await githubBotToolsForSession(db, session);
-    const tool = [...allTools(), ...connectedTools, ...virtualTools, ...githubBotTools, ...await slackToolsForSession(db, session)]
+    const tool = [...await staticToolsForSession(session), ...connectedTools, ...virtualTools, ...githubBotTools, ...await slackToolsForSession(db, session)]
       .filter(
         (candidate) =>
           session.agentId ||
@@ -2869,7 +2955,7 @@ export function createToolGatewayService(
     )).filter(tool => !guestBotConnection || !tool.connectionId || (tool.connectionId === guestBotConnection && tool.providerType === "paperclip_github_chat"));
     const onDemandTargets = allConnectedTools.filter(isOnDemandRemoteTool);
     const tools = [
-      ...allTools(),
+      ...await staticToolsForSession(session),
       ...await githubBotToolsForSession(db, session),
       ...await slackToolsForSession(db, session),
       ...allConnectedTools.filter((tool) => !isOnDemandRemoteTool(tool)),
@@ -3096,6 +3182,68 @@ export function createToolGatewayService(
         content: JSON.stringify({ issue, planDocument: planDocument ?? null }),
         data: { issue, planDocument: planDocument ?? null },
       };
+    }
+
+    if (isMemorySelfToolName(tool.name)) {
+      if (!session.agentId) {
+        throw new ToolGatewayHttpError(
+          403,
+          "Memory tools require an agent-scoped gateway session",
+          "agent_context_required",
+        );
+      }
+      const flags = await memoryToolFlags();
+      const enabled =
+        tool.name === "paperclip-self:share_memory"
+          ? flags.shared && flags.private
+          : flags.shared || flags.private;
+      if (!enabled) {
+        throw new ToolGatewayHttpError(
+          404,
+          "Memory tool is not enabled",
+          "memory_tool_disabled",
+        );
+      }
+
+      const memory = memoryAgentToolsService(db);
+      const context = {
+        companyId: session.companyId,
+        agentId: session.agentId,
+        runId: session.runId,
+        issueId: session.issueId,
+        projectId: session.projectId,
+        responsibleUserId: session.responsibleUserId ?? null,
+        allowShared: flags.shared,
+        allowPrivate: flags.private,
+      };
+
+      try {
+        const data =
+          tool.name === "paperclip-self:recall"
+            ? await memory.recall(context, parameters)
+            : tool.name === "paperclip-self:remember"
+              ? await memory.remember(context, parameters)
+              : tool.name === "paperclip-self:correct_memory"
+                ? await memory.correct(context, parameters)
+                : await memory.share(context, parameters);
+        return { content: JSON.stringify(data), data };
+      } catch (error) {
+        if (error instanceof HttpError) {
+          const details =
+            error.details && typeof error.details === "object"
+              ? (error.details as Record<string, unknown>)
+              : {};
+          throw new ToolGatewayHttpError(
+            error.status,
+            error.message,
+            typeof details.code === "string"
+              ? details.code
+              : "memory_operation_rejected",
+            details,
+          );
+        }
+        throw error;
+      }
     }
 
     if (tool.providerType === "mcp_stdio_fixture") {

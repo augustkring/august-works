@@ -76,9 +76,7 @@ export const routines = pgTable(
     ),
     executionTargetPairCheck: check(
       "routines_execution_target_pair_check",
-      sql`(${table.executionTargetKind} is null and ${table.executionTargetRef} is null)
-        or
-        (${table.executionTargetKind} in ('agent_task', 'workflow') and ${table.executionTargetRef} is not null)`,
+      sql`(${table.executionTargetKind} is null and ${table.executionTargetRef} is null) or (${table.executionTargetKind} in ('agent_task', 'workflow') and ${table.executionTargetRef} is not null)`,
     ),
     companyProjectIdx: index("routines_company_project_idx").on(table.companyId, table.projectId),
     companyFolderIdx: index("routines_company_folder_idx").on(table.companyId, table.folderId),

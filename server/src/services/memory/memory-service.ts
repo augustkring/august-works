@@ -4,6 +4,7 @@ import type { Db } from "@paperclipai/db";
 import {
   agents,
   companyMemberships,
+  heartbeatRuns,
   memoryBindings,
   memoryBindingTargets,
   memoryEvidence,
@@ -31,6 +32,11 @@ import { persistActivity, publishActivity, type ActivityPublication } from "../a
 export interface MemoryMutationActor {
   principal: ExecutionPrincipal;
   runId?: string | null;
+}
+
+interface SharePrivateMemoryInternalContext {
+  operationContextFingerprint?: string | null;
+  additionalEvidence?: MemoryCandidateInputParsed["evidence"];
 }
 
 function actorIdentity(actor: MemoryMutationActor) {
@@ -265,6 +271,48 @@ function memoryOperationFingerprint(value: unknown): string {
     .digest("hex");
 }
 
+function metadataForOperationFingerprint(
+  rawInput: unknown,
+  parsedMetadata: Record<string, unknown>,
+): Record<string, unknown> {
+  if (
+    typeof rawInput !== "object" ||
+    rawInput === null ||
+    Array.isArray(rawInput)
+  ) {
+    return parsedMetadata;
+  }
+  const metadataDescriptor = Object.getOwnPropertyDescriptor(rawInput, "metadata");
+  const rawMetadata =
+    metadataDescriptor && "value" in metadataDescriptor
+      ? metadataDescriptor.value
+      : null;
+  if (
+    typeof rawMetadata !== "object" ||
+    rawMetadata === null ||
+    Array.isArray(rawMetadata)
+  ) {
+    return parsedMetadata;
+  }
+
+  // Zod deliberately normalizes potentially dangerous object keys. The
+  // persisted metadata stays normalized, but idempotency must still distinguish
+  // two validated requests that differed in an own JSON metadata key such as
+  // "__proto__". A null-prototype record avoids invoking prototype setters.
+  const fingerprintMetadata = Object.create(null) as Record<string, unknown>;
+  for (const key of Object.keys(parsedMetadata)) {
+    fingerprintMetadata[key] = parsedMetadata[key];
+  }
+  for (const key of Object.keys(rawMetadata as Record<string, unknown>)) {
+    const descriptor = Object.getOwnPropertyDescriptor(rawMetadata, key);
+    if (!descriptor || !("value" in descriptor) || descriptor.value === undefined) {
+      continue;
+    }
+    fingerprintMetadata[key] = descriptor.value;
+  }
+  return fingerprintMetadata;
+}
+
 async function lockMemoryOperation(
   db: Db,
   companyId: string,
@@ -345,6 +393,19 @@ async function getRecordDetail(db: Db, companyId: string, recordId: string) {
   return recordDetail(record, evidence);
 }
 
+async function persistedActivityRunId(
+  db: Db,
+  companyId: string,
+  runId: string | null,
+): Promise<string | null> {
+  if (!runId) return null;
+  return db
+    .select({ id: heartbeatRuns.id })
+    .from(heartbeatRuns)
+    .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId)))
+    .then((rows) => rows[0]?.id ?? null);
+}
+
 async function persistMemoryActivity(
   db: Db,
   actor: MemoryMutationActor,
@@ -356,12 +417,17 @@ async function persistMemoryActivity(
   },
 ): Promise<ActivityPublication> {
   const identity = actorIdentity(actor);
+  const runId = await persistedActivityRunId(
+    db,
+    input.companyId,
+    identity.runId,
+  );
   const result = await persistActivity(db, {
     companyId: input.companyId,
     actorType: identity.actorType,
     actorId: identity.actorId,
     agentId: identity.agentId,
-    runId: identity.runId,
+    runId,
     responsibleUserIdOverride: identity.responsibleUserId,
     action: input.action,
     entityType: "memory_record",
@@ -702,7 +768,13 @@ export function memoryService(db: Db) {
 
       const operationFingerprint = memoryOperationFingerprint({
         ownerAgentId,
-        input: parsed.data,
+        input: {
+          ...parsed.data,
+          metadata: metadataForOperationFingerprint(
+            rawInput,
+            parsed.data.metadata,
+          ),
+        },
       });
       const candidate: MemoryCandidateInputParsed = {
         ...parsed.data,
@@ -810,7 +882,13 @@ export function memoryService(db: Db) {
 
         const operationFingerprint = memoryOperationFingerprint({
           sourceRecordId: source.id,
-          input: parsed.data,
+          input: {
+            ...parsed.data,
+            metadata: metadataForOperationFingerprint(
+              rawInput,
+              parsed.data.metadata,
+            ),
+          },
         });
         await lockMemoryOperation(
           txDb,
@@ -934,6 +1012,7 @@ export function memoryService(db: Db) {
       recordId: string,
       rawInput: unknown,
       actor: MemoryMutationActor,
+      internalContext: SharePrivateMemoryInternalContext = {},
     ) => {
       const parsed = memoryShareInputSchema.safeParse(rawInput);
       if (!parsed.success) {
@@ -973,6 +1052,8 @@ export function memoryService(db: Db) {
           targetScope: parsed.data.targetScope,
           reason: parsed.data.reason,
           createdByOperationId: parsed.data.createdByOperationId,
+          operationContextFingerprint:
+            internalContext.operationContextFingerprint ?? null,
         });
         await lockMemoryOperation(
           txDb,
@@ -1039,6 +1120,8 @@ export function memoryService(db: Db) {
             promotedFromOwnerAgentId: source.ownerAgentId,
             promotionReason: parsed.data.reason,
             shareOperationFingerprint: operationFingerprint,
+            shareOperationContextFingerprint:
+              internalContext.operationContextFingerprint ?? null,
           },
           evidence: [
             {
@@ -1056,6 +1139,7 @@ export function memoryService(db: Db) {
               trustLevel: privateMemoryEvidenceTrust(source.verificationState),
               relation: "supports",
             },
+            ...(internalContext.additionalEvidence ?? []),
           ],
         };
 

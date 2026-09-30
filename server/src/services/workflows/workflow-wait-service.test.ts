@@ -34,15 +34,10 @@ describePg("Workflow wait service", () => {
   afterEach(async () => {
     await db.delete(workflowWaits);
     await db.delete(workflowRuns);
-    await db
-      .update(workflows)
-      .set({
-        publishedRevisionId: null,
-        draftRevisionId: null,
-        updatedAt: new Date(),
-      });
-    await db.delete(workflowRevisions);
+    // Workflow owns immutable revision history; deleting the owner is the
+    // supported lifecycle path and cascades its revisions.
     await db.delete(workflows);
+    await db.delete(workflowRevisions);
     await db.delete(companyMemberships);
     await db.delete(companies);
   });
