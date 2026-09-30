@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  AUTOMATION_ARTIFACT_GATE_KINDS,
+  AUTOMATION_ARTIFACT_GATE_REPORT_SCHEMA,
   AUTOMATION_ARTIFACT_KINDS,
   AUTOMATION_ARTIFACT_LANGUAGES,
   AUTOMATION_ARTIFACT_STATUSES,
@@ -42,6 +44,28 @@ export const automationArtifactLanguageSchema = z.enum(
 export const automationArtifactStatusSchema = z.enum(
   AUTOMATION_ARTIFACT_STATUSES,
 );
+
+export const automationArtifactGateReportSchema = z
+  .object({
+    schema: z.literal(AUTOMATION_ARTIFACT_GATE_REPORT_SCHEMA),
+    kind: z.enum(AUTOMATION_ARTIFACT_GATE_KINDS),
+    status: z.enum(["passed", "failed"]),
+    contentHash: z.string().regex(/^[0-9a-f]{64}$/),
+    checkedAt: z.string().datetime(),
+    checks: z
+      .array(
+        z
+          .object({
+            code: z.string().trim().min(1).max(160),
+            status: z.enum(["passed", "failed"]),
+            detail: z.string().trim().max(2_000).nullable().default(null),
+          })
+          .strict(),
+      )
+      .max(200),
+  })
+  .strict();
+
 export const automationArtifactJsonSchema = boundedJsonObject(
   "Automation Artifact schema",
 );
