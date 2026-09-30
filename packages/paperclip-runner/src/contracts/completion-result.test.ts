@@ -172,6 +172,47 @@ describe("provider-neutral completion result schema", () => {
     expect(providerValidate(providerResult)).toBe(true);
   });
 
+  it("accepts bounded optional memory candidates without forcing capture", () => {
+    const providerValidate = new Ajv2020({ allErrors: true, strict: false })
+      .compile(PRP_COMPLETION_RESULT_PROVIDER_INPUT_SCHEMA);
+
+    expect(providerValidate({ ...structuredClone(baseResult), memoryCandidates: [] })).toBe(true);
+    expect(validate({ ...structuredClone(baseResult), memoryCandidates: [] })).toBe(true);
+
+    const candidate = {
+      memoryType: "lesson",
+      title: "Security review first",
+      content: "Acme procurement consistently requires a security review before legal.",
+      subjectType: "customer",
+      subjectId: "acme",
+      proposedScopeType: "org",
+      proposedScopeId: null,
+      sensitivity: "internal",
+      validFrom: null,
+      validUntil: null,
+      evidenceRefs: ["task"],
+      rationale: "Durable customer-process learning that is likely useful in future renewals.",
+    };
+
+    expect(providerValidate({
+      ...structuredClone(baseResult),
+      memoryCandidates: [candidate],
+    })).toBe(true);
+    expect(validate({
+      ...structuredClone(baseResult),
+      memoryCandidates: [candidate],
+    })).toBe(true);
+
+    expect(providerValidate({
+      ...structuredClone(baseResult),
+      memoryCandidates: [{ ...candidate, evidenceRefs: [] }],
+    })).toBe(false);
+    expect(validate({
+      ...structuredClone(baseResult),
+      memoryCandidates: [{ ...candidate, content: "x".repeat(4001) }],
+    })).toBe(false);
+  });
+
   it("requires a reason code for verification that was not run", () => {
     const result = structuredClone(baseResult);
     result.verification = [{ commandOrCheck: "Run tests", status: "not_run" } as never];
