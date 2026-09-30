@@ -391,5 +391,185 @@ describePg("Memory agent tools", () => {
         scope: { type: "company", id: null },
       },
     });
+    const sharedDetail = await memoryService(db).get(
+      seeded.companyId,
+      shared.record.id,
+      { principal: { type: "agent", agentId: seeded.agent.id } },
+    );
+    expect(sharedDetail?.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceClass: "private_memory",
+          sourceRef: `memory://private/${corrected.record.id}`,
+        }),
+        expect.objectContaining({
+          sourceClass: "task",
+          sourceProvider: "august_works_memory_agent_tool",
+          sourceRef: `run://${seeded.runId}/issue/${seeded.issue.id}`,
+          trustLevel: "low",
+        }),
+      ]),
+    );
+  });
+
+  it("denies sharing restricted owner-private memory", async () => {
+    const seeded = await seed();
+    await binding(
+      seeded.companyId,
+      seeded.userId,
+      "shared",
+      "company",
+      seeded.companyId,
+    );
+    await binding(
+      seeded.companyId,
+      seeded.userId,
+      "private",
+      "agent",
+      seeded.agent.id,
+    );
+    const tools = memoryAgentToolsService(db);
+    const restricted = await tools.remember(context(seeded), {
+      scope: "private",
+      memoryType: "constraint",
+      content: "Restricted internal customer risk note.",
+      sensitivity: "restricted",
+      idempotencyKey: randomUUID(),
+    });
+
+    await expect(
+      tools.share(context(seeded), {
+        recordId: restricted.record.id,
+        targetScope: "company",
+        reason: "Attempted publication",
+        idempotencyKey: randomUUID(),
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({ code: "memory_sensitivity_denied" }),
+    });
+  });
+
+  it("requires a task-bound run before sharing private memory", async () => {
+    const seeded = await seed();
+    await binding(
+      seeded.companyId,
+      seeded.userId,
+      "shared",
+      "company",
+      seeded.companyId,
+    );
+    await binding(
+      seeded.companyId,
+      seeded.userId,
+      "private",
+      "agent",
+      seeded.agent.id,
+    );
+    const tools = memoryAgentToolsService(db);
+    const original = await tools.remember(context(seeded), {
+      scope: "private",
+      memoryType: "lesson",
+      content: "Task-bound sharing must preserve provenance.",
+      idempotencyKey: randomUUID(),
+    });
+
+    await expect(
+      tools.share(
+        { ...context(seeded), runId: null },
+        {
+          recordId: original.record.id,
+          targetScope: "company",
+          reason: "No active run",
+          idempotencyKey: randomUUID(),
+        },
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({ code: "memory_task_context_required" }),
+    });
+  });
+
+  it("rejects correction idempotency replay from a different agent run", async () => {
+    const seeded = await seed();
+    await binding(
+      seeded.companyId,
+      seeded.userId,
+      "private",
+      "agent",
+      seeded.agent.id,
+    );
+    const tools = memoryAgentToolsService(db);
+    const original = await tools.remember(context(seeded), {
+      scope: "private",
+      memoryType: "preference",
+      content: "Prefer explicit blockers.",
+      idempotencyKey: randomUUID(),
+    });
+    const idempotencyKey = randomUUID();
+    const correction = {
+      recordId: original.record.id,
+      reason: "Add escalation preference",
+      content: "Prefer explicit blockers and escalation owners.",
+      idempotencyKey,
+    };
+
+    const first = await tools.correct(context(seeded), correction);
+    expect(first.status).toBe("accepted");
+
+    await expect(
+      tools.correct(
+        { ...context(seeded), runId: randomUUID() },
+        correction,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({ code: "memory_operation_conflict" }),
+    });
+  });
+
+  it("rejects share idempotency replay from a different agent run", async () => {
+    const seeded = await seed();
+    await binding(
+      seeded.companyId,
+      seeded.userId,
+      "shared",
+      "company",
+      seeded.companyId,
+    );
+    await binding(
+      seeded.companyId,
+      seeded.userId,
+      "private",
+      "agent",
+      seeded.agent.id,
+    );
+    const tools = memoryAgentToolsService(db);
+    const original = await tools.remember(context(seeded), {
+      scope: "private",
+      memoryType: "lesson",
+      content: "Shared learning remains tied to its source run.",
+      idempotencyKey: randomUUID(),
+    });
+    const idempotencyKey = randomUUID();
+    const shareInput = {
+      recordId: original.record.id,
+      targetScope: "company" as const,
+      reason: "Useful team learning",
+      idempotencyKey,
+    };
+
+    const first = await tools.share(context(seeded), shareInput);
+    expect(first.status).toBe("pending");
+
+    await expect(
+      tools.share(
+        { ...context(seeded), runId: randomUUID() },
+        shareInput,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({ code: "memory_operation_conflict" }),
+    });
   });
 });
