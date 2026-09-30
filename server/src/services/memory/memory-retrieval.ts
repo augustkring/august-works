@@ -140,14 +140,12 @@ function retrievalActor(input: RetrieveEligibleMemoryInput): MemoryMutationActor
   };
 }
 
-export async function retrieveEligibleMemory(
-  db: Db,
-  input: RetrieveEligibleMemoryInput,
-): Promise<RetrievedMemoryRecord[]> {
-  const service = memoryService(db);
-  const actor = retrievalActor(input);
-  const asOf = input.asOf ?? new Date();
-  const topK = Math.min(50, Math.max(1, input.topK));
+export function resolveMemoryRetrievalScopes(
+  input: Pick<
+    RetrieveEligibleMemoryInput,
+    "agentId" | "projectId" | "subjectScopeIds" | "allowShared" | "allowPrivate"
+  >,
+): MemoryRetrievalScope[] {
   const scopes: MemoryRetrievalScope[] = [];
 
   if (input.allowShared) {
@@ -173,6 +171,19 @@ export async function retrieveEligibleMemory(
   if (input.allowPrivate) {
     scopes.push({ scopeType: "agent", scopeId: input.agentId });
   }
+
+  return scopes;
+}
+
+export async function retrieveEligibleMemory(
+  db: Db,
+  input: RetrieveEligibleMemoryInput,
+): Promise<RetrievedMemoryRecord[]> {
+  const service = memoryService(db);
+  const actor = retrievalActor(input);
+  const asOf = input.asOf ?? new Date();
+  const topK = Math.min(50, Math.max(1, input.topK));
+  const scopes = resolveMemoryRetrievalScopes(input);
 
   const recordsById = new Map<string, MemoryRecord>();
   for (const scope of scopes) {
