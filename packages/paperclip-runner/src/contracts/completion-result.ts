@@ -139,20 +139,20 @@ export const PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA = {
     },
     title: {
       anyOf: [
-        { type: "string", maxLength: 180 },
+        { type: "string", minLength: 1, maxLength: 180, pattern: "\\S" },
         { type: "null" },
       ],
     },
-    content: { type: "string", minLength: 1, maxLength: 4000 },
+    content: { type: "string", minLength: 1, maxLength: 4000, pattern: "\\S" },
     subjectType: {
       anyOf: [
-        { type: "string", minLength: 1, maxLength: 120 },
+        { type: "string", minLength: 1, maxLength: 120, pattern: "\\S" },
         { type: "null" },
       ],
     },
     subjectId: {
       anyOf: [
-        { type: "string", minLength: 1, maxLength: 320 },
+        { type: "string", minLength: 1, maxLength: 320, pattern: "\\S" },
         { type: "null" },
       ],
     },
@@ -163,7 +163,7 @@ export const PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA = {
     },
     proposedScopeId: {
       anyOf: [
-        { type: "string", minLength: 1, maxLength: 500 },
+        { type: "string", minLength: 1, maxLength: 500, pattern: "\\S" },
         { type: "null" },
       ],
     },
@@ -196,6 +196,7 @@ export const PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA = {
       type: "string",
       minLength: 1,
       maxLength: 1000,
+      pattern: "\\S",
       description:
         "Short audit explanation for why this is durable future-useful memory. This is not hidden reasoning or chain-of-thought.",
     },
