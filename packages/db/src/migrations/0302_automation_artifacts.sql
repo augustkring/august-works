@@ -86,3 +86,121 @@ CREATE INDEX "automation_artifacts_company_kind_idx" ON "automation_artifacts" (
 CREATE INDEX "automation_artifacts_company_origin_workflow_idx" ON "automation_artifacts" ("company_id","origin_workflow_id");
 --> statement-breakpoint
 CREATE INDEX "automation_artifact_versions_company_artifact_created_idx" ON "automation_artifact_versions" ("company_id","artifact_id","created_at");
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "aw_guard_automation_artifact_version_update"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF ROW(
+    NEW."company_id",
+    NEW."artifact_id",
+    NEW."version_number",
+    NEW."source_code",
+    NEW."input_schema",
+    NEW."output_schema",
+    NEW."dependency_manifest",
+    NEW."test_spec",
+    NEW."content_hash",
+    NEW."created_by_agent_id",
+    NEW."created_by_user_id",
+    NEW."created_at"
+  ) IS DISTINCT FROM ROW(
+    OLD."company_id",
+    OLD."artifact_id",
+    OLD."version_number",
+    OLD."source_code",
+    OLD."input_schema",
+    OLD."output_schema",
+    OLD."dependency_manifest",
+    OLD."test_spec",
+    OLD."content_hash",
+    OLD."created_by_agent_id",
+    OLD."created_by_user_id",
+    OLD."created_at"
+  ) THEN
+    RAISE EXCEPTION 'automation artifact version snapshot content is immutable'
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF OLD."validation_report" IS NOT NULL
+     AND NEW."validation_report" IS DISTINCT FROM OLD."validation_report" THEN
+    RAISE EXCEPTION 'automation artifact validation report is already finalized'
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF OLD."security_report" IS NOT NULL
+     AND NEW."security_report" IS DISTINCT FROM OLD."security_report" THEN
+    RAISE EXCEPTION 'automation artifact security report is already finalized'
+      USING ERRCODE = '23514';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER "automation_artifact_versions_immutable_snapshot_guard"
+BEFORE UPDATE ON "automation_artifact_versions"
+FOR EACH ROW
+EXECUTE FUNCTION "aw_guard_automation_artifact_version_update"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "aw_guard_automation_artifact_version_delete"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM 1
+  FROM "automation_artifacts"
+  WHERE "id" = OLD."artifact_id"
+    AND "company_id" = OLD."company_id";
+
+  -- History follows an explicit artifact/company cascade only after its owner
+  -- has disappeared. Direct version deletion is never a supported mutation.
+  IF NOT FOUND THEN
+    RETURN OLD;
+  END IF;
+
+  RAISE EXCEPTION 'automation artifact version history cannot be deleted directly'
+    USING ERRCODE = '23514';
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER "automation_artifact_versions_delete_guard"
+BEFORE DELETE ON "automation_artifact_versions"
+FOR EACH ROW
+EXECUTE FUNCTION "aw_guard_automation_artifact_version_delete"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "aw_check_automation_artifact_latest_pointer"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  version_company_id uuid;
+  version_artifact_id uuid;
+BEGIN
+  IF NEW."latest_version_id" IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT "company_id", "artifact_id"
+  INTO version_company_id, version_artifact_id
+  FROM "automation_artifact_versions"
+  WHERE "id" = NEW."latest_version_id";
+
+  IF NOT FOUND
+     OR version_company_id IS DISTINCT FROM NEW."company_id"
+     OR version_artifact_id IS DISTINCT FROM NEW."id" THEN
+    RAISE EXCEPTION 'automation artifact latest version pointer is invalid'
+      USING ERRCODE = '23514';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER "automation_artifacts_latest_version_integrity"
+AFTER INSERT OR UPDATE ON "automation_artifacts"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION "aw_check_automation_artifact_latest_pointer"();
+
