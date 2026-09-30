@@ -201,12 +201,8 @@ describePg("Workflow routes", () => {
       .send({ name: "Denied create" })
       .expect(403)
       .expect((response) => {
-        expect(response.body).toMatchObject({
-          error: "Missing permission: workflows:edit.",
-          details: expect.objectContaining({
-            code: "permission_denied",
-            permission: "workflows:edit",
-          }),
+        expect(response.body).toEqual({
+          error: "Viewer access is read-only",
         });
       });
   });
@@ -744,12 +740,8 @@ describePg("Workflow routes", () => {
       .send({ input: {} })
       .expect(403)
       .expect((response) => {
-        expect(response.body).toMatchObject({
-          error: expect.any(String),
-          details: expect.objectContaining({
-            code: "permission_denied",
-            permission: "issue:mutate",
-          }),
+        expect(response.body).toEqual({
+          error: "Viewer access is read-only",
         });
       });
   });
