@@ -3119,11 +3119,16 @@ export {
 } from "./validators/workflow.js";
 
 export {
+  AUTOMATION_ARTIFACT_GATE_KINDS,
+  AUTOMATION_ARTIFACT_GATE_REPORT_SCHEMA,
   AUTOMATION_ARTIFACT_KINDS,
   AUTOMATION_ARTIFACT_LANGUAGES,
   AUTOMATION_ARTIFACT_STATUSES,
   type AutomationArtifact,
   type AutomationArtifactDetail,
+  type AutomationArtifactGateCheck,
+  type AutomationArtifactGateKind,
+  type AutomationArtifactGateReport,
   type AutomationArtifactKind,
   type AutomationArtifactLanguage,
   type AutomationArtifactRuntimeBinding,
@@ -3135,6 +3140,7 @@ export {
   appendAutomationArtifactVersionSchema,
   archiveAutomationArtifactSchema,
   automationArtifactDefinitionSchema,
+  automationArtifactGateReportSchema,
   automationArtifactJsonSchema,
   automationArtifactKindSchema,
   automationArtifactLanguageSchema,
