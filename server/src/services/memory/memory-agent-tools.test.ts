@@ -316,7 +316,7 @@ describePg("Memory agent tools", () => {
     });
     const duplicate = await tools.remember(context(seeded), {
       scope: "company",
-      memoryType: "lesson",
+      memoryType: "constraint",
       title: null,
       content: "Acme requires SSO before rollout.",
       idempotencyKey: randomUUID(),
