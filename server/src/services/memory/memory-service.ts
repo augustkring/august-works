@@ -33,6 +33,11 @@ export interface MemoryMutationActor {
   runId?: string | null;
 }
 
+interface SharePrivateMemoryInternalContext {
+  operationContextFingerprint?: string | null;
+  additionalEvidence?: MemoryCandidateInputParsed["evidence"];
+}
+
 function actorIdentity(actor: MemoryMutationActor) {
   const activity = executionPrincipalToActivityActor(actor.principal);
   return {
@@ -934,6 +939,7 @@ export function memoryService(db: Db) {
       recordId: string,
       rawInput: unknown,
       actor: MemoryMutationActor,
+      internalContext: SharePrivateMemoryInternalContext = {},
     ) => {
       const parsed = memoryShareInputSchema.safeParse(rawInput);
       if (!parsed.success) {
@@ -973,6 +979,8 @@ export function memoryService(db: Db) {
           targetScope: parsed.data.targetScope,
           reason: parsed.data.reason,
           createdByOperationId: parsed.data.createdByOperationId,
+          operationContextFingerprint:
+            internalContext.operationContextFingerprint ?? null,
         });
         await lockMemoryOperation(
           txDb,
@@ -1039,6 +1047,8 @@ export function memoryService(db: Db) {
             promotedFromOwnerAgentId: source.ownerAgentId,
             promotionReason: parsed.data.reason,
             shareOperationFingerprint: operationFingerprint,
+            shareOperationContextFingerprint:
+              internalContext.operationContextFingerprint ?? null,
           },
           evidence: [
             {
@@ -1056,6 +1066,7 @@ export function memoryService(db: Db) {
               trustLevel: privateMemoryEvidenceTrust(source.verificationState),
               relation: "supports",
             },
+            ...(internalContext.additionalEvidence ?? []),
           ],
         };
 
