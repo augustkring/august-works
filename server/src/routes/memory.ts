@@ -114,11 +114,12 @@ export function memoryRoutes(db: Db) {
         req.body,
         boardActor(req),
       );
-      const status =
+      const reusedExistingRecord =
         created.resolution.kind === "duplicate" ||
-        created.resolution.kind === "corroboration"
-          ? 200
-          : 201;
+        created.resolution.kind === "corroboration" ||
+        (created.resolution.kind === "contradiction" &&
+          created.resolution.targetRecordId === created.record.id);
+      const status = reusedExistingRecord ? 200 : 201;
       res.status(status).json(created);
     },
   );
