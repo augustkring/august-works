@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import type { PgTableExtraConfigValue } from "drizzle-orm/pg-core";
 import {
   check,
   foreignKey,
@@ -71,73 +71,73 @@ export const automationArtifacts = pgTable(
       .defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
-  (table) => ({
-    companyIdIdUq: uniqueIndex("automation_artifacts_company_id_id_uq").on(
+  (table): PgTableExtraConfigValue[] => [
+    uniqueIndex("automation_artifacts_company_id_id_uq").on(
       table.companyId,
       table.id,
     ),
-    originWorkflowFk: foreignKey({
+    foreignKey({
       name: "automation_artifacts_company_origin_workflow_fk",
       columns: [table.companyId, table.originWorkflowId],
       foreignColumns: [workflows.companyId, workflows.id],
     }),
-    latestVersionFk: foreignKey({
+    foreignKey({
       name: "automation_artifacts_company_latest_version_fk",
       columns: [table.companyId, table.latestVersionId],
       foreignColumns: [
-        automationArtifactVersions.companyId as AnyPgColumn,
-        automationArtifactVersions.id as AnyPgColumn,
+        automationArtifactVersions.companyId,
+        automationArtifactVersions.id,
       ],
     }),
-    companyStatusUpdatedIdx: index(
+    index(
       "automation_artifacts_company_status_updated_idx",
     ).on(table.companyId, table.status, table.updatedAt),
-    companyKindIdx: index("automation_artifacts_company_kind_idx").on(
+    index("automation_artifacts_company_kind_idx").on(
       table.companyId,
       table.kind,
     ),
-    companyOriginWorkflowIdx: index(
+    index(
       "automation_artifacts_company_origin_workflow_idx",
     ).on(table.companyId, table.originWorkflowId),
-    kindCheck: check(
+    check(
       "automation_artifacts_kind_check",
       sql`${table.kind} in ('expression','transform','typescript','python','tool_chain','subworkflow')`,
     ),
-    languageCheck: check(
+    check(
       "automation_artifacts_language_check",
       sql`(${table.kind} = 'typescript' and ${table.language} = 'typescript')
         or (${table.kind} = 'python' and ${table.language} = 'python')
         or (${table.kind} not in ('typescript','python') and ${table.language} is null)`,
     ),
-    statusCheck: check(
+    check(
       "automation_artifacts_status_check",
       sql`${table.status} in ('candidate','testing','shadow','active','deprecated','revoked','failed')`,
     ),
-    riskCheck: check(
+    check(
       "automation_artifacts_risk_class_check",
       sql`${table.riskClass} in ('C0','C1','C2','C3','C4')`,
     ),
-    sideEffectCheck: check(
+    check(
       "automation_artifacts_side_effect_class_check",
       sql`${table.sideEffectClass} in ('pure','read','write','destructive','external_communication','financial','privileged')`,
     ),
-    creatorCheck: check(
+    check(
       "automation_artifacts_creator_check",
       sql`num_nonnulls(${table.createdByAgentId}, ${table.createdByUserId}, ${table.createdByOptimizerSuggestionId}) <= 1`,
     ),
-    originCheck: check(
+    check(
       "automation_artifacts_origin_check",
       sql`${table.originNodeId} is null or ${table.originWorkflowId} is not null`,
     ),
-    countersCheck: check(
+    check(
       "automation_artifacts_counters_check",
       sql`${table.successCount} >= 0 and ${table.failureCount} >= 0`,
     ),
-    archiveCheck: check(
+    check(
       "automation_artifacts_archive_check",
       sql`${table.archivedAt} is null or ${table.status} in ('deprecated','revoked')`,
     ),
-  }),
+  ],
 );
 
 export const automationArtifactVersions = pgTable(
@@ -179,39 +179,39 @@ export const automationArtifactVersions = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => ({
-    companyIdIdUq: uniqueIndex(
+  (table): PgTableExtraConfigValue[] => [
+    uniqueIndex(
       "automation_artifact_versions_company_id_id_uq",
     ).on(table.companyId, table.id),
-    companyArtifactFk: foreignKey({
+    foreignKey({
       name: "automation_artifact_versions_company_artifact_fk",
       columns: [table.companyId, table.artifactId],
       foreignColumns: [automationArtifacts.companyId, automationArtifacts.id],
     }).onDelete("cascade"),
-    artifactVersionUq: uniqueIndex(
+    uniqueIndex(
       "automation_artifact_versions_artifact_version_uq",
     ).on(table.artifactId, table.versionNumber),
-    artifactContentHashUq: uniqueIndex(
+    uniqueIndex(
       "automation_artifact_versions_artifact_content_hash_uq",
     ).on(table.artifactId, table.contentHash),
-    companyArtifactCreatedIdx: index(
+    index(
       "automation_artifact_versions_company_artifact_created_idx",
     ).on(table.companyId, table.artifactId, table.createdAt),
-    versionCheck: check(
+    check(
       "automation_artifact_versions_version_check",
       sql`${table.versionNumber} >= 1`,
     ),
-    hashCheck: check(
+    check(
       "automation_artifact_versions_content_hash_check",
       sql`${table.contentHash} ~ '^[0-9a-f]{64}$'`,
     ),
-    sourceSizeCheck: check(
+    check(
       "automation_artifact_versions_source_size_check",
       sql`char_length(${table.sourceCode}) between 1 and 1000000`,
     ),
-    creatorCheck: check(
+    check(
       "automation_artifact_versions_creator_check",
       sql`num_nonnulls(${table.createdByAgentId}, ${table.createdByUserId}) <= 1`,
     ),
-  }),
+  ],
 );
