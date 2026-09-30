@@ -335,7 +335,8 @@ function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
   if (
     def.type === "optional" ||
     def.type === "default" ||
-    def.type === "catch"
+    def.type === "catch" ||
+    def.type === "nonoptional"
   ) {
     return unwrapSchema(def.innerType as z.ZodTypeAny);
   }
