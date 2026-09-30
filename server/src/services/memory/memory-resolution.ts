@@ -256,21 +256,44 @@ export async function resolveMemoryCandidate(
   );
 
   if (exactMatches.length > 0 && containsContradictingEvidence) {
-    const target =
+    const acceptedTarget =
       exactMatches.find((record) => record.reviewState === "accepted") ?? null;
-    if (target) {
+    if (acceptedTarget) {
       return {
         metadata: resolutionMetadata({
           kind: "contradiction",
           reasonCode: "contradicting_evidence_against_equivalent_claim",
-          targetRecordId: target.id,
+          targetRecordId: acceptedTarget.id,
           relatedRecordIds: exactMatches.map((record) => record.id),
           now,
         }),
-        target,
+        target: acceptedTarget,
         novelEvidence: [],
       };
     }
+
+    // An equivalent pending candidate already represents the claim under
+    // review. Keep one candidate and attach only novel contradicting evidence
+    // instead of creating an unlinked duplicate or superseding pending state.
+    const pendingTarget = exactMatches[0]!;
+    const novelEvidence = await novelEvidenceFor(
+      db,
+      companyId,
+      pendingTarget.id,
+      input.evidence,
+    );
+    return {
+      metadata: resolutionMetadata({
+        kind: "contradiction",
+        reasonCode: "contradicting_evidence_against_pending_equivalent_claim",
+        targetRecordId: pendingTarget.id,
+        relatedRecordIds: exactMatches.map((record) => record.id),
+        novelEvidenceCount: novelEvidence.length,
+        now,
+      }),
+      target: pendingTarget,
+      novelEvidence,
+    };
   }
 
   if (exactMatches.length > 0 && !containsContradictingEvidence) {
