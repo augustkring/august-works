@@ -25,7 +25,6 @@ import {
 import { logActivity } from "../activity-log.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
 
-const AGENT_MEMORY_MAX_SENSITIVITY = "confidential" as const;
 const ELIGIBLE_SCOPE_SCAN_LIMIT = 100;
 const TOOL_FINGERPRINT_KEY = "agentMemoryToolFingerprint";
 
@@ -302,13 +301,9 @@ async function taskEvidence(
 }
 
 function sensitivityAllowed(record: typeof memoryRecords.$inferSelect): boolean {
-  if (AGENT_MEMORY_MAX_SENSITIVITY === "confidential") {
-    return record.sensitivityLabel !== "restricted";
-  }
-  return (
-    record.sensitivityLabel === "public" ||
-    record.sensitivityLabel === "internal"
-  );
+  // Agent Memory tools never expose restricted records. Confidential remains
+  // eligible only when the underlying scope/owner checks have already passed.
+  return record.sensitivityLabel !== "restricted";
 }
 
 function normalized(value: string): string {

@@ -245,41 +245,26 @@ describePg("Memory agent tools", () => {
       seeded.companyId,
       seeded.agent.id,
       {
-        ...candidate(
-          privateBinding.id,
-          { type: "company", id: null },
-          "Renewal private memory",
-        ),
-        createdByOperationId: "private-seed",
         bindingId: privateBinding.id,
+        memoryType: "lesson",
+        subject: { type: "customer", id: "acme" },
+        title: "Private renewal",
+        content: "Renewal private memory",
+        summary: null,
+        sensitivity: "internal",
+        importance: 70,
+        confidenceScore: 0.8,
+        validFrom: null,
+        validUntil: null,
+        observedAt: "2026-09-29T12:00:00.000Z",
+        retentionPolicy: "standard",
+        expiresAt: null,
+        createdByOperationId: "private-seed",
+        metadata: {},
+        evidence: evidence("Renewal private memory"),
       },
       { principal: { type: "agent", agentId: seeded.agent.id } },
-    ).catch(async () => {
-      await svc.createPrivateMemory(
-        seeded.companyId,
-        seeded.agent.id,
-        {
-          bindingId: privateBinding.id,
-          memoryType: "lesson",
-          subject: { type: "customer", id: "acme" },
-          title: "Private renewal",
-          content: "Renewal private memory",
-          summary: null,
-          sensitivity: "internal",
-          importance: 70,
-          confidenceScore: 0.8,
-          validFrom: null,
-          validUntil: null,
-          observedAt: "2026-09-29T12:00:00.000Z",
-          retentionPolicy: "standard",
-          expiresAt: null,
-          createdByOperationId: "private-seed",
-          metadata: {},
-          evidence: evidence("Renewal private memory"),
-        },
-        { principal: { type: "agent", agentId: seeded.agent.id } },
-      );
-    });
+    );
 
     const result = await memoryAgentToolsService(db).recall(
       context(seeded),
