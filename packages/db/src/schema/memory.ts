@@ -13,7 +13,19 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { EvidenceCitation } from "@paperclipai/shared";
+import type {
+  EvidenceCitation,
+  EvidenceSensitivity,
+  EvidenceSourceClass,
+  EvidenceTrustLevel,
+  MemoryBindingTargetType,
+  MemoryEvidenceRelation,
+  MemoryRetentionState,
+  MemoryReviewState,
+  MemoryScopeType,
+  MemoryType,
+  MemoryVerificationState,
+} from "@paperclipai/shared";
 import { agents } from "./agents.js";
 import { companies } from "./companies.js";
 
@@ -47,7 +59,7 @@ export const memoryBindingTargets = pgTable(
       .notNull()
       .references(() => companies.id, { onDelete: "cascade" }),
     bindingId: uuid("binding_id").notNull(),
-    targetType: text("target_type").notNull(),
+    targetType: text("target_type").$type<MemoryBindingTargetType>().notNull(),
     targetId: text("target_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -85,8 +97,8 @@ export const memoryRecords = pgTable(
     bindingId: uuid("binding_id").notNull(),
     providerKey: text("provider_key").notNull(),
 
-    memoryType: text("memory_type").notNull(),
-    scopeType: text("scope_type").notNull(),
+    memoryType: text("memory_type").$type<MemoryType>().notNull(),
+    scopeType: text("scope_type").$type<MemoryScopeType>().notNull(),
     scopeId: text("scope_id"),
     subjectType: text("subject_type"),
     subjectId: text("subject_id"),
@@ -96,9 +108,9 @@ export const memoryRecords = pgTable(
     content: text("content").notNull(),
     summary: text("summary"),
 
-    reviewState: text("review_state").notNull().default("pending"),
-    verificationState: text("verification_state").notNull().default("unverified"),
-    sensitivityLabel: text("sensitivity_label").notNull().default("internal"),
+    reviewState: text("review_state").$type<MemoryReviewState>().notNull().default("pending"),
+    verificationState: text("verification_state").$type<MemoryVerificationState>().notNull().default("unverified"),
+    sensitivityLabel: text("sensitivity_label").$type<EvidenceSensitivity>().notNull().default("internal"),
 
     importance: integer("importance").notNull().default(50),
     confidenceScore: doublePrecision("confidence_score").notNull().default(0.5),
@@ -109,17 +121,17 @@ export const memoryRecords = pgTable(
 
     retentionPolicy: text("retention_policy").notNull().default("standard"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
-    retentionState: text("retention_state").notNull().default("active"),
+    retentionState: text("retention_state").$type<MemoryRetentionState>().notNull().default("active"),
 
     supersedesRecordId: uuid("supersedes_record_id"),
     supersededByRecordId: uuid("superseded_by_record_id"),
 
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    revokedByActorType: text("revoked_by_actor_type"),
+    revokedByActorType: text("revoked_by_actor_type").$type<"user" | "agent" | "system">(),
     revokedByActorId: text("revoked_by_actor_id"),
     revocationReason: text("revocation_reason"),
 
-    createdByActorType: text("created_by_actor_type").notNull(),
+    createdByActorType: text("created_by_actor_type").$type<"user" | "agent" | "system">().notNull(),
     createdByActorId: text("created_by_actor_id").notNull(),
     createdByOperationId: text("created_by_operation_id"),
 
@@ -211,7 +223,7 @@ export const memoryRecords = pgTable(
     ),
     retentionStateCheck: check(
       "memory_records_retention_state_check",
-      sql`${table.retentionState} in ('active','expired')`,
+      sql`${table.retentionState} in ('active','expired','superseded')`,
     ),
     importanceCheck: check(
       "memory_records_importance_check",
@@ -253,7 +265,7 @@ export const memoryEvidence = pgTable(
       .references(() => companies.id, { onDelete: "cascade" }),
     memoryRecordId: uuid("memory_record_id").notNull(),
 
-    sourceClass: text("source_class").notNull(),
+    sourceClass: text("source_class").$type<EvidenceSourceClass>().notNull(),
     sourceProvider: text("source_provider").notNull(),
     sourceType: text("source_type").notNull(),
     sourceRef: text("source_ref").notNull(),
@@ -262,8 +274,8 @@ export const memoryEvidence = pgTable(
     observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
     excerptHash: text("excerpt_hash").notNull(),
     citationJson: jsonb("citation_json").$type<EvidenceCitation>().notNull(),
-    trustLevel: text("trust_level").notNull(),
-    supportsOrContradicts: text("supports_or_contradicts").notNull(),
+    trustLevel: text("trust_level").$type<EvidenceTrustLevel>().notNull(),
+    supportsOrContradicts: text("supports_or_contradicts").$type<MemoryEvidenceRelation>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
