@@ -23,6 +23,7 @@ import {
   fixtureValidator as standaloneFixtureValidator,
   resultValidator as standaloneResultValidator,
 } from "./generated/standalone-validators.js";
+import { PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA } from "../contracts/completion-result.js";
 import { normalizeLegacyPrpStructuredRunResult } from "./result-normalization.js";
 
 export const PRP_PROTOCOL_NAME = "paperclip.runner";
@@ -233,6 +234,247 @@ function ajvIssue(error: ErrorObject): ProtocolValidationIssue {
   };
 }
 
+const memoryCandidateSchema = PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA;
+const memoryCandidateRequired = new Set<string>(memoryCandidateSchema.required);
+const memoryCandidateKeys = new Set<string>(
+  Object.keys(memoryCandidateSchema.properties),
+);
+const memoryTypes = new Set<string>(
+  memoryCandidateSchema.properties.memoryType.enum,
+);
+const memoryScopeTypes = new Set<string>(
+  memoryCandidateSchema.properties.proposedScopeType.enum,
+);
+const memorySensitivities = new Set<string>(
+  memoryCandidateSchema.properties.sensitivity.enum,
+);
+
+function memoryCandidateIssue(
+  path: string,
+  message: string,
+): ProtocolValidationIssue {
+  return { code: "schema_validation", path, message };
+}
+
+function nullableBoundedStringValid(
+  value: unknown,
+  maxLength: number,
+): boolean {
+  return (
+    value === null ||
+    (typeof value === "string" &&
+      value.length >= 1 &&
+      value.length <= maxLength)
+  );
+}
+
+function optionalDateTimeValid(value: unknown): boolean {
+  if (value === null) return true;
+  if (typeof value !== "string" || !value.includes("T")) return false;
+  return !Number.isNaN(Date.parse(value));
+}
+
+function memoryCandidateExtensionIssues(
+  value: unknown,
+  basePath = "",
+): ProtocolValidationIssue[] {
+  const result = asRecord(value);
+  if (!result || !Object.prototype.hasOwnProperty.call(result, "memoryCandidates")) {
+    return [];
+  }
+
+  const path = `${basePath}/memoryCandidates`;
+  const candidates = result.memoryCandidates;
+  if (!Array.isArray(candidates)) {
+    return [memoryCandidateIssue(path, "must be an array")];
+  }
+  if (candidates.length > 8) {
+    return [memoryCandidateIssue(path, "must contain at most 8 candidates")];
+  }
+
+  const issues: ProtocolValidationIssue[] = [];
+  candidates.forEach((rawCandidate, index) => {
+    const candidatePath = `${path}/${index}`;
+    const candidate = asRecord(rawCandidate);
+    if (!candidate) {
+      issues.push(memoryCandidateIssue(candidatePath, "must be an object"));
+      return;
+    }
+
+    for (const key of memoryCandidateRequired) {
+      if (!Object.prototype.hasOwnProperty.call(candidate, key)) {
+        issues.push(
+          memoryCandidateIssue(
+            `${candidatePath}/${key}`,
+            "is required",
+          ),
+        );
+      }
+    }
+    for (const key of Object.keys(candidate)) {
+      if (!memoryCandidateKeys.has(key)) {
+        issues.push(
+          memoryCandidateIssue(
+            `${candidatePath}/${key}`,
+            "is not an allowed memory candidate field",
+          ),
+        );
+      }
+    }
+
+    if (
+      typeof candidate.memoryType !== "string" ||
+      !memoryTypes.has(candidate.memoryType)
+    ) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/memoryType`,
+          "must be a supported memory type",
+        ),
+      );
+    }
+    if (!nullableBoundedStringValid(candidate.title, 180)) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/title`,
+          "must be null or a non-empty string of at most 180 characters",
+        ),
+      );
+    }
+    if (
+      typeof candidate.content !== "string" ||
+      candidate.content.length < 1 ||
+      candidate.content.length > 4_000
+    ) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/content`,
+          "must be a non-empty string of at most 4000 characters",
+        ),
+      );
+    }
+    if (!nullableBoundedStringValid(candidate.subjectType, 120)) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/subjectType`,
+          "must be null or a non-empty string of at most 120 characters",
+        ),
+      );
+    }
+    if (!nullableBoundedStringValid(candidate.subjectId, 320)) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/subjectId`,
+          "must be null or a non-empty string of at most 320 characters",
+        ),
+      );
+    }
+    if ((candidate.subjectType === null) !== (candidate.subjectId === null)) {
+      issues.push(
+        memoryCandidateIssue(
+          candidatePath,
+          "subjectType and subjectId must be supplied together",
+        ),
+      );
+    }
+    if (
+      typeof candidate.proposedScopeType !== "string" ||
+      !memoryScopeTypes.has(candidate.proposedScopeType)
+    ) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/proposedScopeType`,
+          "must be an automatic shared-memory scope",
+        ),
+      );
+    }
+    if (!nullableBoundedStringValid(candidate.proposedScopeId, 500)) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/proposedScopeId`,
+          "must be null or a non-empty string of at most 500 characters",
+        ),
+      );
+    }
+    if (
+      candidate.proposedScopeType === "subject" &&
+      (candidate.subjectType === null || candidate.subjectId === null)
+    ) {
+      issues.push(
+        memoryCandidateIssue(
+          candidatePath,
+          "subject-scoped memory requires subjectType and subjectId",
+        ),
+      );
+    }
+    if (
+      typeof candidate.sensitivity !== "string" ||
+      !memorySensitivities.has(candidate.sensitivity)
+    ) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/sensitivity`,
+          "must be an automatic-capture sensitivity",
+        ),
+      );
+    }
+    if (!optionalDateTimeValid(candidate.validFrom)) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/validFrom`,
+          "must be null or an ISO date-time",
+        ),
+      );
+    }
+    if (!optionalDateTimeValid(candidate.validUntil)) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/validUntil`,
+          "must be null or an ISO date-time",
+        ),
+      );
+    }
+    if (
+      typeof candidate.validFrom === "string" &&
+      typeof candidate.validUntil === "string" &&
+      Date.parse(candidate.validUntil) <= Date.parse(candidate.validFrom)
+    ) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/validUntil`,
+          "must be later than validFrom",
+        ),
+      );
+    }
+    if (
+      !Array.isArray(candidate.evidenceRefs) ||
+      candidate.evidenceRefs.length !== 1 ||
+      candidate.evidenceRefs[0] !== "task"
+    ) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/evidenceRefs`,
+          "must contain exactly the server-verifiable current-task reference",
+        ),
+      );
+    }
+    if (
+      typeof candidate.rationale !== "string" ||
+      candidate.rationale.length < 1 ||
+      candidate.rationale.length > 1_000
+    ) {
+      issues.push(
+        memoryCandidateIssue(
+          `${candidatePath}/rationale`,
+          "must be a non-empty audit explanation of at most 1000 characters",
+        ),
+      );
+    }
+  });
+
+  return issues;
+}
+
 interface SemanticCallBinding {
   envelope: PrpSemanticToolEnvelope;
   index: number;
@@ -437,10 +679,12 @@ export function validatePrpFixture(value: unknown): ProtocolValidationResult {
     };
   }
 
+  const extensions = memoryCandidateExtensionIssues(value.result, "/result");
   const bindings = bindingIssues(value);
-  return bindings.length === 0
+  const issues = [...extensions, ...bindings];
+  return issues.length === 0
     ? { ok: true, fixture: value, issues: [] }
-    : { ok: false, fixture: null, issues: bindings };
+    : { ok: false, fixture: null, issues };
 }
 
 export function parsePrpFixtureText(text: string): ProtocolValidationResult {
@@ -506,6 +750,14 @@ export function validatePrpStructuredRunResult(
       ok: false,
       result: null,
       issues: (resultValidator.errors ?? []).map(ajvIssue),
+    };
+  }
+  const extensionIssues = memoryCandidateExtensionIssues(normalized);
+  if (extensionIssues.length > 0) {
+    return {
+      ok: false,
+      result: null,
+      issues: extensionIssues,
     };
   }
   return { ok: true, result: normalized, issues: [] };
