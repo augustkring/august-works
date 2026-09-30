@@ -410,6 +410,38 @@ describePg("Automation Artifact service", () => {
     ).rejects.toThrow(/cannot be deleted directly/i);
   });
 
+  it("allows lifecycle-owned company cascade while blocking direct version deletion", async () => {
+    const seeded = await seedCompany();
+    const created = await automationArtifactService(db).create(
+      seeded.company.id,
+      input(),
+      userActor(seeded.userId),
+    );
+
+    const versionId = created.latestVersion!.id;
+
+    await expect(
+      db
+        .delete(automationArtifactVersions)
+        .where(eq(automationArtifactVersions.id, versionId)),
+    ).rejects.toThrow(/cannot be deleted directly/i);
+
+    await db.delete(companies).where(eq(companies.id, seeded.company.id));
+
+    expect(
+      await db
+        .select()
+        .from(automationArtifacts)
+        .where(eq(automationArtifacts.companyId, seeded.company.id)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(automationArtifactVersions)
+        .where(eq(automationArtifactVersions.companyId, seeded.company.id)),
+    ).toHaveLength(0);
+  });
+
   it("keeps runtime disabled by default and resolves only active hash-gated versions", async () => {
     const seeded = await seedCompany();
     const actor = userActor(seeded.userId);
