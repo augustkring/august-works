@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   check,
   foreignKey,
@@ -84,8 +85,8 @@ export const automationArtifacts = pgTable(
       name: "automation_artifacts_company_latest_version_fk",
       columns: [table.companyId, table.latestVersionId],
       foreignColumns: [
-        automationArtifactVersions.companyId,
-        automationArtifactVersions.id,
+        automationArtifactVersions.companyId as AnyPgColumn,
+        automationArtifactVersions.id as AnyPgColumn,
       ],
     }),
     companyStatusUpdatedIdx: index(
