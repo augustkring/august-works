@@ -263,6 +263,71 @@ describe("normalizePrpResultSignals", () => {
     });
   });
 
+  it("rejects malformed memory candidate extensions at the canonical PRP boundary", () => {
+    const candidate = {
+      memoryType: "constraint",
+      title: null,
+      content: "Renewal approval requires finance sign-off.",
+      subjectType: "customer",
+      subjectId: "acme",
+      proposedScopeType: "org",
+      proposedScopeId: null,
+      sensitivity: "internal",
+      validFrom: null,
+      validUntil: null,
+      evidenceRefs: ["task"],
+      rationale: "This is a durable approval constraint.",
+    };
+    const base = {
+      schema: "paperclip.run_result.v1",
+      reportedWorkDisposition: "done",
+      summary: "Completed the renewal task.",
+      completionClaim: {
+        contractRevision: "1",
+        objectiveSatisfied: true,
+        criteria: [{ criterionId: "objective", status: "satisfied", evidenceRefs: [] }],
+        remainingWork: [],
+      },
+      evidence: [],
+      verification: [],
+      attentionRequests: [],
+      artifacts: [],
+    };
+
+    expect(validatePrpStructuredRunResult({
+      ...base,
+      memoryCandidates: [{ ...candidate, evidenceRefs: ["artifact://invented"] }],
+    })).toMatchObject({
+      ok: false,
+      issues: [expect.objectContaining({ path: "/memoryCandidates/0/evidenceRefs" })],
+    });
+    expect(validatePrpStructuredRunResult({
+      ...base,
+      memoryCandidates: [{ ...candidate, proposedScopeType: "agent" }],
+    })).toMatchObject({
+      ok: false,
+      issues: [expect.objectContaining({ path: "/memoryCandidates/0/proposedScopeType" })],
+    });
+    expect(validatePrpStructuredRunResult({
+      ...base,
+      memoryCandidates: [{ ...candidate, sensitivity: "restricted" }],
+    })).toMatchObject({
+      ok: false,
+      issues: [expect.objectContaining({ path: "/memoryCandidates/0/sensitivity" })],
+    });
+    expect(validatePrpStructuredRunResult({
+      ...base,
+      memoryCandidates: [{
+        ...candidate,
+        subjectType: "customer",
+        subjectId: null,
+      }],
+    })).toMatchObject({
+      ok: false,
+      issues: [expect.objectContaining({ path: "/memoryCandidates/0" })],
+    });
+  });
+
   it("records unknown and malformed attention as diagnostics instead of throwing", () => {
     const normalized = normalizePrpResultSignals({
       attentionRequests: [
