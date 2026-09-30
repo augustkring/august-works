@@ -45,7 +45,7 @@ function normalizeText(value: string | null | undefined): string {
     .normalize("NFKC")
     .trim()
     .replace(/\s+/gu, " ")
-    .toLocaleLowerCase();
+    .toLowerCase();
 }
 
 function candidateEvidenceKey(item: CandidateEvidence): string {
