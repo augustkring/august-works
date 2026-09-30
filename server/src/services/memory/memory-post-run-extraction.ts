@@ -309,16 +309,13 @@ function containsSensitivePersonalInference(
   );
 }
 
-function allowedEvidenceRefs(result: Record<string, unknown>): Set<string> {
-  const refs = new Set<string>(["task"]);
-  for (const collection of [result.evidence, result.artifacts]) {
-    if (!Array.isArray(collection)) continue;
-    for (const item of collection) {
-      const ref = stringValue(record(item).ref);
-      if (ref) refs.add(ref);
-    }
-  }
-  return refs;
+function allowedEvidenceRefs(): ReadonlySet<string> {
+  // PR 36 deliberately admits only the server-verifiable current task/run.
+  // Semantic-result evidence/artifact refs are model-authored claims and cannot
+  // authenticate themselves by appearing elsewhere in the same result.
+  // Broader refs may be admitted later only after resolving them against an
+  // authoritative same-company artifact/evidence store.
+  return new Set<string>(["task"]);
 }
 
 async function resolveBinding(
@@ -530,7 +527,7 @@ export function memoryPostRunExtractionService(db: Db) {
         return result;
       }
 
-      const permittedEvidenceRefs = allowedEvidenceRefs(semantic.result);
+      const permittedEvidenceRefs = allowedEvidenceRefs();
       const observedAt = (
         run.finishedAt ??
         run.updatedAt ??
