@@ -109,6 +109,7 @@ export interface InstanceExperimentalSettings {
   enableWorkflowExternalAgentNodes: boolean;
   enableCollectiveMemoryV1: boolean;
   enablePrivateAgentMemoryV1: boolean;
+  enableMemoryPostRunExtractionV1: boolean;
   enableAutomationArtifactsV1: boolean;
   enableWorkflowOptimizerSuggestions: boolean;
   enableWorkflowOptimizerShadow: boolean;
