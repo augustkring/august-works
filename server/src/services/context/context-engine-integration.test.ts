@@ -153,13 +153,22 @@ describeEmbeddedPostgres("Context Engine integration", () => {
 
   it("assembles authorized approved Foundation and task context into a durable manifest", async () => {
     const seeded = await seed();
-    await db.insert(principalPermissionGrants).values({
-      companyId: seeded.companyId,
-      principalType: "agent",
-      principalId: seeded.agent.id,
-      permissionKey: "foundation:read",
-      scope: null,
-    });
+    await db.insert(principalPermissionGrants).values([
+      {
+        companyId: seeded.companyId,
+        principalType: "agent",
+        principalId: seeded.agent.id,
+        permissionKey: "foundation:read",
+        scope: null,
+      },
+      {
+        companyId: seeded.companyId,
+        principalType: "user",
+        principalId: seeded.userId,
+        permissionKey: "foundation:read",
+        scope: null,
+      },
+    ]);
     await createApprovedFoundation({
       companyId: seeded.companyId,
       userId: seeded.userId,
