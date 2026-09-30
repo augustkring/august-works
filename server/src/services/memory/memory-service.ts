@@ -1247,9 +1247,15 @@ export function memoryService(db: Db) {
           parsed.data,
         );
 
+        const attachesToExistingPendingContradiction =
+          resolution.metadata.kind === "contradiction" &&
+          resolution.metadata.reasonCode ===
+            "contradicting_evidence_against_pending_equivalent_claim";
+
         if (
           resolution.metadata.kind === "duplicate" ||
-          resolution.metadata.kind === "corroboration"
+          resolution.metadata.kind === "corroboration" ||
+          attachesToExistingPendingContradiction
         ) {
           const target = resolution.target;
           if (!target) {
@@ -1258,7 +1264,10 @@ export function memoryService(db: Db) {
             );
           }
 
-          if (resolution.metadata.kind === "corroboration") {
+          if (
+            resolution.metadata.kind === "corroboration" ||
+            attachesToExistingPendingContradiction
+          ) {
             await insertEvidenceRows(
               txDb,
               companyId,
@@ -1269,7 +1278,10 @@ export function memoryService(db: Db) {
             publications.push(
               await persistMemoryActivity(txDb, actor, {
                 companyId,
-                action: "memory.corroborated",
+                action:
+                  resolution.metadata.kind === "corroboration"
+                    ? "memory.corroborated"
+                    : "memory.contradiction_attached",
                 recordId: target.id,
                 details: { resolution: resolution.metadata },
               }),
