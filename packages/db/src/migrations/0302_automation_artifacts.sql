@@ -149,6 +149,17 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  -- Company deletion can reach this row through either the direct company FK
+  -- or the artifact cascade. Allow that lifecycle-owned cascade independent of
+  -- PostgreSQL's internal RI trigger ordering.
+  PERFORM 1
+  FROM "companies"
+  WHERE "id" = OLD."company_id";
+
+  IF NOT FOUND THEN
+    RETURN OLD;
+  END IF;
+
   PERFORM 1
   FROM "automation_artifacts"
   WHERE "id" = OLD."artifact_id"
