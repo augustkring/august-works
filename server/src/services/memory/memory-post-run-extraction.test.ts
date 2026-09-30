@@ -414,6 +414,65 @@ describePg("Memory post-run extraction", () => {
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
   });
 
+  it("persists authorized project and subject scopes through their governed binding targets", async () => {
+    const seeded = await seed({
+      candidates: [
+        {
+          ...BASE_CANDIDATE,
+          title: "Project renewal playbook",
+          content: "This project's renewal flow requires security review before legal review.",
+          proposedScopeType: "project",
+          proposedScopeId: null,
+          rationale: "Durable project-local process learning.",
+        },
+        {
+          ...BASE_CANDIDATE,
+          title: "Acme renewal constraint",
+          content: "Acme renewals require security review before legal review.",
+          proposedScopeType: "subject",
+          proposedScopeId: "customer:acme",
+          rationale: "Durable customer-specific process constraint.",
+        },
+      ],
+    });
+    const [binding] = await db
+      .select()
+      .from(memoryBindings)
+      .where(eq(memoryBindings.companyId, seeded.companyId));
+    await memoryService(db).addBindingTarget(
+      seeded.companyId,
+      binding!.id,
+      { targetType: "project", targetId: seeded.project.id },
+      { principal: { type: "user", userId: seeded.userId } },
+    );
+
+    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+
+    expect(result).toMatchObject({
+      proposed: 2,
+      persisted: 2,
+      duplicates: 0,
+      skipped: 0,
+    });
+    const records = await db.select().from(memoryRecords);
+    expect(records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          scopeType: "project",
+          scopeId: seeded.project.id,
+          subjectType: "customer",
+          subjectId: "acme",
+        }),
+        expect.objectContaining({
+          scopeType: "subject",
+          scopeId: "customer:acme",
+          subjectType: "customer",
+          subjectId: "acme",
+        }),
+      ]),
+    );
+  });
+
   it("fails closed on restricted, sensitive-personal, invented-evidence and private proposals", async () => {
     const seeded = await seed({
       candidates: [
@@ -434,6 +493,15 @@ describePg("Memory post-run extraction", () => {
         },
         {
           ...BASE_CANDIDATE,
+          proposedScopeType: "team",
+        },
+        {
+          ...BASE_CANDIDATE,
+          proposedScopeType: "org",
+          proposedScopeId: randomUUID(),
+        },
+        {
+          ...BASE_CANDIDATE,
           content: "Authorization: Bearer example-token-12345678",
         },
       ],
@@ -441,10 +509,10 @@ describePg("Memory post-run extraction", () => {
 
     const result = await memoryPostRunExtractionService(db).extract(seeded.run);
     expect(result).toMatchObject({
-      proposed: 5,
+      proposed: 7,
       persisted: 0,
       duplicates: 0,
-      skipped: 5,
+      skipped: 7,
     });
     expect(result.skipReasons).toMatchObject({
       restricted_sensitivity: 1,
@@ -452,6 +520,8 @@ describePg("Memory post-run extraction", () => {
       sensitive_personal_inference: 1,
       evidence_ref_unverified: 1,
       private_scope_requires_explicit_remember: 1,
+      scope_unsupported: 1,
+      scope_mismatch: 1,
     });
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
   });
