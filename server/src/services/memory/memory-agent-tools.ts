@@ -612,6 +612,8 @@ export function memoryAgentToolsService(db: Db) {
         confidenceScore: parsed.data.confidenceScore,
         validFrom: parsed.data.validFrom,
         validUntil: parsed.data.validUntil,
+        observedAt: parsed.data.observedAt ?? null,
+        taskEvidenceRef: source.evidence[0]?.sourceRef ?? null,
         retentionPolicy: parsed.data.retentionPolicy,
         expiresAt: parsed.data.expiresAt,
       });
@@ -722,6 +724,10 @@ export function memoryAgentToolsService(db: Db) {
         tool: "correct_memory",
         companyId: context.companyId,
         agentId: context.agentId,
+        runId: context.runId,
+        issueId: context.issueId,
+        taskEvidenceRef: evidence.evidence[0]?.sourceRef ?? null,
+        observedAt: parsed.data.observedAt ?? null,
         sourceRecordId: record.id,
         reason: parsed.data.reason,
         content: parsed.data.content,
@@ -871,6 +877,7 @@ export function memoryAgentToolsService(db: Db) {
           code: "private_memory_record_not_found",
         });
       }
+      assertRecordToolAccess(source.record, context);
       if (
         source.record.scopeType !== "agent" ||
         source.record.ownerAgentId !== context.agentId
@@ -904,6 +911,24 @@ export function memoryAgentToolsService(db: Db) {
                 type: "subject" as const,
                 id: subjectScopeId(parsed.data.subject!),
               };
+      const evidence = await taskEvidence(
+        db,
+        context,
+        source.record.content,
+        undefined,
+      );
+      const fingerprint = operationFingerprint({
+        tool: "share_memory",
+        companyId: context.companyId,
+        agentId: context.agentId,
+        runId: context.runId,
+        issueId: context.issueId,
+        taskEvidenceRef: evidence.evidence[0]?.sourceRef ?? null,
+        sourceRecordId: source.record.id,
+        targetBindingId: binding.id,
+        targetScope,
+        reason: parsed.data.reason,
+      });
 
       const existing = await existingOperationRecord(
         db,
@@ -916,7 +941,8 @@ export function memoryAgentToolsService(db: Db) {
           existing.scopeId === targetScope.id &&
           existing.bindingId === binding.id &&
           existing.metadata.promotedFromPrivateRecordId === source.record.id &&
-          existing.metadata.promotionReason === parsed.data.reason;
+          existing.metadata.promotionReason === parsed.data.reason &&
+          existing.metadata.shareOperationContextFingerprint === fingerprint;
         if (!duplicate) {
           throw conflict("Memory operation id was reused with different share input", {
             code: "memory_operation_conflict",
@@ -946,6 +972,10 @@ export function memoryAgentToolsService(db: Db) {
           createdByOperationId: parsed.data.idempotencyKey,
         },
         actorFor(context),
+        {
+          operationContextFingerprint: fingerprint,
+          additionalEvidence: evidence.evidence,
+        },
       );
       return memoryResult(detail, "pending");
     },
