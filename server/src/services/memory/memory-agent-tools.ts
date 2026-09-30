@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
+  heartbeatRuns,
   issues,
   memoryBindings,
   memoryBindingTargets,
@@ -50,6 +51,24 @@ function actorFor(context: MemoryAgentToolContext): MemoryMutationActor {
     },
     runId: context.runId,
   };
+}
+
+async function persistedToolActivityRunId(
+  db: Db,
+  context: MemoryAgentToolContext,
+): Promise<string | null> {
+  if (!context.runId) return null;
+  return db
+    .select({ id: heartbeatRuns.id })
+    .from(heartbeatRuns)
+    .where(
+      and(
+        eq(heartbeatRuns.id, context.runId),
+        eq(heartbeatRuns.companyId, context.companyId),
+        eq(heartbeatRuns.agentId, context.agentId),
+      ),
+    )
+    .then((rows) => rows[0]?.id ?? null);
 }
 
 function subjectScopeId(subject: { type: string; id: string }): string {
@@ -527,7 +546,7 @@ export function memoryAgentToolsService(db: Db) {
         actorType: "agent",
         actorId: context.agentId,
         agentId: context.agentId,
-        runId: context.runId,
+        runId: await persistedToolActivityRunId(db, context),
         issueId: context.issueId,
         action: "memory.recalled",
         entityType: "company",
