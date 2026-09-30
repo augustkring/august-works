@@ -192,6 +192,14 @@ import {
   archiveCompanyMemberSchema,
   updateMemberPermissionsSchema,
   updateUserCompanyAccessSchema,
+  // Memory
+  memoryBindingInputSchema,
+  memoryBindingTargetInputSchema,
+  memoryCandidateInputSchema,
+  memoryCorrectionInputSchema,
+  memoryRecordListQuerySchema,
+  memoryReviewReasonSchema,
+  memoryRevokeInputSchema,
   // Instance settings
   patchInstanceGeneralSettingsSchema,
   patchInstanceExperimentalSettingsSchema,
@@ -1329,6 +1337,17 @@ const BOARD_ONLY_OPERATIONS = new Set([
   "PUT /api/projects/{id}/repositories",
   "DELETE /api/issues/{id}/documents/{key}",
   "GET /api/companies/{companyId}/decisions",
+  "GET /api/companies/{companyId}/memory/bindings",
+  "GET /api/companies/{companyId}/memory/records",
+  "GET /api/companies/{companyId}/memory/records/{recordId}",
+  "POST /api/companies/{companyId}/memory/bindings",
+  "POST /api/companies/{companyId}/memory/bindings/company",
+  "POST /api/companies/{companyId}/memory/bindings/{bindingId}/targets",
+  "POST /api/companies/{companyId}/memory/candidates",
+  "POST /api/companies/{companyId}/memory/records/{recordId}/accept",
+  "POST /api/companies/{companyId}/memory/records/{recordId}/correct",
+  "POST /api/companies/{companyId}/memory/records/{recordId}/reject",
+  "POST /api/companies/{companyId}/memory/records/{recordId}/revoke",
   "GET /api/cloud/stacks",
   "GET /api/companies",
   "POST /api/companies",
@@ -2036,6 +2055,180 @@ registry.registerPath({
   summary: "Archive a company",
   request: { params: z.object({ companyId: z.string() }) },
   responses: { 200: r.ok(), 401: r.unauthorized, 404: r.notFound },
+});
+
+// ─── Memory ──────────────────────────────────────────────────────────────────
+
+const memoryPathParams = z.object({
+  companyId: z.string().uuid(),
+});
+
+const memoryRecordPathParams = memoryPathParams.extend({
+  recordId: z.string().uuid(),
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/companies/{companyId}/memory/records",
+  tags: ["memory"],
+  summary: "List governed shared memory records",
+  request: {
+    params: memoryPathParams,
+    query: memoryRecordListQuerySchema,
+  },
+  responses: {
+    200: r.ok(),
+    400: r.badRequest,
+    401: r.unauthorized,
+    403: r.forbidden,
+    404: r.notFound,
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/companies/{companyId}/memory/records/{recordId}",
+  tags: ["memory"],
+  summary: "Get a governed shared memory record",
+  request: { params: memoryRecordPathParams },
+  responses: {
+    200: r.ok(),
+    401: r.unauthorized,
+    403: r.forbidden,
+    404: r.notFound,
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/companies/{companyId}/memory/candidates",
+  tags: ["memory"],
+  summary: "Create a governed shared memory candidate",
+  request: {
+    params: memoryPathParams,
+    body: jsonBody(memoryCandidateInputSchema),
+  },
+  responses: {
+    201: r.ok(),
+    400: r.badRequest,
+    401: r.unauthorized,
+    403: r.forbidden,
+    404: r.notFound,
+    409: r.conflict,
+    422: r.unprocessable,
+  },
+});
+
+for (const [path, summary, body, success] of [
+  [
+    "/api/companies/{companyId}/memory/records/{recordId}/accept",
+    "Accept a governed shared memory candidate",
+    memoryReviewReasonSchema,
+    200,
+  ],
+  [
+    "/api/companies/{companyId}/memory/records/{recordId}/reject",
+    "Reject a governed shared memory candidate",
+    memoryReviewReasonSchema,
+    200,
+  ],
+  [
+    "/api/companies/{companyId}/memory/records/{recordId}/correct",
+    "Create a correction candidate for shared memory",
+    memoryCorrectionInputSchema,
+    201,
+  ],
+  [
+    "/api/companies/{companyId}/memory/records/{recordId}/revoke",
+    "Revoke a governed shared memory record",
+    memoryRevokeInputSchema,
+    200,
+  ],
+] as const) {
+  registry.registerPath({
+    method: "post",
+    path,
+    tags: ["memory"],
+    summary,
+    request: {
+      params: memoryRecordPathParams,
+      body: jsonBody(body),
+    },
+    responses: {
+      [success]: r.ok(),
+      400: r.badRequest,
+      401: r.unauthorized,
+      403: r.forbidden,
+      404: r.notFound,
+      409: r.conflict,
+      422: r.unprocessable,
+    },
+  });
+}
+
+registry.registerPath({
+  method: "get",
+  path: "/api/companies/{companyId}/memory/bindings",
+  tags: ["memory"],
+  summary: "List governed memory bindings",
+  request: { params: memoryPathParams },
+  responses: {
+    200: r.ok(),
+    401: r.unauthorized,
+    403: r.forbidden,
+    404: r.notFound,
+  },
+});
+
+for (const [path, summary] of [
+  [
+    "/api/companies/{companyId}/memory/bindings/company",
+    "Create or update the company memory binding",
+  ],
+  [
+    "/api/companies/{companyId}/memory/bindings",
+    "Create a governed memory binding",
+  ],
+] as const) {
+  registry.registerPath({
+    method: "post",
+    path,
+    tags: ["memory"],
+    summary,
+    request: {
+      params: memoryPathParams,
+      body: jsonBody(memoryBindingInputSchema),
+    },
+    responses: {
+      201: r.ok(),
+      400: r.badRequest,
+      401: r.unauthorized,
+      403: r.forbidden,
+      404: r.notFound,
+      409: r.conflict,
+      422: r.unprocessable,
+    },
+  });
+}
+
+registry.registerPath({
+  method: "post",
+  path: "/api/companies/{companyId}/memory/bindings/{bindingId}/targets",
+  tags: ["memory"],
+  summary: "Add a target to a governed memory binding",
+  request: {
+    params: memoryPathParams.extend({ bindingId: z.string().uuid() }),
+    body: jsonBody(memoryBindingTargetInputSchema),
+  },
+  responses: {
+    201: r.ok(),
+    400: r.badRequest,
+    401: r.unauthorized,
+    403: r.forbidden,
+    404: r.notFound,
+    409: r.conflict,
+    422: r.unprocessable,
+  },
 });
 
 registry.registerPath({
