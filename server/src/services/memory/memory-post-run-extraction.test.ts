@@ -597,6 +597,65 @@ describePg("Memory post-run extraction", () => {
     expect(result).toMatchObject({ proposed: 1, persisted: 1, skipped: 0 });
   });
 
+  it("allows technical race and system-health terminology outside personal context", async () => {
+    const seeded = await seed({
+      candidates: [
+        {
+          ...BASE_CANDIDATE,
+          title: "Race condition mitigation",
+          content: "A race condition can duplicate the renewal transition unless the operation is idempotent.",
+          subjectType: null,
+          subjectId: null,
+          rationale: "Durable technical reliability learning for future workflow changes.",
+        },
+        {
+          ...BASE_CANDIDATE,
+          title: "System health check",
+          content: "The system health check must pass before the renewal workflow resumes.",
+          subjectType: null,
+          subjectId: null,
+          rationale: "Durable operational prerequisite for this workflow class.",
+        },
+      ],
+    });
+
+    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+
+    expect(result).toMatchObject({
+      proposed: 2,
+      persisted: 2,
+      duplicates: 0,
+      skipped: 0,
+    });
+    expect(await db.select().from(memoryRecords)).toHaveLength(2);
+  });
+
+  it("still rejects contextual personal health inference", async () => {
+    const seeded = await seed({
+      candidates: [{
+        ...BASE_CANDIDATE,
+        title: "Employee health profile",
+        content: "The employee health status should be retained for future planning.",
+        subjectType: "employee",
+        subjectId: "employee-2",
+        proposedScopeType: "subject",
+        proposedScopeId: "employee:employee-2",
+        rationale: "Reuse the employee health information in later tasks.",
+      }],
+    });
+
+    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+
+    expect(result).toMatchObject({
+      proposed: 1,
+      persisted: 0,
+      duplicates: 0,
+      skipped: 1,
+      skipReasons: { sensitive_personal_inference: 1 },
+    });
+    expect(await db.select().from(memoryRecords)).toHaveLength(0);
+  });
+
   it("rejects model-authored evidence and artifact refs that are not server-verified", async () => {
     const seeded = await seed({
       candidates: [
