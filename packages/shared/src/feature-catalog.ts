@@ -381,6 +381,13 @@ export const INSTANCE_FEATURE_CATALOG: Record<InstanceFeatureKey, FeatureCatalog
     cloudDefault: false,
     selfHostedDefault: false,
   },
+  enableMemoryPostRunExtractionV1: {
+    title: "Memory Post-Run Extraction V1",
+    description: "Allow successful agent runs to submit governed shared Memory candidates from the same semantic completion turn. Candidates remain pending review and never bypass Memory policy.",
+    tier: "managed",
+    cloudDefault: false,
+    selfHostedDefault: false,
+  },
   enableAutomationArtifactsV1: {
     title: "Automation Artifacts V1",
     description: "Enable validated, versioned deterministic automation artifacts in the governed execution plane.",
