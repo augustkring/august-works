@@ -312,6 +312,8 @@ function containsSensitivePersonalInference(
       candidate.content,
       candidate.rationale,
       candidate.subjectType ?? "",
+      candidate.subjectId ?? "",
+      candidate.proposedScopeId ?? "",
     ].join(" "),
   );
   const padded = ` ${normalized} `;
@@ -432,7 +434,7 @@ function addSkip(
 async function auditExtraction(
   db: Db,
   run: HeartbeatRun,
-  issueId: string,
+  issueId: string | null,
   result: MemoryPostRunExtractionResult,
 ): Promise<void> {
   if (result.proposed === 0) return;
@@ -512,7 +514,7 @@ export function memoryPostRunExtractionService(db: Db) {
         stringValue(context.taskId);
       if (!issueId) {
         addSkip(result, "source_task_unavailable");
-        await auditExtraction(db, run, run.id, result);
+        await auditExtraction(db, run, null, result);
         return result;
       }
 
