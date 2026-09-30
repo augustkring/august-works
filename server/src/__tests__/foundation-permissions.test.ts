@@ -25,6 +25,6 @@ describe("Foundation human permission defaults", () => {
       "foundation:edit",
     ]));
     expect(keys("operator")).not.toContain("foundation:approve");
-    expect(keys("viewer")).toEqual(["foundation:read"]);
+    expect(keys("viewer")).toEqual(["foundation:read", "workflows:read"]);
   });
 });
