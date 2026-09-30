@@ -325,6 +325,39 @@ describePg("Memory post-run extraction", () => {
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
   });
 
+  it("fails closed and records a safe aggregate when the candidate contract is malformed", async () => {
+    const seeded = await seed({
+      candidates: [{ ...BASE_CANDIDATE, content: "" }],
+    });
+
+    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+
+    expect(result).toMatchObject({
+      proposed: 0,
+      persisted: 0,
+      duplicates: 0,
+      skipped: 1,
+      skipReasons: { candidate_contract_invalid: 1 },
+    });
+    expect(await db.select().from(memoryRecords)).toHaveLength(0);
+    const activities = await db.select().from(activityLog);
+    expect(activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "memory.post_run_extracted",
+          entityId: seeded.run.id,
+          details: expect.objectContaining({
+            proposed: 0,
+            persisted: 0,
+            skipped: 1,
+            skipReasons: { candidate_contract_invalid: 1 },
+          }),
+        }),
+      ]),
+    );
+    expect(JSON.stringify(activities)).not.toContain(BASE_CANDIDATE.content);
+  });
+
   it("does not capture from failed or yielded runs", async () => {
     const failed = await seed({ runStatus: "failed" });
     const failedResult = await memoryPostRunExtractionService(db).extract(failed.run);
