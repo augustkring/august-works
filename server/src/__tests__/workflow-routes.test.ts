@@ -41,8 +41,10 @@ describePg("Workflow routes", () => {
     await db.delete(issues);
     await db.delete(workflowStepRuns);
     await db.delete(workflowRuns);
-    await db.delete(workflowRevisions);
+    // Workflow is the lifecycle owner. Deleting it is the supported path that
+    // cascades immutable revision history through the DB guard.
     await db.delete(workflows);
+    await db.delete(workflowRevisions);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
     await db.delete(agents);
