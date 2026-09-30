@@ -25,8 +25,12 @@ import {
 } from "../../errors.js";
 import { logActivity } from "../activity-log.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
+import {
+  memorySubjectScopeId,
+  resolveMemoryRetrievalScopes,
+  retrieveEligibleMemory,
+} from "./memory-retrieval.js";
 
-const ELIGIBLE_SCOPE_SCAN_LIMIT = 100;
 const TOOL_FINGERPRINT_KEY = "agentMemoryToolFingerprint";
 
 export interface MemoryAgentToolContext {
@@ -69,16 +73,6 @@ async function persistedToolActivityRunId(
       ),
     )
     .then((rows) => rows[0]?.id ?? null);
-}
-
-function subjectScopeId(subject: { type: string; id: string }): string {
-  const value = `${subject.type}:${subject.id}`;
-  if (value.length > 500) {
-    throw unprocessable("Memory subject scope identifier is too long", {
-      code: "memory_subject_scope_too_long",
-    });
-  }
-  return value;
 }
 
 function canonicalOperationValue(value: unknown): unknown {
@@ -319,58 +313,6 @@ async function taskEvidence(
   };
 }
 
-function sensitivityAllowed(record: typeof memoryRecords.$inferSelect): boolean {
-  // Agent Memory tools never expose restricted records. Confidential remains
-  // eligible only when the underlying scope/owner checks have already passed.
-  return record.sensitivityLabel !== "restricted";
-}
-
-function normalized(value: string): string {
-  return value.normalize("NFKC").toLocaleLowerCase();
-}
-
-function queryTokens(query: string): string[] {
-  return [
-    ...new Set(
-      normalized(query)
-        .match(/[\p{L}\p{N}][\p{L}\p{N}_-]*/gu)
-        ?.filter((token) => token.length > 1) ?? [],
-    ),
-  ].slice(0, 32);
-}
-
-function relevanceScore(record: typeof memoryRecords.$inferSelect, query: string) {
-  const phrase = normalized(query);
-  const tokens = queryTokens(query);
-  const title = normalized(record.title ?? "");
-  const summary = normalized(record.summary ?? "");
-  const content = normalized(record.content);
-  const subject = normalized(
-    [record.subjectType, record.subjectId, record.scopeId]
-      .filter(Boolean)
-      .join(" "),
-  );
-
-  let score = 0;
-  if (phrase && title.includes(phrase)) score += 18;
-  if (phrase && summary.includes(phrase)) score += 14;
-  if (phrase && content.includes(phrase)) score += 10;
-  if (phrase && subject.includes(phrase)) score += 12;
-
-  for (const token of tokens) {
-    if (title.includes(token)) score += 5;
-    if (summary.includes(token)) score += 4;
-    if (subject.includes(token)) score += 4;
-    if (content.includes(token)) score += 2;
-  }
-
-  if (score > 0) {
-    score += Math.min(1, record.importance / 100);
-    score += Math.min(0.5, record.confidenceScore / 2);
-  }
-  return score;
-}
-
 function recallRecord(detail: MemoryRecordDetail, score: number) {
   const record = detail.record;
   return {
@@ -483,68 +425,29 @@ export function memoryAgentToolsService(db: Db) {
         });
       }
 
-      const actor = actorFor(context);
       const asOf = parsed.data.asOf ? new Date(parsed.data.asOf) : new Date();
-      const scopes: Array<{
-        scopeType: "company" | "agent" | "project" | "subject";
-        scopeId: string | null;
-      }> = [];
+      const retrievalInput = {
+        companyId: context.companyId,
+        agentId: context.agentId,
+        runId: context.runId,
+        responsibleUserId: context.responsibleUserId ?? null,
+        projectId: context.projectId,
+        subjectScopeIds: parsed.data.subjects.map(memorySubjectScopeId),
+        allowShared: context.allowShared,
+        allowPrivate: context.allowPrivate,
+        query: parsed.data.query,
+        asOf,
+        topK: parsed.data.topK,
+        // Agent tool behavior is unchanged: restricted Memory stays hidden,
+        // while confidential owner/scope-authorized Memory remains recallable.
+        sensitivityCeiling: "confidential" as const,
+      };
+      const scopes = resolveMemoryRetrievalScopes(retrievalInput);
+      const ranked = await retrieveEligibleMemory(db, retrievalInput);
 
-      if (context.allowShared) {
-        scopes.push({ scopeType: "company", scopeId: null });
-        if (context.projectId) {
-          scopes.push({ scopeType: "project", scopeId: context.projectId });
-        }
-        for (const subject of parsed.data.subjects) {
-          scopes.push({
-            scopeType: "subject",
-            scopeId: subjectScopeId(subject),
-          });
-        }
-      }
-      if (context.allowPrivate) {
-        scopes.push({ scopeType: "agent", scopeId: context.agentId });
-      }
-
-      const recordsById = new Map<string, typeof memoryRecords.$inferSelect>();
-      for (const scope of scopes) {
-        const rows = await service.listEligible(
-          context.companyId,
-          {
-            scopeType: scope.scopeType,
-            scopeId: scope.scopeId,
-            asOf,
-            limit: ELIGIBLE_SCOPE_SCAN_LIMIT,
-          },
-          actor,
-        );
-        for (const row of rows) {
-          if (sensitivityAllowed(row)) recordsById.set(row.id, row);
-        }
-      }
-
-      const ranked = [...recordsById.values()]
-        .map((record) => ({
-          record,
-          score: relevanceScore(record, parsed.data.query),
-        }))
-        .filter(({ score }) => score > 0)
-        .sort(
-          (left, right) =>
-            right.score - left.score ||
-            right.record.observedAt.getTime() - left.record.observedAt.getTime(),
-        )
-        .slice(0, parsed.data.topK);
-
-      const records = [];
-      for (const { record, score } of ranked) {
-        const detail = await service.get(
-          context.companyId,
-          record.id,
-          actor,
-        );
-        if (detail) records.push(recallRecord(detail, score));
-      }
+      const records = ranked.map(({ detail, relevanceScore }) =>
+        recallRecord(detail, relevanceScore),
+      );
 
       await logActivity(db, {
         companyId: context.companyId,
@@ -615,7 +518,7 @@ export function memoryAgentToolsService(db: Db) {
               ? { type: "project" as const, id: context.projectId! }
               : {
                   type: "subject" as const,
-                  id: subjectScopeId(parsed.data.subject!),
+                  id: memorySubjectScopeId(parsed.data.subject!),
                 };
 
       const fingerprint = operationFingerprint({
@@ -940,7 +843,7 @@ export function memoryAgentToolsService(db: Db) {
             ? { type: "project" as const, id: context.projectId! }
             : {
                 type: "subject" as const,
-                id: subjectScopeId(parsed.data.subject!),
+                id: memorySubjectScopeId(parsed.data.subject!),
               };
       const evidence = await taskEvidence(
         db,
