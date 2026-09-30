@@ -6671,7 +6671,7 @@ describeEmbeddedPostgres("workspace runtime service control persistence", () => 
         status: "starting",
         healthStatus: "unknown",
       });
-      expect(startingRow.providerRef).not.toBeNull();
+      expect(startingRow.providerRef).toMatch(/^\\d+$/);
       expect(startingRow.port).toEqual(expect.any(Number));
 
       const services = await startPromise;
