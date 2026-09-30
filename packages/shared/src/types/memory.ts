@@ -29,7 +29,7 @@ export const MEMORY_VERIFICATION_STATES = [
 export type MemoryVerificationState =
   (typeof MEMORY_VERIFICATION_STATES)[number];
 
-export const MEMORY_RETENTION_STATES = ["active", "expired"] as const;
+export const MEMORY_RETENTION_STATES = ["active", "expired", "superseded"] as const;
 export type MemoryRetentionState = (typeof MEMORY_RETENTION_STATES)[number];
 
 export const MEMORY_SCOPE_TYPES = ["company", "agent", "project", "subject"] as const;
