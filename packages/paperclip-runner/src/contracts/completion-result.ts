@@ -168,7 +168,9 @@ export const PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA = {
       ],
     },
     sensitivity: {
-      enum: ["public", "internal", "confidential", "restricted"],
+      enum: ["public", "internal", "confidential"],
+      description:
+        "Restricted data is never eligible for automatic post-run Memory capture and requires an explicit governed path.",
     },
     validFrom: {
       anyOf: [
