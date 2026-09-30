@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type {
+  AutomationArtifactGateReport,
   AutomationArtifactKind,
   AutomationArtifactLanguage,
   AutomationArtifactStatus,
@@ -165,9 +166,9 @@ export const automationArtifactVersions = pgTable(
       .notNull()
       .default({}),
     validationReport: jsonb("validation_report")
-      .$type<Record<string, unknown> | null>(),
+      .$type<AutomationArtifactGateReport | null>(),
     securityReport: jsonb("security_report")
-      .$type<Record<string, unknown> | null>(),
+      .$type<AutomationArtifactGateReport | null>(),
     contentHash: text("content_hash").notNull(),
     createdByAgentId: uuid("created_by_agent_id").references(() => agents.id, {
       onDelete: "set null",
