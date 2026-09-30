@@ -2129,7 +2129,7 @@ for (const [path, summary, body, success] of [
   [
     "/api/companies/{companyId}/memory/records/{recordId}/reject",
     "Reject a governed shared memory candidate",
-    memoryReviewReasonSchema,
+    memoryReviewReasonSchema.required({ reason: true }),
     200,
   ],
   [
