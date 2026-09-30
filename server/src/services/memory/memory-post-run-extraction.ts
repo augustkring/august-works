@@ -14,6 +14,7 @@ import {
   type MemoryPostRunCandidateProposalParsed,
 } from "@paperclipai/shared";
 import { HttpError } from "../../errors.js";
+import { containsProtectedSemanticData } from "../../vendor/paperclip-runner/index.js";
 import { logActivity } from "../activity-log.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
@@ -34,6 +35,7 @@ export type MemoryPostRunExtractionSkipReason =
   | "scope_mismatch"
   | "private_scope_requires_explicit_remember"
   | "restricted_sensitivity"
+  | "protected_data_detected"
   | "sensitive_personal_inference"
   | "evidence_ref_unverified"
   | "binding_unavailable"
@@ -555,6 +557,10 @@ export function memoryPostRunExtractionService(db: Db) {
       for (const [candidateIndex, candidate] of parsedCandidates.data.entries()) {
         if (candidate.sensitivity === "restricted") {
           addSkip(result, "restricted_sensitivity");
+          continue;
+        }
+        if (containsProtectedSemanticData(candidate)) {
+          addSkip(result, "protected_data_detected");
           continue;
         }
         if (containsSensitivePersonalInference(candidate)) {
