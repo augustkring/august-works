@@ -133,7 +133,6 @@ describePg("Memory routes", () => {
   it("supports shared binding, candidate review, detail and revocation", async () => {
     const seeded = await seed();
     await db.insert(instanceSettings).values({
-      id: 1,
       experimental: { enableCollectiveMemoryV1: true },
     });
     const http = request(app(board(seeded.userId, seeded.companyId)));
@@ -209,7 +208,6 @@ describePg("Memory routes", () => {
   it("does not expose private agent memory through the board lifecycle API", async () => {
     const seeded = await seed();
     await db.insert(instanceSettings).values({
-      id: 1,
       experimental: { enableCollectiveMemoryV1: true },
     });
     const svc = memoryService(db);
