@@ -1,6 +1,7 @@
 import type { Db } from "@paperclipai/db";
-import type {
-  AutomationArtifactRuntimeBinding,
+import {
+  automationArtifactGateReportSchema,
+  type AutomationArtifactRuntimeBinding,
 } from "@paperclipai/shared";
 import { conflict, notFound } from "../../errors.js";
 import { instanceSettingsService } from "../instance-settings.js";
@@ -60,14 +61,32 @@ export function automationArtifactRuntimeService(db: Db) {
           currentVersionId: latestVersion.id,
         });
       }
-      if (!latestVersion.validationReport || !latestVersion.securityReport) {
-        throw conflict(
-          "Automation Artifact version has not completed validation and security gates",
-          {
-            code: "automation_artifact_validation_required",
-            artifactVersionId: latestVersion.id,
-          },
-        );
+      const validation = automationArtifactGateReportSchema.safeParse(
+        latestVersion.validationReport,
+      );
+      const security = automationArtifactGateReportSchema.safeParse(
+        latestVersion.securityReport,
+      );
+      const gates = [
+        { expectedKind: "validation" as const, parsed: validation },
+        { expectedKind: "security" as const, parsed: security },
+      ];
+      for (const gate of gates) {
+        if (
+          !gate.parsed.success ||
+          gate.parsed.data.kind !== gate.expectedKind ||
+          gate.parsed.data.status !== "passed" ||
+          gate.parsed.data.contentHash !== latestVersion.contentHash
+        ) {
+          throw conflict(
+            "Automation Artifact version has not completed validation and security gates",
+            {
+              code: "automation_artifact_validation_required",
+              artifactVersionId: latestVersion.id,
+              gate: gate.expectedKind,
+            },
+          );
+        }
       }
 
       const recomputedHash = automationArtifactVersionContentHash({
