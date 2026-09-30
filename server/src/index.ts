@@ -76,6 +76,7 @@ import {
   githubConnectionEventService,
   issueService,
   instanceSettingsService,
+  memoryJobService,
   reconcileBuiltInAgentsOnStartup,
   reconcileCodexLocalManagedHomesOnStartup,
   reconcilePersistedRuntimeServicesOnStartup,
@@ -1156,12 +1157,25 @@ async function startServerWithDatabaseTeardown(
   };
   const executionControlSweepsInFlight = new Set<string>();
   const workflowRecoveryExecutor = workflowExecutorService(db);
+  const memoryJobs = memoryJobService(db);
   const executionControlSweeps = [
     ["finalization", () => reconcileAbandonedExecutionControl(db)],
     ["replacement", () => heartbeat ? reconcileSafeNativeReplacements(db, new Date(), { verifyStoppedSession: run => verifyStoppedNativeSessionForReplacement(db, run) }) : undefined],
     ["reconciliation_delivery", () => heartbeat ? deliverReconciledExecutions(db, heartbeat.wakeup) : undefined],
     ["status_delivery", () => deliverExecutionStatuses(db)],
     ["automatic_disposition", () => settleUnrecoverableExecutions(db)],
+    ["memory_jobs", async () => {
+      const result = await memoryJobs.tick();
+      if (
+        result.recovered > 0 ||
+        result.retried > 0 ||
+        result.backfilled > 0 ||
+        result.retentionQueued > 0 ||
+        result.processed > 0
+      ) {
+        logger.info(result, "Memory job reconciliation tick completed");
+      }
+    }],
     ["workflow_recovery", async () => {
       const experimental = await instanceSettingsService(db).getExperimental();
       if (experimental.enableWorkflowsV1 !== true) return;

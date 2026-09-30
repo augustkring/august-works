@@ -2094,6 +2094,13 @@
       "when": 1790749654000,
       "tag": "0300_memory_retention_superseded",
       "breakpoints": true
+    },
+    {
+      "idx": 301,
+      "version": "7",
+      "when": 1790753254000,
+      "tag": "0301_memory_jobs",
+      "breakpoints": true
     }
   ]
 }

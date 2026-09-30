@@ -133,6 +133,7 @@ export {
   memoryRecords,
   memoryEvidence,
 } from "./memory.js";
+export { memoryJobs } from "./memory_jobs.js";
 export {
   workflows,
   workflowRevisions,

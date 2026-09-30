@@ -249,3 +249,55 @@ export interface MemoryRecordListQuery {
   memoryType?: MemoryType;
   limit: number;
 }
+
+export const MEMORY_JOB_OPERATION_TYPES = [
+  "capture",
+  "dedupe",
+  "compaction",
+  "reflection",
+  "index_refresh",
+  "retention",
+] as const;
+export type MemoryJobOperationType =
+  (typeof MEMORY_JOB_OPERATION_TYPES)[number];
+
+export const MEMORY_JOB_STATUSES = [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+] as const;
+export type MemoryJobStatus = (typeof MEMORY_JOB_STATUSES)[number];
+export type MemoryJobEffectiveState = MemoryJobStatus | "stuck";
+
+export interface MemoryJob {
+  id: string;
+  companyId: string;
+  operationType: MemoryJobOperationType;
+  status: MemoryJobStatus;
+  effectiveState: MemoryJobEffectiveState;
+  jobKey: string;
+  attemptNumber: number;
+  retryOfJobId: string | null;
+  sourceHeartbeatRunId: string | null;
+  sourceMemoryRecordId: string | null;
+  sourceRefJson: Record<string, unknown>;
+  submittedAt: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  leaseExpiresAt: Date | null;
+  resultSummary: string | null;
+  resultJson: Record<string, unknown> | null;
+  errorCode: string | null;
+  error: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface MemoryJobListQuery {
+  status?: MemoryJobStatus;
+  effectiveState?: MemoryJobEffectiveState;
+  operationType?: MemoryJobOperationType;
+  limit: number;
+}

@@ -4,7 +4,7 @@ import { trackAgentTaskRun } from "@paperclipai/shared/telemetry";
 import { parseObject } from "../adapters/utils.js";
 import { logger } from "../middleware/logger.js";
 import { getTelemetryClient } from "../telemetry.js";
-import { memoryPostRunExtractionService } from "./memory/memory-post-run-extraction.js";
+import { memoryJobService } from "./memory/memory-jobs.js";
 
 type HeartbeatRun = typeof heartbeatRuns.$inferSelect;
 
@@ -55,11 +55,11 @@ function resolveDurationSeconds(
  */
 export async function emitAgentTaskRun(db: Db, run: HeartbeatRun): Promise<void> {
   try {
-    await memoryPostRunExtractionService(db).extract(run);
+    await memoryJobService(db).enqueuePostRunCapture(run);
   } catch (err) {
     logger.warn(
       { err, runId: run.id },
-      "post-run Memory extraction failed after terminal commit",
+      "failed to enqueue durable post-run Memory capture",
     );
   }
 
