@@ -34,6 +34,30 @@ export const AUTOMATION_ARTIFACT_STATUSES = [
 export type AutomationArtifactStatus =
   (typeof AUTOMATION_ARTIFACT_STATUSES)[number];
 
+export const AUTOMATION_ARTIFACT_GATE_REPORT_SCHEMA =
+  "automation_artifact_gate.v1" as const;
+export const AUTOMATION_ARTIFACT_GATE_KINDS = [
+  "validation",
+  "security",
+] as const;
+export type AutomationArtifactGateKind =
+  (typeof AUTOMATION_ARTIFACT_GATE_KINDS)[number];
+
+export interface AutomationArtifactGateCheck {
+  code: string;
+  status: "passed" | "failed";
+  detail: string | null;
+}
+
+export interface AutomationArtifactGateReport {
+  schema: typeof AUTOMATION_ARTIFACT_GATE_REPORT_SCHEMA;
+  kind: AutomationArtifactGateKind;
+  status: "passed" | "failed";
+  contentHash: string;
+  checkedAt: string;
+  checks: AutomationArtifactGateCheck[];
+}
+
 export interface AutomationArtifact {
   id: string;
   companyId: string;
@@ -70,8 +94,8 @@ export interface AutomationArtifactVersion {
   outputSchema: WorkflowJsonSchema;
   dependencyManifest: Record<string, unknown>;
   testSpec: Record<string, unknown>;
-  validationReport: Record<string, unknown> | null;
-  securityReport: Record<string, unknown> | null;
+  validationReport: AutomationArtifactGateReport | null;
+  securityReport: AutomationArtifactGateReport | null;
   contentHash: string;
   createdByAgentId: string | null;
   createdByUserId: string | null;
