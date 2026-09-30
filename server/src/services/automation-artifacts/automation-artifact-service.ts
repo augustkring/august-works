@@ -37,6 +37,10 @@ import {
   publishActivity,
   type ActivityPublication,
 } from "../activity-log.js";
+import {
+  AutomationArtifactDeclarativeError,
+  validateAutomationArtifactDeclarativeSource,
+} from "./automation-artifact-declarative.js";
 
 export interface AutomationArtifactMutationActor {
   principal: ExecutionPrincipal;
@@ -389,6 +393,20 @@ function assertStatusTransitionAllowed(
   }
 }
 
+function validateDeclarativeSource(
+  kind: AutomationArtifactKind,
+  sourceCode: string,
+) {
+  try {
+    validateAutomationArtifactDeclarativeSource(kind, sourceCode);
+  } catch (error) {
+    if (error instanceof AutomationArtifactDeclarativeError) {
+      throw unprocessable(error.message, { code: error.code });
+    }
+    throw error;
+  }
+}
+
 function versionHashFor(
   artifact: Pick<
     typeof automationArtifacts.$inferSelect,
@@ -450,6 +468,7 @@ export function automationArtifactService(db: Db) {
         );
       }
       const input = parsed.data;
+      validateDeclarativeSource(input.kind, input.sourceCode);
       const publications: ActivityPublication[] = [];
 
       const artifactId = await db.transaction(async (tx) => {
@@ -586,6 +605,7 @@ export function automationArtifactService(db: Db) {
         const artifact = await lockArtifact(txDb, companyId, artifactId);
         if (!artifact) throw notFound("Automation Artifact not found");
         assertExpectedPointer(artifact, input.expectedLatestVersionId);
+        validateDeclarativeSource(artifact.kind, input.sourceCode);
         assertVersionAppendAllowed(artifact);
 
         const currentVersion = artifact.latestVersionId
