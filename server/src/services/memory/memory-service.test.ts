@@ -940,6 +940,9 @@ describePg("Memory Core service", () => {
     );
 
     expect(created.evidence).toHaveLength(1);
+    // Activity history intentionally retains a company FK and is not part of
+    // the Memory-owned cascade being verified here.
+    await db.delete(activityLog).where(eq(activityLog.companyId, seeded.companyId));
     await db.delete(companies).where(eq(companies.id, seeded.companyId));
 
     expect(
