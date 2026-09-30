@@ -236,14 +236,21 @@ describeEmbeddedPostgres("tool gateway service", () => {
     expect(disabledNames).not.toContain("paperclip-self:correct_memory");
     expect(disabledNames).not.toContain("paperclip-self:share_memory");
 
-    await db.insert(instanceSettings).values({
-      singletonKey: "default",
-      general: {},
-      experimental: {
-        enableCollectiveMemoryV1: true,
-        enablePrivateAgentMemoryV1: true,
-      },
-    });
+    const enabledMemoryExperimental = {
+      enableCollectiveMemoryV1: true,
+      enablePrivateAgentMemoryV1: true,
+    };
+    await db
+      .insert(instanceSettings)
+      .values({
+        singletonKey: "default",
+        general: {},
+        experimental: enabledMemoryExperimental,
+      })
+      .onConflictDoUpdate({
+        target: [instanceSettings.singletonKey],
+        set: { experimental: enabledMemoryExperimental },
+      });
 
     const enabledNames = (await gateway.listToolsForSession(session.token))
       .map((tool) => tool.name);
