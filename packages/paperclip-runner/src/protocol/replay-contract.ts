@@ -23,7 +23,10 @@ import {
   fixtureValidator as standaloneFixtureValidator,
   resultValidator as standaloneResultValidator,
 } from "./generated/standalone-validators.js";
-import { PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA } from "../contracts/completion-result.js";
+import {
+  PRP_MEMORY_CANDIDATES_SCHEMA,
+  PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA,
+} from "../contracts/completion-result.js";
 import { normalizeLegacyPrpStructuredRunResult } from "./result-normalization.js";
 
 export const PRP_PROTOCOL_NAME = "paperclip.runner";
@@ -234,6 +237,7 @@ function ajvIssue(error: ErrorObject): ProtocolValidationIssue {
   };
 }
 
+const memoryCandidatesSchema = PRP_MEMORY_CANDIDATES_SCHEMA;
 const memoryCandidateSchema = PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA;
 const memoryCandidateRequired = new Set<string>(memoryCandidateSchema.required);
 const memoryCandidateKeys = new Set<string>(
@@ -248,6 +252,8 @@ const memoryScopeTypes = new Set<string>(
 const memorySensitivities = new Set<string>(
   memoryCandidateSchema.properties.sensitivity.enum,
 );
+const memoryEvidenceRef =
+  memoryCandidateSchema.properties.evidenceRefs.items.const;
 
 function memoryCandidateIssue(
   path: string,
@@ -288,8 +294,13 @@ function memoryCandidateExtensionIssues(
   if (!Array.isArray(candidates)) {
     return [memoryCandidateIssue(path, "must be an array")];
   }
-  if (candidates.length > 8) {
-    return [memoryCandidateIssue(path, "must contain at most 8 candidates")];
+  if (candidates.length > memoryCandidatesSchema.maxItems) {
+    return [
+      memoryCandidateIssue(
+        path,
+        `must contain at most ${memoryCandidatesSchema.maxItems} candidates`,
+      ),
+    ];
   }
 
   const issues: ProtocolValidationIssue[] = [];
@@ -333,7 +344,12 @@ function memoryCandidateExtensionIssues(
         ),
       );
     }
-    if (!nullableBoundedStringValid(candidate.title, 180)) {
+    if (
+      !nullableBoundedStringValid(
+        candidate.title,
+        memoryCandidateSchema.properties.title.anyOf[0].maxLength,
+      )
+    ) {
       issues.push(
         memoryCandidateIssue(
           `${candidatePath}/title`,
@@ -343,8 +359,10 @@ function memoryCandidateExtensionIssues(
     }
     if (
       typeof candidate.content !== "string" ||
-      candidate.content.length < 1 ||
-      candidate.content.length > 4_000
+      candidate.content.length <
+        memoryCandidateSchema.properties.content.minLength ||
+      candidate.content.length >
+        memoryCandidateSchema.properties.content.maxLength
     ) {
       issues.push(
         memoryCandidateIssue(
@@ -353,7 +371,12 @@ function memoryCandidateExtensionIssues(
         ),
       );
     }
-    if (!nullableBoundedStringValid(candidate.subjectType, 120)) {
+    if (
+      !nullableBoundedStringValid(
+        candidate.subjectType,
+        memoryCandidateSchema.properties.subjectType.anyOf[0].maxLength,
+      )
+    ) {
       issues.push(
         memoryCandidateIssue(
           `${candidatePath}/subjectType`,
@@ -361,7 +384,12 @@ function memoryCandidateExtensionIssues(
         ),
       );
     }
-    if (!nullableBoundedStringValid(candidate.subjectId, 320)) {
+    if (
+      !nullableBoundedStringValid(
+        candidate.subjectId,
+        memoryCandidateSchema.properties.subjectId.anyOf[0].maxLength,
+      )
+    ) {
       issues.push(
         memoryCandidateIssue(
           `${candidatePath}/subjectId`,
@@ -388,7 +416,12 @@ function memoryCandidateExtensionIssues(
         ),
       );
     }
-    if (!nullableBoundedStringValid(candidate.proposedScopeId, 500)) {
+    if (
+      !nullableBoundedStringValid(
+        candidate.proposedScopeId,
+        memoryCandidateSchema.properties.proposedScopeId.anyOf[0].maxLength,
+      )
+    ) {
       issues.push(
         memoryCandidateIssue(
           `${candidatePath}/proposedScopeId`,
@@ -448,8 +481,9 @@ function memoryCandidateExtensionIssues(
     }
     if (
       !Array.isArray(candidate.evidenceRefs) ||
-      candidate.evidenceRefs.length !== 1 ||
-      candidate.evidenceRefs[0] !== "task"
+      candidate.evidenceRefs.length !==
+        memoryCandidateSchema.properties.evidenceRefs.maxItems ||
+      candidate.evidenceRefs[0] !== memoryEvidenceRef
     ) {
       issues.push(
         memoryCandidateIssue(
@@ -460,8 +494,10 @@ function memoryCandidateExtensionIssues(
     }
     if (
       typeof candidate.rationale !== "string" ||
-      candidate.rationale.length < 1 ||
-      candidate.rationale.length > 1_000
+      candidate.rationale.length <
+        memoryCandidateSchema.properties.rationale.minLength ||
+      candidate.rationale.length >
+        memoryCandidateSchema.properties.rationale.maxLength
     ) {
       issues.push(
         memoryCandidateIssue(
