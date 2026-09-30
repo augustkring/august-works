@@ -306,18 +306,23 @@ describePg("Memory post-run extraction", () => {
           ...BASE_CANDIDATE,
           proposedScopeType: "agent",
         },
+        {
+          ...BASE_CANDIDATE,
+          content: "Authorization: Bearer example-token-12345678",
+        },
       ],
     });
 
     const result = await memoryPostRunExtractionService(db).extract(seeded.run);
     expect(result).toMatchObject({
-      proposed: 4,
+      proposed: 5,
       persisted: 0,
       duplicates: 0,
-      skipped: 4,
+      skipped: 5,
     });
     expect(result.skipReasons).toMatchObject({
       restricted_sensitivity: 1,
+      protected_data_detected: 1,
       sensitive_personal_inference: 1,
       evidence_ref_unverified: 1,
       private_scope_requires_explicit_remember: 1,
