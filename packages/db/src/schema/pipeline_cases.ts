@@ -230,20 +230,7 @@ export const pipelineAutomationExecutions = pgTable(
     retryOfExecutionIdx: index("pipeline_automation_executions_retry_of_execution_idx").on(table.retryOfExecutionId),
     targetCheck: check(
       "pipeline_automation_executions_target_check",
-      sql`(
-        ${table.targetKind} is null
-        and ${table.targetRef} is null
-        and ${table.routineId} is not null
-      ) or (
-        ${table.targetKind} = 'routine'
-        and ${table.targetRef} is not null
-        and ${table.routineId} = ${table.targetRef}
-        and ${table.workflowRunId} is null
-      ) or (
-        ${table.targetKind} = 'workflow'
-        and ${table.targetRef} is not null
-        and ${table.routineId} is null
-      )`,
+      sql`(${table.targetKind} is null and ${table.targetRef} is null and ${table.routineId} is not null) or (${table.targetKind} = 'routine' and ${table.targetRef} is not null and ${table.routineId} = ${table.targetRef} and ${table.workflowRunId} is null) or (${table.targetKind} = 'workflow' and ${table.targetRef} is not null and ${table.routineId} is null)`,
     ),
     statusCheck: check("pipeline_automation_executions_status_check", sql`${table.status} in ('succeeded', 'failed')`),
   }),
