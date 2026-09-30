@@ -18,7 +18,7 @@ function boundedJsonObject(label: string) {
   return jsonObjectSchema.superRefine((value, ctx) => {
     let bytes = 0;
     try {
-      bytes = Buffer.byteLength(JSON.stringify(value), "utf8");
+      bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength;
     } catch {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
