@@ -3117,3 +3117,33 @@ export {
   type RetryWorkflowRun,
   type WorkflowRunListQuery,
 } from "./validators/workflow.js";
+
+export {
+  AUTOMATION_ARTIFACT_KINDS,
+  AUTOMATION_ARTIFACT_LANGUAGES,
+  AUTOMATION_ARTIFACT_STATUSES,
+  type AutomationArtifact,
+  type AutomationArtifactDetail,
+  type AutomationArtifactKind,
+  type AutomationArtifactLanguage,
+  type AutomationArtifactRuntimeBinding,
+  type AutomationArtifactStatus,
+  type AutomationArtifactVersion,
+} from "./types/automation-artifact.js";
+
+export {
+  appendAutomationArtifactVersionSchema,
+  archiveAutomationArtifactSchema,
+  automationArtifactDefinitionSchema,
+  automationArtifactJsonSchema,
+  automationArtifactKindSchema,
+  automationArtifactLanguageSchema,
+  automationArtifactStatusSchema,
+  automationArtifactVersionPayloadSchema,
+  createAutomationArtifactSchema,
+  transitionAutomationArtifactStatusSchema,
+  type AppendAutomationArtifactVersion,
+  type ArchiveAutomationArtifact,
+  type CreateAutomationArtifact,
+  type TransitionAutomationArtifactStatus,
+} from "./validators/automation-artifact.js";
