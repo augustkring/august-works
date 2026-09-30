@@ -89,12 +89,14 @@ function semanticResultCandidates(resultJson: unknown): Record<string, unknown>[
 function acceptedSemanticResult(
   resultJson: unknown,
 ): { result: Record<string, unknown>; yielded: boolean } | null {
-  let sawYielded = false;
   for (const candidate of semanticResultCandidates(resultJson)) {
     if (candidate.schema !== "paperclip.run_result.v1") continue;
+
+    // The candidate order is authoritative: nativeResult first, followed by
+    // compatibility fallbacks. Never skip a yielded higher-priority result and
+    // capture from a stale lower-priority result left in the same envelope.
     if (candidate.reportedWorkDisposition === "yielded") {
-      sawYielded = true;
-      continue;
+      return { result: candidate, yielded: true };
     }
     if (
       candidate.reportedWorkDisposition === "done" ||
@@ -102,8 +104,12 @@ function acceptedSemanticResult(
     ) {
       return { result: candidate, yielded: false };
     }
+
+    // A schema-matching but unknown disposition is not a license to fall back
+    // to another semantic result. Fail closed instead.
+    return null;
   }
-  return sawYielded ? { result: {}, yielded: true } : null;
+  return null;
 }
 
 function canonicalValue(value: unknown): unknown {
