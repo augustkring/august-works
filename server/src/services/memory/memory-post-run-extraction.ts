@@ -443,7 +443,12 @@ async function auditExtraction(
   issueId: string | null,
   result: MemoryPostRunExtractionResult,
 ): Promise<void> {
-  if (result.proposed === 0) return;
+  if (
+    result.proposed === 0 &&
+    result.skipReasons.candidate_contract_invalid === undefined
+  ) {
+    return;
+  }
   await logActivity(db, {
     companyId: run.companyId,
     actorType: "system",
@@ -504,6 +509,7 @@ export function memoryPostRunExtractionService(db: Db) {
         memoryPostRunCandidateProposalListSchema.safeParse(rawCandidates);
       if (!parsedCandidates.success) {
         addSkip(result, "candidate_contract_invalid");
+        await auditExtraction(db, run, null, result);
         return result;
       }
 
