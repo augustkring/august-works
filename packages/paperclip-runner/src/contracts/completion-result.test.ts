@@ -227,6 +227,14 @@ describe("provider-neutral completion result schema", () => {
       ...structuredClone(baseResult),
       memoryCandidates: [{ ...candidate, sensitivity: "restricted" }],
     })).toBe(false);
+    expect(providerValidate({
+      ...structuredClone(baseResult),
+      memoryCandidates: [{ ...candidate, content: "   " }],
+    })).toBe(false);
+    expect(providerValidate({
+      ...structuredClone(baseResult),
+      memoryCandidates: [{ ...candidate, rationale: "\t" }],
+    })).toBe(false);
     expect(validate({
       ...structuredClone(baseResult),
       memoryCandidates: [{ ...candidate, evidenceRefs: ["task", "task"] }],
