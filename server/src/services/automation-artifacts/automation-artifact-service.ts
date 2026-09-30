@@ -605,8 +605,8 @@ export function automationArtifactService(db: Db) {
         const artifact = await lockArtifact(txDb, companyId, artifactId);
         if (!artifact) throw notFound("Automation Artifact not found");
         assertExpectedPointer(artifact, input.expectedLatestVersionId);
-        validateDeclarativeSource(artifact.kind, input.sourceCode);
         assertVersionAppendAllowed(artifact);
+        validateDeclarativeSource(artifact.kind, input.sourceCode);
 
         const currentVersion = artifact.latestVersionId
           ? await getVersionRow(
