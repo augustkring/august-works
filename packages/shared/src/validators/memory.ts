@@ -419,13 +419,13 @@ export const memoryAgentShareInputSchema = z
   });
 
 export const memoryAgentRecallInputJsonSchema =
-  z.toJSONSchema(memoryAgentRecallInputSchema) as Record<string, unknown>;
+  z.toJSONSchema(memoryAgentRecallInputSchema, { io: "input" }) as Record<string, unknown>;
 export const memoryAgentRememberInputJsonSchema =
-  z.toJSONSchema(memoryAgentRememberInputSchema) as Record<string, unknown>;
+  z.toJSONSchema(memoryAgentRememberInputSchema, { io: "input" }) as Record<string, unknown>;
 export const memoryAgentCorrectInputJsonSchema =
-  z.toJSONSchema(memoryAgentCorrectInputSchema) as Record<string, unknown>;
+  z.toJSONSchema(memoryAgentCorrectInputSchema, { io: "input" }) as Record<string, unknown>;
 export const memoryAgentShareInputJsonSchema =
-  z.toJSONSchema(memoryAgentShareInputSchema) as Record<string, unknown>;
+  z.toJSONSchema(memoryAgentShareInputSchema, { io: "input" }) as Record<string, unknown>;
 
 export type MemoryAgentRecallInputParsed = z.infer<
   typeof memoryAgentRecallInputSchema
