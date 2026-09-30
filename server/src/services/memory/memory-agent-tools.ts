@@ -472,11 +472,10 @@ export function memoryAgentToolsService(db: Db) {
           scopes.push({ scopeType: "project", scopeId: context.projectId });
         }
         for (const subject of parsed.data.subjects) {
-          const canonical = subjectScopeId(subject);
-          scopes.push({ scopeType: "subject", scopeId: canonical });
-          if (subject.id !== canonical) {
-            scopes.push({ scopeType: "subject", scopeId: subject.id });
-          }
+          scopes.push({
+            scopeType: "subject",
+            scopeId: subjectScopeId(subject),
+          });
         }
       }
       if (context.allowPrivate) {
