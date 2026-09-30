@@ -260,7 +260,13 @@ describePg("Memory routes", () => {
     const detail = await http
       .get(`/api/companies/${seeded.companyId}/memory/records/${candidate.body.record.id}`)
       .expect(200);
-    expect(detail.body.evidence).toHaveLength(1);
+    expect(detail.body.evidence).toHaveLength(2);
+    expect(detail.body.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ supportsOrContradicts: "supports" }),
+        expect.objectContaining({ supportsOrContradicts: "contradicts" }),
+      ]),
+    );
 
     await http
       .post(`/api/companies/${seeded.companyId}/memory/records/${candidate.body.record.id}/accept`)
