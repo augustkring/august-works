@@ -157,7 +157,9 @@ export const PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA = {
       ],
     },
     proposedScopeType: {
-      enum: ["org", "team", "project", "subject", "agent"],
+      enum: ["org", "project", "subject"],
+      description:
+        "Automatic post-run extraction may propose shared organizational, project, or subject memory only. Agent-private memory requires the explicit remember tool; team-scoped bindings are not available in PR 36.",
     },
     proposedScopeId: {
       anyOf: [
