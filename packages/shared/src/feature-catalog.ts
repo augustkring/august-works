@@ -395,6 +395,13 @@ export const INSTANCE_FEATURE_CATALOG: Record<InstanceFeatureKey, FeatureCatalog
     cloudDefault: false,
     selfHostedDefault: false,
   },
+  enableAutomationArtifactCodeExecutionV1: {
+    title: "Automation Artifact Code Execution V1",
+    description: "Allow qualified generated TypeScript artifacts to execute only inside the governed sandbox after hash-bound validation and security gates pass.",
+    tier: "managed",
+    cloudDefault: false,
+    selfHostedDefault: false,
+  },
   enableWorkflowOptimizerSuggestions: {
     title: "Workflow Optimizer Suggestions",
     description: "Enable observation and suggestion-only optimizer capabilities without production replacement.",
