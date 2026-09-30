@@ -55,9 +55,7 @@ export const automationArtifacts = pgTable(
     }),
     createdByUserId: text("created_by_user_id"),
     createdByOptimizerSuggestionId: uuid("created_by_optimizer_suggestion_id"),
-    originWorkflowId: uuid("origin_workflow_id").references(() => workflows.id, {
-      onDelete: "set null",
-    }),
+    originWorkflowId: uuid("origin_workflow_id"),
     originNodeId: text("origin_node_id"),
     latestVersionId: uuid("latest_version_id"),
     successCount: integer("success_count").notNull().default(0),
@@ -76,6 +74,19 @@ export const automationArtifacts = pgTable(
       table.companyId,
       table.id,
     ),
+    originWorkflowFk: foreignKey({
+      name: "automation_artifacts_company_origin_workflow_fk",
+      columns: [table.companyId, table.originWorkflowId],
+      foreignColumns: [workflows.companyId, workflows.id],
+    }),
+    latestVersionFk: foreignKey({
+      name: "automation_artifacts_company_latest_version_fk",
+      columns: [table.companyId, table.latestVersionId],
+      foreignColumns: [
+        automationArtifactVersions.companyId,
+        automationArtifactVersions.id,
+      ],
+    }),
     companyStatusUpdatedIdx: index(
       "automation_artifacts_company_status_updated_idx",
     ).on(table.companyId, table.status, table.updatedAt),
