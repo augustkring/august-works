@@ -251,6 +251,67 @@ describePg("Memory post-run extraction", () => {
     expect(await db.select().from(memoryRecords)).toHaveLength(1);
   });
 
+  it("deduplicates concurrent extraction of the same run", async () => {
+    const seeded = await seed();
+    const svc = memoryPostRunExtractionService(db);
+
+    const results = await Promise.all([
+      svc.extract(seeded.run),
+      svc.extract(seeded.run),
+    ]);
+
+    expect(
+      results.reduce((sum, result) => sum + result.persisted, 0),
+    ).toBe(1);
+    expect(
+      results.reduce((sum, result) => sum + result.duplicates, 0),
+    ).toBe(1);
+    expect(
+      results.reduce((sum, result) => sum + result.skipped, 0),
+    ).toBe(0);
+    expect(await db.select().from(memoryRecords)).toHaveLength(1);
+    expect(await db.select().from(memoryEvidence)).toHaveLength(1);
+  });
+
+  it("does not cross the tenant boundary when a run references another company's task", async () => {
+    const seeded = await seed();
+    const foreignCompanyId = randomUUID();
+    await db.insert(companies).values({
+      id: foreignCompanyId,
+      name: "Foreign Extraction Co",
+      issuePrefix: `F${foreignCompanyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    const [foreignIssue] = await db.insert(issues).values({
+      companyId: foreignCompanyId,
+      title: "Foreign task",
+      status: "in_progress",
+      priority: "medium",
+    }).returning();
+
+    const foreignScopedRun = {
+      ...seeded.run,
+      contextSnapshot: {
+        issueId: foreignIssue!.id,
+        taskId: foreignIssue!.id,
+      },
+    };
+
+    const result = await memoryPostRunExtractionService(db).extract(
+      foreignScopedRun,
+    );
+
+    expect(result).toMatchObject({
+      proposed: 1,
+      persisted: 0,
+      duplicates: 0,
+      skipped: 1,
+      skipReasons: { source_task_unavailable: 1 },
+    });
+    expect(await db.select().from(memoryRecords)).toHaveLength(0);
+    expect(await db.select().from(memoryEvidence)).toHaveLength(0);
+  });
+
   it("treats zero candidates as a healthy no-op", async () => {
     const seeded = await seed({ candidates: [] });
     const result = await memoryPostRunExtractionService(db).extract(seeded.run);
