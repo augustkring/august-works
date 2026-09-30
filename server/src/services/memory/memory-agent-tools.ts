@@ -443,7 +443,12 @@ function assertRecordToolAccess(
 
 function memoryResult(
   detail: MemoryRecordDetail,
-  status: "pending" | "accepted" | "rejected" | "duplicate",
+  status:
+    | "pending"
+    | "accepted"
+    | "rejected"
+    | "duplicate"
+    | "corroborated",
 ) {
   return {
     status,
@@ -693,7 +698,14 @@ export function memoryAgentToolsService(db: Db) {
           candidate,
           actorFor(context),
         );
-        return memoryResult(detail, "pending");
+        return memoryResult(
+          detail,
+          detail.resolution.kind === "duplicate"
+            ? "duplicate"
+            : detail.resolution.kind === "corroboration"
+              ? "corroborated"
+              : "pending",
+        );
       } catch (error) {
         if (
           error instanceof HttpError &&

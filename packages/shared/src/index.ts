@@ -2924,6 +2924,7 @@ export {
   MEMORY_EVIDENCE_RELATIONS,
   MEMORY_RETENTION_STATES,
   MEMORY_REVIEW_STATES,
+  MEMORY_RESOLUTION_KINDS,
   MEMORY_SCOPE_TYPES,
   MEMORY_TYPES,
   MEMORY_VERIFICATION_STATES,
@@ -2937,6 +2938,8 @@ export {
   type MemoryRetentionState,
   type MemoryReviewInput,
   type MemoryReviewState,
+  type MemoryResolutionKind,
+  type MemoryResolutionMetadata,
   type MemoryRevokeInput,
   type MemoryPrivateInput,
   type MemoryShareInput,
@@ -2951,6 +2954,7 @@ export {
   type MemoryRecord,
   type MemoryEvidence,
   type MemoryRecordDetail,
+  type MemoryCandidateResolutionResult,
   type MemoryRecordListQuery,
 } from "./types/memory.js";
 export {

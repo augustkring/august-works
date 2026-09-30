@@ -109,8 +109,17 @@ export function memoryRoutes(db: Db) {
       const companyId = req.params.companyId as string;
       assertBoardCompany(req, companyId);
       assertSharedCandidateInput(req.body);
-      const created = await svc.createCandidate(companyId, req.body, boardActor(req));
-      res.status(201).json(created);
+      const created = await svc.createCandidate(
+        companyId,
+        req.body,
+        boardActor(req),
+      );
+      const status =
+        created.resolution.kind === "duplicate" ||
+        created.resolution.kind === "corroboration"
+          ? 200
+          : 201;
+      res.status(status).json(created);
     },
   );
 

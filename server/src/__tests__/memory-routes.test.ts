@@ -173,6 +173,42 @@ describePg("Memory routes", () => {
         evidence: supportingEvidence(content),
       })
       .expect(201);
+    expect(candidate.body.resolution).toMatchObject({
+      kind: "new",
+      targetRecordId: null,
+    });
+
+    const duplicate = await http
+      .post(`/api/companies/${seeded.companyId}/memory/candidates`)
+      .send({
+        bindingId: binding.body.id,
+        memoryType: "lesson",
+        scope: { type: "company", id: null },
+        subject: { type: "customer", id: "acme" },
+        ownerAgentId: null,
+        title: "Acme procurement",
+        content,
+        summary: "Security review first.",
+        sensitivity: "internal",
+        importance: 80,
+        confidenceScore: 0.8,
+        validFrom: null,
+        validUntil: null,
+        observedAt: "2026-09-29T12:00:00.000Z",
+        retentionPolicy: "standard",
+        expiresAt: null,
+        createdByOperationId: null,
+        metadata: {},
+        evidence: supportingEvidence(content),
+      })
+      .expect(200);
+    expect(duplicate.body).toMatchObject({
+      resolution: {
+        kind: "duplicate",
+        targetRecordId: candidate.body.record.id,
+      },
+      record: { id: candidate.body.record.id },
+    });
 
     const pending = await http
       .get(`/api/companies/${seeded.companyId}/memory/records?reviewState=pending`)

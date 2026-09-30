@@ -2110,6 +2110,7 @@ registry.registerPath({
     body: jsonBody(memoryCandidateInputSchema),
   },
   responses: {
+    200: r.ok(),
     201: r.ok(),
     400: r.badRequest,
     401: r.unauthorized,

@@ -47,6 +47,9 @@ export interface MemoryPostRunExtractionResult {
   proposed: number;
   persisted: number;
   duplicates: number;
+  corroborations: number;
+  updates: number;
+  contradictions: number;
   skipped: number;
   skipReasons: Partial<Record<MemoryPostRunExtractionSkipReason, number>>;
 }
@@ -484,6 +487,9 @@ function emptyResult(runId: string): MemoryPostRunExtractionResult {
     proposed: 0,
     persisted: 0,
     duplicates: 0,
+    corroborations: 0,
+    updates: 0,
+    contradictions: 0,
     skipped: 0,
     skipReasons: {},
   };
@@ -525,6 +531,9 @@ async function auditExtraction(
       proposed: result.proposed,
       persisted: result.persisted,
       duplicates: result.duplicates,
+      corroborations: result.corroborations,
+      updates: result.updates,
+      contradictions: result.contradictions,
       skipped: result.skipped,
       skipReasons: result.skipReasons,
     },
@@ -751,8 +760,30 @@ export function memoryPostRunExtractionService(db: Db) {
         };
 
         try {
-          await memory.createCandidate(run.companyId, input, actor);
-          result.persisted += 1;
+          const resolved = await memory.createCandidate(
+            run.companyId,
+            input,
+            actor,
+          );
+          switch (resolved.resolution.kind) {
+            case "new":
+              result.persisted += 1;
+              break;
+            case "duplicate":
+              result.duplicates += 1;
+              break;
+            case "corroboration":
+              result.corroborations += 1;
+              break;
+            case "update":
+              result.persisted += 1;
+              result.updates += 1;
+              break;
+            case "contradiction":
+              result.persisted += 1;
+              result.contradictions += 1;
+              break;
+          }
         } catch (error) {
           if (
             error instanceof HttpError &&

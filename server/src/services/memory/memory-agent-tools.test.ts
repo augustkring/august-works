@@ -286,7 +286,8 @@ describePg("Memory agent tools", () => {
       "company",
       seeded.companyId,
     );
-    const result = await memoryAgentToolsService(db).remember(
+    const tools = memoryAgentToolsService(db);
+    const result = await tools.remember(
       context(seeded),
       {
         scope: "company",
@@ -313,6 +314,18 @@ describePg("Memory agent tools", () => {
       sourceType: "agent_run_observation",
       trustLevel: "low",
     });
+    const duplicate = await tools.remember(context(seeded), {
+      scope: "company",
+      memoryType: "lesson",
+      title: null,
+      content: "Acme requires SSO before rollout.",
+      idempotencyKey: randomUUID(),
+    });
+    expect(duplicate).toMatchObject({
+      status: "duplicate",
+      record: { id: result.record.id },
+    });
+
   });
 
   it("makes private remember retry-safe and returns duplicate on semantic replay", async () => {
