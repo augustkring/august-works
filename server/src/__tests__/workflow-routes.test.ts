@@ -201,7 +201,13 @@ describePg("Workflow routes", () => {
       .send({ name: "Denied create" })
       .expect(403)
       .expect((response) => {
-        expect(response.body.code).toBe("permission_denied");
+        expect(response.body).toMatchObject({
+          error: "Missing permission: workflows:edit.",
+          details: expect.objectContaining({
+            code: "permission_denied",
+            permission: "workflows:edit",
+          }),
+        });
       });
   });
 
@@ -275,7 +281,6 @@ describePg("Workflow routes", () => {
       companyId: company.id,
       source: "agent_key",
       keyId: "workflow-agent-key",
-      runId: "workflow-agent-run",
     }))
       .get(`/api/companies/${company.id}/workflows/capabilities`)
       .expect(200);
@@ -739,7 +744,13 @@ describePg("Workflow routes", () => {
       .send({ input: {} })
       .expect(403)
       .expect((response) => {
-        expect(response.body.code).toBe("permission_denied");
+        expect(response.body).toMatchObject({
+          error: expect.any(String),
+          details: expect.objectContaining({
+            code: "permission_denied",
+            permission: "issue:mutate",
+          }),
+        });
       });
   });
 
