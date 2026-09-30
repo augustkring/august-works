@@ -210,6 +210,46 @@ describePg("Memory routes", () => {
       record: { id: candidate.body.record.id },
     });
 
+    const contradiction = await http
+      .post(`/api/companies/${seeded.companyId}/memory/candidates`)
+      .send({
+        bindingId: binding.body.id,
+        memoryType: "lesson",
+        scope: { type: "company", id: null },
+        subject: { type: "customer", id: "acme" },
+        ownerAgentId: null,
+        title: "Acme procurement",
+        content,
+        summary: "Security review first.",
+        sensitivity: "internal",
+        importance: 80,
+        confidenceScore: 0.8,
+        validFrom: null,
+        validUntil: null,
+        observedAt: "2026-09-29T12:00:00.000Z",
+        retentionPolicy: "standard",
+        expiresAt: null,
+        createdByOperationId: null,
+        metadata: {},
+        evidence: [
+          ...supportingEvidence(content),
+          {
+            ...supportingEvidence(content)[0]!,
+            sourceRef: "issue://memory-route-contradiction",
+            relation: "contradicts",
+          },
+        ],
+      })
+      .expect(200);
+    expect(contradiction.body).toMatchObject({
+      resolution: {
+        kind: "contradiction",
+        reasonCode: "contradicting_evidence_against_pending_equivalent_claim",
+        targetRecordId: candidate.body.record.id,
+      },
+      record: { id: candidate.body.record.id, reviewState: "pending" },
+    });
+
     const pending = await http
       .get(`/api/companies/${seeded.companyId}/memory/records?reviewState=pending`)
       .expect(200);
