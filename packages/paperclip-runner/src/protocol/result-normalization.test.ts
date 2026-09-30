@@ -326,6 +326,13 @@ describe("normalizePrpResultSignals", () => {
       ok: false,
       issues: [expect.objectContaining({ path: "/memoryCandidates/0" })],
     });
+    expect(validatePrpStructuredRunResult({
+      ...base,
+      memoryCandidates: [{ ...candidate, content: "   " }],
+    })).toMatchObject({
+      ok: false,
+      issues: [expect.objectContaining({ path: "/memoryCandidates/0/content" })],
+    });
   });
 
   it("records unknown and malformed attention as diagnostics instead of throwing", () => {
