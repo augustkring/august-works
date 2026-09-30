@@ -82,7 +82,7 @@ export const memoryBindingTargets = pgTable(
     ),
     targetTypeCheck: check(
       "memory_binding_targets_target_type_check",
-      sql`${table.targetType} in ('company', 'agent', 'project')`,
+      sql`${table.targetType} in ('company','agent','project')`,
     ),
   }),
 );
