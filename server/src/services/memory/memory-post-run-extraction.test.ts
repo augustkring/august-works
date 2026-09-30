@@ -288,6 +288,70 @@ describePg("Memory post-run extraction", () => {
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
   });
 
+  it("does not fall back to stale completed candidates when the authoritative result yielded", async () => {
+    const seeded = await seed();
+    await db
+      .update(heartbeatRuns)
+      .set({
+        resultJson: {
+          nativeResult: {
+            schema: "paperclip.run_result.v1",
+            reportedWorkDisposition: "yielded",
+            summary: "Waiting for the next response.",
+            completionClaim: {
+              contractRevision: "2",
+              objectiveSatisfied: false,
+              criteria: [],
+              remainingWork: [
+                { description: "Wait for user input.", blocksCompletion: true },
+              ],
+            },
+            evidence: [],
+            verification: [],
+            attentionRequests: [],
+            artifacts: [],
+            continuation: {
+              kind: "response_wake",
+              summary: "Resume after the next response.",
+              idempotencyKey: "wait-1",
+            },
+          },
+          acceptedResult: {
+            schema: "paperclip.run_result.v1",
+            reportedWorkDisposition: "done",
+            summary: "Stale completed result.",
+            completionClaim: {
+              contractRevision: "1",
+              objectiveSatisfied: true,
+              criteria: [],
+              remainingWork: [],
+            },
+            evidence: [],
+            verification: [],
+            attentionRequests: [],
+            artifacts: [],
+            memoryCandidates: [BASE_CANDIDATE],
+          },
+        },
+        updatedAt: new Date("2026-09-30T08:01:00.000Z"),
+      })
+      .where(eq(heartbeatRuns.id, seeded.run.id));
+
+    const refreshed = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, seeded.run.id))
+      .then((rows) => rows[0]!);
+
+    const result = await memoryPostRunExtractionService(db).extract(refreshed);
+    expect(result).toMatchObject({
+      proposed: 0,
+      persisted: 0,
+      skipReasons: { semantic_result_yielded: 1 },
+    });
+    expect(await db.select().from(memoryRecords)).toHaveLength(0);
+  });
+
   it("fails closed on restricted, sensitive-personal, invented-evidence and private proposals", async () => {
     const seeded = await seed({
       candidates: [
