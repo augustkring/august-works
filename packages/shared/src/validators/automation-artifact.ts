@@ -42,80 +42,98 @@ export const automationArtifactLanguageSchema = z.enum(
 export const automationArtifactStatusSchema = z.enum(
   AUTOMATION_ARTIFACT_STATUSES,
 );
-
 export const automationArtifactJsonSchema = boundedJsonObject(
   "Automation Artifact schema",
 );
 
-const automationArtifactDefinitionSchema = z
-  .object({
-    name: z.string().trim().min(1).max(200),
-    description: z.string().trim().max(2_000).nullable().default(null),
-    kind: automationArtifactKindSchema,
-    language: automationArtifactLanguageSchema.nullable().default(null),
-    inputSchema: automationArtifactJsonSchema,
-    outputSchema: automationArtifactJsonSchema,
-    riskClass: z.enum(WORKFLOW_RISK_CLASSES),
-    sideEffectClass: z.enum(WORKFLOW_SIDE_EFFECT_CLASSES),
-    createdByOptimizerSuggestionId: z.string().guid().nullable().default(null),
-    originWorkflowId: z.string().guid().nullable().default(null),
-    originNodeId: z.string().trim().min(1).max(160).nullable().default(null),
-  })
+const artifactDefinitionFields = {
+  name: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2_000).nullable().default(null),
+  kind: automationArtifactKindSchema,
+  language: automationArtifactLanguageSchema.nullable().default(null),
+  inputSchema: automationArtifactJsonSchema,
+  outputSchema: automationArtifactJsonSchema,
+  riskClass: z.enum(WORKFLOW_RISK_CLASSES),
+  sideEffectClass: z.enum(WORKFLOW_SIDE_EFFECT_CLASSES),
+  createdByOptimizerSuggestionId: z.string().guid().nullable().default(null),
+  originWorkflowId: z.string().guid().nullable().default(null),
+  originNodeId: z.string().trim().min(1).max(160).nullable().default(null),
+} as const;
+
+function refineArtifactDefinition(
+  value: {
+    kind: (typeof AUTOMATION_ARTIFACT_KINDS)[number];
+    language: (typeof AUTOMATION_ARTIFACT_LANGUAGES)[number] | null;
+    originWorkflowId: string | null;
+    originNodeId: string | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (value.kind === "typescript" && value.language !== "typescript") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["language"],
+      message: "TypeScript artifacts require language=typescript",
+    });
+  } else if (value.kind === "python" && value.language !== "python") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["language"],
+      message: "Python artifacts require language=python",
+    });
+  } else if (
+    value.kind !== "typescript" &&
+    value.kind !== "python" &&
+    value.language !== null
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["language"],
+      message: "Declarative artifact kinds must not declare a code language",
+    });
+  }
+  if (value.originNodeId !== null && value.originWorkflowId === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["originNodeId"],
+      message: "originNodeId requires originWorkflowId",
+    });
+  }
+}
+
+export const automationArtifactDefinitionSchema = z
+  .object(artifactDefinitionFields)
   .strict()
-  .superRefine((value, ctx) => {
-    if (value.kind === "typescript" && value.language !== "typescript") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["language"],
-        message: "TypeScript artifacts require language=typescript",
-      });
-    } else if (value.kind === "python" && value.language !== "python") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["language"],
-        message: "Python artifacts require language=python",
-      });
-    } else if (
-      value.kind !== "typescript" &&
-      value.kind !== "python" &&
-      value.language !== null
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["language"],
-        message: "Declarative artifact kinds must not declare a code language",
-      });
-    }
-    if (value.originNodeId !== null && value.originWorkflowId === null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["originNodeId"],
-        message: "originNodeId requires originWorkflowId",
-      });
-    }
-  });
+  .superRefine(refineArtifactDefinition);
+
+const artifactVersionFields = {
+  sourceCode: z.string().min(1).max(MAX_SOURCE_CODE_CHARS),
+  inputSchema: automationArtifactJsonSchema,
+  outputSchema: automationArtifactJsonSchema,
+  dependencyManifest: boundedJsonObject(
+    "Automation Artifact dependency manifest",
+  ).default({}),
+  testSpec: boundedJsonObject("Automation Artifact test spec").default({}),
+} as const;
 
 export const automationArtifactVersionPayloadSchema = z
-  .object({
-    sourceCode: z.string().min(1).max(MAX_SOURCE_CODE_CHARS),
-    inputSchema: automationArtifactJsonSchema,
-    outputSchema: automationArtifactJsonSchema,
-    dependencyManifest: boundedJsonObject(
-      "Automation Artifact dependency manifest",
-    ).default({}),
-    testSpec: boundedJsonObject("Automation Artifact test spec").default({}),
-  })
+  .object(artifactVersionFields)
   .strict();
 
-export const createAutomationArtifactSchema =
-  automationArtifactDefinitionSchema.and(automationArtifactVersionPayloadSchema);
+export const createAutomationArtifactSchema = z
+  .object({
+    ...artifactDefinitionFields,
+    ...artifactVersionFields,
+  })
+  .strict()
+  .superRefine(refineArtifactDefinition);
 
-export const appendAutomationArtifactVersionSchema =
-  automationArtifactVersionPayloadSchema
-    .extend({
-      expectedLatestVersionId: z.string().guid(),
-    })
-    .strict();
+export const appendAutomationArtifactVersionSchema = z
+  .object({
+    expectedLatestVersionId: z.string().guid(),
+    ...artifactVersionFields,
+  })
+  .strict();
 
 export const transitionAutomationArtifactStatusSchema = z
   .object({
