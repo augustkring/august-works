@@ -4,6 +4,7 @@ import type { Db } from "@paperclipai/db";
 import {
   agents,
   companyMemberships,
+  heartbeatRuns,
   memoryBindings,
   memoryBindingTargets,
   memoryEvidence,
@@ -392,6 +393,19 @@ async function getRecordDetail(db: Db, companyId: string, recordId: string) {
   return recordDetail(record, evidence);
 }
 
+async function persistedActivityRunId(
+  db: Db,
+  companyId: string,
+  runId: string | null,
+): Promise<string | null> {
+  if (!runId) return null;
+  return db
+    .select({ id: heartbeatRuns.id })
+    .from(heartbeatRuns)
+    .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId)))
+    .then((rows) => rows[0]?.id ?? null);
+}
+
 async function persistMemoryActivity(
   db: Db,
   actor: MemoryMutationActor,
@@ -403,12 +417,17 @@ async function persistMemoryActivity(
   },
 ): Promise<ActivityPublication> {
   const identity = actorIdentity(actor);
+  const runId = await persistedActivityRunId(
+    db,
+    input.companyId,
+    identity.runId,
+  );
   const result = await persistActivity(db, {
     companyId: input.companyId,
     actorType: identity.actorType,
     actorId: identity.actorId,
     agentId: identity.agentId,
-    runId: identity.runId,
+    runId,
     responsibleUserIdOverride: identity.responsibleUserId,
     action: input.action,
     entityType: "memory_record",
