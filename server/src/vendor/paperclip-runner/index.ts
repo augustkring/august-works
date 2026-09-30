@@ -108,6 +108,8 @@ export const drainRetainedRunnerdMaintenanceOperations =
   runner.drainRetainedRunnerdMaintenanceOperations;
 export const nativeRuntimePromptDigest = runner.nativeRuntimePromptDigest;
 export const normalizePrpResultSignals = runner.normalizePrpResultSignals;
+export const containsProtectedSemanticData =
+  runner.containsProtectedSemanticData;
 export const parseCodexTurnDiff = runner.parseCodexTurnDiff;
 export const parseHarnessRuntimeRequestResolution =
   runner.parseHarnessRuntimeRequestResolution;
