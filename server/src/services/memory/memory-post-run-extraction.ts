@@ -232,14 +232,9 @@ function resolveCandidateScope(input: {
   }
 }
 
-const SENSITIVE_PERSONAL_INFERENCE_TERMS = [
-  "health",
-  "medical",
+const STRONG_SENSITIVE_PERSONAL_INFERENCE_TERMS = [
   "diagnosis",
   "diagnosed",
-  "disease",
-  "illness",
-  "disability",
   "pregnant",
   "pregnancy",
   "medication",
@@ -247,10 +242,45 @@ const SENSITIVE_PERSONAL_INFERENCE_TERMS = [
   "depressed",
   "depression",
   "anxiety",
-  "burnout",
-  "politics",
-  "political party",
   "voting preference",
+  "political party membership",
+  "sexual orientation",
+  "gay",
+  "lesbian",
+  "bisexual",
+  "homosexual",
+  "trade union membership",
+  "union membership",
+  "criminal record",
+  "criminal conviction",
+  "plans to resign",
+  "intends to resign",
+  "plans to quit",
+  "diagnose",
+  "gravid",
+  "graviditet",
+  "medicin",
+  "psykisk sygdom",
+  "deprimeret",
+  "angst",
+  "stemmepræference",
+  "politisk medlemskab",
+  "seksuel orientering",
+  "homoseksuel",
+  "fagforeningsmedlemskab",
+  "straffeattest",
+  "domfældt",
+  "planlægger at sige op",
+  "vil sige op",
+] as const;
+
+const CONTEXTUAL_SENSITIVE_PERSONAL_INFERENCE_TERMS = [
+  "health",
+  "medical",
+  "disease",
+  "illness",
+  "disability",
+  "politics",
   "religion",
   "religious",
   "faith",
@@ -258,46 +288,49 @@ const SENSITIVE_PERSONAL_INFERENCE_TERMS = [
   "racial",
   "ethnicity",
   "ethnic",
-  "sexual orientation",
-  "gay",
-  "lesbian",
-  "bisexual",
-  "homosexual",
-  "trade union",
-  "union membership",
-  "criminal record",
-  "criminal conviction",
-  "arrested",
-  "plans to resign",
-  "intends to resign",
-  "plans to quit",
+  "criminal",
   "helbred",
   "sygdom",
-  "diagnose",
   "handicap",
-  "gravid",
-  "graviditet",
-  "medicin",
-  "psykisk",
-  "deprimeret",
-  "angst",
-  "udbrændt",
   "politik",
   "politisk parti",
-  "stemmepræference",
   "religion",
   "religiøs",
   "tro",
   "etnicitet",
   "etnisk",
-  "seksuel orientering",
-  "homoseksuel",
-  "fagforening",
-  "straffeattest",
   "kriminel",
-  "domfældt",
-  "planlægger at sige op",
-  "vil sige op",
+] as const;
+
+const PERSON_SUBJECT_TYPES = new Set([
+  "person",
+  "employee",
+  "worker",
+  "staff",
+  "staff_member",
+  "colleague",
+  "candidate",
+  "applicant",
+  "individual",
+  "user",
+  "contact",
+  "customer_contact",
+  "lead_contact",
+]);
+
+const PERSONAL_CONTEXT_TERMS = [
+  "employee",
+  "worker",
+  "staff member",
+  "colleague",
+  "candidate",
+  "applicant",
+  "individual",
+  "person",
+  "medarbejder",
+  "kollega",
+  "ansøger",
+  "person",
 ] as const;
 
 function normalizeSensitiveText(value: string): string {
@@ -307,6 +340,14 @@ function normalizeSensitiveText(value: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function containsNormalizedTerm(normalizedText: string, term: string): boolean {
+  const normalizedTerm = normalizeSensitiveText(term);
+  return (
+    normalizedTerm.length > 0 &&
+    ` ${normalizedText} `.includes(` ${normalizedTerm} `)
+  );
 }
 
 function containsSensitivePersonalInference(
@@ -322,11 +363,30 @@ function containsSensitivePersonalInference(
       candidate.proposedScopeId ?? "",
     ].join(" "),
   );
-  const padded = ` ${normalized} `;
-  return SENSITIVE_PERSONAL_INFERENCE_TERMS.some((term) => {
-    const normalizedTerm = normalizeSensitiveText(term);
-    return normalizedTerm.length > 0 && padded.includes(` ${normalizedTerm} `);
-  });
+
+  if (
+    STRONG_SENSITIVE_PERSONAL_INFERENCE_TERMS.some((term) =>
+      containsNormalizedTerm(normalized, term),
+    )
+  ) {
+    return true;
+  }
+
+  const normalizedSubjectType = normalizeSensitiveText(
+    candidate.subjectType ?? "",
+  );
+  const hasPersonalContext =
+    PERSON_SUBJECT_TYPES.has(normalizedSubjectType) ||
+    PERSONAL_CONTEXT_TERMS.some((term) =>
+      containsNormalizedTerm(normalized, term),
+    );
+
+  return (
+    hasPersonalContext &&
+    CONTEXTUAL_SENSITIVE_PERSONAL_INFERENCE_TERMS.some((term) =>
+      containsNormalizedTerm(normalized, term),
+    )
+  );
 }
 
 function allowedEvidenceRefs(): ReadonlySet<string> {
