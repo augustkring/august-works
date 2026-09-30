@@ -7,10 +7,28 @@ import {
 } from "./helpers/embedded-postgres.js";
 
 const mockTelemetryClient = vi.hoisted(() => ({ track: vi.fn() }));
+const mockTelemetryState = vi.hoisted(() => ({ enabled: true }));
 const mockTrackAgentTaskRun = vi.hoisted(() => vi.fn());
+const mockPostRunMemoryExtract = vi.hoisted(() =>
+  vi.fn(async () => ({
+    runId: "mock-run",
+    proposed: 0,
+    persisted: 0,
+    duplicates: 0,
+    skipped: 0,
+    skipReasons: {},
+  })),
+);
 
 vi.mock("../telemetry.js", () => ({
-  getTelemetryClient: () => mockTelemetryClient,
+  getTelemetryClient: () =>
+    mockTelemetryState.enabled ? mockTelemetryClient : null,
+}));
+
+vi.mock("../services/memory/memory-post-run-extraction.js", () => ({
+  memoryPostRunExtractionService: () => ({
+    extract: mockPostRunMemoryExtract,
+  }),
 }));
 
 vi.mock("@paperclipai/shared/telemetry", async () => {
@@ -41,6 +59,7 @@ describeEmbeddedPostgres("emitAgentTaskRun", () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
+    mockTelemetryState.enabled = true;
     await db.delete(heartbeatRuns);
     await db.delete(agents);
     await db.delete(companies);
@@ -102,6 +121,28 @@ describeEmbeddedPostgres("emitAgentTaskRun", () => {
         expect.objectContaining({ agentId, state }),
       );
     }
+  });
+
+  it("runs post-run Memory extraction even when telemetry is disabled", async () => {
+    await seedCompanyAndAgent();
+    mockTelemetryState.enabled = false;
+    const run = {
+      id: randomUUID(),
+      companyId,
+      agentId,
+      status: "succeeded",
+      startedAt: null,
+      finishedAt: new Date(),
+      usageJson: null,
+      contextSnapshot: null,
+      resultJson: null,
+    } as unknown as typeof heartbeatRuns.$inferSelect;
+
+    await emitAgentTaskRun(db, run);
+
+    expect(mockPostRunMemoryExtract).toHaveBeenCalledTimes(1);
+    expect(mockPostRunMemoryExtract).toHaveBeenCalledWith(run);
+    expect(mockTrackAgentTaskRun).not.toHaveBeenCalled();
   });
 
   it("omits durationSeconds when the run has no startedAt", async () => {

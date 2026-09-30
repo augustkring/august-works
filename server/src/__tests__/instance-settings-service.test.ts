@@ -70,6 +70,7 @@ describe("instance settings service", () => {
       enableWorkflowExternalAgentNodes: false,
       enableCollectiveMemoryV1: false,
       enablePrivateAgentMemoryV1: false,
+      enableMemoryPostRunExtractionV1: false,
       enableAutomationArtifactsV1: false,
       enableWorkflowOptimizerSuggestions: false,
       enableWorkflowOptimizerShadow: false,
@@ -201,6 +202,21 @@ describe("instance settings service", () => {
       normalizeExperimentalSettings({ enableWorkspaceBranchReconcileForward: false })
         .enableWorkspaceDirtyQuarantineRepair,
     ).toBe(true);
+  });
+
+  it("defaults post-run Memory extraction off and round-trips an explicit patch", () => {
+    const current = normalizeExperimentalSettings({});
+    expect(current.enableMemoryPostRunExtractionV1).toBe(false);
+
+    const enabled = applyExperimentalSettingsPatch(current, {
+      enableMemoryPostRunExtractionV1: true,
+    });
+    expect(enabled.enableMemoryPostRunExtractionV1).toBe(true);
+
+    const restored = applyExperimentalSettingsPatch(enabled, {
+      enableMemoryPostRunExtractionV1: false,
+    });
+    expect(restored.enableMemoryPostRunExtractionV1).toBe(false);
   });
 
   it("round-trips an enableConferenceRoomChat patch through the update merge", () => {

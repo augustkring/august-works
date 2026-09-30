@@ -219,6 +219,7 @@ export {
 } from "./remote-agent-profiles.js";
 
 export { memoryAgentToolsService, type MemoryAgentToolContext } from "./memory/memory-agent-tools.js";
+export { memoryPostRunExtractionService, type MemoryPostRunExtractionResult, type MemoryPostRunExtractionSkipReason } from "./memory/memory-post-run-extraction.js";
 
 export { approvedFoundationView, foundationService, type FoundationMutationActor } from "./foundation/foundation-service.js";
 

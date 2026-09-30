@@ -81,6 +81,7 @@ export const instanceExperimentalSettingsSchema = z.object({
   enableWorkflowExternalAgentNodes: z.boolean().default(false),
   enableCollectiveMemoryV1: z.boolean().default(false),
   enablePrivateAgentMemoryV1: z.boolean().default(false),
+  enableMemoryPostRunExtractionV1: z.boolean().default(false),
   enableAutomationArtifactsV1: z.boolean().default(false),
   enableWorkflowOptimizerSuggestions: z.boolean().default(false),
   enableWorkflowOptimizerShadow: z.boolean().default(false),

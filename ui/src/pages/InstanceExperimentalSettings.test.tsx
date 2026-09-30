@@ -106,6 +106,7 @@ function defaultExperimentalSettings(): InstanceExperimentalSettingsPayload {
     enableWorkflowExternalAgentNodes: false,
     enableCollectiveMemoryV1: false,
     enablePrivateAgentMemoryV1: false,
+    enableMemoryPostRunExtractionV1: false,
     enableAutomationArtifactsV1: false,
     enableWorkflowOptimizerSuggestions: false,
     enableWorkflowOptimizerShadow: false,

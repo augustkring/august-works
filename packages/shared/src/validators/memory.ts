@@ -314,6 +314,61 @@ const memoryAgentSubjectSchema = z
   })
   .strict();
 
+export const memoryPostRunCandidateProposalSchema = z
+  .object({
+    memoryType: z.enum(MEMORY_TYPES),
+    title: nullableBounded(180),
+    content: z.string().trim().min(1).max(4_000),
+    subjectType: nullableBounded(120),
+    subjectId: nullableBounded(320),
+    proposedScopeType: z.enum(["org", "team", "project", "subject", "agent"]),
+    proposedScopeId: nullableBounded(500),
+    sensitivity: z.enum(EVIDENCE_SENSITIVITIES),
+    validFrom: nullableIso,
+    validUntil: nullableIso,
+    evidenceRefs: z
+      .array(z.string().trim().min(1).max(500))
+      .min(1)
+      .max(12),
+    rationale: z.string().trim().min(1).max(1_000),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if ((value.subjectType === null) !== (value.subjectId === null)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["subjectId"],
+        message: "Memory candidate subject type and id must be supplied together",
+      });
+    }
+    if (value.proposedScopeType === "subject" && !value.subjectType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["subjectType"],
+        message: "Subject-scoped memory candidate requires a subject",
+      });
+    }
+    if (
+      value.validFrom &&
+      value.validUntil &&
+      new Date(value.validUntil).getTime() <= new Date(value.validFrom).getTime()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["validUntil"],
+        message: "validUntil must be later than validFrom",
+      });
+    }
+  });
+
+export const memoryPostRunCandidateProposalListSchema = z
+  .array(memoryPostRunCandidateProposalSchema)
+  .max(8);
+
+export type MemoryPostRunCandidateProposalParsed = z.infer<
+  typeof memoryPostRunCandidateProposalSchema
+>;
+
 export const memoryAgentRecallInputSchema = z
   .object({
     query: z.string().trim().min(1).max(4_000),

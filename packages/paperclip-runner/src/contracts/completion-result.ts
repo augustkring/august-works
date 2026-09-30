@@ -107,6 +107,110 @@ const verificationSchema = {
   },
 } as const;
 
+export const PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "memoryType",
+    "title",
+    "content",
+    "subjectType",
+    "subjectId",
+    "proposedScopeType",
+    "proposedScopeId",
+    "sensitivity",
+    "validFrom",
+    "validUntil",
+    "evidenceRefs",
+    "rationale",
+  ],
+  properties: {
+    memoryType: {
+      enum: [
+        "fact",
+        "observation",
+        "decision_reference",
+        "preference",
+        "lesson",
+        "outcome",
+        "relationship",
+        "constraint",
+      ],
+    },
+    title: {
+      anyOf: [
+        { type: "string", minLength: 1, maxLength: 180, pattern: "\\S" },
+        { type: "null" },
+      ],
+    },
+    content: { type: "string", minLength: 1, maxLength: 4000, pattern: "\\S" },
+    subjectType: {
+      anyOf: [
+        { type: "string", minLength: 1, maxLength: 120, pattern: "\\S" },
+        { type: "null" },
+      ],
+    },
+    subjectId: {
+      anyOf: [
+        { type: "string", minLength: 1, maxLength: 320, pattern: "\\S" },
+        { type: "null" },
+      ],
+    },
+    proposedScopeType: {
+      enum: ["org", "project", "subject"],
+      description:
+        "Automatic post-run extraction may propose shared organizational, project, or subject memory only. Agent-private memory requires the explicit remember tool; team-scoped bindings are not available in PR 36.",
+    },
+    proposedScopeId: {
+      anyOf: [
+        { type: "string", minLength: 1, maxLength: 500, pattern: "\\S" },
+        { type: "null" },
+      ],
+    },
+    sensitivity: {
+      enum: ["public", "internal", "confidential"],
+      description:
+        "Restricted data is never eligible for automatic post-run Memory capture and requires an explicit governed path.",
+    },
+    validFrom: {
+      anyOf: [
+        { type: "string", format: "date-time" },
+        { type: "null" },
+      ],
+    },
+    validUntil: {
+      anyOf: [
+        { type: "string", format: "date-time" },
+        { type: "null" },
+      ],
+    },
+    evidenceRefs: {
+      type: "array",
+      minItems: 1,
+      maxItems: 1,
+      items: { type: "string", const: "task" },
+      description:
+        "Evidence that supports the candidate. PR 36 admits exactly 'task', which the server resolves to the current committed task/run. Do not invent or reuse model-authored evidence or artifact refs.",
+    },
+    rationale: {
+      type: "string",
+      minLength: 1,
+      maxLength: 1000,
+      pattern: "\\S",
+      description:
+        "Short audit explanation for why this is durable future-useful memory. This is not hidden reasoning or chain-of-thought.",
+    },
+  },
+} as const;
+
+export const PRP_MEMORY_CANDIDATES_SCHEMA = {
+  type: "array",
+  maxItems: 8,
+  description:
+    "Optional durable-memory proposals from this completed task. Zero candidates is healthy and preferred when nothing is new, corrective, durable, future-useful, evidence-backed, and appropriate to retain. Never propose health, politics, religion, race/ethnicity, sexual orientation, trade-union, criminal-history, speculative mental-state, or speculative resignation inferences about a person.",
+  items: PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA,
+} as const;
+
 const attentionRequestsSchema = {
   type: "array",
   items: {
@@ -187,6 +291,7 @@ export const PRP_COMPLETION_RESULT_OUTPUT_SCHEMA = {
   properties: {
     ...commonResultProperties,
     reportedWorkDisposition: { enum: ["done", "needs_review", "yielded"] },
+    memoryCandidates: PRP_MEMORY_CANDIDATES_SCHEMA,
     continuation: responseWakeContinuationSchema,
   },
   allOf: [
@@ -353,6 +458,7 @@ export const PRP_COMPLETION_RESULT_PROVIDER_INPUT_SCHEMA = {
   properties: {
     ...providerCommonResultProperties,
     reportedWorkDisposition: { enum: ["done", "needs_review", "yielded", "completed"] },
+    memoryCandidates: PRP_MEMORY_CANDIDATES_SCHEMA,
     verification: providerVerificationCompatibilitySchema,
     attentionRequests: providerAttentionCompatibilitySchema,
     continuation: responseWakeContinuationSchema,
