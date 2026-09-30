@@ -399,6 +399,23 @@ describe("openapi routes", () => {
     expect(
       JSON.stringify(res.body.paths["/api/tool-gateway/tools/call"].post),
     ).not.toContain("sessionToken");
+
+    const rejectMemory =
+      res.body.paths[
+        "/api/companies/{companyId}/memory/records/{recordId}/reject"
+      ].post.requestBody.content["application/json"].schema;
+    expect(rejectMemory).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+      required: ["reason"],
+      properties: {
+        reason: {
+          type: "string",
+          minLength: 1,
+          maxLength: 2000,
+        },
+      },
+    });
   });
 
   it("publishes the complete board contract for chat channels", () => {
