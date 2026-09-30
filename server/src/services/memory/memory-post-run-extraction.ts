@@ -292,21 +292,31 @@ const SENSITIVE_PERSONAL_INFERENCE_TERMS = [
   "vil sige op",
 ] as const;
 
+function normalizeSensitiveText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function containsSensitivePersonalInference(
   candidate: MemoryPostRunCandidateProposalParsed,
 ): boolean {
-  const normalized = [
-    candidate.title ?? "",
-    candidate.content,
-    candidate.rationale,
-    candidate.subjectType ?? "",
-  ]
-    .join(" ")
-    .normalize("NFKC")
-    .toLocaleLowerCase();
-  return SENSITIVE_PERSONAL_INFERENCE_TERMS.some((term) =>
-    normalized.includes(term),
+  const normalized = normalizeSensitiveText(
+    [
+      candidate.title ?? "",
+      candidate.content,
+      candidate.rationale,
+      candidate.subjectType ?? "",
+    ].join(" "),
   );
+  const padded = ` ${normalized} `;
+  return SENSITIVE_PERSONAL_INFERENCE_TERMS.some((term) => {
+    const normalizedTerm = normalizeSensitiveText(term);
+    return normalizedTerm.length > 0 && padded.includes(` ${normalizedTerm} `);
+  });
 }
 
 function allowedEvidenceRefs(): ReadonlySet<string> {
