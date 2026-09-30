@@ -330,6 +330,29 @@ describePg("Memory post-run extraction", () => {
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
   });
 
+  it("rejects sensitive personal classifications encoded in subject identifiers", async () => {
+    const seeded = await seed({
+      candidates: [{
+        ...BASE_CANDIDATE,
+        content: "This employee profile should be reusable later.",
+        subjectType: "employee",
+        subjectId: "religion-profile-1",
+        proposedScopeType: "subject",
+        proposedScopeId: "employee:religion-profile-1",
+        rationale: "Retain the employee profile for later tasks.",
+      }],
+    });
+
+    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    expect(result).toMatchObject({
+      proposed: 1,
+      persisted: 0,
+      skipped: 1,
+      skipReasons: { sensitive_personal_inference: 1 },
+    });
+    expect(await db.select().from(memoryRecords)).toHaveLength(0);
+  });
+
   it("does not treat a protected-category token embedded inside another word as a match", async () => {
     const seeded = await seed({
       candidates: [{
