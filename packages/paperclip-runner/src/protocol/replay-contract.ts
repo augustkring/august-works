@@ -269,7 +269,7 @@ function nullableBoundedStringValid(
   return (
     value === null ||
     (typeof value === "string" &&
-      value.length >= 1 &&
+      value.trim().length >= 1 &&
       value.length <= maxLength)
   );
 }
@@ -359,7 +359,7 @@ function memoryCandidateExtensionIssues(
     }
     if (
       typeof candidate.content !== "string" ||
-      candidate.content.length <
+      candidate.content.trim().length <
         memoryCandidateSchema.properties.content.minLength ||
       candidate.content.length >
         memoryCandidateSchema.properties.content.maxLength
@@ -494,7 +494,7 @@ function memoryCandidateExtensionIssues(
     }
     if (
       typeof candidate.rationale !== "string" ||
-      candidate.rationale.length <
+      candidate.rationale.trim().length <
         memoryCandidateSchema.properties.rationale.minLength ||
       candidate.rationale.length >
         memoryCandidateSchema.properties.rationale.maxLength
