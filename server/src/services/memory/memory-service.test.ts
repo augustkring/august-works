@@ -224,7 +224,383 @@ describePg("Memory Core service", () => {
       ownerAgentId: null,
     });
     expect(created.evidence).toHaveLength(1);
+    expect(created.resolution).toMatchObject({
+      kind: "new",
+      targetRecordId: null,
+    });
     expect(await svc.get(other.companyId, created.record.id, userActor(other.userId))).toBeNull();
+  });
+
+  it("deduplicates an equivalent shared claim without creating another record", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const input = candidate(b.id, {
+      memoryType: "fact",
+      title: "Procurement owner",
+      content: "Acme procurement owner is Anna.",
+      summary: null,
+      evidence: evidence("Acme procurement owner is Anna."),
+    });
+
+    const first = await svc.createCandidate(
+      seeded.companyId,
+      input,
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    const duplicate = await svc.createCandidate(
+      seeded.companyId,
+      input,
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+
+    expect(first.resolution.kind).toBe("new");
+    expect(duplicate.resolution).toMatchObject({
+      kind: "duplicate",
+      targetRecordId: first.record.id,
+      novelEvidenceCount: 0,
+    });
+    expect(duplicate.record.id).toBe(first.record.id);
+    expect(
+      await db
+        .select()
+        .from(memoryRecords)
+        .where(eq(memoryRecords.companyId, seeded.companyId)),
+    ).toHaveLength(1);
+  });
+
+  it("corroborates an equivalent claim by attaching only novel evidence", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const text = "Acme procurement owner is Anna.";
+    const first = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: text,
+        summary: null,
+        evidence: [{ ...evidence(text)[0]!, sourceRef: "issue://first" }],
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+
+    const corroborated = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: text,
+        summary: null,
+        evidence: [{ ...evidence(text)[0]!, sourceRef: "issue://second" }],
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+
+    expect(corroborated.resolution).toMatchObject({
+      kind: "corroboration",
+      targetRecordId: first.record.id,
+      novelEvidenceCount: 1,
+    });
+    expect(corroborated.record.id).toBe(first.record.id);
+    expect(corroborated.record.verificationState).toBe(
+      first.record.verificationState,
+    );
+    expect(corroborated.evidence).toHaveLength(2);
+
+    const replay = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: text,
+        summary: null,
+        evidence: [{ ...evidence(text)[0]!, sourceRef: "issue://second" }],
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    expect(replay.resolution.kind).toBe("duplicate");
+    expect(replay.evidence).toHaveLength(2);
+  });
+
+  it("attaches contradicting evidence to an equivalent pending claim without duplicating it", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const text = "Acme procurement owner is Anna.";
+    const supporting = {
+      ...evidence(text)[0]!,
+      sourceRef: "issue://pending-claim",
+    };
+
+    const first = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: text,
+        summary: null,
+        evidence: [supporting],
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+
+    const contradicting = {
+      ...evidence(text)[0]!,
+      sourceRef: "issue://contradicting-source",
+      relation: "contradicts" as const,
+    };
+    const contradiction = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: text,
+        summary: null,
+        evidence: [supporting, contradicting],
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+
+    expect(contradiction.resolution).toMatchObject({
+      kind: "contradiction",
+      reasonCode: "contradicting_evidence_against_pending_equivalent_claim",
+      targetRecordId: first.record.id,
+      novelEvidenceCount: 1,
+    });
+    expect(contradiction.record).toMatchObject({
+      id: first.record.id,
+      reviewState: "pending",
+      supersedesRecordId: null,
+    });
+    expect(contradiction.evidence).toHaveLength(2);
+    expect(
+      await db
+        .select()
+        .from(memoryRecords)
+        .where(eq(memoryRecords.companyId, seeded.companyId)),
+    ).toHaveLength(1);
+
+    const replay = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: text,
+        summary: null,
+        evidence: [supporting, contradicting],
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    expect(replay.resolution).toMatchObject({
+      kind: "contradiction",
+      targetRecordId: first.record.id,
+      novelEvidenceCount: 0,
+    });
+    expect(replay.evidence).toHaveLength(2);
+  });
+
+  it("creates a pending temporal update and supersedes only after acceptance", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const originalCandidate = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: "Acme procurement owner is Anna.",
+        summary: null,
+        validFrom: "2026-01-01T00:00:00.000Z",
+        observedAt: "2026-01-01T00:00:00.000Z",
+        evidence: evidence("Acme procurement owner is Anna."),
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    const original = await svc.reviewCandidate(
+      seeded.companyId,
+      originalCandidate.record.id,
+      { decision: "accept" },
+      userActor(seeded.userId),
+    );
+
+    const update = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: "Acme procurement owner is Peter.",
+        summary: null,
+        validFrom: "2026-09-01T00:00:00.000Z",
+        observedAt: "2026-09-01T00:00:00.000Z",
+        evidence: evidence("Acme procurement owner is Peter."),
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+
+    expect(update.resolution).toMatchObject({
+      kind: "update",
+      targetRecordId: original.record.id,
+    });
+    expect(update.record).toMatchObject({
+      reviewState: "pending",
+      supersedesRecordId: original.record.id,
+    });
+
+    const beforeAccept = await svc.get(
+      seeded.companyId,
+      original.record.id,
+      userActor(seeded.userId),
+    );
+    expect(beforeAccept?.record).toMatchObject({
+      retentionState: "active",
+      supersededByRecordId: null,
+    });
+
+    const accepted = await svc.reviewCandidate(
+      seeded.companyId,
+      update.record.id,
+      { decision: "accept" },
+      userActor(seeded.userId),
+    );
+    const superseded = await svc.get(
+      seeded.companyId,
+      original.record.id,
+      userActor(seeded.userId),
+    );
+
+    expect(accepted.record.reviewState).toBe("accepted");
+    expect(superseded?.record).toMatchObject({
+      retentionState: "superseded",
+      supersededByRecordId: update.record.id,
+    });
+  });
+
+  it("keeps overlapping single-value claims pending as contradictions", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const originalCandidate = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: "Acme procurement owner is Anna.",
+        summary: null,
+        evidence: evidence("Acme procurement owner is Anna."),
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    const original = await svc.reviewCandidate(
+      seeded.companyId,
+      originalCandidate.record.id,
+      { decision: "accept" },
+      userActor(seeded.userId),
+    );
+
+    const contradiction = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: "Acme procurement owner is Peter.",
+        summary: null,
+        evidence: evidence("Acme procurement owner is Peter."),
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+
+    expect(contradiction.resolution).toMatchObject({
+      kind: "contradiction",
+      targetRecordId: original.record.id,
+      reasonCode: "overlapping_single_value_claim",
+    });
+    expect(contradiction.record).toMatchObject({
+      reviewState: "pending",
+      supersedesRecordId: original.record.id,
+    });
+    const stillCurrent = await svc.get(
+      seeded.companyId,
+      original.record.id,
+      userActor(seeded.userId),
+    );
+    expect(stillCurrent?.record).toMatchObject({
+      retentionState: "active",
+      supersededByRecordId: null,
+    });
+  });
+
+  it("does not force additive lessons into single-value contradiction semantics", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const first = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        title: "Procurement lesson",
+        content: "Security review reduces procurement delays.",
+        evidence: evidence("Security review reduces procurement delays."),
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    const second = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        title: "Procurement lesson",
+        content: "Legal review should start after security review.",
+        evidence: evidence("Legal review should start after security review."),
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+
+    expect(first.resolution.kind).toBe("new");
+    expect(second.resolution.kind).toBe("new");
+    expect(second.record.supersedesRecordId).toBeNull();
+    expect(
+      await db
+        .select()
+        .from(memoryRecords)
+        .where(eq(memoryRecords.companyId, seeded.companyId)),
+    ).toHaveLength(2);
+  });
+
+  it("serializes concurrent equivalent claims into one record", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const input = candidate(b.id, {
+      memoryType: "fact",
+      title: "Procurement owner",
+      content: "Acme procurement owner is Anna.",
+      summary: null,
+      evidence: evidence("Acme procurement owner is Anna."),
+    });
+
+    const outcomes = await Promise.all([
+      svc.createCandidate(
+        seeded.companyId,
+        input,
+        agentActor(seeded.agent.id, seeded.userId),
+      ),
+      svc.createCandidate(
+        seeded.companyId,
+        input,
+        agentActor(seeded.agent.id, seeded.userId),
+      ),
+    ]);
+
+    expect(outcomes.map((outcome) => outcome.resolution.kind).sort()).toEqual([
+      "duplicate",
+      "new",
+    ]);
+    expect(new Set(outcomes.map((outcome) => outcome.record.id)).size).toBe(1);
+    expect(
+      await db
+        .select()
+        .from(memoryRecords)
+        .where(eq(memoryRecords.companyId, seeded.companyId)),
+    ).toHaveLength(1);
   });
 
   it("enforces the private-agent memory boundary at validation and tenant scope", async () => {

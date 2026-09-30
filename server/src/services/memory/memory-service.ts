@@ -24,10 +24,15 @@ import {
   memoryShareInputSchema,
   type ExecutionPrincipal,
   type MemoryCandidateInputParsed,
+  type MemoryResolutionMetadata,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
+import {
+  lockMemoryResolution,
+  resolveMemoryCandidate,
+} from "./memory-resolution.js";
 
 export interface MemoryMutationActor {
   principal: ExecutionPrincipal;
@@ -437,6 +442,41 @@ async function persistMemoryActivity(
   return result.publication;
 }
 
+async function insertEvidenceRows(
+  tx: Db,
+  companyId: string,
+  memoryRecordId: string,
+  evidence: MemoryCandidateInputParsed["evidence"],
+): Promise<void> {
+  if (evidence.length === 0) return;
+  await tx.insert(memoryEvidence).values(
+    evidence.map((item) => ({
+      companyId,
+      memoryRecordId,
+      sourceClass: item.sourceClass,
+      sourceProvider: item.sourceProvider,
+      sourceType: item.sourceType,
+      sourceRef: item.sourceRef,
+      sourceVersion: item.sourceVersion,
+      sourceUpdatedAt: item.sourceUpdatedAt
+        ? new Date(item.sourceUpdatedAt)
+        : null,
+      observedAt: new Date(item.observedAt),
+      excerptHash: item.excerptHash,
+      citationJson: item.citation,
+      trustLevel: item.trustLevel,
+      supportsOrContradicts: item.relation,
+    })),
+  );
+}
+
+function withResolution<T extends { record: unknown; evidence: unknown[] }>(
+  detail: T,
+  resolution: MemoryResolutionMetadata,
+) {
+  return { ...detail, resolution };
+}
+
 async function insertCandidate(
   tx: Db,
   companyId: string,
@@ -512,23 +552,7 @@ async function insertCandidate(
     .returning();
   if (!record) throw new Error("Memory candidate insert returned no row");
 
-  await tx.insert(memoryEvidence).values(
-    input.evidence.map((item) => ({
-      companyId,
-      memoryRecordId: record.id,
-      sourceClass: item.sourceClass,
-      sourceProvider: item.sourceProvider,
-      sourceType: item.sourceType,
-      sourceRef: item.sourceRef,
-      sourceVersion: item.sourceVersion,
-      sourceUpdatedAt: item.sourceUpdatedAt ? new Date(item.sourceUpdatedAt) : null,
-      observedAt: new Date(item.observedAt),
-      excerptHash: item.excerptHash,
-      citationJson: item.citation,
-      trustLevel: item.trustLevel,
-      supportsOrContradicts: item.relation,
-    })),
-  );
+  await insertEvidenceRows(tx, companyId, record.id, input.evidence);
 
   return record;
 }
@@ -1180,14 +1204,121 @@ export function memoryService(db: Db) {
       }
 
       const publications: ActivityPublication[] = [];
-      const record = await db.transaction(async (tx) => {
+      const outcome = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
-        const created = await insertCandidate(
+
+        // Authorize before classification so the resolver can never become a
+        // cross-tenant or cross-scope record oracle.
+        await assertActorCompanyScope(txDb, companyId, actor);
+        await assertScopeReferences(txDb, companyId, parsed.data);
+        await assertAgentPrivateOwnership(parsed.data, actor);
+        await assertBindingAllowsCandidate(txDb, companyId, parsed.data);
+
+        // Preserve the existing operation-id contract before semantic
+        // resolution. Reusing one operation id with any prior persisted record
+        // remains a conflict even when the new payload happens to be similar.
+        if (parsed.data.createdByOperationId) {
+          await lockMemoryOperation(
+            txDb,
+            companyId,
+            parsed.data.createdByOperationId,
+          );
+          const existingOperation = await memoryRecordForOperation(
+            txDb,
+            companyId,
+            parsed.data.createdByOperationId,
+          );
+          if (existingOperation) {
+            throw conflict(
+              "Memory operation id is already associated with a record",
+              {
+                code: "memory_operation_conflict",
+                operationId: parsed.data.createdByOperationId,
+                existingRecordId: existingOperation.id,
+              },
+            );
+          }
+        }
+
+        await lockMemoryResolution(txDb, companyId, parsed.data);
+        const resolution = await resolveMemoryCandidate(
           txDb,
           companyId,
           parsed.data,
+        );
+
+        const attachesToExistingPendingContradiction =
+          resolution.metadata.kind === "contradiction" &&
+          resolution.metadata.reasonCode ===
+            "contradicting_evidence_against_pending_equivalent_claim";
+
+        if (
+          resolution.metadata.kind === "duplicate" ||
+          resolution.metadata.kind === "corroboration" ||
+          attachesToExistingPendingContradiction
+        ) {
+          const target = resolution.target;
+          if (!target) {
+            throw new Error(
+              `Memory ${resolution.metadata.kind} resolution is missing its target record`,
+            );
+          }
+
+          if (
+            resolution.metadata.kind === "corroboration" ||
+            attachesToExistingPendingContradiction
+          ) {
+            await insertEvidenceRows(
+              txDb,
+              companyId,
+              target.id,
+              resolution.novelEvidence,
+            );
+
+            publications.push(
+              await persistMemoryActivity(txDb, actor, {
+                companyId,
+                action:
+                  resolution.metadata.kind === "corroboration"
+                    ? "memory.corroborated"
+                    : "memory.contradiction_attached",
+                recordId: target.id,
+                details: { resolution: resolution.metadata },
+              }),
+            );
+          }
+
+          return { recordId: target.id, resolution: resolution.metadata };
+        }
+
+        const supersedesRecordId =
+          resolution.metadata.kind === "update" ||
+          resolution.metadata.kind === "contradiction"
+            ? resolution.target?.id ?? null
+            : null;
+        if (
+          (resolution.metadata.kind === "update" ||
+            resolution.metadata.kind === "contradiction") &&
+          !supersedesRecordId
+        ) {
+          throw new Error(
+            `Memory ${resolution.metadata.kind} resolution is missing its target record`,
+          );
+        }
+
+        const candidate: MemoryCandidateInputParsed = {
+          ...parsed.data,
+          metadata: {
+            ...parsed.data.metadata,
+            memoryResolution: resolution.metadata,
+          },
+        };
+        const created = await insertCandidate(
+          txDb,
+          companyId,
+          candidate,
           actor,
-          null,
+          supersedesRecordId,
         );
         publications.push(
           await persistMemoryActivity(txDb, actor, {
@@ -1198,13 +1329,19 @@ export function memoryService(db: Db) {
               memoryType: created.memoryType,
               scopeType: created.scopeType,
               scopeId: created.scopeId,
+              resolution: resolution.metadata,
             },
           }),
         );
-        return created;
+        return { recordId: created.id, resolution: resolution.metadata };
       });
       publications.forEach(publishActivity);
-      return (await getRecordDetail(db, companyId, record.id))!;
+
+      const detail = await getRecordDetail(db, companyId, outcome.recordId);
+      if (!detail) {
+        throw new Error("Resolved Memory candidate record is unavailable");
+      }
+      return withResolution(detail, outcome.resolution);
     },
 
     createCorrectionCandidate: async (
@@ -1364,7 +1501,11 @@ export function memoryService(db: Db) {
           }
           await txDb
             .update(memoryRecords)
-            .set({ supersededByRecordId: record.id, updatedAt: now })
+            .set({
+              supersededByRecordId: record.id,
+              retentionState: "superseded",
+              updatedAt: now,
+            })
             .where(
               and(
                 eq(memoryRecords.companyId, companyId),

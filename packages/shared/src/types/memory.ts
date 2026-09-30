@@ -47,6 +47,25 @@ export const MEMORY_EVIDENCE_RELATIONS = [
 export type MemoryEvidenceRelation =
   (typeof MEMORY_EVIDENCE_RELATIONS)[number];
 
+export const MEMORY_RESOLUTION_KINDS = [
+  "new",
+  "duplicate",
+  "corroboration",
+  "update",
+  "contradiction",
+] as const;
+export type MemoryResolutionKind = (typeof MEMORY_RESOLUTION_KINDS)[number];
+
+export interface MemoryResolutionMetadata {
+  version: "v1";
+  kind: MemoryResolutionKind;
+  reasonCode: string;
+  targetRecordId: string | null;
+  relatedRecordIds: string[];
+  novelEvidenceCount: number;
+  resolvedAt: string;
+}
+
 export interface MemoryScope {
   type: MemoryScopeType;
   id: string | null;
@@ -219,6 +238,10 @@ export interface MemoryEvidence {
 export interface MemoryRecordDetail {
   record: MemoryRecord;
   evidence: MemoryEvidence[];
+}
+
+export interface MemoryCandidateResolutionResult extends MemoryRecordDetail {
+  resolution: MemoryResolutionMetadata;
 }
 
 export interface MemoryRecordListQuery {

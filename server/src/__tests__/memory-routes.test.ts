@@ -173,6 +173,82 @@ describePg("Memory routes", () => {
         evidence: supportingEvidence(content),
       })
       .expect(201);
+    expect(candidate.body.resolution).toMatchObject({
+      kind: "new",
+      targetRecordId: null,
+    });
+
+    const duplicate = await http
+      .post(`/api/companies/${seeded.companyId}/memory/candidates`)
+      .send({
+        bindingId: binding.body.id,
+        memoryType: "lesson",
+        scope: { type: "company", id: null },
+        subject: { type: "customer", id: "acme" },
+        ownerAgentId: null,
+        title: "Acme procurement",
+        content,
+        summary: "Security review first.",
+        sensitivity: "internal",
+        importance: 80,
+        confidenceScore: 0.8,
+        validFrom: null,
+        validUntil: null,
+        observedAt: "2026-09-29T12:00:00.000Z",
+        retentionPolicy: "standard",
+        expiresAt: null,
+        createdByOperationId: null,
+        metadata: {},
+        evidence: supportingEvidence(content),
+      })
+      .expect(200);
+    expect(duplicate.body).toMatchObject({
+      resolution: {
+        kind: "duplicate",
+        targetRecordId: candidate.body.record.id,
+      },
+      record: { id: candidate.body.record.id },
+    });
+
+    const contradiction = await http
+      .post(`/api/companies/${seeded.companyId}/memory/candidates`)
+      .send({
+        bindingId: binding.body.id,
+        memoryType: "lesson",
+        scope: { type: "company", id: null },
+        subject: { type: "customer", id: "acme" },
+        ownerAgentId: null,
+        title: "Acme procurement",
+        content,
+        summary: "Security review first.",
+        sensitivity: "internal",
+        importance: 80,
+        confidenceScore: 0.8,
+        validFrom: null,
+        validUntil: null,
+        observedAt: "2026-09-29T12:00:00.000Z",
+        retentionPolicy: "standard",
+        expiresAt: null,
+        createdByOperationId: null,
+        metadata: {},
+        evidence: [
+          ...supportingEvidence(content),
+          {
+            ...supportingEvidence(content)[0]!,
+            sourceRef: "issue://memory-route-contradiction",
+            relation: "contradicts",
+          },
+        ],
+      })
+      .expect(200);
+    expect(contradiction.body).toMatchObject({
+      resolution: {
+        kind: "contradiction",
+        reasonCode: "contradicting_evidence_against_pending_equivalent_claim",
+        targetRecordId: candidate.body.record.id,
+      },
+      record: { id: candidate.body.record.id, reviewState: "pending" },
+    });
 
     const pending = await http
       .get(`/api/companies/${seeded.companyId}/memory/records?reviewState=pending`)
@@ -184,7 +260,13 @@ describePg("Memory routes", () => {
     const detail = await http
       .get(`/api/companies/${seeded.companyId}/memory/records/${candidate.body.record.id}`)
       .expect(200);
-    expect(detail.body.evidence).toHaveLength(1);
+    expect(detail.body.evidence).toHaveLength(2);
+    expect(detail.body.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ supportsOrContradicts: "supports" }),
+        expect.objectContaining({ supportsOrContradicts: "contradicts" }),
+      ]),
+    );
 
     await http
       .post(`/api/companies/${seeded.companyId}/memory/records/${candidate.body.record.id}/accept`)
