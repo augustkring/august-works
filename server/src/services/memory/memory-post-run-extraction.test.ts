@@ -325,6 +325,21 @@ describePg("Memory post-run extraction", () => {
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
   });
 
+  it("does not treat a protected-category token embedded inside another word as a match", async () => {
+    const seeded = await seed({
+      candidates: [{
+        ...BASE_CANDIDATE,
+        title: "Trace renewal steps",
+        content: "Trace each renewal step so the team can reproduce the process.",
+        rationale: "Durable process traceability for future renewals.",
+        evidenceRefs: ["task"],
+      }],
+    });
+
+    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    expect(result).toMatchObject({ proposed: 1, persisted: 1, skipped: 0 });
+  });
+
   it("rejects model-authored evidence and artifact refs that are not server-verified", async () => {
     const seeded = await seed({
       candidates: [
