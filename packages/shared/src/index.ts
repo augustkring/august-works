@@ -2978,6 +2978,18 @@ export {
   type MemoryPrivateCorrectionInputParsed,
   memoryRecordListQuerySchema,
   memoryReviewReasonSchema,
+  memoryAgentRecallInputSchema,
+  memoryAgentRememberInputSchema,
+  memoryAgentCorrectInputSchema,
+  memoryAgentShareInputSchema,
+  memoryAgentRecallInputJsonSchema,
+  memoryAgentRememberInputJsonSchema,
+  memoryAgentCorrectInputJsonSchema,
+  memoryAgentShareInputJsonSchema,
+  type MemoryAgentRecallInputParsed,
+  type MemoryAgentRememberInputParsed,
+  type MemoryAgentCorrectInputParsed,
+  type MemoryAgentShareInputParsed,
   type MemoryRecordListQueryParsed,
 } from "./validators/memory.js";
 

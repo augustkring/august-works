@@ -306,3 +306,137 @@ export const memoryReviewReasonSchema = z
   .strict();
 
 export type MemoryRecordListQueryParsed = z.infer<typeof memoryRecordListQuerySchema>;
+
+const memoryAgentSubjectSchema = z
+  .object({
+    type: z.string().trim().min(1).max(120),
+    id: z.string().trim().min(1).max(320),
+  })
+  .strict();
+
+export const memoryAgentRecallInputSchema = z
+  .object({
+    query: z.string().trim().min(1).max(4_000),
+    topK: z.number().int().min(1).max(20).default(8),
+    subjects: z.array(memoryAgentSubjectSchema).max(16).default([]),
+    asOf: z.string().datetime().nullable().optional(),
+  })
+  .strict();
+
+export const memoryAgentRememberInputSchema = z
+  .object({
+    scope: z.enum(["private", "company", "project", "subject"]).default("private"),
+    subject: memoryAgentSubjectSchema.nullable().optional(),
+    bindingKey: z.string().trim().min(1).max(160).optional(),
+    memoryType: z.enum(MEMORY_TYPES),
+    title: nullableBounded(1_000).optional().default(null),
+    content: z.string().trim().min(1).max(128_000),
+    summary: nullableBounded(16_000).optional().default(null),
+    sensitivity: z.enum(EVIDENCE_SENSITIVITIES).default("internal"),
+    importance: z.number().int().min(0).max(100).default(50),
+    confidenceScore: z.number().min(0).max(1).default(0.5),
+    validFrom: nullableIso.optional().default(null),
+    validUntil: nullableIso.optional().default(null),
+    observedAt: z.string().datetime().optional(),
+    retentionPolicy: z.string().trim().min(1).max(160).default("standard"),
+    expiresAt: nullableIso.optional().default(null),
+    idempotencyKey: z.string().uuid(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.scope === "subject" && !value.subject) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["subject"],
+        message: "Subject-scoped memory requires a subject",
+      });
+    }
+    if (
+      value.validFrom &&
+      value.validUntil &&
+      new Date(value.validUntil).getTime() <= new Date(value.validFrom).getTime()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["validUntil"],
+        message: "validUntil must be later than validFrom",
+      });
+    }
+  });
+
+export const memoryAgentCorrectInputSchema = z
+  .object({
+    recordId: z.string().uuid(),
+    reason: z.string().trim().min(1).max(2_000),
+    content: z.string().trim().min(1).max(128_000),
+    memoryType: z.enum(MEMORY_TYPES).optional(),
+    subject: memoryAgentSubjectSchema.nullable().optional(),
+    title: nullableBounded(1_000).optional(),
+    summary: nullableBounded(16_000).optional(),
+    sensitivity: z.enum(EVIDENCE_SENSITIVITIES).optional(),
+    importance: z.number().int().min(0).max(100).optional(),
+    confidenceScore: z.number().min(0).max(1).optional(),
+    validFrom: nullableIso.optional(),
+    validUntil: nullableIso.optional(),
+    observedAt: z.string().datetime().optional(),
+    retentionPolicy: z.string().trim().min(1).max(160).optional(),
+    expiresAt: nullableIso.optional(),
+    idempotencyKey: z.string().uuid(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (
+      value.validFrom &&
+      value.validUntil &&
+      new Date(value.validUntil).getTime() <= new Date(value.validFrom).getTime()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["validUntil"],
+        message: "validUntil must be later than validFrom",
+      });
+    }
+  });
+
+export const memoryAgentShareInputSchema = z
+  .object({
+    recordId: z.string().uuid(),
+    targetScope: z.enum(["company", "project", "subject"]).default("company"),
+    subject: memoryAgentSubjectSchema.nullable().optional(),
+    bindingKey: z.string().trim().min(1).max(160).optional(),
+    reason: z.string().trim().min(1).max(2_000),
+    idempotencyKey: z.string().uuid(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.targetScope === "subject" && !value.subject) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["subject"],
+        message: "Subject-scoped sharing requires a subject",
+      });
+    }
+  });
+
+export const memoryAgentRecallInputJsonSchema =
+  z.toJSONSchema(memoryAgentRecallInputSchema) as Record<string, unknown>;
+export const memoryAgentRememberInputJsonSchema =
+  z.toJSONSchema(memoryAgentRememberInputSchema) as Record<string, unknown>;
+export const memoryAgentCorrectInputJsonSchema =
+  z.toJSONSchema(memoryAgentCorrectInputSchema) as Record<string, unknown>;
+export const memoryAgentShareInputJsonSchema =
+  z.toJSONSchema(memoryAgentShareInputSchema) as Record<string, unknown>;
+
+export type MemoryAgentRecallInputParsed = z.infer<
+  typeof memoryAgentRecallInputSchema
+>;
+export type MemoryAgentRememberInputParsed = z.infer<
+  typeof memoryAgentRememberInputSchema
+>;
+export type MemoryAgentCorrectInputParsed = z.infer<
+  typeof memoryAgentCorrectInputSchema
+>;
+export type MemoryAgentShareInputParsed = z.infer<
+  typeof memoryAgentShareInputSchema
+>;
+
