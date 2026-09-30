@@ -183,10 +183,10 @@ export const PRP_MEMORY_CANDIDATE_PROPOSAL_SCHEMA = {
     evidenceRefs: {
       type: "array",
       minItems: 1,
-      maxItems: 12,
-      items: { type: "string", minLength: 1, maxLength: 500 },
+      maxItems: 1,
+      items: { type: "string", const: "task" },
       description:
-        "Evidence that supports the candidate. For PR 36 use exactly 'task', which the server resolves to the current committed task/run. Do not invent or reuse model-authored evidence or artifact refs.",
+        "Evidence that supports the candidate. PR 36 admits exactly 'task', which the server resolves to the current committed task/run. Do not invent or reuse model-authored evidence or artifact refs.",
     },
     rationale: {
       type: "string",
