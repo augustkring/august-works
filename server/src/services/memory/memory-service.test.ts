@@ -324,6 +324,83 @@ describePg("Memory Core service", () => {
     expect(replay.evidence).toHaveLength(2);
   });
 
+  it("attaches contradicting evidence to an equivalent pending claim without duplicating it", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const text = "Acme procurement owner is Anna.";
+    const supporting = {
+      ...evidence(text)[0]!,
+      sourceRef: "issue://pending-claim",
+    };
+
+    const first = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: text,
+        summary: null,
+        evidence: [supporting],
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+
+    const contradicting = {
+      ...evidence(text)[0]!,
+      sourceRef: "issue://contradicting-source",
+      relation: "contradicts" as const,
+    };
+    const contradiction = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: text,
+        summary: null,
+        evidence: [supporting, contradicting],
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+
+    expect(contradiction.resolution).toMatchObject({
+      kind: "contradiction",
+      reasonCode: "contradicting_evidence_against_pending_equivalent_claim",
+      targetRecordId: first.record.id,
+      novelEvidenceCount: 1,
+    });
+    expect(contradiction.record).toMatchObject({
+      id: first.record.id,
+      reviewState: "pending",
+      supersedesRecordId: null,
+    });
+    expect(contradiction.evidence).toHaveLength(2);
+    expect(
+      await db
+        .select()
+        .from(memoryRecords)
+        .where(eq(memoryRecords.companyId, seeded.companyId)),
+    ).toHaveLength(1);
+
+    const replay = await svc.createCandidate(
+      seeded.companyId,
+      candidate(b.id, {
+        memoryType: "fact",
+        title: "Procurement owner",
+        content: text,
+        summary: null,
+        evidence: [supporting, contradicting],
+      }),
+      agentActor(seeded.agent.id, seeded.userId),
+    );
+    expect(replay.resolution).toMatchObject({
+      kind: "contradiction",
+      targetRecordId: first.record.id,
+      novelEvidenceCount: 0,
+    });
+    expect(replay.evidence).toHaveLength(2);
+  });
+
   it("creates a pending temporal update and supersedes only after acceptance", async () => {
     const seeded = await seed();
     const b = await binding(seeded.companyId, seeded.userId);
