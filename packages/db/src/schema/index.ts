@@ -135,6 +135,10 @@ export {
 } from "./memory.js";
 export { memoryJobs } from "./memory_jobs.js";
 export {
+  automationArtifacts,
+  automationArtifactVersions,
+} from "./automation_artifacts.js";
+export {
   workflows,
   workflowRevisions,
   workflowRuns,

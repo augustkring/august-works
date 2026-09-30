@@ -315,3 +315,12 @@ export {
   createWorkflowWaitSignalToken,
   hashWorkflowWaitSignalToken,
 } from "./workflows/workflow-wait-service.js";
+
+export {
+  automationArtifactService,
+  automationArtifactVersionContentHash,
+  type AutomationArtifactMutationActor,
+} from "./automation-artifacts/automation-artifact-service.js";
+export {
+  automationArtifactRuntimeService,
+} from "./automation-artifacts/automation-artifact-runtime.js";

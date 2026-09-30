@@ -1,0 +1,208 @@
+import type { Db } from "@paperclipai/db";
+import {
+  automationArtifactGateReportSchema,
+  type AutomationArtifactRuntimeBinding,
+} from "@paperclipai/shared";
+import { conflict, notFound, unprocessable } from "../../errors.js";
+import { instanceSettingsService } from "../instance-settings.js";
+import {
+  WorkflowOutputSchemaError,
+  validateWorkflowOutput,
+} from "../workflows/workflow-output-schema.js";
+import {
+  AutomationArtifactDeclarativeError,
+  executeAutomationArtifactDeclarativeSource,
+} from "./automation-artifact-declarative.js";
+import {
+  automationArtifactService,
+  automationArtifactVersionContentHash,
+  type AutomationArtifactMutationActor,
+} from "./automation-artifact-service.js";
+
+function validateValueAgainstSchema(
+  direction: "input" | "output",
+  schema: Record<string, unknown>,
+  value: unknown,
+) {
+  try {
+    validateWorkflowOutput(schema, value);
+  } catch (error) {
+    if (error instanceof WorkflowOutputSchemaError) {
+      throw unprocessable(
+        `Automation Artifact ${direction} failed schema validation`,
+        {
+          code:
+            error.code === "workflow_output_schema_invalid"
+              ? `automation_artifact_${direction}_schema_invalid`
+              : `automation_artifact_${direction}_schema_mismatch`,
+          validationErrors: error.validationErrors,
+        },
+      );
+    }
+    throw error;
+  }
+}
+
+/**
+ * PR 40 runtime boundary.
+ *
+ * It resolves an immutable active version and executes only the existing safe
+ * expression/transform language. There is no host JavaScript/Python execution,
+ * dependency install, network access, filesystem access, or secret access here.
+ * PR 41 owns sandbox execution for generated code and the gates required before
+ * any artifact may enter active/shadow state.
+ */
+export function automationArtifactRuntimeService(db: Db) {
+  const artifacts = automationArtifactService(db);
+  const settings = instanceSettingsService(db);
+
+  async function resolveActiveBinding(
+    companyId: string,
+    artifactId: string,
+    expectedVersionId: string | null,
+    actor: AutomationArtifactMutationActor,
+  ): Promise<AutomationArtifactRuntimeBinding> {
+    const experimental = await settings.getExperimental();
+    if (experimental.enableAutomationArtifactsV1 !== true) {
+      throw notFound("Automation Artifacts are not enabled", {
+        code: "automation_artifacts_disabled",
+      });
+    }
+
+    const detail = await artifacts.getDetail(companyId, artifactId, actor);
+    if (!detail) throw notFound("Automation Artifact not found");
+
+    const { artifact, latestVersion } = detail;
+    if (
+      artifact.archivedAt ||
+      artifact.status !== "active" ||
+      !latestVersion
+    ) {
+      throw conflict("Automation Artifact is not active", {
+        code: "automation_artifact_not_active",
+        status: artifact.status,
+        archived: artifact.archivedAt !== null,
+      });
+    }
+    if (
+      expectedVersionId !== null &&
+      latestVersion.id !== expectedVersionId
+    ) {
+      throw conflict("Automation Artifact active version changed", {
+        code: "revision_conflict",
+        expectedVersionId,
+        currentVersionId: latestVersion.id,
+      });
+    }
+
+    const validation = automationArtifactGateReportSchema.safeParse(
+      latestVersion.validationReport,
+    );
+    const security = automationArtifactGateReportSchema.safeParse(
+      latestVersion.securityReport,
+    );
+    const gates = [
+      { expectedKind: "validation" as const, parsed: validation },
+      { expectedKind: "security" as const, parsed: security },
+    ];
+    for (const gate of gates) {
+      if (
+        !gate.parsed.success ||
+        gate.parsed.data.kind !== gate.expectedKind ||
+        gate.parsed.data.status !== "passed" ||
+        gate.parsed.data.contentHash !== latestVersion.contentHash
+      ) {
+        throw conflict(
+          "Automation Artifact version has not completed validation and security gates",
+          {
+            code: "automation_artifact_validation_required",
+            artifactVersionId: latestVersion.id,
+            gate: gate.expectedKind,
+          },
+        );
+      }
+    }
+
+    const recomputedHash = automationArtifactVersionContentHash({
+      kind: artifact.kind,
+      language: artifact.language,
+      sourceCode: latestVersion.sourceCode,
+      inputSchema: latestVersion.inputSchema,
+      outputSchema: latestVersion.outputSchema,
+      dependencyManifest: latestVersion.dependencyManifest,
+      testSpec: latestVersion.testSpec,
+    });
+    if (recomputedHash !== latestVersion.contentHash) {
+      throw conflict("Automation Artifact version integrity check failed", {
+        code: "automation_artifact_integrity_mismatch",
+        artifactVersionId: latestVersion.id,
+      });
+    }
+
+    return {
+      artifactId: artifact.id,
+      artifactVersionId: latestVersion.id,
+      companyId: artifact.companyId,
+      kind: artifact.kind,
+      language: artifact.language,
+      inputSchema: latestVersion.inputSchema,
+      outputSchema: latestVersion.outputSchema,
+      riskClass: artifact.riskClass,
+      sideEffectClass: artifact.sideEffectClass,
+      contentHash: latestVersion.contentHash,
+      sourceCode: latestVersion.sourceCode,
+      dependencyManifest: latestVersion.dependencyManifest,
+    };
+  }
+
+  return {
+    resolveActiveBinding,
+
+    executeDeclarative: async (
+      companyId: string,
+      artifactId: string,
+      expectedVersionId: string,
+      input: unknown,
+      actor: AutomationArtifactMutationActor,
+    ) => {
+      const binding = await resolveActiveBinding(
+        companyId,
+        artifactId,
+        expectedVersionId,
+        actor,
+      );
+      if (
+        (binding.kind !== "expression" && binding.kind !== "transform") ||
+        binding.sideEffectClass !== "pure"
+      ) {
+        throw conflict(
+          "Automation Artifact kind requires the PR 41 governed execution runtime",
+          {
+            code: "automation_artifact_runtime_not_available",
+            artifactKind: binding.kind,
+            sideEffectClass: binding.sideEffectClass,
+          },
+        );
+      }
+
+      validateValueAgainstSchema("input", binding.inputSchema, input);
+
+      let output: unknown;
+      try {
+        output = executeAutomationArtifactDeclarativeSource(
+          binding.kind,
+          binding.sourceCode,
+          input,
+        );
+      } catch (error) {
+        if (error instanceof AutomationArtifactDeclarativeError) {
+          throw unprocessable(error.message, { code: error.code });
+        }
+        throw error;
+      }
+
+      validateValueAgainstSchema("output", binding.outputSchema, output);
+      return { binding, output };
+    },
+  };
+}
