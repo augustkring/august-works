@@ -270,6 +270,48 @@ function memoryOperationFingerprint(value: unknown): string {
     .digest("hex");
 }
 
+function metadataForOperationFingerprint(
+  rawInput: unknown,
+  parsedMetadata: Record<string, unknown>,
+): Record<string, unknown> {
+  if (
+    typeof rawInput !== "object" ||
+    rawInput === null ||
+    Array.isArray(rawInput)
+  ) {
+    return parsedMetadata;
+  }
+  const metadataDescriptor = Object.getOwnPropertyDescriptor(rawInput, "metadata");
+  const rawMetadata =
+    metadataDescriptor && "value" in metadataDescriptor
+      ? metadataDescriptor.value
+      : null;
+  if (
+    typeof rawMetadata !== "object" ||
+    rawMetadata === null ||
+    Array.isArray(rawMetadata)
+  ) {
+    return parsedMetadata;
+  }
+
+  // Zod deliberately normalizes potentially dangerous object keys. The
+  // persisted metadata stays normalized, but idempotency must still distinguish
+  // two validated requests that differed in an own JSON metadata key such as
+  // "__proto__". A null-prototype record avoids invoking prototype setters.
+  const fingerprintMetadata = Object.create(null) as Record<string, unknown>;
+  for (const key of Object.keys(parsedMetadata)) {
+    fingerprintMetadata[key] = parsedMetadata[key];
+  }
+  for (const key of Object.keys(rawMetadata as Record<string, unknown>)) {
+    const descriptor = Object.getOwnPropertyDescriptor(rawMetadata, key);
+    if (!descriptor || !("value" in descriptor) || descriptor.value === undefined) {
+      continue;
+    }
+    fingerprintMetadata[key] = descriptor.value;
+  }
+  return fingerprintMetadata;
+}
+
 async function lockMemoryOperation(
   db: Db,
   companyId: string,
@@ -707,7 +749,13 @@ export function memoryService(db: Db) {
 
       const operationFingerprint = memoryOperationFingerprint({
         ownerAgentId,
-        input: parsed.data,
+        input: {
+          ...parsed.data,
+          metadata: metadataForOperationFingerprint(
+            rawInput,
+            parsed.data.metadata,
+          ),
+        },
       });
       const candidate: MemoryCandidateInputParsed = {
         ...parsed.data,
@@ -815,7 +863,13 @@ export function memoryService(db: Db) {
 
         const operationFingerprint = memoryOperationFingerprint({
           sourceRecordId: source.id,
-          input: parsed.data,
+          input: {
+            ...parsed.data,
+            metadata: metadataForOperationFingerprint(
+              rawInput,
+              parsed.data.metadata,
+            ),
+          },
         });
         await lockMemoryOperation(
           txDb,
