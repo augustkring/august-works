@@ -21,6 +21,7 @@ import {
   type AutomationArtifactMutationActor,
 } from "./automation-artifact-service.js";
 import { automationArtifactRuntimeService } from "./automation-artifact-runtime.js";
+import { automationArtifactSecurityService } from "./automation-artifact-security.js";
 import { and, eq } from "drizzle-orm";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -29,6 +30,10 @@ const describePg = support.supported ? describe.sequential : describe.skip;
 function userActor(userId: string): AutomationArtifactMutationActor {
   const principal: ExecutionPrincipal = { type: "user", userId };
   return { principal };
+}
+
+function systemActor(): AutomationArtifactMutationActor {
+  return { principal: { type: "system", service: "artifact-security-test" } };
 }
 
 function input(overrides: Record<string, unknown> = {}) {
@@ -440,6 +445,225 @@ describePg("Automation Artifact service", () => {
         .from(automationArtifactVersions)
         .where(eq(automationArtifactVersions.companyId, seeded.company.id)),
     ).toHaveLength(0);
+  });
+
+  it("records hash-bound gates only through the system evaluator and activates a tested declarative artifact", async () => {
+    const seeded = await seedCompany();
+    const user = userActor(seeded.userId);
+    const system = systemActor();
+    const service = automationArtifactService(db);
+    const security = automationArtifactSecurityService(db);
+    const runtime = automationArtifactRuntimeService(db);
+
+    const created = await service.create(
+      seeded.company.id,
+      input({
+        kind: "transform",
+        sourceCode: JSON.stringify({
+          email: "lower(trim(input.email))",
+        }),
+        testSpec: {
+          cases: [
+            {
+              name: "normalizes-email",
+              input: { email: " Alice@Example.COM " },
+              output: { email: "alice@example.com" },
+            },
+          ],
+        },
+      }),
+      user,
+    );
+    const version = created.latestVersion!;
+
+    const passedReport = {
+      schema: "automation_artifact_gate.v1" as const,
+      status: "passed" as const,
+      contentHash: version.contentHash,
+      checkedAt: "2026-09-30T20:00:00.000Z",
+      checks: [],
+    };
+
+    await expect(
+      service.recordGateReports(
+        seeded.company.id,
+        created.artifact.id,
+        version.id,
+        {
+          validationReport: { ...passedReport, kind: "validation" },
+          securityReport: { ...passedReport, kind: "security" },
+        },
+        user,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({
+        code: "automation_artifact_gate_writer_denied",
+      }),
+    });
+
+    const evaluated = await security.evaluateLatestVersion(
+      seeded.company.id,
+      created.artifact.id,
+      system,
+    );
+    expect(evaluated.latestVersion?.validationReport).toMatchObject({
+      kind: "validation",
+      status: "passed",
+      contentHash: version.contentHash,
+    });
+    expect(evaluated.latestVersion?.securityReport).toMatchObject({
+      kind: "security",
+      status: "passed",
+      contentHash: version.contentHash,
+    });
+
+    await service.transitionStatus(
+      seeded.company.id,
+      created.artifact.id,
+      {
+        expectedStatus: "candidate",
+        expectedLatestVersionId: version.id,
+        status: "testing",
+      },
+      user,
+    );
+    const active = await service.transitionStatus(
+      seeded.company.id,
+      created.artifact.id,
+      {
+        expectedStatus: "testing",
+        expectedLatestVersionId: version.id,
+        status: "active",
+      },
+      user,
+    );
+    expect(active.artifact.status).toBe("active");
+
+    await instanceSettingsService(db).updateExperimental({
+      enableAutomationArtifactsV1: true,
+    });
+    const executed = await runtime.execute(
+      seeded.company.id,
+      created.artifact.id,
+      version.id,
+      { email: " BOB@Example.com " },
+      user,
+    );
+    expect(executed.output).toEqual({ email: "bob@example.com" });
+  });
+
+  it("rejects mismatched gate hashes and keeps generated-code execution behind its kill switch", async () => {
+    const seeded = await seedCompany();
+    const user = userActor(seeded.userId);
+    const system = systemActor();
+    const service = automationArtifactService(db);
+
+    const created = await service.create(
+      seeded.company.id,
+      input({
+        kind: "typescript",
+        language: "typescript",
+        inputSchema: {
+          type: "object",
+          properties: { value: { type: "number" } },
+          required: ["value"],
+          additionalProperties: false,
+        },
+        outputSchema: {
+          type: "object",
+          properties: { value: { type: "number" } },
+          required: ["value"],
+          additionalProperties: false,
+        },
+        sourceCode:
+          "export default (input: { value: number }) => ({ value: input.value + 1 });",
+        testSpec: {
+          cases: [{ input: { value: 1 }, output: { value: 2 } }],
+        },
+      }),
+      user,
+    );
+    const version = created.latestVersion!;
+    const reportBase = {
+      schema: "automation_artifact_gate.v1" as const,
+      status: "passed" as const,
+      checkedAt: "2026-09-30T20:00:00.000Z",
+      checks: [],
+    };
+
+    await expect(
+      service.recordGateReports(
+        seeded.company.id,
+        created.artifact.id,
+        version.id,
+        {
+          validationReport: {
+            ...reportBase,
+            kind: "validation",
+            contentHash: "0".repeat(64),
+          },
+          securityReport: {
+            ...reportBase,
+            kind: "security",
+            contentHash: "0".repeat(64),
+          },
+        },
+        system,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({
+        code: "automation_artifact_gate_hash_mismatch",
+      }),
+    });
+
+    await service.recordGateReports(
+      seeded.company.id,
+      created.artifact.id,
+      version.id,
+      {
+        validationReport: {
+          ...reportBase,
+          kind: "validation",
+          contentHash: version.contentHash,
+        },
+        securityReport: {
+          ...reportBase,
+          kind: "security",
+          contentHash: version.contentHash,
+        },
+      },
+      system,
+    );
+
+    await service.transitionStatus(
+      seeded.company.id,
+      created.artifact.id,
+      {
+        expectedStatus: "candidate",
+        expectedLatestVersionId: version.id,
+        status: "testing",
+      },
+      user,
+    );
+    await expect(
+      service.transitionStatus(
+        seeded.company.id,
+        created.artifact.id,
+        {
+          expectedStatus: "testing",
+          expectedLatestVersionId: version.id,
+          status: "active",
+        },
+        user,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({
+        code: "automation_artifact_code_execution_disabled",
+      }),
+    });
   });
 
   it("keeps runtime disabled by default and resolves only active hash-gated versions", async () => {

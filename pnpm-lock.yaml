@@ -1033,6 +1033,9 @@ importers:
       svix:
         specifier: 1.76.1
         version: 1.76.1
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
       ws:
         specifier: ^8.21.3
         version: 8.21.3
@@ -1076,9 +1079,6 @@ importers:
       tsx:
         specifier: ^4.23.12
         version: 4.23.12
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
       vite:
         specifier: ^8.2.2
         version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)

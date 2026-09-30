@@ -12,12 +12,14 @@ import {
 import {
   appendAutomationArtifactVersionSchema,
   archiveAutomationArtifactSchema,
+  automationArtifactGateReportSchema,
   createAutomationArtifactSchema,
   executionPrincipalToActivityActor,
   transitionAutomationArtifactStatusSchema,
   type AppendAutomationArtifactVersion,
   type AutomationArtifact,
   type AutomationArtifactDetail,
+  type AutomationArtifactGateReport,
   type AutomationArtifactKind,
   type AutomationArtifactLanguage,
   type AutomationArtifactStatus,
@@ -37,6 +39,7 @@ import {
   publishActivity,
   type ActivityPublication,
 } from "../activity-log.js";
+import { instanceSettingsService } from "../instance-settings.js";
 import {
   AutomationArtifactDeclarativeError,
   validateAutomationArtifactDeclarativeSource,
@@ -365,8 +368,8 @@ const ALLOWED_STATUS_TRANSITIONS: Readonly<
   Record<AutomationArtifactStatus, readonly AutomationArtifactStatus[]>
 > = {
   candidate: ["testing", "failed", "deprecated", "revoked"],
-  testing: ["candidate", "failed", "deprecated", "revoked"],
-  shadow: ["candidate", "failed", "deprecated", "revoked"],
+  testing: ["candidate", "shadow", "active", "failed", "deprecated", "revoked"],
+  shadow: ["candidate", "active", "failed", "deprecated", "revoked"],
   active: ["failed", "deprecated", "revoked"],
   deprecated: ["revoked"],
   revoked: [],
@@ -378,18 +381,49 @@ function assertStatusTransitionAllowed(
   next: AutomationArtifactStatus,
 ) {
   if (current === next) return;
-  if (next === "active" || next === "shadow") {
-    throw forbidden(
-      "Automation Artifact activation requires the PR 41 validation and security gate",
-      { code: "automation_artifact_security_gate_required", targetStatus: next },
-    );
-  }
   if (!ALLOWED_STATUS_TRANSITIONS[current].includes(next)) {
     throw conflict("Automation Artifact lifecycle transition is invalid", {
       code: "automation_artifact_invalid_transition",
       currentStatus: current,
       targetStatus: next,
     });
+  }
+}
+
+function assertPassingGateReports(
+  artifact: typeof automationArtifacts.$inferSelect,
+  version: typeof automationArtifactVersions.$inferSelect,
+) {
+  for (const [expectedKind, raw] of [
+    ["validation", version.validationReport],
+    ["security", version.securityReport],
+  ] as const) {
+    const parsed = automationArtifactGateReportSchema.safeParse(raw);
+    if (
+      !parsed.success ||
+      parsed.data.kind !== expectedKind ||
+      parsed.data.status !== "passed" ||
+      parsed.data.contentHash !== version.contentHash
+    ) {
+      throw forbidden(
+        "Automation Artifact activation requires passing hash-bound validation and security gates",
+        {
+          code: "automation_artifact_security_gate_required",
+          artifactId: artifact.id,
+          artifactVersionId: version.id,
+          gate: expectedKind,
+        },
+      );
+    }
+  }
+}
+
+function assertGateReportWriter(actor: AutomationArtifactMutationActor) {
+  if (actor.principal.type !== "system") {
+    throw forbidden(
+      "Automation Artifact gate reports can only be recorded by the governed system evaluator",
+      { code: "automation_artifact_gate_writer_denied" },
+    );
   }
 }
 
@@ -432,6 +466,7 @@ function versionHashFor(
 }
 
 export function automationArtifactService(db: Db) {
+  const settings = instanceSettingsService(db);
   return {
     list: async (
       companyId: string,
@@ -716,6 +751,107 @@ export function automationArtifactService(db: Db) {
       return detail;
     },
 
+    recordGateReports: async (
+      companyId: string,
+      artifactId: string,
+      versionId: string,
+      rawReports: {
+        validationReport: AutomationArtifactGateReport;
+        securityReport: AutomationArtifactGateReport;
+      },
+      actor: AutomationArtifactMutationActor,
+    ): Promise<AutomationArtifactDetail> => {
+      assertGateReportWriter(actor);
+      const validation = automationArtifactGateReportSchema.safeParse(
+        rawReports.validationReport,
+      );
+      const security = automationArtifactGateReportSchema.safeParse(
+        rawReports.securityReport,
+      );
+      if (
+        !validation.success ||
+        validation.data.kind !== "validation" ||
+        !security.success ||
+        security.data.kind !== "security"
+      ) {
+        throw unprocessable("Invalid Automation Artifact gate reports", {
+          code: "automation_artifact_gate_report_invalid",
+        });
+      }
+      const publications: ActivityPublication[] = [];
+
+      await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await assertActorCompanyScope(txDb, companyId, actor);
+        const artifact = await lockArtifact(txDb, companyId, artifactId);
+        if (!artifact) throw notFound("Automation Artifact not found");
+        if (artifact.latestVersionId !== versionId) {
+          throw conflict("Automation Artifact gate target is not the latest version", {
+            code: "revision_conflict",
+            currentLatestVersionId: artifact.latestVersionId,
+          });
+        }
+        const version = await getVersionRow(
+          txDb,
+          companyId,
+          artifact.id,
+          versionId,
+        );
+        if (!version) throw notFound("Automation Artifact version not found");
+        if (
+          validation.data.contentHash !== version.contentHash ||
+          security.data.contentHash !== version.contentHash
+        ) {
+          throw conflict("Automation Artifact gate report hash does not match version content", {
+            code: "automation_artifact_gate_hash_mismatch",
+            artifactVersionId: version.id,
+          });
+        }
+
+        const [updated] = await txDb
+          .update(automationArtifactVersions)
+          .set({
+            validationReport: validation.data,
+            securityReport: security.data,
+          })
+          .where(
+            and(
+              eq(automationArtifactVersions.companyId, companyId),
+              eq(automationArtifactVersions.artifactId, artifact.id),
+              eq(automationArtifactVersions.id, version.id),
+              eq(automationArtifactVersions.contentHash, version.contentHash),
+            ),
+          )
+          .returning({ id: automationArtifactVersions.id });
+        if (!updated) {
+          throw conflict("Automation Artifact version changed during gate persistence", {
+            code: "revision_conflict",
+          });
+        }
+
+        publications.push(
+          await persistArtifactActivity(txDb, actor, {
+            companyId,
+            action: "automation_artifact.gates_recorded",
+            artifactId: artifact.id,
+            details: {
+              versionId: version.id,
+              contentHash: version.contentHash,
+              validationStatus: validation.data.status,
+              securityStatus: security.data.status,
+            },
+          }),
+        );
+      });
+
+      publications.forEach(publishActivity);
+      const detail = await getDetail(db, companyId, artifactId);
+      if (!detail) {
+        throw new Error("Automation Artifact disappeared after gate evaluation");
+      }
+      return detail;
+    },
+
     transitionStatus: async (
       companyId: string,
       artifactId: string,
@@ -747,6 +883,59 @@ export function automationArtifactService(db: Db) {
         }
         assertStatusTransitionAllowed(artifact.status, input.status);
         if (artifact.status === input.status) return;
+
+        if (input.status === "active" || input.status === "shadow") {
+          const version = await getVersionRow(
+            txDb,
+            companyId,
+            artifact.id,
+            input.expectedLatestVersionId,
+          );
+          if (!version) {
+            throw conflict("Automation Artifact latest-version pointer is invalid", {
+              code: "automation_artifact_pointer_invalid",
+              currentLatestVersionId: artifact.latestVersionId,
+            });
+          }
+          assertPassingGateReports(artifact, version);
+
+          if (
+            artifact.kind === "python" ||
+            artifact.kind === "tool_chain" ||
+            artifact.kind === "subworkflow"
+          ) {
+            throw forbidden(
+              "Automation Artifact runtime is not qualified for this artifact kind",
+              {
+                code: "automation_artifact_runtime_not_qualified",
+                artifactKind: artifact.kind,
+              },
+            );
+          }
+
+          if (artifact.kind === "typescript") {
+            const experimental = await settings.getExperimental();
+            if (experimental.enableAutomationArtifactCodeExecutionV1 !== true) {
+              throw forbidden(
+                "Generated-code Automation Artifact execution is disabled",
+                { code: "automation_artifact_code_execution_disabled" },
+              );
+            }
+            if (
+              artifact.sideEffectClass !== "pure" ||
+              (artifact.riskClass !== "C0" && artifact.riskClass !== "C1")
+            ) {
+              throw forbidden(
+                "Generated-code pilot is restricted to pure C0/C1 artifacts",
+                {
+                  code: "automation_artifact_code_execution_risk_denied",
+                  riskClass: artifact.riskClass,
+                  sideEffectClass: artifact.sideEffectClass,
+                },
+              );
+            }
+          }
+        }
 
         const now = new Date();
         const [updated] = await txDb
