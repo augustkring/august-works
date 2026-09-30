@@ -333,6 +333,15 @@ vi.mock("../services/index.js", () => ({
   resolveHeartbeatSchedulingSuppression: resolveHeartbeatSchedulingSuppressionMock,
   routineService: routineServiceFactoryMock,
   statusCardService: vi.fn(() => ({})),
+  memoryJobService: vi.fn(() => ({
+    tick: vi.fn(async () => ({
+      recovered: 0,
+      retried: 0,
+      backfilled: 0,
+      retentionQueued: 0,
+      processed: 0,
+    })),
+  })),
   workflowExecutorService: vi.fn(() => ({
     recoverExpiredRuns: vi.fn(async () => ({
       checked: 0,

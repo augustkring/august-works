@@ -9,15 +9,8 @@ import {
 const mockTelemetryClient = vi.hoisted(() => ({ track: vi.fn() }));
 const mockTelemetryState = vi.hoisted(() => ({ enabled: true }));
 const mockTrackAgentTaskRun = vi.hoisted(() => vi.fn());
-const mockPostRunMemoryExtract = vi.hoisted(() =>
-  vi.fn(async () => ({
-    runId: "mock-run",
-    proposed: 0,
-    persisted: 0,
-    duplicates: 0,
-    skipped: 0,
-    skipReasons: {},
-  })),
+const mockEnqueuePostRunCapture = vi.hoisted(() =>
+  vi.fn(async () => null),
 );
 
 vi.mock("../telemetry.js", () => ({
@@ -25,9 +18,9 @@ vi.mock("../telemetry.js", () => ({
     mockTelemetryState.enabled ? mockTelemetryClient : null,
 }));
 
-vi.mock("../services/memory/memory-post-run-extraction.js", () => ({
-  memoryPostRunExtractionService: () => ({
-    extract: mockPostRunMemoryExtract,
+vi.mock("../services/memory/memory-jobs.js", () => ({
+  memoryJobService: () => ({
+    enqueuePostRunCapture: mockEnqueuePostRunCapture,
   }),
 }));
 
@@ -123,7 +116,7 @@ describeEmbeddedPostgres("emitAgentTaskRun", () => {
     }
   });
 
-  it("runs post-run Memory extraction even when telemetry is disabled", async () => {
+  it("enqueues durable post-run Memory capture even when telemetry is disabled", async () => {
     await seedCompanyAndAgent();
     mockTelemetryState.enabled = false;
     const run = {
@@ -140,8 +133,8 @@ describeEmbeddedPostgres("emitAgentTaskRun", () => {
 
     await emitAgentTaskRun(db, run);
 
-    expect(mockPostRunMemoryExtract).toHaveBeenCalledTimes(1);
-    expect(mockPostRunMemoryExtract).toHaveBeenCalledWith(run);
+    expect(mockEnqueuePostRunCapture).toHaveBeenCalledTimes(1);
+    expect(mockEnqueuePostRunCapture).toHaveBeenCalledWith(run);
     expect(mockTrackAgentTaskRun).not.toHaveBeenCalled();
   });
 

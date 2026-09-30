@@ -2924,6 +2924,8 @@ export {
   MEMORY_EVIDENCE_RELATIONS,
   MEMORY_RETENTION_STATES,
   MEMORY_REVIEW_STATES,
+  MEMORY_JOB_OPERATION_TYPES,
+  MEMORY_JOB_STATUSES,
   MEMORY_RESOLUTION_KINDS,
   MEMORY_SCOPE_TYPES,
   MEMORY_TYPES,
@@ -2956,6 +2958,11 @@ export {
   type MemoryRecordDetail,
   type MemoryCandidateResolutionResult,
   type MemoryRecordListQuery,
+  type MemoryJobOperationType,
+  type MemoryJobStatus,
+  type MemoryJobEffectiveState,
+  type MemoryJob,
+  type MemoryJobListQuery,
 } from "./types/memory.js";
 export {
   memoryBindingInputSchema,
