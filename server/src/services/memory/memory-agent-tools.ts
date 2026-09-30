@@ -27,6 +27,7 @@ import { logActivity } from "../activity-log.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
 import {
   memorySubjectScopeId,
+  resolveMemoryRetrievalScopes,
   retrieveEligibleMemory,
 } from "./memory-retrieval.js";
 
@@ -425,7 +426,7 @@ export function memoryAgentToolsService(db: Db) {
       }
 
       const asOf = parsed.data.asOf ? new Date(parsed.data.asOf) : new Date();
-      const ranked = await retrieveEligibleMemory(db, {
+      const retrievalInput = {
         companyId: context.companyId,
         agentId: context.agentId,
         runId: context.runId,
@@ -439,8 +440,10 @@ export function memoryAgentToolsService(db: Db) {
         topK: parsed.data.topK,
         // Agent tool behavior is unchanged: restricted Memory stays hidden,
         // while confidential owner/scope-authorized Memory remains recallable.
-        sensitivityCeiling: "confidential",
-      });
+        sensitivityCeiling: "confidential" as const,
+      };
+      const scopes = resolveMemoryRetrievalScopes(retrievalInput);
+      const ranked = await retrieveEligibleMemory(db, retrievalInput);
 
       const records = ranked.map(({ detail, relevanceScore }) =>
         recallRecord(detail, relevanceScore),
