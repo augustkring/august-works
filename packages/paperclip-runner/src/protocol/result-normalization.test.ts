@@ -225,6 +225,44 @@ describe("normalizePrpResultSignals", () => {
     ]);
   });
 
+  it("preserves optional memory candidate extensions through canonical result validation", () => {
+    const candidate = {
+      memoryType: "constraint",
+      title: null,
+      content: "Renewal approval requires finance sign-off.",
+      subjectType: "customer",
+      subjectId: "acme",
+      proposedScopeType: "org",
+      proposedScopeId: null,
+      sensitivity: "internal",
+      validFrom: null,
+      validUntil: null,
+      evidenceRefs: ["task"],
+      rationale: "This is a durable approval constraint.",
+    };
+    const result = {
+      schema: "paperclip.run_result.v1",
+      reportedWorkDisposition: "done",
+      summary: "Completed the renewal task.",
+      completionClaim: {
+        contractRevision: "1",
+        objectiveSatisfied: true,
+        criteria: [{ criterionId: "objective", status: "satisfied", evidenceRefs: [] }],
+        remainingWork: [],
+      },
+      evidence: [],
+      verification: [],
+      attentionRequests: [],
+      artifacts: [],
+      memoryCandidates: [candidate],
+    };
+
+    expect(validatePrpStructuredRunResult(result)).toMatchObject({
+      ok: true,
+      result: { memoryCandidates: [candidate] },
+    });
+  });
+
   it("records unknown and malformed attention as diagnostics instead of throwing", () => {
     const normalized = normalizePrpResultSignals({
       attentionRequests: [
