@@ -13,16 +13,8 @@ import {
   workflowAuthoringRemoveStepInputSchema,
   workflowAuthoringTestStepInputSchema,
   workflowAuthoringUpdateStepInputSchema,
-  type WorkflowAuthoringAddStepInput,
-  type WorkflowAuthoringAddTriggerInput,
-  type WorkflowAuthoringConnectStepsInput,
-  type WorkflowAuthoringCreateInput,
-  type WorkflowAuthoringPublishInput,
-  type WorkflowAuthoringRemoveStepInput,
-  type WorkflowAuthoringTestStepInput,
   type WorkflowAuthoringUpdateStepInput,
   type WorkflowDetail,
-  type WorkflowEdgeV1,
   type WorkflowGraphV1,
   type WorkflowNodeV1,
 } from "@paperclipai/shared";
@@ -311,7 +303,7 @@ export function workflowAuthoringToolsService(db: Db) {
 
   async function create(
     context: WorkflowAuthoringContext,
-    rawInput: WorkflowAuthoringCreateInput,
+    rawInput: unknown,
   ) {
     const parsed = workflowAuthoringCreateInputSchema.safeParse(rawInput);
     if (!parsed.success) {
@@ -366,7 +358,7 @@ export function workflowAuthoringToolsService(db: Db) {
 
   async function addNode(
     context: WorkflowAuthoringContext,
-    rawInput: WorkflowAuthoringAddTriggerInput | WorkflowAuthoringAddStepInput,
+    rawInput: unknown,
     category: "trigger" | "step",
   ): Promise<DraftMutationResult> {
     const schema =
@@ -451,7 +443,7 @@ export function workflowAuthoringToolsService(db: Db) {
 
   async function updateStep(
     context: WorkflowAuthoringContext,
-    rawInput: WorkflowAuthoringUpdateStepInput,
+    rawInput: unknown,
   ): Promise<DraftMutationResult> {
     const parsed = workflowAuthoringUpdateStepInputSchema.safeParse(rawInput);
     if (!parsed.success) {
@@ -492,7 +484,7 @@ export function workflowAuthoringToolsService(db: Db) {
 
   async function connectSteps(
     context: WorkflowAuthoringContext,
-    rawInput: WorkflowAuthoringConnectStepsInput,
+    rawInput: unknown,
   ): Promise<DraftMutationResult> {
     const parsed = workflowAuthoringConnectStepsInputSchema.safeParse(rawInput);
     if (!parsed.success) {
@@ -536,7 +528,7 @@ export function workflowAuthoringToolsService(db: Db) {
 
   async function removeStep(
     context: WorkflowAuthoringContext,
-    rawInput: WorkflowAuthoringRemoveStepInput,
+    rawInput: unknown,
   ): Promise<DraftMutationResult> {
     const parsed = workflowAuthoringRemoveStepInputSchema.safeParse(rawInput);
     if (!parsed.success) {
@@ -578,7 +570,7 @@ export function workflowAuthoringToolsService(db: Db) {
 
   async function testStep(
     context: WorkflowAuthoringContext,
-    rawInput: WorkflowAuthoringTestStepInput,
+    rawInput: unknown,
   ) {
     const parsed = workflowAuthoringTestStepInputSchema.safeParse(rawInput);
     if (!parsed.success) {
@@ -612,7 +604,7 @@ export function workflowAuthoringToolsService(db: Db) {
 
   async function preparePublish(
     context: WorkflowAuthoringContext,
-    rawInput: WorkflowAuthoringPublishInput,
+    rawInput: unknown,
   ) {
     const parsed = workflowAuthoringPublishInputSchema.safeParse(rawInput);
     if (!parsed.success) {
@@ -661,11 +653,11 @@ export function workflowAuthoringToolsService(db: Db) {
     create,
     addTrigger: (
       context: WorkflowAuthoringContext,
-      input: WorkflowAuthoringAddTriggerInput,
+      input: unknown,
     ) => addNode(context, input, "trigger"),
     addStep: (
       context: WorkflowAuthoringContext,
-      input: WorkflowAuthoringAddStepInput,
+      input: unknown,
     ) => addNode(context, input, "step"),
     updateStep,
     connectSteps,
