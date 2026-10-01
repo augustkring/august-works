@@ -254,3 +254,62 @@ export interface OptimizerCompilerResult {
   unsupportedCases: string[];
   fallbackConditions: string[];
 }
+
+export const OPTIMIZER_REPLAY_CASE_CATEGORIES = [
+  "representative",
+  "corrected",
+  "boundary",
+  "shape_variant",
+] as const;
+export type OptimizerReplayCaseCategory =
+  (typeof OPTIMIZER_REPLAY_CASE_CATEGORIES)[number];
+
+export const OPTIMIZER_REPLAY_EXECUTION_MODES = [
+  "pure",
+  "dry_run",
+  "sandbox",
+] as const;
+export type OptimizerReplayExecutionMode =
+  (typeof OPTIMIZER_REPLAY_EXECUTION_MODES)[number];
+
+export interface OptimizerReplayCase {
+  id: string;
+  category: OptimizerReplayCaseCategory;
+  sourceRunId: string | null;
+  input: unknown;
+  expectedOutput?: unknown;
+}
+
+export interface OptimizerReplayInvariantResult {
+  id: string;
+  critical: boolean;
+  passed: boolean;
+  detail: string | null;
+}
+
+export interface OptimizerReplayCaseResult {
+  id: string;
+  category: OptimizerReplayCaseCategory;
+  status: "passed" | "failed" | "unsupported";
+  outputSchemaValid: boolean;
+  exactOutputMatch: boolean | null;
+  invariantResults: OptimizerReplayInvariantResult[];
+  differenceSummary: string;
+  durationMs: number;
+  costEstimate: number | null;
+  unsupportedCases: string[];
+}
+
+export interface OptimizerReplayEvaluation {
+  status: "passed" | "failed";
+  reasonCode: string;
+  criticalInvariantFailure: boolean;
+  requiredCategories: OptimizerReplayCaseCategory[];
+  missingCategories: OptimizerReplayCaseCategory[];
+  caseResults: OptimizerReplayCaseResult[];
+  passedCaseCount: number;
+  failedCaseCount: number;
+  unsupportedCaseCount: number;
+  totalDurationMs: number;
+  totalCostEstimate: number | null;
+}

@@ -343,4 +343,9 @@ export {
 export {
   compileOptimizerCandidate,
 } from "./optimizer/optimizer-candidate-compiler.js";
+export {
+  evaluateOptimizerHistoricalReplay,
+  type OptimizerReplayExecutor,
+  type OptimizerReplayInvariantEvaluator,
+} from "./optimizer/optimizer-historical-replay.js";
 
