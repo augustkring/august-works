@@ -7,6 +7,7 @@ import {
   automationArtifactVersions,
   companyMemberships,
   heartbeatRuns,
+  workflowOptimizerSuggestions,
   workflows,
 } from "@paperclipai/db";
 import {
@@ -237,14 +238,57 @@ async function assertOriginWorkflow(
   }
 }
 
-function assertOptimizerProvenance(
+async function assertOptimizerProvenance(
+  db: ArtifactDb,
+  companyId: string,
   optimizerSuggestionId: string | null,
+  originWorkflowId: string | null,
   actor: AutomationArtifactMutationActor,
 ) {
-  if (optimizerSuggestionId && actor.principal.type !== "system") {
+  if (!optimizerSuggestionId) return;
+  if (actor.principal.type !== "system") {
     throw forbidden(
       "Optimizer suggestion provenance can only be assigned by the system",
       { code: "automation_artifact_optimizer_provenance_denied" },
+    );
+  }
+
+  const suggestion = await db
+    .select({
+      id: workflowOptimizerSuggestions.id,
+      workflowId: workflowOptimizerSuggestions.workflowId,
+    })
+    .from(workflowOptimizerSuggestions)
+    .where(
+      and(
+        eq(workflowOptimizerSuggestions.companyId, companyId),
+        eq(workflowOptimizerSuggestions.id, optimizerSuggestionId),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+
+  if (!suggestion) {
+    throw unprocessable(
+      "Optimizer suggestion provenance must belong to the artifact company",
+      {
+        code: "cross_company_reference",
+        resourceType: "workflow_optimizer_suggestion",
+        resourceId: optimizerSuggestionId,
+      },
+    );
+  }
+  if (
+    originWorkflowId !== null &&
+    suggestion.workflowId !== originWorkflowId
+  ) {
+    throw unprocessable(
+      "Optimizer suggestion provenance must match the artifact origin workflow",
+      {
+        code: "optimizer_suggestion_origin_mismatch",
+        optimizerSuggestionId,
+        suggestionWorkflowId: suggestion.workflowId,
+        originWorkflowId,
+      },
     );
   }
 }
@@ -510,8 +554,11 @@ export function automationArtifactService(db: Db) {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
         await assertOriginWorkflow(txDb, companyId, input.originWorkflowId);
-        assertOptimizerProvenance(
+        await assertOptimizerProvenance(
+          txDb,
+          companyId,
           input.createdByOptimizerSuggestionId,
+          input.originWorkflowId,
           actor,
         );
 

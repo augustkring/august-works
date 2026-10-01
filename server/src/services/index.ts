@@ -336,3 +336,8 @@ export {
   detectOptimizerCandidates,
   type OptimizerPatternDetectorOptions,
 } from "./optimizer/optimizer-pattern-detector.js";
+export {
+  optimizerSuggestionService,
+  type OptimizerSuggestionServiceOptions,
+} from "./optimizer/optimizer-suggestions.js";
+

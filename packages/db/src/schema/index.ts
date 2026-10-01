@@ -138,6 +138,7 @@ export {
   automationArtifacts,
   automationArtifactVersions,
 } from "./automation_artifacts.js";
+export { workflowOptimizerSuggestions } from "./workflow_optimizer.js";
 export {
   workflows,
   workflowRevisions,

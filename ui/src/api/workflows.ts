@@ -13,6 +13,7 @@ import type {
   WorkflowDataSelectorRequest,
   WorkflowDetail,
   WorkflowNodeDefinitionDescriptor,
+  OptimizerSuggestionResponse,
   WorkflowRun,
   WorkflowRunDetail,
   WorkflowRevision,
@@ -36,6 +37,11 @@ export const workflowsApi = {
 
   get: (companyId: string, workflowId: string) =>
     api.get<WorkflowDetail>(`/companies/${companyId}/workflows/${workflowId}`),
+
+  optimizerSuggestions: (companyId: string, workflowId: string) =>
+    api.get<OptimizerSuggestionResponse>(
+      `/companies/${companyId}/workflows/${workflowId}/optimizer-suggestions`,
+    ),
 
   create: (companyId: string, input: CreateWorkflow) =>
     api.post<WorkflowDetail>(`/companies/${companyId}/workflows`, input),
