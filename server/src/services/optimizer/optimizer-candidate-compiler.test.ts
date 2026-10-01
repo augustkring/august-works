@@ -191,7 +191,11 @@ describe("optimizer candidate compiler", () => {
       status: "compiled",
       candidate: {
         kind: "subgraph",
-        subgraph: { stepOrdinals: [2, 3] },
+        subgraph: {
+          stepOrdinals: [2, 3],
+          riskClass: "C1",
+          sideEffectClass: "read",
+        },
       },
       dependencyManifest: {
         capabilityRefs: ["tool:crm.read"],
