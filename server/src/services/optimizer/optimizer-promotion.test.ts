@@ -109,6 +109,36 @@ describe("optimizer promotion policy", () => {
     });
   });
 
+  it("rejects inconsistent replay and shadow proof even when top-level status says passed", () => {
+    expect(
+      evaluateOptimizerPromotion({
+        riskClass: "C1",
+        sideEffectClass: "pure",
+        policy,
+        evidence: evidence({
+          replayEvaluation: replay({ failedCaseCount: 1 }),
+        }),
+      }),
+    ).toMatchObject({
+      status: "denied",
+      reasonCode: "optimizer_promotion_replay_gate_required",
+    });
+
+    expect(
+      evaluateOptimizerPromotion({
+        riskClass: "C1",
+        sideEffectClass: "pure",
+        policy,
+        evidence: evidence({
+          shadowEvaluation: shadow({ unsupportedObservationCount: 1 }),
+        }),
+      }),
+    ).toMatchObject({
+      status: "denied",
+      reasonCode: "optimizer_promotion_shadow_gate_required",
+    });
+  });
+
   it("requires human approval for C2 and C3 and rejects C4", () => {
     for (const [riskClass, sideEffectClass] of [
       ["C2", "write"],
