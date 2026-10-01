@@ -13,11 +13,12 @@ const MAX_OUTPUT_BYTES = 256 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 3_000;
 const MAX_TIMEOUT_MS = 10_000;
-// V8 reserves several GiB of virtual address space even with a small managed
-// heap, so RLIMIT_AS cannot equal the intended working-memory budget. Keep a
-// coarse virtual-address ceiling high enough for Node startup while bounding
-// the model-authored JavaScript heap directly with V8 flags below.
-const ADDRESS_SPACE_CEILING_BYTES = 16 * 1024 * 1024 * 1024;
+// Modern 64-bit V8 reserves a 1 TiB virtual sandbox independently of the
+// managed JavaScript heap. RLIMIT_AS therefore cannot represent the working
+// memory budget without preventing Node from starting. Keep a coarse 2 TiB
+// virtual-address ceiling for V8 startup while bounding model-authored working
+// memory directly with the V8 heap flags below.
+const ADDRESS_SPACE_CEILING_BYTES = 2 * 1024 * 1024 * 1024 * 1024;
 const NODE_OLD_SPACE_LIMIT_MIB = 96;
 const NODE_SEMI_SPACE_LIMIT_MIB = 8;
 const PROCESS_LIMIT = 64;
