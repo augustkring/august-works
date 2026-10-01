@@ -90,14 +90,12 @@ export function awV4MigrationReconciliationService(db: Db) {
       invalidWorkflowTargetReference,
     ] = await Promise.all([
       scalarCount(
-        db,
         db
           .select({ count: count() })
           .from(routines)
           .where(legacyRoutinePredicate),
       ),
       scalarCount(
-        db,
         db
           .select({ count: count() })
           .from(routines)
@@ -111,7 +109,6 @@ export function awV4MigrationReconciliationService(db: Db) {
           .where(legacyRoutinePredicate),
       ),
       scalarCount(
-        db,
         db
           .select({ count: count() })
           .from(routines)
@@ -125,7 +122,6 @@ export function awV4MigrationReconciliationService(db: Db) {
           ),
       ),
       scalarCount(
-        db,
         db
           .select({ count: count() })
           .from(routines)
@@ -141,7 +137,6 @@ export function awV4MigrationReconciliationService(db: Db) {
           ),
       ),
       scalarCount(
-        db,
         db
           .select({ count: count() })
           .from(routines)
@@ -154,7 +149,6 @@ export function awV4MigrationReconciliationService(db: Db) {
           ),
       ),
       scalarCount(
-        db,
         db
           .select({ count: count(routines.id) })
           .from(routines)
@@ -174,7 +168,6 @@ export function awV4MigrationReconciliationService(db: Db) {
           ),
       ),
       scalarCount(
-        db,
         db
           .select({ count: count(routines.id) })
           .from(routines)
@@ -194,7 +187,6 @@ export function awV4MigrationReconciliationService(db: Db) {
           ),
       ),
       scalarCount(
-        db,
         db
           .select({ count: count() })
           .from(pipelineAutomationExecutions)
@@ -207,7 +199,6 @@ export function awV4MigrationReconciliationService(db: Db) {
           ),
       ),
       scalarCount(
-        db,
         db
           .select({ count: count() })
           .from(pipelineAutomationExecutions)
@@ -227,7 +218,6 @@ export function awV4MigrationReconciliationService(db: Db) {
           ),
       ),
       scalarCount(
-        db,
         db
           .select({ count: count(pipelineAutomationExecutions.id) })
           .from(pipelineAutomationExecutions)
@@ -247,7 +237,6 @@ export function awV4MigrationReconciliationService(db: Db) {
           ),
       ),
       scalarCount(
-        db,
         db
           .select({ count: count(pipelineAutomationExecutions.id) })
           .from(pipelineAutomationExecutions)
