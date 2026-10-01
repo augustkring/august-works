@@ -313,3 +313,42 @@ export interface OptimizerReplayEvaluation {
   totalDurationMs: number;
   totalCostEstimate: number | null;
 }
+
+export interface OptimizerShadowObservation {
+  id: string;
+  sourceRunId: string | null;
+  input: unknown;
+  trustedOutput: unknown;
+}
+
+export interface OptimizerShadowInvariantResult {
+  id: string;
+  critical: boolean;
+  passed: boolean;
+  detail: string | null;
+}
+
+export interface OptimizerShadowObservationResult {
+  id: string;
+  status: "passed" | "failed" | "unsupported";
+  agreement: boolean | null;
+  outputSchemaValid: boolean;
+  invariantResults: OptimizerShadowInvariantResult[];
+  fallbackCondition: string | null;
+  candidateDurationMs: number;
+  candidateCostEstimate: number | null;
+  resourceUse: Record<string, number>;
+}
+
+export interface OptimizerShadowEvaluation {
+  status: "passed" | "failed";
+  reasonCode: string;
+  trustedPathAuthoritative: true;
+  criticalInvariantFailure: boolean;
+  observationResults: OptimizerShadowObservationResult[];
+  passedObservationCount: number;
+  failedObservationCount: number;
+  unsupportedObservationCount: number;
+  totalCandidateDurationMs: number;
+  totalCandidateCostEstimate: number | null;
+}

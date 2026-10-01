@@ -348,4 +348,10 @@ export {
   type OptimizerReplayExecutor,
   type OptimizerReplayInvariantEvaluator,
 } from "./optimizer/optimizer-historical-replay.js";
+export {
+  evaluateOptimizerShadow,
+  type OptimizerShadowAgreementEvaluator,
+  type OptimizerShadowExecutor,
+  type OptimizerShadowInvariantEvaluator,
+} from "./optimizer/optimizer-shadow.js";
 
