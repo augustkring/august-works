@@ -546,6 +546,10 @@ describePg("Memory jobs", () => {
     expect(retentionJobs[0]).toMatchObject({
       status: "succeeded",
       companyId: seeded.companyId,
+      resultJson: {
+        expiredRecordCount: 1,
+        asOf: now.toISOString(),
+      },
     });
   });
 });
