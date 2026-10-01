@@ -264,6 +264,51 @@ describeEmbeddedPostgres("tool gateway service", () => {
     );
   });
 
+  it("exposes AI workflow authoring tools only behind the full authoring feature gate", async () => {
+    const { company, agent, run } = await createRunFixture(db);
+    const authoringToolNames = [
+      "paperclip-self:create_workflow",
+      "paperclip-self:add_trigger",
+      "paperclip-self:add_step",
+      "paperclip-self:update_step",
+      "paperclip-self:connect_steps",
+      "paperclip-self:remove_step",
+      "paperclip-self:test_step",
+      "paperclip-self:publish_workflow",
+    ];
+    for (const toolName of authoringToolNames) {
+      await db.insert(toolPolicies).values({
+        companyId: company.id,
+        name: `Allow ${toolName}`,
+        policyType: "allow",
+        selectors: { toolName },
+      });
+    }
+
+    const gateway = createTestToolGatewayService(db);
+    const session = await gateway.createSession({
+      companyId: company.id,
+      agentId: agent.id,
+      runId: run.id,
+    });
+
+    const disabledNames = (await gateway.listToolsForSession(session.token))
+      .map((tool) => tool.name);
+    for (const toolName of authoringToolNames) {
+      expect(disabledNames).not.toContain(toolName);
+    }
+
+    await instanceSettingsService(db).updateExperimental({
+      enableWorkflowsV1: true,
+      enableWorkflowBuilderV1: true,
+      enableAiWorkflowAuthoring: true,
+    });
+
+    const enabledNames = (await gateway.listToolsForSession(session.token))
+      .map((tool) => tool.name);
+    expect(enabledNames).toEqual(expect.arrayContaining(authoringToolNames));
+  });
+
   it("gates write tools with an action request and executes only stored reviewed arguments once", async () => {
     const { company, agent, run } = await createRunFixture(db);
     await db.insert(toolPolicies).values({
