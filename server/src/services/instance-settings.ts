@@ -266,6 +266,8 @@ export function normalizeExperimentalSettings(raw: unknown): InstanceExperimenta
       enableMemoryPostRunExtractionV1:
         parsed.data.enableMemoryPostRunExtractionV1 ?? false,
       enableAutomationArtifactsV1: parsed.data.enableAutomationArtifactsV1 ?? false,
+      enableAutomationArtifactCodeExecutionV1:
+        parsed.data.enableAutomationArtifactCodeExecutionV1 ?? false,
       enableWorkflowOptimizerSuggestions:
         parsed.data.enableWorkflowOptimizerSuggestions ?? false,
       enableWorkflowOptimizerShadow:
@@ -326,6 +328,7 @@ export function normalizeExperimentalSettings(raw: unknown): InstanceExperimenta
     enablePrivateAgentMemoryV1: false,
     enableMemoryPostRunExtractionV1: false,
     enableAutomationArtifactsV1: false,
+    enableAutomationArtifactCodeExecutionV1: false,
     enableWorkflowOptimizerSuggestions: false,
     enableWorkflowOptimizerShadow: false,
     enableWorkflowOptimizerPromotion: false,
