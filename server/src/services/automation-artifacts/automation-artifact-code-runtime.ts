@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import { stripTypeScriptTypes } from "node:module";
+import { parse } from "acorn";
 import {
   buildLocalProcessSandboxSpawnTarget,
 } from "@paperclipai/adapter-utils/local-process-sandbox";
@@ -85,71 +86,160 @@ function assertEmptyDependencyManifest(
   }
 }
 
-function nodeText(sourceFile: ts.SourceFile, node: ts.Node): string {
-  return node.getText(sourceFile);
+interface PolicyAstNode {
+  type: string;
+  start: number;
+  end: number;
+  [key: string]: unknown;
 }
 
-function staticStringExpression(node: ts.Expression): string | null {
-  if (ts.isStringLiteralLike(node)) return node.text;
-  if (ts.isParenthesizedExpression(node)) {
-    return staticStringExpression(node.expression);
-  }
+function asAstNode(value: unknown): PolicyAstNode | null {
   if (
-    ts.isBinaryExpression(node) &&
-    node.operatorToken.kind === ts.SyntaxKind.PlusToken
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    typeof (value as { type?: unknown }).type !== "string"
   ) {
-    const left = staticStringExpression(node.left);
-    const right = staticStringExpression(node.right);
+    return null;
+  }
+  return value as PolicyAstNode;
+}
+
+function childAstNodes(node: PolicyAstNode): PolicyAstNode[] {
+  const children: PolicyAstNode[] = [];
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "type" || key === "start" || key === "end") continue;
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        const child = asAstNode(entry);
+        if (child) children.push(child);
+      }
+      continue;
+    }
+    const child = asAstNode(value);
+    if (child) children.push(child);
+  }
+  return children;
+}
+
+function staticStringExpression(node: PolicyAstNode | null): string | null {
+  if (!node) return null;
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    const left = staticStringExpression(asAstNode(node.left));
+    const right = staticStringExpression(asAstNode(node.right));
     return left === null || right === null ? null : left + right;
   }
   return null;
 }
 
-function assertSourcePolicy(sourceCode: string): ts.SourceFile {
-  const sourceFile = ts.createSourceFile(
-    "artifact.ts",
-    sourceCode,
-    ts.ScriptTarget.ES2022,
-    true,
-    ts.ScriptKind.TS,
-  );
+function identifierIsNonReferenceProperty(
+  node: PolicyAstNode,
+  parent: PolicyAstNode | null,
+): boolean {
+  if (!parent) return false;
+  if (
+    parent.type === "MemberExpression" &&
+    parent.computed === false &&
+    parent.property === node
+  ) {
+    return true;
+  }
+  if (
+    (parent.type === "Property" ||
+      parent.type === "MethodDefinition" ||
+      parent.type === "PropertyDefinition") &&
+    parent.computed === false &&
+    parent.key === node
+  ) {
+    // Object shorthand such as { process } is still a reference to the
+    // ambient identifier and must remain denied.
+    return !(parent.type === "Property" && parent.shorthand === true);
+  }
+  return false;
+}
 
-  if (sourceFile.parseDiagnostics.length > 0) {
+function topLevelFunctionBindings(program: PolicyAstNode): Set<string> {
+  const bindings = new Set<string>();
+  const body = Array.isArray(program.body) ? program.body : [];
+  for (const rawStatement of body) {
+    const statement = asAstNode(rawStatement);
+    if (!statement) continue;
+    if (statement.type === "FunctionDeclaration") {
+      const id = asAstNode(statement.id);
+      if (id?.type === "Identifier" && typeof id.name === "string") {
+        bindings.add(id.name);
+      }
+      continue;
+    }
+    if (statement.type !== "VariableDeclaration") continue;
+    const declarations = Array.isArray(statement.declarations)
+      ? statement.declarations
+      : [];
+    for (const rawDeclaration of declarations) {
+      const declaration = asAstNode(rawDeclaration);
+      const id = asAstNode(declaration?.id);
+      const init = asAstNode(declaration?.init);
+      if (
+        id?.type === "Identifier" &&
+        typeof id.name === "string" &&
+        (init?.type === "ArrowFunctionExpression" ||
+          init?.type === "FunctionExpression")
+      ) {
+        bindings.add(id.name);
+      }
+    }
+  }
+  return bindings;
+}
+
+function assertSourcePolicy(sourceCode: string): void {
+  let program: PolicyAstNode;
+  try {
+    program = parse(sourceCode, {
+      ecmaVersion: "latest",
+      sourceType: "module",
+    }) as unknown as PolicyAstNode;
+  } catch {
     throw new AutomationArtifactCodeRuntimeError(
       "automation_artifact_code_source_invalid",
-      "TypeScript source could not be parsed.",
+      "TypeScript source could not be parsed after safe type stripping.",
     );
   }
 
+  const topLevelFunctions = topLevelFunctionBindings(program);
   let defaultExportCount = 0;
 
-  const visit = (node: ts.Node): void => {
+  const visit = (
+    node: PolicyAstNode,
+    parent: PolicyAstNode | null,
+  ): void => {
     if (
-      ts.isImportDeclaration(node) ||
-      ts.isImportEqualsDeclaration(node) ||
-      ts.isExportDeclaration(node)
+      node.type === "ImportDeclaration" ||
+      node.type === "ImportExpression" ||
+      node.type === "ExportAllDeclaration" ||
+      node.type === "ExportNamedDeclaration"
     ) {
       throw new AutomationArtifactCodeRuntimeError(
         "automation_artifact_code_import_denied",
-        "Generated-code artifacts cannot import or re-export modules.",
+        "Generated-code artifacts cannot import, dynamically import, or re-export modules.",
       );
     }
 
-    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-      throw new AutomationArtifactCodeRuntimeError(
-        "automation_artifact_code_import_denied",
-        "Dynamic import is not allowed in generated-code artifacts.",
-      );
-    }
-
-    if (ts.isExportAssignment(node) && !node.isExportEquals) {
+    if (node.type === "ExportDefaultDeclaration") {
       defaultExportCount += 1;
-      const expression = node.expression;
-      if (
-        !ts.isArrowFunction(expression) &&
-        !ts.isFunctionExpression(expression) &&
-        !ts.isIdentifier(expression)
-      ) {
+      const declaration = asAstNode(node.declaration);
+      const inlineFunction =
+        declaration?.type === "ArrowFunctionExpression" ||
+        declaration?.type === "FunctionExpression" ||
+        declaration?.type === "FunctionDeclaration";
+      const boundFunction =
+        declaration?.type === "Identifier" &&
+        typeof declaration.name === "string" &&
+        topLevelFunctions.has(declaration.name);
+      if (!inlineFunction && !boundFunction) {
         throw new AutomationArtifactCodeRuntimeError(
           "automation_artifact_code_source_invalid",
           "The default export must be a function.",
@@ -158,44 +248,28 @@ function assertSourcePolicy(sourceCode: string): ts.SourceFile {
     }
 
     if (
-      ts.isFunctionDeclaration(node) &&
-      node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) &&
-      node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)
-    ) {
-      defaultExportCount += 1;
-    }
-
-    if (
-      ts.isIdentifier(node) &&
-      FORBIDDEN_IDENTIFIERS.has(node.text) &&
-      !(
-        ts.isPropertyAccessExpression(node.parent) &&
-        node.parent.name === node
-      ) &&
-      !(
-        ts.isPropertyAssignment(node.parent) &&
-        node.parent.name === node
-      )
+      node.type === "Identifier" &&
+      typeof node.name === "string" &&
+      FORBIDDEN_IDENTIFIERS.has(node.name) &&
+      !identifierIsNonReferenceProperty(node, parent)
     ) {
       throw new AutomationArtifactCodeRuntimeError(
         "automation_artifact_code_capability_denied",
-        `Generated-code artifact uses forbidden capability ${JSON.stringify(node.text)}.`,
+        `Generated-code artifact uses forbidden capability ${JSON.stringify(node.name)}.`,
       );
     }
 
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      FORBIDDEN_PROPERTIES.has(node.name.text)
-    ) {
-      throw new AutomationArtifactCodeRuntimeError(
-        "automation_artifact_code_capability_denied",
-        `Generated-code artifact uses forbidden property ${JSON.stringify(node.name.text)}.`,
-      );
-    }
-
-    if (ts.isElementAccessExpression(node)) {
-      const staticProperty = staticStringExpression(node.argumentExpression);
-      if (staticProperty !== null && FORBIDDEN_PROPERTIES.has(staticProperty)) {
+    if (node.type === "MemberExpression") {
+      const property = asAstNode(node.property);
+      const staticProperty =
+        node.computed === false &&
+        property?.type === "Identifier" &&
+        typeof property.name === "string"
+          ? property.name
+          : node.computed === true
+            ? staticStringExpression(property)
+            : null;
+      if (staticProperty && FORBIDDEN_PROPERTIES.has(staticProperty)) {
         throw new AutomationArtifactCodeRuntimeError(
           "automation_artifact_code_capability_denied",
           `Generated-code artifact uses forbidden property ${JSON.stringify(staticProperty)}.`,
@@ -204,20 +278,22 @@ function assertSourcePolicy(sourceCode: string): ts.SourceFile {
     }
 
     if (
-      ts.isMetaProperty(node) ||
-      ts.isWithStatement(node) ||
-      ts.isDebuggerStatement(node)
+      node.type === "MetaProperty" ||
+      node.type === "WithStatement" ||
+      node.type === "DebuggerStatement"
     ) {
       throw new AutomationArtifactCodeRuntimeError(
         "automation_artifact_code_capability_denied",
-        `Generated-code artifact contains unsupported syntax: ${nodeText(sourceFile, node).slice(0, 80)}.`,
+        `Generated-code artifact contains unsupported syntax ${JSON.stringify(node.type)}.`,
       );
     }
 
-    ts.forEachChild(node, visit);
+    for (const child of childAstNodes(node)) {
+      visit(child, node);
+    }
   };
 
-  visit(sourceFile);
+  visit(program, null);
 
   if (defaultExportCount !== 1) {
     throw new AutomationArtifactCodeRuntimeError(
@@ -225,8 +301,6 @@ function assertSourcePolicy(sourceCode: string): ts.SourceFile {
       "Generated TypeScript must define exactly one default-exported function.",
     );
   }
-
-  return sourceFile;
 }
 
 export function scanAndTranspileAutomationArtifactTypeScript(input: {
@@ -234,47 +308,35 @@ export function scanAndTranspileAutomationArtifactTypeScript(input: {
   dependencyManifest: Record<string, unknown>;
 }): AutomationArtifactCodeScanResult {
   assertEmptyDependencyManifest(input.dependencyManifest);
-  assertSourcePolicy(input.sourceCode);
 
-  const result = ts.transpileModule(input.sourceCode, {
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ES2022,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      isolatedModules: true,
-      sourceMap: false,
-      inlineSourceMap: false,
-      removeComments: true,
-      noEmitHelpers: true,
-      importHelpers: false,
-      useDefineForClassFields: true,
-    },
-    reportDiagnostics: true,
-    fileName: "artifact.ts",
-  });
-
-  const diagnostics = (result.diagnostics ?? []).filter(
-    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
-  );
-  if (diagnostics.length > 0) {
+  let transpiledSource: string;
+  try {
+    // Node 24+ strips erasable TypeScript syntax without loading a compiler
+    // package at runtime. Non-erasable TS features fail closed here.
+    transpiledSource = stripTypeScriptTypes(input.sourceCode, {
+      mode: "strip",
+    });
+  } catch {
     throw new AutomationArtifactCodeRuntimeError(
       "automation_artifact_code_source_invalid",
-      "TypeScript source failed deterministic transpilation.",
+      "TypeScript source contains unsupported or invalid syntax.",
     );
   }
 
+  assertSourcePolicy(transpiledSource);
+
   return {
-    transpiledSource: result.outputText,
+    transpiledSource,
     checks: [
       {
         code: "typescript_parse",
         status: "passed",
-        detail: "TypeScript parsed and transpiled successfully.",
+        detail: "TypeScript was safely stripped and parsed successfully.",
       },
       {
         code: "imports_denied",
         status: "passed",
-        detail: "No module imports or dynamic imports are present.",
+        detail: "No runtime module imports, dynamic imports, or re-exports are present.",
       },
       {
         code: "ambient_capabilities_denied",
