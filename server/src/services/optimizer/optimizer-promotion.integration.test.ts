@@ -418,6 +418,10 @@ describePg("optimizer promotion service", () => {
     });
     const nextRevisionId = randomUUID();
     await db.transaction(async (tx) => {
+      await tx
+        .update(workflowRevisions)
+        .set({ state: "superseded" })
+        .where(eq(workflowRevisions.id, seeded.revisionId));
       await tx.insert(workflowRevisions).values({
         id: nextRevisionId,
         companyId: seeded.company.id,
