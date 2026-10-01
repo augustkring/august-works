@@ -84,6 +84,26 @@ function safeExecutionMode(
   return !requiresSuppressedWrites(effect) || mode === "dry_run" || mode === "sandbox";
 }
 
+function boundedFiniteMetric(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function boundedFiniteOptionalMetric(value: number | null): number | null {
+  return value !== null && Number.isFinite(value)
+    ? Math.max(0, value)
+    : null;
+}
+
+function replayGatePassed(replay: OptimizerReplayEvaluation): boolean {
+  return (
+    replay.status === "passed" &&
+    replay.criticalInvariantFailure === false &&
+    replay.missingCategories.length === 0 &&
+    replay.failedCaseCount === 0 &&
+    replay.unsupportedCaseCount === 0
+  );
+}
+
 function unsupportedResult(
   id: string,
   reason: string,
@@ -129,7 +149,7 @@ export async function evaluateOptimizerShadow(
       totalCandidateCostEstimate:null,
     };
   }
-  if(input.replayEvaluation.status!=="passed"){
+  if(!replayGatePassed(input.replayEvaluation)){
     return {
       status:"failed",
       reasonCode:"optimizer_shadow_replay_gate_required",
@@ -215,10 +235,10 @@ export async function evaluateOptimizerShadow(
             : !agreementEvaluation.agreement
               ? "trusted_output_disagreement"
               : "business_invariant_failure",
-        candidateDurationMs:Math.max(0,execution.durationMs),
-        candidateCostEstimate:execution.costEstimate===null
-          ? null
-          : Math.max(0,execution.costEstimate),
+        candidateDurationMs:boundedFiniteMetric(execution.durationMs),
+        candidateCostEstimate:boundedFiniteOptionalMetric(
+          execution.costEstimate,
+        ),
         resourceUse:Object.fromEntries(
           Object.entries(execution.resourceUse??{})
             .filter(([,value])=>Number.isFinite(value))
