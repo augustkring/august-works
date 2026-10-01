@@ -361,3 +361,8 @@ export {
   executeOptimizerCanaryWithFallback,
   optimizerPromotionService,
 } from "./optimizer/optimizer-promotion.js";
+
+export {
+  evaluateOptimizerDrift,
+  optimizerDriftService,
+} from "./optimizer/optimizer-drift.js";
