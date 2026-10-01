@@ -3108,6 +3108,14 @@ export {
   type WorkflowWaitStatus,
 } from "./types/workflow.js";
 export {
+  OPTIMIZER_EXECUTOR_TYPES,
+  OPTIMIZER_STEP_OUTCOMES,
+  type OptimizerExecutorType,
+  type OptimizerStepOutcome,
+  type OptimizerTrace,
+  type OptimizerTraceStep,
+} from "./types/optimizer.js";
+export {
   startWorkflowRunSchema,
   cancelWorkflowRunSchema,
   retryWorkflowRunSchema,
