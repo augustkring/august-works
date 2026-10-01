@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { Db } from "@paperclipai/db";
 import {
+  approvals,
   automationArtifacts,
   companyMemberships,
   workflowOptimizerSuggestions,
@@ -321,6 +322,7 @@ async function assertHumanApprovalReference(
   companyId: string,
   decision: OptimizerPromotionDecision,
   approvedByUserId: string | null | undefined,
+  approvalId: string | null | undefined,
 ): Promise<void> {
   if (!decision.humanApprovalRequired) return;
   const userId = approvedByUserId?.trim();
@@ -330,7 +332,10 @@ async function assertHumanApprovalReference(
     });
   }
   const membership = await db
-    .select({ id: companyMemberships.id })
+    .select({
+      id: companyMemberships.id,
+      membershipRole: companyMemberships.membershipRole,
+    })
     .from(companyMemberships)
     .where(
       and(
@@ -341,9 +346,39 @@ async function assertHumanApprovalReference(
       ),
     )
     .then((rows) => rows[0] ?? null);
-  if (!membership) {
-    throw forbidden("Approving user is not an active company member", {
+  if (!membership || membership.membershipRole === "viewer") {
+    throw forbidden("Approving user is not authorized to approve promotion", {
       code: "optimizer_promotion_human_approval_invalid",
+    });
+  }
+
+  const approvalKey = approvalId?.trim();
+  if (!approvalKey) {
+    throw forbidden("Human approval requires an approved approval record", {
+      code: "optimizer_promotion_approval_record_required",
+    });
+  }
+  const approval = await db
+    .select({
+      id: approvals.id,
+      status: approvals.status,
+      decidedByUserId: approvals.decidedByUserId,
+    })
+    .from(approvals)
+    .where(
+      and(
+        eq(approvals.id, approvalKey),
+        eq(approvals.companyId, companyId),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+  if (
+    !approval ||
+    approval.status !== "approved" ||
+    approval.decidedByUserId !== userId
+  ) {
+    throw forbidden("Promotion approval record is not valid for this user", {
+      code: "optimizer_promotion_approval_record_invalid",
     });
   }
 }
@@ -440,6 +475,7 @@ export function optimizerPromotionService(db: Db) {
       evidence: OptimizerPromotionEvidence;
       actor: AutomationArtifactMutationActor;
       approvedByUserId?: string | null;
+      approvalId?: string | null;
     }): Promise<OptimizerPromotionDecision> => {
       assertSystemActor(input.actor);
       const experimental = await assertPromotionEnabled(db);
@@ -483,6 +519,7 @@ export function optimizerPromotionService(db: Db) {
         input.companyId,
         decision,
         input.approvedByUserId,
+        input.approvalId,
       );
 
       const publications: ActivityPublication[] = [];
@@ -541,6 +578,7 @@ export function optimizerPromotionService(db: Db) {
       evidence: OptimizerPromotionEvidence;
       actor: AutomationArtifactMutationActor;
       approvedByUserId?: string | null;
+      approvalId?: string | null;
     }): Promise<OptimizerPromotionDecision> => {
       assertSystemActor(input.actor);
       const experimental = await assertPromotionEnabled(db);
@@ -570,6 +608,7 @@ export function optimizerPromotionService(db: Db) {
         input.companyId,
         decision,
         input.approvedByUserId,
+        input.approvalId,
       );
       if (decisionState.suggestion.status !== "ready_to_promote") {
         throw conflict("Optimizer suggestion is not ready to promote", {
@@ -685,6 +724,7 @@ export function optimizerPromotionService(db: Db) {
             sideEffectClass: artifact.sideEffectClass,
             fallbackKind: decision.fallbackKind,
             approvedByUserId: input.approvedByUserId ?? null,
+            approvalId: input.approvalId ?? null,
           },
         });
         publications.push(activity.publication);
