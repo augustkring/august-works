@@ -23,6 +23,8 @@
     "test": "pnpm run test:run",
     "test:watch": "pnpm run preflight:workspace-links && vitest",
     "test:run": "pnpm run preflight:workspace-links && node scripts/run-vitest-stable.mjs",
+    "check:aw-v4-security-evals": "node scripts/check-aw-v4-security-eval-coverage.mjs",
+    "test:aw-v4-security-evals": "pnpm run preflight:workspace-links && node scripts/run-aw-v4-security-evals.mjs",
     "test:runner-acceptance": "vitest run --config tests/runner-acceptance/vitest.config.ts",
     "test:runner-acceptance:typecheck": "tsc -p tests/runner-acceptance/tsconfig.json",
     "test:run:general": "pnpm run preflight:workspace-links && pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && node scripts/run-vitest-stable.mjs --mode general",

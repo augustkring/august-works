@@ -96,3 +96,51 @@ jobs:
 
       - name: Run stable test suite
         run: pnpm test:run
+
+  security-evals:
+    name: Security hard gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if ! pnpm install --frozen-lockfile; then
+            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
+            pnpm install --frozen-lockfile
+          fi
+
+      - name: Prepare workspace build dependencies
+        run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+
+      - name: Prepare generated-code sandbox
+        shell: bash
+        run: |
+          if [ ! -x /usr/bin/bwrap ]; then
+            sudo apt-get update
+            sudo apt-get install -y bubblewrap
+          fi
+          test -x /usr/bin/bwrap
+          test -x /usr/bin/prlimit
+
+      - name: Verify security-eval coverage
+        run: pnpm check:aw-v4-security-evals
+
+      - name: Run deterministic security hard gates
+        run: pnpm test:aw-v4-security-evals
+
