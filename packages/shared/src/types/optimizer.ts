@@ -1,3 +1,11 @@
+import type {
+  WorkflowEdgeV1,
+  WorkflowJsonSchema,
+  WorkflowNodeV1,
+  WorkflowRiskClass,
+  WorkflowSideEffectClass,
+} from "./workflow.js";
+
 export const OPTIMIZER_EXECUTOR_TYPES = [
   "agent",
   "workflow",
@@ -127,3 +135,120 @@ export interface OptimizerSuggestionResponse {
   suggestions: WorkflowOptimizerSuggestion[];
 }
 
+
+export const OPTIMIZER_COMPILER_RESULT_STATUSES = [
+  "compiled",
+  "unsupported",
+] as const;
+export type OptimizerCompilerResultStatus =
+  (typeof OPTIMIZER_COMPILER_RESULT_STATUSES)[number];
+
+export interface OptimizerCompilerBusinessInvariant {
+  id: string;
+  description: string;
+  critical: boolean;
+}
+
+export interface OptimizerCompilerTraceSample {
+  runId: string;
+  inputShapeHash: string | null;
+  outputShapeHash: string | null;
+  outcome: OptimizerStepOutcome;
+}
+
+export type OptimizerObservedImplementation =
+  | {
+      kind: "expression";
+      sourceCode: string;
+    }
+  | {
+      kind: "transform";
+      sourceCode: string;
+    }
+  | {
+      kind: "subgraph";
+      stepOrdinals: number[];
+      nodes: WorkflowNodeV1[];
+      edges: WorkflowEdgeV1[];
+    }
+  | {
+      kind: "generated_code";
+      language: "typescript" | "python";
+      sourceCode: string;
+    };
+
+export interface OptimizerCompilerInput {
+  suggestion: WorkflowOptimizerSuggestion;
+  inputSchema: WorkflowJsonSchema;
+  outputSchema: WorkflowJsonSchema;
+  businessInvariants: OptimizerCompilerBusinessInvariant[];
+  allowedCapabilityRefs: string[];
+  traceSamples: OptimizerCompilerTraceSample[];
+  observedImplementation: OptimizerObservedImplementation | null;
+  riskClass: WorkflowRiskClass;
+  sideEffectClass: WorkflowSideEffectClass;
+}
+
+export interface OptimizerCompilerDependencyManifest {
+  capabilityRefs: string[];
+  packages: [];
+}
+
+export interface OptimizerCompilerGeneratedTestSpec {
+  schema: "optimizer.compiler.test_spec.v1";
+  suggestionId: string;
+  traceSamples: OptimizerCompilerTraceSample[];
+  businessInvariants: OptimizerCompilerBusinessInvariant[];
+  requiredCapabilityRefs: string[];
+}
+
+export interface OptimizerCompiledArtifactCandidate {
+  kind: "artifact";
+  artifact: {
+    name: string;
+    description: string;
+    kind: Extract<
+      OptimizerCandidateType,
+      "expression" | "transform" | "typescript" | "python"
+    >;
+    language: "typescript" | "python" | null;
+    inputSchema: WorkflowJsonSchema;
+    outputSchema: WorkflowJsonSchema;
+    riskClass: WorkflowRiskClass;
+    sideEffectClass: WorkflowSideEffectClass;
+    createdByOptimizerSuggestionId: string;
+    originWorkflowId: string;
+    originNodeId: null;
+    sourceCode: string;
+    dependencyManifest: OptimizerCompilerDependencyManifest;
+    testSpec: OptimizerCompilerGeneratedTestSpec;
+  };
+}
+
+export interface OptimizerCompiledSubgraphCandidate {
+  kind: "subgraph";
+  subgraph: {
+    workflowId: string;
+    workflowRevisionId: string;
+    stepOrdinals: number[];
+    nodes: WorkflowNodeV1[];
+    edges: WorkflowEdgeV1[];
+    inputSchema: WorkflowJsonSchema;
+    outputSchema: WorkflowJsonSchema;
+  };
+}
+
+export type OptimizerCompiledCandidate =
+  | OptimizerCompiledArtifactCandidate
+  | OptimizerCompiledSubgraphCandidate;
+
+export interface OptimizerCompilerResult {
+  status: OptimizerCompilerResultStatus;
+  reasonCode: string;
+  candidate: OptimizerCompiledCandidate | null;
+  dependencyManifest: OptimizerCompilerDependencyManifest;
+  generatedTestSpec: OptimizerCompilerGeneratedTestSpec;
+  knownAssumptions: string[];
+  unsupportedCases: string[];
+  fallbackConditions: string[];
+}
