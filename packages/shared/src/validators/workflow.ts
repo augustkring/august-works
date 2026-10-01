@@ -227,6 +227,101 @@ export const workflowDataSelectorRequestSchema = z
 export type WorkflowDataSelectorRequest =
   z.infer<typeof workflowDataSelectorRequestSchema>;
 
+// AI authoring operates only through explicit, typed draft mutations. The model
+// never submits an arbitrary whole-graph replacement through this surface.
+const workflowAuthoringWorkflowRefSchema = z.object({
+  workflowId: z.string().guid(),
+  expectedRevisionId: z.string().guid(),
+}).strict();
+
+export const workflowAuthoringCreateInputSchema = createWorkflowSchema.extend({
+  idempotencyKey: z.string().trim().min(1).max(200),
+}).strict();
+
+export const workflowAuthoringAddTriggerInputSchema =
+  workflowAuthoringWorkflowRefSchema.extend({
+    node: workflowNodeV1Schema,
+  }).strict();
+
+export const workflowAuthoringAddStepInputSchema =
+  workflowAuthoringWorkflowRefSchema.extend({
+    node: workflowNodeV1Schema,
+  }).strict();
+
+export const workflowAuthoringUpdateStepInputSchema =
+  workflowAuthoringWorkflowRefSchema.extend({
+    nodeId: workflowIdSchema,
+    updates: z.object({
+      name: z.string().trim().min(1).max(200).optional(),
+      position: z.object({
+        x: z.number().finite(),
+        y: z.number().finite(),
+      }).strict().optional(),
+      config: z.unknown().optional(),
+      retryPolicy: workflowRetryPolicySchema.optional(),
+      timeoutSeconds: z.number().int().min(1).max(86_400).nullable().optional(),
+      continueOnFailure: z.boolean().nullable().optional(),
+    }).strict().refine(
+      (updates) => Object.keys(updates).length > 0,
+      "At least one step field must be updated",
+    ),
+  }).strict();
+
+export const workflowAuthoringConnectStepsInputSchema =
+  workflowAuthoringWorkflowRefSchema.extend({
+    edge: workflowEdgeV1Schema,
+  }).strict();
+
+export const workflowAuthoringRemoveStepInputSchema =
+  workflowAuthoringWorkflowRefSchema.extend({
+    nodeId: workflowIdSchema,
+  }).strict();
+
+export const workflowAuthoringTestStepInputSchema = z.object({
+  workflowId: z.string().guid(),
+  nodeId: workflowIdSchema,
+}).strict();
+
+export const workflowAuthoringPublishInputSchema = z.object({
+  workflowId: z.string().guid(),
+  expectedDraftRevisionId: z.string().guid(),
+  expectedPublishedRevisionId: z.string().guid().nullable(),
+}).strict();
+
+export type WorkflowAuthoringCreateInput =
+  z.infer<typeof workflowAuthoringCreateInputSchema>;
+export type WorkflowAuthoringAddTriggerInput =
+  z.infer<typeof workflowAuthoringAddTriggerInputSchema>;
+export type WorkflowAuthoringAddStepInput =
+  z.infer<typeof workflowAuthoringAddStepInputSchema>;
+export type WorkflowAuthoringUpdateStepInput =
+  z.infer<typeof workflowAuthoringUpdateStepInputSchema>;
+export type WorkflowAuthoringConnectStepsInput =
+  z.infer<typeof workflowAuthoringConnectStepsInputSchema>;
+export type WorkflowAuthoringRemoveStepInput =
+  z.infer<typeof workflowAuthoringRemoveStepInputSchema>;
+export type WorkflowAuthoringTestStepInput =
+  z.infer<typeof workflowAuthoringTestStepInputSchema>;
+export type WorkflowAuthoringPublishInput =
+  z.infer<typeof workflowAuthoringPublishInputSchema>;
+
+export const workflowAuthoringCreateInputJsonSchema =
+  z.toJSONSchema(workflowAuthoringCreateInputSchema, { io: "input" }) as Record<string, unknown>;
+export const workflowAuthoringAddTriggerInputJsonSchema =
+  z.toJSONSchema(workflowAuthoringAddTriggerInputSchema, { io: "input" }) as Record<string, unknown>;
+export const workflowAuthoringAddStepInputJsonSchema =
+  z.toJSONSchema(workflowAuthoringAddStepInputSchema, { io: "input" }) as Record<string, unknown>;
+export const workflowAuthoringUpdateStepInputJsonSchema =
+  z.toJSONSchema(workflowAuthoringUpdateStepInputSchema, { io: "input" }) as Record<string, unknown>;
+export const workflowAuthoringConnectStepsInputJsonSchema =
+  z.toJSONSchema(workflowAuthoringConnectStepsInputSchema, { io: "input" }) as Record<string, unknown>;
+export const workflowAuthoringRemoveStepInputJsonSchema =
+  z.toJSONSchema(workflowAuthoringRemoveStepInputSchema, { io: "input" }) as Record<string, unknown>;
+export const workflowAuthoringTestStepInputJsonSchema =
+  z.toJSONSchema(workflowAuthoringTestStepInputSchema, { io: "input" }) as Record<string, unknown>;
+export const workflowAuthoringPublishInputJsonSchema =
+  z.toJSONSchema(workflowAuthoringPublishInputSchema, { io: "input" }) as Record<string, unknown>;
+
 export const workflowRunListQuerySchema = z
   .object({
     limit: z.coerce.number().int().min(1).max(100).optional().default(30),

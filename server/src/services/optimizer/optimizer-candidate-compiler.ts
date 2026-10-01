@@ -238,6 +238,15 @@ export function compileOptimizerCandidate(
     );
   }
 
+  const workflowId = input.suggestion.workflowId;
+  if (!workflowId) {
+    return unsupported(
+      input,
+      requiredCapabilityRefs,
+      "optimizer_compiler_workflow_provenance_required",
+    );
+  }
+
   const common = baseResult(input, requiredCapabilityRefs);
   const implementation = input.observedImplementation;
   if (!implementation) {
@@ -292,7 +301,7 @@ export function compileOptimizerCandidate(
           riskClass: input.riskClass,
           sideEffectClass: input.sideEffectClass,
           createdByOptimizerSuggestionId: input.suggestion.id,
-          originWorkflowId: input.suggestion.workflowId,
+          originWorkflowId: workflowId,
           originNodeId: null,
           sourceCode: implementation.sourceCode,
           dependencyManifest: common.dependencyManifest,
@@ -307,6 +316,14 @@ export function compileOptimizerCandidate(
     input.suggestion.candidateType === "tool_chain" ||
     input.suggestion.candidateType === "subworkflow"
   ) {
+    const workflowRevisionId = input.suggestion.workflowRevisionId;
+    if (!workflowRevisionId) {
+      return unsupported(
+        input,
+        requiredCapabilityRefs,
+        "optimizer_compiler_workflow_revision_provenance_required",
+      );
+    }
     if (
       implementation.kind !== "subgraph" ||
       !sameNumbers(implementation.stepOrdinals, input.suggestion.stepOrdinals) ||
@@ -350,8 +367,8 @@ export function compileOptimizerCandidate(
       candidate: {
         kind: "subgraph",
         subgraph: {
-          workflowId: input.suggestion.workflowId,
-          workflowRevisionId: input.suggestion.workflowRevisionId,
+          workflowId,
+          workflowRevisionId,
           stepOrdinals: [...input.suggestion.stepOrdinals],
           nodes: implementation.nodes.map((node) => structuredClone(node)),
           edges: implementation.edges.map((edge) => structuredClone(edge)),
@@ -408,7 +425,7 @@ export function compileOptimizerCandidate(
           riskClass: input.riskClass,
           sideEffectClass: input.sideEffectClass,
           createdByOptimizerSuggestionId: input.suggestion.id,
-          originWorkflowId: input.suggestion.workflowId,
+          originWorkflowId: workflowId,
           originNodeId: null,
           sourceCode: implementation.sourceCode,
           dependencyManifest: common.dependencyManifest,

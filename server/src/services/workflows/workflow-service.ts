@@ -182,7 +182,12 @@ export function workflowService(db: Db) {
         .then((rows) => rows.map(mapRevision));
     },
 
-    create: async (companyId: string, rawInput: CreateWorkflow, actor: WorkflowMutationActor) => {
+    create: async (
+      companyId: string,
+      rawInput: CreateWorkflow,
+      actor: WorkflowMutationActor,
+      options: { workflowId?: string } = {},
+    ) => {
       const parsed = createWorkflowSchema.safeParse(rawInput);
       if (!parsed.success) throw unprocessable("Invalid workflow", parsed.error.issues);
       const input = parsed.data;
@@ -193,6 +198,7 @@ export function workflowService(db: Db) {
         const now = new Date();
         const actorData = actorFields(actor);
         const [workflow] = await txDb.insert(workflows).values({
+          ...(options.workflowId ? { id: options.workflowId } : {}),
           companyId,
           projectId: input.projectId ?? null,
           name: input.name,

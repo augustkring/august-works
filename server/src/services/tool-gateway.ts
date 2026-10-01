@@ -90,6 +90,14 @@ import {
   memoryAgentRecallInputJsonSchema,
   memoryAgentRememberInputJsonSchema,
   memoryAgentShareInputJsonSchema,
+  workflowAuthoringAddStepInputJsonSchema,
+  workflowAuthoringAddTriggerInputJsonSchema,
+  workflowAuthoringConnectStepsInputJsonSchema,
+  workflowAuthoringCreateInputJsonSchema,
+  workflowAuthoringPublishInputJsonSchema,
+  workflowAuthoringRemoveStepInputJsonSchema,
+  workflowAuthoringTestStepInputJsonSchema,
+  workflowAuthoringUpdateStepInputJsonSchema,
 } from "@paperclipai/shared";
 import {
   isGitHubConnectorProfileId,
@@ -168,6 +176,7 @@ import {
 import { extendApprovedExecutionWaitDeadline } from "./approved-execution-wait.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { memoryAgentToolsService } from "./memory/memory-agent-tools.js";
+import { workflowAuthoringToolsService } from "./workflows/workflow-authoring-tools.js";
 
 const DEFAULT_SESSION_TTL_MS = 15 * 60 * 1000;
 const MAX_SESSION_TTL_MS = 60 * 60 * 1000;
@@ -987,6 +996,86 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "write",
   },
   {
+    name: "paperclip-self:create_workflow",
+    displayName: "Create workflow draft",
+    description:
+      "Create an idempotent draft workflow through the governed Workflow service. This never publishes the workflow.",
+    parametersSchema: workflowAuthoringCreateInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
+    name: "paperclip-self:add_trigger",
+    displayName: "Add workflow trigger",
+    description:
+      "Add one typed trigger node to the current workflow draft using optimistic revision control.",
+    parametersSchema: workflowAuthoringAddTriggerInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
+    name: "paperclip-self:add_step",
+    displayName: "Add workflow step",
+    description:
+      "Add one registered non-trigger node to a workflow draft using optimistic revision control.",
+    parametersSchema: workflowAuthoringAddStepInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
+    name: "paperclip-self:update_step",
+    displayName: "Update workflow step",
+    description:
+      "Update one existing draft step through typed fields and the registered node validator.",
+    parametersSchema: workflowAuthoringUpdateStepInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
+    name: "paperclip-self:connect_steps",
+    displayName: "Connect workflow steps",
+    description:
+      "Add one typed edge between existing draft nodes. Invalid graph references are rejected.",
+    parametersSchema: workflowAuthoringConnectStepsInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
+    name: "paperclip-self:remove_step",
+    displayName: "Remove workflow step",
+    description:
+      "Remove one draft node and its incident edges through the governed Workflow service.",
+    parametersSchema: workflowAuthoringRemoveStepInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
+    name: "paperclip-self:test_step",
+    displayName: "Validate workflow step",
+    description:
+      "Validate a draft step against its registered node contract and report its supported test mode. This does not execute side effects.",
+    parametersSchema: workflowAuthoringTestStepInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "read",
+  },
+  {
+    name: "paperclip-self:publish_workflow",
+    displayName: "Prepare workflow publish",
+    description:
+      "Validate the exact draft for publication and return the human publish request. The agent cannot publish or bypass approval through this tool.",
+    parametersSchema: workflowAuthoringPublishInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "read",
+  },
+  {
     name: "paperclip-self:get_issue_context",
     displayName: "Get issue context",
     description:
@@ -1080,7 +1169,20 @@ function isMemorySelfToolName(name: string): boolean {
   return MEMORY_SELF_TOOL_NAMES.has(name);
 }
 
+const WORKFLOW_AUTHORING_SELF_TOOL_NAMES = new Set([
+  "paperclip-self:create_workflow",
+  "paperclip-self:add_trigger",
+  "paperclip-self:add_step",
+  "paperclip-self:update_step",
+  "paperclip-self:connect_steps",
+  "paperclip-self:remove_step",
+  "paperclip-self:test_step",
+  "paperclip-self:publish_workflow",
+]);
 
+function isWorkflowAuthoringSelfToolName(name: string): boolean {
+  return WORKFLOW_AUTHORING_SELF_TOOL_NAMES.has(name);
+}
 
 export function createToolGatewayService(
   db: Db,
@@ -1270,11 +1372,15 @@ export function createToolGatewayService(
     return [...BUILTIN_TOOLS, ...pluginTools()];
   }
 
-  async function memoryToolFlags() {
+  async function selfToolFeatureFlags() {
     const experimental = await instanceSettingsService(db).getExperimental();
     return {
-      shared: experimental.enableCollectiveMemoryV1 === true,
-      private: experimental.enablePrivateAgentMemoryV1 === true,
+      sharedMemory: experimental.enableCollectiveMemoryV1 === true,
+      privateMemory: experimental.enablePrivateAgentMemoryV1 === true,
+      workflowAuthoring:
+        experimental.enableWorkflowsV1 === true &&
+        experimental.enableWorkflowBuilderV1 === true &&
+        experimental.enableAiWorkflowAuthoring === true,
     };
   }
 
@@ -1285,13 +1391,18 @@ export function createToolGatewayService(
     if (!session.agentId) {
       return tools.filter((tool) => tool.providerType !== "paperclip_self");
     }
-    const flags = await memoryToolFlags();
+    const flags = await selfToolFeatureFlags();
     return tools.filter((tool) => {
-      if (!isMemorySelfToolName(tool.name)) return true;
-      if (tool.name === "paperclip-self:share_memory") {
-        return flags.shared && flags.private;
+      if (isMemorySelfToolName(tool.name)) {
+        if (tool.name === "paperclip-self:share_memory") {
+          return flags.sharedMemory && flags.privateMemory;
+        }
+        return flags.sharedMemory || flags.privateMemory;
       }
-      return flags.shared || flags.private;
+      if (isWorkflowAuthoringSelfToolName(tool.name)) {
+        return flags.workflowAuthoring;
+      }
+      return true;
     });
   }
 
@@ -3184,6 +3295,67 @@ export function createToolGatewayService(
       };
     }
 
+    if (isWorkflowAuthoringSelfToolName(tool.name)) {
+      if (!session.agentId || !session.runId) {
+        throw new ToolGatewayHttpError(
+          403,
+          "Workflow authoring tools require an active agent run",
+          "workflow_authoring_run_required",
+        );
+      }
+      const flags = await selfToolFeatureFlags();
+      if (!flags.workflowAuthoring) {
+        throw new ToolGatewayHttpError(
+          404,
+          "AI workflow authoring is not enabled",
+          "workflow_authoring_disabled",
+        );
+      }
+
+      const authoring = workflowAuthoringToolsService(db);
+      const context = {
+        companyId: session.companyId,
+        agentId: session.agentId,
+        runId: session.runId,
+        projectId: session.projectId,
+      };
+      try {
+        const data =
+          tool.name === "paperclip-self:create_workflow"
+            ? await authoring.create(context, parameters)
+            : tool.name === "paperclip-self:add_trigger"
+              ? await authoring.addTrigger(context, parameters)
+              : tool.name === "paperclip-self:add_step"
+                ? await authoring.addStep(context, parameters)
+                : tool.name === "paperclip-self:update_step"
+                  ? await authoring.updateStep(context, parameters)
+                  : tool.name === "paperclip-self:connect_steps"
+                    ? await authoring.connectSteps(context, parameters)
+                    : tool.name === "paperclip-self:remove_step"
+                      ? await authoring.removeStep(context, parameters)
+                      : tool.name === "paperclip-self:test_step"
+                        ? await authoring.testStep(context, parameters)
+                        : await authoring.preparePublish(context, parameters);
+        return { content: JSON.stringify(data), data };
+      } catch (error) {
+        if (error instanceof HttpError) {
+          const details =
+            error.details && typeof error.details === "object"
+              ? (error.details as Record<string, unknown>)
+              : {};
+          throw new ToolGatewayHttpError(
+            error.status,
+            error.message,
+            typeof details.code === "string"
+              ? details.code
+              : "workflow_authoring_rejected",
+            details,
+          );
+        }
+        throw error;
+      }
+    }
+
     if (isMemorySelfToolName(tool.name)) {
       if (!session.agentId) {
         throw new ToolGatewayHttpError(
@@ -3192,11 +3364,11 @@ export function createToolGatewayService(
           "agent_context_required",
         );
       }
-      const flags = await memoryToolFlags();
+      const flags = await selfToolFeatureFlags();
       const enabled =
         tool.name === "paperclip-self:share_memory"
-          ? flags.shared && flags.private
-          : flags.shared || flags.private;
+          ? flags.sharedMemory && flags.privateMemory
+          : flags.sharedMemory || flags.privateMemory;
       if (!enabled) {
         throw new ToolGatewayHttpError(
           404,
@@ -3213,8 +3385,8 @@ export function createToolGatewayService(
         issueId: session.issueId,
         projectId: session.projectId,
         responsibleUserId: session.responsibleUserId ?? null,
-        allowShared: flags.shared,
-        allowPrivate: flags.private,
+        allowShared: flags.sharedMemory,
+        allowPrivate: flags.privateMemory,
       };
 
       try {

@@ -177,7 +177,7 @@ describePg("optimizer promotion service", () => {
         createdByOptimizerSuggestionId: suggestion!.id,
         originWorkflowId: workflowId,
         originNodeId: null,
-        latestVersionId: versionId,
+        latestVersionId: null,
       });
       await tx.insert(automationArtifactVersions).values({
         id: versionId,
@@ -207,6 +207,10 @@ describePg("optimizer promotion service", () => {
         },
         contentHash: "b".repeat(64),
       });
+      await tx
+        .update(automationArtifacts)
+        .set({ latestVersionId: versionId })
+        .where(eq(automationArtifacts.id, artifactId));
     });
 
     return {
@@ -414,6 +418,10 @@ describePg("optimizer promotion service", () => {
     });
     const nextRevisionId = randomUUID();
     await db.transaction(async (tx) => {
+      await tx
+        .update(workflowRevisions)
+        .set({ state: "superseded" })
+        .where(eq(workflowRevisions.id, seeded.revisionId));
       await tx.insert(workflowRevisions).values({
         id: nextRevisionId,
         companyId: seeded.company.id,

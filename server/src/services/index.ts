@@ -302,6 +302,10 @@ export {
 } from "./memory/memory-service.js";
 
 export { workflowService, type WorkflowMutationActor } from "./workflows/workflow-service.js";
+export {
+  workflowAuthoringToolsService,
+  type WorkflowAuthoringContext,
+} from "./workflows/workflow-authoring-tools.js";
 
 export { workflowNodeDefinitions, workflowNodeRegistryService } from "./workflows/workflow-node-registry.js";
 
