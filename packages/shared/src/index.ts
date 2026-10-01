@@ -3108,9 +3108,13 @@ export {
   type WorkflowWaitStatus,
 } from "./types/workflow.js";
 export {
+  OPTIMIZER_CANDIDATE_TYPES,
   OPTIMIZER_EXECUTOR_TYPES,
   OPTIMIZER_STEP_OUTCOMES,
+  type OptimizerCandidateSuggestion,
+  type OptimizerCandidateType,
   type OptimizerExecutorType,
+  type OptimizerSideEffectRisk,
   type OptimizerStepOutcome,
   type OptimizerTrace,
   type OptimizerTraceStep,

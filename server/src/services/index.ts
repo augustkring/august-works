@@ -332,3 +332,7 @@ export {
   optimizerShapeHash,
   optimizerExecutorTypeForNodeType,
 } from "./optimizer/optimizer-trace.js";
+export {
+  detectOptimizerCandidates,
+  type OptimizerPatternDetectorOptions,
+} from "./optimizer/optimizer-pattern-detector.js";

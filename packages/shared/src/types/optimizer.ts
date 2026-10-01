@@ -41,3 +41,46 @@ export interface OptimizerTrace {
   humanCorrection?: boolean;
   createdAt: string;
 }
+
+export const OPTIMIZER_CANDIDATE_TYPES = [
+  "expression",
+  "transform",
+  "tool_chain",
+  "subworkflow",
+  "typescript",
+  "python",
+] as const;
+export type OptimizerCandidateType =
+  (typeof OPTIMIZER_CANDIDATE_TYPES)[number];
+
+export type OptimizerSideEffectRisk = "low" | "medium" | "high";
+
+export interface OptimizerCandidateSuggestion {
+  companyId: string;
+  workflowId: string | null;
+  workflowRevisionId: string | null;
+  signatureHash: string;
+  candidateType: OptimizerCandidateType;
+  /** Stable span coordinates within the normalized workflow trace. */
+  stepOrdinals: number[];
+  operationTypes: string[];
+  capabilityRefs: Array<string | null>;
+  sideEffectRisk: OptimizerSideEffectRisk;
+  observationCount: number;
+  successRate: number;
+  /**
+   * Null means no authoritative correction evidence was observed. It must
+   * never be rendered or interpreted as a measured 0% correction rate.
+   */
+  humanCorrectionRate: number | null;
+  humanCorrectionEvidenceCount: number;
+  humanCorrectionEvidenceCoverage: number;
+  inputShapeStability: number;
+  outputShapeStability: number;
+  averageDurationMs: number;
+  averageCost: number | null;
+  estimatedLatencySavingsMs: number;
+  estimatedCostSavings: number | null;
+  observedRunIds: string[];
+}
+
