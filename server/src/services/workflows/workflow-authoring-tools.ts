@@ -13,6 +13,7 @@ import {
   workflowAuthoringRemoveStepInputSchema,
   workflowAuthoringTestStepInputSchema,
   workflowAuthoringUpdateStepInputSchema,
+  workflowGraphV1Schema,
   type WorkflowAuthoringUpdateStepInput,
   type WorkflowDetail,
   type WorkflowGraphV1,
@@ -146,6 +147,17 @@ function nodeMatchesUpdates(
     return false;
   }
   return true;
+}
+
+function validateAuthoringGraphShape(graph: WorkflowGraphV1): WorkflowGraphV1 {
+  const parsed = workflowGraphV1Schema.safeParse(graph);
+  if (!parsed.success) {
+    throw unprocessable("Workflow graph is invalid", {
+      code: "workflow_graph_invalid",
+      issues: parsed.error.issues,
+    });
+  }
+  return parsed.data;
 }
 
 function applyNodeUpdates(
@@ -454,14 +466,15 @@ export function workflowAuthoringToolsService(db: Db) {
       ...draft.graph,
       nodes: [...draft.graph.nodes, parsed.data.node],
     };
-    await registry.validateDraftGraph(context.companyId, graph);
+    const validatedGraph = validateAuthoringGraphShape(graph);
+    await registry.validateDraftGraph(context.companyId, validatedGraph);
     return {
       status: "updated",
       workflow: await saveGraph(
         context,
         detail,
         parsed.data.expectedRevisionId,
-        graph,
+        validatedGraph,
         category === "trigger"
           ? `AI authoring: add trigger ${parsed.data.node.id}`
           : `AI authoring: add step ${parsed.data.node.id}`,
@@ -497,14 +510,15 @@ export function workflowAuthoringToolsService(db: Db) {
     const nodes = [...draft.graph.nodes];
     nodes[index] = updated;
     const graph = { ...draft.graph, nodes };
-    await registry.validateDraftGraph(context.companyId, graph);
+    const validatedGraph = validateAuthoringGraphShape(graph);
+    await registry.validateDraftGraph(context.companyId, validatedGraph);
     return {
       status: "updated",
       workflow: await saveGraph(
         context,
         detail,
         parsed.data.expectedRevisionId,
-        graph,
+        validatedGraph,
         `AI authoring: update step ${parsed.data.nodeId}`,
       ),
     };
@@ -541,14 +555,15 @@ export function workflowAuthoringToolsService(db: Db) {
       ...draft.graph,
       edges: [...draft.graph.edges, parsed.data.edge],
     };
-    await registry.validateDraftGraph(context.companyId, graph);
+    const validatedGraph = validateAuthoringGraphShape(graph);
+    await registry.validateDraftGraph(context.companyId, validatedGraph);
     return {
       status: "updated",
       workflow: await saveGraph(
         context,
         detail,
         parsed.data.expectedRevisionId,
-        graph,
+        validatedGraph,
         `AI authoring: connect ${parsed.data.edge.source} to ${parsed.data.edge.target}`,
       ),
     };
@@ -600,14 +615,15 @@ export function workflowAuthoringToolsService(db: Db) {
           edge.target !== parsed.data.nodeId,
       ),
     };
-    await registry.validateDraftGraph(context.companyId, graph);
+    const validatedGraph = validateAuthoringGraphShape(graph);
+    await registry.validateDraftGraph(context.companyId, validatedGraph);
     return {
       status: "updated",
       workflow: await saveGraph(
         context,
         detail,
         parsed.data.expectedRevisionId,
-        graph,
+        validatedGraph,
         `AI authoring: remove step ${parsed.data.nodeId}`,
       ),
     };
