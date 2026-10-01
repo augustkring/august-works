@@ -234,7 +234,9 @@ const workflowAuthoringWorkflowRefSchema = z.object({
   expectedRevisionId: z.string().guid(),
 }).strict();
 
-export const workflowAuthoringCreateInputSchema = createWorkflowSchema;
+export const workflowAuthoringCreateInputSchema = createWorkflowSchema.extend({
+  idempotencyKey: z.string().trim().min(1).max(200),
+}).strict();
 
 export const workflowAuthoringAddTriggerInputSchema =
   workflowAuthoringWorkflowRefSchema.extend({
