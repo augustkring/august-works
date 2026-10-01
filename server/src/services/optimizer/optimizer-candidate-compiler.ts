@@ -238,6 +238,14 @@ export function compileOptimizerCandidate(
     );
   }
 
+  if (!input.suggestion.workflowId) {
+    return unsupported(
+      input,
+      requiredCapabilityRefs,
+      "optimizer_compiler_workflow_provenance_required",
+    );
+  }
+
   const common = baseResult(input, requiredCapabilityRefs);
   const implementation = input.observedImplementation;
   if (!implementation) {
@@ -307,6 +315,13 @@ export function compileOptimizerCandidate(
     input.suggestion.candidateType === "tool_chain" ||
     input.suggestion.candidateType === "subworkflow"
   ) {
+    if (!input.suggestion.workflowRevisionId) {
+      return unsupported(
+        input,
+        requiredCapabilityRefs,
+        "optimizer_compiler_workflow_revision_provenance_required",
+      );
+    }
     if (
       implementation.kind !== "subgraph" ||
       !sameNumbers(implementation.stepOrdinals, input.suggestion.stepOrdinals) ||
