@@ -15,6 +15,12 @@ const HIGH_RISK_EFFECTS = new Set([
   "external_communication",
 ]);
 const MEDIUM_RISK_EFFECTS = new Set(["write"]);
+const LOW_RISK_EFFECTS = new Set(["pure", "read"]);
+const KNOWN_SIDE_EFFECTS = new Set([
+  ...LOW_RISK_EFFECTS,
+  ...MEDIUM_RISK_EFFECTS,
+  ...HIGH_RISK_EFFECTS,
+]);
 
 export interface OptimizerPatternDetectorOptions {
   minObservationCount?: number;
@@ -49,13 +55,23 @@ function dominantStability(values: Array<string | null>): number {
 }
 
 function riskForSteps(steps: OptimizerTraceStep[]): OptimizerSideEffectRisk {
-  if (steps.some((step) => HIGH_RISK_EFFECTS.has(step.sideEffectClass))) {
+  if (
+    steps.some(
+      (step) =>
+        !KNOWN_SIDE_EFFECTS.has(step.sideEffectClass) ||
+        HIGH_RISK_EFFECTS.has(step.sideEffectClass),
+    )
+  ) {
     return "high";
   }
   if (steps.some((step) => MEDIUM_RISK_EFFECTS.has(step.sideEffectClass))) {
     return "medium";
   }
   return "low";
+}
+
+function hasUnknownSideEffectClass(steps: OptimizerTraceStep[]): boolean {
+  return steps.some((step) => !KNOWN_SIDE_EFFECTS.has(step.sideEffectClass));
 }
 
 function candidateTypeForSteps(
@@ -198,6 +214,7 @@ export function detectOptimizerCandidates(
     // an explicit "not measured" correction rate. Side-effectful candidates
     // remain fail-closed until correction evidence covers every sampled run.
     if (
+      hasUnknownSideEffectClass(first.steps) ||
       successRate < minSuccessRate ||
       (humanCorrectionRate !== null &&
         humanCorrectionRate > maxHumanCorrectionRate) ||
