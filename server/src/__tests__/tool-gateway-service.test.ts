@@ -31,6 +31,7 @@ import {
   toolGatewaySessions,
   toolInvocations,
   toolPolicies,
+  workflows,
 } from "@paperclipai/db";
 import type { PluginToolDispatcher } from "../services/plugin-tool-dispatcher.js";
 import type { VercelConnectClient } from "../services/vercel-connect.js";
@@ -198,6 +199,9 @@ describeEmbeddedPostgres("tool gateway service", () => {
     await db.delete(toolPolicies);
     await db.delete(principalPermissionGrants);
     await db.delete(instanceSettings);
+    // Workflows own immutable revision history, including createdByRunId
+    // provenance. Cascade revisions before deleting their source runs.
+    await db.delete(workflows);
     await db.delete(heartbeatRuns);
     await db.delete(issues);
     await db.delete(projects);
