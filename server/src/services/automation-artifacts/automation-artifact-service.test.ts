@@ -24,6 +24,33 @@ import { automationArtifactRuntimeService } from "./automation-artifact-runtime.
 import { automationArtifactSecurityService } from "./automation-artifact-security.js";
 import { and, eq } from "drizzle-orm";
 
+async function expectDatabaseCause(
+  promise: Promise<unknown>,
+  pattern: RegExp,
+): Promise<void> {
+  try {
+    await promise;
+    throw new Error("Expected database operation to fail");
+  } catch (error) {
+    const cause =
+      error instanceof Error && "cause" in error
+        ? (error as Error & { cause?: unknown }).cause
+        : null;
+    const message =
+      cause instanceof Error
+        ? cause.message
+        : typeof cause === "object" &&
+            cause !== null &&
+            "message" in cause &&
+            typeof (cause as { message?: unknown }).message === "string"
+          ? (cause as { message: string }).message
+          : error instanceof Error
+            ? error.message
+            : String(error);
+    expect(message).toMatch(pattern);
+  }
+}
+
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe.sequential : describe.skip;
 
@@ -384,19 +411,20 @@ describePg("Automation Artifact service", () => {
       checks: [{ code: "parse", status: "passed" as const, detail: null }],
     };
 
-    await expect(
+    await expectDatabaseCause(
       db
         .update(automationArtifactVersions)
         .set({ sourceCode: "mutated" })
         .where(eq(automationArtifactVersions.id, version.id)),
-    ).rejects.toThrow(/immutable/i);
+      /immutable/i,
+    );
 
     await db
       .update(automationArtifactVersions)
       .set({ validationReport: report })
       .where(eq(automationArtifactVersions.id, version.id));
 
-    await expect(
+    await expectDatabaseCause(
       db
         .update(automationArtifactVersions)
         .set({
@@ -406,13 +434,15 @@ describePg("Automation Artifact service", () => {
           },
         })
         .where(eq(automationArtifactVersions.id, version.id)),
-    ).rejects.toThrow(/already finalized/i);
+      /already finalized/i,
+    );
 
-    await expect(
+    await expectDatabaseCause(
       db
         .delete(automationArtifactVersions)
         .where(eq(automationArtifactVersions.id, version.id)),
-    ).rejects.toThrow(/cannot be deleted directly/i);
+      /cannot be deleted directly/i,
+    );
   });
 
   it("allows lifecycle-owned company cascade while blocking direct version deletion", async () => {
@@ -425,11 +455,12 @@ describePg("Automation Artifact service", () => {
 
     const versionId = created.latestVersion!.id;
 
-    await expect(
+    await expectDatabaseCause(
       db
         .delete(automationArtifactVersions)
         .where(eq(automationArtifactVersions.id, versionId)),
-    ).rejects.toThrow(/cannot be deleted directly/i);
+      /cannot be deleted directly/i,
+    );
 
     await db.delete(companies).where(eq(companies.id, seeded.company.id));
 
