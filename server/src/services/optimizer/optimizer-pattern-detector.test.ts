@@ -179,6 +179,21 @@ describe("optimizer pattern detector", () => {
     ).toEqual([]);
   });
 
+  it("does not suggest patterns with unknown side-effect classification", () => {
+    const unknownStep = {
+      ...trace("x").steps[0]!,
+      operationType: "future.unregistered_node",
+      sideEffectClass: "unknown",
+    };
+    expect(
+      detectOptimizerCandidates([
+        trace("run-1", { steps: [unknownStep] }),
+        trace("run-2", { steps: [unknownStep] }),
+        trace("run-3", { steps: [unknownStep] }),
+      ]),
+    ).toEqual([]);
+  });
+
   it("keeps write-side-effect patterns suggestion-only but marks their risk", () => {
     const toolStep = {
       ...trace("x").steps[0]!,
