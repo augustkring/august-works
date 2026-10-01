@@ -131,6 +131,62 @@ describe("optimizer shadow evaluation",()=>{
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("fails closed when a nominally passed replay carries invalid gate state",async()=>{
+    const execute=vi.fn();
+    const result=await evaluateOptimizerShadow(
+      {
+        compilerResult:compiler(),
+        replayEvaluation:{
+          ...replay(),
+          status:"passed",
+          criticalInvariantFailure:true,
+        },
+        observations,
+        executionMode:"pure",
+      },
+      {
+        execute,
+        evaluateAgreement:async()=>({agreement:true}),
+        evaluateInvariant:async()=>({passed:true}),
+      },
+    );
+    expect(result.reasonCode).toBe("optimizer_shadow_replay_gate_required");
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes non-finite shadow runtime metrics",async()=>{
+    const result=await evaluateOptimizerShadow(
+      {
+        compilerResult:compiler(),
+        replayEvaluation:replay(),
+        observations:[observations[0]!],
+        executionMode:"pure",
+      },
+      {
+        execute:async()=>({
+          output:{score:1},
+          durationMs:Number.POSITIVE_INFINITY,
+          costEstimate:Number.NaN,
+          resourceUse:{cpuMs:Number.NaN,wallMs:Number.POSITIVE_INFINITY},
+        }),
+        evaluateAgreement:async()=>({agreement:true}),
+        evaluateInvariant:async()=>({passed:true}),
+      },
+    );
+    expect(result).toMatchObject({
+      status:"passed",
+      totalCandidateDurationMs:0,
+      totalCandidateCostEstimate:null,
+      observationResults:[
+        expect.objectContaining({
+          candidateDurationMs:0,
+          candidateCostEstimate:null,
+          resourceUse:{},
+        }),
+      ],
+    });
+  });
+
   it("never executes write candidates in a pure/live-style mode",async()=>{
     const execute=vi.fn();
     const result=await evaluateOptimizerShadow(
