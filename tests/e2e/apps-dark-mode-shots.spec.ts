@@ -115,10 +115,10 @@ test.describe.serial("dark-mode Apps surfaces", () => {
     await healthy?.close();
   });
 
-  test("sidebar says Connectors and links to /apps", async ({ page }) => {
+  test("sidebar says Connections and links to /apps", async ({ page }) => {
     await forceDark(page);
     await page.goto(`/${seed.prefix}/dashboard`);
-    const connectorsLink = page.getByRole("link", { name: "Connectors", exact: true });
+    const connectorsLink = page.getByRole("link", { name: "Connections", exact: true });
     await expect(connectorsLink).toBeVisible({ timeout: 30_000 });
     await expect(connectorsLink).toHaveAttribute("href", new RegExp(`/${seed.prefix}/apps$`));
   });
@@ -126,7 +126,7 @@ test.describe.serial("dark-mode Apps surfaces", () => {
   test("apps list dark mode with attention banner", async ({ page }) => {
     await forceDark(page);
     await page.goto(`/${seed.prefix}/apps/connections`);
-    await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/needs attention/i).first()).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: `${SCREENSHOT_DIR}/apps-nav-01-apps-dark.png`, fullPage: true });
   });
@@ -134,7 +134,7 @@ test.describe.serial("dark-mode Apps surfaces", () => {
   test("attention details dark mode", async ({ page }) => {
     await forceDark(page);
     await page.goto(`/${seed.prefix}/apps/connections`);
-    await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/connect ECONNREFUSED/i).first()).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: `${SCREENSHOT_DIR}/apps-nav-02-attention-dark.png`, fullPage: true });
   });
@@ -144,7 +144,7 @@ test.describe.serial("dark-mode Apps surfaces", () => {
     await page.goto(`/${seed.prefix}/apps/advanced`);
     await expect(page.getByRole("heading", { name: "Advanced setup" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/Paste the MCP config snippet/i).first()).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole("link", { name: "Connectors" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Connections" })).toBeVisible();
     await page.screenshot({ path: `${SCREENSHOT_DIR}/apps-nav-03-advanced-run-dark.png`, fullPage: true });
 
     // Sidebar and tab switcher both link Paste a config — either lands on /paste-config.
@@ -164,7 +164,7 @@ test.describe.serial("dark-mode Apps surfaces", () => {
     await expect(page.locator('a[href$="/activity"]', { hasText: "Audit" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Applications", exact: true })).toHaveCount(0);
     // Apps section lives in the same sidebar now.
-    await expect(page.locator('a[href$="/apps"]', { hasText: "Connectors" })).toBeVisible();
+    await expect(page.locator('a[href$="/apps"]', { hasText: "Connections" })).toBeVisible();
     await page.screenshot({ path: `${SCREENSHOT_DIR}/apps-nav-05-developer-overview-dark.png`, fullPage: true });
   });
 
@@ -186,7 +186,7 @@ test.describe.serial("dark-mode Apps surfaces", () => {
     await page.getByRole("button", { name: "Remove connection" }).click();
     await expect(page).toHaveURL(new RegExp(`/${seed.prefix}/apps$`), { timeout: 20_000 });
     await expect(page.getByText("Connection removed").first()).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible();
     await page.screenshot({ path: `${SCREENSHOT_DIR}/apps-nav-07-after-remove-dark.png`, fullPage: true });
   });
 });

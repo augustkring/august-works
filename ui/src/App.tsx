@@ -44,6 +44,7 @@ import { IssueChatLongThreadPerf } from "./pages/IssueChatLongThreadPerf";
 import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
 import { Memory } from "./pages/Memory";
+import { Governance } from "./pages/Governance";
 import { Workflows } from "./pages/Workflows";
 import { WorkflowBuilder } from "./pages/WorkflowBuilder";
 import { WorkflowRuns } from "./pages/WorkflowRuns";
@@ -156,6 +157,10 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
   return (
     <>
       <Route index element={<Navigate to="dashboard" replace />} />
+      <Route path="overview" element={<Navigate to="/dashboard" replace />} />
+      <Route path="work" element={<Navigate to="/issues" replace />} />
+      <Route path="connections" element={<Navigate to="/apps" replace />} />
+      <Route path="governance" element={<Governance />} />
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
       <Route
@@ -807,6 +812,10 @@ export function App() {
           <Route path="instance/settings" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings/*" element={<LegacySettingsRedirect />} />
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
+          <Route path="overview" element={<UnprefixedBoardRedirect />} />
+          <Route path="work" element={<UnprefixedBoardRedirect />} />
+          <Route path="connections" element={<UnprefixedBoardRedirect />} />
+          <Route path="governance" element={<UnprefixedBoardRedirect />} />
           <Route path="issues" element={<UnprefixedBoardRedirect />} />
           <Route path="tasks" element={<UnprefixedBoardRedirect />} />
           <Route path="issues/:issueId" element={<UnprefixedBoardRedirect />} />

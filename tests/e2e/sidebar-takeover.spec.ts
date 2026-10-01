@@ -73,7 +73,7 @@ test.describe("Contextual sidebar companion", () => {
     await expect(contextual.getByRole("link", { name: "Back to app" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Open account menu" })).toBeVisible();
 
-    await expect(page.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Overview" })).toHaveCount(0);
     await expect(page.getByLabel(APP_SIDEBAR_EXPANDED_MARKER)).toHaveCount(0);
   });
 
@@ -97,16 +97,16 @@ test.describe("Contextual sidebar companion", () => {
     await page.goto(`/${prefix}/dashboard`);
 
     await expect(page.locator("[data-contextual-sidebar]")).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Overview" })).toBeVisible();
     await expect(page.getByLabel(APP_SIDEBAR_EXPANDED_MARKER)).toHaveCount(0);
   });
 
-  test("uses Dashboard as the destination for a direct Settings link", async ({ page }) => {
+  test("uses Overview as the visible destination for a direct Settings link", async ({ page }) => {
     await page.goto(`/${prefix}/company/settings`);
     await page.getByRole("link", { name: "Back to app" }).click();
 
     await expect(page).toHaveURL(new RegExp(`/${prefix}/dashboard$`));
     await expect(page.locator("[data-contextual-sidebar]")).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Overview" })).toBeVisible();
   });
 });

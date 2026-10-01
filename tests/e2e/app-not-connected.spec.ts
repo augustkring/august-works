@@ -98,7 +98,7 @@ test.describe.serial("not-connected app page", () => {
   test("not-connected row opens the app page, not the generic wizard", async ({ page }) => {
     await page.goto(`/${seed.prefix}/apps/connections`);
     const row = page
-      .getByRole("list", { name: "Connector list" })
+      .getByRole("list", { name: "Connections list" })
       .getByRole("listitem")
       .filter({ has: page.getByRole("heading", { name: "Bla", exact: true }) });
     await expect(row).toBeVisible({ timeout: 30_000 });
@@ -163,7 +163,7 @@ test.describe.serial("not-connected app page", () => {
 
     await page.goto(`/${seed.prefix}/apps/connections`);
     const row = page
-      .getByRole("list", { name: "Connector list" })
+      .getByRole("list", { name: "Connections list" })
       .getByRole("listitem")
       .filter({ has: page.getByRole("heading", { name: "Bla", exact: true }) });
     await expect(row).toBeVisible({ timeout: 30_000 });

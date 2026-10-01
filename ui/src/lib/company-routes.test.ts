@@ -7,6 +7,15 @@ import {
 } from "./company-routes";
 
 describe("company routes", () => {
+  it("treats the V4 product IA aliases as company-scoped routes", () => {
+    for (const root of ["overview", "work", "connections", "governance"]) {
+      expect(isBoardPathWithoutPrefix(`/${root}`)).toBe(true);
+      expect(extractCompanyPrefixFromPath(`/${root}`)).toBeNull();
+      expect(applyCompanyPrefix(`/${root}`, "PAP")).toBe(`/PAP/${root}`);
+      expect(toCompanyRelativePath(`/PAP/${root}`)).toBe(`/${root}`);
+    }
+  });
+
   it("treats the task-list alias as an unprefixed board route", () => {
     expect(isBoardPathWithoutPrefix("/tasks")).toBe(true);
     expect(extractCompanyPrefixFromPath("/tasks")).toBeNull();

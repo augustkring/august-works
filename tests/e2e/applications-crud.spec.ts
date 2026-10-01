@@ -56,7 +56,7 @@ async function createConnection(
 
 async function gotoApps(page: Page, prefix: string) {
   await page.goto(`/${prefix}/apps/connections`);
-  await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible({ timeout: 30_000 });
 }
 
 test.describe.serial("applications lifecycle", () => {
@@ -91,7 +91,7 @@ test.describe.serial("applications lifecycle", () => {
     // label, so accept either connected state instead of the racy exact label.
     // The pill is derived from two react-query fetches (applications +
     // connections), so keep the same generous window the rest of this spec uses.
-    const connectorList = page.getByRole("list", { name: "Connector list" });
+    const connectorList = page.getByRole("list", { name: "Connections list" });
     const connectedRow = connectorList
       .getByRole("listitem")
       .filter({ has: page.getByRole("heading", { name: connectedName, exact: true }) });

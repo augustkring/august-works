@@ -289,7 +289,7 @@ export function Browse({ renderAccountDetails = (connection) => connection.conne
     useState<ConnectionRemovalTarget | null>(null);
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Connectors" }]);
+    setBreadcrumbs([{ label: "Connections" }]);
     return () => setBreadcrumbs([]);
   }, [setBreadcrumbs]);
 
@@ -647,8 +647,8 @@ export function Browse({ renderAccountDetails = (connection) => connection.conne
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search connectors…"
-            aria-label="Search connectors"
+            placeholder="Search connections…"
+            aria-label="Search connections"
             className="pl-9"
           />
         </div>
@@ -661,7 +661,7 @@ export function Browse({ renderAccountDetails = (connection) => connection.conne
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p className="min-w-0 flex-1">
-            Couldn’t load every connector. Existing accounts are shown where
+            Couldn’t load every connection. Existing accounts are shown where
             available.
           </p>
           <Button
@@ -681,7 +681,7 @@ export function Browse({ renderAccountDetails = (connection) => connection.conne
       ) : null}
 
       {loading ? (
-        <div className="space-y-3" aria-label="Loading connectors">
+        <div className="space-y-3" aria-label="Loading connections">
           {Array.from({ length: 6 }).map((_, index) => (
             <Skeleton key={index} className="h-24 w-full rounded-xl" />
           ))}
@@ -692,7 +692,7 @@ export function Browse({ renderAccountDetails = (connection) => connection.conne
           No connectors match “{query.trim()}”.
         </p>
       ) : (
-        <div className="space-y-3" role="list" aria-label="Connector list">
+        <div className="space-y-3" role="list" aria-label="Connections list">
           {visibleRows.map((row) => (
             <ConnectorCard
               renderAccountDetails={renderAccountDetails}
