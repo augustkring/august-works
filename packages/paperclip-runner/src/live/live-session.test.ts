@@ -1475,6 +1475,10 @@ describe("Capability live runnerd and Codex session", () => {
       sessionId: binding.sessionId,
       attemptId: "attempt-resumed",
       resumeOf: "attempt-killed",
+      // The first attempt intentionally uses a short timeout to model worker
+      // loss. The resumed attempt should exercise durable recovery, not depend
+      // on CI scheduler latency inheriting that artificial 500 ms budget.
+      turnTimeoutMs: 2_000,
     });
     expect(resumed.snapshot().providerThreadId).toBe(state.threadId);
     expect(resumed.snapshot().attempts).toMatchObject([
