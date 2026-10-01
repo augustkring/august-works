@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import {
   activityLog,
   automationArtifacts,
   automationArtifactVersions,
   companies,
   createDb,
+  instanceSettings,
   workflowOptimizerSuggestions,
   workflowRevisions,
   workflows,
@@ -83,6 +85,7 @@ describePg("optimizer promotion service", () => {
   afterEach(async () => {
     await db.delete(activityLog);
     await db.delete(companies);
+    await db.delete(instanceSettings);
   });
 
   afterAll(async () => {
@@ -276,6 +279,34 @@ describePg("optimizer promotion service", () => {
       status: 403,
       details: expect.objectContaining({
         code: "optimizer_promotion_disabled",
+      }),
+    });
+  });
+
+  it("requires an active approving user when policy requires human approval", async () => {
+    const seeded = await seed();
+    await instanceSettingsService(db).updateExperimental({
+      enableWorkflowOptimizerPromotion: true,
+    });
+    await db
+      .update(automationArtifacts)
+      .set({ riskClass: "C2", sideEffectClass: "write" })
+      .where(eq(automationArtifacts.id, seeded.artifactId));
+
+    await expect(
+      optimizerPromotionService(db).prepareCanary({
+        companyId: seeded.company.id,
+        suggestionId: seeded.suggestion.id,
+        artifactId: seeded.artifactId,
+        expectedArtifactVersionId: seeded.versionId,
+        policy,
+        evidence: evidence({ humanApproved: true }),
+        actor,
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({
+        code: "optimizer_promotion_human_approval_reference_required",
       }),
     });
   });
