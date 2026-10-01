@@ -136,7 +136,7 @@ for (const journey of [
       const agent = await createAgent(request, seed.companyId, "Page reader");
       await page.goto(`/${seed.prefix}/apps`);
       const connector = page
-        .getByRole("list", { name: "Connector list" })
+        .getByRole("list", { name: "Connections list" })
         .getByRole("listitem")
         .filter({ hasText: "Connect your own tool" });
       await connector
