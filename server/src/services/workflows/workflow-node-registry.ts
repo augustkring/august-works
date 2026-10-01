@@ -1006,6 +1006,12 @@ export function workflowNodeRegistryService(db: Db) {
 
   return {
     list: workflowNodeDefinitions,
+    get: (nodeType: string) =>
+      REGISTRY_BY_TYPE.get(nodeType)?.descriptor ?? null,
+    validateDraftNode: (
+      companyId: string,
+      node: WorkflowGraphV1["nodes"][number],
+    ) => validateNode(companyId, node, "draft"),
     validateDraftGraph: (companyId: string, graph: WorkflowGraphV1) =>
       validate(companyId, graph, "draft"),
     validatePublishGraph: async (companyId: string, graph: WorkflowGraphV1) => {
