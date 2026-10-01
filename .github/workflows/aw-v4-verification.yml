@@ -151,12 +151,10 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
 
-          /usr/bin/prlimit \
-            --cpu=4 \
-            --as=17179869184 \
-            --nofile=64 \
-            -- \
-            /usr/bin/bwrap \
+          /usr/bin/bwrap \
+            --unshare-user \
+            --uid 65534 \
+            --gid 65534 \
             --die-with-parent \
             --new-session \
             --unshare-pid \
@@ -166,6 +164,12 @@ jobs:
             --ro-bind / / \
             --proc /proc \
             --dev /dev \
+            -- \
+            /usr/bin/prlimit \
+            --nproc=64 \
+            --cpu=4 \
+            --as=17179869184 \
+            --nofile=64 \
             -- \
             /usr/bin/true
 
