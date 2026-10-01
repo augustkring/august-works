@@ -54,6 +54,24 @@ describe("Automation Artifact generated-code policy", () => {
       code: "automation_artifact_code_capability_denied",
     },
     {
+      label: "external ArrayBuffer allocation",
+      source:
+        "export default () => new ArrayBuffer(512 * 1024 * 1024);",
+      code: "automation_artifact_code_capability_denied",
+    },
+    {
+      label: "TextEncoder native backing store",
+      source:
+        "export default () => new TextEncoder().encode('x'.repeat(1024));",
+      code: "automation_artifact_code_capability_denied",
+    },
+    {
+      label: "Response body native backing store",
+      source:
+        "export default () => new Response('x'.repeat(1024));",
+      code: "automation_artifact_code_capability_denied",
+    },
+    {
       label: "constructor escape",
       source:
         'export default () => ({}).constructor.constructor("return 1")();',
