@@ -123,6 +123,49 @@ describe("optimizer candidate compiler", () => {
     expect(JSON.stringify(result)).not.toContain(" Alice@Example.COM ");
   });
 
+  it("fails closed when compiled output lacks workflow provenance", () => {
+    const missingWorkflow = compileOptimizerCandidate(
+      input({
+        suggestion: suggestion({ workflowId: null }),
+      }),
+    );
+    expect(missingWorkflow).toMatchObject({
+      status: "unsupported",
+      reasonCode: "optimizer_compiler_workflow_provenance_required",
+      candidate: null,
+    });
+
+    const missingRevision = compileOptimizerCandidate(
+      input({
+        suggestion: suggestion({
+          candidateType: "subworkflow",
+          workflowRevisionId: null,
+          stepOrdinals: [2],
+          operationTypes: ["core.transform"],
+        }),
+        observedImplementation: {
+          kind: "subgraph",
+          stepOrdinals: [2],
+          nodes: [
+            {
+              id: "transform",
+              type: "core.transform",
+              name: "Transform",
+              position: { x: 0, y: 0 },
+              config: {},
+            },
+          ],
+          edges: [],
+        },
+      }),
+    );
+    expect(missingRevision).toMatchObject({
+      status: "unsupported",
+      reasonCode: "optimizer_compiler_workflow_revision_provenance_required",
+      candidate: null,
+    });
+  });
+
   it("fails closed when the suggestion needs a capability outside the allowlist", () => {
     const s = suggestion({
       candidateType: "tool_chain",
