@@ -152,7 +152,6 @@ jobs:
           fi
 
           /usr/bin/prlimit \
-            --nproc=16 \
             --cpu=4 \
             --as=8589934592 \
             --nofile=64 \
