@@ -340,4 +340,7 @@ export {
   optimizerSuggestionService,
   type OptimizerSuggestionServiceOptions,
 } from "./optimizer/optimizer-suggestions.js";
+export {
+  compileOptimizerCandidate,
+} from "./optimizer/optimizer-candidate-compiler.js";
 
