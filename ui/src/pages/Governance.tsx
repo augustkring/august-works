@@ -82,12 +82,9 @@ export function Governance() {
   return (
     <div className="h-full min-h-0 overflow-y-auto">
       <div className="w-full max-w-5xl space-y-8 px-4 py-5 md:px-6">
-        <header>
-          <h1 className="text-xl font-semibold tracking-tight">Governance</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Who can access what, and what can they do with it?
-          </p>
-        </header>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Who can access what, and what can they do with it?
+        </p>
 
         <section aria-labelledby="governance-access-heading">
           <div className="border-b border-border pb-3">
