@@ -1393,65 +1393,7 @@ export function createToolGatewayService(
     }
     const flags = await selfToolFeatureFlags();
     return tools.filter((tool) => {
-      if (isWorkflowAuthoringSelfToolName(tool.name)) {
-      if (!session.agentId || !session.runId) {
-        throw new ToolGatewayHttpError(
-          403,
-          "Workflow authoring tools require an active agent run",
-          "workflow_authoring_run_required",
-        );
-      }
-      const flags = await selfToolFeatureFlags();
-      if (!flags.workflowAuthoring) {
-        throw new ToolGatewayHttpError(
-          404,
-          "AI workflow authoring is not enabled",
-          "workflow_authoring_disabled",
-        );
-      }
-
-      const authoring = workflowAuthoringToolsService(db);
-      const context = {
-        companyId: session.companyId,
-        agentId: session.agentId,
-        runId: session.runId,
-        projectId: session.projectId,
-      };
-      try {
-        const data =
-          tool.name === "paperclip-self:create_workflow"
-            ? await authoring.create(context, parameters)
-            : tool.name === "paperclip-self:add_trigger"
-              ? await authoring.addTrigger(context, parameters)
-              : tool.name === "paperclip-self:add_step"
-                ? await authoring.addStep(context, parameters)
-                : tool.name === "paperclip-self:update_step"
-                  ? await authoring.updateStep(context, parameters)
-                  : tool.name === "paperclip-self:connect_steps"
-                    ? await authoring.connectSteps(context, parameters)
-                    : tool.name === "paperclip-self:remove_step"
-                      ? await authoring.removeStep(context, parameters)
-                      : tool.name === "paperclip-self:test_step"
-                        ? await authoring.testStep(context, parameters)
-                        : await authoring.preparePublish(context, parameters);
-        return { content: JSON.stringify(data), data };
-      } catch (error) {
-        if (error instanceof HttpError) {
-          const details = asRecord(error.details) ?? {};
-          throw new ToolGatewayHttpError(
-            error.status,
-            error.message,
-            typeof details.code === "string"
-              ? details.code
-              : "workflow_authoring_rejected",
-            details,
-          );
-        }
-        throw error;
-      }
-    }
-
-    if (isMemorySelfToolName(tool.name)) {
+      if (isMemorySelfToolName(tool.name)) {
         if (tool.name === "paperclip-self:share_memory") {
           return flags.sharedMemory && flags.privateMemory;
         }
@@ -3351,6 +3293,67 @@ export function createToolGatewayService(
         content: JSON.stringify({ issue, planDocument: planDocument ?? null }),
         data: { issue, planDocument: planDocument ?? null },
       };
+    }
+
+    if (isWorkflowAuthoringSelfToolName(tool.name)) {
+      if (!session.agentId || !session.runId) {
+        throw new ToolGatewayHttpError(
+          403,
+          "Workflow authoring tools require an active agent run",
+          "workflow_authoring_run_required",
+        );
+      }
+      const flags = await selfToolFeatureFlags();
+      if (!flags.workflowAuthoring) {
+        throw new ToolGatewayHttpError(
+          404,
+          "AI workflow authoring is not enabled",
+          "workflow_authoring_disabled",
+        );
+      }
+
+      const authoring = workflowAuthoringToolsService(db);
+      const context = {
+        companyId: session.companyId,
+        agentId: session.agentId,
+        runId: session.runId,
+        projectId: session.projectId,
+      };
+      try {
+        const data =
+          tool.name === "paperclip-self:create_workflow"
+            ? await authoring.create(context, parameters)
+            : tool.name === "paperclip-self:add_trigger"
+              ? await authoring.addTrigger(context, parameters)
+              : tool.name === "paperclip-self:add_step"
+                ? await authoring.addStep(context, parameters)
+                : tool.name === "paperclip-self:update_step"
+                  ? await authoring.updateStep(context, parameters)
+                  : tool.name === "paperclip-self:connect_steps"
+                    ? await authoring.connectSteps(context, parameters)
+                    : tool.name === "paperclip-self:remove_step"
+                      ? await authoring.removeStep(context, parameters)
+                      : tool.name === "paperclip-self:test_step"
+                        ? await authoring.testStep(context, parameters)
+                        : await authoring.preparePublish(context, parameters);
+        return { content: JSON.stringify(data), data };
+      } catch (error) {
+        if (error instanceof HttpError) {
+          const details =
+            error.details && typeof error.details === "object"
+              ? (error.details as Record<string, unknown>)
+              : {};
+          throw new ToolGatewayHttpError(
+            error.status,
+            error.message,
+            typeof details.code === "string"
+              ? details.code
+              : "workflow_authoring_rejected",
+            details,
+          );
+        }
+        throw error;
+      }
     }
 
     if (isMemorySelfToolName(tool.name)) {
