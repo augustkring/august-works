@@ -201,6 +201,29 @@ describePg("Workflow AI authoring tools", () => {
     expect(await db.select().from(workflows)).toHaveLength(1);
   });
 
+  it("serializes concurrent create retries into one workflow", async () => {
+    const seeded = await seed();
+    await enable();
+    const service = workflowAuthoringToolsService(db);
+    const input = {
+      name: "Concurrent authoring",
+      description: "One durable draft",
+      idempotencyKey: "concurrent-create",
+    };
+
+    const outcomes = await Promise.all([
+      service.create(seeded.context, input),
+      service.create(seeded.context, input),
+    ]);
+
+    expect(new Set(outcomes.map((outcome) => outcome.workflow.id)).size).toBe(1);
+    expect(outcomes.map((outcome) => outcome.status).sort()).toEqual([
+      "created",
+      "replayed",
+    ]);
+    expect(await db.select().from(workflows)).toHaveLength(1);
+  });
+
   it("edits only draft revisions with retry-safe node and edge mutations", async () => {
     const seeded = await seed();
     await enable();
@@ -308,6 +331,26 @@ describePg("Workflow AI authoring tools", () => {
     });
     expect(removed.workflow.draftRevision?.graph.nodes).toHaveLength(1);
     expect(removed.workflow.draftRevision?.graph.edges).toHaveLength(0);
+
+    const removeReplay = await service.removeStep(seeded.context, {
+      workflowId: created.workflow.id,
+      expectedRevisionId: updated.workflow.draftRevisionId!,
+      nodeId: "wait",
+    });
+    expect(removeReplay.status).toBe("replayed");
+
+    await expect(
+      service.removeStep(seeded.context, {
+        workflowId: created.workflow.id,
+        expectedRevisionId: withTrigger.workflow.draftRevisionId!,
+        nodeId: "never-existed",
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({
+        code: "workflow_revision_conflict",
+      }),
+    });
   });
 
   it("validates publication but leaves the human publish boundary authoritative", async () => {
