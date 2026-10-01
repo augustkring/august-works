@@ -97,6 +97,21 @@ function safeModeForEffect(
   return mode === "dry_run" || mode === "sandbox";
 }
 
+function boundedFiniteMetric(
+  value: number,
+  fallback = 0,
+): number {
+  return Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+
+function boundedFiniteOptionalMetric(
+  value: number | null,
+): number | null {
+  return value !== null && Number.isFinite(value)
+    ? Math.max(0, value)
+    : null;
+}
+
 function resultForUnsupported(
   replayCase: OptimizerReplayCase,
   reason: string,
@@ -236,11 +251,8 @@ export async function evaluateOptimizerHistoricalReplay(
               : exactOutputMatch === true
                 ? "exact_output_match"
                 : "invariants_passed",
-        durationMs: Math.max(0, executed.durationMs),
-        costEstimate:
-          executed.costEstimate === null
-            ? null
-            : Math.max(0, executed.costEstimate),
+        durationMs: boundedFiniteMetric(executed.durationMs),
+        costEstimate: boundedFiniteOptionalMetric(executed.costEstimate),
         unsupportedCases: [],
       });
     } catch {
