@@ -20,13 +20,12 @@ const MAX_TIMEOUT_MS = 10_000;
 const ADDRESS_SPACE_CEILING_BYTES = 16 * 1024 * 1024 * 1024;
 const NODE_OLD_SPACE_LIMIT_MIB = 96;
 const NODE_SEMI_SPACE_LIMIT_MIB = 8;
-// Do not use RLIMIT_NPROC here. Linux accounts it against the host real UID,
-// not this sandbox process tree, so a shared service/CI user can already exceed
-// a small limit before bwrap starts. Process creation is denied at the language
-// capability boundary (no process/require/import/Worker/constructor escape),
-// while the sandbox still enforces CPU, address-space, FD and wall-clock bounds.
+const PROCESS_LIMIT = 64;
 const FILE_DESCRIPTOR_LIMIT = 64;
 const CPU_SECONDS = 4;
+const SANDBOX_UID = 65_534;
+const SANDBOX_GID = 65_534;
+const PRLIMIT_PATH = "/usr/bin/prlimit";
 
 const FORBIDDEN_IDENTIFIERS = new Set([
   "require",
@@ -629,6 +628,7 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
 
     let target: Awaited<ReturnType<typeof buildLocalProcessSandboxSpawnTarget>>;
     try {
+      await fs.access(PRLIMIT_PATH);
       target = await buildLocalProcessSandboxSpawnTarget({
         executable: process.execPath,
         args: [
@@ -651,25 +651,42 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
       );
     }
 
-    const prlimitArgs = [
+    const commandSeparator = target.args.lastIndexOf("--");
+    if (commandSeparator < 0 || commandSeparator === target.args.length - 1) {
+      await target.cleanup?.();
+      throw new AutomationArtifactCodeRuntimeError(
+        "automation_artifact_code_runtime_unavailable",
+        "Qualified Linux sandbox command boundary is unavailable.",
+      );
+    }
+    const sandboxedCommand = target.args.slice(commandSeparator + 1);
+    const sandboxArgs = [
+      "--unshare-user",
+      "--uid",
+      String(SANDBOX_UID),
+      "--gid",
+      String(SANDBOX_GID),
+      ...target.args.slice(0, commandSeparator + 1),
+      PRLIMIT_PATH,
+      `--nproc=${PROCESS_LIMIT}`,
       `--cpu=${CPU_SECONDS}`,
       `--as=${ADDRESS_SPACE_CEILING_BYTES}`,
       `--nofile=${FILE_DESCRIPTOR_LIMIT}`,
       "--",
-      target.command,
-      ...target.args,
+      ...sandboxedCommand,
     ];
 
     let result: ProcessResult;
     try {
       result = await runBoundedProcess({
-        command: "prlimit",
-        args: prlimitArgs,
+        command: target.command,
+        args: sandboxArgs,
         cwd: "/",
         env: {
           LANG: "C.UTF-8",
           LC_ALL: "C.UTF-8",
           TZ: "UTC",
+          UV_THREADPOOL_SIZE: "2",
           ...target.env,
         },
         stdin: serializedInput,
