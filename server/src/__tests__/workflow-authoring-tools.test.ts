@@ -282,6 +282,23 @@ describePg("Workflow AI authoring tools", () => {
         config: { durationSeconds: 1 },
       },
     });
+    await expect(
+      service.connectSteps(seeded.context, {
+        workflowId: created.workflow.id,
+        expectedRevisionId: withWait.workflow.draftRevisionId!,
+        edge: {
+          id: "start-missing",
+          source: "start",
+          target: "missing",
+        },
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: expect.objectContaining({
+        code: "workflow_graph_invalid",
+      }),
+    });
+
     const withEdge = await service.connectSteps(seeded.context, {
       workflowId: created.workflow.id,
       expectedRevisionId: withWait.workflow.draftRevisionId!,
