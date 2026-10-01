@@ -238,7 +238,8 @@ export function compileOptimizerCandidate(
     );
   }
 
-  if (!input.suggestion.workflowId) {
+  const workflowId = input.suggestion.workflowId;
+  if (!workflowId) {
     return unsupported(
       input,
       requiredCapabilityRefs,
@@ -300,7 +301,7 @@ export function compileOptimizerCandidate(
           riskClass: input.riskClass,
           sideEffectClass: input.sideEffectClass,
           createdByOptimizerSuggestionId: input.suggestion.id,
-          originWorkflowId: input.suggestion.workflowId,
+          originWorkflowId: workflowId,
           originNodeId: null,
           sourceCode: implementation.sourceCode,
           dependencyManifest: common.dependencyManifest,
@@ -315,7 +316,8 @@ export function compileOptimizerCandidate(
     input.suggestion.candidateType === "tool_chain" ||
     input.suggestion.candidateType === "subworkflow"
   ) {
-    if (!input.suggestion.workflowRevisionId) {
+    const workflowRevisionId = input.suggestion.workflowRevisionId;
+    if (!workflowRevisionId) {
       return unsupported(
         input,
         requiredCapabilityRefs,
@@ -365,8 +367,8 @@ export function compileOptimizerCandidate(
       candidate: {
         kind: "subgraph",
         subgraph: {
-          workflowId: input.suggestion.workflowId,
-          workflowRevisionId: input.suggestion.workflowRevisionId,
+          workflowId,
+          workflowRevisionId,
           stepOrdinals: [...input.suggestion.stepOrdinals],
           nodes: implementation.nodes.map((node) => structuredClone(node)),
           edges: implementation.edges.map((edge) => structuredClone(edge)),
@@ -423,7 +425,7 @@ export function compileOptimizerCandidate(
           riskClass: input.riskClass,
           sideEffectClass: input.sideEffectClass,
           createdByOptimizerSuggestionId: input.suggestion.id,
-          originWorkflowId: input.suggestion.workflowId,
+          originWorkflowId: workflowId,
           originNodeId: null,
           sourceCode: implementation.sourceCode,
           dependencyManifest: common.dependencyManifest,
