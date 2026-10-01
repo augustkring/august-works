@@ -360,6 +360,13 @@ export function memoryJobService(
     };
   }
 
+  function retentionCutoff(job: MemoryJob, fallback: Date): Date {
+    const raw = record(job.sourceRefJson).asOf;
+    if (typeof raw !== "string" || raw.trim().length === 0) return fallback;
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+  }
+
   async function executeRetention(job: MemoryJob, now: Date) {
     const experimental = await settings.getExperimental();
     if (
@@ -406,7 +413,8 @@ export function memoryJobService(
         return;
       }
       if (job.operationType === "retention") {
-        const output = await executeRetention(job, now);
+        const cutoff = retentionCutoff(job, now);
+        const output = await executeRetention(job, cutoff);
         await settle(job, {
           status: "succeeded",
           resultSummary: output.summary,
