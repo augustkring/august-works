@@ -71,8 +71,21 @@ try {
   fail(`Security-gate manifest is invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
 }
 
-if (manifest?.version !== 1 || !Array.isArray(manifest?.gates)) {
-  fail("Security-gate manifest must be version 1 with a gates array.");
+if (manifest?.version !== 2 || !Array.isArray(manifest?.gates)) {
+  fail("Security-gate manifest must be version 2 with a gates array.");
+}
+
+const expectedEvalDomains = new Set([
+  "foundation",
+  "connected_knowledge",
+  "memory",
+  "context",
+  "workflows",
+  "optimizer",
+  "security",
+]);
+if (!Array.isArray(manifest.evalDomains) || manifest.evalDomains.length !== expectedEvalDomains.size) {
+  fail(`Expected ${expectedEvalDomains.size} eval domains, found ${Array.isArray(manifest.evalDomains) ? manifest.evalDomains.length : 0}.`);
 }
 
 if (manifest.gates.length !== expectedGates.size) {
@@ -95,16 +108,26 @@ for (const gate of manifest.gates) {
   if (!Array.isArray(gate.deterministicTests) || gate.deterministicTests.length === 0) {
     fail(`Gate ${gate.id} requires at least one deterministic test suite.`);
   }
-  for (const testPath of gate.deterministicTests) {
+  for (const evidence of gate.deterministicTests) {
     if (
-      typeof testPath !== "string" ||
-      !testPath.startsWith("server/src/") ||
-      !testPath.endsWith(".test.ts")
+      !evidence ||
+      typeof evidence !== "object" ||
+      typeof evidence.file !== "string" ||
+      typeof evidence.contains !== "string" ||
+      evidence.contains.trim().length === 0 ||
+      !evidence.file.startsWith("server/src/") ||
+      !evidence.file.endsWith(".test.ts")
     ) {
-      fail(`Gate ${gate.id} has unsupported deterministic suite: ${String(testPath)}`);
+      fail(`Gate ${gate.id} has malformed deterministic evidence.`);
     }
-    repoFile(testPath);
-    deterministicSuites.add(testPath);
+    const absolute = repoFile(evidence.file);
+    const source = readFileSync(absolute, "utf8");
+    if (!source.includes(evidence.contains)) {
+      fail(
+        `Gate ${gate.id} expects missing test evidence ${JSON.stringify(evidence.contains)} in ${evidence.file}.`,
+      );
+    }
+    deterministicSuites.add(evidence.file);
   }
 
   const behaviorEvals = gate.behaviorEvals ?? [];
@@ -140,6 +163,30 @@ for (const id of expectedGates.keys()) {
   if (!seenIds.has(id)) fail(`Missing required security gate: ${id}`);
 }
 
+const seenDomains = new Set();
+for (const domain of manifest.evalDomains) {
+  if (
+    !domain ||
+    typeof domain !== "object" ||
+    typeof domain.id !== "string" ||
+    !expectedEvalDomains.has(domain.id) ||
+    !Array.isArray(domain.gateIds) ||
+    domain.gateIds.length === 0
+  ) {
+    fail("Malformed eval-domain coverage entry.");
+  }
+  if (seenDomains.has(domain.id)) fail(`Duplicate eval domain: ${domain.id}`);
+  seenDomains.add(domain.id);
+  for (const gateId of domain.gateIds) {
+    if (!seenIds.has(gateId)) {
+      fail(`Eval domain ${domain.id} references unknown security gate ${String(gateId)}.`);
+    }
+  }
+}
+for (const domain of expectedEvalDomains) {
+  if (!seenDomains.has(domain)) fail(`Missing required eval domain: ${domain}`);
+}
+
 console.log(
-  `[aw-v4-security] coverage valid: ${seenIds.size} gates, ${deterministicSuites.size} deterministic suites, ${behaviorMetricCount} behavior metrics.`,
+  `[aw-v4-security] coverage valid: ${seenIds.size} gates, ${seenDomains.size} eval domains, ${deterministicSuites.size} deterministic suites, ${behaviorMetricCount} behavior metrics.`,
 );
