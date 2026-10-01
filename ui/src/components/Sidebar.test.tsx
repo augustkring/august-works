@@ -235,6 +235,10 @@ describe("Sidebar", () => {
     const navLabels = [...container.querySelectorAll("nav a")].map((a) => a.textContent?.trim());
     expect(navLabels).toContain("Tasks");
     expect(navLabels).not.toContain("Issues");
+    expect(navLabels).toContain("Overview");
+    expect(navLabels).not.toContain("Dashboard");
+    expect(navLabels).toContain("Connections");
+    expect(navLabels).toContain("Governance");
 
     const projectsLink = [...container.querySelectorAll("nav a")].find((a) => a.textContent?.trim() === "Projects");
     expect(projectsLink?.getAttribute("href")).toBe("/projects");
@@ -391,7 +395,7 @@ describe("Sidebar", () => {
     });
   });
 
-  it("groups and orders the streamlined Work and Org navigation", async () => {
+  it("groups and orders the streamlined Work and Advanced navigation", async () => {
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({
       enableIsolatedWorkspaces: false,
       enableApps: true,
@@ -400,16 +404,60 @@ describe("Sidebar", () => {
 
     const sections = [...container.querySelectorAll("nav > div")];
     const workSection = sections.find((section) => section.textContent?.startsWith("Work"));
-    const orgSection = sections.find((section) => section.textContent?.startsWith("Org"));
+    const advancedSection = sections.find((section) => section.textContent?.startsWith("Advanced"));
     const labels = (section: Element | undefined) => [...(section?.querySelectorAll("a") ?? [])]
       .map((anchor) => anchor.textContent?.trim());
 
-    expect(labels(workSection)).toEqual(["Tasks", "Projects", "Routines", "Artifacts"]);
-    expect(labels(orgSection)).toEqual(["Agents", "Skills", "Connectors", "Audit"]);
-    expect(sections.indexOf(workSection!)).toBeLessThan(sections.indexOf(orgSection!));
+    expect(labels(workSection)).toEqual(["Tasks", "Routines", "Projects", "Artifacts"]);
+    expect(labels(advancedSection)).toEqual(["Skills", "Audit"]);
+    expect(sections.indexOf(workSection!)).toBeLessThan(sections.indexOf(advancedSection!));
     expect(
       workSection?.querySelector('a[href="/issues"] svg')?.classList.contains("lucide-circle-check"),
     ).toBe(true);
+
+    flushSync(() => {
+      root.unmount();
+    });
+  });
+
+  it("matches the V4 customer-facing product IA when core surfaces are enabled", async () => {
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({
+      enableFoundationV1: true,
+      enableCollectiveMemoryV1: true,
+      enableWorkflowsV1: true,
+      enableWorkflowBuilderV1: true,
+      enablePipelines: true,
+      enableIsolatedWorkspaces: false,
+    });
+    const root = await renderSidebar();
+
+    const links = [...container.querySelectorAll("nav a")];
+    const labels = links.map((anchor) => anchor.textContent?.trim() ?? "");
+    const index = (label: string) => labels.indexOf(label);
+
+    for (const label of [
+      "Overview",
+      "Foundation",
+      "Agents",
+      "Tasks",
+      "Routines",
+      "Workflows",
+      "Pipelines",
+      "Memory",
+      "Connections",
+      "Governance",
+    ]) {
+      expect(index(label)).toBeGreaterThanOrEqual(0);
+    }
+    expect(index("Overview")).toBeLessThan(index("Foundation"));
+    expect(index("Foundation")).toBeLessThan(index("Agents"));
+    expect(index("Agents")).toBeLessThan(index("Tasks"));
+    expect(index("Tasks")).toBeLessThan(index("Routines"));
+    expect(index("Routines")).toBeLessThan(index("Workflows"));
+    expect(index("Workflows")).toBeLessThan(index("Pipelines"));
+    expect(index("Pipelines")).toBeLessThan(index("Memory"));
+    expect(index("Memory")).toBeLessThan(index("Connections"));
+    expect(index("Connections")).toBeLessThan(index("Governance"));
 
     flushSync(() => {
       root.unmount();
@@ -531,20 +579,16 @@ describe("Sidebar", () => {
     });
   });
 
-  it("always shows Connectors in the Org section", async () => {
+  it("always shows Connections as a customer-facing product destination", async () => {
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableApps: false });
     const root = await renderSidebar();
 
     const links = [...container.querySelectorAll("a")];
-    const link = links.find((anchor) => anchor.textContent === "Connectors");
+    const link = links.find((anchor) => anchor.textContent === "Connections");
     expect(link?.getAttribute("href")).toBe("/apps");
     expect(link?.querySelector("svg")?.classList).toContain("lucide-unplug");
-    expect(links.findIndex((anchor) => anchor.textContent === "Connectors")).toBeGreaterThan(
-      links.findIndex((anchor) => anchor.textContent === "Skills"),
-    );
-    expect(links.findIndex((anchor) => anchor.textContent === "Connectors")).toBeLessThan(
-      links.findIndex((anchor) => anchor.textContent === "Audit"),
-    );
+    expect(links.filter((anchor) => anchor.textContent === "Connections")).toHaveLength(1);
+    expect(links.some((anchor) => anchor.textContent === "Connectors")).toBe(false);
 
     flushSync(() => {
       root.unmount();

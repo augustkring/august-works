@@ -23,6 +23,7 @@ import {
   LayoutGrid,
   Users,
   Brain,
+  ShieldCheck,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -170,9 +171,18 @@ export function Sidebar({ children }: { children?: ReactNode }) {
               collapsed rail, where the old header icon was dropped entirely.
               Cmd/Ctrl+K remains the keyboard path (command palette). */}
           <SidebarNavItem to="/search" label="Search" icon={Search} />
-          <SidebarNavItem to="/dashboard" label="Dashboard" icon={LayoutDashboard} liveCount={liveRunCount} />
+          <SidebarNavItem
+            to="/dashboard"
+            label={streamlinedUiEnabled ? "Overview" : "Dashboard"}
+            icon={LayoutDashboard}
+            liveCount={liveRunCount}
+          />
           {showFoundation ? <SidebarNavItem to="/foundation" label="Foundation" icon={BookOpen} /> : null}
-          {showMemory ? <SidebarNavItem to="/memory" label="Memory" icon={Brain} /> : null}
+          {streamlinedUiEnabled ? (
+            <SidebarNavItem to="/agents" label="Agents" icon={Users} />
+          ) : showMemory ? (
+            <SidebarNavItem to="/memory" label="Memory" icon={Brain} />
+          ) : null}
           <SidebarNavItem
             to="/inbox"
             label="Inbox"
@@ -201,20 +211,20 @@ export function Sidebar({ children }: { children?: ReactNode }) {
 
         <SidebarSection label="Work" collapsible={{ open: workOpen, onOpenChange: setWorkOpen }}>
           <SidebarNavItem to="/issues" label="Tasks" icon={CircleCheck} />
+          <SidebarNavItem to="/routines" label="Routines" icon={Repeat} />
+          {showWorkflows ? <SidebarNavItem to="/workflows" label="Workflows" icon={GitBranch} /> : null}
+          {showPipelines ? (
+            <SidebarNavItem to="/pipelines" label="Pipelines" icon={GitBranch} />
+          ) : null}
           {streamlinedUiEnabled ? (
             <>
               <SidebarNavItem to="/projects" label="Projects" icon={FolderOpen} />
               <SidebarStarredProjects />
             </>
           ) : null}
-          <SidebarNavItem to="/routines" label="Routines" icon={Repeat} />
-          {showWorkflows ? <SidebarNavItem to="/workflows" label="Workflows" icon={GitBranch} /> : null}
           <SidebarNavItem to="/artifacts" label="Artifacts" icon={Package} />
           {showCases ? (
             <SidebarNavItem to="/cases" label="Cases" icon={Layers} textBadge="beta" />
-          ) : null}
-          {showPipelines ? (
-            <SidebarNavItem to="/pipelines" label="Pipelines" icon={GitBranch} />
           ) : null}
           {showGoalsLink ? (
             <SidebarNavItem to="/goals" label="Goals" icon={Target} />
@@ -244,15 +254,20 @@ export function Sidebar({ children }: { children?: ReactNode }) {
         </SidebarSection>
 
         {streamlinedUiEnabled ? (
-          <SidebarSection
-            label="Org"
-            collapsible={{ open: organizationOpen, onOpenChange: setOrganizationOpen }}
-          >
-            <SidebarNavItem to="/agents" label="Agents" icon={Users} />
-            <SidebarNavItem to="/skills" label="Skills" icon={Boxes} />
-            <SidebarNavItem to="/apps" label="Connectors" icon={Unplug} />
-            <SidebarNavItem to="/activity" label="Audit" icon={History} />
-          </SidebarSection>
+          <>
+            <div className={primarySidebarStyles.group}>
+              {showMemory ? <SidebarNavItem to="/memory" label="Memory" icon={Brain} /> : null}
+              <SidebarNavItem to="/apps" label="Connections" icon={Unplug} />
+              <SidebarNavItem to="/governance" label="Governance" icon={ShieldCheck} />
+            </div>
+            <SidebarSection
+              label="Advanced"
+              collapsible={{ open: organizationOpen, onOpenChange: setOrganizationOpen }}
+            >
+              <SidebarNavItem to="/skills" label="Skills" icon={Boxes} />
+              <SidebarNavItem to="/activity" label="Audit" icon={History} />
+            </SidebarSection>
+          </>
         ) : null}
 
         {children}

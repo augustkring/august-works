@@ -129,7 +129,7 @@ function connection(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("Connectors landing page", () => {
+describe("Connections landing page", () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
 
@@ -267,15 +267,15 @@ describe("Connectors landing page", () => {
   it("renders one connector list with the requested header and no gallery sections", async () => {
     await renderBrowse();
 
-    expect(setBreadcrumbsMock).toHaveBeenCalledWith([{ label: "Connectors" }]);
+    expect(setBreadcrumbsMock).toHaveBeenCalledWith([{ label: "Connections" }]);
     expect(setBreadcrumbsMock).not.toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ href: "/dashboard" })]),
     );
     expect(container.querySelector("header")?.textContent).not.toContain(
-      "Connectors",
+      "Connections",
     );
     expect(
-      container.querySelector('header input[aria-label="Search connectors"]'),
+      container.querySelector('header input[aria-label="Search connections"]'),
     ).toBeTruthy();
     expect(container.querySelector("header")?.classList).toContain(
       "justify-start",
@@ -289,7 +289,7 @@ describe("Connectors landing page", () => {
     expect(
       Array.from(
         container.querySelectorAll<HTMLElement>(
-          '[aria-label="Connector list"] > [data-app-slug]',
+          '[aria-label="Connections list"] > [data-app-slug]',
         ),
       ).map((row) => row.dataset.appSlug),
     ).toEqual([
@@ -374,7 +374,7 @@ describe("Connectors landing page", () => {
 
     const rows = Array.from(
       container.querySelectorAll<HTMLElement>(
-        '[aria-label="Connector list"] > [data-app-slug]',
+        '[aria-label="Connections list"] > [data-app-slug]',
       ),
     );
     expect(rows[0]?.dataset.appSlug).toBe("notion");
@@ -572,7 +572,7 @@ describe("Connectors landing page", () => {
     await renderBrowse();
 
     const input = container.querySelector<HTMLInputElement>(
-      'input[aria-label="Search connectors"]',
+      'input[aria-label="Search connections"]',
     );
     const setter = Object.getOwnPropertyDescriptor(
       window.HTMLInputElement.prototype,
@@ -586,7 +586,7 @@ describe("Connectors landing page", () => {
 
     const rows = Array.from(
       container.querySelectorAll<HTMLElement>(
-        '[aria-label="Connector list"] > [data-app-slug]',
+        '[aria-label="Connections list"] > [data-app-slug]',
       ),
     );
     expect(rows.map((row) => row.dataset.appSlug)).toEqual(["jira"]);
@@ -620,7 +620,7 @@ describe("Connectors landing page", () => {
     await renderBrowse();
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      "Couldn’t load every connector",
+      "Couldn’t load every connection",
     );
     expect(container.textContent).toContain("Internal search");
     expect(container.textContent).toContain("search.internal.example");

@@ -221,11 +221,11 @@ test("store setup and task connection intent share one fake provider through con
 
     // Entry point one: connect and test the provider through the Connections store.
     await page.goto(`/${seed.prefix}/apps`);
-    await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible({
       timeout: 30_000,
     });
     const customConnector = page
-      .getByRole("list", { name: "Connector list" })
+      .getByRole("list", { name: "Connections list" })
       .getByRole("listitem")
       .filter({ hasText: "Connect your own tool" });
     await customConnector.getByRole("button", { name: "Connect", exact: true }).click();
