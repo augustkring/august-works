@@ -32,6 +32,14 @@ function readNonEmptyString(value: unknown): string | null {
     : null;
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
+function readUuid(value: unknown): string | null {
+  const candidate = readNonEmptyString(value);
+  return candidate && UUID_RE.test(candidate) ? candidate.toLowerCase() : null;
+}
+
 function shapeDescriptor(
   value: unknown,
   depth = 0,
@@ -109,9 +117,9 @@ function capabilityRefForStep(
     node?.config && typeof node.config === "object" && !Array.isArray(node.config)
       ? (node.config as Record<string, unknown>)
       : null;
-  const toolCatalogEntryId = readNonEmptyString(config?.toolCatalogEntryId);
+  const toolCatalogEntryId = readUuid(config?.toolCatalogEntryId);
   if (toolCatalogEntryId) return `tool:${toolCatalogEntryId}`;
-  const agentId = readNonEmptyString(config?.agentId) ?? step.agentId;
+  const agentId = readUuid(config?.agentId) ?? readUuid(step.agentId);
   if (agentId) return `agent:${agentId}`;
   return null;
 }
@@ -121,9 +129,9 @@ function runSourceMetadata(
 ): { taskId: string | null; routineId: string | null } {
   return {
     taskId:
-      readNonEmptyString(triggerPayload.taskId) ??
-      readNonEmptyString(triggerPayload.issueId),
-    routineId: readNonEmptyString(triggerPayload.routineId),
+      readUuid(triggerPayload.taskId) ??
+      readUuid(triggerPayload.issueId),
+    routineId: readUuid(triggerPayload.routineId),
   };
 }
 
