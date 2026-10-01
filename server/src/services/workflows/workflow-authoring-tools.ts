@@ -25,6 +25,7 @@ import {
   notFound,
   unprocessable,
 } from "../../errors.js";
+import { isUniqueViolation } from "../../db-errors.js";
 import { authorizationService } from "../authorization.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { workflowNodeRegistryService } from "./workflow-node-registry.js";
@@ -350,17 +351,37 @@ export function workflowAuthoringToolsService(db: Db) {
       return { status: "replayed" as const, workflow: existing };
     }
 
-    const workflow = await workflows.create(
-      context.companyId,
-      {
-        projectId: requestedProjectId ?? null,
-        name: parsed.data.name,
-        description: parsed.data.description ?? null,
-      },
-      authoringActor(context),
-      { workflowId },
-    );
-    return { status: "created" as const, workflow };
+    try {
+      const workflow = await workflows.create(
+        context.companyId,
+        {
+          projectId: requestedProjectId ?? null,
+          name: parsed.data.name,
+          description: parsed.data.description ?? null,
+        },
+        authoringActor(context),
+        { workflowId },
+      );
+      return { status: "created" as const, workflow };
+    } catch (error) {
+      // Two retries can race after both observe no row. The deterministic PK is
+      // the final concurrency guard; only replay if the winning row is the same
+      // logical request.
+      if (!isUniqueViolation(error)) throw error;
+      const winner = await workflows.getDetail(context.companyId, workflowId);
+      if (
+        winner &&
+        winner.projectId === (requestedProjectId ?? null) &&
+        winner.name === parsed.data.name &&
+        winner.description === (parsed.data.description ?? null)
+      ) {
+        return { status: "replayed" as const, workflow: winner };
+      }
+      throw conflict("Workflow authoring idempotency key was reused", {
+        code: "workflow_authoring_idempotency_conflict",
+        workflowId,
+      });
+    }
   }
 
   async function addNode(
@@ -548,7 +569,24 @@ export function workflowAuthoringToolsService(db: Db) {
     );
     if (!existing) {
       if (detail.draftRevisionId !== parsed.data.expectedRevisionId) {
-        return { status: "replayed", workflow: detail };
+        const revisions = await workflows.listRevisions(
+          context.companyId,
+          parsed.data.workflowId,
+        );
+        const expected = revisions?.find(
+          (revision) => revision.id === parsed.data.expectedRevisionId,
+        );
+        const existedAtExpectedRevision = expected?.graph.nodes.some(
+          (node) => node.id === parsed.data.nodeId,
+        ) === true;
+        if (existedAtExpectedRevision) {
+          return { status: "replayed", workflow: detail };
+        }
+        throw conflict("Workflow draft changed before the remove mutation", {
+          code: "workflow_revision_conflict",
+          expectedRevisionId: parsed.data.expectedRevisionId,
+          currentDraftRevisionId: detail.draftRevisionId,
+        });
       }
       throw notFound("Workflow step not found");
     }
