@@ -268,6 +268,14 @@ describePg("Workflow AI authoring tools", () => {
       ]),
     );
     expect(updated.workflow.publishedRevisionId).toBeNull();
+
+    const removed = await service.removeStep(seeded.context, {
+      workflowId: created.workflow.id,
+      expectedRevisionId: updated.workflow.draftRevisionId!,
+      nodeId: "wait",
+    });
+    expect(removed.workflow.draftRevision?.graph.nodes).toHaveLength(1);
+    expect(removed.workflow.draftRevision?.graph.edges).toHaveLength(0);
   });
 
   it("validates publication but leaves the human publish boundary authoritative", async () => {
