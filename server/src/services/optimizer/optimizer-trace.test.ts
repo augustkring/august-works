@@ -136,6 +136,7 @@ describePg("optimizer workflow trace normalization", () => {
         source: "task",
         triggerPayload: {
           issueId: randomUUID(),
+          routineId: "raw-trigger-secret-must-not-be-provenance",
           untrustedSecret: "must-never-enter-trace",
         },
         startedAt: now,
@@ -205,6 +206,8 @@ describePg("optimizer workflow trace normalization", () => {
     const serialized = JSON.stringify(trace);
     expect(serialized).not.toContain("secret@example.com");
     expect(serialized).not.toContain("must-never-enter-trace");
+    expect(serialized).not.toContain("raw-trigger-secret-must-not-be-provenance");
+    expect(trace.routineId).toBeNull();
   });
 
   it("fails closed for non-terminal runs and cross-company lookups", async () => {
