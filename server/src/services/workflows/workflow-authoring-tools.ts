@@ -23,6 +23,7 @@ import {
   type WorkflowAuthoringUpdateStepInput,
   type WorkflowDetail,
   type WorkflowEdgeV1,
+  type WorkflowGraphV1,
   type WorkflowNodeV1,
 } from "@paperclipai/shared";
 
@@ -289,7 +290,7 @@ export function workflowAuthoringToolsService(db: Db) {
     context: WorkflowAuthoringContext,
     detail: WorkflowDetail,
     expectedRevisionId: string,
-    graph: WorkflowDetail["draftRevision"]["graph"],
+    graph: WorkflowGraphV1,
     changeSummary: string,
   ): Promise<WorkflowDetail> {
     assertExpectedRevision(detail, expectedRevisionId);
