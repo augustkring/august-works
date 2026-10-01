@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   automationArtifacts,
+  companyMemberships,
   workflowOptimizerSuggestions,
   workflows,
 } from "@paperclipai/db";
@@ -264,11 +265,85 @@ function assertSystemActor(actor: AutomationArtifactMutationActor): void {
   }
 }
 
-async function assertPromotionEnabled(db: Db): Promise<void> {
+async function assertPromotionEnabled(db: Db) {
   const experimental = await instanceSettingsService(db).getExperimental();
   if (experimental.enableWorkflowOptimizerPromotion !== true) {
     throw forbidden("Workflow Optimizer promotion is disabled", {
       code: "optimizer_promotion_disabled",
+    });
+  }
+  return experimental;
+}
+
+function assertPromotionRuntimeEligible(
+  artifact: typeof automationArtifacts.$inferSelect,
+  experimental: Awaited<
+    ReturnType<ReturnType<typeof instanceSettingsService>["getExperimental"]>
+  >,
+): void {
+  if (
+    artifact.kind === "python" ||
+    artifact.kind === "tool_chain" ||
+    artifact.kind === "subworkflow"
+  ) {
+    throw forbidden(
+      "Automation Artifact runtime is not qualified for optimizer promotion",
+      {
+        code: "optimizer_promotion_runtime_not_qualified",
+        artifactKind: artifact.kind,
+      },
+    );
+  }
+  if (artifact.kind === "typescript") {
+    if (experimental.enableAutomationArtifactCodeExecutionV1 !== true) {
+      throw forbidden("Generated-code artifact execution is disabled", {
+        code: "optimizer_promotion_code_execution_disabled",
+      });
+    }
+    if (
+      artifact.sideEffectClass !== "pure" ||
+      (artifact.riskClass !== "C0" && artifact.riskClass !== "C1")
+    ) {
+      throw forbidden(
+        "Generated-code optimizer promotion is restricted to pure C0/C1 artifacts",
+        {
+          code: "optimizer_promotion_code_execution_risk_denied",
+          riskClass: artifact.riskClass,
+          sideEffectClass: artifact.sideEffectClass,
+        },
+      );
+    }
+  }
+}
+
+async function assertHumanApprovalReference(
+  db: Db,
+  companyId: string,
+  decision: OptimizerPromotionDecision,
+  approvedByUserId: string | null | undefined,
+): Promise<void> {
+  if (!decision.humanApprovalRequired) return;
+  const userId = approvedByUserId?.trim();
+  if (!userId) {
+    throw forbidden("Human approval requires an approving user reference", {
+      code: "optimizer_promotion_human_approval_reference_required",
+    });
+  }
+  const membership = await db
+    .select({ id: companyMemberships.id })
+    .from(companyMemberships)
+    .where(
+      and(
+        eq(companyMemberships.companyId, companyId),
+        eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, userId),
+        eq(companyMemberships.status, "active"),
+      ),
+    )
+    .then((rows) => rows[0] ?? null);
+  if (!membership) {
+    throw forbidden("Approving user is not an active company member", {
+      code: "optimizer_promotion_human_approval_invalid",
     });
   }
 }
@@ -364,9 +439,10 @@ export function optimizerPromotionService(db: Db) {
       policy: OptimizerPromotionPolicy;
       evidence: OptimizerPromotionEvidence;
       actor: AutomationArtifactMutationActor;
+      approvedByUserId?: string | null;
     }): Promise<OptimizerPromotionDecision> => {
       assertSystemActor(input.actor);
-      await assertPromotionEnabled(db);
+      const experimental = await assertPromotionEnabled(db);
       const state = await loadBoundState(
         input.companyId,
         input.suggestionId,
@@ -378,6 +454,22 @@ export function optimizerPromotionService(db: Db) {
         publishedRevisionId: state.workflow.publishedRevisionId,
         expectedArtifactVersionId: input.expectedArtifactVersionId,
       });
+      assertPromotionRuntimeEligible(state.artifact, experimental);
+      if (
+        ![
+          "detected",
+          "generated",
+          "evaluating",
+          "ready_for_shadow",
+          "shadowing",
+          "ready_to_promote",
+        ].includes(state.suggestion.status)
+      ) {
+        throw conflict("Optimizer suggestion cannot enter canary from its current state", {
+          code: "optimizer_promotion_suggestion_state_invalid",
+          currentStatus: state.suggestion.status,
+        });
+      }
 
       const decision = evaluateOptimizerPromotion({
         riskClass: state.artifact.riskClass,
@@ -386,6 +478,12 @@ export function optimizerPromotionService(db: Db) {
         evidence: { ...input.evidence, canaryPassed: false },
       });
       if (decision.status !== "canary_ready") return decision;
+      await assertHumanApprovalReference(
+        db,
+        input.companyId,
+        decision,
+        input.approvedByUserId,
+      );
 
       const publications: ActivityPublication[] = [];
       await db.transaction(async (tx) => {
@@ -399,6 +497,10 @@ export function optimizerPromotionService(db: Db) {
               eq(
                 workflowOptimizerSuggestions.workflowRevisionId,
                 state.suggestion.workflowRevisionId,
+              ),
+              eq(
+                workflowOptimizerSuggestions.status,
+                state.suggestion.status,
               ),
             ),
           )
@@ -441,7 +543,7 @@ export function optimizerPromotionService(db: Db) {
       approvedByUserId?: string | null;
     }): Promise<OptimizerPromotionDecision> => {
       assertSystemActor(input.actor);
-      await assertPromotionEnabled(db);
+      const experimental = await assertPromotionEnabled(db);
 
       const decisionState = await loadBoundState(
         input.companyId,
@@ -454,6 +556,7 @@ export function optimizerPromotionService(db: Db) {
         publishedRevisionId: decisionState.workflow.publishedRevisionId,
         expectedArtifactVersionId: input.expectedArtifactVersionId,
       });
+      assertPromotionRuntimeEligible(decisionState.artifact, experimental);
 
       const decision = evaluateOptimizerPromotion({
         riskClass: decisionState.artifact.riskClass,
@@ -462,6 +565,12 @@ export function optimizerPromotionService(db: Db) {
         evidence: { ...input.evidence, canaryPassed: true },
       });
       if (decision.status !== "promotion_ready") return decision;
+      await assertHumanApprovalReference(
+        db,
+        input.companyId,
+        decision,
+        input.approvedByUserId,
+      );
       if (decisionState.suggestion.status !== "ready_to_promote") {
         throw conflict("Optimizer suggestion is not ready to promote", {
           code: "optimizer_promotion_suggestion_not_ready",
