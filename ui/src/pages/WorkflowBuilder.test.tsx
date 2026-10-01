@@ -281,7 +281,11 @@ describe("WorkflowBuilder", () => {
     expect(container.textContent).toContain("Optimizer");
     expect(container.textContent).toContain("Suggestion only");
     expect(container.textContent).toContain("Optimization available");
-    expect(container.textContent).toContain("Deterministic transform");
+    expect(
+      container.querySelector(
+        '[aria-label="Optimizer suggestion: Deterministic transform"]',
+      ),
+    ).toBeTruthy();
     expect(container.textContent).toContain("No production mutation");
     const promote = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Promote",
