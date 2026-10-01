@@ -1,7 +1,9 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
   AutomationArtifactCodeRuntimeError,
+  executeAutomationArtifactTypeScriptSandbox,
   scanAndTranspileAutomationArtifactTypeScript,
 } from "./automation-artifact-code-runtime.js";
 
@@ -107,4 +109,33 @@ describe("Automation Artifact generated-code policy", () => {
       }),
     );
   });
+});
+
+
+const qualifiedLinuxSandbox =
+  process.platform === "linux" &&
+  existsSync("/usr/bin/bwrap") &&
+  existsSync("/usr/bin/prlimit");
+
+const describeQualifiedSandbox = qualifiedLinuxSandbox
+  ? describe
+  : describe.skip;
+
+describeQualifiedSandbox("Automation Artifact qualified TypeScript sandbox", () => {
+  it(
+    "starts Node under the resource limits and preserves large Unicode input/output",
+    async () => {
+      const text = "Sønderborg · 日本語 · 🙂 · ".repeat(6_000);
+      const output = await executeAutomationArtifactTypeScriptSandbox({
+        sourceCode:
+          "export default (input: { text: string }) => ({ text: input.text });",
+        dependencyManifest: {},
+        value: { text },
+        timeoutMs: 5_000,
+      });
+
+      expect(output).toEqual({ text });
+    },
+    15_000,
+  );
 });
