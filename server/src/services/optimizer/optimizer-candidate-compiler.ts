@@ -272,6 +272,8 @@ export function compileOptimizerCandidate(
           edges: implementation.edges.map((edge) => structuredClone(edge)),
           inputSchema: structuredClone(input.inputSchema),
           outputSchema: structuredClone(input.outputSchema),
+          riskClass: input.riskClass,
+          sideEffectClass: input.sideEffectClass,
         },
       },
       ...common,
