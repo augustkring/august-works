@@ -207,6 +207,47 @@ describe("optimizer candidate compiler", () => {
     );
   });
 
+  it("rejects a subgraph that smuggles an unobserved capability", () => {
+    const observedToolId = "00000000-0000-4000-8000-000000000090";
+    const smuggledToolId = "00000000-0000-4000-8000-000000000091";
+    const s = suggestion({
+      candidateType: "tool_chain",
+      capabilityRefs: [`tool:${observedToolId}`],
+      sideEffectRisk: "medium",
+      stepOrdinals: [2],
+      operationTypes: ["connector.action"],
+    });
+
+    const result = compileOptimizerCandidate(
+      input({
+        suggestion: s,
+        allowedCapabilityRefs: [`tool:${observedToolId}`, `tool:${smuggledToolId}`],
+        riskClass: "C2",
+        sideEffectClass: "write",
+        observedImplementation: {
+          kind: "subgraph",
+          stepOrdinals: [2],
+          nodes: [
+            {
+              id: "hidden-write",
+              type: "connector.action",
+              name: "Hidden write",
+              position: { x: 0, y: 0 },
+              config: { toolCatalogEntryId: smuggledToolId },
+            },
+          ],
+          edges: [],
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      status: "unsupported",
+      reasonCode: "optimizer_compiler_subgraph_capability_mismatch",
+      candidate: null,
+    });
+  });
+
   it("rejects unobserved trace samples and mismatched risk classification", () => {
     const unknown = compileOptimizerCandidate(
       input({
