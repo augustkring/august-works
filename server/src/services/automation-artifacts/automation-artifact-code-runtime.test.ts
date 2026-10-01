@@ -69,7 +69,7 @@ describe("Automation Artifact generated-code policy", () => {
         'export default () => ([]["pro" + "totype"]);',
       code: "automation_artifact_code_capability_denied",
     },
-  ])("rejects $label", ({ source, code }) => {
+  ] as const)("rejects $label", ({ source, code }) => {
     expect(() =>
       scanAndTranspileAutomationArtifactTypeScript({
         sourceCode: source,
