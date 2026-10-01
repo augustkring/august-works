@@ -205,6 +205,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
     await db.delete(heartbeatRuns);
     await db.delete(issues);
     await db.delete(projects);
+    await db.delete(companyMemberships);
     await db.delete(agents);
     await db.delete(companies);
   });
