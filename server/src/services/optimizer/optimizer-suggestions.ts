@@ -275,9 +275,8 @@ async function materializeDetectedSuggestions(
  * Read-only suggestion projection for Wave 11.
  *
  * This service deliberately does not create artifacts, mutate workflows, or
- * infer missing human-correction evidence. The detector may surface pure/read
- * suggestion-only candidates with an explicit unmeasured correction rate, while
- * side-effectful candidates remain fail-closed without full correction coverage.
+ * infer missing human-correction evidence. Suggestion materialization fails
+ * closed until every sampled run carries authoritative correction evidence.
  */
 export function optimizerSuggestionService(
   db: Db,
@@ -352,6 +351,17 @@ export function optimizerSuggestionService(
         (trace) => typeof trace.humanCorrection === "boolean",
       ).length;
 
+      if (correctionEvidenceCount !== traces.length) {
+        return response({
+          state: "correction_evidence_incomplete",
+          workflowId,
+          workflowRevisionId: workflow.publishedRevisionId,
+          terminalRunCount: traces.length,
+          correctionEvidenceCount,
+          suggestions: [],
+        });
+      }
+
       const detected = detector(traces, {
         minObservationCount: MIN_OBSERVATION_COUNT,
       }).filter(
@@ -364,12 +374,7 @@ export function optimizerSuggestionService(
       const suggestions = await materializeDetectedSuggestions(db, detected);
 
       return response({
-        state:
-          suggestions.length > 0
-            ? "ready"
-            : correctionEvidenceCount !== traces.length
-              ? "correction_evidence_incomplete"
-              : "no_candidate",
+        state: suggestions.length > 0 ? "ready" : "no_candidate",
         workflowId,
         workflowRevisionId: workflow.publishedRevisionId,
         terminalRunCount: traces.length,
