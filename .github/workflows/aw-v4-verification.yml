@@ -153,8 +153,6 @@ jobs:
 
           /usr/bin/bwrap \
             --unshare-user \
-            --uid 65534 \
-            --gid 65534 \
             --die-with-parent \
             --new-session \
             --unshare-pid \
@@ -166,7 +164,7 @@ jobs:
             --dev /dev \
             -- \
             /usr/bin/prlimit \
-            --nproc=64 \
+            --nproc=512 \
             --cpu=4 \
             --as=2199023255552 \
             --nofile=64 \
