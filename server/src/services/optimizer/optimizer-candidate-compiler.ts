@@ -6,6 +6,8 @@ import type {
   OptimizerSideEffectRisk,
   WorkflowRiskClass,
   WorkflowSideEffectClass,
+  WorkflowNodeV1,
+  WorkflowEdgeV1,
 } from "@paperclipai/shared";
 
 import {
@@ -155,9 +157,7 @@ function uuidConfigValue(
 }
 
 function subgraphCapabilityRefs(
-  nodes: OptimizerCompilerInput["observedImplementation"] extends infer _T
-    ? import("@paperclipai/shared").WorkflowNodeV1[]
-    : never,
+  nodes: WorkflowNodeV1[],
 ): string[] {
   const refs: string[] = [];
   for (const node of nodes) {
@@ -181,8 +181,8 @@ function subgraphCapabilityRefs(
 }
 
 function subgraphIsClosed(
-  nodes: import("@paperclipai/shared").WorkflowNodeV1[],
-  edges: import("@paperclipai/shared").WorkflowEdgeV1[],
+  nodes: WorkflowNodeV1[],
+  edges: WorkflowEdgeV1[],
 ): boolean {
   const ids = new Set(nodes.map((node) => node.id));
   return edges.every((edge) => ids.has(edge.source) && ids.has(edge.target));
