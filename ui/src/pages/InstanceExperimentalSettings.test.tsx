@@ -108,6 +108,7 @@ function defaultExperimentalSettings(): InstanceExperimentalSettingsPayload {
     enablePrivateAgentMemoryV1: false,
     enableMemoryPostRunExtractionV1: false,
     enableAutomationArtifactsV1: false,
+    enableAutomationArtifactCodeExecutionV1: false,
     enableWorkflowOptimizerSuggestions: false,
     enableWorkflowOptimizerShadow: false,
     enableWorkflowOptimizerPromotion: false,
