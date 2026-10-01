@@ -620,7 +620,7 @@ describe("Connections landing page", () => {
     await renderBrowse();
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      "Couldn’t load every connector",
+      "Couldn’t load every connection",
     );
     expect(container.textContent).toContain("Internal search");
     expect(container.textContent).toContain("search.internal.example");
