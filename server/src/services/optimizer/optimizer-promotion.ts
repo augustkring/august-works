@@ -1,0 +1,587 @@
+import { createHash } from "node:crypto";
+import { and, eq } from "drizzle-orm";
+
+import type { Db } from "@paperclipai/db";
+import {
+  automationArtifacts,
+  workflowOptimizerSuggestions,
+  workflows,
+} from "@paperclipai/db";
+import type {
+  OptimizerCanaryExecutionResult,
+  OptimizerCanarySelection,
+  OptimizerPromotionDecision,
+  OptimizerPromotionEvidence,
+  OptimizerPromotionPolicy,
+  WorkflowRiskClass,
+  WorkflowSideEffectClass,
+} from "@paperclipai/shared";
+
+import { conflict, forbidden, notFound } from "../../errors.js";
+import {
+  persistActivity,
+  publishActivity,
+  type ActivityPublication,
+} from "../activity-log.js";
+import { instanceSettingsService } from "../instance-settings.js";
+import type { AutomationArtifactMutationActor } from "../automation-artifacts/automation-artifact-service.js";
+
+const RISK_ORDER: Record<WorkflowRiskClass, number> = {
+  C0: 0,
+  C1: 1,
+  C2: 2,
+  C3: 3,
+  C4: 4,
+};
+
+function requiredRiskForEffect(
+  sideEffectClass: WorkflowSideEffectClass,
+): WorkflowRiskClass {
+  if (sideEffectClass === "write") return "C2";
+  if (
+    sideEffectClass === "destructive" ||
+    sideEffectClass === "external_communication" ||
+    sideEffectClass === "financial" ||
+    sideEffectClass === "privileged"
+  ) {
+    return "C3";
+  }
+  return "C0";
+}
+
+function denied(
+  reasonCode: string,
+  policy: OptimizerPromotionPolicy,
+  humanApprovalRequired = false,
+): OptimizerPromotionDecision {
+  return {
+    status: "denied",
+    reasonCode,
+    humanApprovalRequired,
+    canaryRequired: true,
+    fallbackKind: policy.fallbackKind,
+  };
+}
+
+export function evaluateOptimizerPromotion(input: {
+  riskClass: WorkflowRiskClass;
+  sideEffectClass: WorkflowSideEffectClass;
+  policy: OptimizerPromotionPolicy;
+  evidence: OptimizerPromotionEvidence;
+}): OptimizerPromotionDecision {
+  const { evidence, policy } = input;
+
+  if (
+    evidence.replayEvaluation.status !== "passed" ||
+    evidence.replayEvaluation.criticalInvariantFailure
+  ) {
+    return denied("optimizer_promotion_replay_gate_required", policy);
+  }
+  if (
+    evidence.shadowEvaluation.status !== "passed" ||
+    evidence.shadowEvaluation.trustedPathAuthoritative !== true ||
+    evidence.shadowEvaluation.criticalInvariantFailure
+  ) {
+    return denied("optimizer_promotion_shadow_gate_required", policy);
+  }
+  if (!evidence.rollbackAvailable) {
+    return denied("optimizer_promotion_rollback_required", policy);
+  }
+  if (!evidence.driftGuardAvailable) {
+    return denied("optimizer_promotion_drift_guard_required", policy);
+  }
+  if (input.riskClass === "C4") {
+    return denied("optimizer_promotion_c4_unsupported", policy, true);
+  }
+
+  const minimumRisk = requiredRiskForEffect(input.sideEffectClass);
+  if (RISK_ORDER[input.riskClass] < RISK_ORDER[minimumRisk]) {
+    return denied("optimizer_promotion_risk_classification_mismatch", policy);
+  }
+
+  const lowRiskPureOrRead =
+    (input.riskClass === "C0" || input.riskClass === "C1") &&
+    (input.sideEffectClass === "pure" || input.sideEffectClass === "read");
+  const humanApprovalRequired =
+    input.riskClass === "C2" ||
+    input.riskClass === "C3" ||
+    !lowRiskPureOrRead ||
+    !policy.allowLowRiskAutoPromotion;
+
+  if (humanApprovalRequired && !evidence.humanApproved) {
+    return {
+      status: "approval_required",
+      reasonCode: "optimizer_promotion_human_approval_required",
+      humanApprovalRequired: true,
+      canaryRequired: true,
+      fallbackKind: policy.fallbackKind,
+    };
+  }
+
+  if (!evidence.canaryPassed) {
+    return {
+      status: "canary_ready",
+      reasonCode: "optimizer_promotion_canary_required",
+      humanApprovalRequired,
+      canaryRequired: true,
+      fallbackKind: policy.fallbackKind,
+    };
+  }
+
+  return {
+    status: "promotion_ready",
+    reasonCode: "optimizer_promotion_gates_passed",
+    humanApprovalRequired,
+    canaryRequired: true,
+    fallbackKind: policy.fallbackKind,
+  };
+}
+
+export function selectOptimizerCanaryRoute(input: {
+  companyId: string;
+  promotionKey: string;
+  routingKey: string;
+  candidateTrafficPercent: number;
+}): OptimizerCanarySelection {
+  if (
+    !Number.isInteger(input.candidateTrafficPercent) ||
+    input.candidateTrafficPercent < 0 ||
+    input.candidateTrafficPercent > 100
+  ) {
+    throw new Error("optimizer_canary_percent_invalid");
+  }
+  const digest = createHash("sha256")
+    .update(
+      JSON.stringify([
+        input.companyId,
+        input.promotionKey,
+        input.routingKey,
+      ]),
+    )
+    .digest();
+  const bucketBasisPoints = digest.readUInt32BE(0) % 10_000;
+  return {
+    route:
+      bucketBasisPoints < input.candidateTrafficPercent * 100
+        ? "candidate"
+        : "trusted",
+    bucketBasisPoints,
+    candidateTrafficPercent: input.candidateTrafficPercent,
+  };
+}
+
+export async function executeOptimizerCanaryWithFallback<T>(input: {
+  decision: OptimizerPromotionDecision;
+  companyId: string;
+  promotionKey: string;
+  routingKey: string;
+  candidateTrafficPercent: number;
+  guard: () => Promise<{ passed: boolean; reasonCode?: string | null }>;
+  executeCandidate: () => Promise<T>;
+  executeTrusted: () => Promise<T>;
+  validateCandidateOutput: (
+    output: T,
+  ) => Promise<{ valid: boolean; reasonCode?: string | null }>;
+}): Promise<OptimizerCanaryExecutionResult<T>> {
+  const eligible =
+    input.decision.status === "canary_ready" ||
+    input.decision.status === "promotion_ready";
+  const selection = eligible
+    ? selectOptimizerCanaryRoute(input)
+    : {
+        route: "trusted" as const,
+        bucketBasisPoints: 0,
+        candidateTrafficPercent: input.candidateTrafficPercent,
+      };
+
+  if (!eligible) {
+    return {
+      path: "trusted",
+      fallbackTriggered: false,
+      reasonCode: "optimizer_canary_promotion_not_eligible",
+      selection,
+      output: await input.executeTrusted(),
+    };
+  }
+
+  if (selection.route === "trusted") {
+    return {
+      path: "trusted",
+      fallbackTriggered: false,
+      reasonCode: null,
+      selection,
+      output: await input.executeTrusted(),
+    };
+  }
+
+  const guard = await input.guard();
+  if (!guard.passed) {
+    return {
+      path: "trusted",
+      fallbackTriggered: true,
+      reasonCode: guard.reasonCode ?? "optimizer_canary_guard_failed",
+      selection,
+      output: await input.executeTrusted(),
+    };
+  }
+
+  try {
+    const candidateOutput = await input.executeCandidate();
+    const validation = await input.validateCandidateOutput(candidateOutput);
+    if (!validation.valid) {
+      return {
+        path: "trusted",
+        fallbackTriggered: true,
+        reasonCode:
+          validation.reasonCode ?? "optimizer_canary_candidate_output_invalid",
+        selection,
+        output: await input.executeTrusted(),
+      };
+    }
+    return {
+      path: "candidate",
+      fallbackTriggered: false,
+      reasonCode: null,
+      selection,
+      output: candidateOutput,
+    };
+  } catch {
+    return {
+      path: "trusted",
+      fallbackTriggered: true,
+      reasonCode: "optimizer_canary_candidate_execution_failed",
+      selection,
+      output: await input.executeTrusted(),
+    };
+  }
+}
+
+function assertSystemActor(actor: AutomationArtifactMutationActor): void {
+  if (actor.principal.type !== "system") {
+    throw forbidden("Optimizer promotion is a governed system transition", {
+      code: "optimizer_promotion_system_actor_required",
+    });
+  }
+}
+
+async function assertPromotionEnabled(db: Db): Promise<void> {
+  const experimental = await instanceSettingsService(db).getExperimental();
+  if (experimental.enableWorkflowOptimizerPromotion !== true) {
+    throw forbidden("Workflow Optimizer promotion is disabled", {
+      code: "optimizer_promotion_disabled",
+    });
+  }
+}
+
+function assertPromotionBinding(input: {
+  suggestion: typeof workflowOptimizerSuggestions.$inferSelect;
+  artifact: typeof automationArtifacts.$inferSelect;
+  publishedRevisionId: string | null;
+  expectedArtifactVersionId: string;
+}): void {
+  if (input.publishedRevisionId !== input.suggestion.workflowRevisionId) {
+    throw conflict("Optimizer suggestion targets a stale workflow revision", {
+      code: "optimizer_promotion_stale_workflow_revision",
+      suggestionWorkflowRevisionId: input.suggestion.workflowRevisionId,
+      currentWorkflowRevisionId: input.publishedRevisionId,
+    });
+  }
+  if (
+    input.artifact.createdByOptimizerSuggestionId !== input.suggestion.id ||
+    input.artifact.originWorkflowId !== input.suggestion.workflowId
+  ) {
+    throw conflict("Automation Artifact provenance does not match the suggestion", {
+      code: "optimizer_promotion_artifact_provenance_mismatch",
+    });
+  }
+  if (input.artifact.latestVersionId !== input.expectedArtifactVersionId) {
+    throw conflict("Automation Artifact version changed during promotion", {
+      code: "optimizer_promotion_artifact_version_conflict",
+      currentLatestVersionId: input.artifact.latestVersionId,
+    });
+  }
+  if (input.artifact.status !== "shadow") {
+    throw conflict("Automation Artifact must complete shadow state before promotion", {
+      code: "optimizer_promotion_artifact_not_shadowed",
+      currentStatus: input.artifact.status,
+    });
+  }
+}
+
+export function optimizerPromotionService(db: Db) {
+  async function loadBoundState(
+    companyId: string,
+    suggestionId: string,
+    artifactId: string,
+  ) {
+    const [suggestion, artifact] = await Promise.all([
+      db
+        .select()
+        .from(workflowOptimizerSuggestions)
+        .where(
+          and(
+            eq(workflowOptimizerSuggestions.companyId, companyId),
+            eq(workflowOptimizerSuggestions.id, suggestionId),
+          ),
+        )
+        .then((rows) => rows[0] ?? null),
+      db
+        .select()
+        .from(automationArtifacts)
+        .where(
+          and(
+            eq(automationArtifacts.companyId, companyId),
+            eq(automationArtifacts.id, artifactId),
+          ),
+        )
+        .then((rows) => rows[0] ?? null),
+    ]);
+    if (!suggestion) throw notFound("Optimizer suggestion not found");
+    if (!artifact) throw notFound("Automation Artifact not found");
+    const workflow = await db
+      .select({
+        id: workflows.id,
+        publishedRevisionId: workflows.publishedRevisionId,
+      })
+      .from(workflows)
+      .where(
+        and(
+          eq(workflows.companyId, companyId),
+          eq(workflows.id, suggestion.workflowId),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    if (!workflow) throw notFound("Workflow not found");
+    return { suggestion, artifact, workflow };
+  }
+
+  return {
+    prepareCanary: async (input: {
+      companyId: string;
+      suggestionId: string;
+      artifactId: string;
+      expectedArtifactVersionId: string;
+      policy: OptimizerPromotionPolicy;
+      evidence: OptimizerPromotionEvidence;
+      actor: AutomationArtifactMutationActor;
+    }): Promise<OptimizerPromotionDecision> => {
+      assertSystemActor(input.actor);
+      await assertPromotionEnabled(db);
+      const state = await loadBoundState(
+        input.companyId,
+        input.suggestionId,
+        input.artifactId,
+      );
+      assertPromotionBinding({
+        suggestion: state.suggestion,
+        artifact: state.artifact,
+        publishedRevisionId: state.workflow.publishedRevisionId,
+        expectedArtifactVersionId: input.expectedArtifactVersionId,
+      });
+
+      const decision = evaluateOptimizerPromotion({
+        riskClass: state.artifact.riskClass,
+        sideEffectClass: state.artifact.sideEffectClass,
+        policy: input.policy,
+        evidence: { ...input.evidence, canaryPassed: false },
+      });
+      if (decision.status !== "canary_ready") return decision;
+
+      const publications: ActivityPublication[] = [];
+      await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(workflowOptimizerSuggestions)
+          .set({ status: "ready_to_promote", updatedAt: new Date() })
+          .where(
+            and(
+              eq(workflowOptimizerSuggestions.companyId, input.companyId),
+              eq(workflowOptimizerSuggestions.id, input.suggestionId),
+              eq(
+                workflowOptimizerSuggestions.workflowRevisionId,
+                state.suggestion.workflowRevisionId,
+              ),
+            ),
+          )
+          .returning({ id: workflowOptimizerSuggestions.id })
+          .then((rows) => rows[0] ?? null);
+        if (!updated) {
+          throw conflict("Optimizer suggestion changed during canary preparation", {
+            code: "optimizer_promotion_suggestion_conflict",
+          });
+        }
+        const activity = await persistActivity(tx as unknown as Db, {
+          companyId: input.companyId,
+          actorType: "system",
+          actorId: "workflow-optimizer",
+          action: "optimizer.canary_ready",
+          entityType: "workflow_optimizer_suggestion",
+          entityId: input.suggestionId,
+          details: {
+            artifactId: input.artifactId,
+            artifactVersionId: input.expectedArtifactVersionId,
+            riskClass: state.artifact.riskClass,
+            sideEffectClass: state.artifact.sideEffectClass,
+            fallbackKind: decision.fallbackKind,
+          },
+        });
+        publications.push(activity.publication);
+      });
+      publications.forEach(publishActivity);
+      return decision;
+    },
+
+    activate: async (input: {
+      companyId: string;
+      suggestionId: string;
+      artifactId: string;
+      expectedArtifactVersionId: string;
+      policy: OptimizerPromotionPolicy;
+      evidence: OptimizerPromotionEvidence;
+      actor: AutomationArtifactMutationActor;
+      approvedByUserId?: string | null;
+    }): Promise<OptimizerPromotionDecision> => {
+      assertSystemActor(input.actor);
+      await assertPromotionEnabled(db);
+
+      const decisionState = await loadBoundState(
+        input.companyId,
+        input.suggestionId,
+        input.artifactId,
+      );
+      assertPromotionBinding({
+        suggestion: decisionState.suggestion,
+        artifact: decisionState.artifact,
+        publishedRevisionId: decisionState.workflow.publishedRevisionId,
+        expectedArtifactVersionId: input.expectedArtifactVersionId,
+      });
+
+      const decision = evaluateOptimizerPromotion({
+        riskClass: decisionState.artifact.riskClass,
+        sideEffectClass: decisionState.artifact.sideEffectClass,
+        policy: input.policy,
+        evidence: { ...input.evidence, canaryPassed: true },
+      });
+      if (decision.status !== "promotion_ready") return decision;
+      if (decisionState.suggestion.status !== "ready_to_promote") {
+        throw conflict("Optimizer suggestion is not ready to promote", {
+          code: "optimizer_promotion_suggestion_not_ready",
+          currentStatus: decisionState.suggestion.status,
+        });
+      }
+
+      const publications: ActivityPublication[] = [];
+      await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        const [suggestion] = await txDb
+          .select()
+          .from(workflowOptimizerSuggestions)
+          .where(
+            and(
+              eq(workflowOptimizerSuggestions.companyId, input.companyId),
+              eq(workflowOptimizerSuggestions.id, input.suggestionId),
+            ),
+          )
+          .for("update");
+        const [artifact] = await txDb
+          .select()
+          .from(automationArtifacts)
+          .where(
+            and(
+              eq(automationArtifacts.companyId, input.companyId),
+              eq(automationArtifacts.id, input.artifactId),
+            ),
+          )
+          .for("update");
+        if (!suggestion || !artifact) {
+          throw conflict("Optimizer promotion state changed during activation", {
+            code: "optimizer_promotion_state_conflict",
+          });
+        }
+        const [workflow] = await txDb
+          .select({
+            publishedRevisionId: workflows.publishedRevisionId,
+          })
+          .from(workflows)
+          .where(
+            and(
+              eq(workflows.companyId, input.companyId),
+              eq(workflows.id, suggestion.workflowId),
+            ),
+          );
+        assertPromotionBinding({
+          suggestion,
+          artifact,
+          publishedRevisionId: workflow?.publishedRevisionId ?? null,
+          expectedArtifactVersionId: input.expectedArtifactVersionId,
+        });
+        if (suggestion.status !== "ready_to_promote") {
+          throw conflict("Optimizer suggestion changed during activation", {
+            code: "optimizer_promotion_suggestion_conflict",
+            currentStatus: suggestion.status,
+          });
+        }
+
+        const now = new Date();
+        const artifactUpdated = await txDb
+          .update(automationArtifacts)
+          .set({ status: "active", updatedAt: now })
+          .where(
+            and(
+              eq(automationArtifacts.companyId, input.companyId),
+              eq(automationArtifacts.id, input.artifactId),
+              eq(automationArtifacts.status, "shadow"),
+              eq(
+                automationArtifacts.latestVersionId,
+                input.expectedArtifactVersionId,
+              ),
+            ),
+          )
+          .returning({ id: automationArtifacts.id })
+          .then((rows) => rows[0] ?? null);
+        if (!artifactUpdated) {
+          throw conflict("Automation Artifact changed during activation", {
+            code: "optimizer_promotion_artifact_conflict",
+          });
+        }
+
+        const suggestionUpdated = await txDb
+          .update(workflowOptimizerSuggestions)
+          .set({ status: "promoted", updatedAt: now })
+          .where(
+            and(
+              eq(workflowOptimizerSuggestions.companyId, input.companyId),
+              eq(workflowOptimizerSuggestions.id, input.suggestionId),
+              eq(workflowOptimizerSuggestions.status, "ready_to_promote"),
+            ),
+          )
+          .returning({ id: workflowOptimizerSuggestions.id })
+          .then((rows) => rows[0] ?? null);
+        if (!suggestionUpdated) {
+          throw conflict("Optimizer suggestion changed during activation", {
+            code: "optimizer_promotion_suggestion_conflict",
+          });
+        }
+
+        const activity = await persistActivity(txDb, {
+          companyId: input.companyId,
+          actorType: "system",
+          actorId: "workflow-optimizer",
+          action: "optimizer.promoted",
+          entityType: "workflow_optimizer_suggestion",
+          entityId: input.suggestionId,
+          details: {
+            artifactId: input.artifactId,
+            artifactVersionId: input.expectedArtifactVersionId,
+            riskClass: artifact.riskClass,
+            sideEffectClass: artifact.sideEffectClass,
+            fallbackKind: decision.fallbackKind,
+            approvedByUserId: input.approvedByUserId ?? null,
+          },
+        });
+        publications.push(activity.publication);
+      });
+      publications.forEach(publishActivity);
+      return decision;
+    },
+  };
+}
