@@ -6,6 +6,7 @@ import type {
   OptimizerReplayExecutionMode,
   OptimizerShadowEvaluation,
   OptimizerShadowObservation,
+  OptimizerShadowObservationResult,
   WorkflowJsonSchema,
   WorkflowSideEffectClass,
 } from "@paperclipai/shared";
@@ -182,7 +183,7 @@ export async function evaluateOptimizerShadow(
     };
   }
 
-  const observationResults=[];
+  const observationResults: OptimizerShadowObservationResult[] = [];
   let criticalInvariantFailure=false;
 
   for(const observation of input.observations){
