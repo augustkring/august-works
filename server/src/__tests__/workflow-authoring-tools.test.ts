@@ -9,6 +9,7 @@ import {
   createDb,
   heartbeatRuns,
   instanceSettings,
+  issues,
   principalPermissionGrants,
   workflowRevisions,
   workflows,
@@ -39,6 +40,7 @@ describePg("Workflow AI authoring tools", () => {
     await db.delete(workflowRevisions);
     await db.delete(principalPermissionGrants);
     await db.delete(heartbeatRuns);
+    await db.delete(issues);
     await db.delete(companyMemberships);
     await db.delete(agents);
     await db.delete(companies);
@@ -93,20 +95,30 @@ describePg("Workflow AI authoring tools", () => {
         scope: null,
       },
     ]);
+    const [issue] = await db
+      .insert(issues)
+      .values({
+        companyId: company!.id,
+        title: "Author a workflow",
+        status: "in_progress",
+        assigneeAgentId: agent!.id,
+      })
+      .returning();
     const [run] = await db
       .insert(heartbeatRuns)
       .values({
         companyId: company!.id,
         agentId: agent!.id,
-        invocationSource: "manual",
+        invocationSource: "assignment",
         status: "running",
-        contextSnapshot: {},
+        contextSnapshot: { issueId: issue!.id },
       })
       .returning();
 
     return {
       company: company!,
       agent: agent!,
+      issue: issue!,
       run: run!,
       context: {
         companyId: company!.id,
@@ -167,6 +179,26 @@ describePg("Workflow AI authoring tools", () => {
         graph: { nodes: [], edges: [] },
       },
     });
+
+    const [retryRun] = await db
+      .insert(heartbeatRuns)
+      .values({
+        companyId: seeded.company.id,
+        agentId: seeded.agent.id,
+        invocationSource: "retry",
+        status: "running",
+        contextSnapshot: { issueId: seeded.issue.id },
+      })
+      .returning();
+    const crossRunReplay = await service.create(
+      { ...seeded.context, runId: retryRun!.id },
+      input,
+    );
+    expect(crossRunReplay).toMatchObject({
+      status: "replayed",
+      workflow: { id: first.workflow.id },
+    });
+    expect(await db.select().from(workflows)).toHaveLength(1);
   });
 
   it("edits only draft revisions with retry-safe node and edge mutations", async () => {
