@@ -105,9 +105,7 @@ export const automationArtifacts = pgTable(
     ),
     check(
       "automation_artifacts_language_check",
-      sql`(${table.kind} = 'typescript' and ${table.language} = 'typescript')
-        or (${table.kind} = 'python' and ${table.language} = 'python')
-        or (${table.kind} not in ('typescript','python') and ${table.language} is null)`,
+      sql`(${table.kind} = 'typescript' and ${table.language} = 'typescript') or (${table.kind} = 'python' and ${table.language} = 'python') or (${table.kind} not in ('typescript','python') and ${table.language} is null)`,
     ),
     check(
       "automation_artifacts_status_check",
