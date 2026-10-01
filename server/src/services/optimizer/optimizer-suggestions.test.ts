@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   companies,
@@ -15,6 +15,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
+import { detectOptimizerCandidates } from "./optimizer-pattern-detector.js";
 import { optimizerSuggestionService } from "./optimizer-suggestions.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -189,8 +190,9 @@ describePg("optimizer suggestion projection", () => {
     });
   });
 
-  it("surfaces low-risk suggestions without fabricating correction evidence", async () => {
+  it("fails closed when authoritative correction evidence is incomplete", async () => {
     const seeded = await seedWorkflow({ published: true, runCount: 3 });
+    const detector = vi.fn(detectOptimizerCandidates);
     const service = optimizerSuggestionService(db, {
       traceNormalizer: {
         normalizeWorkflowRun: async (companyId, runId) =>
@@ -201,6 +203,7 @@ describePg("optimizer suggestion projection", () => {
             runId,
           ),
       },
+      detector,
     });
 
     const result = await service.forWorkflow(
@@ -208,18 +211,13 @@ describePg("optimizer suggestion projection", () => {
       seeded.workflowId,
     );
     expect(result).toMatchObject({
-      state: "ready",
+      state: "correction_evidence_incomplete",
       terminalRunCount: 3,
       correctionEvidenceCount: 0,
+      suggestions: [],
     });
-    expect(result?.suggestions).toHaveLength(1);
-    expect(result?.suggestions[0]).toMatchObject({
-      candidateType: "transform",
-      sideEffectRisk: "low",
-      humanCorrectionRate: null,
-      humanCorrectionEvidenceCount: 0,
-      humanCorrectionEvidenceCoverage: 0,
-    });
+    expect(detector).not.toHaveBeenCalled();
+    expect(await db.select().from(workflowOptimizerSuggestions)).toEqual([]);
   });
 
   it("materializes each detected signature once and reuses its durable identity", async () => {
@@ -232,6 +230,7 @@ describePg("optimizer suggestion projection", () => {
             seeded.workflowId,
             seeded.revisionId,
             runId,
+            false,
           ),
       },
     });
@@ -257,9 +256,9 @@ describePg("optimizer suggestion projection", () => {
       workflowId: seeded.workflowId,
       workflowRevisionId: seeded.revisionId,
       status: "detected",
-      humanCorrectionRate: null,
-      humanCorrectionEvidenceCount: 0,
-      humanCorrectionEvidenceCoverage: 0,
+      humanCorrectionRate: 0,
+      humanCorrectionEvidenceCount: 3,
+      humanCorrectionEvidenceCoverage: 1,
     });
 
     const auditRows = await db.select().from(activityLog);
