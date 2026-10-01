@@ -200,9 +200,13 @@ describe("optimizer candidate compiler", () => {
   });
 
   it("preserves exact subgraph span and only the explicitly allowed capability set", () => {
+    const observedToolId = "00000000-0000-4000-8000-000000000080";
+    const unrelatedToolId = "00000000-0000-4000-8000-000000000081";
+    const observedCapability = `tool:${observedToolId}`;
+    const unrelatedCapability = `tool:${unrelatedToolId}`;
     const s = suggestion({
       candidateType: "tool_chain",
-      capabilityRefs: ["tool:crm.read"],
+      capabilityRefs: [observedCapability],
       sideEffectRisk: "low",
       stepOrdinals: [2, 3],
       operationTypes: ["connector.action", "core.transform"],
@@ -210,7 +214,7 @@ describe("optimizer candidate compiler", () => {
     const result = compileOptimizerCandidate(
       input({
         suggestion: s,
-        allowedCapabilityRefs: ["tool:crm.read", "tool:unrelated"],
+        allowedCapabilityRefs: [observedCapability, unrelatedCapability],
         riskClass: "C1",
         sideEffectClass: "read",
         observedImplementation: {
@@ -222,7 +226,14 @@ describe("optimizer candidate compiler", () => {
               type: "connector.action",
               name: "Read CRM",
               position: { x: 0, y: 0 },
-              config: { toolCatalogEntryId: "crm.read" },
+              config: { toolCatalogEntryId: observedToolId },
+            },
+            {
+              id: "transform",
+              type: "core.transform",
+              name: "Normalize CRM data",
+              position: { x: 180, y: 0 },
+              config: {},
             },
           ],
           edges: [],
@@ -241,12 +252,12 @@ describe("optimizer candidate compiler", () => {
         },
       },
       dependencyManifest: {
-        capabilityRefs: ["tool:crm.read"],
+        capabilityRefs: [observedCapability],
         packages: [],
       },
     });
     expect(result.dependencyManifest.capabilityRefs).not.toContain(
-      "tool:unrelated",
+      unrelatedCapability,
     );
   });
 
