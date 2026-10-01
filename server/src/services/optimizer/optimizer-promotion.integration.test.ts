@@ -3,9 +3,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import {
   activityLog,
+  approvals,
   automationArtifacts,
   automationArtifactVersions,
   companies,
+  companyMemberships,
   createDb,
   instanceSettings,
   workflowOptimizerSuggestions,
@@ -84,6 +86,8 @@ describePg("optimizer promotion service", () => {
 
   afterEach(async () => {
     await db.delete(activityLog);
+    await db.delete(approvals);
+    await db.delete(companyMemberships);
     await db.delete(companies);
     await db.delete(instanceSettings);
   });
@@ -314,6 +318,92 @@ describePg("optimizer promotion service", () => {
       details: expect.objectContaining({
         code: "optimizer_promotion_human_approval_reference_required",
       }),
+    });
+  });
+
+  it("requires the approved record to be bound to the exact promotion", async () => {
+    const seeded = await seed();
+    await instanceSettingsService(db).updateExperimental({
+      enableWorkflowOptimizerPromotion: true,
+    });
+    await db
+      .update(automationArtifacts)
+      .set({ riskClass: "C2", sideEffectClass: "write" })
+      .where(eq(automationArtifacts.id, seeded.artifactId));
+
+    const userId = "promotion-approver";
+    await db.insert(companyMemberships).values({
+      companyId: seeded.company.id,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "admin",
+    });
+    const [unrelated] = await db
+      .insert(approvals)
+      .values({
+        companyId: seeded.company.id,
+        type: "optimizer_promotion",
+        status: "approved",
+        decidedByUserId: userId,
+        payload: {
+          suggestionId: seeded.suggestion.id,
+          artifactId: seeded.artifactId,
+          artifactVersionId: randomUUID(),
+          workflowRevisionId: seeded.revisionId,
+        },
+      })
+      .returning();
+
+    await expect(
+      optimizerPromotionService(db).prepareCanary({
+        companyId: seeded.company.id,
+        suggestionId: seeded.suggestion.id,
+        artifactId: seeded.artifactId,
+        expectedArtifactVersionId: seeded.versionId,
+        policy,
+        evidence: evidence({ humanApproved: true }),
+        actor,
+        approvedByUserId: userId,
+        approvalId: unrelated!.id,
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      details: expect.objectContaining({
+        code: "optimizer_promotion_approval_record_invalid",
+      }),
+    });
+
+    const [bound] = await db
+      .insert(approvals)
+      .values({
+        companyId: seeded.company.id,
+        type: "optimizer_promotion",
+        status: "approved",
+        decidedByUserId: userId,
+        payload: {
+          suggestionId: seeded.suggestion.id,
+          artifactId: seeded.artifactId,
+          artifactVersionId: seeded.versionId,
+          workflowRevisionId: seeded.revisionId,
+        },
+      })
+      .returning();
+
+    const prepared = await optimizerPromotionService(db).prepareCanary({
+      companyId: seeded.company.id,
+      suggestionId: seeded.suggestion.id,
+      artifactId: seeded.artifactId,
+      expectedArtifactVersionId: seeded.versionId,
+      policy,
+      evidence: evidence({ humanApproved: true }),
+      actor,
+      approvedByUserId: userId,
+      approvalId: bound!.id,
+    });
+    expect(prepared).toMatchObject({
+      status: "canary_ready",
+      humanApprovalRequired: true,
     });
   });
 
