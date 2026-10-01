@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
@@ -53,6 +54,11 @@ async function expectDatabaseCause(
 
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe.sequential : describe.skip;
+
+const qualifiedLinuxArtifactSandbox =
+  process.platform === "linux" &&
+  existsSync("/usr/bin/bwrap") &&
+  existsSync("/usr/bin/prlimit");
 
 function userActor(userId: string): AutomationArtifactMutationActor {
   const principal: ExecutionPrincipal = { type: "user", userId };
@@ -701,6 +707,33 @@ describePg("Automation Artifact service", () => {
         code: "automation_artifact_code_execution_disabled",
       }),
     });
+
+    if (qualifiedLinuxArtifactSandbox) {
+      await instanceSettingsService(db).updateExperimental({
+        enableAutomationArtifactsV1: true,
+        enableAutomationArtifactCodeExecutionV1: true,
+      });
+      const active = await service.transitionStatus(
+        seeded.company.id,
+        created.artifact.id,
+        {
+          expectedStatus: "testing",
+          expectedLatestVersionId: version.id,
+          status: "active",
+        },
+        user,
+      );
+      expect(active.artifact.status).toBe("active");
+
+      const executed = await automationArtifactRuntimeService(db).execute(
+        seeded.company.id,
+        created.artifact.id,
+        version.id,
+        { value: 1 },
+        user,
+      );
+      expect(executed.output).toEqual({ value: 2 });
+    }
   });
 
   it("keeps runtime disabled by default and resolves only active hash-gated versions", async () => {
