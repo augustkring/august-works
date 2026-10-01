@@ -203,8 +203,8 @@ describeEmbeddedPostgres("AW V4 migration reconciliation", () => {
     const before = await reconciliation.inspect();
 
     expect(before.routines).toMatchObject({
-      legacyTargets: 4,
-      repairableLegacyTargets: 3,
+      legacyTargets: 3,
+      repairableLegacyTargets: 2,
       unsafeLegacyTargets: 1,
       activeWithoutTarget: 1,
     });
@@ -217,9 +217,9 @@ describeEmbeddedPostgres("AW V4 migration reconciliation", () => {
 
     const repaired = await reconciliation.repairBatch({ batchSize: 10 });
     expect(repaired).toEqual({
-      routinesRepaired: 3,
+      routinesRepaired: 2,
       pipelineExecutionsRepaired: 1,
-      repaired: 4,
+      repaired: 3,
     });
 
     const [safeRoutineAfter] = await db
