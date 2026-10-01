@@ -234,6 +234,39 @@ describe("optimizer historical replay", () => {
     });
   });
 
+  it("sanitizes non-finite executor metrics instead of leaking invalid telemetry", async () => {
+    const result = await evaluateOptimizerHistoricalReplay(
+      {
+        compilerResult: compilerResult(),
+        cases: cases(),
+        executionMode: "pure",
+      },
+      {
+        execute: async ({ replayCase }) => ({
+          output: {
+            email: String(
+              (replayCase.input as { email: string }).email,
+            )
+              .trim()
+              .toLowerCase(),
+          },
+          durationMs: Number.POSITIVE_INFINITY,
+          costEstimate: Number.NaN,
+        }),
+        evaluateInvariant: async () => ({ passed: true }),
+      },
+    );
+
+    expect(result.status).toBe("passed");
+    expect(result.totalDurationMs).toBe(0);
+    expect(result.totalCostEstimate).toBeNull();
+    expect(
+      result.caseResults.every(
+        (item) => Number.isFinite(item.durationMs) && item.costEstimate === null,
+      ),
+    ).toBe(true);
+  });
+
   it("records output schema and exact-output differences per case without raw diff payloads", async () => {
     const result = await evaluateOptimizerHistoricalReplay(
       {
