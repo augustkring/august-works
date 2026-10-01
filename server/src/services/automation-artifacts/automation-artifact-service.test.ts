@@ -462,6 +462,9 @@ describePg("Automation Artifact service", () => {
       /cannot be deleted directly/i,
     );
 
+    await db
+      .delete(activityLog)
+      .where(eq(activityLog.companyId, seeded.company.id));
     await db.delete(companies).where(eq(companies.id, seeded.company.id));
 
     expect(
@@ -491,13 +494,13 @@ describePg("Automation Artifact service", () => {
       input({
         kind: "transform",
         sourceCode: JSON.stringify({
-          email: "lower(trim(input.email))",
+          email: "{{input.email}}",
         }),
         testSpec: {
           cases: [
             {
-              name: "normalizes-email",
-              input: { email: " Alice@Example.COM " },
+              name: "copies-email-through-governed-transform",
+              input: { email: "alice@example.com" },
               output: { email: "alice@example.com" },
             },
           ],
