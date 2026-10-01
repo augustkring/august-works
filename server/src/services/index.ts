@@ -355,3 +355,9 @@ export {
   type OptimizerShadowInvariantEvaluator,
 } from "./optimizer/optimizer-shadow.js";
 
+export {
+  evaluateOptimizerPromotion,
+  selectOptimizerCanaryRoute,
+  executeOptimizerCanaryWithFallback,
+  optimizerPromotionService,
+} from "./optimizer/optimizer-promotion.js";
