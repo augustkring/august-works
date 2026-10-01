@@ -2234,6 +2234,25 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "get",
+  path: "/api/companies/{companyId}/workflows/{workflowId}/optimizer-suggestions",
+  tags: ["workflows"],
+  summary: "List governed optimizer suggestions for a workflow",
+  request: {
+    params: z.object({
+      companyId: z.string().uuid(),
+      workflowId: z.string().uuid(),
+    }),
+  },
+  responses: {
+    200: r.ok(),
+    401: r.unauthorized,
+    403: r.forbidden,
+    404: r.notFound,
+  },
+});
+
+registry.registerPath({
   method: "delete",
   path: "/api/companies/{companyId}",
   tags: ["companies"],
