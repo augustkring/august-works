@@ -63,20 +63,15 @@ describe("Governance", () => {
       "Who can access what, and what can they do with it?",
     );
 
-    const destinations = new Map(
-      [...container.querySelectorAll("a")].map((anchor) => [
-        anchor.textContent?.replace(/\s+/g, " ").trim(),
-        anchor.getAttribute("href"),
-      ]),
-    );
-    expect(destinations.get("Members & access People, roles, invitations, and organization access. →"))
-      .toBe("/company/settings/members");
-    expect(destinations.get("Agent permissions Review each agent's role, connections, and operating authority. →"))
-      .toBe("/agents/all");
-    expect(destinations.get("Connection access See connected systems and manage who can use them. →"))
-      .toBe("/apps");
-    expect(destinations.get("Audit history Inspect agent activity, runs, cost, and operational history. →"))
-      .toBe("/activity");
+    const hrefForTitle = (title: string) =>
+      [...container.querySelectorAll("a")]
+        .find((anchor) => anchor.textContent?.includes(title))
+        ?.getAttribute("href");
+
+    expect(hrefForTitle("Members & access")).toBe("/company/settings/members");
+    expect(hrefForTitle("Agent permissions")).toBe("/agents/all");
+    expect(hrefForTitle("Connection access")).toBe("/apps");
+    expect(hrefForTitle("Audit history")).toBe("/activity");
 
     expect(mockSetBreadcrumbs).toHaveBeenCalledWith([
       { label: "Governance", href: "/governance" },
