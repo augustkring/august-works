@@ -235,6 +235,8 @@ export interface OptimizerCompiledSubgraphCandidate {
     edges: WorkflowEdgeV1[];
     inputSchema: WorkflowJsonSchema;
     outputSchema: WorkflowJsonSchema;
+    riskClass: WorkflowRiskClass;
+    sideEffectClass: WorkflowSideEffectClass;
   };
 }
 
