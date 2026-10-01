@@ -352,3 +352,57 @@ export interface OptimizerShadowEvaluation {
   totalCandidateDurationMs: number;
   totalCandidateCostEstimate: number | null;
 }
+
+export const OPTIMIZER_PROMOTION_DECISION_STATUSES = [
+  "denied",
+  "approval_required",
+  "canary_ready",
+  "promotion_ready",
+] as const;
+export type OptimizerPromotionDecisionStatus =
+  (typeof OPTIMIZER_PROMOTION_DECISION_STATUSES)[number];
+
+export const OPTIMIZER_FALLBACK_KINDS = [
+  "agent",
+  "human",
+  "alternate_artifact",
+  "fail_workflow",
+] as const;
+export type OptimizerFallbackKind =
+  (typeof OPTIMIZER_FALLBACK_KINDS)[number];
+
+export interface OptimizerPromotionPolicy {
+  allowLowRiskAutoPromotion: boolean;
+  fallbackKind: OptimizerFallbackKind;
+}
+
+export interface OptimizerPromotionEvidence {
+  replayEvaluation: OptimizerReplayEvaluation;
+  shadowEvaluation: OptimizerShadowEvaluation;
+  rollbackAvailable: boolean;
+  driftGuardAvailable: boolean;
+  humanApproved: boolean;
+  canaryPassed: boolean;
+}
+
+export interface OptimizerPromotionDecision {
+  status: OptimizerPromotionDecisionStatus;
+  reasonCode: string;
+  humanApprovalRequired: boolean;
+  canaryRequired: boolean;
+  fallbackKind: OptimizerFallbackKind;
+}
+
+export interface OptimizerCanarySelection {
+  route: "candidate" | "trusted";
+  bucketBasisPoints: number;
+  candidateTrafficPercent: number;
+}
+
+export interface OptimizerCanaryExecutionResult<T = unknown> {
+  path: "candidate" | "trusted";
+  fallbackTriggered: boolean;
+  reasonCode: string | null;
+  selection: OptimizerCanarySelection;
+  output: T;
+}
