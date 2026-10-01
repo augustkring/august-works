@@ -21,11 +21,9 @@ const MAX_TIMEOUT_MS = 10_000;
 const ADDRESS_SPACE_CEILING_BYTES = 2 * 1024 * 1024 * 1024 * 1024;
 const NODE_OLD_SPACE_LIMIT_MIB = 96;
 const NODE_SEMI_SPACE_LIMIT_MIB = 8;
-const PROCESS_LIMIT = 64;
+const PROCESS_LIMIT = 512;
 const FILE_DESCRIPTOR_LIMIT = 64;
 const CPU_SECONDS = 4;
-const SANDBOX_UID = 65_534;
-const SANDBOX_GID = 65_534;
 const PRLIMIT_PATH = "/usr/bin/prlimit";
 
 const FORBIDDEN_IDENTIFIERS = new Set([
@@ -703,11 +701,10 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     }
     const sandboxedCommand = target.args.slice(commandSeparator + 1);
     const sandboxArgs = [
+      // Keep the caller's filesystem ownership mapping inside an unprivileged
+      // user namespace. Remapping to an unrelated UID would make the 0700
+      // ephemeral workspace unreadable before Node starts.
       "--unshare-user",
-      "--uid",
-      String(SANDBOX_UID),
-      "--gid",
-      String(SANDBOX_GID),
       ...target.args.slice(0, commandSeparator + 1),
       PRLIMIT_PATH,
       `--nproc=${PROCESS_LIMIT}`,
