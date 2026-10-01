@@ -19,6 +19,7 @@ import {
   issueApprovals,
   issues,
   projects,
+  principalPermissionGrants,
   issueThreadInteractions,
   instanceSettings,
   toolApplications,
@@ -195,6 +196,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
     await db.delete(toolApplications);
     await db.delete(companySecrets);
     await db.delete(toolPolicies);
+    await db.delete(principalPermissionGrants);
     await db.delete(instanceSettings);
     await db.delete(heartbeatRuns);
     await db.delete(issues);
@@ -308,6 +310,63 @@ describeEmbeddedPostgres("tool gateway service", () => {
     const enabledNames = (await gateway.listToolsForSession(session.token))
       .map((tool) => tool.name);
     expect(enabledNames).toEqual(expect.arrayContaining(authoringToolNames));
+  });
+
+  it("executes create_workflow through the governed gateway without publishing", async () => {
+    const { company, agent, run } = await createRunFixture(db);
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      status: "active",
+      membershipRole: "member",
+    });
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      permissionKey: "workflows:edit",
+      scope: null,
+    });
+    await db.insert(toolPolicies).values({
+      companyId: company.id,
+      name: "Allow workflow draft creation",
+      policyType: "allow",
+      selectors: { toolName: "paperclip-self:create_workflow" },
+    });
+    await instanceSettingsService(db).updateExperimental({
+      enableWorkflowsV1: true,
+      enableWorkflowBuilderV1: true,
+      enableAiWorkflowAuthoring: true,
+    });
+
+    const gateway = createTestToolGatewayService(db);
+    const session = await gateway.createSession({
+      companyId: company.id,
+      agentId: agent.id,
+      runId: run.id,
+    });
+    const result = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "paperclip-self:create_workflow",
+      parameters: {
+        name: "Gateway-authored workflow",
+        description: "Created through the governed self-tool",
+        idempotencyKey: "gateway-create-v1",
+      },
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.result).toMatchObject({
+      data: {
+        status: "created",
+        workflow: {
+          name: "Gateway-authored workflow",
+          publishedRevisionId: null,
+          draftRevision: { state: "draft" },
+        },
+      },
+    });
   });
 
   it("gates write tools with an action request and executes only stored reviewed arguments once", async () => {
