@@ -61,8 +61,7 @@ function boundedBatchSize(value: number | undefined): number {
 }
 
 async function scalarCount(
-  db: Db,
-  query: ReturnType<Db["select"]>,
+  query: PromiseLike<Array<{ count: number }>>,
 ): Promise<number> {
   const rows = await query;
   const value = rows[0]?.count;
