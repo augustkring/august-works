@@ -156,4 +156,39 @@ describeQualifiedSandbox("Automation Artifact qualified TypeScript sandbox", () 
     },
     15_000,
   );
+
+  it(
+    "terminates non-cooperative generated code at the wall-clock limit",
+    async () => {
+      await expect(
+        executeAutomationArtifactTypeScriptSandbox({
+          sourceCode: "export default () => { while (true) {} };",
+          dependencyManifest: {},
+          value: {},
+          timeoutMs: 150,
+        }),
+      ).rejects.toMatchObject({
+        code: "automation_artifact_code_timeout",
+      });
+    },
+    15_000,
+  );
+
+  it(
+    "fails closed when generated output exceeds the bounded stdout contract",
+    async () => {
+      await expect(
+        executeAutomationArtifactTypeScriptSandbox({
+          sourceCode:
+            "export default () => ({ text: 'x'.repeat(300000) });",
+          dependencyManifest: {},
+          value: {},
+          timeoutMs: 5_000,
+        }),
+      ).rejects.toMatchObject({
+        code: "automation_artifact_code_output_too_large",
+      });
+    },
+    15_000,
+  );
 });
