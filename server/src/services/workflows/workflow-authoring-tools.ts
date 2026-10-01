@@ -51,7 +51,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 function deterministicWorkflowId(
   companyId: string,
   agentId: string,
-  runId: string,
+  durableScopeId: string,
   idempotencyKey: string,
 ): string {
   const hex = createHash("sha256")
@@ -60,7 +60,7 @@ function deterministicWorkflowId(
         "aw-workflow-authoring-v1",
         companyId,
         agentId,
-        runId,
+        durableScopeId,
         idempotencyKey,
       ]),
     )
@@ -221,6 +221,12 @@ export function workflowAuthoringToolsService(db: Db) {
       typeof snapshot.projectId === "string" && snapshot.projectId.length > 0
         ? snapshot.projectId
         : null;
+    const snapshotIssueId =
+      typeof snapshot.issueId === "string" && snapshot.issueId.length > 0
+        ? snapshot.issueId
+        : typeof snapshot.taskId === "string" && snapshot.taskId.length > 0
+          ? snapshot.taskId
+          : null;
     if (
       snapshotProjectId &&
       context.projectId &&
@@ -232,6 +238,7 @@ export function workflowAuthoringToolsService(db: Db) {
     }
     return {
       projectId: snapshotProjectId ?? context.projectId ?? null,
+      issueId: snapshotIssueId,
     };
   }
 
@@ -325,7 +332,7 @@ export function workflowAuthoringToolsService(db: Db) {
     const workflowId = deterministicWorkflowId(
       context.companyId,
       context.agentId,
-      context.runId,
+      scope.issueId ?? context.runId,
       parsed.data.idempotencyKey,
     );
     const existing = await workflows.getDetail(context.companyId, workflowId);
