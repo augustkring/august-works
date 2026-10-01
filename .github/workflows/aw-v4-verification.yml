@@ -168,7 +168,7 @@ jobs:
             /usr/bin/prlimit \
             --nproc=64 \
             --cpu=4 \
-            --as=17179869184 \
+            --as=2199023255552 \
             --nofile=64 \
             -- \
             /usr/bin/true
