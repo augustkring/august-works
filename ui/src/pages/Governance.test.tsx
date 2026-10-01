@@ -58,7 +58,7 @@ describe("Governance", () => {
     const root = createRoot(container);
     flushSync(() => root.render(<Governance />));
 
-    expect(container.querySelector("h1")?.textContent).toBe("Governance");
+    expect(container.querySelector("h1")).toBeNull();
     expect(container.textContent).toContain(
       "Who can access what, and what can they do with it?",
     );
