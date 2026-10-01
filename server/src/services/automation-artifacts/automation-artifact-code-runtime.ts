@@ -17,7 +17,7 @@ const MAX_TIMEOUT_MS = 10_000;
 // heap, so RLIMIT_AS cannot equal the intended working-memory budget. Keep a
 // coarse virtual-address ceiling high enough for Node startup while bounding
 // the model-authored JavaScript heap directly with V8 flags below.
-const ADDRESS_SPACE_CEILING_BYTES = 8 * 1024 * 1024 * 1024;
+const ADDRESS_SPACE_CEILING_BYTES = 16 * 1024 * 1024 * 1024;
 const NODE_OLD_SPACE_LIMIT_MIB = 96;
 const NODE_SEMI_SPACE_LIMIT_MIB = 8;
 // Do not use RLIMIT_NPROC here. Linux accounts it against the host real UID,
