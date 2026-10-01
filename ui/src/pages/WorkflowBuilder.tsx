@@ -60,6 +60,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { WorkflowDataSelector } from "@/components/workflows/WorkflowDataSelector";
+import { WorkflowOptimizerSuggestions } from "@/components/workflows/WorkflowOptimizerSuggestions";
 
 type BuilderNodeData = {
   workflowNode: WorkflowNodeV1;
@@ -1087,6 +1088,15 @@ export function WorkflowBuilder() {
               Select a step to inspect its contract and configuration.
             </div>
           )}
+
+          {workflowId ? (
+            <div className="mt-6 border-t border-border pt-5">
+              <WorkflowOptimizerSuggestions
+                companyId={selectedCompanyId}
+                workflowId={workflowId}
+              />
+            </div>
+          ) : null}
         </aside>
       </div>
     </div>

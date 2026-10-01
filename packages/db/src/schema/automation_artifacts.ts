@@ -24,6 +24,7 @@ import type {
 import { agents } from "./agents.js";
 import { companies } from "./companies.js";
 import { workflows } from "./workflows.js";
+import { workflowOptimizerSuggestions } from "./workflow_optimizer.js";
 
 export const automationArtifacts = pgTable(
   "automation_artifacts",
@@ -81,6 +82,14 @@ export const automationArtifacts = pgTable(
       columns: [table.companyId, table.originWorkflowId],
       foreignColumns: [workflows.companyId, workflows.id],
     }),
+    foreignKey({
+      name: "automation_artifacts_optimizer_suggestion_fk",
+      columns: [table.companyId, table.createdByOptimizerSuggestionId],
+      foreignColumns: [
+        workflowOptimizerSuggestions.companyId,
+        workflowOptimizerSuggestions.id,
+      ],
+    }).onDelete("restrict"),
     foreignKey({
       name: "automation_artifacts_company_latest_version_fk",
       columns: [table.companyId, table.latestVersionId],

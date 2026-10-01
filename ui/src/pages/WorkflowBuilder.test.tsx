@@ -20,6 +20,7 @@ const agentsApiMock = vi.hoisted(() => ({
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
+  optimizerSuggestions: vi.fn(),
   capabilities: vi.fn(),
   nodeRegistry: vi.fn(),
   capabilitySearch: vi.fn(),
@@ -156,6 +157,15 @@ describe("WorkflowBuilder", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     apiMock.get.mockResolvedValue(baseDetail);
+    apiMock.optimizerSuggestions.mockResolvedValue({
+      state: "disabled",
+      workflowId: "workflow-1",
+      workflowRevisionId: null,
+      terminalRunCount: 0,
+      correctionEvidenceCount: 0,
+      minimumObservationCount: 3,
+      suggestions: [],
+    });
     apiMock.capabilities.mockResolvedValue({ read: true, edit: true, publish: true, run: false });
     apiMock.nodeRegistry.mockResolvedValue(registry);
     apiMock.capabilitySearch.mockResolvedValue({
@@ -214,6 +224,69 @@ describe("WorkflowBuilder", () => {
     await flush();
     expect(container.textContent).toContain("1. Manual Trigger");
     expect(container.textContent).toContain("Unsaved");
+
+    flushSync(() => root.unmount());
+  });
+
+  it("shows optimizer evidence separately from executed workflow state", async () => {
+    apiMock.optimizerSuggestions.mockResolvedValue({
+      state: "ready",
+      workflowId: "workflow-1",
+      workflowRevisionId: "revision-published",
+      terminalRunCount: 3,
+      correctionEvidenceCount: 3,
+      minimumObservationCount: 3,
+      suggestions: [
+        {
+          companyId: "company-1",
+          workflowId: "workflow-1",
+          workflowRevisionId: "revision-published",
+          signatureHash: "f".repeat(64),
+          candidateType: "transform",
+          stepOrdinals: [1],
+          operationTypes: ["core.transform"],
+          capabilityRefs: [null],
+          sideEffectRisk: "low",
+          observationCount: 3,
+          successRate: 1,
+          humanCorrectionRate: 0,
+          humanCorrectionEvidenceCount: 3,
+          humanCorrectionEvidenceCoverage: 1,
+          inputShapeStability: 1,
+          outputShapeStability: 1,
+          averageDurationMs: 120,
+          averageCost: 4,
+          estimatedLatencySavingsMs: 120,
+          estimatedCostSavings: 4,
+          observedRunIds: ["run-1", "run-2", "run-3"],
+        },
+      ],
+    });
+
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    flushSync(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/workflows/workflow-1"]}>
+            <Routes>
+              <Route path="/workflows/:workflowId" element={<WorkflowBuilder />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Optimizer");
+    expect(container.textContent).toContain("Suggestion only");
+    expect(container.textContent).toContain("Optimization available");
+    expect(container.textContent).toContain("Deterministic transform");
+    expect(container.textContent).toContain("No production mutation");
+    const promote = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Promote",
+    ) as HTMLButtonElement | undefined;
+    expect(promote?.disabled).toBe(true);
 
     flushSync(() => root.unmount());
   });

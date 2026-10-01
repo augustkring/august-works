@@ -289,6 +289,69 @@ describePg("Workflow routes", () => {
     });
   });
 
+  it("does not expose optimizer state for nonexistent or cross-company workflows", async () => {
+    const alpha = await seedCompany("Optimizer Alpha");
+    const beta = await seedCompany("Optimizer Beta");
+    await enableWorkflows();
+    const workflow = await request(app(localBoard))
+      .post(`/api/companies/${alpha.id}/workflows`)
+      .send({ name: "Alpha optimizer workflow" })
+      .expect(201);
+
+    await request(app(localBoard))
+      .get(
+        `/api/companies/${beta.id}/workflows/${workflow.body.id}/optimizer-suggestions`,
+      )
+      .expect(404);
+
+    await request(app(localBoard))
+      .get(
+        `/api/companies/${alpha.id}/workflows/${randomUUID()}/optimizer-suggestions`,
+      )
+      .expect(404);
+  });
+
+  it("keeps optimizer suggestions read-only and feature-gated", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+    const workflow = await request(app(localBoard))
+      .post(`/api/companies/${company.id}/workflows`)
+      .send({ name: "Optimizer evidence workflow" })
+      .expect(201);
+
+    await request(app(localBoard))
+      .get(
+        `/api/companies/${company.id}/workflows/${workflow.body.id}/optimizer-suggestions`,
+      )
+      .expect(200)
+      .expect((response) => {
+        expect(response.body).toMatchObject({
+          state: "disabled",
+          workflowId: workflow.body.id,
+          terminalRunCount: 0,
+          suggestions: [],
+        });
+      });
+
+    await instanceSettingsService(db).updateExperimental({
+      enableWorkflowOptimizerSuggestions: true,
+    });
+
+    await request(app(localBoard))
+      .get(
+        `/api/companies/${company.id}/workflows/${workflow.body.id}/optimizer-suggestions`,
+      )
+      .expect(200)
+      .expect((response) => {
+        expect(response.body).toMatchObject({
+          state: "no_published_revision",
+          workflowId: workflow.body.id,
+          terminalRunCount: 0,
+          suggestions: [],
+        });
+      });
+  });
+
   it("exposes the typed Node Registry to authorized readers", async () => {
     const company = await seedCompany();
     await enableWorkflows();

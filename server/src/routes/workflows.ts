@@ -25,6 +25,7 @@ import {
   workflowExecutorService,
   workflowNodeRegistryService,
   workflowService,
+  optimizerSuggestionService,
   type WorkflowMutationActor,
 } from "../services/index.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
@@ -41,6 +42,7 @@ export function workflowRoutes(db: Db) {
   const capabilityResolver = workflowCapabilityResolverService(db);
   const dataSelector = workflowDataSelectorService(db);
   const executor = workflowExecutorService(db);
+  const optimizerSuggestions = optimizerSuggestionService(db);
   const issuesSvc = issueService(db);
   const access = accessService(db);
   const settings = instanceSettingsService(db);
@@ -407,6 +409,40 @@ export function workflowRoutes(db: Db) {
     },
   );
 
+
+  router.get(
+    "/companies/:companyId/workflows/:workflowId/optimizer-suggestions",
+    async (req, res) => {
+      await assertWorkflowsEnabled();
+      const companyId = req.params.companyId as string;
+      const workflowId = req.params.workflowId as string;
+      await assertPermission(req, companyId, "workflows:read");
+      const workflow = await svc.getDetail(companyId, workflowId);
+      if (!workflow) {
+        throw notFound("Workflow not found");
+      }
+
+      const experimental = await settings.getExperimental();
+      if (experimental.enableWorkflowOptimizerSuggestions !== true) {
+        res.json({
+          state: "disabled",
+          workflowId,
+          workflowRevisionId: null,
+          terminalRunCount: 0,
+          correctionEvidenceCount: 0,
+          minimumObservationCount: 3,
+          suggestions: [],
+        });
+        return;
+      }
+
+      const result = await optimizerSuggestions.forWorkflow(companyId, workflowId);
+      if (!result) {
+        throw notFound("Workflow not found");
+      }
+      res.json(result);
+    },
+  );
 
   router.get("/companies/:companyId/workflows/:workflowId", async (req, res) => {
     await assertWorkflowsEnabled();

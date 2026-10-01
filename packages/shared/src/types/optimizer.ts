@@ -55,6 +55,20 @@ export type OptimizerCandidateType =
 
 export type OptimizerSideEffectRisk = "low" | "medium" | "high";
 
+export const OPTIMIZER_SUGGESTION_STATUSES = [
+  "detected",
+  "generated",
+  "evaluating",
+  "ready_for_shadow",
+  "shadowing",
+  "ready_to_promote",
+  "promoted",
+  "rejected",
+  "needs_revision",
+] as const;
+export type OptimizerSuggestionStatus =
+  (typeof OPTIMIZER_SUGGESTION_STATUSES)[number];
+
 export interface OptimizerCandidateSuggestion {
   companyId: string;
   workflowId: string | null;
@@ -82,5 +96,34 @@ export interface OptimizerCandidateSuggestion {
   estimatedLatencySavingsMs: number;
   estimatedCostSavings: number | null;
   observedRunIds: string[];
+}
+
+export const OPTIMIZER_SUGGESTION_EVIDENCE_STATES = [
+  "disabled",
+  "no_published_revision",
+  "insufficient_runs",
+  "correction_evidence_incomplete",
+  "no_candidate",
+  "ready",
+] as const;
+export type OptimizerSuggestionEvidenceState =
+  (typeof OPTIMIZER_SUGGESTION_EVIDENCE_STATES)[number];
+
+export interface WorkflowOptimizerSuggestion
+  extends OptimizerCandidateSuggestion {
+  id: string;
+  status: OptimizerSuggestionStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OptimizerSuggestionResponse {
+  state: OptimizerSuggestionEvidenceState;
+  workflowId: string;
+  workflowRevisionId: string | null;
+  terminalRunCount: number;
+  correctionEvidenceCount: number;
+  minimumObservationCount: number;
+  suggestions: WorkflowOptimizerSuggestion[];
 }
 

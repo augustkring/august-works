@@ -9,6 +9,8 @@ import {
   companyMemberships,
   createDb,
   instanceSettings,
+  workflowOptimizerSuggestions,
+  workflowRevisions,
   workflows,
 } from "@paperclipai/db";
 import type { ExecutionPrincipal } from "@paperclipai/shared";
@@ -125,6 +127,7 @@ describePg("Automation Artifact service", () => {
       .update(automationArtifacts)
       .set({ latestVersionId: null });
     await db.delete(automationArtifacts);
+    await db.delete(workflowOptimizerSuggestions);
     await db.delete(workflows);
     await db.delete(companyMemberships);
     await db.delete(companies);
@@ -331,6 +334,136 @@ describePg("Automation Artifact service", () => {
         originWorkflowId: betaWorkflow!.id,
       }),
     ).rejects.toThrow();
+  });
+
+  it("binds optimizer provenance to the same company and origin workflow", async () => {
+    const alpha = await seedCompany("Optimizer Alpha");
+    const beta = await seedCompany("Optimizer Beta");
+
+    async function seedSuggestion(
+      companyId: string,
+      name: string,
+    ) {
+      const workflowId = randomUUID();
+      const revisionId = randomUUID();
+      await db.transaction(async (tx) => {
+        await tx.insert(workflows).values({
+          id: workflowId,
+          companyId,
+          name,
+          status: "active",
+          publishedRevisionId: revisionId,
+        });
+        await tx.insert(workflowRevisions).values({
+          id: revisionId,
+          companyId,
+          workflowId,
+          revisionNumber: 1,
+          state: "published",
+          graph: {
+            version: 1,
+            nodes: [],
+            edges: [],
+            variables: [],
+            settings: {},
+          },
+        });
+      });
+      const [suggestion] = await db
+        .insert(workflowOptimizerSuggestions)
+        .values({
+          companyId,
+          workflowId,
+          workflowRevisionId: revisionId,
+          signatureHash: "a".repeat(64),
+          status: "detected",
+          candidateType: "transform",
+          stepOrdinals: [1],
+          operationTypes: ["core.transform"],
+          capabilityRefs: [null],
+          sideEffectRisk: "low",
+          observationCount: 3,
+          successRate: 1,
+          humanCorrectionRate: null,
+          humanCorrectionEvidenceCount: 0,
+          humanCorrectionEvidenceCoverage: 0,
+          inputShapeStability: 1,
+          outputShapeStability: 1,
+          averageDurationMs: 10,
+          averageCost: null,
+          estimatedLatencySavingsMs: 10,
+          estimatedCostSavings: null,
+          observedRunIds: [],
+        })
+        .returning();
+      return { workflowId, revisionId, suggestion: suggestion! };
+    }
+
+    const alphaSource = await seedSuggestion(
+      alpha.company.id,
+      "Alpha source workflow",
+    );
+    const betaSource = await seedSuggestion(
+      beta.company.id,
+      "Beta source workflow",
+    );
+    const [alphaOtherWorkflow] = await db
+      .insert(workflows)
+      .values({
+        companyId: alpha.company.id,
+        name: "Alpha other workflow",
+        status: "active",
+      })
+      .returning();
+
+    const service = automationArtifactService(db);
+
+    await expect(
+      service.create(
+        alpha.company.id,
+        input({
+          createdByOptimizerSuggestionId: betaSource.suggestion.id,
+          originWorkflowId: betaSource.workflowId,
+        }),
+        systemActor(),
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: expect.objectContaining({
+        code: "cross_company_reference",
+        resourceType: "workflow_optimizer_suggestion",
+      }),
+    });
+
+    await expect(
+      service.create(
+        alpha.company.id,
+        input({
+          createdByOptimizerSuggestionId: alphaSource.suggestion.id,
+          originWorkflowId: alphaOtherWorkflow!.id,
+        }),
+        systemActor(),
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: expect.objectContaining({
+        code: "optimizer_suggestion_origin_mismatch",
+      }),
+    });
+
+    const created = await service.create(
+      alpha.company.id,
+      input({
+        createdByOptimizerSuggestionId: alphaSource.suggestion.id,
+        originWorkflowId: alphaSource.workflowId,
+      }),
+      systemActor(),
+    );
+    expect(created.artifact).toMatchObject({
+      companyId: alpha.company.id,
+      createdByOptimizerSuggestionId: alphaSource.suggestion.id,
+      originWorkflowId: alphaSource.workflowId,
+    });
   });
 
   it("blocks activation before PR 41 security gates and archives reversibly", async () => {

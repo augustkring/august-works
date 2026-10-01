@@ -454,6 +454,8 @@ export const queryKeys = {
     list: (companyId: string) => ["workflows", companyId, "list"] as const,
     detail: (companyId: string, workflowId: string) =>
       ["workflows", companyId, "detail", workflowId] as const,
+    optimizerSuggestions: (companyId: string, workflowId: string) =>
+      ["workflows", companyId, "detail", workflowId, "optimizer-suggestions"] as const,
     revisions: (companyId: string, workflowId: string) =>
       ["workflows", companyId, "detail", workflowId, "revisions"] as const,
     runs: (companyId: string, workflowId: string) =>
