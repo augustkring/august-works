@@ -153,7 +153,7 @@ jobs:
 
           /usr/bin/prlimit \
             --cpu=4 \
-            --as=8589934592 \
+            --as=17179869184 \
             --nofile=64 \
             -- \
             /usr/bin/bwrap \
