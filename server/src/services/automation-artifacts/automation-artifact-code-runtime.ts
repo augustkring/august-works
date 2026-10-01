@@ -13,7 +13,13 @@ const MAX_OUTPUT_BYTES = 256 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 3_000;
 const MAX_TIMEOUT_MS = 10_000;
-const MEMORY_LIMIT_BYTES = 384 * 1024 * 1024;
+// V8 reserves several GiB of virtual address space even with a small managed
+// heap, so RLIMIT_AS cannot equal the intended working-memory budget. Keep a
+// coarse virtual-address ceiling high enough for Node startup while bounding
+// the model-authored JavaScript heap directly with V8 flags below.
+const ADDRESS_SPACE_CEILING_BYTES = 8 * 1024 * 1024 * 1024;
+const NODE_OLD_SPACE_LIMIT_MIB = 96;
+const NODE_SEMI_SPACE_LIMIT_MIB = 8;
 const PROCESS_LIMIT = 16;
 const FILE_DESCRIPTOR_LIMIT = 64;
 const CPU_SECONDS = 4;
@@ -356,9 +362,10 @@ const RUNNER_SOURCE = `
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
+process.stdin.setEncoding("utf8");
 let raw = "";
 for await (const chunk of process.stdin) {
-  raw += chunk.toString("utf8");
+  raw += chunk;
 }
 const write = process.stdout.write.bind(process.stdout);
 const fail = (message) => {
@@ -437,25 +444,46 @@ async function runBoundedProcess(input: {
     let stderr = "";
     let overflow = false;
     let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    const finish = (result: Omit<ProcessResult, "stdout" | "stderr" | "overflow">) => {
+    const clearTimer = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+    const finish = (
+      result: Omit<ProcessResult, "stdout" | "stderr" | "overflow">,
+    ) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      clearTimer();
       resolve({ ...result, stdout, stderr, overflow });
     };
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimer();
+      reject(error);
+    };
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
 
     const append = (
       current: string,
-      chunk: Buffer,
+      chunk: string,
       maxBytes: number,
     ): { next: string; exceeded: boolean } => {
-      const next = current + chunk.toString("utf8");
+      const next = current + chunk;
       if (byteLength(next) <= maxBytes) return { next, exceeded: false };
-      return { next: next.slice(0, maxBytes), exceeded: true };
+      // The overflow result is never parsed: the child is terminated and the
+      // caller returns output_too_large. Retain only the already-bounded prefix
+      // instead of cutting through a UTF-8 code point.
+      return { next: current, exceeded: true };
     };
 
-    child.stdout.on("data", (chunk: Buffer) => {
+    child.stdout.on("data", (chunk: string) => {
       const result = append(stdout, chunk, MAX_OUTPUT_BYTES);
       stdout = result.next;
       if (result.exceeded && !overflow) {
@@ -463,7 +491,7 @@ async function runBoundedProcess(input: {
         child.kill("SIGKILL");
       }
     });
-    child.stderr.on("data", (chunk: Buffer) => {
+    child.stderr.on("data", (chunk: string) => {
       const result = append(stderr, chunk, MAX_STDERR_BYTES);
       stderr = result.next;
       if (result.exceeded && !overflow) {
@@ -471,12 +499,26 @@ async function runBoundedProcess(input: {
         child.kill("SIGKILL");
       }
     });
-    child.once("error", reject);
-    child.once("exit", (exitCode, signal) => {
+    child.once("error", fail);
+    child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+      // A fast sandbox/setup failure can close stdin before this process has
+      // flushed the bounded input. EPIPE/closed-stream is then expected; the
+      // child close event remains authoritative for the execution result.
+      if (
+        error.code === "EPIPE" ||
+        error.code === "ERR_STREAM_DESTROYED" ||
+        settled
+      ) {
+        return;
+      }
+      child.kill("SIGKILL");
+      fail(error);
+    });
+    child.once("close", (exitCode, signal) => {
       finish({ exitCode, signal, timedOut: false });
     });
 
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       child.kill("SIGKILL");
       finish({ exitCode: null, signal: "SIGKILL", timedOut: true });
     }, input.timeoutMs);
@@ -540,7 +582,8 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
       target = await buildLocalProcessSandboxSpawnTarget({
         executable: process.execPath,
         args: [
-          "--max-old-space-size=96",
+          `--max-old-space-size=${NODE_OLD_SPACE_LIMIT_MIB}`,
+          `--max-semi-space-size=${NODE_SEMI_SPACE_LIMIT_MIB}`,
           "--disallow-code-generation-from-strings",
           runnerPath,
         ],
@@ -561,7 +604,7 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     const prlimitArgs = [
       `--nproc=${PROCESS_LIMIT}`,
       `--cpu=${CPU_SECONDS}`,
-      `--as=${MEMORY_LIMIT_BYTES}`,
+      `--as=${ADDRESS_SPACE_CEILING_BYTES}`,
       `--nofile=${FILE_DESCRIPTOR_LIMIT}`,
       "--",
       target.command,
