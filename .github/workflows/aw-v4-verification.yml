@@ -138,12 +138,43 @@ jobs:
           test -x /usr/bin/bwrap
           test -x /usr/bin/prlimit
 
+          # GitHub's Ubuntu 24.04 image can expose bwrap while AppArmor still
+          # blocks unprivileged user namespaces. This runner is ephemeral; make
+          # the namespace capability explicit here, then prove the exact
+          # isolation primitives required by the generated-code hard gate.
+          userns_clone="$(sysctl -n kernel.unprivileged_userns_clone 2>/dev/null || true)"
+          if [ -n "$userns_clone" ] && [ "$userns_clone" != "1" ]; then
+            sudo sysctl -w kernel.unprivileged_userns_clone=1
+          fi
+          apparmor_userns="$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || true)"
+          if [ -n "$apparmor_userns" ] && [ "$apparmor_userns" != "0" ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+          /usr/bin/prlimit \
+            --nproc=16 \
+            --cpu=4 \
+            --as=8589934592 \
+            --nofile=64 \
+            -- \
+            /usr/bin/bwrap \
+            --die-with-parent \
+            --new-session \
+            --unshare-pid \
+            --unshare-ipc \
+            --unshare-uts \
+            --unshare-net \
+            --ro-bind / / \
+            --proc /proc \
+            --dev /dev \
+            -- \
+            /usr/bin/true
+
       - name: Verify security-eval coverage
         run: pnpm check:aw-v4-security-evals
 
       - name: Run deterministic security hard gates
         run: pnpm test:aw-v4-security-evals
-
   pilot-readiness:
     name: Pilot readiness contract
     runs-on: ubuntu-24.04
