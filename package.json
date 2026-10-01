@@ -91,7 +91,8 @@
     "connections:ingest-app-definitions": "node scripts/ingest-app-definitions.mjs",
     "test:lifecycle-baseline": "node tests/lifecycle-baseline/run.mjs",
     "test:lifecycle-baseline:support": "node --test tests/lifecycle-baseline/report.test.mjs",
-    "test:lifecycle-baseline:typecheck": "tsc -p tests/lifecycle-baseline/tsconfig.json"
+    "test:lifecycle-baseline:typecheck": "tsc -p tests/lifecycle-baseline/tsconfig.json",
+    "migrate:aw-v4:reconcile": "pnpm run preflight:workspace-links && tsx scripts/reconcile-aw-v4-migrations.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
