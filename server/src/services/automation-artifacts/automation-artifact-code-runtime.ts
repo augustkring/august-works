@@ -20,7 +20,11 @@ const MAX_TIMEOUT_MS = 10_000;
 const ADDRESS_SPACE_CEILING_BYTES = 8 * 1024 * 1024 * 1024;
 const NODE_OLD_SPACE_LIMIT_MIB = 96;
 const NODE_SEMI_SPACE_LIMIT_MIB = 8;
-const PROCESS_LIMIT = 16;
+// Do not use RLIMIT_NPROC here. Linux accounts it against the host real UID,
+// not this sandbox process tree, so a shared service/CI user can already exceed
+// a small limit before bwrap starts. Process creation is denied at the language
+// capability boundary (no process/require/import/Worker/constructor escape),
+// while the sandbox still enforces CPU, address-space, FD and wall-clock bounds.
 const FILE_DESCRIPTOR_LIMIT = 64;
 const CPU_SECONDS = 4;
 
@@ -648,7 +652,6 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     }
 
     const prlimitArgs = [
-      `--nproc=${PROCESS_LIMIT}`,
       `--cpu=${CPU_SECONDS}`,
       `--as=${ADDRESS_SPACE_CEILING_BYTES}`,
       `--nofile=${FILE_DESCRIPTOR_LIMIT}`,
