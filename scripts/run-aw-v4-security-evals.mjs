@@ -28,7 +28,9 @@ run(process.execPath, ["scripts/check-aw-v4-security-eval-coverage.mjs"]);
 const tests = [
   ...new Set(
     manifest.gates.flatMap((gate) =>
-      Array.isArray(gate.deterministicTests) ? gate.deterministicTests : [],
+      Array.isArray(gate.deterministicTests)
+        ? gate.deterministicTests.map((evidence) => evidence.file)
+        : [],
     ),
   ),
 ].sort();
