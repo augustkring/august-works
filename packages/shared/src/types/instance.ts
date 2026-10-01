@@ -111,6 +111,11 @@ export interface InstanceExperimentalSettings {
   enablePrivateAgentMemoryV1: boolean;
   enableMemoryPostRunExtractionV1: boolean;
   enableAutomationArtifactsV1: boolean;
+  /**
+   * Permit generated TypeScript Automation Artifacts to execute only after
+   * PR 41 validation/security gates pass inside the qualified sandbox.
+   */
+  enableAutomationArtifactCodeExecutionV1: boolean;
   enableWorkflowOptimizerSuggestions: boolean;
   enableWorkflowOptimizerShadow: boolean;
   enableWorkflowOptimizerPromotion: boolean;

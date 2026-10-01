@@ -324,3 +324,6 @@ export {
 export {
   automationArtifactRuntimeService,
 } from "./automation-artifacts/automation-artifact-runtime.js";
+export {
+  automationArtifactSecurityService,
+} from "./automation-artifacts/automation-artifact-security.js";

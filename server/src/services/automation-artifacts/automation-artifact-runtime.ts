@@ -14,6 +14,10 @@ import {
   executeAutomationArtifactDeclarativeSource,
 } from "./automation-artifact-declarative.js";
 import {
+  AutomationArtifactCodeRuntimeError,
+  executeAutomationArtifactTypeScriptSandbox,
+} from "./automation-artifact-code-runtime.js";
+import {
   automationArtifactService,
   automationArtifactVersionContentHash,
   type AutomationArtifactMutationActor,
@@ -157,6 +161,100 @@ export function automationArtifactRuntimeService(db: Db) {
 
   return {
     resolveActiveBinding,
+
+    execute: async (
+      companyId: string,
+      artifactId: string,
+      expectedVersionId: string,
+      input: unknown,
+      actor: AutomationArtifactMutationActor,
+    ) => {
+      const binding = await resolveActiveBinding(
+        companyId,
+        artifactId,
+        expectedVersionId,
+        actor,
+      );
+
+      validateValueAgainstSchema("input", binding.inputSchema, input);
+
+      if (binding.kind === "expression" || binding.kind === "transform") {
+        if (binding.sideEffectClass !== "pure") {
+          throw conflict(
+            "Declarative Automation Artifacts must remain pure",
+            {
+              code: "automation_artifact_side_effect_denied",
+              sideEffectClass: binding.sideEffectClass,
+            },
+          );
+        }
+        let output: unknown;
+        try {
+          output = executeAutomationArtifactDeclarativeSource(
+            binding.kind,
+            binding.sourceCode,
+            input,
+          );
+        } catch (error) {
+          if (error instanceof AutomationArtifactDeclarativeError) {
+            throw unprocessable(error.message, { code: error.code });
+          }
+          throw error;
+        }
+        validateValueAgainstSchema("output", binding.outputSchema, output);
+        return { binding, output };
+      }
+
+      if (binding.kind !== "typescript") {
+        throw conflict(
+          "Automation Artifact runtime is not qualified for this artifact kind",
+          {
+            code: "automation_artifact_runtime_not_qualified",
+            artifactKind: binding.kind,
+          },
+        );
+      }
+
+      const experimental = await settings.getExperimental();
+      if (experimental.enableAutomationArtifactCodeExecutionV1 !== true) {
+        throw notFound("Generated-code Automation Artifact execution is disabled", {
+          code: "automation_artifact_code_execution_disabled",
+        });
+      }
+      if (
+        binding.sideEffectClass !== "pure" ||
+        (binding.riskClass !== "C0" && binding.riskClass !== "C1")
+      ) {
+        throw conflict(
+          "Generated-code pilot is restricted to pure C0/C1 artifacts",
+          {
+            code: "automation_artifact_code_execution_risk_denied",
+            riskClass: binding.riskClass,
+            sideEffectClass: binding.sideEffectClass,
+          },
+        );
+      }
+
+      let output: unknown;
+      try {
+        output = await executeAutomationArtifactTypeScriptSandbox({
+          sourceCode: binding.sourceCode,
+          dependencyManifest: binding.dependencyManifest,
+          value: input,
+        });
+      } catch (error) {
+        if (error instanceof AutomationArtifactCodeRuntimeError) {
+          throw unprocessable(
+            "Automation Artifact generated-code execution failed",
+            { code: error.code },
+          );
+        }
+        throw error;
+      }
+
+      validateValueAgainstSchema("output", binding.outputSchema, output);
+      return { binding, output };
+    },
 
     executeDeclarative: async (
       companyId: string,
