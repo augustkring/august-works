@@ -327,3 +327,8 @@ export {
 export {
   automationArtifactSecurityService,
 } from "./automation-artifacts/automation-artifact-security.js";
+export {
+  optimizerTraceService,
+  optimizerShapeHash,
+  optimizerExecutorTypeForNodeType,
+} from "./optimizer/optimizer-trace.js";
