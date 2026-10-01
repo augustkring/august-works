@@ -130,6 +130,64 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
   );
 }
 
+function sortedStrings(values: readonly string[]): string[] {
+  return [...values].sort();
+}
+
+function sameStringMultiset(left: readonly string[], right: readonly string[]): boolean {
+  const a = sortedStrings(left);
+  const b = sortedStrings(right);
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function uuidConfigValue(
+  config: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value = config[key];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
+    trimmed,
+  )
+    ? trimmed
+    : null;
+}
+
+function subgraphCapabilityRefs(
+  nodes: OptimizerCompilerInput["observedImplementation"] extends infer _T
+    ? import("@paperclipai/shared").WorkflowNodeV1[]
+    : never,
+): string[] {
+  const refs: string[] = [];
+  for (const node of nodes) {
+    const config =
+      node.config && typeof node.config === "object" && !Array.isArray(node.config)
+        ? (node.config as Record<string, unknown>)
+        : {};
+    if (node.type === "connector.action") {
+      const id = uuidConfigValue(config, "toolCatalogEntryId");
+      if (!id) return ["__invalid_connector_capability__"];
+      refs.push(`tool:${id}`);
+      continue;
+    }
+    if (node.type.startsWith("agent.")) {
+      const id = uuidConfigValue(config, "agentId");
+      if (!id) return ["__invalid_agent_capability__"];
+      refs.push(`agent:${id}`);
+    }
+  }
+  return uniqueStrings(refs);
+}
+
+function subgraphIsClosed(
+  nodes: import("@paperclipai/shared").WorkflowNodeV1[],
+  edges: import("@paperclipai/shared").WorkflowEdgeV1[],
+): boolean {
+  const ids = new Set(nodes.map((node) => node.id));
+  return edges.every((edge) => ids.has(edge.source) && ids.has(edge.target));
+}
+
 export function compileOptimizerCandidate(
   input: OptimizerCompilerInput,
 ): OptimizerCompilerResult {
@@ -251,7 +309,13 @@ export function compileOptimizerCandidate(
   ) {
     if (
       implementation.kind !== "subgraph" ||
-      !sameNumbers(implementation.stepOrdinals, input.suggestion.stepOrdinals)
+      !sameNumbers(implementation.stepOrdinals, input.suggestion.stepOrdinals) ||
+      implementation.nodes.length !== input.suggestion.operationTypes.length ||
+      !sameStringMultiset(
+        implementation.nodes.map((node) => node.type),
+        input.suggestion.operationTypes,
+      ) ||
+      !subgraphIsClosed(implementation.nodes, implementation.edges)
     ) {
       return unsupported(
         input,
@@ -259,6 +323,27 @@ export function compileOptimizerCandidate(
         "optimizer_compiler_subgraph_span_mismatch",
       );
     }
+
+    const implementationCapabilityRefs = subgraphCapabilityRefs(
+      implementation.nodes,
+    );
+    if (
+      implementationCapabilityRefs.some((ref) => ref.startsWith("__invalid_")) ||
+      !sameStringMultiset(
+        implementationCapabilityRefs,
+        requiredCapabilityRefs,
+      )
+    ) {
+      return unsupported(
+        input,
+        requiredCapabilityRefs,
+        "optimizer_compiler_subgraph_capability_mismatch",
+        implementationCapabilityRefs
+          .filter((ref) => !requiredCapabilityRefs.includes(ref))
+          .map((ref) => `unexpected_subgraph_capability:${ref}`),
+      );
+    }
+
     return {
       status: "compiled",
       reasonCode: "optimizer_compiler_subgraph_compiled",
