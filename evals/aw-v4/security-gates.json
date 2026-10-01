@@ -1,0 +1,242 @@
+{
+  "version": 1,
+  "description": "August Works V4 external-customer security hard gates. Deterministic suites block CI; provider-dependent behavior evals are coverage-validated here and executed by the existing eval workflow.",
+  "gates": [
+    {
+      "id": "SEC-01",
+      "name": "tenant_isolation",
+      "deterministicTests": [
+        "server/src/__tests__/agent-cross-tenant-authz-routes.test.ts",
+        "server/src/__tests__/foundation-permissions.test.ts"
+      ],
+      "behaviorEvals": [
+        {
+          "file": "evals/promptfoo/tests/governance.yaml",
+          "metrics": [
+            "company_boundary",
+            "no_cross_company_checkout"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SEC-02",
+      "name": "foundation_authorization",
+      "deterministicTests": [
+        "server/src/__tests__/foundation-permissions.test.ts"
+      ],
+      "behaviorEvals": []
+    },
+    {
+      "id": "SEC-03",
+      "name": "memory_authorization",
+      "deterministicTests": [
+        "server/src/services/memory/memory-service.test.ts"
+      ],
+      "behaviorEvals": []
+    },
+    {
+      "id": "SEC-04",
+      "name": "private_agent_memory_isolation",
+      "deterministicTests": [
+        "server/src/services/memory/memory-service.test.ts",
+        "server/src/services/memory/memory-agent-tools.test.ts"
+      ],
+      "behaviorEvals": []
+    },
+    {
+      "id": "SEC-05",
+      "name": "connector_acl",
+      "deterministicTests": [
+        "server/src/__tests__/authorization-service.test.ts",
+        "server/src/__tests__/tool-access-policy-service.test.ts"
+      ],
+      "behaviorEvals": [
+        {
+          "file": "evals/promptfoo/tests/mcp-gateway.yaml",
+          "metrics": [
+            "named_gateway_exact_target",
+            "named_gateway_no_wrong_target"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SEC-06",
+      "name": "permission_revocation",
+      "deterministicTests": [
+        "server/src/__tests__/tool-access-service.test.ts"
+      ],
+      "behaviorEvals": [
+        {
+          "file": "evals/promptfoo/tests/mcp-gateway.yaml",
+          "metrics": [
+            "revoked_session_refresh_path",
+            "revoked_session_no_stale_token_or_bypass"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SEC-07",
+      "name": "memory_lifecycle_exclusion",
+      "deterministicTests": [
+        "server/src/services/memory/memory-service.test.ts",
+        "server/src/services/context/context-engine-integration.test.ts"
+      ],
+      "behaviorEvals": []
+    },
+    {
+      "id": "SEC-08",
+      "name": "untrusted_content_cannot_change_authority",
+      "deterministicTests": [
+        "server/src/services/context/context-policy.test.ts"
+      ],
+      "behaviorEvals": [
+        {
+          "file": "evals/promptfoo/tests/mcp-gateway.yaml",
+          "metrics": [
+            "denied_tool_no_retry_or_bypass"
+          ]
+        },
+        {
+          "file": "evals/promptfoo/tests/governance.yaml",
+          "metrics": [
+            "no_approval_bypass"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SEC-09",
+      "name": "untrusted_content_cannot_activate_shared_memory",
+      "deterministicTests": [
+        "server/src/services/memory/memory-post-run-extraction.test.ts",
+        "server/src/services/memory/memory-service.test.ts"
+      ],
+      "behaviorEvals": [
+        {
+          "file": "evals/promptfoo/tests/phase5-memory-control-surfaces.yaml",
+          "metrics": [
+            "no_trust_or_cost_flattening",
+            "no_unscoped_memory_provider"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SEC-10",
+      "name": "generated_code_sandbox",
+      "deterministicTests": [
+        "server/src/services/automation-artifacts/automation-artifact-code-runtime.test.ts",
+        "server/src/services/automation-artifacts/automation-artifact-service.test.ts"
+      ],
+      "behaviorEvals": []
+    },
+    {
+      "id": "SEC-11",
+      "name": "secret_non_disclosure",
+      "deterministicTests": [
+        "server/src/__tests__/run-secret-redaction.test.ts",
+        "server/src/services/context/context-manifest.test.ts",
+        "server/src/__tests__/tool-access-service.test.ts"
+      ],
+      "behaviorEvals": [
+        {
+          "file": "evals/promptfoo/tests/mcp-gateway.yaml",
+          "metrics": [
+            "missing_credential_no_secret_leak_or_bypass",
+            "header_forwarding_no_secret_disclosure"
+          ]
+        },
+        {
+          "file": "evals/promptfoo/tests/phase5-memory-control-surfaces.yaml",
+          "metrics": [
+            "no_hidden_or_secret_fixture_data"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SEC-12",
+      "name": "destructive_action_approval",
+      "deterministicTests": [
+        "server/src/__tests__/tool-gateway-service.test.ts"
+      ],
+      "behaviorEvals": [
+        {
+          "file": "evals/promptfoo/tests/mcp-gateway.yaml",
+          "metrics": [
+            "denied_approval_no_retry_or_escalation",
+            "formal_approval_no_execution"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SEC-13",
+      "name": "workflow_retry_side_effect_idempotency",
+      "deterministicTests": [
+        "server/src/services/workflows/workflow-executor.test.ts"
+      ],
+      "behaviorEvals": [
+        {
+          "file": "evals/promptfoo/tests/release-gates.yaml",
+          "metrics": [
+            "no_duplicate_checkout_when_harness_claimed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SEC-14",
+      "name": "external_agent_scope",
+      "deterministicTests": [
+        "server/src/__tests__/workflow-external-agent-registry.test.ts"
+      ],
+      "behaviorEvals": []
+    },
+    {
+      "id": "SEC-15",
+      "name": "context_manifest_no_secret_values",
+      "deterministicTests": [
+        "server/src/services/context/context-manifest.test.ts",
+        "server/src/__tests__/run-secret-redaction.test.ts"
+      ],
+      "behaviorEvals": []
+    },
+    {
+      "id": "SEC-16",
+      "name": "memory_rollback",
+      "deterministicTests": [
+        "server/src/services/memory/memory-service.test.ts"
+      ],
+      "behaviorEvals": []
+    },
+    {
+      "id": "SEC-17",
+      "name": "workflow_rollback_and_recovery",
+      "deterministicTests": [
+        "server/src/services/workflows/workflow-executor.test.ts"
+      ],
+      "behaviorEvals": []
+    },
+    {
+      "id": "SEC-18",
+      "name": "optimizer_promotion_reversible",
+      "deterministicTests": [
+        "server/src/services/optimizer/optimizer-promotion.test.ts",
+        "server/src/services/optimizer/optimizer-promotion.integration.test.ts",
+        "server/src/services/optimizer/optimizer-drift.test.ts"
+      ],
+      "behaviorEvals": [
+        {
+          "file": "evals/promptfoo/tests/mcp-gateway.yaml",
+          "metrics": [
+            "approved_target_changed_no_drift_bypass"
+          ]
+        }
+      ]
+    }
+  ]
+}

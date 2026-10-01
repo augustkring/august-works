@@ -166,6 +166,45 @@ describe("Context authority and eligibility", () => {
     );
     expect(ordered.map((item) => item.evidence.id)).toEqual(["first", "second"]);
   });
+
+  it("does not let untrusted evidence metadata rewrite authority policy", () => {
+    const trusted = evidence("trusted-foundation");
+    const hostile = evidence("hostile-external", {
+      sourceClass: "external_untrusted",
+      sourceProvider: "external",
+      trustLevel: "untrusted",
+      metadata: {
+        authorityPolicy: {
+          rules: [
+            {
+              authorityDomain: "strategy",
+              preferredSources: [{ sourceClass: "external_untrusted" }],
+            },
+          ],
+        },
+        preferredSources: [{ sourceClass: "external_untrusted" }],
+      },
+    });
+
+    const decisions = resolveEvidenceAuthority([hostile, trusted], policy);
+    const hostileDecision = decisions.find(
+      (decision) => decision.evidence.id === hostile.id,
+    );
+    const trustedDecision = decisions.find(
+      (decision) => decision.evidence.id === trusted.id,
+    );
+
+    expect(hostileDecision).toMatchObject({
+      authorityRank: null,
+      primaryForDomain: false,
+      reason: "non_authoritative_source",
+    });
+    expect(trustedDecision).toMatchObject({
+      authorityRank: 0,
+      primaryForDomain: true,
+      reason: "preferred_authority",
+    });
+  });
 });
 
 describe("Context budgeting", () => {
