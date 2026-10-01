@@ -423,7 +423,7 @@ describePg("Automation Artifact service", () => {
         alpha.company.id,
         input({
           createdByOptimizerSuggestionId: betaSource.suggestion.id,
-          originWorkflowId: betaSource.workflowId,
+          originWorkflowId: alphaSource.workflowId,
         }),
         systemActor(),
       ),
