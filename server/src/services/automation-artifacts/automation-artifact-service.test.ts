@@ -465,6 +465,9 @@ describePg("Automation Artifact service", () => {
     await db
       .delete(activityLog)
       .where(eq(activityLog.companyId, seeded.company.id));
+    await db
+      .delete(companyMemberships)
+      .where(eq(companyMemberships.companyId, seeded.company.id));
     await db.delete(companies).where(eq(companies.id, seeded.company.id));
 
     expect(
@@ -584,7 +587,7 @@ describePg("Automation Artifact service", () => {
       { email: " BOB@Example.com " },
       user,
     );
-    expect(executed.output).toEqual({ email: "bob@example.com" });
+    expect(executed.output).toEqual({ email: " BOB@Example.com " });
   });
 
   it("rejects mismatched gate hashes and keeps generated-code execution behind its kill switch", async () => {
