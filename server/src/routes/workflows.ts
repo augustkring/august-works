@@ -417,6 +417,10 @@ export function workflowRoutes(db: Db) {
       const companyId = req.params.companyId as string;
       const workflowId = req.params.workflowId as string;
       await assertPermission(req, companyId, "workflows:read");
+      const workflow = await svc.getDetail(companyId, workflowId);
+      if (!workflow) {
+        throw notFound("Workflow not found");
+      }
 
       const experimental = await settings.getExperimental();
       if (experimental.enableWorkflowOptimizerSuggestions !== true) {
