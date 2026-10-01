@@ -1,13 +1,91 @@
 {
-  "version": 1,
-  "description": "August Works V4 external-customer security hard gates. Deterministic suites block CI; provider-dependent behavior evals are coverage-validated here and executed by the existing eval workflow.",
+  "version": 2,
+  "description": "August Works V4 external-customer security hard gates and eval-domain coverage. Deterministic suites block PR CI; provider-dependent Promptfoo behavior evals are coverage-validated here and remain explicitly invoked rather than silently spending provider budget on every PR.",
+  "evalDomains": [
+    {
+      "id": "foundation",
+      "gateIds": [
+        "SEC-01",
+        "SEC-02"
+      ]
+    },
+    {
+      "id": "connected_knowledge",
+      "gateIds": [
+        "SEC-05",
+        "SEC-06"
+      ]
+    },
+    {
+      "id": "memory",
+      "gateIds": [
+        "SEC-03",
+        "SEC-04",
+        "SEC-07",
+        "SEC-09",
+        "SEC-16"
+      ]
+    },
+    {
+      "id": "context",
+      "gateIds": [
+        "SEC-08",
+        "SEC-11",
+        "SEC-15"
+      ]
+    },
+    {
+      "id": "workflows",
+      "gateIds": [
+        "SEC-12",
+        "SEC-13",
+        "SEC-14",
+        "SEC-17"
+      ]
+    },
+    {
+      "id": "optimizer",
+      "gateIds": [
+        "SEC-18"
+      ]
+    },
+    {
+      "id": "security",
+      "gateIds": [
+        "SEC-01",
+        "SEC-02",
+        "SEC-03",
+        "SEC-04",
+        "SEC-05",
+        "SEC-06",
+        "SEC-07",
+        "SEC-08",
+        "SEC-09",
+        "SEC-10",
+        "SEC-11",
+        "SEC-12",
+        "SEC-13",
+        "SEC-14",
+        "SEC-15",
+        "SEC-16",
+        "SEC-17",
+        "SEC-18"
+      ]
+    }
+  ],
   "gates": [
     {
       "id": "SEC-01",
       "name": "tenant_isolation",
       "deterministicTests": [
-        "server/src/__tests__/agent-cross-tenant-authz-routes.test.ts",
-        "server/src/__tests__/foundation-permissions.test.ts"
+        {
+          "file": "server/src/__tests__/agent-cross-tenant-authz-routes.test.ts",
+          "contains": "enforces company boundaries before mutating or reading agent keys"
+        },
+        {
+          "file": "server/src/__tests__/foundation-permissions.test.ts",
+          "contains": "keeps canonical approval restricted to owner/admin roles"
+        }
       ],
       "behaviorEvals": [
         {
@@ -23,7 +101,14 @@
       "id": "SEC-02",
       "name": "foundation_authorization",
       "deterministicTests": [
-        "server/src/__tests__/foundation-permissions.test.ts"
+        {
+          "file": "server/src/__tests__/foundation-permissions.test.ts",
+          "contains": "keeps canonical approval restricted to owner/admin roles"
+        },
+        {
+          "file": "server/src/services/context/context-engine-integration.test.ts",
+          "contains": "omits Foundation without foundation:read but still admits authorized task context"
+        }
       ],
       "behaviorEvals": []
     },
@@ -31,7 +116,10 @@
       "id": "SEC-03",
       "name": "memory_authorization",
       "deterministicTests": [
-        "server/src/services/memory/memory-service.test.ts"
+        {
+          "file": "server/src/services/memory/memory-service.test.ts",
+          "contains": "denies private memory detail and recall to same-company non-owner principals"
+        }
       ],
       "behaviorEvals": []
     },
@@ -39,8 +127,14 @@
       "id": "SEC-04",
       "name": "private_agent_memory_isolation",
       "deterministicTests": [
-        "server/src/services/memory/memory-service.test.ts",
-        "server/src/services/memory/memory-agent-tools.test.ts"
+        {
+          "file": "server/src/services/memory/memory-service.test.ts",
+          "contains": "excludes private agent memory from unscoped eligibility and requires explicit owner scope"
+        },
+        {
+          "file": "server/src/services/memory/memory-agent-tools.test.ts",
+          "contains": "recalls only company, current-project and owner-private memory"
+        }
       ],
       "behaviorEvals": []
     },
@@ -48,8 +142,14 @@
       "id": "SEC-05",
       "name": "connector_acl",
       "deterministicTests": [
-        "server/src/__tests__/authorization-service.test.ts",
-        "server/src/__tests__/tool-access-policy-service.test.ts"
+        {
+          "file": "server/src/__tests__/tool-access-policy-service.test.ts",
+          "contains": "rejects cross-company owner agents and credential secret refs before persisting tool access records"
+        },
+        {
+          "file": "server/src/__tests__/tool-gateway.test.ts",
+          "contains": "lists connected remote MCP catalog tools only for the scoped company and agent policy"
+        }
       ],
       "behaviorEvals": [
         {
@@ -65,7 +165,14 @@
       "id": "SEC-06",
       "name": "permission_revocation",
       "deterministicTests": [
-        "server/src/__tests__/tool-access-service.test.ts"
+        {
+          "file": "server/src/__tests__/tool-access-service.test.ts",
+          "contains": "returns typed subject errors and rejects revoked grants immediately"
+        },
+        {
+          "file": "server/src/__tests__/authorization-service.test.ts",
+          "contains": "rechecks responsible-user membership on a new request actor after revocation"
+        }
       ],
       "behaviorEvals": [
         {
@@ -81,8 +188,14 @@
       "id": "SEC-07",
       "name": "memory_lifecycle_exclusion",
       "deterministicTests": [
-        "server/src/services/memory/memory-service.test.ts",
-        "server/src/services/context/context-engine-integration.test.ts"
+        {
+          "file": "server/src/services/memory/memory-service.test.ts",
+          "contains": "requires human or system review before a candidate becomes active memory"
+        },
+        {
+          "file": "server/src/services/context/context-engine-integration.test.ts",
+          "contains": "hydrates only eligible relevant shared and owner-private Memory into Context"
+        }
       ],
       "behaviorEvals": []
     },
@@ -90,7 +203,14 @@
       "id": "SEC-08",
       "name": "untrusted_content_cannot_change_authority",
       "deterministicTests": [
-        "server/src/services/context/context-policy.test.ts"
+        {
+          "file": "server/src/services/context/context-policy.test.ts",
+          "contains": "does not let untrusted evidence metadata rewrite authority policy"
+        },
+        {
+          "file": "server/src/services/context/context-engine.test.ts",
+          "contains": "marks untrusted external content as data rather than instructions"
+        }
       ],
       "behaviorEvals": [
         {
@@ -111,8 +231,14 @@
       "id": "SEC-09",
       "name": "untrusted_content_cannot_activate_shared_memory",
       "deterministicTests": [
-        "server/src/services/memory/memory-post-run-extraction.test.ts",
-        "server/src/services/memory/memory-service.test.ts"
+        {
+          "file": "server/src/services/memory/memory-post-run-extraction.test.ts",
+          "contains": "creates one evidence-backed pending candidate and replays idempotently"
+        },
+        {
+          "file": "server/src/services/memory/memory-post-run-extraction.test.ts",
+          "contains": "fails closed on restricted, sensitive-personal, invented-evidence and private proposals"
+        }
       ],
       "behaviorEvals": [
         {
@@ -128,8 +254,18 @@
       "id": "SEC-10",
       "name": "generated_code_sandbox",
       "deterministicTests": [
-        "server/src/services/automation-artifacts/automation-artifact-code-runtime.test.ts",
-        "server/src/services/automation-artifacts/automation-artifact-service.test.ts"
+        {
+          "file": "server/src/services/automation-artifacts/automation-artifact-code-runtime.test.ts",
+          "contains": "label: \"ambient process\""
+        },
+        {
+          "file": "server/src/services/automation-artifacts/automation-artifact-code-runtime.test.ts",
+          "contains": "terminates non-cooperative generated code at the wall-clock limit"
+        },
+        {
+          "file": "server/src/services/automation-artifacts/automation-artifact-service.test.ts",
+          "contains": "rejects mismatched gate hashes and keeps generated-code execution behind its kill switch"
+        }
       ],
       "behaviorEvals": []
     },
@@ -137,9 +273,14 @@
       "id": "SEC-11",
       "name": "secret_non_disclosure",
       "deterministicTests": [
-        "server/src/__tests__/run-secret-redaction.test.ts",
-        "server/src/services/context/context-manifest.test.ts",
-        "server/src/__tests__/tool-access-service.test.ts"
+        {
+          "file": "server/src/__tests__/run-secret-redaction.test.ts",
+          "contains": "redacts exact values across comment and heartbeat/wake projections"
+        },
+        {
+          "file": "server/src/services/context/context-manifest.test.ts",
+          "contains": "persists only hashes and provenance, not raw query or evidence content"
+        }
       ],
       "behaviorEvals": [
         {
@@ -161,7 +302,10 @@
       "id": "SEC-12",
       "name": "destructive_action_approval",
       "deterministicTests": [
-        "server/src/__tests__/tool-gateway-service.test.ts"
+        {
+          "file": "server/src/__tests__/tool-gateway-service.test.ts",
+          "contains": "adds formal board approval for destructive tool actions and fails closed until approved"
+        }
       ],
       "behaviorEvals": [
         {
@@ -177,7 +321,14 @@
       "id": "SEC-13",
       "name": "workflow_retry_side_effect_idempotency",
       "deterministicTests": [
-        "server/src/services/workflows/workflow-executor.test.ts"
+        {
+          "file": "server/src/services/workflows/workflow-executor.test.ts",
+          "contains": "recovers after a real worker SIGKILL without duplicating an Agent Task side effect"
+        },
+        {
+          "file": "server/src/services/workflows/workflow-executor.test.ts",
+          "contains": "does not duplicate a Create Task side effect after executor crash recovery"
+        }
       ],
       "behaviorEvals": [
         {
@@ -192,7 +343,14 @@
       "id": "SEC-14",
       "name": "external_agent_scope",
       "deterministicTests": [
-        "server/src/__tests__/workflow-external-agent-registry.test.ts"
+        {
+          "file": "server/src/__tests__/workflow-external-agent-registry.test.ts",
+          "contains": "rejects non-OpenClaw and cross-company bindings"
+        },
+        {
+          "file": "server/src/services/workflows/workflow-executor.test.ts",
+          "contains": "executes External Agent with scoped OpenClaw context and validates its structured result"
+        }
       ],
       "behaviorEvals": []
     },
@@ -200,8 +358,14 @@
       "id": "SEC-15",
       "name": "context_manifest_no_secret_values",
       "deterministicTests": [
-        "server/src/services/context/context-manifest.test.ts",
-        "server/src/__tests__/run-secret-redaction.test.ts"
+        {
+          "file": "server/src/services/context/context-manifest.test.ts",
+          "contains": "persists only hashes and provenance, not raw query or evidence content"
+        },
+        {
+          "file": "server/src/__tests__/run-secret-redaction.test.ts",
+          "contains": "redacts run detail, event, and transcript fields and strips registry material"
+        }
       ],
       "behaviorEvals": []
     },
@@ -209,7 +373,10 @@
       "id": "SEC-16",
       "name": "memory_rollback",
       "deterministicTests": [
-        "server/src/services/memory/memory-service.test.ts"
+        {
+          "file": "server/src/services/memory/memory-service.test.ts",
+          "contains": "revokes accepted memory durably and excludes it from eligible recall"
+        }
       ],
       "behaviorEvals": []
     },
@@ -217,7 +384,14 @@
       "id": "SEC-17",
       "name": "workflow_rollback_and_recovery",
       "deterministicTests": [
-        "server/src/services/workflows/workflow-executor.test.ts"
+        {
+          "file": "server/src/services/workflows/workflow-executor.test.ts",
+          "contains": "cancels a durable wait and preserves the cancellation as terminal audit state"
+        },
+        {
+          "file": "server/src/services/workflows/workflow-executor.test.ts",
+          "contains": "retries a failed run as a new immutable run while reusing completed task side effects"
+        }
       ],
       "behaviorEvals": []
     },
@@ -225,9 +399,18 @@
       "id": "SEC-18",
       "name": "optimizer_promotion_reversible",
       "deterministicTests": [
-        "server/src/services/optimizer/optimizer-promotion.test.ts",
-        "server/src/services/optimizer/optimizer-promotion.integration.test.ts",
-        "server/src/services/optimizer/optimizer-drift.test.ts"
+        {
+          "file": "server/src/services/optimizer/optimizer-promotion.test.ts",
+          "contains": "allows low-risk pure candidates into canary only when replay, shadow, rollback and drift gates pass"
+        },
+        {
+          "file": "server/src/services/optimizer/optimizer-promotion.integration.test.ts",
+          "contains": "rejects stale workflow revisions before canary or activation"
+        },
+        {
+          "file": "server/src/services/optimizer/optimizer-drift.test.ts",
+          "contains": "immediately requires review for invariants and authority-changing dependencies"
+        }
       ],
       "behaviorEvals": [
         {
