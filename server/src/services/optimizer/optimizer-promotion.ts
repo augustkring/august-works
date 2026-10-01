@@ -571,7 +571,59 @@ export function optimizerPromotionService(db: Db) {
 
       const publications: ActivityPublication[] = [];
       await db.transaction(async (tx) => {
-        const updated = await tx
+        const txDb = tx as unknown as Db;
+        const [lockedSuggestion] = await txDb
+          .select()
+          .from(workflowOptimizerSuggestions)
+          .where(
+            and(
+              eq(workflowOptimizerSuggestions.companyId, input.companyId),
+              eq(workflowOptimizerSuggestions.id, input.suggestionId),
+            ),
+          )
+          .for("update");
+        const [lockedArtifact] = await txDb
+          .select()
+          .from(automationArtifacts)
+          .where(
+            and(
+              eq(automationArtifacts.companyId, input.companyId),
+              eq(automationArtifacts.id, input.artifactId),
+            ),
+          )
+          .for("update");
+        const [lockedWorkflow] = await txDb
+          .select({
+            publishedRevisionId: workflows.publishedRevisionId,
+          })
+          .from(workflows)
+          .where(
+            and(
+              eq(workflows.companyId, input.companyId),
+              eq(workflows.id, state.suggestion.workflowId),
+            ),
+          )
+          .for("update");
+        if (!lockedSuggestion || !lockedArtifact || !lockedWorkflow) {
+          throw conflict("Optimizer promotion state changed during canary preparation", {
+            code: "optimizer_promotion_state_conflict",
+          });
+        }
+        assertPromotionBinding({
+          suggestion: lockedSuggestion,
+          artifact: lockedArtifact,
+          publishedRevisionId: lockedWorkflow.publishedRevisionId,
+          expectedArtifactVersionId: input.expectedArtifactVersionId,
+        });
+        assertPromotionRuntimeEligible(lockedArtifact, experimental);
+        if (lockedSuggestion.status !== state.suggestion.status) {
+          throw conflict("Optimizer suggestion changed during canary preparation", {
+            code: "optimizer_promotion_suggestion_conflict",
+            currentStatus: lockedSuggestion.status,
+          });
+        }
+
+        const updated = await txDb
           .update(workflowOptimizerSuggestions)
           .set({ status: "ready_to_promote", updatedAt: new Date() })
           .where(
@@ -595,7 +647,7 @@ export function optimizerPromotionService(db: Db) {
             code: "optimizer_promotion_suggestion_conflict",
           });
         }
-        const activity = await persistActivity(tx as unknown as Db, {
+        const activity = await persistActivity(txDb, {
           companyId: input.companyId,
           actorType: "system",
           actorId: "workflow-optimizer",
@@ -705,7 +757,8 @@ export function optimizerPromotionService(db: Db) {
               eq(workflows.companyId, input.companyId),
               eq(workflows.id, suggestion.workflowId),
             ),
-          );
+          )
+          .for("update");
         assertPromotionBinding({
           suggestion,
           artifact,

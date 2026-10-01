@@ -406,3 +406,48 @@ export interface OptimizerCanaryExecutionResult<T = unknown> {
   selection: OptimizerCanarySelection;
   output: T;
 }
+
+export const OPTIMIZER_DRIFT_STATUSES = [
+  "healthy",
+  "insufficient_data",
+  "degraded",
+  "review_required",
+] as const;
+export type OptimizerDriftStatus =
+  (typeof OPTIMIZER_DRIFT_STATUSES)[number];
+
+export interface OptimizerDriftPolicy {
+  minimumExecutions: number;
+  degradedFailureRate: number;
+  reviewFailureRate: number;
+  degradedFallbackRate: number;
+  reviewFallbackRate: number;
+  degradedHumanOverrideRate: number;
+  reviewHumanOverrideRate: number;
+  degradedNewInputShapeRate: number;
+  reviewNewInputShapeRate: number;
+}
+
+export interface OptimizerDriftWindow {
+  totalExecutions: number;
+  candidateFailures: number;
+  fallbacks: number;
+  newInputShapes: number;
+  humanOverrides: number;
+  invariantFailures: number;
+  connectorOrToolChanged: boolean;
+  workflowChanged: boolean;
+  foundationOrPolicyChanged: boolean;
+}
+
+export interface OptimizerDriftEvaluation {
+  status: OptimizerDriftStatus;
+  reasonCodes: string[];
+  failureRate: number;
+  fallbackRate: number;
+  newInputShapeRate: number;
+  humanOverrideRate: number;
+  invariantFailureCount: number;
+  totalExecutions: number;
+  evaluatedAt: string;
+}
