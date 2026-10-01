@@ -1420,20 +1420,20 @@ export function createToolGatewayService(
       try {
         const data =
           tool.name === "paperclip-self:create_workflow"
-            ? await authoring.create(context, parameters as never)
+            ? await authoring.create(context, parameters)
             : tool.name === "paperclip-self:add_trigger"
-              ? await authoring.addTrigger(context, parameters as never)
+              ? await authoring.addTrigger(context, parameters)
               : tool.name === "paperclip-self:add_step"
-                ? await authoring.addStep(context, parameters as never)
+                ? await authoring.addStep(context, parameters)
                 : tool.name === "paperclip-self:update_step"
-                  ? await authoring.updateStep(context, parameters as never)
+                  ? await authoring.updateStep(context, parameters)
                   : tool.name === "paperclip-self:connect_steps"
-                    ? await authoring.connectSteps(context, parameters as never)
+                    ? await authoring.connectSteps(context, parameters)
                     : tool.name === "paperclip-self:remove_step"
-                      ? await authoring.removeStep(context, parameters as never)
+                      ? await authoring.removeStep(context, parameters)
                       : tool.name === "paperclip-self:test_step"
-                        ? await authoring.testStep(context, parameters as never)
-                        : await authoring.preparePublish(context, parameters as never);
+                        ? await authoring.testStep(context, parameters)
+                        : await authoring.preparePublish(context, parameters);
         return { content: JSON.stringify(data), data };
       } catch (error) {
         if (error instanceof HttpError) {
