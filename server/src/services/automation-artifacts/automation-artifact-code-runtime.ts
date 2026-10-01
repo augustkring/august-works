@@ -471,6 +471,47 @@ interface ProcessResult {
   overflow: boolean;
 }
 
+type SandboxFailureCategory =
+  | "address_space"
+  | "bubblewrap"
+  | "empty_stderr_exit"
+  | "module_path"
+  | "node_runtime"
+  | "permission_denied"
+  | "prlimit"
+  | "process_limit"
+  | "unknown_exit";
+
+function classifySandboxFailure(stderr: string): SandboxFailureCategory {
+  const normalized = stderr.toLowerCase();
+  if (
+    /resource temporarily unavailable|pthread_create|uv_thread_create|\beagain\b/.test(
+      normalized,
+    )
+  ) {
+    return "process_limit";
+  }
+  if (
+    /failed to reserve|virtual memory|out of memory|allocation failed|fatal process out of memory/.test(
+      normalized,
+    )
+  ) {
+    return "address_space";
+  }
+  if (/permission denied|\beacces\b/.test(normalized)) {
+    return "permission_denied";
+  }
+  if (/err_module_not_found|cannot find module|module not found/.test(normalized)) {
+    return "module_path";
+  }
+  if (/\bbwrap:/.test(normalized)) return "bubblewrap";
+  if (/\bprlimit:/.test(normalized)) return "prlimit";
+  if (/syntaxerror|typeerror|referenceerror|rangeerror/.test(normalized)) {
+    return "node_runtime";
+  }
+  return normalized.trim().length === 0 ? "empty_stderr_exit" : "unknown_exit";
+}
+
 async function runBoundedProcess(input: {
   command: string;
   args: string[];
@@ -715,9 +756,10 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
       );
     }
     if (result.exitCode !== 0) {
+      const failureCategory = classifySandboxFailure(result.stderr);
       throw new AutomationArtifactCodeRuntimeError(
         "automation_artifact_code_execution_failed",
-        "Automation Artifact sandbox execution failed.",
+        `Automation Artifact sandbox execution failed (${failureCategory}; exit=${result.exitCode ?? "signal"}).`,
       );
     }
 
