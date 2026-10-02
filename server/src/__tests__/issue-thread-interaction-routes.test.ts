@@ -1053,10 +1053,19 @@ describe.sequential("issue thread interaction routes", () => {
       expect.anything(),
       "interaction-withdraw",
       {},
-      expect.objectContaining({ agentId: ASSIGNEE_AGENT_ID, runId: RUN_WATCHDOG }),
-      expect.objectContaining({ afterResolveInTransaction: expect.any(Function) }),
+      expect.objectContaining({
+        agentId: ASSIGNEE_AGENT_ID,
+        runId: RUN_WATCHDOG,
+      }),
+      expect.objectContaining({
+        afterResolveInTransaction: expect.any(Function),
+      }),
     );
     expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id: "interaction-withdraw",
+      status: "cancelled",
+    });
   });
 
   it("rejects withdrawal by low-trust actors", async () => {
