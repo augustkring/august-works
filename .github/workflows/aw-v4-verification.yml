@@ -177,3 +177,41 @@ jobs:
       - name: Run deterministic security hard gates
         run: pnpm test:aw-v4-security-evals
 
+  pilot-readiness:
+    name: Pilot readiness contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs:
+      - static-and-build
+      - tests
+      - security-evals
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if ! pnpm install --frozen-lockfile; then
+            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
+            pnpm install --frozen-lockfile
+          fi
+
+      - name: Verify customer-pilot readiness contract
+        run: pnpm check:aw-v4-pilot-readiness
+
+      - name: Test customer-pilot readiness gate
+        run: pnpm test:aw-v4-pilot-readiness
+
