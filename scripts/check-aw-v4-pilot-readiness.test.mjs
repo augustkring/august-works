@@ -40,8 +40,8 @@ function completeEvidence(overrides = {}) {
       typecheckBuildPassed: true,
       securityGatesPassed: true,
       behaviorEvalsPassed: true,
-      ciRunUrl: "https://example.invalid/ci/1",
-      securityGateRunUrl: "https://example.invalid/security/1",
+      ciRunUrl: "https://github.com/augustkring/august-works/actions/runs/1",
+      securityGateRunUrl: "https://github.com/augustkring/august-works/actions/runs/2",
       behaviorEvalRunRef: "artifact://behavior-evals",
     },
     migration: {
@@ -120,6 +120,19 @@ test("complete pilot evidence passes without echoing customer environment", () =
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.match(result.stdout, /pilot evidence valid/);
     assert.doesNotMatch(result.stdout, /pilot-fixture/);
+  });
+});
+
+test("automated run URLs must point to this repository", () => {
+  const evidence = completeEvidence();
+  evidence.automated = {
+    ...evidence.automated,
+    ciRunUrl: "https://example.invalid/actions/runs/1",
+  };
+  withEvidence(evidence, (file) => {
+    const result = run(["--require-evidence", "--evidence", file]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /GitHub Actions run for augustkring\/august-works/);
   });
 });
 
