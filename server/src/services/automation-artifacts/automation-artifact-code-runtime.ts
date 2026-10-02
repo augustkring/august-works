@@ -25,7 +25,12 @@ const MAX_TIMEOUT_MS = 10_000;
 const ADDRESS_SPACE_CEILING_BYTES = 2 * 1024 * 1024 * 1024 * 1024;
 const NODE_OLD_SPACE_LIMIT_MIB = 96;
 const NODE_SEMI_SPACE_LIMIT_MIB = 8;
-const PROCESS_LIMIT = 512;
+// RLIMIT_NPROC is enforced against every thread owned by the process real UID,
+// not just descendants of this sandbox. Derive the sandbox ceiling from the
+// host UID's current thread population so generated code receives bounded
+// headroom without imposing a fixed global ceiling on unrelated server work.
+const SANDBOX_UID_THREAD_HEADROOM = 64;
+const MAX_UID_THREAD_CEILING = 4_096;
 const FILE_DESCRIPTOR_LIMIT = 64;
 const CPU_SECONDS = 4;
 const PRLIMIT_PATH = "/usr/bin/prlimit";
@@ -495,6 +500,68 @@ function boundedSandboxDiagnostic(stderr: string): string | null {
     : redacted;
 }
 
+async function resolveSandboxProcessLimit(): Promise<number> {
+  const uid = process.getuid?.();
+  if (uid === undefined) {
+    throw new AutomationArtifactCodeRuntimeError(
+      "automation_artifact_code_runtime_unavailable",
+      "Qualified Linux sandbox process accounting is unavailable.",
+    );
+  }
+  // Linux exempts real UID 0 from RLIMIT_NPROC enforcement. Refuse generated
+  // code execution rather than presenting a process limit that the kernel will
+  // not enforce.
+  if (uid === 0) {
+    throw new AutomationArtifactCodeRuntimeError(
+      "automation_artifact_code_runtime_unavailable",
+      "Generated-code Automation Artifacts require a non-root runtime user.",
+    );
+  }
+
+  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  try {
+    entries = await fs.readdir("/proc", { withFileTypes: true });
+  } catch {
+    throw new AutomationArtifactCodeRuntimeError(
+      "automation_artifact_code_runtime_unavailable",
+      "Qualified Linux sandbox process accounting is unavailable.",
+    );
+  }
+
+  const threadCounts = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory() && /^\d+$/.test(entry.name))
+      .map(async (entry) => {
+        const status = await fs
+          .readFile(path.join("/proc", entry.name, "status"), "utf8")
+          .catch(() => null);
+        if (!status) return 0;
+        const uidMatch = /^Uid:\s+(\d+)/m.exec(status);
+        const threadsMatch = /^Threads:\s+(\d+)/m.exec(status);
+        if (!uidMatch || !threadsMatch || Number(uidMatch[1]) !== uid) return 0;
+        const threads = Number(threadsMatch[1]);
+        return Number.isSafeInteger(threads) && threads > 0 ? threads : 0;
+      }),
+  );
+
+  const currentUidThreads = threadCounts.reduce((sum, count) => sum + count, 0);
+  if (currentUidThreads <= 0) {
+    throw new AutomationArtifactCodeRuntimeError(
+      "automation_artifact_code_runtime_unavailable",
+      "Qualified Linux sandbox process accounting returned no current runtime threads.",
+    );
+  }
+
+  const processLimit = currentUidThreads + SANDBOX_UID_THREAD_HEADROOM;
+  if (processLimit > MAX_UID_THREAD_CEILING) {
+    throw new AutomationArtifactCodeRuntimeError(
+      "automation_artifact_code_runtime_unavailable",
+      "Qualified Linux sandbox process budget is unavailable on this host.",
+    );
+  }
+  return processLimit;
+}
+
 function classifySandboxFailure(stderr: string): SandboxFailureCategory {
   const normalized = stderr.toLowerCase();
   if (
@@ -711,8 +778,9 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     // command and inserting another namespace boundary inside it. This keeps
     // filesystem/network isolation owned by the shared sandbox builder while
     // applying RLIMITs to Bubblewrap and every descendant.
+    const processLimit = await resolveSandboxProcessLimit();
     const prlimitArgs = [
-      `--nproc=${PROCESS_LIMIT}`,
+      `--nproc=${processLimit}`,
       `--cpu=${CPU_SECONDS}`,
       `--as=${ADDRESS_SPACE_CEILING_BYTES}`,
       `--nofile=${FILE_DESCRIPTOR_LIMIT}`,
