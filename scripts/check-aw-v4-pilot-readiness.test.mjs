@@ -72,6 +72,16 @@ function completeEvidence(overrides = {}) {
       "feature_flag_rollout_and_rollback",
       "external_agent_scope_smoke",
       "customer_support_owner",
+      "privacy_per_company_retention",
+      "privacy_memory_deletion",
+      "privacy_source_deletion_propagation",
+      "privacy_derived_index_deletion",
+      "privacy_sensitive_classification",
+      "privacy_export_capability",
+      "privacy_run_output_retention",
+      "privacy_optimizer_trace_retention",
+      "privacy_audit_access_control",
+      "privacy_backup_restore_deletion_semantics",
     ].map((id) => ({
       id,
       status: "passed",
@@ -174,6 +184,21 @@ test("migration blockers fail closed", () => {
     const result = run(["--require-evidence", "--evidence", file]);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /not cutover-ready/);
+  });
+});
+
+test("missing privacy hard-gate evidence fails closed", () => {
+  const evidence = completeEvidence();
+  evidence.manualChecks = evidence.manualChecks.filter(
+    (check) => check.id !== "privacy_memory_deletion",
+  );
+  withEvidence(evidence, (file) => {
+    const result = run(["--require-evidence", "--evidence", file]);
+    assert.notEqual(result.status, 0);
+    assert.match(
+      result.stderr,
+      /Missing manual pilot check: privacy_memory_deletion/,
+    );
   });
 });
 
