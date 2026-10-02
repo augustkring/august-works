@@ -98,6 +98,35 @@ function nonEmptyString(value, label) {
   return value.trim();
 }
 
+function httpsReference(value, label) {
+  const reference = nonEmptyString(value, label);
+  let parsed;
+  try {
+    parsed = new URL(reference);
+  } catch {
+    fail(label + " must be a valid HTTPS URL.");
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+    fail(label + " must be a credential-free HTTPS URL.");
+  }
+  return reference;
+}
+
+function durableEvidenceReference(value, label) {
+  const reference = nonEmptyString(value, label);
+  if (/^https:\/\/\S+$/iu.test(reference)) {
+    httpsReference(reference, label);
+    return reference;
+  }
+  if (/^(?:artifact|s3|gs|azure|az|urn|ticket|run):(?:\/\/)?\S+$/iu.test(reference)) {
+    return reference;
+  }
+  fail(
+    label +
+      " must be a durable evidence reference (HTTPS or a supported durable reference scheme).",
+  );
+}
+
 function repositoryFile(relativePath) {
   if (
     typeof relativePath !== "string" ||
@@ -408,9 +437,15 @@ if (evidence.commitSha.toLowerCase() !== repositoryCommitSha) {
 const recordedAt = new Date(evidence.recordedAt);
 if (
   typeof evidence.recordedAt !== "string" ||
+  !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u.test(
+    evidence.recordedAt,
+  ) ||
   Number.isNaN(recordedAt.getTime())
 ) {
-  fail("recordedAt must be a valid ISO timestamp.");
+  fail("recordedAt must be an explicit ISO-8601 timestamp with timezone.");
+}
+if (recordedAt.getTime() > Date.now() + 5 * 60 * 1000) {
+  fail("recordedAt cannot be materially in the future.");
 }
 
 const automated = evidence.automated;
@@ -427,12 +462,12 @@ for (const key of [
     fail("automated." + key + " must be true.");
   }
 }
-nonEmptyString(automated.ciRunUrl, "automated.ciRunUrl");
-nonEmptyString(
+httpsReference(automated.ciRunUrl, "automated.ciRunUrl");
+httpsReference(
   automated.securityGateRunUrl,
   "automated.securityGateRunUrl",
 );
-nonEmptyString(
+durableEvidenceReference(
   automated.behaviorEvalRunRef,
   "automated.behaviorEvalRunRef",
 );
@@ -450,7 +485,7 @@ if (
     "Migration evidence is not cutover-ready; require cutoverReady=true, repairableCount=0 and blockerCount=0.",
   );
 }
-nonEmptyString(migration.reportRef, "migration.reportRef");
+durableEvidenceReference(migration.reportRef, "migration.reportRef");
 
 const rollout = evidence.rollout;
 if (!rollout || typeof rollout !== "object") {
@@ -524,7 +559,7 @@ for (const flag of manifest.restrictedPilotFlags) {
   if (!approval || approval.approved !== true) {
     fail("Enabled high-impact feature requires explicit approval: " + flag);
   }
-  nonEmptyString(
+  durableEvidenceReference(
     approval.evidence,
     "highImpactApprovals[" + flag + "].evidence",
   );
@@ -552,7 +587,10 @@ for (const id of expectedManualChecks) {
   if (check.status !== "passed") {
     fail("Manual pilot check is not passed: " + id);
   }
-  nonEmptyString(check.evidence, "manualChecks[" + id + "].evidence");
+  durableEvidenceReference(
+    check.evidence,
+    "manualChecks[" + id + "].evidence",
+  );
 }
 for (const id of manual.keys()) {
   if (!expectedManualChecks.includes(id)) {
@@ -561,9 +599,7 @@ for (const id of manual.keys()) {
 }
 
 console.log(
-  "[aw-v4-pilot] pilot evidence valid for " +
-    evidence.environment +
-    " at " +
+  "[aw-v4-pilot] pilot evidence valid for repository HEAD " +
     evidence.commitSha +
     "; migration ready, rollback verified, and all manual C3/privacy checks passed.",
 );
