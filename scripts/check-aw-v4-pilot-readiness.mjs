@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 
 const repoRoot = process.cwd();
 const manifestPath = path.join(repoRoot, "evals", "aw-v4", "pilot-readiness.json");
+const SECURITY_MANIFEST_PATH = "evals/aw-v4/security-gates.json";
 const instanceSettingsPath = path.join(
   repoRoot,
   "packages",
@@ -159,6 +160,13 @@ const manifest = readJson(manifestPath, "Pilot-readiness manifest");
 if (manifest?.version !== 1) {
   fail("Pilot-readiness manifest version must be 1.");
 }
+if (manifest.securityManifest !== SECURITY_MANIFEST_PATH) {
+  fail(
+    "securityManifest must reference the canonical AW V4 security manifest: " +
+      SECURITY_MANIFEST_PATH,
+  );
+}
+repositoryFile(manifest.securityManifest);
 
 exactStringSet(
   manifest.requiredSecurityGateIds,
