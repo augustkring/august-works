@@ -5,6 +5,10 @@ import path from "node:path";
 import { stripTypeScriptTypes } from "node:module";
 import { parse } from "acorn";
 import {
+  redactDiagnosticText,
+  redactHomePathUserSegments,
+} from "@paperclipai/adapter-utils";
+import {
   buildLocalProcessSandboxSpawnTarget,
 } from "@paperclipai/adapter-utils/local-process-sandbox";
 
@@ -13,16 +17,24 @@ const MAX_OUTPUT_BYTES = 256 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 3_000;
 const MAX_TIMEOUT_MS = 10_000;
-// V8 reserves several GiB of virtual address space even with a small managed
-// heap, so RLIMIT_AS cannot equal the intended working-memory budget. Keep a
-// coarse virtual-address ceiling high enough for Node startup while bounding
-// the model-authored JavaScript heap directly with V8 flags below.
-const ADDRESS_SPACE_CEILING_BYTES = 8 * 1024 * 1024 * 1024;
+// Modern 64-bit V8 reserves a 1 TiB virtual sandbox independently of the
+// managed JavaScript heap. RLIMIT_AS therefore cannot represent the working
+// memory budget without preventing Node from starting. Keep a coarse 2 TiB
+// virtual-address ceiling for V8 startup while bounding model-authored working
+// memory directly with the V8 heap flags below.
+const ADDRESS_SPACE_CEILING_BYTES = 2 * 1024 * 1024 * 1024 * 1024;
 const NODE_OLD_SPACE_LIMIT_MIB = 96;
 const NODE_SEMI_SPACE_LIMIT_MIB = 8;
-const PROCESS_LIMIT = 16;
+// RLIMIT_NPROC is enforced against every thread owned by the process real UID,
+// not just descendants of this sandbox. Derive the sandbox ceiling from the
+// host UID's current thread population so generated code receives bounded
+// headroom without imposing a fixed global ceiling on unrelated server work.
+const SANDBOX_UID_THREAD_HEADROOM = 64;
+const MAX_UID_THREAD_CEILING = 4_096;
 const FILE_DESCRIPTOR_LIMIT = 64;
 const CPU_SECONDS = 4;
+const PRLIMIT_PATH = "/usr/bin/prlimit";
+const MAX_SANDBOX_DIAGNOSTIC_CHARS = 1_024;
 
 const FORBIDDEN_IDENTIFIERS = new Set([
   "require",
@@ -467,6 +479,123 @@ interface ProcessResult {
   overflow: boolean;
 }
 
+type SandboxFailureCategory =
+  | "address_space"
+  | "bubblewrap"
+  | "empty_stderr_exit"
+  | "module_path"
+  | "node_runtime"
+  | "permission_denied"
+  | "prlimit"
+  | "process_limit"
+  | "unknown_exit";
+
+function boundedSandboxDiagnostic(stderr: string): string | null {
+  const redacted = redactHomePathUserSegments(redactDiagnosticText(stderr))
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!redacted) return null;
+  return redacted.length > MAX_SANDBOX_DIAGNOSTIC_CHARS
+    ? `${redacted.slice(0, MAX_SANDBOX_DIAGNOSTIC_CHARS - 1)}…`
+    : redacted;
+}
+
+async function resolveSandboxProcessLimit(): Promise<number> {
+  const uid = process.getuid?.();
+  if (uid === undefined) {
+    throw new AutomationArtifactCodeRuntimeError(
+      "automation_artifact_code_runtime_unavailable",
+      "Qualified Linux sandbox process accounting is unavailable.",
+    );
+  }
+  // Linux exempts real UID 0 from RLIMIT_NPROC enforcement. Refuse generated
+  // code execution rather than presenting a process limit that the kernel will
+  // not enforce.
+  if (uid === 0) {
+    throw new AutomationArtifactCodeRuntimeError(
+      "automation_artifact_code_runtime_unavailable",
+      "Generated-code Automation Artifacts require a non-root runtime user.",
+    );
+  }
+
+  const entries = await fs
+    .readdir("/proc", { withFileTypes: true })
+    .catch(() => null);
+  if (!entries) {
+    throw new AutomationArtifactCodeRuntimeError(
+      "automation_artifact_code_runtime_unavailable",
+      "Qualified Linux sandbox process accounting is unavailable.",
+    );
+  }
+
+  let currentUidThreads = 0;
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
+    const status = await fs
+      .readFile(path.join("/proc", entry.name, "status"), "utf8")
+      .catch(() => null);
+    if (!status) continue;
+    const uidMatch = /^Uid:\s+(\d+)/m.exec(status);
+    const threadsMatch = /^Threads:\s+(\d+)/m.exec(status);
+    if (!uidMatch || !threadsMatch || Number(uidMatch[1]) !== uid) continue;
+    const threads = Number(threadsMatch[1]);
+    if (!Number.isSafeInteger(threads) || threads <= 0) continue;
+    currentUidThreads += threads;
+    if (currentUidThreads > MAX_UID_THREAD_CEILING) {
+      throw new AutomationArtifactCodeRuntimeError(
+        "automation_artifact_code_runtime_unavailable",
+        "Qualified Linux sandbox process budget is unavailable on this host.",
+      );
+    }
+  }
+
+  if (currentUidThreads <= 0) {
+    throw new AutomationArtifactCodeRuntimeError(
+      "automation_artifact_code_runtime_unavailable",
+      "Qualified Linux sandbox process accounting returned no current runtime threads.",
+    );
+  }
+
+  const processLimit = currentUidThreads + SANDBOX_UID_THREAD_HEADROOM;
+  if (processLimit > MAX_UID_THREAD_CEILING) {
+    throw new AutomationArtifactCodeRuntimeError(
+      "automation_artifact_code_runtime_unavailable",
+      "Qualified Linux sandbox process budget is unavailable on this host.",
+    );
+  }
+  return processLimit;
+}
+
+function classifySandboxFailure(stderr: string): SandboxFailureCategory {
+  const normalized = stderr.toLowerCase();
+  if (
+    /resource temporarily unavailable|pthread_create|uv_thread_create|\beagain\b/.test(
+      normalized,
+    )
+  ) {
+    return "process_limit";
+  }
+  if (
+    /failed to reserve|virtual memory|out of memory|allocation failed|fatal process out of memory/.test(
+      normalized,
+    )
+  ) {
+    return "address_space";
+  }
+  if (/permission denied|\beacces\b/.test(normalized)) {
+    return "permission_denied";
+  }
+  if (/err_module_not_found|cannot find module|module not found/.test(normalized)) {
+    return "module_path";
+  }
+  if (/\bbwrap:/.test(normalized)) return "bubblewrap";
+  if (/\bprlimit:/.test(normalized)) return "prlimit";
+  if (/syntaxerror|typeerror|referenceerror|rangeerror/.test(normalized)) {
+    return "node_runtime";
+  }
+  return normalized.trim().length === 0 ? "empty_stderr_exit" : "unknown_exit";
+}
+
 async function runBoundedProcess(input: {
   command: string;
   args: string[];
@@ -625,6 +754,7 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
 
     let target: Awaited<ReturnType<typeof buildLocalProcessSandboxSpawnTarget>>;
     try {
+      await fs.access(PRLIMIT_PATH);
       target = await buildLocalProcessSandboxSpawnTarget({
         executable: process.execPath,
         args: [
@@ -647,8 +777,14 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
       );
     }
 
+    // Keep the already-qualified PR 41 topology: resource limits wrap the
+    // complete Bubblewrap process tree rather than rewriting the Bubblewrap
+    // command and inserting another namespace boundary inside it. This keeps
+    // filesystem/network isolation owned by the shared sandbox builder while
+    // applying RLIMITs to Bubblewrap and every descendant.
+    const processLimit = await resolveSandboxProcessLimit();
     const prlimitArgs = [
-      `--nproc=${PROCESS_LIMIT}`,
+      `--nproc=${processLimit}`,
       `--cpu=${CPU_SECONDS}`,
       `--as=${ADDRESS_SPACE_CEILING_BYTES}`,
       `--nofile=${FILE_DESCRIPTOR_LIMIT}`,
@@ -660,13 +796,14 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     let result: ProcessResult;
     try {
       result = await runBoundedProcess({
-        command: "prlimit",
+        command: PRLIMIT_PATH,
         args: prlimitArgs,
         cwd: "/",
         env: {
           LANG: "C.UTF-8",
           LC_ALL: "C.UTF-8",
           TZ: "UTC",
+          UV_THREADPOOL_SIZE: "2",
           ...target.env,
         },
         stdin: serializedInput,
@@ -694,9 +831,11 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
       );
     }
     if (result.exitCode !== 0) {
+      const failureCategory = classifySandboxFailure(result.stderr);
+      const diagnostic = boundedSandboxDiagnostic(result.stderr);
       throw new AutomationArtifactCodeRuntimeError(
         "automation_artifact_code_execution_failed",
-        "Automation Artifact sandbox execution failed.",
+        `Automation Artifact sandbox execution failed (${failureCategory}; exit=${result.exitCode ?? "signal"})${diagnostic ? `: ${diagnostic}` : "."}`,
       );
     }
 

@@ -96,3 +96,84 @@ jobs:
 
       - name: Run stable test suite
         run: pnpm test:run
+
+  security-evals:
+    name: Security hard gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if ! pnpm install --frozen-lockfile; then
+            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
+            pnpm install --frozen-lockfile
+          fi
+
+      - name: Prepare workspace build dependencies
+        run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+
+      - name: Prepare generated-code sandbox
+        shell: bash
+        run: |
+          if [ ! -x /usr/bin/bwrap ]; then
+            sudo apt-get update
+            sudo apt-get install -y bubblewrap
+          fi
+          test -x /usr/bin/bwrap
+          test -x /usr/bin/prlimit
+
+          # GitHub's Ubuntu 24.04 image can expose bwrap while AppArmor still
+          # blocks unprivileged user namespaces. This runner is ephemeral; make
+          # the namespace capability explicit here, then prove the exact
+          # isolation primitives required by the generated-code hard gate.
+          userns_clone="$(sysctl -n kernel.unprivileged_userns_clone 2>/dev/null || true)"
+          if [ -n "$userns_clone" ] && [ "$userns_clone" != "1" ]; then
+            sudo sysctl -w kernel.unprivileged_userns_clone=1
+          fi
+          apparmor_userns="$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || true)"
+          if [ -n "$apparmor_userns" ] && [ "$apparmor_userns" != "0" ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+          /usr/bin/bwrap \
+            --unshare-user \
+            --die-with-parent \
+            --new-session \
+            --unshare-pid \
+            --unshare-ipc \
+            --unshare-uts \
+            --unshare-net \
+            --ro-bind / / \
+            --proc /proc \
+            --dev /dev \
+            -- \
+            /usr/bin/prlimit \
+            --nproc=512 \
+            --cpu=4 \
+            --as=2199023255552 \
+            --nofile=64 \
+            -- \
+            /usr/bin/true
+
+      - name: Verify security-eval coverage
+        run: pnpm check:aw-v4-security-evals
+
+      - name: Run deterministic security hard gates
+        run: pnpm test:aw-v4-security-evals
+

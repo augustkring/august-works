@@ -98,6 +98,35 @@ describe("local process sandbox", () => {
 
     expect(target.command).toBe("bwrap");
     expect(target.args).toContain("--tmpfs");
+    expect(target.args).toEqual(
+      expect.arrayContaining([
+        "--symlink",
+        "usr/bin",
+        "/bin",
+        "--symlink",
+        "usr/sbin",
+        "/sbin",
+        "--symlink",
+        "usr/lib",
+        "/lib",
+        "--symlink",
+        "usr/lib64",
+        "/lib64",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+      ]),
+    );
+    for (const alias of ["/bin", "/sbin", "/lib", "/lib64"]) {
+      expect(
+        target.args.some(
+          (value, index) =>
+            value === "--ro-bind" &&
+            target.args[index + 1] === alias &&
+            target.args[index + 2] === alias,
+        ),
+      ).toBe(false);
+    }
     expect(target.args).toContain(workspace);
     expect(target.args).toContain(managedHome);
     expect(target.args.slice(-3)).toEqual([process.execPath, "-e", "console.log('ok')"]);
