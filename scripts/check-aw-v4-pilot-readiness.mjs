@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import ts from "typescript";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const manifestPath = path.join(repoRoot, "evals", "aw-v4", "pilot-readiness.json");
@@ -383,12 +384,92 @@ if (!existsSync(instanceSettingsPath)) {
   fail("Missing instance experimental settings schema.");
 }
 const instanceSettingsSource = readFileSync(instanceSettingsPath, "utf8");
-for (const flag of manifest.requiredDefaultOffFlags) {
-  const escaped = flag.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-  const pattern = new RegExp(
-    escaped + "\\s*:\\s*z\\.boolean\\(\\)\\.default\\(false\\)",
+const instanceSettingsAst = ts.createSourceFile(
+  instanceSettingsPath,
+  instanceSettingsSource,
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.TS,
+);
+
+function variableInitializer(sourceFile, variableName) {
+  let found = null;
+  function visit(node) {
+    if (found) return;
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      if (node.name.text === variableName) {
+        found = node.initializer ?? null;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return found;
+}
+
+function findZodObjectLiteral(node) {
+  if (!node) return null;
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    ts.isIdentifier(node.expression.expression) &&
+    node.expression.expression.text === "z" &&
+    node.expression.name.text === "object"
+  ) {
+    const first = node.arguments[0];
+    return first && ts.isObjectLiteralExpression(first) ? first : null;
+  }
+  let found = null;
+  ts.forEachChild(node, (child) => {
+    if (!found) found = findZodObjectLiteral(child);
+  });
+  return found;
+}
+
+function propertyNameText(name) {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text;
+  return null;
+}
+
+function isExplicitDefaultOffBoolean(node) {
+  if (
+    !ts.isCallExpression(node) ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.name.text !== "default" ||
+    node.arguments.length !== 1 ||
+    node.arguments[0].kind !== ts.SyntaxKind.FalseKeyword
+  ) {
+    return false;
+  }
+  const booleanCall = node.expression.expression;
+  return (
+    ts.isCallExpression(booleanCall) &&
+    ts.isPropertyAccessExpression(booleanCall.expression) &&
+    ts.isIdentifier(booleanCall.expression.expression) &&
+    booleanCall.expression.expression.text === "z" &&
+    booleanCall.expression.name.text === "boolean" &&
+    booleanCall.arguments.length === 0
   );
-  if (!pattern.test(instanceSettingsSource)) {
+}
+
+const experimentalInitializer = variableInitializer(
+  instanceSettingsAst,
+  "instanceExperimentalSettingsSchema",
+);
+const experimentalShape = findZodObjectLiteral(experimentalInitializer);
+if (!experimentalShape) {
+  fail("Could not resolve instanceExperimentalSettingsSchema Zod object.");
+}
+const experimentalProperties = new Map();
+for (const property of experimentalShape.properties) {
+  if (!ts.isPropertyAssignment(property)) continue;
+  const name = propertyNameText(property.name);
+  if (name) experimentalProperties.set(name, property.initializer);
+}
+for (const flag of manifest.requiredDefaultOffFlags) {
+  const initializer = experimentalProperties.get(flag);
+  if (!initializer || !isExplicitDefaultOffBoolean(initializer)) {
     fail("Pilot feature flag is not explicitly default-off: " + flag);
   }
 }
