@@ -528,23 +528,27 @@ async function resolveSandboxProcessLimit(): Promise<number> {
     );
   }
 
-  const threadCounts = await Promise.all(
-    entries
-      .filter((entry) => entry.isDirectory() && /^\d+$/.test(entry.name))
-      .map(async (entry) => {
-        const status = await fs
-          .readFile(path.join("/proc", entry.name, "status"), "utf8")
-          .catch(() => null);
-        if (!status) return 0;
-        const uidMatch = /^Uid:\s+(\d+)/m.exec(status);
-        const threadsMatch = /^Threads:\s+(\d+)/m.exec(status);
-        if (!uidMatch || !threadsMatch || Number(uidMatch[1]) !== uid) return 0;
-        const threads = Number(threadsMatch[1]);
-        return Number.isSafeInteger(threads) && threads > 0 ? threads : 0;
-      }),
-  );
+  let currentUidThreads = 0;
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
+    const status = await fs
+      .readFile(path.join("/proc", entry.name, "status"), "utf8")
+      .catch(() => null);
+    if (!status) continue;
+    const uidMatch = /^Uid:\s+(\d+)/m.exec(status);
+    const threadsMatch = /^Threads:\s+(\d+)/m.exec(status);
+    if (!uidMatch || !threadsMatch || Number(uidMatch[1]) !== uid) continue;
+    const threads = Number(threadsMatch[1]);
+    if (!Number.isSafeInteger(threads) || threads <= 0) continue;
+    currentUidThreads += threads;
+    if (currentUidThreads > MAX_UID_THREAD_CEILING) {
+      throw new AutomationArtifactCodeRuntimeError(
+        "automation_artifact_code_runtime_unavailable",
+        "Qualified Linux sandbox process budget is unavailable on this host.",
+      );
+    }
+  }
 
-  const currentUidThreads = threadCounts.reduce((sum, count) => sum + count, 0);
   if (currentUidThreads <= 0) {
     throw new AutomationArtifactCodeRuntimeError(
       "automation_artifact_code_runtime_unavailable",
