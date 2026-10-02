@@ -246,12 +246,12 @@ describe("managed Codex credentials", () => {
   });
 
   it("fails before auth mutation when two quorum candidates are occupied", async () => {
-    const fixture = await credentialFixture();
+    const { fixture, occupied } = await silentQuorumFixture(
+      credentialFixture,
+      [0, 1],
+    );
     const destination = join(fixture.home, "auth.json");
     await writeFile(destination, '{"sentinel":true}', { mode: 0o600 });
-    const ports = credentialLeasePorts(await realpath(fixture.home));
-    const first = await listenSilently(ports[0]);
-    const second = await listenSilently(ports[1]);
     try {
       await expect(
         stageManagedCodexCredential({
@@ -265,7 +265,7 @@ describe("managed Codex credentials", () => {
         '{"sentinel":true}',
       );
     } finally {
-      await Promise.all([first.close(), second.close()]);
+      await Promise.all(occupied.map((listener) => listener.close()));
     }
   });
 
@@ -1652,16 +1652,28 @@ async function credentialFixture(): Promise<{ root: string; home: string }> {
   return { root, home: await realpath(home) };
 }
 
-async function silentPrimaryQuorumFixture(
+async function silentQuorumFixture(
   nextFixture = credentialFixture,
-  occupiedIndex: 0 | 1 = 0,
+  occupiedIndices: readonly (0 | 1 | 2)[] = [0],
 ) {
+  const occupiedIndexSet = new Set<number>(occupiedIndices);
+  if (
+    occupiedIndices.length === 0 ||
+    occupiedIndexSet.size !== occupiedIndices.length
+  ) {
+    throw new Error("Silent quorum fixture requires unique occupied indices.");
+  }
+
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const fixture = await nextFixture();
     const owned: Array<Awaited<ReturnType<typeof listenSilently>>> = [];
     try {
-      for (const port of credentialLeasePorts(fixture.home))
+      // Reserve the complete deterministic candidate set first. This prevents
+      // another parallel test/process from taking a later candidate between
+      // sequential binds and turning fixture preparation into EADDRINUSE noise.
+      for (const port of credentialLeasePorts(fixture.home)) {
         owned.push(await listenSilently(port));
+      }
     } catch (error) {
       const closed = await Promise.allSettled(
         owned.map((listener) => listener.close()),
@@ -1674,24 +1686,41 @@ async function silentPrimaryQuorumFixture(
         continue;
       throw error;
     }
-    // Only fixture preparation may retry. Release the two free candidates
-    // immediately before the caller stages once. A foreign bind racing this
-    // handoff remains a visible production-call failure, never a hidden retry.
+
     const released = await Promise.allSettled(
       owned
-        .filter((_, index) => index !== occupiedIndex)
+        .filter((_, index) => !occupiedIndexSet.has(index))
         .map((listener) => listener.close()),
     );
     const releaseFailure = released.find(
       (result) => result.status === "rejected",
     );
     if (releaseFailure?.status === "rejected") {
-      await owned[occupiedIndex]!.close();
+      await Promise.allSettled(
+        owned
+          .filter((_, index) => occupiedIndexSet.has(index))
+          .map((listener) => listener.close()),
+      );
       throw releaseFailure.reason;
     }
-    return { fixture, occupied: owned[occupiedIndex]! };
+
+    return {
+      fixture,
+      occupied: owned.filter((_, index) => occupiedIndexSet.has(index)),
+    };
   }
-  throw new Error("Silent-primary credential fixture reservation exhausted.");
+  throw new Error("Silent quorum credential fixture reservation exhausted.");
+}
+
+async function silentPrimaryQuorumFixture(
+  nextFixture = credentialFixture,
+  occupiedIndex: 0 | 1 = 0,
+) {
+  const prepared = await silentQuorumFixture(nextFixture, [occupiedIndex]);
+  return {
+    fixture: prepared.fixture,
+    occupied: prepared.occupied[0]!,
+  };
 }
 
 function credentialLeasePorts(home: string): readonly number[] {
