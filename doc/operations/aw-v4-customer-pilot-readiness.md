@@ -105,6 +105,23 @@ evidence reference.
 9. `external_agent_scope_smoke` — external-agent scope and cancellation behavior are smoke-tested when enabled.
 10. `customer_support_owner` — a named operator owns incident response and customer escalation during pilot.
 
+### Privacy hard gates
+
+The Golden Master privacy gates in §155 are mandatory before pilot. They use
+the same `manualChecks` evidence envelope, so readiness fails closed when
+privacy verification is missing:
+
+11. `privacy_per_company_retention` — retention is verified per company.
+12. `privacy_memory_deletion` — Memory deletion is exercised and evidenced.
+13. `privacy_source_deletion_propagation` — source deletion propagation is verified.
+14. `privacy_derived_index_deletion` — derived indexes are removed with governed source deletion.
+15. `privacy_sensitive_classification` — sensitive-data classification behavior is verified.
+16. `privacy_export_capability` — customer/company data export is exercised.
+17. `privacy_run_output_retention` — run-output retention behavior is verified.
+18. `privacy_optimizer_trace_retention` — optimizer trace retention behavior is verified.
+19. `privacy_audit_access_control` — audit data access control is verified.
+20. `privacy_backup_restore_deletion_semantics` — backup/restore deletion semantics are documented and rehearsed.
+
 ## Pilot evidence file
 
 Keep the evidence file outside source control when it contains deployment URLs
@@ -141,7 +158,7 @@ pnpm verify:aw-v4-pilot-readiness -- --evidence /secure/path/pilot-evidence.json
 ```
 
 The validator fails closed on missing evidence, unknown governed flags,
-incomplete migration state, unverified rollback, missing manual checks, or
+incomplete migration state, unverified rollback, missing manual/privacy checks, or
 unapproved high-impact features.
 
 ## Stop and rollback
