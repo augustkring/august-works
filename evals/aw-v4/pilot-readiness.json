@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "securityManifest": "evals/aw-v4/security-gates.json",
+  "requiredSecurityGateIds": [
+    "SEC-01",
+    "SEC-02",
+    "SEC-03",
+    "SEC-04",
+    "SEC-05",
+    "SEC-06",
+    "SEC-07",
+    "SEC-08",
+    "SEC-09",
+    "SEC-10",
+    "SEC-11",
+    "SEC-12",
+    "SEC-13",
+    "SEC-14",
+    "SEC-15",
+    "SEC-16",
+    "SEC-17",
+    "SEC-18"
+  ],
+  "requiredEvalDomains": [
+    "foundation",
+    "connected_knowledge",
+    "memory",
+    "context",
+    "workflows",
+    "optimizer",
+    "security"
+  ],
+  "requiredDefaultOffFlags": [
+    "enableFoundationV1",
+    "enableContextEngineV1",
+    "enableWorkflowsV1",
+    "enableWorkflowBuilderV1",
+    "enableWorkflowAgentNodes",
+    "enableWorkflowExternalAgentNodes",
+    "enableCollectiveMemoryV1",
+    "enablePrivateAgentMemoryV1",
+    "enableMemoryPostRunExtractionV1",
+    "enableAutomationArtifactsV1",
+    "enableAutomationArtifactCodeExecutionV1",
+    "enableWorkflowOptimizerSuggestions",
+    "enableWorkflowOptimizerShadow",
+    "enableWorkflowOptimizerPromotion",
+    "enableAiWorkflowAuthoring"
+  ],
+  "restrictedPilotFlags": [
+    "enableAutomationArtifactCodeExecutionV1",
+    "enableWorkflowOptimizerPromotion"
+  ],
+  "repositoryEvidence": [
+    {
+      "id": "security_hard_gates",
+      "file": "scripts/run-aw-v4-security-evals.mjs",
+      "contains": "Generated-code sandbox prerequisites are unavailable"
+    },
+    {
+      "id": "migration_cutover",
+      "file": "doc/operations/aw-v4-migration-cutover.md",
+      "contains": "--apply --require-ready"
+    },
+    {
+      "id": "migration_reconciliation_tests",
+      "file": "server/src/__tests__/aw-v4-migration-reconciliation.test.ts"
+    },
+    {
+      "id": "product_ia_navigation",
+      "file": "ui/src/components/Sidebar.test.tsx",
+      "contains": "Overview"
+    },
+    {
+      "id": "governance_surface",
+      "file": "ui/src/pages/Governance.test.tsx",
+      "contains": "Governance"
+    }
+  ],
+  "requiredManualChecks": [
+    "migration_rehearsal",
+    "tenant_security_review",
+    "keyboard_accessibility",
+    "drag_alternative",
+    "approval_consequence_clarity",
+    "control_plane_slo_baseline",
+    "backup_restore_rehearsal",
+    "feature_flag_rollout_and_rollback",
+    "external_agent_scope_smoke",
+    "customer_support_owner"
+  ],
+  "featureFlagMetadata": {
+    "enableFoundationV1": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [],
+      "rollbackBehavior": "Disable the flag; preserve Foundation documents, revisions, proposals, and audit history."
+    },
+    "enableContextEngineV1": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [],
+      "rollbackBehavior": "Disable the flag; agents fall back to the pre-Context execution path while Context Manifests remain audit history."
+    },
+    "enableWorkflowsV1": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [],
+      "rollbackBehavior": "Disable the flag; prevent new Workflow use while preserving definitions, revisions, runs, and legacy Tasks/Routines/Pipelines."
+    },
+    "enableWorkflowBuilderV1": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [
+        "enableWorkflowsV1"
+      ],
+      "rollbackBehavior": "Disable the builder surface; preserve workflow drafts and continue to allow governed non-builder workflow reads where authorized."
+    },
+    "enableWorkflowAgentNodes": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [
+        "enableWorkflowsV1"
+      ],
+      "rollbackBehavior": "Disable new Agent-node execution; preserve existing workflow revisions and run audit records."
+    },
+    "enableWorkflowExternalAgentNodes": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [
+        "enableWorkflowsV1"
+      ],
+      "rollbackBehavior": "Disable external-agent nodes; stop new external work through the workflow path and preserve scoped run/audit state."
+    },
+    "enableCollectiveMemoryV1": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [],
+      "rollbackBehavior": "Disable shared Memory reads/writes/hydration; preserve governed records, review state, evidence, and audit history."
+    },
+    "enablePrivateAgentMemoryV1": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [],
+      "rollbackBehavior": "Disable private Memory reads/writes/hydration; preserve owner-bound records without promoting them."
+    },
+    "enableMemoryPostRunExtractionV1": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [
+        "enableCollectiveMemoryV1"
+      ],
+      "rollbackBehavior": "Disable automatic extraction; keep already-created candidates governed by normal review and retention."
+    },
+    "enableAutomationArtifactsV1": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [
+        "enableWorkflowsV1"
+      ],
+      "rollbackBehavior": "Disable artifact creation/execution surfaces; preserve immutable artifact versions and audit evidence."
+    },
+    "enableAutomationArtifactCodeExecutionV1": {
+      "owner": "august-works-security",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [
+        "enableAutomationArtifactsV1"
+      ],
+      "rollbackBehavior": "Disable generated-code execution immediately; preserve artifact source, validation evidence, versions, and logs."
+    },
+    "enableWorkflowOptimizerSuggestions": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [
+        "enableWorkflowsV1"
+      ],
+      "rollbackBehavior": "Disable optimizer observation/suggestions; preserve historical traces, evaluations, and suggestion records."
+    },
+    "enableWorkflowOptimizerShadow": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [
+        "enableWorkflowOptimizerSuggestions"
+      ],
+      "rollbackBehavior": "Disable shadow evaluation; preserve suggestions and prior shadow/replay evidence."
+    },
+    "enableWorkflowOptimizerPromotion": {
+      "owner": "august-works-security",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [
+        "enableWorkflowOptimizerSuggestions",
+        "enableWorkflowOptimizerShadow"
+      ],
+      "rollbackBehavior": "Disable promotion/canary immediately and fall back to the last approved workflow revision while preserving promotion evidence."
+    },
+    "enableAiWorkflowAuthoring": {
+      "owner": "august-works-platform",
+      "default": false,
+      "scope": "instance",
+      "reviewDate": "2026-11-15",
+      "cleanupCondition": "Remove the rollout flag after broader-release graduation or retire the feature if pilot evidence does not support graduation.",
+      "dependencies": [
+        "enableWorkflowsV1"
+      ],
+      "rollbackBehavior": "Disable AI authoring; preserve typed workflow drafts and require normal manual editing/publishing paths."
+    }
+  }
+}
