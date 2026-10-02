@@ -518,10 +518,10 @@ async function resolveSandboxProcessLimit(): Promise<number> {
     );
   }
 
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
-  try {
-    entries = await fs.readdir("/proc", { withFileTypes: true });
-  } catch {
+  const entries = await fs
+    .readdir("/proc", { withFileTypes: true })
+    .catch(() => null);
+  if (!entries) {
     throw new AutomationArtifactCodeRuntimeError(
       "automation_artifact_code_runtime_unavailable",
       "Qualified Linux sandbox process accounting is unavailable.",
