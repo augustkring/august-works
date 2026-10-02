@@ -3,6 +3,7 @@ import { legacyDispositionFingerprint, LEGACY_DISPOSITION_REPAIR_INSTRUCTION } f
 import * as controllerLeases from "../services/legacy-controller-lease.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { randomUUID } from "node:crypto";
+import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { terminalizeLegacyExecution } from "../services/legacy-execution-recovery.js";
 import { issueService } from "../services/issues.js";
 import { getExecutionBlocker } from "../services/execution-blocker.js";
@@ -704,7 +705,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: input?.agentStatus ?? "paused",
       adapterType: input?.adapterType ?? "codex_local",
-      adapterConfig: {},
+      adapterConfig: (input?.adapterType ?? "codex_local") === "codex_local" ? mockedCodexAdapterConfig : {},
       runtimeConfig: {},
       permissions: {},
     });
@@ -938,7 +939,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -1136,7 +1137,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -1229,7 +1230,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: input?.agentStatus ?? "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -1269,7 +1270,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           enabled: true,
@@ -1422,7 +1423,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           wakeOnDemand: true,
@@ -6780,7 +6781,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "cto",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -6948,7 +6949,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "cto",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -8997,7 +8998,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "running",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -9067,7 +9068,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -9150,7 +9151,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -9196,7 +9197,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -9403,7 +9404,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -9601,7 +9602,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -9686,7 +9687,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -9860,7 +9861,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -10003,7 +10004,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -10092,7 +10093,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -10192,7 +10193,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -10609,7 +10610,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         role: "engineer",
         status: "idle",
         adapterType: "codex_local",
-        adapterConfig: {},
+        adapterConfig: mockedCodexAdapterConfig,
         runtimeConfig: {},
         permissions: {},
       },
@@ -10620,7 +10621,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         role: "engineer",
         status: "idle",
         adapterType: "codex_local",
-        adapterConfig: {},
+        adapterConfig: mockedCodexAdapterConfig,
         runtimeConfig: {},
         permissions: {},
       },
@@ -10791,7 +10792,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -14074,7 +14075,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
               role: "engineer",
               status: "paused",
               adapterType: "codex_local",
-              adapterConfig: {},
+              adapterConfig: mockedCodexAdapterConfig,
               runtimeConfig: {},
               permissions: {},
             });
@@ -14573,7 +14574,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           role: "engineer",
           status: "idle",
           adapterType: "codex_local",
-          adapterConfig: {},
+          adapterConfig: mockedCodexAdapterConfig,
           runtimeConfig: {},
           permissions: {},
         });

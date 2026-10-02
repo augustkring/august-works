@@ -300,7 +300,9 @@ describe.sequential("adapter management route authorization", () => {
     mocks.reloadExternalAdapter.mockImplementation(async (type: string) =>
       createAdapter(type),
     );
-  }, 20_000);
+  // Resetting and importing the full adapter registry can be cold in cloud CI.
+  // This is fixture setup; the authorization assertions retain their limits.
+  }, 60_000);
 
   afterEach(() => {
     unregisterServerAdapter(EXTERNAL_ADAPTER_TYPE);

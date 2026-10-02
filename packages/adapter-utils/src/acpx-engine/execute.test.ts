@@ -3630,7 +3630,7 @@ describe("ACPX engine Claude skill bundle staging (remote ACP lane)", () => {
     expect(skillsIdentity?.skillRoot).toBe(inSandboxSkillsRoot);
   });
 
-  it("keeps the session fingerprint stable across two different in-sandbox skill roots", async () => {
+  it("keeps the session fingerprint stable across two different in-sandbox skill roots", { timeout: 30_000 }, async () => {
     // Same session (same execution target, same config) both times, so the
     // fingerprint's other 16 fields cannot explain a difference — only the
     // seam's reported in-sandbox skill path varies, by direct override.

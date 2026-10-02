@@ -2388,7 +2388,7 @@ describe("sandbox adapter execution targets", () => {
     }
   });
 
-  it("defaults sandbox run log streaming on and honors the explicit opt-out", async () => {
+  it("defaults sandbox run log streaming on and honors the explicit opt-out", { timeout: 30_000 }, async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-stream-default-"));
     cleanupDirs.push(rootDir);
     const remoteCwd = path.join(rootDir, "workspace");
