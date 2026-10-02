@@ -361,6 +361,14 @@ for (const flag of manifest.requiredDefaultOffFlags) {
   ) {
     fail("featureFlagMetadata[" + flag + "].reviewDate must be a real calendar date.");
   }
+  const reviewDeadline = new Date(reviewDate + "T23:59:59.999Z");
+  if (reviewDeadline.getTime() < Date.now()) {
+    fail(
+      "featureFlagMetadata[" +
+        flag +
+        "].reviewDate is overdue; review or retire the rollout flag before pilot.",
+    );
+  }
   nonEmptyString(
     metadata.cleanupCondition,
     "featureFlagMetadata[" + flag + "].cleanupCondition",
