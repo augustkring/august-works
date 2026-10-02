@@ -28,6 +28,29 @@ const expectedEvalDomains = [
   "optimizer",
   "security",
 ];
+const expectedDefaultOffFlags = [
+  "enableFoundationV1",
+  "enableContextEngineV1",
+  "enableWorkflowsV1",
+  "enableWorkflowBuilderV1",
+  "enableWorkflowAgentNodes",
+  "enableWorkflowExternalAgentNodes",
+  "enableCollectiveMemoryV1",
+  "enablePrivateAgentMemoryV1",
+  "enableMemoryPostRunExtractionV1",
+  "enableAutomationArtifactsV1",
+  "enableAutomationArtifactCodeExecutionV1",
+  "enableWorkflowOptimizerSuggestions",
+  "enableWorkflowOptimizerShadow",
+  "enableWorkflowOptimizerPromotion",
+  "enableAiWorkflowAuthoring",
+];
+
+const expectedRestrictedPilotFlags = [
+  "enableAutomationArtifactCodeExecutionV1",
+  "enableWorkflowOptimizerPromotion",
+];
+
 const expectedManualChecks = [
   "migration_rehearsal",
   "tenant_security_review",
@@ -194,25 +217,16 @@ exactStringSet(
   "requiredManualChecks",
 );
 
-if (
-  !Array.isArray(manifest.requiredDefaultOffFlags) ||
-  manifest.requiredDefaultOffFlags.length === 0 ||
-  manifest.requiredDefaultOffFlags.some((value) => typeof value !== "string")
-) {
-  fail("requiredDefaultOffFlags must be a non-empty string array.");
-}
-if (
-  new Set(manifest.requiredDefaultOffFlags).size !==
-  manifest.requiredDefaultOffFlags.length
-) {
-  fail("requiredDefaultOffFlags contains duplicates.");
-}
-if (
-  !Array.isArray(manifest.restrictedPilotFlags) ||
-  manifest.restrictedPilotFlags.some((value) => typeof value !== "string")
-) {
-  fail("restrictedPilotFlags must be a string array.");
-}
+exactStringSet(
+  manifest.requiredDefaultOffFlags,
+  expectedDefaultOffFlags,
+  "requiredDefaultOffFlags",
+);
+exactStringSet(
+  manifest.restrictedPilotFlags,
+  expectedRestrictedPilotFlags,
+  "restrictedPilotFlags",
+);
 for (const flag of manifest.restrictedPilotFlags) {
   if (!manifest.requiredDefaultOffFlags.includes(flag)) {
     fail("Restricted pilot flag is not governed default-off: " + flag);
@@ -274,6 +288,26 @@ for (const flag of manifest.requiredDefaultOffFlags) {
     metadata.cleanupCondition,
     "featureFlagMetadata[" + flag + "].cleanupCondition",
   );
+}
+
+const featureDependencyState = new Map();
+function visitFeatureDependency(flag, ancestry = []) {
+  const state = featureDependencyState.get(flag);
+  if (state === "done") return;
+  if (state === "visiting") {
+    fail(
+      "Feature flag dependency cycle detected: " +
+        [...ancestry, flag].join(" -> "),
+    );
+  }
+  featureDependencyState.set(flag, "visiting");
+  for (const dependency of manifest.featureFlagMetadata[flag].dependencies) {
+    visitFeatureDependency(dependency, [...ancestry, flag]);
+  }
+  featureDependencyState.set(flag, "done");
+}
+for (const flag of expectedDefaultOffFlags) {
+  visitFeatureDependency(flag);
 }
 
 runSecurityCoverageCheck();
