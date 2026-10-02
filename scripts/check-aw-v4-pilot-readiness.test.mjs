@@ -58,6 +58,7 @@ function completeEvidence(overrides = {}) {
         "enableWorkflowsV1",
       ],
       rollbackOwner: "pilot-operator",
+      exposureControlRef: "artifact://pilot-exposure-policy",
       rollbackVerified: true,
     },
     highImpactApprovals: [],
@@ -136,6 +137,16 @@ test("automated run URLs must point to this repository", () => {
   });
 });
 
+test("pilot rollout requires durable exposure-control evidence", () => {
+  const evidence = completeEvidence();
+  delete evidence.rollout.exposureControlRef;
+  withEvidence(evidence, (file) => {
+    const result = run(["--require-evidence", "--evidence", file]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /rollout\.exposureControlRef/);
+  });
+});
+
 test("non-durable manual evidence reference fails closed", () => {
   const evidence = completeEvidence();
   evidence.manualChecks[0] = {
@@ -171,6 +182,7 @@ test("high-impact feature fails without explicit approval", () => {
         "enableAutomationArtifactCodeExecutionV1",
       ],
       rollbackOwner: "pilot-operator",
+      exposureControlRef: "artifact://pilot-exposure-policy",
       rollbackVerified: true,
     },
   });
@@ -192,6 +204,7 @@ test("high-impact feature passes with dependencies and explicit approval", () =>
         "enableAutomationArtifactCodeExecutionV1",
       ],
       rollbackOwner: "pilot-operator",
+      exposureControlRef: "artifact://pilot-exposure-policy",
       rollbackVerified: true,
     },
     highImpactApprovals: [
@@ -257,6 +270,7 @@ test("enabled feature dependencies must be enabled in the same rollout", () => {
       stage: "pilot",
       enabledFeatureFlags: ["enableWorkflowBuilderV1"],
       rollbackOwner: "pilot-operator",
+      exposureControlRef: "artifact://pilot-exposure-policy",
       rollbackVerified: true,
     },
   });
