@@ -13,6 +13,9 @@ it("removes retired backups containing immutable skills without modifying live f
   mkdirSync(live);
   writeFileSync(join(nested, "SKILL.md"), "retired instructions", { mode: 0o444 });
   writeFileSync(join(live, "SKILL.md"), "live instructions", { mode: 0o444 });
+  // Explicit modes make the immutability assertion independent of the host umask.
+  chmodSync(join(nested, "SKILL.md"), 0o444);
+  chmodSync(join(live, "SKILL.md"), 0o444);
   symlinkSync(live, join(retired, "outside"));
   chmodSync(nested, 0o555);
   chmodSync(join(retired, "claude", "skills"), 0o555);

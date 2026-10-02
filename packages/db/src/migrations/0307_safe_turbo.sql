@@ -1,0 +1,1 @@
+ALTER TABLE "memory_deletion_markers" ADD COLUMN "record_id" uuid;

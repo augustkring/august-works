@@ -2454,6 +2454,13 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
      line-height (text-(length:--x) set font-size only) — intentional,
      reviewed on the post-preset contact sheet. */
   --text-nano: 10px;
+  /* Verbatim V4 extraction; no spacing or layout scale changes. */
+  --sz-112px: 112px;
+  --sz-118px: 118px;
+  --sz-440px: 440px;
+  --gtc-foundation-browser: 190px 270px minmax(0,1fr);
+  --gtc-foundation-editor: 170px minmax(0,1fr);
+  --gtc-workflow-builder: 220px minmax(0,1fr) 300px;
   --text-micro: 11px;
   --text-compact: 13px;
   /* The onboarding arc's question. A quarter larger than the 36px it was, so

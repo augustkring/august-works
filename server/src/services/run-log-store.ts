@@ -37,6 +37,8 @@ export interface RunLogStore {
   ): Promise<number>;
   finalize(handle: RunLogHandle): Promise<RunLogFinalizeSummary>;
   read(handle: RunLogHandle, opts?: RunLogReadOptions): Promise<RunLogReadResult>;
+  /** Permanent, content-free tombstone prevents late writes and restored mirrors. */
+  erase?(handle: RunLogHandle): Promise<void>;
   // Optional so existing fakes/fixtures keep compiling: uploads every dirty
   // in-flight mirror immediately (graceful-shutdown path). No-op when the
   // in-flight mirror is not enabled.
@@ -105,6 +107,28 @@ export function createDurableRunLogStore(options: DurableRunLogStoreOptions): Ru
     return s3Prefix ? `${s3Prefix}/${logRef}` : logRef;
   }
 
+  const erased = new Set<string>();
+  const operations = new Map<string, Promise<unknown>>();
+  async function serialized<T>(logRef: string, action: () => Promise<T>): Promise<T> {
+    const previous = operations.get(logRef) ?? Promise.resolve();
+    const current = previous.catch(() => {}).then(action);
+    operations.set(logRef, current);
+    try { return await current; }
+    finally { if (operations.get(logRef) === current) operations.delete(logRef); }
+  }
+  async function isErased(logRef: string) {
+    if (erased.has(logRef)) return true;
+    const marker = resolveWithin(basePath, `${logRef}.erased`);
+    if (await fs.stat(marker).then(() => true, (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return false;
+      throw error;
+    }) || (s3 && (await s3.provider.headObject({ objectKey: s3Key(`${logRef}.erased`) })).exists)) {
+      erased.add(logRef);
+      return true;
+    }
+    return false;
+  }
+
   // In-flight mirror bookkeeping, keyed by logRef. The mirror uploads the
   // CURRENT (partial) file to the SAME key finalize uses: readers already
   // range-read that key, so a partial object is served exactly like a live
@@ -122,6 +146,7 @@ export function createDurableRunLogStore(options: DurableRunLogStoreOptions): Ru
   function mirrorInflightNow(logRef: string, entry: InflightMirrorEntry): Promise<boolean> {
     entry.dirty = false;
     const upload = (async () => {
+      if (await isErased(logRef)) return true;
       const absPath = resolveWithin(basePath, logRef);
       const stat = await fs.stat(absPath);
       if (stat.size === 0) return true;
@@ -152,7 +177,7 @@ export function createDurableRunLogStore(options: DurableRunLogStoreOptions): Ru
       // to one attempt per interval instead of hot-looping.
       entry.lastMirrorAt = Date.now();
       entry.upload = null;
-      if (entry.dirty) scheduleInflightMirror(logRef, entry);
+      if (entry.dirty && inflightMirrors.get(logRef) === entry && !erased.has(logRef)) scheduleInflightMirror(logRef, entry);
     });
     entry.upload = upload;
     return upload;
@@ -275,12 +300,13 @@ export function createDurableRunLogStore(options: DurableRunLogStoreOptions): Ru
     });
   }
 
-  return {
+  const store: RunLogStore = {
     async begin(input) {
       const [companyId, agentId] = safeSegments(input.companyId, input.agentId);
       const runId = safeSegments(input.runId)[0]!;
       const relDir = path.join(companyId, agentId);
       const relPath = path.join(relDir, `${runId}.ndjson`);
+      if (await isErased(relPath)) throw notFound("Run log was erased");
       await ensureDir(relDir);
       const absPath = resolveWithin(basePath, relPath);
       await fs.writeFile(absPath, "", "utf8");
@@ -290,6 +316,7 @@ export function createDurableRunLogStore(options: DurableRunLogStoreOptions): Ru
 
     async append(handle, event) {
       if (handle.store !== "local_file") return 0;
+      if (await isErased(handle.logRef)) return 0;
       const absPath = resolveWithin(basePath, handle.logRef);
       const line = JSON.stringify({
         ts: event.ts,
@@ -308,6 +335,7 @@ export function createDurableRunLogStore(options: DurableRunLogStoreOptions): Ru
 
     async finalize(handle) {
       if (handle.store !== "local_file") return { bytes: 0, compressed: false };
+      if (await isErased(handle.logRef)) return { bytes: 0, compressed: false };
       await retireInflightMirror(handle.logRef);
       const absPath = resolveWithin(basePath, handle.logRef);
       const stat = await fs.stat(absPath).catch(() => null);
@@ -345,6 +373,7 @@ export function createDurableRunLogStore(options: DurableRunLogStoreOptions): Ru
 
     async read(handle, opts) {
       if (handle.store !== "local_file") throw notFound("Run log not found");
+      if (await isErased(handle.logRef)) throw notFound("Run log was erased");
       const absPath = resolveWithin(basePath, handle.logRef);
       const offset = opts?.offset ?? 0;
       const limitBytes = opts?.limitBytes ?? 256_000;
@@ -352,6 +381,23 @@ export function createDurableRunLogStore(options: DurableRunLogStoreOptions): Ru
       if (local) return local;
       // Local file gone (pod rolled) -> serve from the S3 mirror if configured.
       return readS3Range(handle.logRef, offset, limitBytes);
+    },
+
+    async erase(handle) {
+      if (handle.store !== "local_file") throw new Error("Unsupported run log store");
+      const absPath = resolveWithin(basePath, handle.logRef);
+      erased.add(handle.logRef);
+      await fs.mkdir(path.dirname(absPath), { recursive: true });
+      await fs.writeFile(`${absPath}.erased`, "", { flag: "w" });
+      await retireInflightMirror(handle.logRef);
+      // A remote tombstone survives a pod roll and precedes physical deletion.
+      // Failures are retried by the privacy outbox, never reported as success.
+      if (s3) {
+        await s3.provider.putObject({ objectKey: s3Key(`${handle.logRef}.erased`),
+          body: Buffer.alloc(0), contentType: "application/octet-stream", contentLength: 0 });
+        await s3.provider.deleteObject({ objectKey: s3Key(handle.logRef) });
+      }
+      await fs.unlink(absPath).catch((error: NodeJS.ErrnoException) => { if (error.code !== "ENOENT") throw error; });
     },
 
     async flushInflightMirrors() {
@@ -386,6 +432,14 @@ export function createDurableRunLogStore(options: DurableRunLogStoreOptions): Ru
       };
       await Promise.all([...inflightMirrors].map(([logRef, entry]) => flushEntry(logRef, entry)));
     },
+  };
+  return {
+    begin: (input) => serialized(path.join(...safeSegments(input.companyId, input.agentId), `${safeSegments(input.runId)[0]}.ndjson`), () => store.begin(input)),
+    append: (handle, event) => serialized(handle.logRef, () => store.append(handle, event)),
+    finalize: (handle) => serialized(handle.logRef, () => store.finalize(handle)),
+    read: (handle, opts) => serialized(handle.logRef, () => store.read(handle, opts)),
+    erase: (handle) => serialized(handle.logRef, () => store.erase!(handle)),
+    flushInflightMirrors: () => store.flushInflightMirrors!(),
   };
 }
 

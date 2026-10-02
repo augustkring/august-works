@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { MemoryPrivacyControls } from "@/components/MemoryPrivacyControls";
+import { MemoryMaintenanceControls } from "@/components/MemoryMaintenanceControls";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Brain,
@@ -383,6 +385,8 @@ export function Memory() {
           </section>
 
           <section aria-labelledby="memory-governance-heading">
+            <MemoryPrivacyControls companyId={selectedCompanyId} recordId={recordId}
+              onDeleted={() => navigate("/memory")} />
             <h2 id="memory-governance-heading" className="text-sm font-semibold">
               Governance
             </h2>
@@ -572,7 +576,9 @@ export function Memory() {
           </div>
         </header>
 
+        <MemoryMaintenanceControls companyId={selectedCompanyId} />
         <div className="flex flex-wrap items-center justify-between gap-3">
+          <MemoryPrivacyControls companyId={selectedCompanyId} />
           <div role="tablist" aria-label="Memory review state" className="flex rounded-lg border border-border p-1">
             {REVIEW_TABS.map((tab) => (
               <button
@@ -636,7 +642,7 @@ export function Memory() {
                 key={record.id}
                 type="button"
                 onClick={() => navigate(`/memory/${record.id}`)}
-                className="grid w-full gap-3 px-2 py-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[minmax(0,1fr)_auto]"
+                className="grid w-full gap-3 px-2 py-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-(--gtc-13)"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

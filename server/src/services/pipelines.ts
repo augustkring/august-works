@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { workflowDelegationForActor } from "./workflows/workflow-delegation.js";
 import { isDeepStrictEqual } from "node:util";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -1259,6 +1260,7 @@ function routineRevisionSnapshotRoutine(routine: typeof routines.$inferSelect): 
     assigneeAgentId: routine.assigneeAgentId,
     executionTargetKind: routine.executionTargetKind,
     executionTargetRef: routine.executionTargetRef,
+    workflowExecutionPrincipal: routine.workflowExecutionPrincipal,
     priority: routine.priority as RoutineRevisionSnapshotV1["routine"]["priority"],
     status: routine.status as RoutineRevisionSnapshotV1["routine"]["status"],
     concurrencyPolicy: routine.concurrencyPolicy as RoutineRevisionSnapshotV1["routine"]["concurrencyPolicy"],
@@ -2252,10 +2254,17 @@ function pipelineAutomationTargetFromExecution(
   return null;
 }
 
-function workflowActorForPipeline(actor: PipelineActor): WorkflowRunActor {
+async function workflowActorForPipeline(db: Db, companyId: string, actor: PipelineActor, delegation: typeof pipelineStages.$inferSelect["workflowExecutionPrincipal"]): Promise<WorkflowRunActor> {
+  if (actor.type === "user") return { principal: { type: "user", userId: actor.userId }, responsibleUserId: actor.userId };
+  if (actor.type === "agent") return { principal: { type: "agent", agentId: actor.agentId }, runId: actor.runId };
+  if (delegation) {
+    await workflowDelegationForActor(db, companyId, delegation.type === "user" ? { userId: delegation.userId }
+      : delegation.type === "agent" ? { agentId: delegation.agentId } : {});
+    return { principal: delegation };
+  }
   return {
     principal: { type: "system", service: "pipeline-automation" },
-    responsibleUserId: actor.type === "user" ? actor.userId : null,
+    responsibleUserId: null,
   };
 }
 
@@ -2279,6 +2288,7 @@ async function enqueueStageAutomationLedger(
       caseId: input.caseId,
       automationId: automation.id,
       triggeringEventId: input.eventId,
+      workflowExecutionPrincipal: input.stage.workflowExecutionPrincipal,
       targetKind: automation.target.kind,
       targetRef:
         automation.target.kind === "routine"
@@ -3183,10 +3193,13 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
 
     const detail = await getCaseWithStageOrThrow(db, execution.companyId, execution.caseId);
     const automation = stageAutomation(detail.stage);
-    if (!automation || automation.id !== execution.automationId) {
+    if (!automation || automation.id !== execution.automationId || automation.target.kind !== executionTarget.kind ||
+      (automation.target.kind === "workflow" && executionTarget.kind === "workflow" && automation.target.workflowId !== executionTarget.workflowId) ||
+      (automation.target.kind === "routine" && executionTarget.kind === "routine" && automation.target.routineId !== executionTarget.routineId)) {
+      const error = automation && automation.id === execution.automationId ? "automation_binding_changed" : "automation_not_configured";
       const [failed] = await db
         .update(pipelineAutomationExecutions)
-        .set({ status: "failed", error: "automation_not_configured", updatedAt: nowDate() })
+        .set({ status: "failed", error, updatedAt: nowDate() })
         .where(eq(pipelineAutomationExecutions.id, execution.id))
         .returning();
       await writeCaseEvent(db, {
@@ -3194,7 +3207,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         caseId: execution.caseId,
         type: "automation_failed",
         actor,
-        payload: { automationId: execution.automationId, error: "automation_not_configured" },
+        payload: { automationId: execution.automationId, error },
       });
       return { status: "failed", execution: failed! };
     }
@@ -3221,7 +3234,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           execution.companyId,
           executionTarget.workflowId,
         );
-        const workflowActor = workflowActorForPipeline(actor);
+        const workflowActor = await workflowActorForPipeline(db, execution.companyId, actor, execution.workflowExecutionPrincipal);
         const workflowPublications: ActivityPublication[] = [];
         const workflowPayload = {
           pipeline: contextPack.pipeline,
@@ -3892,14 +3905,16 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           .returning();
         const insertedStages = await tx
           .insert(pipelineStages)
-          .values(stageInputs.map((stage) => ({
+          .values(await Promise.all(stageInputs.map(async (stage) => ({
             pipelineId: pipeline!.id,
             key: stage.key,
             name: stage.name,
             kind: stage.kind,
             position: stage.position,
             config: stage.config ?? {},
-          })))
+            workflowExecutionPrincipal: stageAutomationTargetFromConfig(stage.config ?? {})?.kind === "workflow"
+              ? await workflowDelegationForActor(tx as unknown as Db, input.companyId, documentActorFields(input.actor)) : null,
+          }))))
           .returning();
         for (const stage of insertedStages) {
           const routineId = stageAutomationRoutineIdFromConfig((stage.config ?? {}) as PipelineStageConfig);
@@ -3996,6 +4011,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
             kind,
             position: input.position,
             config: nextConfig,
+            workflowExecutionPrincipal: stageAutomationTargetFromConfig(nextConfig)?.kind === "workflow"
+              ? await workflowDelegationForActor(tx as unknown as Db, input.companyId, documentActorFields(input.actor ?? { type: "system" })) : null,
           })
           .returning();
         const routineId = stageAutomationRoutineIdFromConfig(nextConfig);
@@ -4073,6 +4090,9 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
             ...input.patch,
             kind,
             config: nextConfig,
+            workflowExecutionPrincipal: stageAutomationTargetFromConfig(nextConfig)?.kind === "workflow"
+              ? input.patch.config === undefined ? existing.workflowExecutionPrincipal
+                : await workflowDelegationForActor(tx as unknown as Db, input.companyId, documentActorFields(input.actor ?? { type: "system" })) : null,
             updatedAt: nowDate(),
           })
           .where(and(eq(pipelineStages.id, input.stageId), eq(pipelineStages.pipelineId, input.pipelineId)))

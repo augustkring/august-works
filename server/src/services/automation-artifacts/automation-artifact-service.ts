@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
   automationArtifacts,
   automationArtifactVersions,
+  workflowOptimizerEvaluations,
+  memoryDeletionMarkers,
   companyMemberships,
   heartbeatRuns,
   workflowOptimizerSuggestions,
@@ -337,6 +339,12 @@ async function getDetail(
   const artifact = await getArtifactRow(db, companyId, artifactId);
   if (!artifact) return null;
 
+  const [erased] = artifact.createdByOptimizerSuggestionId ? await db.select({ id: workflowOptimizerEvaluations.id })
+    .from(workflowOptimizerEvaluations).innerJoin(memoryDeletionMarkers,
+      and(eq(memoryDeletionMarkers.companyId, workflowOptimizerEvaluations.companyId),
+        sql`${workflowOptimizerEvaluations.memoryRecordIds} ? ${memoryDeletionMarkers.recordId}::text`))
+    .where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.artifactId, artifactId))).limit(1) : [];
+
   const latestVersion = artifact.latestVersionId
     ? await getVersionRow(db, companyId, artifact.id, artifact.latestVersionId)
     : null;
@@ -349,8 +357,9 @@ async function getDetail(
   }
 
   return {
-    artifact: mapArtifact(artifact),
-    latestVersion: latestVersion ? mapVersion(latestVersion) : null,
+    artifact: erased ? { ...mapArtifact(artifact), status: "deprecated", name: "Erased optimizer candidate", description: null } : mapArtifact(artifact),
+    latestVersion: latestVersion ? erased ? { ...mapVersion(latestVersion), sourceCode: "", inputSchema: {}, outputSchema: {},
+      dependencyManifest: {}, testSpec: {}, validationReport: null, securityReport: null } : mapVersion(latestVersion) : null,
   };
 }
 
@@ -522,7 +531,14 @@ export function automationArtifactService(db: Db) {
         .from(automationArtifacts)
         .where(eq(automationArtifacts.companyId, companyId))
         .orderBy(desc(automationArtifacts.updatedAt))
-        .then((rows) => rows.map(mapArtifact));
+        .then(async (rows) => {
+          const erased = await db.select({ artifactId: workflowOptimizerEvaluations.artifactId }).from(workflowOptimizerEvaluations)
+            .innerJoin(memoryDeletionMarkers, and(eq(memoryDeletionMarkers.companyId, workflowOptimizerEvaluations.companyId),
+              sql`${workflowOptimizerEvaluations.memoryRecordIds} ? ${memoryDeletionMarkers.recordId}::text`))
+            .where(eq(workflowOptimizerEvaluations.companyId, companyId));
+          const erasedIds = new Set(erased.map((item) => item.artifactId));
+          return rows.map((row) => mapArtifact(erasedIds.has(row.id) ? { ...row, name: "Erased optimizer candidate", description: null, status: "deprecated" } : row));
+        });
     },
 
     getDetail: async (

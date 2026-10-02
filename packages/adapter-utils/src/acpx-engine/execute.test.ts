@@ -2270,7 +2270,7 @@ describe("shared ACPX engine runtime behavior", () => {
     expect(payloadEnv.PAPERCLIP_API_KEY).not.toBe("real-run-jwt");
   });
 
-  it("keeps the session fingerprint stable when only the host spawn cwd changes", async () => {
+  it("keeps the session fingerprint stable when only the host spawn cwd changes", { timeout: 30_000 }, async () => {
     // `spawnCwd` (the host-only spawn redirect = the host `cwd`) must NOT enter
     // the session fingerprint or compat key: two runs of the same session that
     // stage into the same in-sandbox `remoteCwd` from DIFFERENT host worktrees
@@ -3630,7 +3630,7 @@ describe("ACPX engine Claude skill bundle staging (remote ACP lane)", () => {
     expect(skillsIdentity?.skillRoot).toBe(inSandboxSkillsRoot);
   });
 
-  it("keeps the session fingerprint stable across two different in-sandbox skill roots", async () => {
+  it("keeps the session fingerprint stable across two different in-sandbox skill roots", { timeout: 30_000 }, async () => {
     // Same session (same execution target, same config) both times, so the
     // fingerprint's other 16 fields cannot explain a difference — only the
     // seam's reported in-sandbox skill path varies, by direct override.
@@ -3831,7 +3831,9 @@ describe("ACPX engine Claude skill bundle staging (remote ACP lane)", () => {
   });
 });
 
-describe("ACPX engine remote session-lifecycle re-staging (PR 3: stage once / reuse on compatible resume)", () => {
+// These integrations launch real shell/process bridges repeatedly. Allow cold
+// cloud startup without changing runtime deadlines or cancellation assertions.
+describe("ACPX engine remote session-lifecycle re-staging (PR 3: stage once / reuse on compatible resume)", { timeout: 30_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -5851,7 +5853,7 @@ describe("ACPX engine per-step startup timing (run.startup.step events)", () => 
   });
 });
 
-describe("ACPX engine run lifecycle corrections (F1: settle every failure after buildRuntime)", () => {
+describe("ACPX engine run lifecycle corrections (F1: settle every failure after buildRuntime)", { timeout: 30_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

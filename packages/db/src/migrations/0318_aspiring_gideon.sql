@@ -1,0 +1,1 @@
+ALTER TABLE "pipeline_automation_executions" ADD COLUMN "workflow_execution_principal" jsonb;

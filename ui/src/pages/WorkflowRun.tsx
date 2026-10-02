@@ -1,3 +1,4 @@
+import { WorkflowRunReview } from "@/components/workflows/WorkflowRunReview";
 import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CircleStop, RefreshCw, RotateCcw, Workflow as WorkflowIcon } from "lucide-react";
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import { WorkflowToolReview } from "@/components/workflows/WorkflowToolReview";
 
 const TERMINAL_RUN_STATUSES = new Set<WorkflowRunStatus>([
   "succeeded",
@@ -85,13 +87,15 @@ function waitingLabel(
   retryScheduled: boolean,
 ) {
   if (retryScheduled) return "Retrying";
-  if (wait?.kind === "human_interaction") return "Waiting on you";
+  if (wait?.kind === "human_interaction" || wait?.kind === "tool_action") return "Waiting on you";
   if (wait) return "Waiting on system";
   return "Waiting";
 }
 
 function waitDescription(wait: WorkflowWait) {
   switch (wait.kind) {
+    case "tool_action":
+      return "Waiting for a reviewed connected action to be approved and completed.";
     case "delay":
       return wait.wakeAt
         ? `Resumes automatically after ${formatDateTime(wait.wakeAt)}.`
@@ -478,6 +482,7 @@ export function WorkflowRun() {
                 <p className="text-xs text-muted-foreground">
                   {waitDescription(activeWait)}
                 </p>
+                {activeWait.kind === "tool_action" && <WorkflowToolReview companyId={selectedCompanyId!} runId={runId!} nodeId={activeWait.nodeId} />}
                 {activeWait.kind === "human_interaction" &&
                 activeWait.referenceType === "approval" &&
                 activeWait.referenceId ? (
@@ -519,6 +524,8 @@ export function WorkflowRun() {
             </p>
           </div>
         ) : null}
+
+        {TERMINAL_RUN_STATUSES.has(run.status) && <WorkflowRunReview companyId={selectedCompanyId!} runId={runId!} />}
 
         {run.status === "cancelled" ? (
           <div className="mt-5 border-l-2 border-border pl-4 text-sm text-muted-foreground">
@@ -627,20 +634,22 @@ export function WorkflowRun() {
                       </div>
                     ) : null}
 
+                    {step.payloadDeleted && <p className="mt-3 text-xs text-muted-foreground">Input and output were erased with their Memory source.</p>}
                     {input || output ? (
                       <div className="mt-3 grid gap-2 md:grid-cols-2">
                         {input ? (
                           <details className="rounded-md border border-border p-3">
                             <summary className="cursor-pointer text-xs font-medium">Input</summary>
-                            <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words text-[11px] text-muted-foreground">
+                            <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words text-(length:--text-micro) text-muted-foreground">
                               {input}
                             </pre>
                           </details>
                         ) : null}
+
                         {output ? (
                           <details className="rounded-md border border-border p-3">
                             <summary className="cursor-pointer text-xs font-medium">Output</summary>
-                            <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words text-[11px] text-muted-foreground">
+                            <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words text-(length:--text-micro) text-muted-foreground">
                               {output}
                             </pre>
                           </details>

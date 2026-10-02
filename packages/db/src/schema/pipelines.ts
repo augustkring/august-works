@@ -3,6 +3,7 @@ import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, unique
 import { agents } from "./agents.js";
 import { companies } from "./companies.js";
 import { projects } from "./projects.js";
+import type { ExecutionPrincipal } from "@paperclipai/shared";
 
 export const pipelines = pgTable(
   "pipelines",
@@ -37,6 +38,7 @@ export const pipelineStages = pgTable(
     kind: text("kind").notNull(),
     position: integer("position").notNull(),
     config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
+    workflowExecutionPrincipal: jsonb("workflow_execution_principal").$type<ExecutionPrincipal>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

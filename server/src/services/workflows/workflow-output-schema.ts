@@ -132,3 +132,7 @@ export function validateWorkflowOutput(
     validationErrors: validate.errors,
   });
 }
+
+export function assertWorkflowOutputSchema(schema: Record<string, unknown>): void {
+  validatorFor(schema);
+}

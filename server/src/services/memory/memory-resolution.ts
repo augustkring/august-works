@@ -1,3 +1,4 @@
+import { memoryPayloadVisible } from "./memory-privacy.js";
 import { createHash } from "node:crypto";
 import {
   and,
@@ -165,7 +166,7 @@ async function currentComparableRecords(
         eq(memoryRecords.retentionState, "active"),
         isNull(memoryRecords.revokedAt),
         isNull(memoryRecords.supersededByRecordId),
-        isNull(memoryRecords.deletedAt),
+        memoryPayloadVisible(),
         or(isNull(memoryRecords.validFrom), lte(memoryRecords.validFrom, now)),
         or(isNull(memoryRecords.validUntil), gt(memoryRecords.validUntil, now)),
         or(isNull(memoryRecords.expiresAt), gt(memoryRecords.expiresAt, now)),

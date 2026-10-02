@@ -3046,7 +3046,7 @@ export function PipelineSettings() {
                             }}
                           >
                             <SelectTrigger
-                              className="h-8 w-[118px]"
+                              className="h-8 w-(--sz-118px)"
                               aria-label="Automation target type"
                             >
                               <SelectValue />

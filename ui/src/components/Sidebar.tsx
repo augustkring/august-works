@@ -213,6 +213,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           <SidebarNavItem to="/issues" label="Tasks" icon={CircleCheck} />
           <SidebarNavItem to="/routines" label="Routines" icon={Repeat} />
           {showWorkflows ? <SidebarNavItem to="/workflows" label="Workflows" icon={GitBranch} /> : null}
+          {experimentalSettings?.enableAutomationArtifactsV1 === true ? <SidebarNavItem to="/automation-artifacts" label="Automation Artifacts" icon={GitBranch} /> : null}
           {showPipelines ? (
             <SidebarNavItem to="/pipelines" label="Pipelines" icon={GitBranch} />
           ) : null}

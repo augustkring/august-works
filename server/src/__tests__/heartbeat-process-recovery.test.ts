@@ -3,6 +3,7 @@ import { legacyDispositionFingerprint, LEGACY_DISPOSITION_REPAIR_INSTRUCTION } f
 import * as controllerLeases from "../services/legacy-controller-lease.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { randomUUID } from "node:crypto";
+import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { terminalizeLegacyExecution } from "../services/legacy-execution-recovery.js";
 import { issueService } from "../services/issues.js";
 import { getExecutionBlocker } from "../services/execution-blocker.js";
@@ -704,7 +705,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: input?.agentStatus ?? "paused",
       adapterType: input?.adapterType ?? "codex_local",
-      adapterConfig: {},
+      adapterConfig: (input?.adapterType ?? "codex_local") === "codex_local" ? mockedCodexAdapterConfig : {},
       runtimeConfig: {},
       permissions: {},
     });
@@ -938,7 +939,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -1136,7 +1137,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -1229,7 +1230,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: input?.agentStatus ?? "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -1269,7 +1270,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           enabled: true,
@@ -1422,7 +1423,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           wakeOnDemand: true,
@@ -1588,6 +1589,16 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   it("does not immediately continue a low-trust preflight setup failure", async () => {
     const { agentId, runId, issueId, companyId } =
       await seedQueuedIssueRunFixture();
+    // This fixture must reach the isolation preflight. Inline provider keys
+    // are deliberately forbidden at the low-trust boundary before that gate.
+    const secrets = secretService(db);
+    const credential = await secrets.create(companyId, { name: `mocked-codex-${randomUUID()}`,
+      provider: "local_encrypted", value: "test-mocked-adapter-not-a-provider-key" });
+    const credentialBinding = await secrets.createBinding({ companyId, secretId: credential.id, targetType: "agent",
+      targetId: agentId, configPath: "env.OPENAI_API_KEY" });
+    await db.update(agents).set({ adapterConfig: { env: { OPENAI_API_KEY: {
+      type: "secret_ref", secretId: credential.id, version: "latest",
+    } } } }).where(eq(agents.id, agentId));
     const reviewPreset = {
       id: "low_trust_review",
       version: 1,
@@ -1615,6 +1626,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
               rootIssueId: issueId,
               issueIds: [issueId],
               allowedAgentIds: [agentId],
+              allowedSecretBindingIds: [credentialBinding.id],
               allowedToolClasses: ["git.read", "github.pr.read", "tests.local"],
             },
           },
@@ -2628,7 +2640,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await withTempPaperclipHome(async () => {
       const { agentId, issueId, runId } = await seedQueuedIssueRunFixture();
       await db.update(agents).set({ adapterType: "paperclip_runner",
-        adapterConfig: { provider: "codex", model: "gpt-5.6-luna" },
+        adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
       }).where(eq(agents.id, agentId));
       const factory = vi.fn(() => { throw new Error("provider must not start"); });
       let reachedSelection = false;
@@ -2659,7 +2671,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await withTempPaperclipHome(async () => {
       const { agentId, issueId, runId } = await seedQueuedIssueRunFixture();
       await db.update(agents).set({ adapterType: "paperclip_runner",
-        adapterConfig: { provider: "codex", model: "gpt-5.6-luna" },
+        adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
       }).where(eq(agents.id, agentId));
       await db.update(heartbeatRuns).set({ invocationSource: "automation" }).where(eq(heartbeatRuns.id, runId));
       const factory = vi.fn(() => { throw new Error("provider must not start"); });
@@ -2696,7 +2708,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         .update(agents)
         .set({
           adapterType: "paperclip_runner",
-          adapterConfig: { provider: "codex", model: "gpt-5.6-luna" },
+          adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
         })
         .where(eq(agents.id, agentId));
       await db
@@ -2792,7 +2804,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         .update(agents)
         .set({
           adapterType: "paperclip_runner",
-          adapterConfig: { provider: "codex", model: "gpt-5.6-luna" },
+          adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
         })
         .where(eq(agents.id, agentId));
       await db
@@ -6780,7 +6792,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "cto",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -6948,7 +6960,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "cto",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -7100,6 +7112,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       runtimeMode: "legacy", adapterType: "codex_local", agentStatus: "idle", runStatus: "queued",
     });
     await db.update(agents).set({ adapterConfig: {
+      ...mockedCodexAdapterConfig,
       command: process.execPath, args: ["-e", "console.log('ready');setInterval(() => {}, 1000)"], graceSec: 1,
     } }).where(eq(agents.id, agentId));
     mockAdapterExecute.mockImplementationOnce((async (input: unknown) =>
@@ -7706,6 +7719,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         .update(agents)
         .set({
           adapterConfig: {
+            ...mockedCodexAdapterConfig,
             command: process.execPath,
             args: [
               "-e",
@@ -7835,7 +7849,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       await db
         .update(agents)
         .set({
-          adapterConfig: { command: process.execPath, args: ["-e", script] },
+          adapterConfig: { ...mockedCodexAdapterConfig, command: process.execPath, args: ["-e", script] },
         })
         .where(eq(agents.id, agentId));
       const heartbeat = heartbeatService(db);
@@ -7887,6 +7901,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       .update(agents)
       .set({
         adapterConfig: {
+          ...mockedCodexAdapterConfig,
           command: process.execPath,
           args: [
             "-e",
@@ -8687,7 +8702,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         role: index === 0 ? "cto" : "ceo",
         status: "idle" as const,
         adapterType: "codex_local" as const,
-        adapterConfig: {},
+        adapterConfig: mockedCodexAdapterConfig,
         runtimeConfig: {},
         permissions: {},
       })),
@@ -8997,7 +9012,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "running",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -9067,7 +9082,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -9150,7 +9165,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -9196,7 +9211,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -9403,7 +9418,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -9601,7 +9616,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -9686,7 +9701,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -9860,7 +9875,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -10003,7 +10018,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -10092,7 +10107,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -10192,7 +10207,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 },
       },
@@ -10609,7 +10624,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         role: "engineer",
         status: "idle",
         adapterType: "codex_local",
-        adapterConfig: {},
+        adapterConfig: mockedCodexAdapterConfig,
         runtimeConfig: {},
         permissions: {},
       },
@@ -10620,7 +10635,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         role: "engineer",
         status: "idle",
         adapterType: "codex_local",
-        adapterConfig: {},
+        adapterConfig: mockedCodexAdapterConfig,
         runtimeConfig: {},
         permissions: {},
       },
@@ -10791,7 +10806,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
     });
@@ -12064,7 +12079,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       if (mode === "native") {
         await db.update(agents).set({
           adapterType: "paperclip_runner",
-          adapterConfig: { provider: "codex", model: "gpt-5.6-luna" },
+          adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
         }).where(eq(agents.id, source.agentId));
       }
       const factory = vi.fn(() => { throw new NativeRunnerOwnershipUnverifiedError(); });
@@ -12317,7 +12332,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       .update(agents)
       .set({
         adapterType: "paperclip_runner",
-        adapterConfig: { provider: "codex", model: "gpt-5.6-luna" },
+        adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
       })
       .where(eq(agents.id, source.agentId));
     await db
@@ -12933,7 +12948,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       role: "engineer",
       status: "idle",
       adapterType: oldAgent!.adapterType,
-      adapterConfig: {},
+      adapterConfig: oldAgent!.adapterType === "codex_local" ? mockedCodexAdapterConfig : {},
       runtimeConfig: {},
       permissions: {},
     });
@@ -13022,7 +13037,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await db.insert(projects).values({ id: projectId, companyId, name: "Shared project" });
     await db.insert(projectWorkspaces).values({ id: workspaceId, companyId, projectId, name: "Primary", sourceType: "local_path", cwd: "/tmp/recovery-shared", isPrimary: true });
     await db.update(issues).set({ projectId, projectWorkspaceId: workspaceId }).where(eq(issues.id, issueId));
-    await db.insert(agents).values({ id: workerId, companyId, name: "Worker", role: "engineer", status: "idle", adapterType: "codex_local", adapterConfig: {} });
+    await db.insert(agents).values({ id: workerId, companyId, name: "Worker", role: "engineer", status: "idle", adapterType: "codex_local", adapterConfig: mockedCodexAdapterConfig });
     await db.insert(issues).values({ id: childId, companyId, parentId: issueId, title: "Build the project", status: "in_progress", assigneeAgentId: workerId, projectId, projectWorkspaceId: workspaceId });
     await db.insert(heartbeatRuns).values({ companyId, agentId: workerId, status: "scheduled_retry", scheduledRetryAt: new Date(Date.now() + 60_000), scheduledRetryReason: "workspace_busy", contextSnapshot: { issueId: childId } });
     const heartbeat = heartbeatService(db);
@@ -13043,7 +13058,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await db.insert(projects).values({ id: projectId, companyId, name: "Shared project" });
     await db.insert(projectWorkspaces).values({ id: workspaceId, companyId, projectId, name: "Primary", sourceType: "local_path", cwd: "/tmp/recovery-shared", isPrimary: true });
     await db.update(issues).set({ projectId, projectWorkspaceId: workspaceId }).where(eq(issues.id, issueId));
-    await db.insert(agents).values({ id: workerId, companyId, name: "Worker", role: "engineer", status: "idle", adapterType: "codex_local", adapterConfig: {} });
+    await db.insert(agents).values({ id: workerId, companyId, name: "Worker", role: "engineer", status: "idle", adapterType: "codex_local", adapterConfig: mockedCodexAdapterConfig });
     await db.insert(issues).values({ id: childId, companyId, parentId: issueId, title: "Review the project", status: "in_review", assigneeAgentId: workerId, projectId, projectWorkspaceId: workspaceId });
     await db.insert(issueThreadInteractions).values({ companyId, issueId: childId, kind: "request_confirmation", status: "pending", addresseeAgentId: agentId, payload: { prompt: "Review this delivery" } });
     const heartbeat = heartbeatService(db);
@@ -14074,7 +14089,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
               role: "engineer",
               status: "paused",
               adapterType: "codex_local",
-              adapterConfig: {},
+              adapterConfig: mockedCodexAdapterConfig,
               runtimeConfig: {},
               permissions: {},
             });
@@ -14573,7 +14588,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           role: "engineer",
           status: "idle",
           adapterType: "codex_local",
-          adapterConfig: {},
+          adapterConfig: mockedCodexAdapterConfig,
           runtimeConfig: {},
           permissions: {},
         });

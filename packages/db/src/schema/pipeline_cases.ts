@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { ExecutionPrincipal } from "@paperclipai/shared";
 import {
   type AnyPgColumn,
   check,
@@ -191,6 +192,7 @@ export const pipelineAutomationExecutions = pgTable(
     companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
     caseId: uuid("case_id").notNull().references(() => pipelineCases.id, { onDelete: "cascade" }),
     automationId: text("automation_id").notNull(),
+    workflowExecutionPrincipal: jsonb("workflow_execution_principal").$type<ExecutionPrincipal>(),
     triggeringEventId: uuid("triggering_event_id").notNull(),
     targetKind: text("target_kind").$type<PipelineAutomationTargetKind>(),
     targetRef: uuid("target_ref"),

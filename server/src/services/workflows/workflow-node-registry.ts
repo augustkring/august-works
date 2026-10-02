@@ -1,8 +1,13 @@
+import { workflowDirectAgentNode } from "./workflow-direct-agent.js";
+import { workflowSubworkflowNode, assertSubworkflowGraph } from "./workflow-subworkflow.js";
+import { workflowMapNode } from "./workflow-map.js";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  automationArtifacts,
+  automationArtifactVersions,
   companyMemberships,
   projects,
   toolCatalogEntries,
@@ -10,6 +15,7 @@ import {
 } from "@paperclipai/db";
 import {
   workflowGraphV1Schema,
+  automationArtifactGateReportSchema,
   type WorkflowGraphV1,
   type WorkflowNodeDefinitionDescriptor,
   type WorkflowRetryPolicy,
@@ -17,6 +23,9 @@ import {
 import { unprocessable } from "../../errors.js";
 import { parseWorkflowConditionExpression } from "./workflow-condition-expression.js";
 import { parseWorkflowTransformExpression } from "./workflow-transform-expression.js";
+import { workflowNativeQueryNodes } from "./workflow-native-nodes.js";
+import { workflowHttpNode } from "./workflow-http-request.js";
+import { assertWorkflowOutputSchema, validateWorkflowOutput } from "./workflow-output-schema.js";
 import {
   descriptorRetryIsStructurallySafe,
   effectiveWorkflowRetryPolicy,
@@ -57,6 +66,19 @@ const emptyObjectSchema = {
 };
 
 const manualTriggerConfig = z.object({}).strict();
+const artifactConfig = z.object({
+  artifactId: z.string().guid(),
+  artifactVersionId: z.string().guid(),
+  inputMapping: z.record(z.string(), z.string().max(10_000)).optional(),
+}).strict().superRefine((value, ctx) => {
+  for (const [field, expression] of Object.entries(value.inputMapping ?? {})) {
+    try { parseWorkflowTransformExpression(expression); }
+    catch (error) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["inputMapping", field],
+        message: error instanceof Error ? error.message : "Invalid input expression" });
+    }
+  }
+});
 const transformConfig = z.object({
   mapping: z.record(z.string(), z.string().max(10_000)).refine(
     (mapping) => Object.keys(mapping).length >= 1 && Object.keys(mapping).length <= 100,
@@ -91,11 +113,37 @@ const conditionConfig = z.object({
 const waitConfig = z.object({
   durationSeconds: z.number().int().min(1).max(604_800),
 }).strict();
+const switchConfig = z.object({
+  cases: z.array(z.object({ key: z.string().trim().min(1).max(100),
+    expression: z.string().trim().min(1).max(5_000) }).strict()).min(1).max(32),
+  defaultBranch: z.string().trim().min(1).max(100),
+}).strict().superRefine((value, ctx) => {
+  const keys = [value.defaultBranch, ...value.cases.map((item) => item.key)];
+  if (new Set(keys).size !== keys.length) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Switch branch keys must be unique" });
+  value.cases.forEach((item, index) => {
+    try { parseWorkflowConditionExpression(item.expression); }
+    catch (error) { ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["cases", index, "expression"],
+      message: error instanceof Error ? error.message : "Invalid switch expression" }); }
+  });
+});
+const mergeConfig = z.object({ mode: z.literal("all") }).strict();
+const parallelConfig = z.object({ concurrency: z.literal(1).default(1) }).strict();
 const connectorActionConfig = z.object({
   toolCatalogEntryId: z.string().guid(),
   connectionId: z.string().guid(),
   input: z.record(z.string(), z.unknown()).optional().default({}),
-}).strict();
+  inputMapping: z.record(z.string(), z.string().max(10_000)).optional(),
+  catalogVersionHash: z.string().min(1).optional(),
+  catalogSchemaHash: z.string().min(1).optional(),
+}).strict().superRefine((value, ctx) => {
+  for (const [field, expression] of Object.entries(value.inputMapping ?? {})) {
+    try { parseWorkflowTransformExpression(expression); }
+    catch (error) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["inputMapping", field],
+        message: error instanceof Error ? error.message : "Invalid input expression" });
+    }
+  }
+});
 const createTaskConfig = z.object({
   title: z.string().trim().min(1).max(500),
   description: z.string().max(20_000).nullable().optional(),
@@ -249,6 +297,79 @@ function descriptor(
 }
 
 const REGISTRY: RegisteredWorkflowNode[] = [
+  workflowMapNode,
+  workflowSubworkflowNode,
+  workflowDirectAgentNode,
+  ...workflowNativeQueryNodes,
+  workflowHttpNode,
+  ...[
+    { type: "core.switch", displayName: "Switch", description: "Selects the first matching declared branch, otherwise its explicit default.",
+      validator: switchConfig, configSchema: { type: "object", required: ["cases", "defaultBranch"], properties: {
+        cases: { type: "array", minItems: 1, maxItems: 32, items: { type: "object", required: ["key", "expression"],
+          properties: { key: { type: "string" }, expression: { type: "string" } }, additionalProperties: false } },
+        defaultBranch: { type: "string" } }, additionalProperties: false } },
+    { type: "core.merge", displayName: "Merge activated branches", description: "Joins all activated inputs and excludes conclusively skipped paths.",
+      validator: mergeConfig, configSchema: { type: "object", required: ["mode"], properties: { mode: { const: "all" } }, additionalProperties: false } },
+    { type: "core.parallel", displayName: "Parallel branches", description: "Explicitly activates bounded branches. V1 runs one branch step at a time.",
+      validator: parallelConfig, configSchema: { type: "object", properties: { concurrency: { const: 1 } }, additionalProperties: false } },
+  ].map((item): RegisteredWorkflowNode => ({ configValidator: item.validator, descriptor: descriptor({
+    type: item.type, version: 1, category: "control", displayName: item.displayName, description: item.description,
+    inputSchema: null, outputSchema: null, configSchema: item.configSchema,
+    sideEffectClass: "pure", riskDefault: "C0", authorizationRequirements: [], timeoutDefaultSeconds: null,
+    retryPolicyDefault: NO_RETRY, idempotencyStrategy: "not_required", cancellationSupport: "none", testMode: "safe",
+    failureOutputs: ["workflow_control_invalid"], auditEvents: ["workflow.step_completed"], uiComponent: item.type,
+    accessibilityContract: { label: item.displayName, description: item.description, supportsKeyboardInsert: true, supportsOutlineEdit: true },
+    publishState: "ready", publishBlockedReason: null,
+  }) })),
+  {
+    descriptor: descriptor({
+      type: "automation.artifact", version: 1, category: "transform",
+      displayName: "Automation Artifact",
+      description: "Executes a pinned, reviewed artifact with typed input and output.",
+      inputSchema: { type: "object", additionalProperties: true }, outputSchema: null,
+      configSchema: { type: "object", required: ["artifactId", "artifactVersionId"],
+        properties: { artifactId: { type: "string", format: "uuid" },
+          artifactVersionId: { type: "string", format: "uuid" },
+          inputMapping: { type: "object", additionalProperties: { type: "string" } } },
+        additionalProperties: false },
+      sideEffectClass: "pure", riskDefault: "C1", authorizationRequirements: [],
+      timeoutDefaultSeconds: 5, retryPolicyDefault: NO_RETRY,
+      idempotencyStrategy: "not_required", cancellationSupport: "cooperative",
+      testMode: "safe", failureOutputs: ["artifact_unavailable", "artifact_validation_failed"],
+      auditEvents: ["workflow.step_completed", "workflow.run_failed"], uiComponent: "automation_artifact",
+      accessibilityContract: { label: "Automation artifact",
+        description: "Execute a reviewed immutable artifact version.",
+        supportsKeyboardInsert: true, supportsOutlineEdit: true },
+      publishState: "ready", publishBlockedReason: null,
+    }),
+    configValidator: artifactConfig,
+    validateReferences: async (db, companyId, nodeId, config, mode) => {
+      const parsed = artifactConfig.parse(config);
+      const [artifact, version] = await Promise.all([
+        db.select().from(automationArtifacts).where(and(eq(automationArtifacts.companyId, companyId),
+          eq(automationArtifacts.id, parsed.artifactId))).then((rows) => rows[0]),
+        db.select().from(automationArtifactVersions).where(and(eq(automationArtifactVersions.companyId, companyId),
+          eq(automationArtifactVersions.artifactId, parsed.artifactId),
+          eq(automationArtifactVersions.id, parsed.artifactVersionId))).then((rows) => rows[0]),
+      ]);
+      if (!artifact || !version) invalidNode("Artifact version is unavailable in this company", {
+        reason: "cross_company_reference", nodeId, referenceType: "artifact" });
+      if (mode !== "publish") return;
+      if (artifact.status !== "active" || artifact.archivedAt || artifact.latestVersionId !== version.id ||
+        artifact.sideEffectClass !== "pure" || !["C0", "C1"].includes(artifact.riskClass) ||
+        !["expression", "transform", "typescript"].includes(artifact.kind)) {
+        invalidNode("Artifact must be active and qualified for pure execution", {
+          reason: "automation_artifact_not_active", nodeId });
+      }
+      for (const [kind, report] of [["validation", version.validationReport], ["security", version.securityReport]] as const) {
+        const gate = automationArtifactGateReportSchema.safeParse(report);
+        if (!gate.success || gate.data.kind !== kind || gate.data.status !== "passed" || gate.data.contentHash !== version.contentHash) {
+          invalidNode("Artifact version requires hash-bound validation and security gates", {
+            reason: "automation_artifact_validation_required", nodeId, gate: kind });
+        }
+      }
+    },
+  },
   {
     descriptor: descriptor({
       type: "core.manual_trigger",
@@ -433,6 +554,9 @@ const REGISTRY: RegisteredWorkflowNode[] = [
           toolCatalogEntryId: { type: "string", format: "uuid" },
           connectionId: { type: "string", format: "uuid" },
           input: { type: "object", additionalProperties: true },
+          inputMapping: { type: "object", additionalProperties: { type: "string" } },
+          catalogVersionHash: { type: "string" },
+          catalogSchemaHash: { type: "string" },
         },
         additionalProperties: false,
       },
@@ -444,7 +568,7 @@ const REGISTRY: RegisteredWorkflowNode[] = [
         description: "Resolved again at execution time against the selected connection and grant.",
       }],
       timeoutDefaultSeconds: 30,
-      retryPolicyDefault: STANDARD_RETRY,
+      retryPolicyDefault: NO_RETRY,
       idempotencyStrategy: "provider_passthrough",
       cancellationSupport: "cooperative",
       testMode: "dry_run",
@@ -457,16 +581,19 @@ const REGISTRY: RegisteredWorkflowNode[] = [
         supportsKeyboardInsert: true,
         supportsOutlineEdit: true,
       },
-      publishState: "draft_only",
-      publishBlockedReason: "connector_execution_policy_not_ready",
+      publishState: "ready",
+      publishBlockedReason: null,
     }),
     configValidator: connectorActionConfig,
-    validateReferences: async (db, companyId, nodeId, config) => {
+    validateReferences: async (db, companyId, nodeId, config, mode) => {
       const parsed = connectorActionConfig.parse(config);
       const [entry, connection] = await Promise.all([
         db.select({
           id: toolCatalogEntries.id,
           connectionId: toolCatalogEntries.connectionId,
+          status: toolCatalogEntries.status,
+          versionHash: toolCatalogEntries.versionHash,
+          schemaHash: toolCatalogEntries.schemaHash,
         }).from(toolCatalogEntries)
           .where(and(
             eq(toolCatalogEntries.companyId, companyId),
@@ -486,6 +613,12 @@ const REGISTRY: RegisteredWorkflowNode[] = [
           nodeId,
           referenceType: "connector",
         });
+      }
+      if (mode === "publish" && (entry.status !== "active" ||
+        !parsed.catalogVersionHash || !parsed.catalogSchemaHash ||
+        parsed.catalogVersionHash !== entry.versionHash || parsed.catalogSchemaHash !== entry.schemaHash)) {
+        invalidNode("Connector publication requires the current catalogue version and schema", {
+          reason: "workflow_connector_binding_invalid", nodeId });
       }
     },
   },
@@ -632,15 +765,9 @@ const REGISTRY: RegisteredWorkflowNode[] = [
     validateReferences: async (db, companyId, nodeId, config, mode) => {
       const parsed = agentTaskConfig.parse(config);
       await requireAgent(db, companyId, nodeId, parsed.agentId);
-      if (mode === "publish" && parsed.expectedOutputSchema != null) {
-        invalidNode(
-          "Structured Agent Task output is not publishable until the task runtime exposes an authoritative structured-result channel",
-          {
-            reason: "workflow_agent_task_structured_output_not_ready",
-            nodeId,
-            nodeType: "agent.task",
-          },
-        );
+      if (parsed.expectedOutputSchema) assertWorkflowOutputSchema(parsed.expectedOutputSchema);
+      if (parsed.expectedOutputSchema != null && !parsed.waitForCompletion) {
+        invalidNode("Structured Agent Task output requires waiting for completion", { nodeId, nodeType: "agent.task" });
       }
     },
   },
@@ -872,6 +999,14 @@ export function validateWorkflowPublishTopology(graph: WorkflowGraphV1): void {
     const outgoingCount = outgoing.get(node.id)?.length ?? 0;
     const nodeOutgoingEdges = graph.edges.filter((edge) => edge.source === node.id);
 
+    if (node.type === "core.switch") {
+      const config = switchConfig.parse(node.config);
+      const expected = [config.defaultBranch, ...config.cases.map((item) => item.key)].sort();
+      const actual = nodeOutgoingEdges.map((edge) => (edge.sourceHandle ?? edge.label ?? "").trim()).sort();
+      if (JSON.stringify(expected) !== JSON.stringify(actual)) invalidGraph("Switch paths must match every declared branch and default exactly once", {
+        reason: "switch_branches_invalid", nodeId: node.id });
+    }
+
     if (node.type === "core.condition" && nodeOutgoingEdges.length > 0) {
       const branchKeys = nodeOutgoingEdges.map((edge) =>
         (edge.sourceHandle ?? edge.label ?? "").trim().toLowerCase(),
@@ -890,7 +1025,24 @@ export function validateWorkflowPublishTopology(graph: WorkflowGraphV1): void {
       }
     }
 
-    if (outgoingCount > 1 && !EXPLICIT_SPLIT_NODE_TYPES.has(node.type)) {
+    const failurePolicy = node.failurePolicy ?? "fail_workflow";
+    if (["follow_failure_branch", "wait_for_human"].includes(failurePolicy)) {
+      const keys = nodeOutgoingEdges.map((edge) => edge.sourceHandle);
+      if (EXPLICIT_SPLIT_NODE_TYPES.has(node.type) || EXPLICIT_MERGE_NODE_TYPES.has(node.type) || node.type === "core.manual_trigger" ||
+        keys.length !== 2 || !keys.includes("success") || !keys.includes("failure")) invalidGraph("Recovery requires exactly one success and one failure path on a regular node", {
+        reason: "workflow_failure_branches_invalid", nodeId: node.id });
+    }
+    if (failurePolicy === "continue_with_null") {
+      if (!nodeOutgoingEdges.length) invalidGraph("Null continuation requires a downstream input contract", { reason: "workflow_nullable_input_required", nodeId: node.id });
+      for (const edge of nodeOutgoingEdges) {
+        const target = graph.nodes.find((item) => item.id === edge.target)!;
+        try {
+          if (!target.inputSchema) throw new Error("Missing nullable input contract");
+          validateWorkflowOutput(target.inputSchema, null);
+        } catch { invalidGraph("Every downstream input schema must accept null", { reason: "workflow_nullable_input_required", nodeId: node.id, targetId: target.id }); }
+      }
+    }
+    if (outgoingCount > 1 && !EXPLICIT_SPLIT_NODE_TYPES.has(node.type) && !["follow_failure_branch", "wait_for_human"].includes(failurePolicy)) {
       invalidGraph("Published workflow requires an explicit branch/split node for parallel outgoing paths", {
         reason: "implicit_parallel_split",
         nodeId: node.id,
@@ -983,12 +1135,13 @@ export function workflowNodeRegistryService(db: Db) {
         });
       }
       if (node.continueOnFailure === true) {
-        invalidNode("Continue-on-failure is not implemented for published workflows yet", {
-          reason: "workflow_failure_policy_not_ready",
+        invalidNode("Choose an explicit failure policy instead of continueOnFailure", {
+          reason: "workflow_failure_policy_required",
           nodeId: node.id,
           nodeType: node.type,
         });
       }
+      if (node.inputSchema) assertWorkflowOutputSchema(node.inputSchema);
     }
   }
 
@@ -1014,9 +1167,10 @@ export function workflowNodeRegistryService(db: Db) {
     ) => validateNode(companyId, node, "draft"),
     validateDraftGraph: (companyId: string, graph: WorkflowGraphV1) =>
       validate(companyId, graph, "draft"),
-    validatePublishGraph: async (companyId: string, graph: WorkflowGraphV1) => {
+    validatePublishGraph: async (companyId: string, graph: WorkflowGraphV1, workflowId?: string) => {
       const validated = await validate(companyId, graph, "publish");
       validateWorkflowPublishTopology(validated);
+      await assertSubworkflowGraph(db, companyId, validated, workflowId);
       return validated;
     },
   };

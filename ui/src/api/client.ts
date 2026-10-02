@@ -51,9 +51,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   applyObservabilityHeaders(headers);
 
   const res = await fetch(`${BASE}${path}`, {
-    headers,
-    credentials: "include",
     ...init,
+    headers,
+    credentials: init?.credentials ?? "include",
   });
   if (!res.ok) {
     const errorBody = await res.json().catch(() => null);

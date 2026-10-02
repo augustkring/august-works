@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
+  workflows,
   agents,
   authUsers,
   companies,
@@ -28,6 +29,11 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
+import { memoryService } from "../memory/memory-service.js";
+import { assertMemorySourcesRetained } from "../memory/memory-privacy.js";
+import { issueService } from "../issues.js";
+import { workflowService } from "../workflows/workflow-service.js";
+import { workflowExecutorService } from "../workflows/workflow-executor.js";
 import { foundationService } from "../foundation/foundation-service.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { contextEngineService } from "./context-engine.js";
@@ -48,6 +54,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
 
   afterEach(async () => {
     await db.delete(activityLog);
+    await db.delete(workflows);
     await db.delete(contextManifestItems);
     await db.delete(memoryEvidence);
     await db.delete(memoryRecords);
@@ -220,6 +227,58 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       { principal: { type: "user", userId: input.userId } },
     );
   }
+
+  it("executes Foundation and Memory query nodes with approved and accepted sources only", async () => {
+    const seeded = await seed();
+    await instanceSettingsService(db).updateExperimental({ enableFoundationV1: true, enableCollectiveMemoryV1: true });
+    await db.insert(principalPermissionGrants).values({ companyId: seeded.companyId, principalType: "user",
+      principalId: seeded.userId, permissionKey: "foundation:read", scope: null });
+    const approved = await createApprovedFoundation({ companyId: seeded.companyId, userId: seeded.userId,
+      key: "enterprise-guidance", body: "# Enterprise\nApproved enterprise strategy", sensitivity: "internal" });
+    await foundationService(db).createDraft(seeded.companyId, { foundationKey: "enterprise-draft", category: "strategy",
+      documentType: "strategy", title: "Unapproved enterprise strategy", body: "Draft enterprise secret", sensitivity: "internal" },
+      { principal: { type: "user", userId: seeded.userId } });
+    const accepted = await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      content: "Accepted enterprise memory", reviewState: "accepted" });
+    await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      content: "Pending enterprise memory", reviewState: "pending" });
+    await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      content: "Private enterprise memory", scope: "agent", reviewState: "accepted" });
+    const sourceRef = `run://${randomUUID()}/issue/${seeded.issue.id}`;
+    await db.insert(memoryEvidence).values({ companyId: seeded.companyId, memoryRecordId: accepted.id,
+      sourceClass: "task", sourceProvider: "august_works_memory_agent_tool", sourceType: "issue",
+      sourceRef, observedAt: new Date(), excerptHash: "a".repeat(64), citationJson: { label: "Source task" }, trustLevel: "medium", supportsOrContradicts: "supports" });
+    const actor = { principal: { type: "user" as const, userId: seeded.userId } };
+    const svc = workflowService(db);
+    const created = await svc.create(seeded.companyId, { name: "Native evidence workflow" }, actor);
+    const updated = await svc.updateDraft(seeded.companyId, created.id, { expectedRevisionId: created.draftRevisionId!,
+      graph: { version: 1, variables: [], settings: {}, nodes: [
+        { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+        { id: "foundation", type: "native.foundation_query", name: "Foundation", position: { x: 100, y: 0 }, config: { query: "{{trigger.query}}", limit: 8 } },
+        { id: "memory", type: "native.memory_recall", name: "Memory", position: { x: 200, y: 0 }, config: { query: "{{trigger.query}}", limit: 8 } },
+        { id: "derived", type: "core.transform", name: "Derived output", position: { x: 300, y: 0 }, config: { mapping: { content: '{{input.records["0"].record.content}}' } } },
+      ], edges: [{ id: "e1", source: "start", target: "foundation" }, { id: "e2", source: "foundation", target: "memory" },
+        { id: "e3", source: "memory", target: "derived" }] } }, actor);
+    await svc.publish(seeded.companyId, created.id, { expectedDraftRevisionId: updated.draftRevisionId!, expectedPublishedRevisionId: null, approvalId: null }, actor);
+    const executor = workflowExecutorService(db);
+    const result = await executor.startManualRun(seeded.companyId, created.id, { input: { query: "enterprise" } }, actor, "native-evidence-run");
+    expect(result.run.status).toBe("succeeded");
+    const foundation = result.steps.find((step) => step.nodeId === "foundation")!.outputJson as { sections: Array<{ foundationDocumentId: string; sourceRef: string }> };
+    expect(foundation.sections).toMatchObject([{ foundationDocumentId: approved.id, sourceRef: expect.stringContaining(approved.approvedRevisionId!) }]);
+    const memory = result.steps.find((step) => step.nodeId === "memory")!.outputJson as { records: Array<{ record: { id: string; content: string }; sourceRef: string }> };
+    expect(memory.records).toMatchObject([{ record: { id: accepted.id, content: "Accepted enterprise memory" }, sourceRef: `memory://shared/${accepted.id}` }]);
+    expect(memory.records).toHaveLength(1);
+    expect(result.steps.find((step) => step.nodeId === "derived")).toMatchObject({ outputJson: { content: "Accepted enterprise memory" }, memoryRecordIds: [accepted.id] });
+    await issueService(db).remove(seeded.issue.id);
+    const erased = await executor.getRun(seeded.companyId, result.run.id);
+    for (const id of ["memory", "derived"]) expect(erased?.steps.find((step) => step.nodeId === id)).toMatchObject({ inputJson: null, outputJson: null, payloadDeleted: true });
+    expect(await memoryService(db).get(seeded.companyId, accepted.id, actor)).toBeNull();
+    await expect(assertMemorySourcesRetained(db, seeded.companyId, [{ sourceProvider: "august_works_memory_agent_tool", sourceRef }]))
+      .rejects.toMatchObject({ details: { code: "memory_source_deleted" } });
+    await instanceSettingsService(db).updateExperimental({ enableCollectiveMemoryV1: false });
+    const denied = await executor.startManualRun(seeded.companyId, created.id, { input: { query: "enterprise" } }, actor, "native-evidence-disabled");
+    expect(denied.run).toMatchObject({ status: "failed", failureCode: "collective_memory_disabled" });
+  });
 
   it("assembles authorized approved Foundation and task context into a durable manifest", async () => {
     const seeded = await seed();

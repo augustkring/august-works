@@ -31,9 +31,9 @@ export default defineConfig({
     // the loaded serial shard (maxWorkers=1) that cost can cross vitest's
     // default 5s testTimeout and fail the first test, which also lets its
     // fire-and-forget wake leak into the next test. Give each test generous
-    // headroom; 15s is far above the observed module-load cost yet still
-    // catches a genuinely hung test well inside the 20 minute job limit.
-    testTimeout: 15000,
+    // headroom for cold cloud imports; 30s bounds a hung test while keeping
+    // explicit workflow, watchdog and child-process deadline assertions intact.
+    testTimeout: 30000,
     isolate: true,
     maxConcurrency: 1,
     maxWorkers: 1,

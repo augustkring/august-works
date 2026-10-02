@@ -1,3 +1,4 @@
+import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -81,6 +82,7 @@ describe("P6-32 legacy finalization regression", () => {
       companyId,
       name: "Legacy agent",
       adapterType: "codex_local",
+      adapterConfig: mockedCodexAdapterConfig,
       status: "idle",
       runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } },
     });

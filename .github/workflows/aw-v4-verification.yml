@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/august-works-unified-platform-v4
+      - feat/aw-v4-completion
+      - master
+  workflow_dispatch:
   pull_request:
     branches:
       - master
@@ -54,6 +57,9 @@ jobs:
       - name: Verify migration numbering and safety
         run: pnpm --filter @paperclipai/db check:migrations
 
+      - name: Verify UI design tokens
+        run: pnpm check:tokens && pnpm check:token-gates
+
       - name: Verify OpenClaw workflow smoke syntax
         run: bash -n scripts/smoke/openclaw-gateway-e2e.sh
 
@@ -64,9 +70,36 @@ jobs:
         run: pnpm build
 
   tests:
-    name: Repository tests
+    name: Repository tests (${{ matrix.partition }})
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - partition: server-1
+            args: --mode general --group general-server --shard-index 0 --shard-count 4
+          - partition: server-2
+            args: --mode general --group general-server --shard-index 1 --shard-count 4
+          - partition: server-3
+            args: --mode general --group general-server --shard-index 2 --shard-count 4
+          - partition: server-4
+            args: --mode general --group general-server --shard-index 3 --shard-count 4
+          - partition: workspaces-a-1
+            args: --mode general --group general-workspaces-a --shard-index 0 --shard-count 2
+          - partition: workspaces-a-2
+            args: --mode general --group general-workspaces-a --shard-index 1 --shard-count 2
+          - partition: workspaces-b
+            args: --mode general --group general-workspaces-b
+          - partition: routes-1
+            args: --mode serialized --shard-index 0 --shard-count 4
+          - partition: routes-2
+            args: --mode serialized --shard-index 1 --shard-count 4
+          - partition: routes-3
+            args: --mode serialized --shard-index 2 --shard-count 4
+          - partition: routes-4
+            args: --mode serialized --shard-index 3 --shard-count 4
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -95,7 +128,7 @@ jobs:
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
 
       - name: Run stable test suite
-        run: pnpm test:run
+        run: pnpm test:run ${{ matrix.args }}
 
   security-evals:
     name: Security hard gates
@@ -177,6 +210,53 @@ jobs:
       - name: Run deterministic security hard gates
         run: pnpm test:aw-v4-security-evals
 
+  product-browser:
+    name: V4 product browser journeys
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if ! pnpm install --frozen-lockfile; then
+            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
+            pnpm install --frozen-lockfile
+          fi
+
+      - name: Prepare workspace build dependencies
+        run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify V4 product journeys
+        run: pnpm exec playwright test --config tests/e2e/playwright.config.ts tests/e2e/aw-v4-completion.spec.ts
+
+      - name: Retain browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aw-v4-browser-failure
+          path: |
+            tests/e2e/test-results
+            tests/e2e/playwright-report
+          if-no-files-found: ignore
+
   pilot-readiness:
     name: Pilot readiness contract
     runs-on: ubuntu-24.04
@@ -185,6 +265,7 @@ jobs:
       - static-and-build
       - tests
       - security-evals
+      - product-browser
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -214,4 +295,3 @@ jobs:
 
       - name: Test customer-pilot readiness gate
         run: pnpm test:aw-v4-pilot-readiness
-

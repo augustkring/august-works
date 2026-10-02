@@ -1,3 +1,4 @@
+import type { ExecutionPrincipal } from "../august-works-platform.js";
 import type {
   IssueOriginKind,
   IssuePriority,
@@ -93,6 +94,7 @@ export interface Routine {
   assigneeAgentId: string | null;
   executionTargetKind?: RoutineExecutionTargetKind | null;
   executionTargetRef?: string | null;
+  workflowExecutionPrincipal?: ExecutionPrincipal | null;
   priority: string;
   status: string;
   concurrencyPolicy: string;
@@ -140,6 +142,7 @@ export interface RoutineRevisionSnapshotRoutineV1 {
   assigneeAgentId: string | null;
   executionTargetKind?: RoutineExecutionTargetKind | null;
   executionTargetRef?: string | null;
+  workflowExecutionPrincipal?: ExecutionPrincipal | null;
   priority: IssuePriority;
   status: RoutineStatus;
   concurrencyPolicy: RoutineConcurrencyPolicy;

@@ -1,5 +1,6 @@
 import type {
   MemoryBinding,
+  MemoryMaintenanceJobSummary,
   MemoryBindingInput,
   MemoryBindingTargetInput,
   MemoryCorrectionInput,
@@ -11,6 +12,15 @@ import type {
 import { api } from "./client";
 
 export const memoryApi = {
+  jobs: (companyId: string) => api.get<MemoryMaintenanceJobSummary[]>(`/companies/${companyId}/memory/jobs`),
+  enqueueMaintenance: (companyId: string, input: { operationType: "dedupe" | "compaction" | "reflection" | "index_refresh"; recordIds: string[]; proposedLesson?: { title: string; content: string } }, key: string) =>
+    api.post<{ id: string; status: string }>(`/companies/${companyId}/memory/jobs`, input, { headers: { "Idempotency-Key": key } }),
+  exportMemory: (companyId: string) => api.get<unknown>(`/companies/${companyId}/memory/export`),
+  forget: (companyId: string, recordId: string) =>
+    api.delete<{ deletedRecordCount: number }>(`/companies/${companyId}/memory/records/${recordId}`),
+  retentionPolicy: (companyId: string) => api.get<{ companyId: string; maxAgeDays: number | null; canManage: boolean }>(`/companies/${companyId}/memory/retention-policy`),
+  setRetentionPolicy: (companyId: string, maxAgeDays: number | null) =>
+    api.put<{ maxAgeDays: number | null }>(`/companies/${companyId}/memory/retention-policy`, { maxAgeDays }),
   listRecords: (companyId: string, input: Partial<MemoryRecordListQuery> = {}) => {
     const params = new URLSearchParams();
     if (input.reviewState) params.set("reviewState", input.reviewState);

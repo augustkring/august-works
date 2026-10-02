@@ -291,7 +291,7 @@ export function Foundation() {
           ) : null}
         </div>
 
-        <div className="grid min-h-[560px] gap-0 border-y border-border lg:grid-cols-[190px_270px_minmax(0,1fr)]">
+        <div className="grid min-h-(--sz-560px) gap-0 border-y border-border lg:grid-cols-(--gtc-foundation-browser)">
           <nav
             aria-label="Foundation categories"
             className="border-b border-border py-3 lg:border-b-0 lg:border-r lg:pr-3"
@@ -368,7 +368,7 @@ export function Foundation() {
                       <span className="min-w-0 truncate text-sm font-medium">
                         {item.title?.trim() || item.foundationKey}
                       </span>
-                      <Badge variant="outline" className={cn("shrink-0 text-[10px]", statusClass(item.status))}>
+                      <Badge variant="outline" className={cn("shrink-0 text-(length:--text-nano)", statusClass(item.status))}>
                         {STATUS_LABELS[item.status]}
                       </Badge>
                     </div>
@@ -383,7 +383,7 @@ export function Foundation() {
 
           <main className="min-w-0 py-4 lg:pl-5">
             {!foundationDocumentId ? (
-              <div className="flex min-h-[440px] items-center justify-center">
+              <div className="flex min-h-(--sz-440px) items-center justify-center">
                 <EmptyState
                   icon={FileText}
                   message="Choose a Foundation document to read or update."
@@ -954,7 +954,7 @@ function FoundationEditor({
           onChange={(body) => setState({ ...state, body })}
           placeholder="Write the company truth in clear Markdown…"
           bordered
-          contentClassName="min-h-[320px]"
+          contentClassName="min-h-(--sz-320px)"
         />
       </div>
 
@@ -1002,7 +1002,7 @@ function RevisionPanel({
   if (revisions.length === 0) return <p className="text-sm text-muted-foreground">No revisions yet.</p>;
 
   return (
-    <div className="grid gap-5 md:grid-cols-[170px_minmax(0,1fr)]">
+    <div className="grid gap-5 md:grid-cols-(--gtc-foundation-editor)">
       <div className="space-y-1">
         {revisions.map((revision) => (
           <button
@@ -1209,7 +1209,7 @@ function CreateFoundationDialog({
           onChange={setBody}
           placeholder="Write the first draft…"
           bordered
-          contentClassName="min-h-[240px]"
+          contentClassName="min-h-(--sz-240px)"
         />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
@@ -1277,7 +1277,7 @@ function ProposalDialog({
           value={body}
           onChange={setBody}
           bordered
-          contentClassName="min-h-[260px]"
+          contentClassName="min-h-(--sz-260px)"
         />
         <Input
           aria-label="Proposal summary"

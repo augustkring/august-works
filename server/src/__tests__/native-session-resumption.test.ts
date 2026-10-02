@@ -1378,7 +1378,12 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
       // fresh run ignores the stale native profile and stays on the legacy path.
       await db
         .update(agents)
-        .set({ adapterType: "codex_local" })
+        .set({ adapterType: "codex_local", adapterConfig: {
+          workspaceStrategy: { type: "project_primary" },
+          // This test replaces the provider adapter; satisfy its credential
+          // preflight without depending on the developer's host login.
+          env: { OPENAI_API_KEY: "test-mocked-adapter-not-a-provider-key" },
+        } })
         .where(eq(agents.id, agentId));
       await db.insert(issues).values({
         id: freshIssueId,

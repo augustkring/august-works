@@ -43,6 +43,12 @@ describe("company routes", () => {
     );
   });
 
+  it.each(["memory", "foundation", "knowledge", "workflows", "automation-artifacts", "pipelines"])("keeps %s navigation in the active company", (root) => {
+    expect(applyCompanyPrefix(`/${root}`, "AW")).toBe(`/AW/${root}`);
+    expect(extractCompanyPrefixFromPath(`/${root}`)).toBeNull();
+    expect(applyCompanyPrefix(`/AW/${root}`, "AW")).toBe(`/AW/${root}`);
+  });
+
   it("treats /search as a board route that needs a company prefix", () => {
     expect(isBoardPathWithoutPrefix("/search")).toBe(true);
     expect(extractCompanyPrefixFromPath("/search")).toBeNull();

@@ -1,5 +1,9 @@
 import { Router, type Request } from "express";
 import type { Db } from "@paperclipai/db";
+import { desc, eq } from "drizzle-orm";
+import { memoryJobs } from "@paperclipai/db";
+import { memoryJobService } from "../services/memory/memory-jobs.js";
+import { memoryMaintenanceInputSchema } from "../services/memory/memory-maintenance.js";
 import {
   memoryBindingInputSchema,
   memoryBindingTargetInputSchema,
@@ -8,9 +12,12 @@ import {
   memoryRecordListQuerySchema,
   memoryReviewReasonSchema,
   memoryRevokeInputSchema,
+  memoryRetentionPolicyInputSchema,
+  memorySourceDeletionInputSchema,
+  memoryDeletionLedgerInputSchema,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { notFound, unauthorized, unprocessable } from "../errors.js";
+import { forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
 import {
   instanceSettingsService,
   memoryService,
@@ -22,6 +29,7 @@ export function memoryRoutes(db: Db) {
   const router = Router();
   const svc = memoryService(db);
   const settings = instanceSettingsService(db);
+  const jobs = memoryJobService(db);
 
   async function assertMemoryEnabled() {
     const experimental = await settings.getExperimental();
@@ -76,6 +84,72 @@ export function memoryRoutes(db: Db) {
       });
     }
   }
+
+  router.get("/companies/:companyId/memory/jobs", async (req, res) => {
+    await assertMemoryEnabled();
+    const companyId = req.params.companyId as string;
+    assertBoardCompany(req, companyId);
+    if (!(await svc.getRetentionPolicy(companyId, boardActor(req))).canManage) throw forbidden("Memory jobs require an owner or administrator");
+    const rows = await db.select().from(memoryJobs).where(eq(memoryJobs.companyId, companyId)).orderBy(desc(memoryJobs.createdAt)).limit(50);
+    res.json(rows.map((row) => ({ id: row.id, operationType: row.operationType, status: row.status, attemptNumber: row.attemptNumber,
+      submittedAt: row.submittedAt, finishedAt: row.finishedAt, errorCode: row.errorCode,
+      result: row.operationType === "dedupe" || row.operationType === "compaction" || row.operationType === "reflection" || row.operationType === "index_refresh" ? row.resultJson : null })));
+  });
+  router.post("/companies/:companyId/memory/jobs", validate(memoryMaintenanceInputSchema), async (req, res) => {
+    await assertMemoryEnabled();
+    const companyId = req.params.companyId as string;
+    assertBoardCompany(req, companyId);
+    const actor = boardActor(req);
+    if (!(await svc.getRetentionPolicy(companyId, actor)).canManage) throw forbidden("Memory jobs require an owner or administrator");
+    const job = await jobs.enqueueMaintenance(companyId, req.body, actor, req.header("Idempotency-Key") ?? "");
+    res.status(202).json({ id: job.id, operationType: job.operationType, status: job.status });
+  });
+
+  router.get("/companies/:companyId/memory/export", async (req, res) => {
+    await assertMemoryEnabled();
+    const companyId = req.params.companyId as string;
+    assertBoardCompany(req, companyId);
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Content-Disposition", 'attachment; filename="memory-export.json"');
+    res.json(await svc.export(companyId, boardActor(req)));
+  });
+  router.get("/companies/:companyId/memory/deletion-ledger", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertBoardCompany(req, companyId);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await svc.exportDeletionLedger(companyId, boardActor(req)));
+  });
+  router.post("/companies/:companyId/memory/deletion-ledger/restore", validate(memoryDeletionLedgerInputSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertBoardCompany(req, companyId);
+    res.json(await svc.restoreDeletionLedger(companyId, req.body, boardActor(req)));
+  });
+  router.delete("/companies/:companyId/memory/records/:recordId", async (req, res) => {
+    await assertMemoryEnabled();
+    const companyId = req.params.companyId as string;
+    assertBoardCompany(req, companyId);
+    const actor = boardActor(req);
+    await assertSharedRecord(companyId, req.params.recordId as string, actor);
+    res.json(await svc.forget(companyId, req.params.recordId as string, actor));
+  });
+  router.get("/companies/:companyId/memory/retention-policy", async (req, res) => {
+    await assertMemoryEnabled();
+    const companyId = req.params.companyId as string;
+    assertBoardCompany(req, companyId);
+    res.json(await svc.getRetentionPolicy(companyId, boardActor(req)));
+  });
+  router.put("/companies/:companyId/memory/retention-policy", validate(memoryRetentionPolicyInputSchema), async (req, res) => {
+    await assertMemoryEnabled();
+    const companyId = req.params.companyId as string;
+    assertBoardCompany(req, companyId);
+    res.json(await svc.setRetentionPolicy(companyId, req.body, boardActor(req)));
+  });
+  router.post("/companies/:companyId/memory/source-deletions", validate(memorySourceDeletionInputSchema), async (req, res) => {
+    await assertMemoryEnabled();
+    const companyId = req.params.companyId as string;
+    assertBoardCompany(req, companyId);
+    res.json(await svc.forgetSource(companyId, req.body, boardActor(req)));
+  });
 
   router.get("/companies/:companyId/memory/records", async (req, res) => {
     await assertMemoryEnabled();

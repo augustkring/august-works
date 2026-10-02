@@ -1,9 +1,57 @@
 # August Works V4 Architecture Decisions
 
 **Status:** Accepted baseline  
-**Date:** 2026-09-28
+**Date:** 2026-09-28; implementation addendum 2026-10-02
 
 This ledger implements the ADR set required by the V4 Implementation Golden Master. Each record is an architectural baseline, not a prohibition on lower-level implementation evolution.
+
+## Implementation addendum — Durable authority, evidence and erasure
+
+**Status:** Implemented paths locally qualified; broader optimizer and target-environment acceptance remain open.
+
+Workflow runs retain the original execution principal. Recovery checks current
+membership and permissions before dispatch. Routines and Pipeline stages save
+the configuring principal; Pipeline execution rows retain that principal at
+enqueue time. An old configuration without this field must be saved by an
+identified authorized member. A responsible-owner label cannot grant authority.
+
+Connector nodes use the existing configured gateway, signed action requests,
+approvals and durable invocation receipts. Published catalogue hashes and step
+operation keys bind requests to immutable graph revisions. Recovery consumes
+the existing receipt. It does not create another provider write.
+
+Agent Task nodes accept an immutable typed result from the active assigned
+execution. Direct Agent Call nodes use the existing heartbeat queue, a durable
+wait and an immutable typed response. They do not create a Task. Wake requests
+carry opaque identifiers; the server reconstructs the published contract.
+
+Optimizer qualification uses explicit human reviews, actual replay, committed
+shadow observations and a bound approval. The automatic candidate path covers
+one pure scalar transform. Unknown shapes, revoked artifacts, human corrections
+and changed revisions cause fallback and quarantine. Semantic or larger spans
+need a separately reviewed replacement contract. This restriction is a stated
+implementation limit, not evidence that every V4 optimizer span is complete.
+
+Memory maintenance retains the review boundary. Dedupe uses equal accepted
+claims. Compaction creates a pending observation. Reflection requires an
+explicit operator lesson and at least two accepted sources; it creates a
+pending lesson. It does not make autonomous model output company truth.
+
+Memory erasure uses the existing company privacy lock, a content-free deletion
+ledger and a transactional log-erasure job. Derived workflow, agent, document,
+native-result and session payloads are cleared. Database guards block late
+child writes. Read guards hide restored payloads before cleanup. Log tombstones
+remain after physical deletion and prevent restored or late log uploads.
+Remote tombstone checks fail closed when storage cannot be checked. This can
+reduce log availability during a storage outage, but prevents deleted content
+from becoming visible. Erasure covers application-owned copies; it does not
+claim universal deletion from external providers or arbitrary workspace files.
+
+These choices add migrations 0304–0320 and reuse existing authorization,
+execution, approval and audit primitives. Rollout remains default-off. Reversal
+requires an additive compatibility plan; restoring an old database does not
+restore the right to serve erased content. See the migration runbook and
+`doc/operations/aw-v4-build-qualification.md` for checks and scope.
 
 ## ADR-001 — Foundation uses existing documents/revisions as canonical content store
 

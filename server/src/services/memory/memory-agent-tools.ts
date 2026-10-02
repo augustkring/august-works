@@ -1,3 +1,4 @@
+import { memoryPayloadVisible } from "./memory-privacy.js";
 import { createHash } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -123,7 +124,7 @@ async function existingOperationRecord(
       and(
         eq(memoryRecords.companyId, companyId),
         eq(memoryRecords.createdByOperationId, operationId),
-        isNull(memoryRecords.deletedAt),
+        memoryPayloadVisible(),
       ),
     )
     .limit(2);

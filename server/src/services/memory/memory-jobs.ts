@@ -1,4 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { getRunLogStore, type RunLogStore } from "../run-log-store.js";
+import { isDeepStrictEqual } from "node:util";
+import { executeMemoryMaintenance, memoryMaintenanceInputSchema, memoryMaintenanceSources } from "./memory-maintenance.js";
+import { memoryService, type MemoryMutationActor } from "./memory-service.js";
+import { conflict, unprocessable } from "../../errors.js";
+import { publishActivity } from "../activity-log.js";
 import {
   and,
   asc,
@@ -6,6 +12,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  or,
   sql,
 } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -13,12 +20,15 @@ import {
   heartbeatRuns,
   memoryJobs,
   memoryRecords,
+  memoryRetentionPolicies,
+  memoryDeletionMarkers,
 } from "@paperclipai/db";
 import type { MemoryJobOperationType } from "@paperclipai/shared";
 import { isUniqueViolation } from "../../db-errors.js";
 import { logger } from "../../middleware/logger.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { memoryPostRunExtractionService } from "./memory-post-run-extraction.js";
+import { expireMemoryPayloads, lockMemoryPrivacy, reapplyMemoryDeletionMarkers } from "./memory-privacy.js";
 
 const MEMORY_JOB_VERSION = "v1";
 const DEFAULT_LEASE_MS = 5 * 60_000;
@@ -64,6 +74,7 @@ function retentionJobKey(companyId: string, now: Date) {
 }
 
 export interface MemoryJobServiceOptions {
+  runLogStore?: Pick<RunLogStore, "erase">;
   ownerId?: string;
   leaseMs?: number;
   maxAttempts?: number;
@@ -225,14 +236,23 @@ export function memoryJobService(
       .selectDistinct({ companyId: memoryRecords.companyId })
       .from(memoryRecords)
       .where(
-        and(
-          eq(memoryRecords.retentionState, "active"),
-          isNotNull(memoryRecords.expiresAt),
-          lte(memoryRecords.expiresAt, now),
-        ),
+        or(and(eq(memoryRecords.retentionState, "active"), isNotNull(memoryRecords.expiresAt), lte(memoryRecords.expiresAt, now)),
+          sql`exists (select 1 from ${memoryDeletionMarkers}
+            where ${memoryDeletionMarkers.companyId} = ${memoryRecords.companyId}
+            and ${memoryDeletionMarkers.recordId} = ${memoryRecords.id}
+            and ${memoryRecords.deletedAt} is null)`),
       )
       .limit(RETENTION_COMPANY_LIMIT);
 
+    const configured = await db.select({ companyId: memoryRetentionPolicies.companyId }).from(memoryRetentionPolicies)
+      .where(and(isNotNull(memoryRetentionPolicies.maxAgeDays), sql`exists (
+        select 1 from ${memoryRecords} where ${memoryRecords.companyId} = ${memoryRetentionPolicies.companyId}
+        and ${memoryRecords.deletedAt} is null
+        and ${memoryRecords.observedAt} <= ${now.toISOString()}::timestamptz - (${memoryRetentionPolicies.maxAgeDays} * interval '1 day')
+      )`)).limit(RETENTION_COMPANY_LIMIT);
+    for (const row of configured) {
+      if (!companies.some((candidate) => candidate.companyId === row.companyId)) companies.push(row);
+    }
     let enqueued = 0;
     for (const { companyId } of companies) {
       const key = retentionJobKey(companyId, now);
@@ -302,9 +322,10 @@ export function memoryJobService(
       error?: string | null;
       now?: Date;
     },
+    targetDb: Db = db,
   ): Promise<void> {
     const now = input.now ?? new Date();
-    await db
+    await targetDb
       .update(memoryJobs)
       .set({
         status: input.status,
@@ -368,6 +389,20 @@ export function memoryJobService(
   }
 
   async function executeRetention(job: MemoryJob, now: Date) {
+    const source = record(job.sourceRefJson);
+    if (source.kind === "run_log_erasure") {
+      if (typeof source.runId !== "string" || typeof source.agentId !== "string" ||
+        source.logRef !== `${job.companyId}/${source.agentId}/${source.runId}.ndjson` ||
+        !/^[a-f0-9-]{36}$/i.test(source.runId) || !/^[a-f0-9-]{36}$/i.test(source.agentId)) {
+        throw unprocessable("Invalid log erasure binding", { code: "memory_log_erasure_binding_invalid" });
+      }
+      const store = options.runLogStore ?? getRunLogStore();
+      if (!store.erase) throw new Error("Run log store does not support erasure");
+      await store.erase({ store: "local_file", logRef: source.logRef as string });
+      return { summary: "Erased the application-owned workflow run log.", result: { erasedLogCount: 1 } };
+    }
+    // Restored erased payloads must be removed even with Memory switched off.
+    const restored = await reapplyMemoryDeletionMarkers(db, job.companyId);
     const experimental = await settings.getExperimental();
     if (
       experimental.enableCollectiveMemoryV1 !== true &&
@@ -378,30 +413,33 @@ export function memoryJobService(
         result: { expiredRecordCount: 0, asOf: now.toISOString(), disabled: true },
       };
     }
-    const expired = await db
-      .update(memoryRecords)
-      .set({
-        retentionState: "expired",
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(memoryRecords.companyId, job.companyId),
-          eq(memoryRecords.retentionState, "active"),
-          isNotNull(memoryRecords.expiresAt),
-          lte(memoryRecords.expiresAt, now),
-        ),
-      )
-      .returning({ id: memoryRecords.id });
+    const expired = await expireMemoryPayloads(db, job.companyId, now);
+    const deletedRecordCount = restored.deletedRecordCount + expired.deletedRecordCount;
     return {
-      summary: `Expired ${expired.length} Memory record(s).`,
-      result: { expiredRecordCount: expired.length, asOf: now.toISOString() },
+      summary: `Deleted ${deletedRecordCount} expired or previously erased Memory payload(s).`,
+      result: { expiredRecordCount: deletedRecordCount, asOf: now.toISOString() },
     };
   }
 
   async function executeClaimed(job: MemoryJob): Promise<void> {
     const now = new Date();
     try {
+      if (["dedupe", "compaction", "reflection", "index_refresh"].includes(job.operationType)) {
+        if (!(await settings.getExperimental()).enableCollectiveMemoryV1) throw conflict("Memory maintenance is disabled");
+        const publication = await db.transaction(async (tx) => {
+          await lockMemoryPrivacy(tx as unknown as Db, job.companyId);
+          const [owned] = await tx.select().from(memoryJobs).where(and(eq(memoryJobs.id, job.id), eq(memoryJobs.companyId, job.companyId),
+            eq(memoryJobs.status, "running"), eq(memoryJobs.executionOwnerId, ownerId))).for("update");
+          if (!owned?.leaseExpiresAt || owned.leaseExpiresAt <= new Date()) throw conflict("Memory job lease was lost");
+          await tx.execute(sql`set local statement_timeout = '5000'`);
+          const output = await executeMemoryMaintenance(tx as unknown as Db, owned);
+          if (owned.leaseExpiresAt <= new Date()) throw conflict("Memory job lease expired during maintenance");
+          await settle(owned, { status: "succeeded", resultSummary: "Native Memory maintenance completed.", resultJson: output.result }, tx as unknown as Db);
+          return output.publication;
+        });
+        publishActivity(publication);
+        return;
+      }
       if (job.operationType === "capture") {
         const output = await executeCapture(job);
         await settle(job, {
@@ -558,6 +596,27 @@ export function memoryJobService(
   }
 
   return {
+    enqueueMaintenance: async (companyId: string, rawInput: unknown, actor: MemoryMutationActor, idempotencyKey: string) => {
+      const input = memoryMaintenanceInputSchema.parse(rawInput);
+      if (!idempotencyKey.trim() || idempotencyKey.length > 160) throw unprocessable("A bounded Idempotency-Key is required");
+      if (!(await memoryService(db).getRetentionPolicy(companyId, actor)).canManage) throw conflict("Memory maintenance permission was revoked");
+      const jobKey = `maintenance:v1:${idempotencyKey}`;
+      const [existing] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId), eq(memoryJobs.jobKey, jobKey), eq(memoryJobs.attemptNumber, 1)));
+      const sameRequest = (job: MemoryJob) => job.operationType === input.operationType &&
+        isDeepStrictEqual(job.sourceRefJson.recordIds, [...input.recordIds].sort()) && isDeepStrictEqual(job.sourceRefJson.requester, actor.principal) &&
+        isDeepStrictEqual(job.sourceRefJson.proposedLesson, input.proposedLesson);
+      if (existing) {
+        if (!sameRequest(existing)) throw conflict("Idempotency key is already bound to a different or erased request");
+        return existing;
+      }
+      const sources = await memoryMaintenanceSources(db, companyId, input.recordIds, actor);
+      const sourceRefJson = { recordIds: [...input.recordIds].sort(), requester: actor.principal,
+        ...(input.proposedLesson ? { proposedLesson: input.proposedLesson } : {}),
+        recordVersions: Object.fromEntries(sources.map((row) => [row.id, row.updatedAt.toISOString()])) };
+      const job = await enqueue({ companyId, operationType: input.operationType, jobKey, sourceRefJson });
+      if (!sameRequest(job)) throw conflict("Idempotency key is already bound to a different maintenance request");
+      return job;
+    },
     enqueuePostRunCapture,
     enqueueMissingPostRunCaptures,
     enqueueDueRetentionJobs,

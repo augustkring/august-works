@@ -1,4 +1,5 @@
 import { verifyAppWebhook } from "./app-webhook.js";
+import { workflowDelegationForActor } from "./workflows/workflow-delegation.js";
 import crypto from "node:crypto";
 import { verifyFirefliesWebhook } from "./fireflies-webhook.js";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, ne, not, or, sql } from "drizzle-orm";
@@ -638,6 +639,7 @@ function routineRevisionSnapshotRoutine(routine: RoutineRow): RoutineRevisionSna
     assigneeAgentId: routine.assigneeAgentId,
     executionTargetKind: routine.executionTargetKind,
     executionTargetRef: routine.executionTargetRef,
+    workflowExecutionPrincipal: routine.workflowExecutionPrincipal,
     priority: routine.priority as RoutineRevisionSnapshotV1["routine"]["priority"],
     status: routine.status as RoutineRevisionSnapshotV1["routine"]["status"],
     concurrencyPolicy: routine.concurrencyPolicy as RoutineRevisionSnapshotV1["routine"]["concurrencyPolicy"],
@@ -839,11 +841,13 @@ export function routineService(
     return resolveRoutineExecutionTarget(existing);
   }
 
-  function workflowActorForRoutine(
+  async function workflowActorForRoutine(
+    companyId: string,
     source: "schedule" | "manual" | "api" | "webhook",
     actor: Actor | undefined,
     responsibleUserId: string | null,
-  ): WorkflowRunActor {
+    delegation: RoutineRow["workflowExecutionPrincipal"],
+  ): Promise<WorkflowRunActor> {
     if (source === "manual" && actor?.userId) {
       return {
         principal: { type: "user", userId: actor.userId },
@@ -859,6 +863,11 @@ export function routineService(
         },
         responsibleUserId,
       };
+    }
+    if (delegation) {
+      await workflowDelegationForActor(db, companyId, delegation.type === "user" ? { userId: delegation.userId }
+        : delegation.type === "agent" ? { agentId: delegation.agentId } : {});
+      return { principal: delegation, responsibleUserId };
     }
     return {
       principal: {
@@ -2173,10 +2182,12 @@ export function routineService(
           input.routine.companyId,
           executionTarget.workflowId,
         );
-        const workflowActor = workflowActorForRoutine(
+        const workflowActor = await workflowActorForRoutine(
+          input.routine.companyId,
           input.source,
           input.actor,
           responsibleUserId,
+          input.routine.workflowExecutionPrincipal,
         );
         const workflowPayload = {
           ...(triggerPayload ?? {}),
@@ -2603,6 +2614,7 @@ export function routineService(
       await assertRoutineFolder(companyId, input.folderId ?? null);
       const executionTarget = requestedRoutineExecutionTarget(input);
       const targetStorage = executionTargetStorage(executionTarget);
+      const workflowExecutionPrincipal = executionTarget?.kind === "workflow" ? await workflowDelegationForActor(db, companyId, actor) : null;
       const status = normalizeDraftRoutineStatus(input.status, executionTarget);
       await assertRoutineExecutionTarget(companyId, executionTarget, {
         requireRunnable: status === "active",
@@ -2639,6 +2651,7 @@ export function routineService(
             assigneeAgentId: targetStorage.assigneeAgentId,
             executionTargetKind: targetStorage.executionTargetKind,
             executionTargetRef: targetStorage.executionTargetRef,
+            workflowExecutionPrincipal,
             priority: input.priority,
             status,
             concurrencyPolicy: input.concurrencyPolicy,
@@ -2679,6 +2692,7 @@ export function routineService(
       const nextExecutionTarget = resolveUpdatedRoutineExecutionTarget(existing, patch);
       const nextTargetStorage = executionTargetStorage(nextExecutionTarget);
       const nextAssigneeAgentId = nextTargetStorage.assigneeAgentId;
+      const workflowExecutionPrincipal = nextExecutionTarget?.kind === "workflow" ? await workflowDelegationForActor(db, existing.companyId, actor) : null;
       const targetChanged =
         JSON.stringify(existingExecutionTarget) !==
         JSON.stringify(nextExecutionTarget);
@@ -2771,6 +2785,7 @@ export function routineService(
           assigneeAgentId: nextAssigneeAgentId,
           executionTargetKind: nextTargetStorage.executionTargetKind,
           executionTargetRef: nextTargetStorage.executionTargetRef,
+          workflowExecutionPrincipal,
           priority: patch.priority ?? locked.priority,
           status: nextStatus,
           concurrencyPolicy: patch.concurrencyPolicy ?? locked.concurrencyPolicy,
@@ -2838,6 +2853,7 @@ export function routineService(
             assigneeAgentId: candidate.assigneeAgentId,
             executionTargetKind: candidate.executionTargetKind,
             executionTargetRef: candidate.executionTargetRef,
+            workflowExecutionPrincipal: candidate.workflowExecutionPrincipal,
             priority: candidate.priority,
             status: candidate.status,
             concurrencyPolicy: candidate.concurrencyPolicy,
@@ -3215,6 +3231,7 @@ export function routineService(
             assigneeAgentId: restoredTargetStorage.assigneeAgentId,
             executionTargetKind: restoredTargetStorage.executionTargetKind,
             executionTargetRef: restoredTargetStorage.executionTargetRef,
+            workflowExecutionPrincipal: restoredTargetStorage.executionTargetKind === "workflow" ? await workflowDelegationForActor(txDb, locked.companyId, actor) : null,
             priority: routineSnapshot.priority,
             status: routineSnapshot.status,
             concurrencyPolicy: routineSnapshot.concurrencyPolicy,

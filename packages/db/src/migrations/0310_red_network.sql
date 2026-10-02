@@ -1,0 +1,1 @@
+ALTER TABLE "workflow_step_runs" ADD COLUMN "memory_record_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;

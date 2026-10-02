@@ -2,6 +2,8 @@ import { and, asc, eq, ilike, ne, or } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  automationArtifacts,
+  automationArtifactVersions,
   toolApplications,
   toolCatalogEntries,
   toolConnections,
@@ -16,12 +18,21 @@ import {
   type WorkflowSideEffectClass,
 } from "@paperclipai/shared";
 import { projectedConnectionToolInputSchema } from "../tool-access.js";
+import { instanceSettingsService } from "../instance-settings.js";
 import { workflowNodeDefinitions } from "./workflow-node-registry.js";
 
 const CORE_CAPABILITY_TYPES = new Set([
   "core.manual_trigger",
   "core.transform",
   "core.condition",
+  "core.switch",
+  "core.merge",
+  "core.parallel",
+  "core.http_request",
+  "core.map",
+  "core.subworkflow",
+  "native.foundation_query",
+  "native.memory_recall",
   "core.wait",
   "work.create_task",
   "human.approval",
@@ -37,6 +48,21 @@ function coreConfigTemplate(type: string): Record<string, unknown> {
       return { mapping: { value: "{{input.value}}" } };
     case "core.condition":
       return { expression: "true" };
+    case "core.switch":
+      return { cases: [{ key: "match", expression: "true" }], defaultBranch: "default" };
+    case "core.merge":
+      return { mode: "all" };
+    case "core.parallel":
+      return { concurrency: 1 };
+    case "core.subworkflow":
+      return { workflowId: "", revisionId: "", inputMapping: {}, timeoutSeconds: 3600, cancellationPolicy: "propagate" };
+    case "core.map":
+      return { collection: "{{input.items}}", mapping: { value: "{{input.item}}" }, maxItems: 32, concurrency: 1, perItemTimeoutSeconds: 1, failurePolicy: "fail_workflow" };
+    case "core.http_request":
+      return { url: "", method: "GET", responseMode: "json", maxResponseBytes: 65_536, responseSchema: null };
+    case "native.foundation_query":
+    case "native.memory_recall":
+      return { query: "{{input.query}}", limit: 8 };
     case "core.wait":
       return { durationSeconds: 300 };
     case "work.create_task":
@@ -317,6 +343,8 @@ export function workflowCapabilityResolverService(db: Db) {
               configTemplate: {
                 toolCatalogEntryId: catalogEntry.id,
                 connectionId: connection.id,
+                catalogVersionHash: catalogEntry.versionHash,
+                catalogSchemaHash: catalogEntry.schemaHash,
                 input: {},
               },
               executionMode: "deterministic",
@@ -413,10 +441,36 @@ export function workflowCapabilityResolverService(db: Db) {
             })
           : [];
 
-      const core =
-        parsed.kind && parsed.kind !== "core_node" ? [] : coreCandidates();
+      const flags = await instanceSettingsService(db).getExperimental();
+      const core = (parsed.kind && parsed.kind !== "core_node" ? [] : coreCandidates()).filter((candidate) =>
+        (candidate.nodeType !== "native.foundation_query" || flags.enableFoundationV1) &&
+        (candidate.nodeType !== "native.memory_recall" || flags.enableCollectiveMemoryV1));
+      const artifactRows = flags.enableAutomationArtifactsV1 === true && (!parsed.kind || parsed.kind === "core_node")
+        ? await db.select({ artifact: automationArtifacts, version: automationArtifactVersions })
+          .from(automationArtifacts).innerJoin(automationArtifactVersions, and(
+            eq(automationArtifactVersions.companyId, companyId),
+            eq(automationArtifactVersions.artifactId, automationArtifacts.id),
+            eq(automationArtifactVersions.id, automationArtifacts.latestVersionId)))
+          .where(and(eq(automationArtifacts.companyId, companyId), eq(automationArtifacts.status, "active")))
+          .orderBy(asc(automationArtifacts.name)).limit(candidateLimit)
+        : [];
+      const artifactCandidates: WorkflowCapabilityCandidate[] = artifactRows
+        .filter(({ artifact }) => artifact.sideEffectClass === "pure" && ["C0", "C1"].includes(artifact.riskClass) &&
+          ["expression", "transform", "typescript"].includes(artifact.kind))
+        .map(({ artifact, version }) => ({
+          id: `artifact:${artifact.id}:${version.id}`, kind: "core_node", title: artifact.name,
+          description: artifact.description, nodeType: "automation.artifact",
+          configTemplate: { artifactId: artifact.id, artifactVersionId: version.id },
+          executionMode: "deterministic", sideEffectClass: artifact.sideEffectClass, riskClass: artifact.riskClass,
+          inputSchema: version.inputSchema, outputSchema: version.outputSchema, requiredPermissions: [],
+          availability: { status: "available", reason: null },
+          operationalProfile: { reliabilityBasis: "static_contract", reliabilitySignal: "reviewed_version",
+            latencyProfile: "bounded", costProfile: "no_model_inference" },
+          publishState: "ready", publishBlockedReason: null,
+          source: { registryNodeType: "automation.artifact" },
+        }));
       const candidates = rankWorkflowCapabilities(
-        [...core, ...tools, ...agentCandidates],
+        [...core, ...artifactCandidates, ...tools, ...agentCandidates],
         parsed,
       );
       return { query: parsed.q, candidates };

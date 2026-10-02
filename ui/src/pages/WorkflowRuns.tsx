@@ -170,7 +170,7 @@ export function WorkflowRuns() {
                 key={run.id}
                 type="button"
                 onClick={() => navigate(`/workflows/${workflowId}/runs/${run.id}`)}
-                className="grid w-full gap-3 px-2 py-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[minmax(0,1fr)_auto]"
+                className="grid w-full gap-3 px-2 py-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-(--gtc-13)"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

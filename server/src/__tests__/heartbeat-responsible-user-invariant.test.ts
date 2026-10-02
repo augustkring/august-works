@@ -1,3 +1,4 @@
+import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -149,7 +150,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
       role: "engineer",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } },
       permissions: {},
     });
@@ -470,7 +471,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
       role: "engineer",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: { heartbeat: { wakeOnDemand: true } },
       permissions: {},
     });
@@ -518,7 +519,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
       role: "engineer",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: { heartbeat: { wakeOnDemand: true } },
       permissions: {},
     });

@@ -13,6 +13,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type {
+  ExecutionPrincipal,
   WorkflowGraphV1,
   WorkflowJsonSchema,
   WorkflowWaitKind,
@@ -86,6 +87,11 @@ export const workflowRuns = pgTable(
     source: text("source").notNull().default("manual"),
     triggerPayload: jsonb("trigger_payload").$type<Record<string, unknown>>().notNull().default({}),
     responsibleUserId: text("responsible_user_id"),
+    executionPrincipal: jsonb("execution_principal").$type<ExecutionPrincipal>(),
+    memoryRecordIds: jsonb("memory_record_ids").$type<string[]>().notNull().default([]),
+    parentWorkflowRunId: uuid("parent_workflow_run_id").references((): AnyPgColumn => workflowRuns.id, { onDelete: "set null" }),
+    parentNodeId: text("parent_node_id"),
+    executionAgentRunId: uuid("execution_agent_run_id").references(() => heartbeatRuns.id, { onDelete: "set null" }),
     idempotencyKey: text("idempotency_key"),
     correlationId: text("correlation_id"),
     retryOfRunId: uuid("retry_of_run_id").references(
@@ -173,6 +179,12 @@ export const workflowStepRuns = pgTable(
     status: text("status").notNull().default("pending"),
     inputJson: jsonb("input_json").$type<unknown>(),
     outputJson: jsonb("output_json").$type<unknown>(),
+    failureResolution: jsonb("failure_resolution").$type<{ policy: "follow_failure_branch" | "continue_with_null" | "wait_for_human"; resolved: boolean }>(),
+    memoryRecordIds: jsonb("memory_record_ids").$type<string[]>().notNull().default([]),
+    taskResultJson: jsonb("task_result_json").$type<unknown>(),
+    taskResultAcceptedAt: timestamp("task_result_accepted_at", { withTimezone: true }),
+    taskResultRunId: uuid("task_result_run_id").references(() => heartbeatRuns.id, { onDelete: "set null" }),
+    childWorkflowRunId: uuid("child_workflow_run_id").references(() => workflowRuns.id, { onDelete: "set null" }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     durationMs: integer("duration_ms"),
@@ -196,6 +208,7 @@ export const workflowStepRuns = pgTable(
       table.workflowRunId,
       table.status,
     ),
+    heartbeatRunIdx: index("workflow_step_runs_company_heartbeat_idx").on(table.companyId, table.heartbeatRunId),
     statusCheck: check(
       "workflow_step_runs_status_check",
       sql`${table.status} in ('pending', 'running', 'waiting', 'retry_scheduled', 'retried', 'succeeded', 'failed', 'skipped', 'cancelling', 'cancelled')`,
@@ -259,7 +272,7 @@ export const workflowWaits = pgTable(
       .where(sql`${table.signalTokenHash} is not null`),
     kindCheck: check(
       "workflow_waits_kind_check",
-      sql`${table.kind} in ('delay', 'human_interaction', 'external_callback', 'task_completion', 'external_agent_run')`,
+      sql`${table.kind} in ('delay', 'human_interaction', 'external_callback', 'task_completion', 'external_agent_run', 'direct_agent_run', 'tool_action', 'subworkflow')`,
     ),
     statusCheck: check(
       "workflow_waits_status_check",

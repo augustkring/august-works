@@ -5241,6 +5241,43 @@ rl.on("line", (line) => {
     bridge.mockRestore();
   });
 
+  it("bounds cancellation and timeout of a local stdio child that ignores termination", async () => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { run } = await createIssueAndRun(db, company.id, agent.id);
+    const local = await createLocalStdioMcpTool(db, company.id, { stdioScript:
+      `process.on("SIGTERM", () => {}); setInterval(() => {}, 1000); process.stdin.resume();` });
+    const name = expectedConnectedToolName({ applicationKey: local.application.applicationKey,
+      connectionId: local.connection.id, toolName: local.catalogEntry.toolName! });
+    await allowToolsForAgent(db, company.id, agent.id, [name]);
+    const gateway = createTestToolGatewayService(db);
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+    const started = Date.now();
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: name,
+      parameters: { message: "never returns" }, timeoutMs: 200 })).rejects.toMatchObject({ reasonCode: "tool_timeout" });
+    expect(Date.now() - started).toBeLessThan(4_000);
+    const abort = new AbortController();
+    const cancelled = gateway.executeTool({ sessionToken: session.token, tool: name,
+      parameters: { message: "cancel" }, timeoutMs: 10_000, signal: abort.signal });
+    setTimeout(() => abort.abort(), 200);
+    await expect(cancelled).rejects.toMatchObject({ reasonCode: "tool_cancelled" });
+  });
+
+  it("bounds an unterminated local stdio response", async () => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { run } = await createIssueAndRun(db, company.id, agent.id);
+    const local = await createLocalStdioMcpTool(db, company.id, { stdioScript:
+      `process.stdin.once("data", () => process.stdout.write("x".repeat(1_100_000))); process.stdin.resume();` });
+    const name = expectedConnectedToolName({ applicationKey: local.application.applicationKey,
+      connectionId: local.connection.id, toolName: local.catalogEntry.toolName! });
+    await allowToolsForAgent(db, company.id, agent.id, [name]);
+    const gateway = createTestToolGatewayService(db);
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: name,
+      parameters: { message: "oversized" } })).rejects.toMatchObject({ reasonCode: "local_stdio_protocol_error" });
+  });
+
   it("fails closed for hosted public local stdio unless a trusted runtime host is configured", async () => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);

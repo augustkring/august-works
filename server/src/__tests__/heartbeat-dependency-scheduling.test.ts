@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -188,7 +189,7 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       role: "engineer",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } },
       permissions: {},
     });
@@ -286,7 +287,7 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       role: "engineer",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } },
       permissions: {},
     });
@@ -382,7 +383,7 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       role: "engineer",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           wakeOnDemand: true,
@@ -637,7 +638,7 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       role: "engineer",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           wakeOnDemand: true,
@@ -770,7 +771,7 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       role: "engineer",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           wakeOnDemand: true,
@@ -907,7 +908,7 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       role: "qa",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           wakeOnDemand: true,
@@ -1107,7 +1108,7 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       role: "engineer",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           wakeOnDemand: true,
@@ -1239,7 +1240,7 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       role: "engineer",
       status: "active",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           wakeOnDemand: true,

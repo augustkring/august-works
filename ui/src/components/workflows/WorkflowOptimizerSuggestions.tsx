@@ -8,6 +8,7 @@ import {
 import type {
   OptimizerCandidateSuggestion,
   OptimizerSuggestionResponse,
+  WorkflowOptimizerSuggestion,
 } from "@paperclipai/shared";
 
 import { workflowsApi } from "@/api/workflows";
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { queryKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
+import { WorkflowOptimizerCandidateForm, WorkflowOptimizerEvaluations } from "./WorkflowOptimizerEvaluations";
 
 function percentage(value: number): string {
   return `${Math.round(value * 100)}%`;
@@ -99,8 +101,12 @@ function stateMessage(result: OptimizerSuggestionResponse): {
 
 function Suggestion({
   suggestion,
+  companyId,
+  workflowId,
 }: {
-  suggestion: OptimizerCandidateSuggestion;
+  suggestion: WorkflowOptimizerSuggestion;
+  companyId: string;
+  workflowId: string;
 }) {
   const riskTone =
     suggestion.sideEffectRisk === "low"
@@ -126,7 +132,7 @@ function Suggestion({
         </Badge>
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-(length:--text-micro)">
         <div>
           <dt className="text-muted-foreground">Observed</dt>
           <dd className="mt-0.5 font-medium">{suggestion.observationCount} runs</dd>
@@ -150,7 +156,7 @@ function Suggestion({
       </dl>
 
       <div className="mt-3 border-t border-border/70 pt-3">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="text-(length:--text-nano) font-medium uppercase tracking-wide text-muted-foreground">
           Affected span
         </p>
         <p className="mt-1 break-words text-xs leading-5">
@@ -162,7 +168,7 @@ function Suggestion({
         <summary className="cursor-pointer rounded-sm text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Review evidence
         </summary>
-        <div className="mt-3 space-y-2 text-[11px] leading-4 text-muted-foreground">
+        <div className="mt-3 space-y-2 text-(length:--text-micro) leading-4 text-muted-foreground">
           <p>
             Input shape stability: {percentage(suggestion.inputShapeStability)} · output shape stability: {percentage(suggestion.outputShapeStability)}.
           </p>
@@ -170,7 +176,7 @@ function Suggestion({
             Human correction rate: {measuredPercentage(suggestion.humanCorrectionRate)} ({suggestion.humanCorrectionEvidenceCount}/{suggestion.observationCount} runs measured). Average observed runtime: {duration(suggestion.averageDurationMs)}. Average observed cost: {cents(suggestion.averageCost)}.
           </p>
           <p>
-            Shadow evidence: not available yet. Unsupported cases and fallback guards are established by the compiler/replay gates before any promotion.
+            Qualification results and shadow observations are recorded separately for each replacement candidate below.
           </p>
           <p>
             Current workflow remains authoritative. This suggestion has not changed the draft or published workflow.
@@ -178,31 +184,7 @@ function Suggestion({
         </div>
       </details>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled
-          title="Historical replay is introduced in PR 46."
-        >
-          Run replay
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled
-          title="Shadow execution is introduced in PR 47."
-        >
-          Start shadow
-        </Button>
-        <Button
-          size="sm"
-          disabled
-          title="Promotion remains disabled until replay, shadow, fallback, and risk policy gates are implemented."
-        >
-          Promote
-        </Button>
-      </div>
+      <WorkflowOptimizerCandidateForm companyId={companyId} workflowId={workflowId} suggestion={suggestion} />
     </section>
   );
 }
@@ -263,26 +245,26 @@ export function WorkflowOptimizerSuggestions({
           <Gauge className="h-4 w-4 text-muted-foreground" />
           <p className="text-xs font-semibold">Optimizer</p>
         </div>
-        <Badge variant="outline">Suggestion only</Badge>
+        <Badge variant="outline">Governed qualification</Badge>
       </div>
 
       {message ? (
         <div className="border-l-2 border-border pl-3">
           <p className="text-xs font-medium">{message.title}</p>
-          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+          <p className="mt-1 text-(length:--text-micro) leading-5 text-muted-foreground">
             {message.body}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-4 text-(length:--text-nano) text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <Activity className="h-3 w-3" />
               Historical traces
             </span>
             <span className="inline-flex items-center gap-1">
               <ShieldCheck className="h-3 w-3" />
-              No production mutation
+              Reviewed evidence
             </span>
             <span className="inline-flex items-center gap-1">
               <Clock3 className="h-3 w-3" />
@@ -293,10 +275,13 @@ export function WorkflowOptimizerSuggestions({
             <Suggestion
               key={suggestion.signatureHash}
               suggestion={suggestion}
+              companyId={companyId}
+              workflowId={workflowId}
             />
           ))}
         </div>
       )}
+      <WorkflowOptimizerEvaluations companyId={companyId} workflowId={workflowId} />
     </section>
   );
 }

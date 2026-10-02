@@ -1,14 +1,24 @@
+import { WorkflowCheckpointError } from "./workflow-errors.js";
+import { assertWorkflowTaskAssignmentAuthorized } from "./workflow-task-authority.js";
+import { directAgentConfig, dispatchDirectAgent } from "./workflow-direct-agent.js";
+import { executeOptimizedWorkflowTransform } from "../optimizer/optimizer-workflow-runtime.js";
+import { subworkflowConfig, requireSubworkflowRevision, assertSubworkflowGraph } from "./workflow-subworkflow.js";
+import { executeWorkflowMap } from "./workflow-map.js";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  agentWakeupRequests,
   approvals,
   companyMemberships,
+  memoryDeletionMarkers,
   heartbeatRuns,
   issues,
   routineRuns,
+  toolActionRequests,
+  toolInvocations,
   workflowRevisions,
   workflowRuns,
   workflowStepRuns,
@@ -34,13 +44,12 @@ import {
   queueIssueAssignmentWakeup,
   type IssueAssignmentWakeupDeps,
 } from "../issue-assignment-wakeup.js";
-import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
+import { conflict, forbidden, HttpError, notFound, unprocessable } from "../../errors.js";
+import { automationArtifactRuntimeService } from "../automation-artifacts/automation-artifact-runtime.js";
+import { getAssignedMcpGateway } from "../native-runtime/assigned-mcp-tools.js";
+import { ToolGatewayHttpError, type ToolGatewayService } from "../tool-gateway.js";
 import { isUniqueViolation } from "../../db-errors.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
-import {
-  authorizationService,
-  type AuthorizationActor,
-} from "../authorization.js";
 import { issueService } from "../issues.js";
 import {
   evaluateWorkflowConditionExpression,
@@ -57,11 +66,16 @@ import {
   workflowStepIdempotencyKey,
 } from "./workflow-execution-policy.js";
 import { workflowNodeDefinitions } from "./workflow-node-registry.js";
+import { resolveToolActionWait, scheduleToolActionWait } from "./workflow-tool-action-wait.js";
+import { executeNativeWorkflowQuery } from "./workflow-native-nodes.js";
+import { executeWorkflowHttpRequest } from "./workflow-http-request.js";
+import { assertMemoryRecordsRetained, lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import {
   validateWorkflowOutput,
   WorkflowOutputSchemaError,
 } from "./workflow-output-schema.js";
 
+const EXECUTABLE_WORKFLOW_NODE_TYPES = new Set(["core.manual_trigger", "core.transform", "core.condition", "core.switch", "core.merge", "core.parallel", "core.wait", "core.http_request", "core.map", "core.subworkflow", "human.approval", "work.create_task", "agent.task", "agent.external", "agent.direct_call", "automation.artifact", "connector.action", "native.foundation_query", "native.memory_recall"]);
 const WORKFLOW_EXECUTION_LEASE_MS = 30_000;
 const ABANDONED_QUEUED_RUN_AGE_MS = 30_000;
 
@@ -88,6 +102,7 @@ export interface WorkflowRunActor {
   principal: ExecutionPrincipal;
   runId?: string | null;
   responsibleUserId?: string | null;
+  memoryRecordIds?: string[];
 }
 
 type WorkflowHeartbeatRuntime = IssueAssignmentWakeupDeps & {
@@ -100,6 +115,7 @@ type WorkflowHeartbeatRuntime = IssueAssignmentWakeupDeps & {
 
 export interface WorkflowExecutorRuntimeDeps {
   heartbeat?: WorkflowHeartbeatRuntime;
+  toolGateway?: ToolGatewayService;
 }
 
 function workflowActivityActor(actor: WorkflowRunActor) {
@@ -188,7 +204,7 @@ async function assertActorCompanyScope(
   if (actor.principal.type === "system") return;
   if (actor.principal.type === "agent") {
     const agent = await db
-      .select({ id: agents.id })
+      .select({ id: agents.id, status: agents.status })
       .from(agents)
       .where(
         and(
@@ -197,7 +213,7 @@ async function assertActorCompanyScope(
         ),
       )
       .then((rows) => rows[0] ?? null);
-    if (!agent) {
+    if (!agent || !["active", "idle", "running"].includes(agent.status)) {
       throw forbidden("Agent does not belong to this company", {
         code: "company_boundary_denied",
       });
@@ -256,10 +272,16 @@ async function getRunDetail(
       )
       .orderBy(asc(workflowWaits.createdAt)),
   ]);
+  const recordIds = [...new Set([...run.memoryRecordIds, ...steps.flatMap((step) => step.memoryRecordIds)])];
+  const erased = recordIds.length ? await db.select({ id: memoryDeletionMarkers.recordId }).from(memoryDeletionMarkers).where(and(
+    eq(memoryDeletionMarkers.companyId, companyId), inArray(memoryDeletionMarkers.recordId, recordIds))) : [];
+  const erasedIds = new Set(erased.map((row) => row.id));
   return {
-    run: mapRun(run),
-    steps: steps.map(mapStep),
-    waits: waits.map(mapWait),
+    run: run.memoryRecordIds.some((id) => erasedIds.has(id)) ? { ...mapRun(run), triggerPayload: {} } : mapRun(run),
+    steps: steps.map((step) => step.memoryRecordIds.some((id) => erasedIds.has(id))
+      ? { ...mapStep(step), inputJson: null, outputJson: null, taskResultJson: null, errorMessage: null, payloadDeleted: true } : mapStep(step)),
+    waits: waits.map((wait) => steps.some((step) => step.nodeId === wait.nodeId && step.memoryRecordIds.some((id) => erasedIds.has(id)))
+      ? { ...mapWait(wait), resolutionJson: null } : mapWait(wait)),
   };
 }
 
@@ -322,6 +344,8 @@ export interface EnqueueWorkflowRunInput {
   retryOfRunId?: string | null;
   idempotencyRootRunId?: string | null;
   actor: WorkflowRunActor;
+  parentWorkflowRunId?: string;
+  parentNodeId?: string;
 }
 
 export async function enqueueWorkflowRunInTransaction(
@@ -356,6 +380,11 @@ export async function enqueueWorkflowRunInTransaction(
       source: input.source,
       triggerPayload: input.triggerPayload,
       responsibleUserId: input.responsibleUserId,
+      executionPrincipal: input.actor.principal,
+      memoryRecordIds: input.actor.memoryRecordIds ?? [],
+      parentWorkflowRunId: input.parentWorkflowRunId ?? null,
+      parentNodeId: input.parentNodeId ?? null,
+      executionAgentRunId: input.actor.principal.type === "agent" ? input.actor.runId ?? null : null,
       idempotencyKey: input.idempotencyKey,
       correlationId: input.correlationId,
       retryOfRunId: input.retryOfRunId ?? null,
@@ -373,6 +402,7 @@ export async function enqueueWorkflowRunInTransaction(
     attempt: 1,
     status: "pending",
     inputJson: input.triggerPayload,
+    memoryRecordIds: input.actor.memoryRecordIds ?? [],
     createdAt: now,
     updatedAt: now,
   });
@@ -546,6 +576,21 @@ function reachableFrom(
 }
 
 async function createPendingStep(
+  db: Db, run: typeof workflowRuns.$inferSelect, nodeId: string, inputJson: unknown, attempt = 1,
+  memoryRecordIds: string[] = [],
+) {
+  if (!memoryRecordIds.length) return createPendingStepRow(db, run, nodeId, inputJson, attempt);
+  return db.transaction(async (tx) => {
+    const scopedDb = tx as unknown as Db;
+    await lockMemoryPrivacy(scopedDb, run.companyId);
+    await assertMemoryRecordsRetained(scopedDb, run.companyId, memoryRecordIds);
+    const pending = await createPendingStepRow(scopedDb, run, nodeId, inputJson, attempt);
+    const [tagged] = await tx.update(workflowStepRuns).set({ memoryRecordIds }).where(eq(workflowStepRuns.id, pending.id)).returning();
+    return tagged;
+  });
+}
+
+async function createPendingStepRow(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
   nodeId: string,
@@ -661,11 +706,22 @@ async function completeRunningStep(
   );
   const publications: ActivityPublication[] = [];
   const finished = await db.transaction(async (tx) => {
+    if (actor.memoryRecordIds?.length) {
+      await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
+      await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, actor.memoryRecordIds);
+    }
+    const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.id, run.id),
+      eq(workflowRuns.companyId, run.companyId))).for("update");
+    if (owned?.status !== "running" || owned.executionOwnerId !== run.executionOwnerId ||
+      !owned.leaseExpiresAt || owned.leaseExpiresAt <= finishedAt) {
+      throw conflict("Workflow execution ownership changed before checkpoint", { code: "workflow_run_claim_lost" });
+    }
     const [row] = await tx
       .update(workflowStepRuns)
       .set({
         status: "succeeded",
         outputJson,
+        memoryRecordIds: actor.memoryRecordIds ?? runningStep.memoryRecordIds,
         finishedAt,
         durationMs,
         updatedAt: finishedAt,
@@ -884,6 +940,72 @@ async function finishRun(
   publishActivities(publications);
 }
 
+async function recoverNodeFailure(db: Db, run: typeof workflowRuns.$inferSelect, actor: WorkflowRunActor,
+  step: WorkflowStepRow, code: string, message: string, resume = true): Promise<boolean> {
+  const revision = await revisionForRun(db, run);
+  const node = revision?.graph.nodes.find((item) => item.id === step.nodeId);
+  const policy = node?.failurePolicy ?? "fail_workflow";
+  if (!node || policy === "fail_workflow" || step.failureResolution) return false;
+  const publications: ActivityPublication[] = [];
+  await db.transaction(async (tx) => {
+    await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
+    await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, step.memoryRecordIds);
+    const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId), eq(workflowRuns.id, run.id))).for("update");
+    if (owned?.status !== "running" || owned.executionOwnerId !== run.executionOwnerId || !owned.leaseExpiresAt || owned.leaseExpiresAt <= new Date()) {
+      throw conflict("Workflow failure recovery lost its lease", { code: "workflow_run_claim_lost" });
+    }
+    if (policy === "wait_for_human") {
+      const [running] = await tx.update(workflowStepRuns).set({ status: "running", finishedAt: null })
+        .where(and(eq(workflowStepRuns.id, step.id), inArray(workflowStepRuns.status, ["running", "failed"]))).returning();
+      if (!running) throw conflict("Failure recovery checkpoint changed");
+      await scheduleHumanApprovalWait(tx as unknown as Db, owned, node, running, actor, { code, message });
+    } else {
+      const now = new Date();
+      const [recovered] = await tx.update(workflowStepRuns).set({ status: "failed", errorCode: code, errorMessage: message,
+        outputJson: policy === "continue_with_null" ? null : { error: { code, nodeId: node.id } },
+        failureResolution: { policy, resolved: true }, finishedAt: now,
+        durationMs: Math.max(0, now.getTime() - (step.startedAt ?? now).getTime()), updatedAt: now })
+        .where(and(eq(workflowStepRuns.id, step.id), inArray(workflowStepRuns.status, ["running", "failed"]))).returning();
+      if (!recovered) throw conflict("Failure recovery checkpoint changed");
+    }
+    const audit = await persistWorkflowActivity(tx as unknown as Db, actor, { companyId: run.companyId,
+      action: "workflow.step_failure_recovery", entityType: "workflow_step_run", entityId: step.id,
+      details: { workflowRunId: run.id, nodeId: node.id, policy, errorCode: code } });
+    publications.push(audit.publication);
+  });
+  publishActivities(publications);
+  if (resume && policy !== "wait_for_human") await executeClaimedRun(db, run, actor);
+  return true;
+}
+
+async function recoverFailedWait(db: Db, run: typeof workflowRuns.$inferSelect, wait: typeof workflowWaits.$inferSelect,
+  code: string, message: string, now: Date): Promise<boolean> {
+  const revision = await revisionForRun(db, run);
+  const node = revision?.graph.nodes.find((item) => item.id === wait.nodeId);
+  if (!node || !node.failurePolicy || node.failurePolicy === "fail_workflow") return false;
+  const actor: WorkflowRunActor = { principal: run.executionPrincipal ?? { type: "system", service: "workflow-recovery" },
+    runId: run.executionAgentRunId, responsibleUserId: run.responsibleUserId };
+  const resumed = await db.transaction(async (tx) => {
+    await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
+    const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId), eq(workflowRuns.id, run.id))).for("update");
+    if (owned?.status !== "waiting") return null;
+    const [resolved] = await tx.update(workflowWaits).set({ status: "resolved", resolvedAt: now, resolvedByType: "system",
+      resolvedById: "workflow-recovery", resolutionJson: { errorCode: code }, updatedAt: now })
+      .where(and(eq(workflowWaits.id, wait.id), eq(workflowWaits.status, "active"))).returning();
+    if (!resolved) return null;
+    const [step] = await tx.update(workflowStepRuns).set({ status: "failed", errorCode: code, errorMessage: message, finishedAt: now, updatedAt: now })
+      .where(and(eq(workflowStepRuns.companyId, run.companyId), eq(workflowStepRuns.workflowRunId, run.id), eq(workflowStepRuns.nodeId, wait.nodeId), eq(workflowStepRuns.status, "waiting"))).returning();
+    if (!step) throw conflict("Waiting failure checkpoint changed");
+    const [claimed] = await tx.update(workflowRuns).set({ status: "running", executionOwnerId: `failure:${randomUUID()}`,
+      leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS), ownerHeartbeatAt: now, updatedAt: now })
+      .where(eq(workflowRuns.id, run.id)).returning();
+    await recoverNodeFailure(tx as unknown as Db, claimed!, actor, step, code, message, false);
+    return claimed!;
+  });
+  if (resumed && node.failurePolicy !== "wait_for_human") await executeClaimedRun(db, resumed, actor);
+  return true;
+}
+
 async function failRun(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
@@ -892,6 +1014,12 @@ async function failRun(
   errorMessage: string,
   runningStep?: typeof workflowStepRuns.$inferSelect,
 ) {
+  if (!/claim_lost|deadline|cancelled|memory_source_deleted|principal_revoked/.test(errorCode)) {
+    const candidate = runningStep ?? await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, run.companyId),
+      eq(workflowStepRuns.workflowRunId, run.id), eq(workflowStepRuns.status, "failed"), eq(workflowStepRuns.errorCode, errorCode)))
+      .orderBy(desc(workflowStepRuns.updatedAt)).limit(1).then((rows) => rows[0]);
+    if (candidate && !candidate.failureResolution && await recoverNodeFailure(db, run, actor, candidate, errorCode, errorMessage)) return;
+  }
   if (!run.executionOwnerId) {
     throw conflict("Workflow run has no execution owner", {
       code: "workflow_run_claim_lost",
@@ -1086,16 +1214,6 @@ function transformInput(
 
 type WorkflowStepRow = typeof workflowStepRuns.$inferSelect;
 
-class WorkflowCheckpointError extends Error {
-  readonly code: string;
-
-  constructor(code: string, message: string) {
-    super(message);
-    this.name = "WorkflowCheckpointError";
-    this.code = code;
-  }
-}
-
 function isRecordValue(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -1238,6 +1356,8 @@ async function prepareRunnableStep(
   const attempts = await nodeAttempts(db, run, nodeId);
   const succeeded = attempts.find((step) => step.status === "succeeded") ?? null;
   if (succeeded) return { checkpoint: succeeded, running: null };
+  const recovered = attempts.find((step) => step.status === "failed" && step.failureResolution?.resolved);
+  if (recovered) return { checkpoint: recovered, running: null };
 
   let latest = attempts[0] ?? null;
   if (latest?.status === "skipped") {
@@ -1261,7 +1381,7 @@ async function prepareRunnableStep(
       latest.errorCode === "workflow_execution_interrupted")
   ) {
     const attempt = latest ? latest.attempt + 1 : 1;
-    pending = await createPendingStep(db, run, nodeId, inputJson, attempt);
+    pending = await createPendingStep(db, run, nodeId, inputJson, attempt, actor.memoryRecordIds);
   } else {
     throw new WorkflowCheckpointError(
       "workflow_checkpoint_state_invalid",
@@ -2142,84 +2262,6 @@ function createTaskNodeConfig(node: WorkflowNode): CreateTaskConfig {
   };
 }
 
-function workflowTaskAuthorizationActor(
-  run: typeof workflowRuns.$inferSelect,
-  actor: WorkflowRunActor,
-): AuthorizationActor {
-  const responsibleUserId =
-    run.responsibleUserId ??
-    actor.responsibleUserId ??
-    (actor.principal.type === "agent"
-      ? actor.principal.responsibleUserId
-      : null);
-
-  if (actor.principal.type === "agent") {
-    return {
-      type: "agent",
-      agentId: actor.principal.agentId,
-      companyId: run.companyId,
-      source: "agent_jwt",
-      runId: actor.runId ?? run.id,
-      onBehalfOfUserId: responsibleUserId,
-    };
-  }
-  if (actor.principal.type === "user") {
-    return {
-      type: "board",
-      userId: actor.principal.userId,
-      companyIds: [run.companyId],
-      source: "session",
-    };
-  }
-  if (responsibleUserId) {
-    return {
-      type: "board",
-      userId: responsibleUserId,
-      companyIds: [run.companyId],
-      source: "session",
-      ignoreInstanceAdmin: true,
-    };
-  }
-  throw new WorkflowCheckpointError(
-    "workflow_task_responsible_user_required",
-    "Create Task requires an attributable user or agent responsible-user context",
-  );
-}
-
-async function assertWorkflowTaskAssignmentAuthorized(
-  db: Db,
-  run: typeof workflowRuns.$inferSelect,
-  actor: WorkflowRunActor,
-  config: CreateTaskConfig,
-) {
-  const decision = await authorizationService(db).decide({
-    actor: workflowTaskAuthorizationActor(run, actor),
-    action: "tasks:assign",
-    resource: {
-      type: "issue",
-      companyId: run.companyId,
-      projectId: config.projectId,
-      parentIssueId: null,
-      assigneeAgentId: config.assigneeAgentId,
-      assigneeUserId: config.assigneeUserId,
-      originKind: "workflow_task",
-      originId: run.workflowId,
-      status: config.assigneeAgentId || config.assigneeUserId ? "todo" : "backlog",
-    },
-    scope: {
-      projectId: config.projectId,
-      assigneeAgentId: config.assigneeAgentId,
-      assigneeUserId: config.assigneeUserId,
-    },
-  });
-  if (!decision.allowed) {
-    throw new WorkflowCheckpointError(
-      "workflow_task_permission_denied",
-      decision.explanation,
-    );
-  }
-}
-
 function workflowTaskActorFields(
   run: typeof workflowRuns.$inferSelect,
   actor: WorkflowRunActor,
@@ -2383,18 +2425,18 @@ function agentTaskNodeConfig(node: WorkflowNode): AgentTaskConfig {
       "Published Agent Task node has invalid waitForCompletion",
     );
   }
-  if (expectedOutputSchema != null) {
-    throw new WorkflowCheckpointError(
-      "workflow_agent_task_structured_output_not_ready",
-      "Structured Agent Task output requires an authoritative task result channel",
-    );
+  if (expectedOutputSchema != null && !isRecordValue(expectedOutputSchema)) {
+    throw new WorkflowCheckpointError("workflow_agent_task_config_invalid", "Agent Task output schema must be an object");
+  }
+  if (expectedOutputSchema != null && waitForCompletion === false) {
+    throw new WorkflowCheckpointError("workflow_agent_task_config_invalid", "Structured output requires waiting for completion");
   }
 
   return {
     agentId: agentId.trim(),
     objective: objective.trim(),
     waitForCompletion: waitForCompletion !== false,
-    expectedOutputSchema: null,
+    expectedOutputSchema: expectedOutputSchema ?? null,
   };
 }
 
@@ -2799,7 +2841,7 @@ async function createWorkflowAgentTaskIssueInTransaction(
     run.companyId,
     {
       title: taskConfig.title,
-      description: config.objective,
+      description: config.expectedOutputSchema ? `${config.objective}\n\nWorkflow structured result contract:\n${JSON.stringify(config.expectedOutputSchema)}\nBefore completing this task, submit JSON {"result": <your result>} to POST /api/companies/${run.companyId}/workflow-runs/${run.id}/nodes/${encodeURIComponent(node.id)}/task-result using your current agent run credentials. An accepted result is immutable; comments are not results.` : config.objective,
       projectId: null,
       assigneeAgentId: config.agentId,
       assigneeUserId: null,
@@ -2981,6 +3023,7 @@ async function failExternalAgentWait(
   now: Date,
   details: Record<string, unknown> = {},
 ): Promise<boolean> {
+  if (await recoverFailedWait(db, run, wait, errorCode, errorMessage, now)) return true;
   const actor: WorkflowRunActor = {
     principal: { type: "system", service: "workflow-external-agent" },
     responsibleUserId: run.responsibleUserId,
@@ -3568,6 +3611,95 @@ async function resumeCompletedExternalAgentWait(
 
   if (!resumed) return "raced";
   await executeClaimedRun(db, resumed, actor, runtimeDeps);
+  return "recovered";
+}
+
+async function scheduleDirectAgentWait(db: Db, run: typeof workflowRuns.$inferSelect, node: WorkflowNode,
+  step: WorkflowStepRow, actor: WorkflowRunActor, runtimeDeps: WorkflowExecutorRuntimeDeps) {
+  const config = directAgentConfig.parse(node.config);
+  await assertWorkflowTaskAssignmentAuthorized(db, run, actor, { title: config.objective, description: null,
+    projectId: null, assigneeAgentId: config.agentId, assigneeUserId: null, waitForCompletion: true });
+  const waiting = await db.transaction(async (tx) => {
+    await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
+    await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, step.memoryRecordIds);
+    const now = new Date();
+    const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId),
+      eq(workflowRuns.id, run.id), eq(workflowRuns.status, "running"), eq(workflowRuns.executionOwnerId, run.executionOwnerId!))).for("update");
+    if (!owned?.leaseExpiresAt || owned.leaseExpiresAt <= now) throw conflict("Direct call lost its execution lease");
+    const [waitingStep] = await tx.update(workflowStepRuns).set({ status: "waiting", agentId: config.agentId, updatedAt: now })
+      .where(and(eq(workflowStepRuns.companyId, run.companyId), eq(workflowStepRuns.id, step.id), eq(workflowStepRuns.status, "running"))).returning();
+    if (!waitingStep) throw conflict("Direct call checkpoint changed");
+    await tx.insert(workflowWaits).values({ companyId: run.companyId, workflowRunId: run.id, nodeId: node.id,
+      kind: "direct_agent_run", waitKey: "primary", timeoutAt: new Date(now.getTime() + config.timeoutSeconds * 1000),
+      referenceType: "workflow_step_run", referenceId: step.id });
+    const [waitingRun] = await tx.update(workflowRuns).set({ status: "waiting", executionOwnerId: null,
+      leaseExpiresAt: null, ownerHeartbeatAt: null, updatedAt: now }).where(eq(workflowRuns.id, run.id)).returning();
+    const activity = await persistWorkflowActivity(tx as unknown as Db, actor, { companyId: run.companyId,
+      action: "workflow.direct_agent_requested", entityType: "workflow_step_run", entityId: step.id,
+      details: { workflowRunId: run.id, nodeId: node.id, agentId: config.agentId } });
+    return { run: waitingRun!, step: waitingStep, publication: activity.publication };
+  });
+  publishActivity(waiting.publication);
+  // The wait is durable before dispatch. A lost response reuses the same wake key.
+  try { await dispatchDirectAgent(db, waiting.run, waiting.step, actor, await workflowAgentHeartbeat(db, runtimeDeps)); }
+  catch { /* Recovery validates the original principal and redispatches idempotently. */ }
+}
+
+async function resolveDirectAgentWait(db: Db, run: typeof workflowRuns.$inferSelect, wait: typeof workflowWaits.$inferSelect,
+  now: Date, runtimeDeps: WorkflowExecutorRuntimeDeps): Promise<"recovered" | "raced" | "deferred"> {
+  const [step] = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, run.companyId),
+    eq(workflowStepRuns.workflowRunId, run.id), eq(workflowStepRuns.id, wait.referenceId!), eq(workflowStepRuns.status, "waiting")));
+  if (!step) return "raced";
+  const actor: WorkflowRunActor = { principal: run.executionPrincipal ?? { type: "system", service: "workflow-direct-agent" },
+    runId: run.executionAgentRunId, responsibleUserId: run.responsibleUserId };
+  const revision = await revisionForRun(db, run);
+  const node = revision?.graph.nodes.find((item) => item.id === wait.nodeId);
+  try {
+    if (node?.type !== "agent.direct_call") throw new Error("Direct call revision unavailable");
+    await assertActorCompanyScope(db, run.companyId, actor);
+    const config = directAgentConfig.parse(node.config);
+    await assertWorkflowTaskAssignmentAuthorized(db, run, actor, { title: config.objective, description: null,
+      projectId: null, assigneeAgentId: config.agentId, assigneeUserId: null, waitForCompletion: true });
+    await assertMemoryRecordsRetained(db, run.companyId, step.memoryRecordIds);
+  } catch {
+    const requested = await requestWorkflowRunCancellation(db, run.companyId, run.id, "Direct call authority or source revoked", actor,
+      { code: "workflow_execution_principal_revoked", message: "Direct call authority or source revoked" });
+    return continueWorkflowRunCancellation(db, requested, "Direct call authority or source revoked", actor, runtimeDeps);
+  }
+  if (!step.heartbeatRunId) {
+    try { await dispatchDirectAgent(db, run, step, actor, await workflowAgentHeartbeat(db, runtimeDeps)); }
+    catch { return "deferred"; }
+    return "deferred";
+  }
+  const [execution] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, run.companyId),
+    eq(heartbeatRuns.id, step.heartbeatRunId), eq(heartbeatRuns.agentId, step.agentId!)));
+  if (execution && ["queued", "running", "scheduled_retry"].includes(execution.status)) return "deferred";
+  const errorCode = execution?.status !== "succeeded" ? "workflow_direct_agent_failed" : !step.taskResultAcceptedAt ? "workflow_direct_agent_result_missing" : null;
+  if (errorCode && await recoverFailedWait(db, run, wait, errorCode, "Direct agent did not complete its output contract", now)) return "recovered";
+  const resumed = await db.transaction(async (tx) => {
+    await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
+    const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId), eq(workflowRuns.id, run.id))).for("update");
+    if (owned?.status !== "waiting") return null;
+    await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, step.memoryRecordIds);
+    const [resolved] = await tx.update(workflowWaits).set({ status: "resolved", resolvedAt: now, resolvedByType: "system",
+      resolvedById: "workflow-direct-agent", resolutionJson: { succeeded: !errorCode }, updatedAt: now })
+      .where(and(eq(workflowWaits.id, wait.id), eq(workflowWaits.status, "active"))).returning();
+    if (!resolved) return null;
+    await tx.update(workflowStepRuns).set({ status: errorCode ? "failed" : "succeeded", outputJson: errorCode ? null : step.taskResultJson,
+      errorCode, errorMessage: errorCode ? "Direct agent did not complete its output contract" : null,
+      finishedAt: now, durationMs: Math.max(0, now.getTime() - (step.startedAt ?? now).getTime()), updatedAt: now })
+      .where(and(eq(workflowStepRuns.id, step.id), eq(workflowStepRuns.status, "waiting")));
+    const [claimed] = await tx.update(workflowRuns).set({ status: "running", executionOwnerId: `direct-agent:${randomUUID()}`,
+      leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS), ownerHeartbeatAt: now, updatedAt: now }).where(eq(workflowRuns.id, run.id)).returning();
+    const audit = await persistWorkflowActivity(tx as unknown as Db, actor, { companyId: run.companyId,
+      action: "workflow.direct_agent_completed", entityType: "workflow_step_run", entityId: step.id,
+      details: { workflowRunId: run.id, nodeId: node!.id, agentId: step.agentId, heartbeatRunId: execution?.id, succeeded: !errorCode } });
+    return { run: claimed!, publication: audit.publication };
+  });
+  if (!resumed) return "raced";
+  publishActivity(resumed.publication);
+  if (errorCode) await failRun(db, resumed.run, actor, errorCode, "Direct agent did not complete its output contract");
+  else await executeClaimedRun(db, resumed.run, actor, runtimeDeps);
   return "recovered";
 }
 
@@ -4628,6 +4760,10 @@ async function resumeCompletedTaskWait(
           agentId: waitingStep.agentId,
           heartbeatRunId: waitingStep.heartbeatRunId,
         }),
+        ...(waitingStep.taskResultAcceptedAt ? { outputJson: {
+          ...workflowTaskOutput(issue, { agentId: waitingStep.agentId, heartbeatRunId: waitingStep.taskResultRunId }),
+          result: waitingStep.taskResultJson,
+        } } : {}),
         finishedAt: now,
         durationMs,
         updatedAt: now,
@@ -4783,9 +4919,11 @@ async function failTaskWait(
   errorCode:
     | "workflow_task_cancelled"
     | "workflow_task_missing"
+    | "workflow_task_result_missing"
     | "workflow_agent_unavailable",
   errorMessage: string,
 ) {
+  if (await recoverFailedWait(db, run, wait, errorCode, errorMessage, now)) return true;
   const actor: WorkflowRunActor = {
     principal: { type: "system", service: "workflow-task" },
     responsibleUserId: run.responsibleUserId,
@@ -4969,6 +5107,8 @@ async function resolveTaskCompletionWait(
   now: Date,
   runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ): Promise<"recovered" | "raced" | "deferred"> {
+  const expired = await expireWaitingWorkflow(db, run, now, runtimeDeps);
+  if (expired) return expired;
   const issue = await issueForTaskWait(db, run, wait);
   if (!issue) {
     const changed = await failTaskWait(
@@ -4983,6 +5123,19 @@ async function resolveTaskCompletionWait(
     return changed ? "recovered" : "raced";
   }
   if (issue.status === "done") {
+    const [revision] = await db.select().from(workflowRevisions).where(and(eq(workflowRevisions.id, run.workflowRevisionId), eq(workflowRevisions.companyId, run.companyId)));
+    const node = revision?.graph.nodes.find((item) => item.id === wait.nodeId);
+    const schema = node?.type === "agent.task" ? agentTaskNodeConfig(node).expectedOutputSchema : null;
+    if (schema) {
+      const [step] = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.workflowRunId, run.id),
+        eq(workflowStepRuns.companyId, run.companyId), eq(workflowStepRuns.nodeId, wait.nodeId), eq(workflowStepRuns.status, "waiting")));
+      if (!step?.taskResultAcceptedAt) {
+        const changed = await failTaskWait(db, run, wait, issue, now, "workflow_task_result_missing",
+          "Task completed without its required authoritative structured result");
+        return changed ? "recovered" : "raced";
+      }
+      validateWorkflowOutput(schema, step.taskResultJson);
+    }
     const resumed = await resumeCompletedTaskWait(db, run, wait, issue, now);
     if (!resumed) return "raced";
     await executeClaimedRun(
@@ -5079,6 +5232,7 @@ async function scheduleHumanApprovalWait(
   node: WorkflowNode,
   runningStep: WorkflowStepRow,
   actor: WorkflowRunActor,
+  failure?: { code: string; message: string },
 ): Promise<void> {
   if (!run.executionOwnerId) {
     throw conflict("Workflow run has no execution owner", {
@@ -5087,11 +5241,12 @@ async function scheduleHumanApprovalWait(
     });
   }
 
-  const config = humanApprovalConfig(node);
+  const config = failure ? { summary: `Review failed workflow step: ${node.name}`,
+    consequence: `Continue along the published failure branch for ${node.id}. The failed action is not repeated or marked successful. Failure code: ${failure.code}.` } : humanApprovalConfig(node);
   const requester = approvalRequester(actor);
   const now = new Date();
   const approvalId = randomUUID();
-  const waitKey = "primary";
+  const waitKey = failure ? "failure-recovery" : "primary";
   const publications: ActivityPublication[] = [];
 
   await db.transaction(async (tx) => {
@@ -5119,7 +5274,8 @@ async function scheduleHumanApprovalWait(
           workflowRevisionId: run.workflowRevisionId,
           workflowRunId: run.id,
           workflowNodeId: node.id,
-          requestedByPrincipal: requester.requestedByPrincipal,
+        requestedByPrincipal: requester.requestedByPrincipal,
+          ...(failure ? { failureRecovery: true, failureCode: failure.code } : {}),
         },
         createdAt: now,
         updatedAt: now,
@@ -5160,6 +5316,8 @@ async function scheduleHumanApprovalWait(
       .update(workflowStepRuns)
       .set({
         status: "waiting",
+        ...(failure ? { errorCode: failure.code, errorMessage: failure.message, finishedAt: null,
+          failureResolution: { policy: "wait_for_human" as const, resolved: false } } : {}),
         updatedAt: now,
       })
       .where(
@@ -5368,8 +5526,9 @@ async function resumeApprovedHumanWait(
     const [completedStep] = await tx
       .update(workflowStepRuns)
       .set({
-        status: "succeeded",
-        outputJson: resolvedWait.resolutionJson,
+        status: waitingStep.failureResolution?.policy === "wait_for_human" ? "failed" : "succeeded",
+        outputJson: waitingStep.failureResolution?.policy === "wait_for_human" ? { error: { code: waitingStep.errorCode, nodeId: wait.nodeId }, recovery: resolvedWait.resolutionJson } : resolvedWait.resolutionJson,
+        ...(waitingStep.failureResolution ? { failureResolution: { ...waitingStep.failureResolution, resolved: true } } : {}),
         finishedAt: now,
         durationMs,
         updatedAt: now,
@@ -5702,6 +5861,137 @@ async function resolveHumanApprovalWait(
   return "deferred";
 }
 
+async function withWorkflowExecutionLease<T>(
+  db: Db, run: typeof workflowRuns.$inferSelect, execute: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let stopped = false;
+  let renewal: Promise<void> = Promise.resolve();
+  const timer = setInterval(() => {
+    renewal = renewal.then(async () => {
+      if (stopped || controller.signal.aborted) return;
+      try { await renewRunLease(db, run); }
+      catch { controller.abort(new WorkflowCheckpointError("workflow_run_claim_lost", "Workflow execution was cancelled or its ownership changed")); }
+    });
+  }, 1_000);
+  timer.unref?.();
+  try {
+    const result = await execute(controller.signal);
+    controller.signal.throwIfAborted();
+    return result;
+  } finally {
+    stopped = true;
+    clearInterval(timer);
+    await renewal;
+  }
+}
+
+async function startSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSelect, graph: WorkflowGraphV1,
+  node: WorkflowNode, step: WorkflowStepRow, context: Parameters<typeof evaluateWorkflowTransformMapping>[1],
+  actor: WorkflowRunActor, runtimeDeps: WorkflowExecutorRuntimeDeps) {
+  const config = subworkflowConfig.parse(node.config);
+  const revision = await requireSubworkflowRevision(db, run.companyId, config.workflowId, config.revisionId);
+  await assertSubworkflowGraph(db, run.companyId, graph, run.workflowId);
+  let ancestor: typeof workflowRuns.$inferSelect | undefined = run;
+  for (let depth = 0; ancestor; depth++) {
+    if (depth >= 16 || ancestor.workflowId === config.workflowId) {
+      throw new WorkflowCheckpointError("workflow_subworkflow_recursion", "Recursive or excessively nested subworkflow invocation is forbidden");
+    }
+    const parentId: string | null = ancestor.parentWorkflowRunId;
+    ancestor = parentId ? (await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId), eq(workflowRuns.id, parentId))))[0] : undefined;
+  }
+  const input = Object.keys(config.inputMapping).length ? evaluateWorkflowTransformMapping(config.inputMapping, context)
+    : isRecordValue(context.input) ? context.input : {};
+  validateWorkflowOutput(revision.inputSchema, input);
+  const trigger = revision.graph.nodes.find((item) => item.type === "core.manual_trigger");
+  if (!trigger) throw new WorkflowCheckpointError("workflow_trigger_missing", "Child workflow has no entry trigger");
+  const now = new Date();
+  const timeoutAt = new Date(now.getTime() + Math.min(config.timeoutSeconds * 1_000,
+    remainingWorkflowDeadlineMs(run, graph, now) ?? config.timeoutSeconds * 1_000));
+  const queued = await db.transaction(async (tx) => {
+    await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
+    await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, actor.memoryRecordIds ?? []);
+    const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.id, run.id), eq(workflowRuns.companyId, run.companyId))).for("update");
+    if (owned?.status !== "running" || owned.executionOwnerId !== run.executionOwnerId || !owned.leaseExpiresAt || owned.leaseExpiresAt <= now) {
+      throw conflict("Workflow execution ownership changed", { code: "workflow_run_claim_lost" });
+    }
+    const child = await enqueueWorkflowRunInTransaction(tx as unknown as Db, { companyId: run.companyId,
+      workflowId: config.workflowId, revisionId: config.revisionId, nodeId: trigger.id, source: "api", triggerPayload: input,
+      responsibleUserId: run.responsibleUserId, actor, parentWorkflowRunId: run.id, parentNodeId: node.id,
+      idempotencyKey: `subworkflow:${workflowRunIdempotencyRootId(run)}:${node.id}`,
+      correlationId: run.correlationId ?? `subworkflow:${run.id}` });
+    const [waiting] = await tx.update(workflowStepRuns).set({ status: "waiting", childWorkflowRunId: child.run.id, updatedAt: now })
+      .where(and(eq(workflowStepRuns.id, step.id), eq(workflowStepRuns.status, "running"))).returning();
+    if (!waiting) throw conflict("Subworkflow checkpoint changed");
+    await tx.insert(workflowWaits).values({ companyId: run.companyId, workflowRunId: run.id, nodeId: node.id,
+      waitKey: "primary", kind: "subworkflow", status: "active", referenceType: "workflow_run", referenceId: child.run.id, timeoutAt });
+    await tx.update(workflowRuns).set({ status: "waiting", executionOwnerId: null, leaseExpiresAt: null,
+      ownerHeartbeatAt: null, updatedAt: now }).where(eq(workflowRuns.id, run.id));
+    const audit = await persistWorkflowActivity(tx as unknown as Db, actor, { companyId: run.companyId,
+      action: "workflow.child_run_created", entityType: "workflow_step_run", entityId: step.id,
+      details: { workflowRunId: run.id, nodeId: node.id, childRunId: child.run.id, childRevisionId: config.revisionId } });
+    return { ...child, publications: [...child.publications, audit.publication] };
+  });
+  publishActivities(queued.publications);
+  const child = await claimQueuedRun(db, run.companyId, queued.run.id, `child:${randomUUID()}`, actor);
+  if (child) await executeClaimedRun(db, child, actor, runtimeDeps);
+  const [parent] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, run.id));
+  const wait = parent ? await activeWaitForRun(db, parent) : null;
+  if (parent?.status === "waiting" && wait?.kind === "subworkflow") await resolveSubworkflowWait(db, parent, wait, new Date(), runtimeDeps);
+}
+
+async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSelect, wait: typeof workflowWaits.$inferSelect,
+  now: Date, runtimeDeps: WorkflowExecutorRuntimeDeps): Promise<"recovered" | "raced" | "deferred"> {
+  const [child] = wait.referenceId ? await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId),
+    eq(workflowRuns.id, wait.referenceId), eq(workflowRuns.parentWorkflowRunId, run.id), eq(workflowRuns.parentNodeId, wait.nodeId))) : [];
+  const expired = Boolean(wait.timeoutAt && wait.timeoutAt <= now);
+  if (child && !["succeeded", "failed", "cancelled"].includes(child.status)) {
+    if (!expired) return "deferred";
+    await workflowExecutorService(db, runtimeDeps).cancelRun(run.companyId, child.id, { reason: "Parent subworkflow timeout" },
+      { principal: { type: "system", service: "workflow-subworkflow" } });
+  }
+  const actor: WorkflowRunActor = { principal: { type: "system", service: "workflow-subworkflow" }, responsibleUserId: run.responsibleUserId };
+  let errorCode = !child ? "workflow_subworkflow_missing" : expired ? "workflow_subworkflow_timeout" : "workflow_subworkflow_failed";
+  let succeeded = child?.status === "succeeded" && (!wait.timeoutAt || Boolean(child.finishedAt && child.finishedAt <= wait.timeoutAt));
+  const detail = succeeded ? await getRunDetail(db, run.companyId, child!.id) : null;
+  const childRevision = succeeded ? await revisionForRun(db, child!) : null;
+  const terminalNodes = new Set(childRevision?.graph.nodes.filter((item) => !childRevision.graph.edges.some((edge) => edge.source === item.id)).map((item) => item.id) ?? []);
+  const resultSteps = detail?.steps.filter((item) => item.status === "succeeded" && terminalNodes.has(item.nodeId)) ?? [];
+  const result = resultSteps.length === 1 ? resultSteps[0]!.outputJson : Object.fromEntries(resultSteps.map((item) => [item.nodeId, item.outputJson]));
+  if (succeeded && childRevision) validateWorkflowOutput(childRevision.outputSchema, result);
+  const publications: ActivityPublication[] = [];
+  const resumed = await db.transaction(async (tx) => {
+    await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
+    const references = [...new Set(resultSteps.flatMap((item) => item.memoryRecordIds ?? []))];
+    try { await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, references); }
+    catch { succeeded = false; errorCode = "workflow_memory_source_deleted"; }
+    const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.id, run.id), eq(workflowRuns.companyId, run.companyId))).for("update");
+    if (owned?.status !== "waiting" || owned.executionOwnerId) return null;
+    const [resolved] = await tx.update(workflowWaits).set({ status: expired ? "timed_out" : "resolved", resolvedAt: now,
+      resolvedByType: "system", resolvedById: "workflow-subworkflow", resolutionJson: { childRunId: child?.id ?? null, outcome: succeeded ? "succeeded" : "failed" }, updatedAt: now })
+      .where(and(eq(workflowWaits.id, wait.id), eq(workflowWaits.status, "active"))).returning();
+    if (!resolved) return null;
+    const [step] = await tx.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.workflowRunId, run.id), eq(workflowStepRuns.companyId, run.companyId),
+      eq(workflowStepRuns.nodeId, wait.nodeId), eq(workflowStepRuns.status, "waiting"), eq(workflowStepRuns.childWorkflowRunId, wait.referenceId!))).for("update");
+    if (!step) throw conflict("Subworkflow checkpoint changed");
+    await tx.update(workflowStepRuns).set({ status: succeeded ? "succeeded" : "failed", outputJson: succeeded ? { childRunId: child!.id, revisionId: child!.workflowRevisionId, result } : null,
+      memoryRecordIds: [...new Set([...step.memoryRecordIds, ...references])], errorCode: succeeded ? null : errorCode,
+      finishedAt: now, durationMs: now.getTime() - (step.startedAt ?? now).getTime(), updatedAt: now }).where(eq(workflowStepRuns.id, step.id));
+    const [claimed] = await tx.update(workflowRuns).set({ status: "running", executionOwnerId: `subworkflow:${randomUUID()}`,
+      leaseExpiresAt: new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS), ownerHeartbeatAt: now, updatedAt: now }).where(eq(workflowRuns.id, run.id)).returning();
+    const audit = await persistWorkflowActivity(tx as unknown as Db, actor, { companyId: run.companyId,
+      action: "workflow.child_run_resolved", entityType: "workflow_wait", entityId: wait.id,
+      details: { workflowRunId: run.id, childRunId: child?.id ?? null, outcome: succeeded ? "succeeded" : "failed" } });
+    publications.push(audit.publication);
+    return claimed;
+  });
+  publishActivities(publications);
+  if (!resumed) return "raced";
+  if (succeeded) await executeClaimedRun(db, resumed, actor, runtimeDeps);
+  else await failRun(db, resumed, actor, errorCode, "Child workflow did not complete successfully");
+  return "recovered";
+}
+
 async function executeWorkflowGraph(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
@@ -5726,14 +6016,62 @@ async function executeWorkflowGraph(
   const variables = graphVariables(graph);
   let current: WorkflowNode | null = trigger;
   let ownedRun = run;
+  const queue: string[] = [];
+  const processed = new Set<string>();
+  const memoryReferences: Record<string, string[]> = {};
+  let deferredMerges = 0;
+  const nextQueuedNode = (): WorkflowNode | null => {
+    while (queue.length) {
+      const id = queue.shift()!;
+      if (!processed.has(id)) return nodes.get(id) ?? null;
+    }
+    return null;
+  };
 
   while (current) {
     ownedRun = await renewRunLease(db, ownedRun);
+    if (remainingWorkflowDeadlineMs(ownedRun, graph, new Date()) === 0) {
+      await failRun(db, ownedRun, actor, "workflow_deadline_exceeded", "Workflow execution reached its total deadline");
+      return;
+    }
+    if (current.type === "core.merge") {
+      let waitingForInput = false;
+      for (const edge of graph.edges.filter((item) => item.target === current!.id)) {
+        if (processed.has(edge.source)) continue;
+        const attempts = await nodeAttempts(db, ownedRun, edge.source);
+        if (attempts[0]?.status !== "skipped") waitingForInput = true;
+      }
+      if (waitingForInput) {
+        queue.push(current.id);
+        deferredMerges++;
+        if (deferredMerges > queue.length) {
+          await failRun(db, ownedRun, actor, "workflow_merge_input_unresolved", "Merge inputs did not reach a terminal branch state");
+          return;
+        }
+        current = nextQueuedNode();
+        continue;
+      }
+    }
+    deferredMerges = 0;
+    actor = { ...actor, memoryRecordIds: [...new Set([...ownedRun.memoryRecordIds, ...graph.edges.filter((edge) => edge.target === current!.id)
+      .flatMap((edge) => memoryReferences[edge.source] ?? [])])] };
+    if (actor.memoryRecordIds?.length) {
+      try { await assertMemoryRecordsRetained(db, ownedRun.companyId, actor.memoryRecordIds); }
+      catch {
+        await failRun(db, ownedRun, actor, "workflow_memory_source_deleted", "A required Memory source was erased");
+        return;
+      }
+    }
     let output: unknown;
     let conditionResult: boolean | null = null;
+    let switchBranch: string | null = null;
     let runningStep: WorkflowStepRow | undefined;
 
     try {
+      if (current.inputSchema) {
+        try { validateWorkflowOutput(current.inputSchema, transformInput(graph, current, outputs)); }
+        catch { throw new WorkflowCheckpointError("workflow_input_schema_mismatch", "Node input does not satisfy its published contract"); }
+      }
       if (current.type === "core.manual_trigger") {
         const prepared = await prepareRunnableStep(
           db,
@@ -5775,12 +6113,179 @@ async function executeWorkflowGraph(
               `Transform ${current.id} produced no runnable attempt`,
             );
           }
-          output = evaluateWorkflowTransformMapping(mapping, {
-            input,
-            trigger: ownedRun.triggerPayload ?? {},
-            variables,
-            steps: outputs,
-          });
+          const transformNodeId = current.id;
+          output = await withWorkflowExecutionLease(db, ownedRun, () => executeOptimizedWorkflowTransform(db, ownedRun,
+            transformNodeId, input, actor.memoryRecordIds ?? [], () => evaluateWorkflowTransformMapping(mapping, {
+              input, trigger: ownedRun.triggerPayload ?? {}, variables, steps: outputs,
+            })));
+          await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
+      } else if (current.type === "core.subworkflow") {
+        const input = transformInput(graph, current, outputs);
+        const prepared = await prepareRunnableStep(db, ownedRun, current.id, input, actor);
+        if (prepared.checkpoint) output = prepared.checkpoint.outputJson;
+        else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) throw new WorkflowCheckpointError("workflow_checkpoint_state_invalid", "Subworkflow has no runnable attempt");
+          await startSubworkflowWait(db, ownedRun, graph, current, runningStep,
+            { input, trigger: ownedRun.triggerPayload ?? {}, variables, steps: outputs }, actor, runtimeDeps);
+          return;
+        }
+      } else if (current.type === "core.map") {
+        const input = transformInput(graph, current, outputs);
+        const prepared = await prepareRunnableStep(db, ownedRun, current.id, input, actor);
+        if (prepared.checkpoint) output = prepared.checkpoint.outputJson;
+        else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) throw new WorkflowCheckpointError("workflow_checkpoint_state_invalid", "Map has no runnable attempt");
+          const mapNode = current;
+          try {
+            output = await withWorkflowExecutionLease(db, ownedRun, (signal) => executeWorkflowMap(mapNode.config,
+              { input, trigger: ownedRun.triggerPayload ?? {}, variables, steps: outputs },
+              Math.min((mapNode.timeoutSeconds ?? 5) * 1_000, remainingWorkflowDeadlineMs(ownedRun, graph, new Date()) ?? 5_000), signal));
+          } catch (error) {
+            if (!(error instanceof HttpError)) throw error;
+            throw new WorkflowCheckpointError((error.details as { code?: string } | undefined)?.code ?? "workflow_map_item_failed", error.message);
+          }
+          await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
+      } else if (current.type === "core.http_request") {
+        const prepared = await prepareRunnableStep(db, ownedRun, current.id, { url: (current.config as Record<string, unknown>).url }, actor);
+        if (prepared.checkpoint) output = prepared.checkpoint.outputJson;
+        else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) throw new WorkflowCheckpointError("workflow_checkpoint_state_invalid", "HTTP request has no runnable attempt");
+          const httpNode = current;
+          try {
+            output = await withWorkflowExecutionLease(db, ownedRun, (signal) => executeWorkflowHttpRequest(httpNode.config,
+              Math.min((httpNode.timeoutSeconds ?? 15) * 1_000, remainingWorkflowDeadlineMs(ownedRun, graph, new Date()) ?? 30_000), signal));
+          } catch (error) {
+            if (!(error instanceof HttpError) && !(error instanceof WorkflowOutputSchemaError)) throw error;
+            const code = error instanceof WorkflowOutputSchemaError ? error.code :
+              (error.details as { code?: string } | undefined)?.code ?? "workflow_http_failed";
+            throw new WorkflowCheckpointError(code, "HTTP request was blocked or did not meet its response contract");
+          }
+          await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
+      } else if (current.type === "native.foundation_query" || current.type === "native.memory_recall") {
+        const input = transformInput(graph, current, outputs);
+        const query = evaluateWorkflowTransformMapping({ query: String((current.config as Record<string, unknown>).query) }, {
+          input, trigger: ownedRun.triggerPayload ?? {}, variables, steps: outputs,
+        }).query;
+        const prepared = await prepareRunnableStep(db, ownedRun, current.id, { query }, actor);
+        if (prepared.checkpoint) output = prepared.checkpoint.outputJson;
+        else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) throw new WorkflowCheckpointError("workflow_checkpoint_state_invalid", "Native query has no runnable attempt");
+          try { output = await executeNativeWorkflowQuery(db, ownedRun.companyId, current, query, actor); }
+          catch (error) {
+            if (!(error instanceof HttpError)) throw error;
+            const details = error.details as { code?: string } | undefined;
+            throw new WorkflowCheckpointError(details?.code ?? "workflow_native_query_failed", "Native query was denied or could not complete");
+          }
+          if (current.type === "native.memory_recall") {
+            const result = output as { records: Array<{ record: { id: string } }> };
+            actor.memoryRecordIds = [...new Set([...(actor.memoryRecordIds ?? []), ...result.records.map((item) => item.record.id)])];
+          }
+          await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
+      } else if (current.type === "core.switch" || current.type === "core.merge" || current.type === "core.parallel") {
+        const input = current.type !== "core.merge" ? transformInput(graph, current, outputs)
+          : Object.fromEntries(graph.edges.filter((edge) => edge.target === current!.id &&
+            Object.prototype.hasOwnProperty.call(outputs, edge.source)).map((edge) => [edge.source, outputs[edge.source]]));
+        const prepared = await prepareRunnableStep(db, ownedRun, current.id, input, actor);
+        if (prepared.checkpoint) output = prepared.checkpoint.outputJson;
+        else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) throw new WorkflowCheckpointError("workflow_checkpoint_state_invalid", "Control node has no runnable attempt");
+          if (current.type === "core.switch") {
+            const config = current.config as { cases: Array<{ key: string; expression: string }>; defaultBranch: string };
+            const selected = config.cases.find((item) => evaluateWorkflowConditionExpression(item.expression,
+              { trigger: ownedRun.triggerPayload ?? {}, variables, steps: outputs }));
+            output = { branchKey: selected?.key ?? config.defaultBranch };
+          } else if (current.type === "core.parallel") {
+            output = input;
+          } else {
+            if (Object.keys(input as Record<string, unknown>).length === 0) throw new WorkflowCheckpointError("workflow_merge_input_invalid", "Merge has no activated input");
+            output = { inputs: input };
+          }
+          await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
+        if (current.type === "core.switch") {
+          const value = output as { branchKey?: unknown };
+          if (typeof value?.branchKey !== "string") throw new WorkflowCheckpointError("workflow_checkpoint_invalid", "Switch checkpoint has no selected branch");
+          switchBranch = value.branchKey;
+        }
+      } else if (current.type === "connector.action") {
+        const connectorNode = current;
+        const config = connectorNode.config as Record<string, unknown>;
+        const input = config.inputMapping ? evaluateWorkflowTransformMapping(config.inputMapping as Record<string, string>, {
+          input: transformInput(graph, current, outputs), trigger: ownedRun.triggerPayload ?? {}, variables, steps: outputs,
+        }) : config.input ?? {};
+        const prepared = await prepareRunnableStep(db, ownedRun, connectorNode.id, {
+          toolCatalogEntryId: config.toolCatalogEntryId, connectionId: config.connectionId, input,
+        }, actor);
+        if (prepared.checkpoint) {
+          output = prepared.checkpoint.outputJson;
+        } else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) throw new WorkflowCheckpointError("workflow_checkpoint_state_invalid", "Connector step produced no runnable attempt");
+          const gateway = runtimeDeps.toolGateway ?? getAssignedMcpGateway(db);
+          try {
+            const executed = await withWorkflowExecutionLease(db, ownedRun, (signal) => gateway.executeTool({
+              signal,
+              sessionToken: "", tool: "", parameters: input,
+              timeoutMs: Math.min(30_000, (connectorNode.timeoutSeconds ?? 30) * 1_000),
+              idempotencyKey: workflowStepIdempotencyKey(ownedRun.idempotencyRootRunId ?? ownedRun.id, connectorNode.id),
+            }, { companyId: ownedRun.companyId, workflowRunId: ownedRun.id, nodeId: connectorNode.id,
+              executionOwnerId: requireWorkflowExecutionOwnerId(ownedRun) }));
+            output = executed.result;
+            await db.update(workflowStepRuns).set({ toolInvocationId: executed.invocationId })
+              .where(and(eq(workflowStepRuns.companyId, ownedRun.companyId), eq(workflowStepRuns.id, runningStep.id)));
+          } catch (error) {
+            if (error instanceof ToolGatewayHttpError && error.reasonCode === "approval_required") {
+              const details = error.details as { invocationId?: string; actionRequestId?: string } | undefined;
+              if (details?.invocationId && details.actionRequestId) {
+                await scheduleToolActionWait(db, ownedRun, runningStep, details.invocationId, details.actionRequestId, actor);
+                return;
+              }
+            }
+            if (!(error instanceof HttpError) && !(error instanceof ToolGatewayHttpError)) throw error;
+            const code = error instanceof ToolGatewayHttpError ? error.reasonCode :
+              typeof error.details === "object" && error.details !== null && "code" in error.details ?
+                String(error.details.code) : "workflow_connector_denied";
+            throw new WorkflowCheckpointError(code, "Connector execution was blocked or failed; inspect its governed invocation before retrying");
+          }
+          await completeRunningStep(db, ownedRun, runningStep, output, actor);
+        }
+      } else if (current.type === "automation.artifact") {
+        const config = current.config as Record<string, unknown>;
+        const artifactId = config.artifactId as string;
+        const versionId = config.artifactVersionId as string;
+        const input = config.inputMapping
+          ? evaluateWorkflowTransformMapping(config.inputMapping as Record<string, string>, {
+            input: transformInput(graph, current, outputs), trigger: ownedRun.triggerPayload ?? {}, variables, steps: outputs,
+          })
+          : transformInput(graph, current, outputs);
+        const prepared = await prepareRunnableStep(db, ownedRun, current.id,
+          { artifactId, artifactVersionId: versionId, input }, actor);
+        if (prepared.checkpoint) {
+          output = prepared.checkpoint.outputJson;
+        } else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) throw new WorkflowCheckpointError("workflow_checkpoint_state_invalid",
+            "Artifact step produced no runnable attempt");
+          try {
+            const executed = await automationArtifactRuntimeService(db).execute(
+              ownedRun.companyId, artifactId, versionId, input, actor,
+              { timeoutMs: Math.min(5_000, (current.timeoutSeconds ?? 5) * 1_000) });
+            output = executed.output;
+          } catch (error) {
+            if (!(error instanceof HttpError)) throw error;
+            const code = typeof error.details === "object" && error.details !== null && "code" in error.details
+              ? String(error.details.code) : "automation_artifact_execution_denied";
+            throw new WorkflowCheckpointError(code, "Artifact execution failed its authorization, binding or validation gate");
+          }
           await completeRunningStep(db, ownedRun, runningStep, output, actor);
         }
       } else if (current.type === "core.condition") {
@@ -5893,6 +6398,17 @@ async function executeWorkflowGraph(
               providerAllowsRetry: true,
             });
           }
+        }
+      } else if (current.type === "agent.direct_call") {
+        const config = directAgentConfig.parse(current.config);
+        const input = evaluateWorkflowTransformMapping(config.inputMapping, { input: transformInput(graph, current, outputs), trigger: ownedRun.triggerPayload ?? {}, variables, steps: outputs });
+        const prepared = await prepareRunnableStep(db, ownedRun, current.id, input, actor);
+        if (prepared.checkpoint) output = prepared.checkpoint.outputJson;
+        else {
+          runningStep = prepared.running ?? undefined;
+          if (!runningStep) throw new WorkflowCheckpointError("workflow_checkpoint_state_invalid", "Direct call produced no runnable attempt");
+          await scheduleDirectAgentWait(db, ownedRun, current, runningStep, actor, runtimeDeps);
+          return;
         }
       } else if (current.type === "agent.external") {
         const config = externalAgentNodeConfig(current);
@@ -6097,15 +6613,20 @@ async function executeWorkflowGraph(
     }
 
     outputs[current.id] = output;
+    const checkpoint = await nodeAttempts(db, ownedRun, current.id);
+    memoryReferences[current.id] = checkpoint[0]?.memoryRecordIds ?? actor.memoryRecordIds ?? [];
+    processed.add(current.id);
     const outgoing = graph.edges.filter((edge) => edge.source === current!.id);
     if (outgoing.length === 0) {
-      current = null;
+      current = nextQueuedNode();
       continue;
     }
 
-    if (current.type === "core.condition") {
-      const selectedKey = conditionResult ? "true" : "false";
-      const selected = outgoing.find((edge) => conditionBranchKey(edge) === selectedKey);
+    const recoveryBranches = ["follow_failure_branch", "wait_for_human"].includes(current.failurePolicy ?? "fail_workflow");
+    if (current.type === "core.condition" || current.type === "core.switch" || recoveryBranches) {
+      const selectedKey: string | null = recoveryBranches ? checkpoint[0]?.failureResolution?.resolved ? "failure" : "success" : current.type === "core.switch" ? switchBranch : conditionResult ? "true" : "false";
+      const selected: WorkflowGraphV1["edges"][number] | undefined = outgoing.find((edge) => recoveryBranches || current!.type === "core.switch"
+        ? (edge.sourceHandle ?? edge.label ?? "").trim() === selectedKey : conditionBranchKey(edge) === selectedKey);
       if (!selected) {
         await failRun(
           db,
@@ -6118,6 +6639,7 @@ async function executeWorkflowGraph(
       }
 
       const protectedNodeIds = reachableFrom(graph, selected.target);
+      for (const queuedId of queue) for (const id of reachableFrom(graph, queuedId)) protectedNodeIds.add(id);
       for (const edge of outgoing) {
         if (edge.id === selected.id) continue;
         await markSkippedBranch(
@@ -6129,11 +6651,12 @@ async function executeWorkflowGraph(
           actor,
         );
       }
-      current = nodes.get(selected.target) ?? null;
+      queue.unshift(selected.target);
+      current = nextQueuedNode();
       continue;
     }
 
-    if (outgoing.length !== 1) {
+    if (outgoing.length !== 1 && current.type !== "core.parallel") {
       await failRun(
         db,
         ownedRun,
@@ -6143,7 +6666,8 @@ async function executeWorkflowGraph(
       );
       return;
     }
-    current = nodes.get(outgoing[0]!.target) ?? null;
+    queue.push(...outgoing.map((edge) => edge.target));
+    current = nextQueuedNode();
   }
 
   await finishRun(db, ownedRun, actor);
@@ -6155,6 +6679,22 @@ async function executeClaimedRun(
   actor: WorkflowRunActor,
   runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ) {
+  // A recovery worker owns the lease, but does not become the authority for
+  // effects. Keep the initiating principal and recheck its current membership.
+  if (run.executionPrincipal) {
+    actor = {
+      principal: run.executionPrincipal,
+      runId: run.executionAgentRunId,
+      responsibleUserId: run.responsibleUserId,
+    };
+    try {
+      await assertActorCompanyScope(db, run.companyId, actor);
+    } catch {
+      await failRun(db, run, actor, "workflow_execution_principal_revoked",
+        "The initiating principal no longer has access to this company");
+      return;
+    }
+  }
   const revision = await revisionForRun(db, run);
   if (!revision) {
     await failRun(
@@ -6167,23 +6707,7 @@ async function executeClaimedRun(
     return;
   }
 
-  const unsupportedNodeTypes = [
-    ...new Set(
-      revision.graph.nodes
-        .filter(
-          (node) =>
-            node.type !== "core.manual_trigger" &&
-            node.type !== "core.transform" &&
-            node.type !== "core.condition" &&
-            node.type !== "core.wait" &&
-            node.type !== "human.approval" &&
-            node.type !== "work.create_task" &&
-            node.type !== "agent.task" &&
-            node.type !== "agent.external",
-        )
-        .map((node) => node.type),
-    ),
-  ].sort();
+  const unsupportedNodeTypes = Array.from(new Set(revision.graph.nodes.filter((node) => !EXECUTABLE_WORKFLOW_NODE_TYPES.has(node.type)).map((node) => node.type))).sort();
   if (unsupportedNodeTypes.length > 0) {
     await failRun(
       db,
@@ -6564,6 +7088,7 @@ async function requestWorkflowRunCancellation(
   runId: string,
   reason: string,
   actor: WorkflowRunActor,
+  terminalFailure?: { code: "workflow_deadline_exceeded" | "workflow_wait_timeout" | "workflow_execution_principal_revoked"; message: string },
 ): Promise<typeof workflowRuns.$inferSelect> {
   const publications: ActivityPublication[] = [];
   const updated = await db.transaction(async (tx) => {
@@ -6603,6 +7128,14 @@ async function requestWorkflowRunCancellation(
         ),
       );
 
+    const reviewInvocations = await tx.select({ id: toolInvocations.id }).from(toolInvocations).where(and(
+      eq(toolInvocations.companyId, companyId), eq(toolInvocations.workflowRunId, run.id)));
+    if (reviewInvocations.length) {
+      await tx.update(toolActionRequests).set({ status: "cancelled", resolvedAt: now, updatedAt: now }).where(and(
+        eq(toolActionRequests.companyId, companyId), inArray(toolActionRequests.invocationId, reviewInvocations.map((row) => row.id)),
+        inArray(toolActionRequests.status, ["pending", "approved"])));
+    }
+
     const directCancelledSteps = await tx
       .update(workflowStepRuns)
       .set({
@@ -6641,7 +7174,7 @@ async function requestWorkflowRunCancellation(
     const cancelledWaits = await tx
       .update(workflowWaits)
       .set({
-        status: "cancelled",
+        status: terminalFailure ? "timed_out" : "cancelled",
         resolutionJson: {
           status: "cancelled",
           errorCode: "workflow_parent_cancelled",
@@ -6827,6 +7360,7 @@ async function requestWorkflowRunCancellation(
       .update(workflowRuns)
       .set({
         status: "cancelling",
+        ...(terminalFailure ? { failureCode: terminalFailure.code, failureMessage: terminalFailure.message } : {}),
         executionOwnerId: null,
         leaseExpiresAt: null,
         ownerHeartbeatAt: null,
@@ -6891,7 +7425,7 @@ async function cancelWorkflowChildIssues(
       and(
         eq(workflowWaits.companyId, run.companyId),
         eq(workflowWaits.workflowRunId, run.id),
-        eq(workflowWaits.status, "cancelled"),
+        inArray(workflowWaits.status, ["cancelled", "timed_out"]),
         eq(workflowWaits.referenceType, "issue"),
       ),
     );
@@ -7002,6 +7536,7 @@ async function cancelWorkflowHeartbeatChildren(
   const childSteps = await db
     .select({
       heartbeatRunId: workflowStepRuns.heartbeatRunId,
+      stepId: workflowStepRuns.id,
     })
     .from(workflowStepRuns)
     .where(
@@ -7009,16 +7544,18 @@ async function cancelWorkflowHeartbeatChildren(
         eq(workflowStepRuns.companyId, run.companyId),
         eq(workflowStepRuns.workflowRunId, run.id),
         eq(workflowStepRuns.status, "cancelling"),
-        sql`${workflowStepRuns.heartbeatRunId} is not null`,
+
       ),
     );
 
+  const unboundDirectWaits = await db.select({ stepId: workflowWaits.referenceId }).from(workflowWaits).where(and(
+    eq(workflowWaits.companyId, run.companyId), eq(workflowWaits.workflowRunId, run.id), eq(workflowWaits.kind, "direct_agent_run")));
+  const keys = unboundDirectWaits.flatMap((wait) => wait.stepId ? [`workflow-direct-agent:${wait.stepId}`] : []);
+  const dispatched = keys.length ? await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).innerJoin(agentWakeupRequests,
+    and(eq(agentWakeupRequests.companyId, heartbeatRuns.companyId), eq(agentWakeupRequests.id, heartbeatRuns.wakeupRequestId)))
+    .where(and(eq(heartbeatRuns.companyId, run.companyId), inArray(agentWakeupRequests.idempotencyKey, keys))) : [];
   const heartbeatRunIds = [
-    ...new Set(
-      childSteps.flatMap((step) =>
-        step.heartbeatRunId ? [step.heartbeatRunId] : [],
-      ),
-    ),
+    ...new Set([...dispatched.map((child) => child.id), ...childSteps.flatMap((step) => step.heartbeatRunId ? [step.heartbeatRunId] : [])]),
   ];
   if (heartbeatRunIds.length === 0) return true;
 
@@ -7093,6 +7630,7 @@ async function finalizeWorkflowRunCancellation(
       .then((rows) => rows[0] ?? null);
     if (!current) return null;
     if (current.status === "cancelled") return current;
+    const terminalFailure = current.failureCode === "workflow_deadline_exceeded" || current.failureCode === "workflow_wait_timeout" || current.failureCode === "workflow_execution_principal_revoked";
     if (current.status !== "cancelling") return null;
 
     const now = new Date();
@@ -7152,7 +7690,7 @@ async function finalizeWorkflowRunCancellation(
     const [cancelledRun] = await tx
       .update(workflowRuns)
       .set({
-        status: "cancelled",
+        status: terminalFailure ? "failed" : "cancelled",
         executionOwnerId: null,
         leaseExpiresAt: null,
         ownerHeartbeatAt: null,
@@ -7184,7 +7722,7 @@ async function finalizeWorkflowRunCancellation(
       actor,
       {
         companyId: run.companyId,
-        action: "workflow.run_cancelled",
+        action: terminalFailure ? "workflow.run_failed" : "workflow.run_cancelled",
         entityType: "workflow_run",
         entityId: cancelledRun.id,
         details: {
@@ -7217,7 +7755,17 @@ async function continueWorkflowRunCancellation(
     cancelWorkflowChildIssues(db, run, actor),
     cancelWorkflowHeartbeatChildren(db, run, reason, runtimeDeps),
   ]);
-  if (!issuesTerminal || !heartbeatChildrenTerminal) return "deferred";
+  const children = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId), eq(workflowRuns.parentWorkflowRunId, run.id)));
+  let workflowsTerminal = true;
+  for (const child of children) {
+    if (["succeeded", "failed", "cancelled"].includes(child.status)) continue;
+    const requested = await requestWorkflowRunCancellation(db, run.companyId, child.id, reason, actor);
+    if (requested.status !== "cancelled") {
+      const outcome = await continueWorkflowRunCancellation(db, requested, reason, actor, runtimeDeps);
+      if (outcome !== "recovered") workflowsTerminal = false;
+    }
+  }
+  if (!issuesTerminal || !heartbeatChildrenTerminal || !workflowsTerminal) return "deferred";
 
   const finalized = await finalizeWorkflowRunCancellation(
     db,
@@ -7236,9 +7784,26 @@ async function continueWorkflowRunCancellation(
         ),
       )
       .then((rows) => rows[0] ?? null);
-    return current?.status === "cancelled" ? "recovered" : "raced";
+    return current?.status === "cancelled" || current?.status === "failed" ? "recovered" : "raced";
   }
   return "recovered";
+}
+
+async function expireWaitingWorkflow(db: Db, run: typeof workflowRuns.$inferSelect, now: Date,
+  runtimeDeps: WorkflowExecutorRuntimeDeps): Promise<"recovered" | "raced" | "deferred" | null> {
+  if (run.status !== "waiting") return null;
+  const revision = await revisionForRun(db, run);
+  const deadlineExpired = revision && remainingWorkflowDeadlineMs(run, revision.graph, now) === 0;
+  const wait = await activeWaitForRun(db, run);
+  // These waits have receipt-specific timeout handling that preserves effects.
+  const handledSeparately = wait && ["tool_action", "external_agent_run", "subworkflow"].includes(wait.kind);
+  const waitExpired = wait?.timeoutAt && wait.timeoutAt <= now && !handledSeparately;
+  if (!deadlineExpired && !waitExpired) return null;
+  const actor: WorkflowRunActor = { principal: { type: "system", service: "workflow-deadline" } };
+  const reason = deadlineExpired ? "Workflow total deadline exceeded" : "Workflow wait timeout exceeded";
+  const requested = await requestWorkflowRunCancellation(db, run.companyId, run.id, reason, actor,
+    { code: deadlineExpired ? "workflow_deadline_exceeded" : "workflow_wait_timeout", message: reason });
+  return continueWorkflowRunCancellation(db, requested, reason, actor, runtimeDeps);
 }
 
 async function recoverWaitingCandidate(
@@ -7247,10 +7812,22 @@ async function recoverWaitingCandidate(
   now: Date,
   runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ): Promise<"recovered" | "raced" | "deferred"> {
+  const expired = await expireWaitingWorkflow(db, candidate, now, runtimeDeps);
+  if (expired) return expired;
   const scheduledStep = await retryScheduledStepForRun(db, candidate);
   if (!scheduledStep) {
     const wait = await activeWaitForRun(db, candidate);
     if (!wait) return "deferred";
+    if (wait.kind === "subworkflow") return resolveSubworkflowWait(db, candidate, wait, now, runtimeDeps);
+    if (wait.kind === "tool_action") {
+      const resolved = await resolveToolActionWait(db, candidate, wait, now);
+      if (!resolved) return "deferred";
+      const actor: WorkflowRunActor = { principal: { type: "system", service: "workflow-tool-review" } };
+      if (resolved.succeeded) await executeClaimedRun(db, resolved.run, actor, runtimeDeps);
+      else await failRun(db, resolved.run, actor, resolved.errorCode, "The governed tool review did not complete successfully");
+      return "recovered";
+    }
+    if (wait.kind === "direct_agent_run") return resolveDirectAgentWait(db, candidate, wait, now, runtimeDeps);
     if (wait.kind === "external_agent_run") {
       return resolveExternalAgentWait(
         db,
@@ -7491,23 +8068,7 @@ export async function resolveWorkflowExecutionRevision(
     });
   }
 
-  const unsupportedNodeTypes = [
-    ...new Set(
-      revision.graph.nodes
-        .filter(
-          (node) =>
-            node.type !== "core.manual_trigger" &&
-            node.type !== "core.transform" &&
-            node.type !== "core.condition" &&
-            node.type !== "core.wait" &&
-            node.type !== "human.approval" &&
-            node.type !== "work.create_task" &&
-            node.type !== "agent.task" &&
-            node.type !== "agent.external",
-        )
-        .map((node) => node.type),
-    ),
-  ].sort();
+  const unsupportedNodeTypes = Array.from(new Set(revision.graph.nodes.filter((node) => !EXECUTABLE_WORKFLOW_NODE_TYPES.has(node.type)).map((node) => node.type))).sort();
   const triggers = revision.graph.nodes.filter(
     (node) => node.type === "core.manual_trigger",
   );
@@ -7730,7 +8291,11 @@ export function workflowExecutorService(
         )
         .orderBy(desc(workflowRuns.createdAt))
         .limit(safeLimit);
-      return rows.map(mapRun);
+      const references = [...new Set(rows.flatMap((row) => row.memoryRecordIds))];
+      const erased = references.length ? await db.select({ recordId: memoryDeletionMarkers.recordId }).from(memoryDeletionMarkers)
+        .where(and(eq(memoryDeletionMarkers.companyId, companyId), inArray(memoryDeletionMarkers.recordId, references))) : [];
+      const erasedIds = new Set(erased.map((marker) => marker.recordId));
+      return rows.map((row) => row.memoryRecordIds.some((id) => erasedIds.has(id)) ? { ...mapRun(row), triggerPayload: {} } : mapRun(row));
     },
 
     executeQueuedRun: async (

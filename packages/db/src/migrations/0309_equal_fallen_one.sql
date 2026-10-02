@@ -1,0 +1,2 @@
+CREATE INDEX "tool_invocations_company_workflow_idx" ON "tool_invocations" USING btree ("company_id","workflow_run_id");--> statement-breakpoint
+ALTER TABLE "memory_deletion_markers" ADD CONSTRAINT "memory_deletion_markers_record_check" CHECK (("memory_deletion_markers"."kind" = 'record' and "memory_deletion_markers"."record_id" is not null) or ("memory_deletion_markers"."kind" <> 'record' and "memory_deletion_markers"."record_id" is null));

@@ -534,8 +534,9 @@ describePg("Memory jobs", () => {
       .select()
       .from(memoryRecords)
       .orderBy(memoryRecords.title);
-    expect(stored.find((row) => row.title === "Expired")?.retentionState)
-      .toBe("expired");
+    expect(stored.find((row) => row.deletedAt !== null)).toMatchObject({
+      retentionState: "expired", content: "", title: null, summary: null, metadata: {},
+    });
     expect(stored.find((row) => row.title === "Current")?.retentionState)
       .toBe("active");
 

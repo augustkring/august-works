@@ -1,3 +1,6 @@
+import { signalRunningProcess } from "@paperclipai/adapter-utils/server-utils";
+import { resolveWorkflowConnectorSession, type WorkflowGatewayContext } from "./workflows/workflow-connector-authority.js";
+import { validateWorkflowOutput, WorkflowOutputSchemaError } from "./workflows/workflow-output-schema.js";
 import { COGNEE_STDIO_TEMPLATE, cogneeCloudUrl, callCogneeCloud } from "./cognee-connection.js";
 import { HttpError } from "../errors.js";
 import { claimSlackRateLimitRetry } from "./connectors/slack-retry.js";
@@ -332,6 +335,8 @@ export interface ToolGatewaySession {
   approvedSlackInvocationId?: string;
   createdAt: Date;
   expiresAt: Date;
+  workflowRunId?: string;
+  workflowNodeId?: string;
 }
 
 export type ToolGatewayRuntimeSlot = ToolRuntimeSlotView;
@@ -354,10 +359,12 @@ interface ExecuteGatewayToolInput {
   tool: string;
   parameters?: unknown;
   timeoutMs?: number;
+  signal?: AbortSignal;
   approvedActionRequestId?: string | null;
   idempotencyKey?: string | null;
   callerHeaders?: Record<string, string | string[] | undefined>;
 }
+
 
 interface ExecuteTestCallInput {
   companyId: string;
@@ -1888,6 +1895,7 @@ export function createToolGatewayService(
           issueId: input.issueId,
           projectId: input.session?.projectId ?? null,
           runId: input.runId,
+          workflowRunId: input.session?.workflowRunId ?? null,
           gatewaySessionId: input.session?.id ?? null,
           identityContextId: input.session?.identityContextId ?? null,
           gatewayId: input.session?.gatewayId ?? null,
@@ -2371,7 +2379,7 @@ export function createToolGatewayService(
     invocationId: string;
     actionRequestId: string;
     interactionId?: string | null;
-    issueId: string;
+    issueId: string | null;
     toolName: string;
     argumentsHash: string;
   }): Promise<never> {
@@ -2386,7 +2394,8 @@ export function createToolGatewayService(
         issueId: input.issueId,
         tool: input.toolName,
         argumentsHash: input.argumentsHash,
-        instructions: await approvalRequiredInstructions(input.issueId),
+        instructions: input.issueId ? await approvalRequiredInstructions(input.issueId)
+          : "Review the action on the workflow run. Recovery will continue from its durable receipt after approval.",
       },
     );
   }
@@ -2410,7 +2419,7 @@ export function createToolGatewayService(
       },
     );
 
-    if (!input.session.issueId) {
+    if (!input.session.issueId && !input.session.workflowRunId) {
       await db
         .update(toolInvocations)
         .set({
@@ -2553,6 +2562,7 @@ export function createToolGatewayService(
           companyId: input.session.companyId,
           type: "request_board_approval",
           requestedByAgentId: input.session.agentId,
+          requestedByUserId: input.session.actorType === "user" ? input.session.actorId : null,
           payload: {
             title: `Approve high-risk tool action: ${input.tool.name}`,
             summary: `${input.tool.name} is classified as ${input.tool.risk} and requires formal board approval before execution.`,
@@ -2572,7 +2582,7 @@ export function createToolGatewayService(
         })
         .returning();
       formalApprovalId = approval.id;
-      await db
+      if (input.session.issueId) await db
         .insert(issueApprovals)
         .values({
           companyId: input.session.companyId,
@@ -2583,7 +2593,7 @@ export function createToolGatewayService(
         .onConflictDoNothing();
     }
 
-    const interaction = await interactions.create(
+    const interaction = input.session.issueId ? await interactions.create(
       { id: input.session.issueId, companyId: input.session.companyId },
       {
         kind: "request_confirmation",
@@ -2638,7 +2648,7 @@ export function createToolGatewayService(
         },
       },
       { agentId: input.session.agentId },
-    );
+    ) : null;
 
     // Sign the row only while it is still pending. A concurrent matching call can
     // expire this row when the create runs longer than the abandon grace time.
@@ -2649,7 +2659,7 @@ export function createToolGatewayService(
     const signedRows = await db
       .update(toolActionRequests)
       .set({
-        interactionId: interaction.id,
+        interactionId: interaction?.id ?? null,
         canonicalArgumentsHash,
         canonicalArgumentsSummary: input.argumentsSummary,
         signedArguments,
@@ -2693,13 +2703,13 @@ export function createToolGatewayService(
       );
     }
 
-    await db
+    if (input.session.issueId && interaction) await db
       .insert(toolActionDeliveries)
       .values({
         companyId: input.session.companyId,
         actionRequestId: actionRequest.id,
         issueId: input.session.issueId,
-        interactionId: interaction.id,
+        interactionId: interaction?.id ?? null,
       })
       .onConflictDoNothing();
 
@@ -2715,7 +2725,7 @@ export function createToolGatewayService(
       argumentsSummary: input.argumentsSummary,
       metadata: {
         actionRequestId: actionRequest.id,
-        interactionId: interaction.id,
+        interactionId: interaction?.id ?? null,
         approvalId: formalApprovalId,
       },
       tool: input.tool,
@@ -2731,7 +2741,7 @@ export function createToolGatewayService(
       details: {
         invocationId: input.invocation.id,
         actionRequestId: actionRequest.id,
-        interactionId: interaction.id,
+        interactionId: interaction?.id ?? null,
         approvalId: formalApprovalId,
         decision: "require_approval",
         reasonCode: "requires_approval_policy",
@@ -2745,11 +2755,24 @@ export function createToolGatewayService(
     return throwApprovalRequired({
       invocationId: input.invocation.id,
       actionRequestId: actionRequest.id,
-      interactionId: interaction.id,
+      interactionId: interaction?.id ?? null,
       issueId: input.session.issueId,
       toolName: input.tool.name,
       argumentsHash: canonicalArgumentsHash,
     });
+  }
+
+  function typedWorkflowToolResult(tool: ToolGatewayDescriptor, value: unknown) {
+    const schema = asRecord(asRecord(tool.providerMetadata)?.outputSchema);
+    if (!schema) return value;
+    const data = asRecord(value)?.structuredContent ?? value;
+    try { validateWorkflowOutput(schema, data); }
+    catch (error) {
+      if (!(error instanceof WorkflowOutputSchemaError)) throw error;
+      throw new ToolGatewayHttpError(502, "Connected action output did not match its published schema",
+        error.code === "workflow_output_schema_invalid" ? "tool_output_schema_invalid" : "tool_output_schema_mismatch");
+    }
+    return data;
   }
 
   function policyInputForTool(input: {
@@ -2769,6 +2792,8 @@ export function createToolGatewayService(
       idempotencyKey: input.idempotencyKey,
       consumeRateLimit: input.consumeRateLimit,
       heartbeatRunId: input.session.runId,
+      workflowRunId: input.session.workflowRunId,
+      workflowNodeId: input.session.workflowNodeId,
       issueId: input.session.issueId,
       projectId: input.session.projectId,
       gatewayId: input.session.gatewayId ?? null,
@@ -2785,6 +2810,8 @@ export function createToolGatewayService(
     idempotencyKey?: string | null;
     consumeRateLimit?: boolean;
     heartbeatRunId?: string | null;
+    workflowRunId?: string | null;
+    workflowNodeId?: string | null;
     issueId?: string | null;
     projectId?: string | null;
     gatewayId?: string | null;
@@ -2801,6 +2828,8 @@ export function createToolGatewayService(
       },
       runContext: {
         heartbeatRunId: input.heartbeatRunId ?? null,
+        workflowRunId: input.workflowRunId ?? null,
+        workflowNodeId: input.workflowNodeId ?? null,
         issueId: input.issueId ?? null,
         projectId: input.projectId ?? null,
         gatewayId: input.gatewayId ?? null,
@@ -5288,6 +5317,7 @@ export function createToolGatewayService(
     protocolMethod?: string;
     protocolParams?: Record<string, unknown>;
     timeoutMs: number;
+    signal?: AbortSignal;
   }): Promise<unknown> {
     if (input.template.templateId === "paperclip.cognee-cloud") {
       if (input.protocolMethod === "resources/list") return { resources: [] };
@@ -5298,7 +5328,7 @@ export function createToolGatewayService(
       return callCogneeCloud({
         baseUrl: input.env.COGNEE_BASE_URL ?? "", apiKey: input.env.COGNEE_API_KEY ?? "",
         tool: input.entry?.toolName ?? "", parameters: asRecord(input.parameters) ?? {},
-        signal: AbortSignal.timeout(input.timeoutMs),
+        signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(input.timeoutMs)]) : AbortSignal.timeout(input.timeoutMs),
         request: async (url, init) => {
           const response = await guardedRemoteHttpFetch(url, init, remoteHttpFetchOptions());
           const body = await readBoundedRemoteResponse(response);
@@ -5324,6 +5354,7 @@ export function createToolGatewayService(
     const child = spawn(input.template.command, input.template.args, {
       env: input.env,
       stdio: ["pipe", "pipe", "pipe"],
+      detached: process.platform !== "win32",
     });
     let stdout = "";
     let stderr = "";
@@ -5335,28 +5366,33 @@ export function createToolGatewayService(
         reject: (error: Error) => void;
       }
     >();
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      for (const { reject } of pending.values()) {
-        reject(
-          new ToolGatewayHttpError(
-            504,
-            "Local stdio MCP tool call timed out",
-            "tool_timeout",
-            {
-              connectionId: input.connection.id,
-              catalogEntryId: input.entry?.id ?? null,
-            },
-          ),
-        );
-      }
+    const ownedProcess = { child, processGroupId: process.platform !== "win32" ? child.pid ?? null : null };
+    let terminalError: Error | null = null;
+    const stop = (error: Error) => {
+      terminalError ??= error;
+      signalRunningProcess(ownedProcess, "SIGTERM");
+      for (const { reject } of pending.values()) reject(terminalError);
       pending.clear();
+    };
+    const abort = () => stop(new ToolGatewayHttpError(409, "Local stdio invocation cancelled", "tool_cancelled"));
+    child.stdin.on("error", () => stop(stdioProtocolError("Local stdio request stream closed")));
+    input.signal?.addEventListener("abort", abort, { once: true });
+    if (input.signal?.aborted) abort();
+    const timer = setTimeout(() => {
+      stop(new ToolGatewayHttpError(504, "Local stdio MCP tool call timed out", "tool_timeout",
+        { connectionId: input.connection.id, catalogEntryId: input.entry?.id ?? null }));
     }, input.timeoutMs);
     timer.unref?.();
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
+      if (terminalError) return;
       stdout += chunk;
+      if (Buffer.byteLength(stdout, "utf8") > MAX_REMOTE_MCP_RESPONSE_BYTES) {
+        stop(stdioProtocolError("Local stdio MCP response exceeds the size limit"));
+        stdout = "";
+        return;
+      }
       let newline = stdout.indexOf("\n");
       while (newline >= 0) {
         const line = stdout.slice(0, newline).trim();
@@ -5420,9 +5456,11 @@ export function createToolGatewayService(
           rejectPending(gatewayError);
         }
         pending.clear();
-        reject(gatewayError);
+        terminalError ??= gatewayError;
+        resolve();
       });
       child.on("exit", (code, signal) => {
+        terminalError ??= stdioProtocolError("Local stdio process has exited", { code, signal });
         if (pending.size === 0) {
           resolve();
           return;
@@ -5448,6 +5486,7 @@ export function createToolGatewayService(
       });
     });
     const request = (method: string, params: Record<string, unknown>) => {
+      if (terminalError) return Promise.reject(terminalError);
       const id = nextId;
       nextId += 1;
       const promise = new Promise<unknown>((resolve, reject) => {
@@ -5455,6 +5494,7 @@ export function createToolGatewayService(
       });
       child.stdin.write(
         `${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`,
+        (error) => { if (error) stop(stdioProtocolError("Local stdio request could not be written")); },
       );
       return promise;
     };
@@ -5476,9 +5516,13 @@ export function createToolGatewayService(
       );
     } finally {
       clearTimeout(timer);
+      input.signal?.removeEventListener("abort", abort);
       child.stdin.end();
-      child.kill("SIGTERM");
-      await exitPromise.catch(() => undefined);
+      signalRunningProcess(ownedProcess, "SIGTERM");
+      // Bound cleanup even when the provider or a descendant ignores SIGTERM.
+      await new Promise<void>((resolve) => setTimeout(resolve, 250));
+      signalRunningProcess(ownedProcess, "SIGKILL");
+      await Promise.race([exitPromise, new Promise<void>((resolve) => setTimeout(resolve, 250))]);
     }
   }
 
@@ -6175,6 +6219,7 @@ export function createToolGatewayService(
     invocationId: string,
     callerHeaders?: ExecuteGatewayToolInput["callerHeaders"],
     useDefaultTimeout = false,
+    signal?: AbortSignal,
   ): Promise<RemoteHttpExecutionResult> {
     const { entry, connection } = await resolveConnectedRemoteTool(
       session,
@@ -6217,6 +6262,9 @@ export function createToolGatewayService(
       },
     };
     const controller = new AbortController();
+    const abort = () => controller.abort(signal?.reason);
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
     const timer = setTimeout(() => controller.abort(), ms);
     timer.unref?.();
     try {
@@ -6599,6 +6647,7 @@ export function createToolGatewayService(
       );
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
     }
   }
 
@@ -6608,6 +6657,7 @@ export function createToolGatewayService(
     parameters: unknown,
     ms: number,
     useProviderDefaultTimeout = false,
+    signal?: AbortSignal,
   ): Promise<RemoteHttpExecutionResult> {
     const { entry, connection } = await resolveConnectedLocalStdioTool(
       session,
@@ -6621,7 +6671,7 @@ export function createToolGatewayService(
       template,
       grant,
     );
-    const invoke = () => callLocalStdioMcp({ connection, entry, template, env, parameters,
+    const invoke = () => callLocalStdioMcp({ connection, entry, template, env, parameters, signal,
       timeoutMs: useProviderDefaultTimeout && template.templateId === "paperclip.cognee-cloud" ? 60_000 : ms });
     // Cognee is a bundled HTTP client. Provider failures are tool failures, not
     // crashed local processes, and must never consume slots or restart budgets.
@@ -7381,6 +7431,7 @@ export function createToolGatewayService(
   ): boolean {
     return (
       invocation.actorType === "user" &&
+      invocation.workflowRunId === null && invocation.workflowNodeId === null &&
       invocation.runId === null &&
       invocation.issueId === null &&
       invocation.gatewayId === null &&
@@ -7968,11 +8019,36 @@ export function createToolGatewayService(
   // before provider dispatch, because tool/snapshot resolution between the two
   // involves network calls and leaves a seconds-wide window for the issue to
   // close.
+  async function workflowApprovedActionSession(invocation: typeof toolInvocations.$inferSelect) {
+    if (!invocation.workflowRunId || !invocation.workflowNodeId) {
+      throw new ToolGatewayHttpError(409, "Workflow action binding is unavailable", "workflow_connector_binding_invalid");
+    }
+    const { session } = await resolveWorkflowConnectorSession(db, {
+      companyId: invocation.companyId, workflowRunId: invocation.workflowRunId,
+      nodeId: invocation.workflowNodeId, approvalInvocationId: invocation.id,
+    }, invocation.idempotencyKey, options.deploymentMode);
+    if (session.actorType !== invocation.actorType || session.actorId !== invocation.actorId) {
+      throw new ToolGatewayHttpError(409, "Workflow action authority changed", "workflow_connector_binding_invalid");
+    }
+    return session;
+  }
+
   async function assertIssueOpenForApprovedAction(input: {
     claimed: typeof toolActionRequests.$inferSelect;
     invocation: typeof toolInvocations.$inferSelect;
   }): Promise<{ projectId: string | null }> {
     const { claimed, invocation } = input;
+    if (invocation.workflowRunId) {
+      try {
+        const session = await workflowApprovedActionSession(invocation);
+        if (!invocation.issueId) return { projectId: session.projectId };
+      } catch (error) {
+        await markApprovedActionFailed({ actionRequestId: claimed.id, invocationId: invocation.id,
+          claimUpdatedAt: claimed.updatedAt, expectedInvocationStatus: "awaiting_approval",
+          error: error instanceof Error ? error : new Error("Workflow review is no longer active") });
+        throw error;
+      }
+    }
     const [issue] = await db
       .select({ status: issues.status, projectId: issues.projectId })
       .from(issues)
@@ -8036,8 +8112,8 @@ export function createToolGatewayService(
   }) {
     const { actionRequest, invocation } = input;
     if (
-      !invocation.agentId ||
-      !invocation.issueId ||
+      (!invocation.workflowRunId && (!invocation.agentId || !invocation.issueId)) ||
+      (invocation.workflowNodeId !== null && invocation.workflowRunId === null) ||
       isTestOriginInvocation(invocation)
     ) {
       throw new ToolGatewayHttpError(
@@ -8128,7 +8204,9 @@ export function createToolGatewayService(
       throw error;
     }
 
-    const session: ToolGatewaySession = {
+    const session: ToolGatewaySession = invocation.workflowRunId
+      ? await workflowApprovedActionSession(invocation)
+      : {
       id: `approved-action:${claimed.id}`,
       token: "",
       companyId: invocation.companyId,
@@ -8345,6 +8423,7 @@ export function createToolGatewayService(
           resultHash: resultValidation.summary.sha256 ?? null,
           resultSummary: resultValidation.summary,
           resultSizeBytes: resultValidation.summary.sizeBytes ?? null,
+          workflowResultJson: session.workflowRunId ? typedWorkflowToolResult(tool, resultValidation.value) : null,
           completedAt: now,
           updatedAt: now,
         })
@@ -9889,7 +9968,7 @@ export function createToolGatewayService(
         !isTestOriginInvocation(invocation) &&
         signedPayload.executionOnApprove === true
       ) {
-        const [issue] = await db
+        const [issue] = invocation.issueId ? await db
           .select()
           .from(issues)
           .where(
@@ -9898,21 +9977,23 @@ export function createToolGatewayService(
               eq(issues.companyId, input.companyId),
             ),
           )
-          .limit(1);
-        if (!issue || issue.status === "done" || issue.status === "cancelled")
+          .limit(1) : [];
+        if (!invocation.workflowRunId && (!issue || issue.status === "done" || issue.status === "cancelled"))
           throw new ToolGatewayHttpError(
             409,
             "Task is closed",
             "action_task_closed",
           );
-        const session: ToolGatewaySession = {
+        const session: ToolGatewaySession = invocation.workflowRunId
+          ? await workflowApprovedActionSession(invocation)
+          : {
           id: `review:${actionRequest.id}`,
           token: "",
           companyId: input.companyId,
           agentId: invocation.agentId,
           runId: invocation.runId,
-          issueId: issue.id,
-          projectId: issue.projectId,
+          issueId: issue!.id,
+          projectId: issue!.projectId,
           createdAt: new Date(),
           expiresAt: new Date(Date.now() + DEFAULT_SESSION_TTL_MS),
         };
@@ -10006,8 +10087,10 @@ export function createToolGatewayService(
       return updated;
     },
 
-    async executeTool(input: ExecuteGatewayToolInput) {
-      const session = await getActiveSession(input.sessionToken, {
+    async executeTool(input: ExecuteGatewayToolInput, workflowContext?: WorkflowGatewayContext) {
+      const workflowBinding = workflowContext ? await resolveWorkflowConnectorSession(db, workflowContext,
+        input.idempotencyKey, options.deploymentMode) : null;
+      const session = workflowBinding?.session ?? await getActiveSession(input.sessionToken, {
         gatewayId: input.gatewayId ?? null,
         gatewayPublicId: input.gatewayPublicId ?? null,
         protocolMethod: "tools/call",
@@ -10076,7 +10159,22 @@ export function createToolGatewayService(
               : origin.responsibleUserId;
         }
       }
+      if (workflowBinding) {
+        const tools = [
+          ...await connectedMcpToolsForCompany(session.companyId),
+          ...await staticToolsForSession(session),
+          ...await githubBotToolsForSession(db, session),
+          ...await slackToolsForSession(db, session),
+        ];
+        const bound = tools.find((candidate) => candidate.catalogEntryId === workflowBinding.entry.id &&
+          candidate.connectionId === workflowBinding.entry.connectionId);
+        if (!bound) throw new ToolGatewayHttpError(404, "Published connector is unavailable", "workflow_connector_unavailable");
+        input = { ...input, tool: bound.name };
+      }
       let tool = await findToolForSession(session, input.tool);
+      if (workflowBinding && (tool.catalogEntryId !== workflowBinding.entry.id || tool.connectionId !== workflowBinding.entry.connectionId)) {
+        throw new ToolGatewayHttpError(403, "Connector does not match its published binding", "workflow_connector_binding_invalid");
+      }
       if (tool.providerType === "paperclip_slack_chat") {
         const definition = SLACK_TOOLS.find(t => t.name === tool.upstreamToolName);
         const args = definition?.schema.parse(input.parameters ?? {}) as Record<string, unknown> | undefined;
@@ -10138,6 +10236,7 @@ export function createToolGatewayService(
             status: "succeeded",
             resultHash: resultValidation.summary.sha256 ?? null,
             resultSummary: resultValidation.summary,
+            workflowResultJson: session.workflowRunId ? typedWorkflowToolResult(tool, resultValidation.value) : null,
             resultSizeBytes: resultValidation.summary.sizeBytes ?? null,
             startedAt: new Date(),
             completedAt: new Date(),
@@ -10179,7 +10278,7 @@ export function createToolGatewayService(
           invocationId: invocation.id,
           status: "completed" as const,
           tool: "search_tools",
-          result: resultValidation.value,
+          result: session.workflowRunId ? typedWorkflowToolResult(tool, resultValidation.value) : resultValidation.value,
         };
       }
 
@@ -10625,6 +10724,22 @@ export function createToolGatewayService(
           ? await claimSlackRateLimitRetry(db, { companyId: session.companyId, agentId: session.agentId, runId: session.runId, issueId: session.issueId, endpointId: String(asRecord(tool.providerMetadata)?.endpointId ?? ""), identityContextId: session.identityContextId }, invocationId)
           : false;
         if (recorded.replayed && !retryingSlackRateLimit) {
+          const reviewedReceipt = recorded.invocation.status === "succeeded" && recorded.invocation.approvalState === "approved";
+          if (!accessDecision.allowed && !(accessDecision.decision === "require_approval" && reviewedReceipt)) {
+            if (session.workflowRunId && accessDecision.decision === "require_approval" && recorded.invocation.status === "awaiting_approval") {
+              const [review] = await db.select().from(toolActionRequests).where(and(
+                eq(toolActionRequests.companyId, session.companyId), eq(toolActionRequests.invocationId, invocationId),
+                eq(toolActionRequests.status, "pending")));
+              if (review?.signedArguments) return throwApprovalRequired({ invocationId, actionRequestId: review.id,
+                interactionId: review.interactionId, issueId: session.issueId, toolName: tool.name,
+                argumentsHash: review.canonicalArgumentsHash });
+            }
+            throw new ToolGatewayHttpError(policyErrorStatus(accessDecision),
+            accessDecision.explanation, accessDecision.reasonCode, { invocationId });
+          }
+          if (session.workflowRunId && recorded.invocation.status !== "succeeded") throw new ToolGatewayHttpError(409,
+            "The original tool operation is pending or failed; its effects cannot be repeated",
+            "tool_idempotency_unsettled", { invocationId, status: recorded.invocation.status });
           await writeAudit({
             session,
             companyId: session.companyId,
@@ -10645,7 +10760,7 @@ export function createToolGatewayService(
             invocationId,
             status: "replayed" as const,
             tool: tool.name,
-            result: recorded.invocation.resultSummary ?? null,
+            result: session.workflowRunId ? recorded.invocation.workflowResultJson : storedInvocationResult(recorded.invocation),
           };
         }
         if (accessDecision.decision === "require_approval") {
@@ -10729,6 +10844,7 @@ export function createToolGatewayService(
 
       try {
         const executionTimeoutMs = timeoutMs(input.timeoutMs);
+        input.signal?.throwIfAborted();
         if (
           tool.providerType === "paperclip_plugin" &&
           (!session.agentId || !session.runId)
@@ -10749,6 +10865,7 @@ export function createToolGatewayService(
                 invocationId,
                 input.callerHeaders,
                 input.timeoutMs === undefined,
+                input.signal,
               )
             : tool.providerType === "mcp_local_stdio"
               ? await executeLocalStdioTool(
@@ -10757,6 +10874,7 @@ export function createToolGatewayService(
                   effectiveParameters,
                   executionTimeoutMs,
                   input.timeoutMs === undefined,
+                  input.signal,
                 )
               : null;
         const result = connectedMcpExecution
@@ -10804,6 +10922,7 @@ export function createToolGatewayService(
             status: "succeeded",
             resultHash: resultValidation.summary.sha256 ?? null,
             resultSummary: resultValidation.summary,
+            workflowResultJson: session.workflowRunId ? typedWorkflowToolResult(tool, resultValidation.value) : null,
             resultSizeBytes: resultValidation.summary.sizeBytes ?? null,
             completedAt,
             updatedAt: completedAt,
@@ -10888,7 +11007,7 @@ export function createToolGatewayService(
           status: "completed" as const,
           tool: virtualToolName ?? tool.name,
           targetTool: virtualToolName ? tool.name : undefined,
-          result: resultValidation.value,
+          result: session.workflowRunId ? typedWorkflowToolResult(tool, resultValidation.value) : resultValidation.value,
         };
       } catch (err) {
         const normalizedError =

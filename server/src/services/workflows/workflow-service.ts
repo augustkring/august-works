@@ -314,7 +314,7 @@ export function workflowService(db: Db) {
           { code: "workflow_publish_approval_unsupported", approvalId: input.approvalId },
         );
       }
-      return db.transaction(async (tx) => {
+      const publishedDetail = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
         const workflow = await lockWorkflow(tx, companyId, workflowId);
@@ -329,7 +329,7 @@ export function workflowService(db: Db) {
             currentDraftRevisionId: workflow.draftRevisionId,
           });
         }
-        await workflowNodeRegistryService(txDb).validatePublishGraph(companyId, draft.graph);
+        await workflowNodeRegistryService(txDb).validatePublishGraph(companyId, draft.graph, workflowId);
         const previousPublished = await getRevisionById(
           txDb,
           companyId,
@@ -390,6 +390,8 @@ export function workflowService(db: Db) {
         if (!detail) throw new Error("Workflow disappeared after publish");
         return detail;
       });
+      await (await import("../optimizer/optimizer-live-drift.js")).evaluateWorkflowOptimizerDrift(db, companyId, workflowId);
+      return publishedDetail;
     },
   };
 }

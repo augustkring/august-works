@@ -157,6 +157,17 @@ async function waitForPidExit(pid: number, timeoutMs = 2_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (!isPidAlive(pid)) return true;
+    if (process.platform === "linux") {
+      // Container PID 1 may retain a dead orphan as a zombie. It cannot run
+      // or receive signals; require actual death, rather than prompt reaping.
+      try {
+        const status = await fs.readFile(`/proc/${pid}/status`, "utf8");
+        if (/^State:\s+Z\b/m.test(status)) return true;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+        throw error;
+      }
+    }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   return !isPidAlive(pid);

@@ -39,7 +39,7 @@ describe("Workflow Node Registry", () => {
     }
   });
 
-  it("publishes deterministic Transform nodes and keeps Connector Action gated", async () => {
+  it("publishes deterministic Transform nodes and exposes governed Connector Action execution", async () => {
     const registry = workflowNodeRegistryService({} as Db);
     const graph = {
       version: 1 as const,
@@ -80,8 +80,8 @@ describe("Workflow Node Registry", () => {
       (definition) => definition.type === "connector.action",
     );
     expect(connector).toMatchObject({
-      publishState: "draft_only",
-      publishBlockedReason: "connector_execution_policy_not_ready",
+      publishState: "ready",
+      publishBlockedReason: null,
     });
   });
 
@@ -330,7 +330,7 @@ describe("Workflow Node Registry", () => {
     });
   });
 
-  it("rejects publish-time failure behavior that the executor does not implement", async () => {
+  it("requires an explicit failure policy instead of ambiguous legacy continuation", async () => {
     const registry = workflowNodeRegistryService({} as Db);
     const graph = {
       version: 1 as const,
@@ -358,7 +358,7 @@ describe("Workflow Node Registry", () => {
       status: 422,
       details: expect.objectContaining({
         code: "workflow_node_invalid",
-        reason: "workflow_failure_policy_not_ready",
+        reason: "workflow_failure_policy_required",
         nodeId: "start",
       }),
     });

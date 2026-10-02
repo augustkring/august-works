@@ -1,3 +1,4 @@
+import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
@@ -370,7 +371,7 @@ async function seedBranchContainmentRun(
     role: "engineer",
     status: "idle",
     adapterType: "codex_local",
-    adapterConfig: {},
+    adapterConfig: mockedCodexAdapterConfig,
     runtimeConfig: {
       heartbeat: {
         wakeOnDemand: true,
@@ -948,7 +949,7 @@ describeEmbeddedPostgres("heartbeat workspace branch containment", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           wakeOnDemand: true,

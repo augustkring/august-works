@@ -23,6 +23,7 @@ import { heartbeatRuns } from "./heartbeat_runs.js";
 import { folders } from "./folders.js";
 import type {
   RoutineEnvConfig,
+  ExecutionPrincipal,
   RoutineExecutionTargetKind,
   RoutineRevisionSnapshotV1,
   RoutineVariable,
@@ -44,6 +45,7 @@ export const routines = pgTable(
     assigneeAgentId: uuid("assignee_agent_id").references(() => agents.id),
     executionTargetKind: text("execution_target_kind").$type<RoutineExecutionTargetKind>(),
     executionTargetRef: uuid("execution_target_ref"),
+    workflowExecutionPrincipal: jsonb("workflow_execution_principal").$type<ExecutionPrincipal>(),
     priority: text("priority").notNull().default("medium"),
     status: text("status").notNull().default("active"),
     concurrencyPolicy: text("concurrency_policy").notNull().default("coalesce_if_active"),

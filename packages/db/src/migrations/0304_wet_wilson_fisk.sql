@@ -1,0 +1,3 @@
+ALTER TABLE "workflow_runs" ADD COLUMN "execution_principal" jsonb;--> statement-breakpoint
+ALTER TABLE "workflow_runs" ADD COLUMN "execution_agent_run_id" uuid;--> statement-breakpoint
+ALTER TABLE "workflow_runs" ADD CONSTRAINT "workflow_runs_execution_agent_run_id_heartbeat_runs_id_fk" FOREIGN KEY ("execution_agent_run_id") REFERENCES "public"."heartbeat_runs"("id") ON DELETE set null ON UPDATE no action;

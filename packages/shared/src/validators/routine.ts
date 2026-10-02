@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { executionPrincipalSchema } from "../august-works-platform.js";
 import {
   ISSUE_PRIORITIES,
   ROUTINE_ACTIVITY_GATE_POLICIES,
@@ -151,6 +152,7 @@ export const routineRevisionSnapshotRoutineV1Schema = z.object({
   assigneeAgentId: z.string().guid().nullable(),
   executionTargetKind: z.enum(ROUTINE_EXECUTION_TARGET_KINDS).nullable().optional(),
   executionTargetRef: z.string().guid().nullable().optional(),
+  workflowExecutionPrincipal: executionPrincipalSchema.nullable().optional(),
   priority: z.enum(ISSUE_PRIORITIES),
   status: z.enum(ROUTINE_STATUSES),
   concurrencyPolicy: z.enum(ROUTINE_CONCURRENCY_POLICIES),

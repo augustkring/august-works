@@ -11,6 +11,7 @@ import {
   memoryBindingTargets,
   memoryEvidence,
   memoryRecords,
+  memoryDeletionMarkers,
   projects,
 } from "@paperclipai/db";
 import {
@@ -18,6 +19,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { memoryService } from "./memory-service.js";
+import { reapplyMemoryDeletionMarkers, expireMemoryPayloads } from "./memory-privacy.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe : describe.skip;
@@ -884,6 +886,70 @@ describePg("Memory Core service", () => {
       svc.get(seeded.companyId, privateCandidate.record.id, systemActor),
     ).resolves.toMatchObject({
       record: expect.objectContaining({ id: privateCandidate.record.id }),
+    });
+  });
+
+  it("erases private content, its evidence and operation replay, and reapplies deletions after restore", async () => {
+    const seeded = await seed();
+    const ownBinding = await privateBinding(seeded.companyId, seeded.userId, seeded.agent.id);
+    const svc = memoryService(db);
+    const actor = agentActor(seeded.agent.id, seeded.userId);
+    const input = privateInput(ownBinding.id, { createdByOperationId: "forgotten-private-operation" });
+    const created = await svc.createPrivateMemory(seeded.companyId, seeded.agent.id, input, actor);
+    await expect(svc.forget(seeded.companyId, created.record.id, userActor(seeded.userId))).rejects.toMatchObject({ status: 403 });
+    expect((await svc.export(seeded.companyId, userActor(seeded.userId))).records).toHaveLength(0);
+    expect((await svc.export(seeded.companyId, actor)).records.map((row) => row.id)).toEqual([created.record.id]);
+    const erased = await svc.forget(seeded.companyId, created.record.id, actor);
+    expect(erased.deletedRecordCount).toBe(1);
+    const [stored] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, created.record.id));
+    expect(stored).toMatchObject({ content: "", title: null, summary: null, metadata: {}, deletedAt: expect.any(Date) });
+    expect(await db.select().from(memoryEvidence).where(eq(memoryEvidence.memoryRecordId, created.record.id))).toHaveLength(0);
+    await expect(svc.createPrivateMemory(seeded.companyId, seeded.agent.id, input, actor)).rejects.toMatchObject({
+      status: 409, details: { code: "memory_operation_deleted" },
+    });
+    expect((await svc.forget(seeded.companyId, created.record.id, actor)).deletedRecordCount).toBe(0);
+    const ledger = await svc.exportDeletionLedger(seeded.companyId, userActor(seeded.userId));
+    expect(ledger.markers.some((marker) => marker.recordId === created.record.id)).toBe(true);
+    const markers = await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.companyId, seeded.companyId));
+    expect(JSON.stringify(markers)).not.toContain(created.record.content);
+    // Simulate old payloads being restored while retaining the separate deletion ledger.
+    await db.update(memoryRecords).set({ content: created.record.content, title: created.record.title,
+      deletedAt: null, retentionState: "active", reviewState: "accepted" }).where(eq(memoryRecords.id, created.record.id));
+    expect((await svc.export(seeded.companyId, actor)).records).toHaveLength(0);
+    expect(await svc.get(seeded.companyId, created.record.id, actor)).toBeNull();
+    expect((await svc.restoreDeletionLedger(seeded.companyId, ledger, userActor(seeded.userId))).deletedRecordCount).toBe(1);
+    expect((await svc.export(seeded.companyId, actor)).records).toHaveLength(0);
+    expect((await reapplyMemoryDeletionMarkers(db, seeded.companyId)).deletedRecordCount).toBe(0);
+  });
+
+  it("applies a company maximum age to records without individual expiry dates", async () => {
+    const seeded = await seed();
+    const ownBinding = await privateBinding(seeded.companyId, seeded.userId, seeded.agent.id);
+    const svc = memoryService(db);
+    const privateActor = agentActor(seeded.agent.id, seeded.userId);
+    const created = await svc.createPrivateMemory(seeded.companyId, seeded.agent.id,
+      privateInput(ownBinding.id, { createdByOperationId: "retention-private-operation",
+        observedAt: "2026-09-29T12:00:00.000Z", expiresAt: null }), privateActor);
+    await expect(svc.setRetentionPolicy(seeded.companyId, { maxAgeDays: 2 }, privateActor)).rejects.toMatchObject({ status: 403 });
+    await svc.setRetentionPolicy(seeded.companyId, { maxAgeDays: 2 }, userActor(seeded.userId));
+    expect((await expireMemoryPayloads(db, seeded.companyId, new Date("2026-10-02T12:00:00.000Z"))).deletedRecordCount).toBe(1);
+    const [stored] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, created.record.id));
+    expect(stored.content).toBe("");
+    expect(stored.deletedAt).not.toBeNull();
+  });
+
+  it("propagates source deletion and denies source recapture in the same company", async () => {
+    const seeded = await seed();
+    const companyBinding = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const actor = userActor(seeded.userId);
+    const created = await svc.createCandidate(seeded.companyId, candidate(companyBinding.id), actor);
+    const deleted = await svc.forgetSource(seeded.companyId,
+      { sourceProvider: "august_works_tasks", sourceRef: "issue://test" }, actor);
+    expect(deleted.deletedRecordCount).toBe(1);
+    expect(await svc.getShared(seeded.companyId, created.record.id, actor)).toBeNull();
+    await expect(svc.createCandidate(seeded.companyId, candidate(companyBinding.id), actor)).rejects.toMatchObject({
+      status: 409, details: { code: "memory_source_deleted" },
     });
   });
 

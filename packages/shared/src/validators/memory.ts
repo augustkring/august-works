@@ -15,6 +15,18 @@ import {
 const nullableIso = z.string().datetime().nullable();
 const nullableBounded = (max: number) => z.string().trim().min(1).max(max).nullable();
 
+export const memoryRetentionPolicyInputSchema = z.object({ maxAgeDays: z.number().int().min(1).max(3650).nullable() }).strict();
+export const memorySourceDeletionInputSchema = z.object({
+  sourceProvider: z.string().trim().min(1).max(160), sourceRef: z.string().trim().min(1).max(2000),
+}).strict();
+export const memoryDeletionLedgerInputSchema = z.object({
+  schema: z.literal("memory_deletion_ledger.v1"), companyId: z.string().guid(),
+  markers: z.array(z.object({
+    key: z.string().regex(/^[a-f0-9]{64}$/), kind: z.enum(["record", "operation", "source"]),
+    recordId: z.string().guid().nullable(), deletedAt: z.string().datetime(),
+  }).strict()).max(10_000),
+}).strict();
+
 export const memoryBindingInputSchema = z
   .object({
     key: z.string().trim().min(1).max(160).regex(/^[a-z0-9][a-z0-9._:-]*$/),
@@ -494,4 +506,3 @@ export type MemoryAgentCorrectInputParsed = z.infer<
 export type MemoryAgentShareInputParsed = z.infer<
   typeof memoryAgentShareInputSchema
 >;
-

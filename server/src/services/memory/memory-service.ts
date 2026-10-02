@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -9,6 +9,8 @@ import {
   memoryBindingTargets,
   memoryEvidence,
   memoryRecords,
+  memoryDeletionMarkers,
+  memoryRetentionPolicies,
   projects,
 } from "@paperclipai/db";
 import {
@@ -22,12 +24,17 @@ import {
   memoryReviewInputSchema,
   memoryRevokeInputSchema,
   memoryShareInputSchema,
+  memoryRetentionPolicyInputSchema,
+  memorySourceDeletionInputSchema,
+  memoryDeletionLedgerInputSchema,
   type ExecutionPrincipal,
   type MemoryCandidateInputParsed,
   type MemoryResolutionMetadata,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
+import { lockMemoryPrivacy, assertMemoryOperationRetained, assertMemorySourcesRetained,
+  purgeMemoryRecords, memoryDeletionKey, memoryPayloadVisible, reapplyMemoryDeletionMarkers } from "./memory-privacy.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
 import {
   lockMemoryResolution,
@@ -91,6 +98,16 @@ function requireHumanOrSystem(actor: MemoryMutationActor, action: string) {
   if (actor.principal.type === "agent") {
     throw forbidden(`Agents cannot ${action} durable organizational memory`);
   }
+}
+
+async function assertPrivacyManagement(db: Db, companyId: string, actor: MemoryMutationActor) {
+  await assertActorCompanyScope(db, companyId, actor);
+  if (actor.principal.type === "system") return;
+  if (actor.principal.type !== "user") throw forbidden("Company privacy management requires a human administrator");
+  const [membership] = await db.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
+    eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, actor.principal.userId), eq(companyMemberships.status, "active")));
+  if (!membership || !["owner", "admin"].includes(membership.membershipRole ?? "")) throw forbidden("Company privacy management requires an owner or administrator", {
+    code: "memory_privacy_management_denied" });
 }
 
 function assertPrivateMemoryReadAllowed(
@@ -323,6 +340,7 @@ async function lockMemoryOperation(
   companyId: string,
   operationId: string,
 ) {
+  await lockMemoryPrivacy(db, companyId);
   await db.execute(
     sql`select pg_advisory_xact_lock(
       hashtextextended(${`memory:operation:${companyId}:${operationId}`}, 0)
@@ -335,6 +353,7 @@ async function memoryRecordForOperation(
   companyId: string,
   operationId: string,
 ) {
+  await assertMemoryOperationRetained(db, companyId, operationId);
   const rows = await db
     .select()
     .from(memoryRecords)
@@ -342,7 +361,7 @@ async function memoryRecordForOperation(
       and(
         eq(memoryRecords.companyId, companyId),
         eq(memoryRecords.createdByOperationId, operationId),
-        isNull(memoryRecords.deletedAt),
+        memoryPayloadVisible(),
       ),
     )
     .limit(2);
@@ -380,7 +399,7 @@ async function getRecordDetail(db: Db, companyId: string, recordId: string) {
       and(
         eq(memoryRecords.companyId, companyId),
         eq(memoryRecords.id, recordId),
-        isNull(memoryRecords.deletedAt),
+        memoryPayloadVisible(),
       ),
     )
     .then((rows) => rows[0] ?? null);
@@ -492,6 +511,7 @@ async function insertCandidate(
       | "system_verified";
   } = {},
 ) {
+  await assertMemorySourcesRetained(tx, companyId, input.evidence);
   await assertActorCompanyScope(tx, companyId, actor);
   await assertScopeReferences(tx, companyId, input);
   await assertAgentPrivateOwnership(input, actor);
@@ -559,6 +579,123 @@ async function insertCandidate(
 
 export function memoryService(db: Db) {
   return {
+    exportDeletionLedger: async (companyId: string, actor: MemoryMutationActor) => {
+      await assertPrivacyManagement(db, companyId, actor);
+      const rows = await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.companyId, companyId));
+      return { schema: "memory_deletion_ledger.v1" as const, companyId, markers: rows.map((row) => ({
+        key: row.key, kind: row.kind, recordId: row.recordId, deletedAt: row.deletedAt.toISOString(),
+      })) };
+    },
+    restoreDeletionLedger: async (companyId: string, input: unknown, actor: MemoryMutationActor) => {
+      const ledger = memoryDeletionLedgerInputSchema.parse(input);
+      if (ledger.companyId !== companyId) throw forbidden("Deletion ledger belongs to another company", { code: "company_boundary_denied" });
+      const publications: ActivityPublication[] = [];
+      const result = await db.transaction(async (tx) => {
+        const scopedDb = tx as unknown as Db;
+        await assertPrivacyManagement(scopedDb, companyId, actor);
+        await lockMemoryPrivacy(scopedDb, companyId);
+        for (const marker of ledger.markers) {
+          if (marker.kind === "record" ? !marker.recordId || marker.key !== memoryDeletionKey(companyId, "record", marker.recordId) : marker.recordId !== null) {
+            throw unprocessable("Deletion marker identity is invalid", { code: "memory_deletion_marker_invalid" });
+          }
+        }
+        if (ledger.markers.length) await scopedDb.insert(memoryDeletionMarkers).values(ledger.markers.map((marker) => ({
+          ...marker, companyId, deletedAt: new Date(marker.deletedAt),
+        }))).onConflictDoNothing();
+        const erased = await reapplyMemoryDeletionMarkers(scopedDb, companyId);
+        publications.push(await persistMemoryActivity(scopedDb, actor, { companyId, action: "memory.deletion_ledger_restored", recordId: companyId,
+          details: { markerCount: ledger.markers.length, deletedRecordCount: erased.deletedRecordCount } }));
+        return { importedMarkerCount: ledger.markers.length, deletedRecordCount: erased.deletedRecordCount };
+      });
+      publications.forEach(publishActivity);
+      return result;
+    },
+    forget: async (companyId: string, recordId: string, actor: MemoryMutationActor) => {
+      const publications: ActivityPublication[] = [];
+      const result = await db.transaction(async (tx) => {
+        const scopedDb = tx as unknown as Db;
+        await assertActorCompanyScope(scopedDb, companyId, actor);
+        await lockMemoryPrivacy(scopedDb, companyId);
+        const [record] = await scopedDb.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId))).for("update");
+        if (!record) throw notFound("Memory record not found");
+        assertPrivateMemoryReadAllowed(record, actor);
+        if (record.scopeType === "agent") assertPrivateMemoryWriter(record.ownerAgentId!, actor);
+        else requireHumanOrSystem(actor, "delete");
+        const deleted = await purgeMemoryRecords(scopedDb, companyId, [recordId]);
+        if (deleted.deletedRecordCount) publications.push(await persistMemoryActivity(scopedDb, actor, {
+          companyId, action: "memory.deleted", recordId,
+          details: { deletedRecordCount: deleted.deletedRecordCount, includesDerivedRecords: true },
+        }));
+        return deleted;
+      });
+      publications.forEach(publishActivity);
+      return result;
+    },
+
+    export: async (companyId: string, actor: MemoryMutationActor) => {
+      return db.transaction(async (tx) => {
+        const scopedDb = tx as unknown as Db;
+        await assertActorCompanyScope(scopedDb, companyId, actor);
+        const records = await scopedDb.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), memoryPayloadVisible(),
+          actor.principal.type === "agent" ? and(eq(memoryRecords.scopeType, "agent"), eq(memoryRecords.ownerAgentId, actor.principal.agentId)) : ne(memoryRecords.scopeType, "agent")));
+        const evidence = records.length ? await scopedDb.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId, companyId),
+          inArray(memoryEvidence.memoryRecordId, records.map((row) => row.id)))) : [];
+        return { schema: "memory_export.v1" as const, companyId, exportedAt: new Date().toISOString(), records, evidence };
+      });
+    },
+
+    forgetSource: async (companyId: string, input: unknown, actor: MemoryMutationActor) => {
+      requireHumanOrSystem(actor, "delete source-derived");
+      const parsed = memorySourceDeletionInputSchema.parse(input);
+      const publications: ActivityPublication[] = [];
+      const result = await db.transaction(async (tx) => {
+        const scopedDb = tx as unknown as Db;
+        await assertPrivacyManagement(scopedDb, companyId, actor);
+        await lockMemoryPrivacy(scopedDb, companyId);
+        const key = memoryDeletionKey(companyId, "source", [parsed.sourceProvider, parsed.sourceRef]);
+        await scopedDb.insert(memoryDeletionMarkers).values({ companyId, key, kind: "source" }).onConflictDoNothing();
+        const evidence = await scopedDb.select({ id: memoryEvidence.memoryRecordId }).from(memoryEvidence).where(and(
+          eq(memoryEvidence.companyId, companyId), eq(memoryEvidence.sourceProvider, parsed.sourceProvider), eq(memoryEvidence.sourceRef, parsed.sourceRef)));
+        const deleted = await purgeMemoryRecords(scopedDb, companyId, evidence.map((row) => row.id));
+        publications.push(await persistMemoryActivity(scopedDb, actor, { companyId, action: "memory.source_deleted", recordId: companyId,
+          details: { sourceDigest: key, deletedRecordCount: deleted.deletedRecordCount } }));
+        return { deletedRecordCount: deleted.deletedRecordCount, sourceDigest: key };
+      });
+      publications.forEach(publishActivity);
+      return result;
+    },
+
+    getRetentionPolicy: async (companyId: string, actor: MemoryMutationActor) => {
+      requireHumanOrSystem(actor, "inspect retention for");
+      await assertActorCompanyScope(db, companyId, actor);
+      const [policy] = await db.select().from(memoryRetentionPolicies).where(eq(memoryRetentionPolicies.companyId, companyId));
+      let canManage = actor.principal.type === "system";
+      if (actor.principal.type === "user") {
+        const [membership] = await db.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
+          eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, actor.principal.userId), eq(companyMemberships.status, "active")));
+        canManage = ["owner", "admin"].includes(membership?.membershipRole ?? "");
+      }
+      return { companyId, maxAgeDays: policy?.maxAgeDays ?? null, canManage };
+    },
+
+    setRetentionPolicy: async (companyId: string, input: unknown, actor: MemoryMutationActor) => {
+      requireHumanOrSystem(actor, "configure retention for");
+      const policy = memoryRetentionPolicyInputSchema.parse(input);
+      const publications: ActivityPublication[] = [];
+      const result = await db.transaction(async (tx) => {
+        const scopedDb = tx as unknown as Db;
+        await assertPrivacyManagement(scopedDb, companyId, actor);
+        await lockMemoryPrivacy(scopedDb, companyId);
+        const [stored] = await scopedDb.insert(memoryRetentionPolicies).values({ companyId, ...policy })
+          .onConflictDoUpdate({ target: memoryRetentionPolicies.companyId, set: { ...policy, updatedAt: new Date() } }).returning();
+        publications.push(await persistMemoryActivity(scopedDb, actor, { companyId, action: "memory.retention_policy_updated", recordId: companyId,
+          details: { maxAgeDays: stored!.maxAgeDays } }));
+        return stored!;
+      });
+      publications.forEach(publishActivity);
+      return result;
+    },
+
     listBindings: async (
       companyId: string,
       actor: MemoryMutationActor,
@@ -590,7 +727,7 @@ export function memoryService(db: Db) {
           and(
             eq(memoryRecords.companyId, companyId),
             ne(memoryRecords.scopeType, "agent"),
-            isNull(memoryRecords.deletedAt),
+            memoryPayloadVisible(),
             ...(input.reviewState
               ? [eq(memoryRecords.reviewState, input.reviewState)]
               : []),
@@ -618,7 +755,7 @@ export function memoryService(db: Db) {
             eq(memoryRecords.companyId, companyId),
             eq(memoryRecords.id, recordId),
             ne(memoryRecords.scopeType, "agent"),
-            isNull(memoryRecords.deletedAt),
+            memoryPayloadVisible(),
           ),
         )
         .then((rows) => rows[0] ?? null);
@@ -890,7 +1027,7 @@ export function memoryService(db: Db) {
               eq(memoryRecords.companyId, companyId),
               eq(memoryRecords.id, recordId),
               eq(memoryRecords.scopeType, "agent"),
-              isNull(memoryRecords.deletedAt),
+              memoryPayloadVisible(),
             ),
           )
           .for("update")
@@ -1056,7 +1193,7 @@ export function memoryService(db: Db) {
               eq(memoryRecords.companyId, companyId),
               eq(memoryRecords.id, recordId),
               eq(memoryRecords.scopeType, "agent"),
-              isNull(memoryRecords.deletedAt),
+              memoryPayloadVisible(),
             ),
           )
           .for("update")
@@ -1213,6 +1350,7 @@ export function memoryService(db: Db) {
         await assertScopeReferences(txDb, companyId, parsed.data);
         await assertAgentPrivateOwnership(parsed.data, actor);
         await assertBindingAllowsCandidate(txDb, companyId, parsed.data);
+        await assertMemorySourcesRetained(txDb, companyId, parsed.data.evidence);
 
         // Preserve the existing operation-id contract before semantic
         // resolution. Reusing one operation id with any prior persisted record
@@ -1366,7 +1504,7 @@ export function memoryService(db: Db) {
             and(
               eq(memoryRecords.companyId, companyId),
               eq(memoryRecords.id, recordId),
-              isNull(memoryRecords.deletedAt),
+              memoryPayloadVisible(),
             ),
           )
           .for("update")
@@ -1454,7 +1592,7 @@ export function memoryService(db: Db) {
             and(
               eq(memoryRecords.companyId, companyId),
               eq(memoryRecords.id, recordId),
-              isNull(memoryRecords.deletedAt),
+              memoryPayloadVisible(),
             ),
           )
           .for("update")
@@ -1483,7 +1621,7 @@ export function memoryService(db: Db) {
               and(
                 eq(memoryRecords.companyId, companyId),
                 eq(memoryRecords.id, record.supersedesRecordId),
-                isNull(memoryRecords.deletedAt),
+                memoryPayloadVisible(),
               ),
             )
             .for("update")
@@ -1583,7 +1721,7 @@ export function memoryService(db: Db) {
             and(
               eq(memoryRecords.companyId, companyId),
               eq(memoryRecords.id, recordId),
-              isNull(memoryRecords.deletedAt),
+              memoryPayloadVisible(),
             ),
           )
           .for("update")
@@ -1672,7 +1810,7 @@ export function memoryService(db: Db) {
             eq(memoryRecords.reviewState, "accepted"),
             eq(memoryRecords.retentionState, "active"),
             isNull(memoryRecords.revokedAt),
-            isNull(memoryRecords.deletedAt),
+            memoryPayloadVisible(),
             isNull(memoryRecords.supersededByRecordId),
             or(isNull(memoryRecords.validFrom), lte(memoryRecords.validFrom, asOf)),
             or(isNull(memoryRecords.validUntil), gt(memoryRecords.validUntil, asOf)),

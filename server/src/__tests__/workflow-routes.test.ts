@@ -369,7 +369,7 @@ describePg("Workflow routes", () => {
         }),
         expect.objectContaining({
           type: "connector.action",
-          publishState: "draft_only",
+          publishState: "ready",
         }),
       ]),
     );

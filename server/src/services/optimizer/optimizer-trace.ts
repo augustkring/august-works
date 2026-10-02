@@ -6,6 +6,7 @@ import {
   costEvents,
   workflowRevisions,
   workflowRuns,
+  workflowRunReviews,
   workflowStepRuns,
 } from "@paperclipai/db";
 import type {
@@ -253,6 +254,7 @@ export function optimizerTraceService(db: Db) {
         };
       });
 
+      const [review] = await db.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, runId)));
       const metadata = runSourceMetadata(run.triggerPayload);
       return {
         companyId: run.companyId,
@@ -264,9 +266,7 @@ export function optimizerTraceService(db: Db) {
         executorType: "workflow",
         steps: normalizedSteps,
         finalOutcome: run.status,
-        // Workflow run state currently has no authoritative human-correction
-        // signal. Omit it rather than fabricating false; downstream candidate
-        // detection must fail closed until correction evidence is available.
+        ...(review ? { humanCorrection: review.humanCorrection } : {}),
         createdAt: run.finishedAt.toISOString(),
       };
     },

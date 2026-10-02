@@ -377,3 +377,36 @@ describe("in-flight mirror", () => {
     }
   });
 });
+
+describe("permanent run log erasure", () => {
+  it("erases local and mirrored payloads and rejects late writes after restart and pod roll", async () => {
+    const { provider, objects } = createMemoryProvider();
+    const store = createDurableRunLogStore({ basePath: baseDir, s3: { provider } });
+    const handle = await store.begin(begin);
+    await store.append(handle, { stream: "stdout", chunk: "private source", ts: "t1" });
+    await store.finalize(handle);
+    await store.erase!(handle);
+    expect(objects.has(handle.logRef)).toBe(false);
+    expect(objects.has(`${handle.logRef}.erased`)).toBe(true);
+    expect(await store.append(handle, { stream: "stdout", chunk: "late source", ts: "t2" })).toBe(0);
+    expect(await store.finalize(handle)).toEqual({ bytes: 0, compressed: false });
+    await expect(store.read(handle)).rejects.toMatchObject({ status: 404 });
+    await expect(createDurableRunLogStore({ basePath: baseDir }).begin(begin)).rejects.toMatchObject({ status: 404 });
+    // Even a restored old S3 payload must remain unreadable on a fresh pod.
+    objects.set(handle.logRef, Buffer.from("restored private source"));
+    await fs.rm(baseDir, { recursive: true, force: true });
+    const rolled = createDurableRunLogStore({ basePath: baseDir, s3: { provider } });
+    await expect(rolled.read(handle)).rejects.toMatchObject({ status: 404 });
+    await expect(rolled.begin(begin)).rejects.toMatchObject({ status: 404 });
+  });
+  it("serializes concurrent finalization and erasure so the mirror cannot resurrect the payload", async () => {
+    const { provider, objects } = createMemoryProvider();
+    const store = createDurableRunLogStore({ basePath: baseDir, s3: { provider, inflightMirrorMs: 1 } });
+    const handle = await store.begin(begin);
+    await store.append(handle, { stream: "stdout", chunk: "private source", ts: "t1" });
+    await Promise.all([store.finalize(handle), store.erase!(handle), store.append(handle, { stream: "stdout", chunk: "late source", ts: "t2" })]);
+    expect(objects.has(handle.logRef)).toBe(false);
+    await expect(fs.readFile(path.join(baseDir, handle.logRef))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(store.read(handle)).rejects.toMatchObject({ status: 404 });
+  });
+});

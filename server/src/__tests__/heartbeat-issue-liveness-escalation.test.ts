@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -160,7 +161,7 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
         role: "cto",
         status: "idle",
         adapterType: "codex_local",
-        adapterConfig: {},
+        adapterConfig: mockedCodexAdapterConfig,
         runtimeConfig: { heartbeat: { wakeOnDemand: false } },
         permissions: {},
       },
@@ -172,7 +173,7 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
         status: "idle",
         reportsTo: managerId,
         adapterType: "codex_local",
-        adapterConfig: {},
+        adapterConfig: mockedCodexAdapterConfig,
         runtimeConfig: { heartbeat: { wakeOnDemand: false } },
         permissions: {},
       },
@@ -361,7 +362,7 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } },
       permissions: {},
     });

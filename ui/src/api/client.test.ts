@@ -199,3 +199,14 @@ describe("per-caller abort semantics", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+it("preserves JSON and observability headers when posting with an idempotency key", async () => {
+  fetchMock.mockResolvedValue(jsonResponse({ status: "queued" }));
+  await api.post("/companies/company/memory/jobs", { operationType: "index_refresh", recordIds: ["record"] }, { headers: { "Idempotency-Key": "operation-key" } });
+  const init = fetchMock.mock.calls[0]![1] as RequestInit;
+  const headers = new Headers(init.headers);
+  expect(headers.get("Content-Type")).toBe("application/json");
+  expect(headers.get("Idempotency-Key")).toBe("operation-key");
+  expect(init.credentials).toBe("include");
+  expect(JSON.parse(init.body as string)).toEqual({ operationType: "index_refresh", recordIds: ["record"] });
+});
