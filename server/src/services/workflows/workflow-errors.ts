@@ -7,4 +7,3 @@ export class WorkflowCheckpointError extends Error {
     this.code = code;
   }
 }
-
