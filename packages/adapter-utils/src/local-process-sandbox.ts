@@ -49,11 +49,11 @@ interface NetworkAllowlistProxy {
 }
 
 const SYSTEM_READ_PATHS = [
-  "/bin",
-  "/sbin",
+  // Fresh-root compatibility paths (/bin, /sbin, /lib, /lib64) are created
+  // below as symlinks into /usr. Binding host paths over those symlinks makes
+  // Bubblewrap fail before the sandboxed process starts. Mount /usr once and
+  // let the compatibility symlinks resolve inside that read-only tree.
   "/usr",
-  "/lib",
-  "/lib64",
   "/etc/ca-certificates",
   "/etc/ssl",
   "/etc/resolv.conf",
