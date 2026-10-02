@@ -642,6 +642,10 @@ if (rollout.rollbackVerified !== true) {
   fail("rollout.rollbackVerified must be true.");
 }
 nonEmptyString(rollout.rollbackOwner, "rollout.rollbackOwner");
+durableEvidenceReference(
+  rollout.exposureControlRef,
+  "rollout.exposureControlRef",
+);
 if (!Array.isArray(rollout.enabledFeatureFlags)) {
   fail("rollout.enabledFeatureFlags must be an array.");
 }
