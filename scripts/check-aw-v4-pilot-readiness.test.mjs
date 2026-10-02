@@ -118,6 +118,8 @@ test("high-impact feature fails without explicit approval", () => {
       stage: "pilot",
       enabledFeatureFlags: [
         "enableFoundationV1",
+        "enableWorkflowsV1",
+        "enableAutomationArtifactsV1",
         "enableAutomationArtifactCodeExecutionV1",
       ],
       rollbackOwner: "pilot-operator",
