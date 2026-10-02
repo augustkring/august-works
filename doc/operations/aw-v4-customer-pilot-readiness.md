@@ -147,6 +147,7 @@ It must include:
 - `rollout.stage = "pilot"`;
 - `rollout.enabledFeatureFlags`;
 - `rollout.rollbackOwner`;
+- `rollout.exposureControlRef` pointing to the selected-company allowlist or equivalent exposure policy;
 - `rollout.rollbackVerified = true`;
 - every required `manualChecks` entry with `status: "passed"` and non-empty `evidence`;
 - `highImpactApprovals` for every enabled restricted pilot flag.
