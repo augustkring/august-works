@@ -7,7 +7,7 @@ This ledger implements the ADR set required by the V4 Implementation Golden Mast
 
 ## Implementation addendum — Durable authority, evidence and erasure
 
-**Status:** Implemented; final repository qualification pending.
+**Status:** Implemented paths locally qualified; broader optimizer and target-environment acceptance remain open.
 
 Workflow runs retain the original execution principal. Recovery checks current
 membership and permissions before dispatch. Routines and Pipeline stages save

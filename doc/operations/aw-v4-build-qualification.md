@@ -5,9 +5,11 @@ Branch: `feat/aw-v4-completion`.
 
 ## Current decision
 
-Final repository qualification is in progress. This document does not declare
-full Golden Master acceptance or authorize a customer deployment. A passing
-build is one input to the existing customer-pilot readiness process.
+The implemented paths have completed local repository qualification. The final
+implementation commit builds successfully. This is a local build candidate,
+with the explicit implementation limits below. Full Golden Master acceptance
+remains open. A customer rollout still requires the target-environment evidence
+in the existing pilot readiness process.
 
 ## Delivered product paths
 
@@ -22,6 +24,7 @@ build is one input to the existing customer-pilot readiness process.
 | Memory privacy | Export, permanent deletion, source/derived erasure, restore ledger, retention, child late-write guards and local/S3 log tombstones | Memory/privacy/direct-call/run-log suites and browser export/delete |
 | Memory jobs | Native dedupe, compaction, index refresh and operator-proposed reflection, with durable retry and review | Maintenance and job suites; browser actual index-refresh worker |
 | UI | Company routes, semantic capability/agent/subworkflow selectors, explicit result/failure contracts and merged request headers | Component/client/routing tests and three Chromium flows |
+| API contracts | All 32 new governance operations documented with shared validation schemas, correct status codes, board/run authority and required maintenance idempotency header | Exact route coverage and 12 OpenAPI contract checks |
 
 Existing Foundation, Context Engine, Connected Knowledge, OpenClaw bindings,
 draft-only AI authoring and native-work primitives remain part of the baseline.
@@ -103,7 +106,61 @@ failure. See the migration runbook; nullable continuation is never inferred.
   includes the new delegated-erasure, prompt-revocation, log-tombstone,
   human-recovery and optimizer-drift suites.
 - Pilot-validator tests: 13 passed; event-extractor checks: seven passed.
-- Full repository suite: pending.
+- Full repository manifest: 1,888 files covered through the official partitions
+  and focused correction reruns; 27,745 passed tests and 63 existing skips.
+  This is an aggregate of partition runs and correction reruns, not a claim
+  that one uninterrupted `pnpm test:run` invocation passed.
+
+| Official partition | Files covered | Passed tests after correction reruns | Existing skipped tests |
+| --- | ---: | ---: | ---: |
+| General server (two local duration-balanced shards) | 744 | 14,052 | 51 |
+| UI | 647 | 6,772 | 0 |
+| CLI | 63 | 502 | 0 |
+| Other workspace projects | 282 | 3,664 | 12 |
+| Serialized server routes/recovery | 152 | 2,755 | 0 |
+| Total | 1,888 | 27,745 | 63 |
+
+The serialized manifest was checked for exact coverage. It has 149 initial
+passing files plus the freshly passing heartbeat recovery (305 tests),
+workflow routes (17 tests) and OpenAPI contracts (12 tests). The final complete
+heartbeat recovery file passed with its scoped low-trust binding.
+
+V4 CI now uses 11 independent partitions with `fail-fast: false`: four general
+server shards, two UI/CLI shards, one other-workspace partition and four
+serialized partitions. The matrices cover every official manifest entry exactly
+once. Browser, static, security and pilot gates remain required. This improves
+failure visibility and bounds job duration; it does not remove test coverage.
+
+Correction reruns retained the assertions and production boundaries:
+
+- Workflow executor: all 51 tests passed after allowing cold fixture workers
+  45 seconds to start; the real SIGKILL and durable idempotency checks remain.
+- Chat ordering: the failed rapid callback scenario passed after bounded
+  database polling replaced its implicit one-second limit. The other 1,041
+  chat scenarios passed in the partition run. The test still requires all eight
+  ordered messages, wake requests and lease cleanup.
+- Runtime exposure: all 31 tests passed in isolation after a fixed-port collision
+  with another live fixture. The port ownership protection remains intact.
+- CLI: all 78 tests in the three affected files passed. Atomic writes now apply
+  the requested executable mode despite a restrictive umask. Mocked telemetry
+  tests set their own opt-out environment. Logical backups retain CHECK constraints.
+- Adapter utilities: all 119 process tests, 188 ACPX engine tests and 146
+  execution-target tests passed after fixture startup budgets accounted for real
+  child processes. Zombie state is treated as stopped while live kill checks
+  remain. The actual installed Codex prerelease MCP check also passed.
+- Codex CPU watchdog: both real-process tests passed. The busy fixture runs
+  longer than its five-second inactivity threshold so `/proc` group sampling
+  can observe CPU progress; the wedged-process deadline test is unchanged.
+- Daytona file sync: all 23 tests passed under the fixture's standard `umask 022`.
+  Its two original mode expectations failed under the cloud shell's `077`.
+  Production permissions were not made less restrictive.
+- Mocked Codex fixtures explicitly supply dummy credentials. The low-trust
+  isolation fixture uses an encrypted mock secret and only its own allowed
+  binding. Inline-sensitive-env and missing-binding rejection remain enforced.
+
+Local logs are in `/workspace/.cloud-setup/v4-final-*.log`. The serialized
+coverage map and remaining-file exit results are retained alongside them.
+These local paths are not remote CI evidence.
 
 The final authority check also passed 61 workflow/executor/direct-call/failure
 tests after extracting the shared Task-assignment authorization helper. Memory
@@ -126,6 +183,36 @@ latency, capacity and cost; SLO/alerts; rollout ownership and exposure controls.
 Keep flags default-off until those target checks pass. Do not create success
 evidence from fixture results or claim online CI/reviews which were not read.
 
-The GitHub Actions API was unavailable during the audit. Remote CI and review
-status require separate verification. Build identity and final test counts will
-be added after qualification.
+## Source and delivery identity
+
+Qualified implementation commit: `2faf53e4b` on `feat/aw-v4-completion`, following
+`d01a3cb877` (product implementation) and `34d1b156ce` (CI partitioning).
+The full `pnpm build` passed and embeds
+`2faf53e4b94329f5bf324198c38fa9f6e799f0f5` in `server/dist/build-info.json`.
+Fresh full workspace typecheck also passed on this final source.
+Later documentation commits do not change the qualified executable source.
+
+The branch was pushed to `augustkring/august-works`. Both GraphQL draft-PR
+creation and REST pull-request creation returned `Forbidden`; no PR was
+created. The prepared PR description remains in the local cloud evidence
+folder. Remote CI, root-lockfile refresh and review status were not verified.
+The root lockfile remains owned by the repository's lock refresh workflow.
+
+## Gates before full V4 acceptance
+
+1. Implement and qualify the broader optimizer paths in master brief sections
+   77–86: stable agent/tool work and larger spans compiled to deterministic
+   implementations, with preserved side-effect authority, structured business
+   invariants, replay/shadow/canary and actual agent fallback. Current live
+   qualification supports only one pure C0 transform. Compiler helper tests
+   are not evidence that these broader paths exist.
+2. Record the target-environment acceptance evidence described above. Local
+   mocked providers, temporary PostgreSQL instances and Chromium scenarios do
+   not establish real account/model behavior, representative production restore,
+   user accessibility acceptance or production capacity/SLOs.
+3. Run remote CI and its governed lockfile refresh, then review the branch.
+   Git push succeeded, but GitHub API permissions prevented PR creation here.
+
+The candidate can be used for the next integration build with the V4 rollout
+flags default-off. It must not be labelled fully accepted Golden Master V4
+while these gates remain open.

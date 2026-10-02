@@ -165,3 +165,26 @@ development database is current with all 15 late-write guards. PostgreSQL
 backup/restore and the three affected CLI suites passed. The full official
 server/workspace/serialized partitions remain under qualification; partial
 partition success does not establish whole-repository acceptance.
+
+
+### Final local qualification and delivery
+
+The implemented product paths are committed on `feat/aw-v4-completion` and
+pushed to GitHub. Exact official-manifest coverage includes 1,888 files and
+27,745 passed tests, with 63 existing skips. Counts combine
+partition runs and focused correction reruns; there was no single uninterrupted
+green full-suite invocation. All 305 heartbeat recovery scenarios, all 17
+workflow route checks and all 12 OpenAPI checks passed on the final source.
+The three Chromium journeys passed again after route contract synchronization.
+
+The CI matrix now has 11 complete partitions. Shared wire schemas document
+32 new V4 operations, including run-bound agent results and required maintenance
+idempotency. No route coverage exclusions or production security reductions
+were introduced to make qualification pass.
+
+Full V4 Golden Master acceptance remains open for the broader optimizer
+agent/tool/subgraph replacement paths and target-environment evidence. The
+implementation report records concrete gates rather than declaring those
+requirements complete. PR creation is blocked by GitHub API `Forbidden`;
+the code branch is available for review. See the build qualification report
+for source identity, final build evidence and the complete acceptance limits.
