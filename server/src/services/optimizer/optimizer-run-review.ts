@@ -8,15 +8,8 @@ import { assertMemoryRecordsRetained, lockMemoryPrivacy } from "../memory/memory
 import { persistActivity, publishActivity } from "../activity-log.js";
 import { validateWorkflowOutput } from "../workflows/workflow-output-schema.js";
 
-export const workflowRunReviewSchema = z.object({
-  humanCorrection: z.boolean(), correctedOutputs: z.record(z.string(), z.unknown()).default({}),
-  reason: z.string().trim().min(1).max(2_000),
-}).strict().superRefine((value, ctx) => {
-  if (value.humanCorrection !== (Object.keys(value.correctedOutputs).length > 0)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Corrected reviews require explicit corrected node outputs; uncorrected reviews cannot contain corrections" });
-  }
-  if (Buffer.byteLength(JSON.stringify(value), "utf8") > 256_000) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Review payload exceeds the size limit" });
-});
+import { workflowRunReviewSchema } from "../v4-api-contracts.js";
+export { workflowRunReviewSchema } from "../v4-api-contracts.js";
 
 export async function getWorkflowRunReview(db: Db, companyId: string, runId: string) {
   const [review] = await db.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, runId)));

@@ -8,13 +8,9 @@ import { assertMemoryRecordsRetained, lockMemoryPrivacy, memoryPayloadVisible, r
 import { persistActivity } from "../activity-log.js";
 import { executionPrincipalSchema } from "@paperclipai/shared";
 
-export const memoryMaintenanceInputSchema = z.object({
-  operationType: z.enum(["dedupe", "compaction", "reflection", "index_refresh"]),
-  proposedLesson: z.object({ title: z.string().trim().min(1).max(180), content: z.string().trim().min(1).max(16_000) }).strict().optional(),
-  recordIds: z.array(z.string().guid()).min(1).max(64).refine((ids) => new Set(ids).size === ids.length, "Record IDs must be unique"),
-}).strict().superRefine((input, ctx) => {
-  if ((input.operationType === "reflection") !== Boolean(input.proposedLesson)) ctx.addIssue({ code: "custom", message: "A reflection requires an explicit proposed lesson; other operations do not accept one" });
-});
+import { memoryMaintenanceInputSchema } from "../v4-api-contracts.js";
+export { memoryMaintenanceInputSchema } from "../v4-api-contracts.js";
+
 const sourceSchema = z.object({ recordIds: memoryMaintenanceInputSchema.shape.recordIds,
   proposedLesson: memoryMaintenanceInputSchema.shape.proposedLesson,
   requester: executionPrincipalSchema, recordVersions: z.record(z.string(), z.string()) }).strict();

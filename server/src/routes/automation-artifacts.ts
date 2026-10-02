@@ -36,26 +36,25 @@ export function automationArtifactRoutes(db: Db) {
     if (!req.actor.userId) throw unauthorized("Authenticated user identity required");
     return { principal: { type: "user" as const, userId: req.actor.userId } };
   }
-  const base = "/companies/:companyId/automation-artifacts";
-  router.get(base, async (req, res) => {
+  router.get("/companies/:companyId/automation-artifacts", async (req, res) => {
     const actor = await authorize(req, "workflows:read");
     res.json(await artifacts.list(req.params.companyId as string, actor));
   });
-  router.get(`${base}/:artifactId`, async (req, res) => {
+  router.get("/companies/:companyId/automation-artifacts/:artifactId", async (req, res) => {
     const actor = await authorize(req, "workflows:read");
     const detail = await artifacts.getDetail(req.params.companyId as string, req.params.artifactId as string, actor);
     if (!detail) throw notFound("Automation Artifact not found");
     res.json(detail);
   });
-  router.post(base, validate(createAutomationArtifactSchema), async (req, res) => {
+  router.post("/companies/:companyId/automation-artifacts", validate(createAutomationArtifactSchema), async (req, res) => {
     const actor = await authorize(req, "workflows:edit");
     res.status(201).json(await artifacts.create(req.params.companyId as string, req.body, actor));
   });
-  router.post(`${base}/:artifactId/versions`, validate(appendAutomationArtifactVersionSchema), async (req, res) => {
+  router.post("/companies/:companyId/automation-artifacts/:artifactId/versions", validate(appendAutomationArtifactVersionSchema), async (req, res) => {
     const actor = await authorize(req, "workflows:edit");
     res.status(201).json(await artifacts.appendVersion(req.params.companyId as string, req.params.artifactId as string, req.body, actor));
   });
-  router.post(`${base}/:artifactId/evaluate`, async (req, res) => {
+  router.post("/companies/:companyId/automation-artifacts/:artifactId/evaluate", async (req, res) => {
     const actor = await authorize(req, "workflows:edit");
     const companyId = req.params.companyId as string;
     const artifactId = req.params.artifactId as string;
@@ -64,11 +63,11 @@ export function automationArtifactRoutes(db: Db) {
     res.json(await security.evaluateLatestVersion(companyId, artifactId,
       { principal: { type: "system", service: "artifact-security-evaluator" } }));
   });
-  router.post(`${base}/:artifactId/status`, validate(transitionAutomationArtifactStatusSchema), async (req, res) => {
+  router.post("/companies/:companyId/automation-artifacts/:artifactId/status", validate(transitionAutomationArtifactStatusSchema), async (req, res) => {
     const actor = await authorize(req, "workflows:publish");
     res.json(await artifacts.transitionStatus(req.params.companyId as string, req.params.artifactId as string, req.body, actor));
   });
-  router.post(`${base}/:artifactId/archive`, validate(archiveAutomationArtifactSchema), async (req, res) => {
+  router.post("/companies/:companyId/automation-artifacts/:artifactId/archive", validate(archiveAutomationArtifactSchema), async (req, res) => {
     const actor = await authorize(req, "workflows:publish");
     res.json(await artifacts.archive(req.params.companyId as string, req.params.artifactId as string, req.body, actor));
   });

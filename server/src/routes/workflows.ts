@@ -1,6 +1,6 @@
 import { proposeOptimizerCandidate } from "../services/optimizer/optimizer-candidate-proposal.js";
 import { submitWorkflowDirectResult } from "../services/workflows/workflow-direct-agent.js";
-import { Router, type Request } from "express";
+import { Router, type Request, type Response } from "express";
 import { toolActionRequests, toolInvocations, workflowWaits, type Db } from "@paperclipai/db";
 import { and, eq } from "drizzle-orm";
 import {
@@ -81,26 +81,31 @@ export function workflowRoutes(db: Db) {
       res.status(201).json(await optimizerEvaluations.compile(companyId, req.params.workflowId as string,
         req.params.suggestionId as string, req.body, mutationActor(req)));
     });
-  for (const action of ["evaluate", "shadow", "request-approval", "canary", "activate", "retire"] as const) {
-    router.post(`/companies/:companyId/workflows/:workflowId/optimizer-evaluations/:evaluationId/${action}`,
-      validate(z.object({}).strict()), async (req, res) => {
-        const companyId = req.params.companyId as string;
-        const evaluationId = req.params.evaluationId as string;
-        await assertWorkflowsEnabled();
-        await assertPermission(req, companyId, "workflows:publish");
-        const [bound] = await db.select({ id: workflowOptimizerEvaluations.id }).from(workflowOptimizerEvaluations)
-          .where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.workflowId, req.params.workflowId as string), eq(workflowOptimizerEvaluations.id, evaluationId)));
-        if (!bound) throw notFound("Optimizer evaluation not found");
-        const actor = mutationActor(req);
-        const result = action === "evaluate" ? await optimizerEvaluations.evaluate(companyId, evaluationId)
-          : action === "shadow" ? await optimizerEvaluations.startShadow(companyId, evaluationId, actor)
-          : action === "request-approval" ? await optimizerEvaluations.requestPromotionApproval(companyId, evaluationId, actor)
-            : action === "canary" ? await optimizerEvaluations.prepareCanary(companyId, evaluationId)
-              : action === "activate" ? await optimizerEvaluations.activate(companyId, evaluationId)
-                : await optimizerEvaluations.retire(companyId, evaluationId, actor);
-        res.json(result);
-      });
-  }
+  const optimizerAction = (action: "evaluate" | "shadow" | "request-approval" | "canary" | "activate" | "retire") => [
+    validate(z.object({}).strict()), async (req: Request, res: Response) => {
+      const companyId = req.params.companyId as string;
+      const evaluationId = req.params.evaluationId as string;
+      await assertWorkflowsEnabled();
+      await assertPermission(req, companyId, "workflows:publish");
+      const [bound] = await db.select({ id: workflowOptimizerEvaluations.id }).from(workflowOptimizerEvaluations)
+        .where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.workflowId, req.params.workflowId as string), eq(workflowOptimizerEvaluations.id, evaluationId)));
+      if (!bound) throw notFound("Optimizer evaluation not found");
+      const actor = mutationActor(req);
+      const result = action === "evaluate" ? await optimizerEvaluations.evaluate(companyId, evaluationId)
+        : action === "shadow" ? await optimizerEvaluations.startShadow(companyId, evaluationId, actor)
+        : action === "request-approval" ? await optimizerEvaluations.requestPromotionApproval(companyId, evaluationId, actor)
+          : action === "canary" ? await optimizerEvaluations.prepareCanary(companyId, evaluationId)
+            : action === "activate" ? await optimizerEvaluations.activate(companyId, evaluationId)
+              : await optimizerEvaluations.retire(companyId, evaluationId, actor);
+      res.json(result);
+    },
+  ] as const;
+  router.post("/companies/:companyId/workflows/:workflowId/optimizer-evaluations/:evaluationId/evaluate", ...optimizerAction("evaluate"));
+  router.post("/companies/:companyId/workflows/:workflowId/optimizer-evaluations/:evaluationId/shadow", ...optimizerAction("shadow"));
+  router.post("/companies/:companyId/workflows/:workflowId/optimizer-evaluations/:evaluationId/request-approval", ...optimizerAction("request-approval"));
+  router.post("/companies/:companyId/workflows/:workflowId/optimizer-evaluations/:evaluationId/canary", ...optimizerAction("canary"));
+  router.post("/companies/:companyId/workflows/:workflowId/optimizer-evaluations/:evaluationId/activate", ...optimizerAction("activate"));
+  router.post("/companies/:companyId/workflows/:workflowId/optimizer-evaluations/:evaluationId/retire", ...optimizerAction("retire"));
 
   router.get("/companies/:companyId/workflow-runs/:runId/review", async (req, res) => {
     const companyId = req.params.companyId as string;
@@ -476,28 +481,28 @@ export function workflowRoutes(db: Db) {
       reviews: await toolReviewForRun(companyId, req.params.runId as string) });
   });
 
-  for (const decision of ["approve", "reject"] as const) {
-    router.post(`/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/${decision}`, async (req, res) => {
-      await assertWorkflowsEnabled();
-      assertBoard(req);
-      const companyId = req.params.companyId as string;
-      await assertPermission(req, companyId, "workflows:publish");
-      const runId = req.params.runId as string;
-      const [review] = await toolReviewForRun(companyId, runId, req.params.requestId as string);
-      if (!review) throw notFound("Active workflow tool review not found");
-      const input = { companyId, actionRequestId: review.id, actor: { userId: getActorInfo(req).actorId } };
-      const gateway = getAssignedMcpGateway(db);
-      try {
-        if (decision === "approve") await gateway.approveActionRequest(input);
-        else await gateway.declineActionRequest(input);
-      } catch (error) {
-        if (!(error instanceof ToolGatewayHttpError)) throw error;
-        res.status(error.status).json({ error: error.message, reasonCode: error.reasonCode, ...error.details });
-        return;
-      }
-      res.json(await executor.getRun(companyId, runId));
-    });
-  }
+  const reviewToolAction = (decision: "approve" | "reject") => async (req: Request, res: Response) => {
+    await assertWorkflowsEnabled();
+    assertBoard(req);
+    const companyId = req.params.companyId as string;
+    await assertPermission(req, companyId, "workflows:publish");
+    const runId = req.params.runId as string;
+    const [review] = await toolReviewForRun(companyId, runId, req.params.requestId as string);
+    if (!review) throw notFound("Active workflow tool review not found");
+    const input = { companyId, actionRequestId: review.id, actor: { userId: getActorInfo(req).actorId } };
+    const gateway = getAssignedMcpGateway(db);
+    try {
+      if (decision === "approve") await gateway.approveActionRequest(input);
+      else await gateway.declineActionRequest(input);
+    } catch (error) {
+      if (!(error instanceof ToolGatewayHttpError)) throw error;
+      res.status(error.status).json({ error: error.message, reasonCode: error.reasonCode, ...error.details });
+      return;
+    }
+    res.json(await executor.getRun(companyId, runId));
+  };
+  router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/approve", reviewToolAction("approve"));
+  router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/reject", reviewToolAction("reject"));
 
   router.get("/companies/:companyId/workflow-runs/:runId", async (req, res) => {
     await assertWorkflowsEnabled();

@@ -20,7 +20,10 @@ describe("codex inactivity monitor (integration: real subprocess)", () => {
     "allows a long silent build while the child process group is consuming CPU",
     async () => {
       const runId = `monitor-active-build-${Date.now()}`;
-      const timeoutMs = 500;
+      // A real process-group sample scans /proc. Cloud containers can retain
+      // thousands of dead test processes, so allow that scan to finish twice.
+      // The silent CPU work still lasts well beyond the inactivity deadline.
+      const timeoutMs = 5_000;
       const processActivityMonitor: {
         current: ReturnType<typeof createCodexProcessActivityMonitor> | null;
       } = { current: null };
@@ -36,11 +39,11 @@ describe("codex inactivity monitor (integration: real subprocess)", () => {
         const proc = await runChildProcess(
           runId,
           process.execPath,
-          ["-e", "const end = Date.now() + 2_000; while (Date.now() < end) {}"],
+          ["-e", "const end = Date.now() + 12_000; while (Date.now() < end) {}"],
           {
             cwd: process.cwd(),
             env: process.env as Record<string, string>,
-            timeoutSec: 5,
+            timeoutSec: 20,
             graceSec: 1,
             onSpawn: async (meta) => {
               processActivityMonitor.current = createCodexProcessActivityMonitor({
@@ -63,7 +66,7 @@ describe("codex inactivity monitor (integration: real subprocess)", () => {
         monitor.stop();
       }
     },
-    10_000,
+    30_000,
   );
 
   it(

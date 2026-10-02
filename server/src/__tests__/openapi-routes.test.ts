@@ -24,6 +24,7 @@ const apiPrefixes: Record<string, string> = {
   "ai-connections.ts": "/api",
   "attention.ts": "/api",
   "approvals.ts": "/api",
+  "automation-artifacts.ts": "/api",
   "assets.ts": "/api",
   "auth.ts": "/api/auth",
   "board-chat.ts": "/api",
@@ -229,6 +230,32 @@ function loadSpecRoutes() {
 }
 
 describe("openapi routes", () => {
+  it("documents V4 governance identities, typed result authority and maintenance idempotency", () => {
+    const { spec } = loadSpecRoutes();
+    const jobs = spec.paths["/api/companies/{companyId}/memory/jobs"].post;
+    expect(jobs.responses["202"]).toBeDefined();
+    expect(jobs.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "companyId", in: "path", required: true }),
+      expect.objectContaining({ name: "Idempotency-Key", in: "header", required: true,
+        schema: expect.objectContaining({ minLength: 1, maxLength: 160 }) }),
+    ]));
+    expect(jobs["x-paperclip-authorization"]).toEqual({ actor: "board" });
+    const compile = spec.paths["/api/companies/{companyId}/workflows/{workflowId}/optimizer-suggestions/{suggestionId}/compile"].post;
+    expect(compile.responses["201"]).toBeDefined();
+    expect(compile.requestBody.content["application/json"].schema.required).toEqual(
+      expect.arrayContaining(["kind", "sourceCode", "inputSchema", "outputSchema", "invariants", "cases"]),
+    );
+    expect(compile["x-paperclip-authorization"]).toEqual({ actor: "board" });
+    for (const action of ["task-result", "direct-result"]) {
+      const result = spec.paths[`/api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/${action}`].post;
+      expect(result.responses["201"]).toBeDefined();
+      expect(result.security).toEqual([{ AgentRunAuth: [] }]);
+      expect(result["x-paperclip-authorization"]).toEqual({ actor: "agent",
+        heartbeatBound: true, workflowBound: true, taskBound: action === "task-result" });
+    }
+    expect(spec.paths["/api/companies/{companyId}/automation-artifacts"].get["x-paperclip-authorization"]).toEqual({ actor: "board" });
+  });
+
   it("documents personal board-only announcements and private responses", () => {
     const { spec } = loadSpecRoutes();
     const current = spec.paths["/api/announcements/current"].get;

@@ -192,7 +192,14 @@ import {
   archiveCompanyMemberSchema,
   updateMemberPermissionsSchema,
   updateUserCompanyAccessSchema,
+  createAutomationArtifactSchema,
+  appendAutomationArtifactVersionSchema,
+  transitionAutomationArtifactStatusSchema,
+  archiveAutomationArtifactSchema,
   // Memory
+  memoryDeletionLedgerInputSchema,
+  memoryRetentionPolicyInputSchema,
+  memorySourceDeletionInputSchema,
   memoryBindingInputSchema,
   memoryBindingTargetInputSchema,
   memoryCandidateInputSchema,
@@ -303,6 +310,8 @@ import {
   companyImportTransferDeclarationSchema,
 } from "@paperclipai/shared/company-import-transfer";
 
+import { optimizerCandidateRequestSchema, workflowRunReviewSchema, memoryMaintenanceInputSchema } from "../services/v4-api-contracts.js";
+
 type JsonSchema = Record<string, unknown>;
 type OpenApiResponse = Record<string, unknown>;
 type OpenApiPathRegistration = {
@@ -311,6 +320,7 @@ type OpenApiPathRegistration = {
   request?: {
     params?: z.ZodTypeAny;
     query?: z.ZodTypeAny;
+    headers?: z.ZodTypeAny;
     body?: {
       content: Record<string, { schema: unknown }>;
       required?: boolean;
@@ -573,7 +583,7 @@ function normalizeResponses(responses: Record<string, OpenApiResponse> = {}) {
 
 function parametersFromSchema(
   schema: z.ZodTypeAny,
-  location: "path" | "query",
+  location: "path" | "query" | "header",
 ) {
   const objectSchema = unwrapSchema(schema);
   if (zodTypeName(objectSchema) !== "object") return [];
@@ -617,6 +627,12 @@ class OpenAPIRegistry {
         normalizedOperation.parameters = [
           ...((normalizedOperation.parameters as unknown[]) ?? []),
           ...parametersFromSchema(request.query, "query"),
+        ];
+      }
+      if (request?.headers) {
+        normalizedOperation.parameters = [
+          ...((normalizedOperation.parameters as unknown[]) ?? []),
+          ...parametersFromSchema(request.headers, "header"),
         ];
       }
       if (request?.body) {
@@ -1655,7 +1671,9 @@ function resolveOperationAuthLevel(
 ): OpenApiAuthLevel {
   const key = operationKey(method, path);
   if (PUBLIC_OPERATIONS.has(key)) return "public";
-  if (key === "POST /api/mcp/project-tools" || key === "POST /api/companies/{companyId}/slack/tasks/{issueId}/tools") return "agent_run";
+  if (key === "POST /api/mcp/project-tools" || key === "POST /api/companies/{companyId}/slack/tasks/{issueId}/tools" ||
+    key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/task-result" ||
+    key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
   if (
@@ -1740,7 +1758,9 @@ function applyDocumentFixups(document: any): any {
           : authLevel === "board"
             ? { actor: "board" }
             : authLevel === "agent_run"
-              ? { actor: "agent", heartbeatBound: true, taskBound: true }
+              ? { actor: "agent", heartbeatBound: true,
+                  taskBound: !path.endsWith("/direct-result"),
+                  ...(path.includes("/workflow-runs/") ? { workflowBound: true } : {}) }
             : authLevel === "runtime_tools"
               ? { actor: "runtime_tools", heartbeatBound: true }
               : authLevel === "authenticated"
@@ -2057,6 +2077,56 @@ registry.registerPath({
   request: { params: z.object({ companyId: z.string() }) },
   responses: { 200: r.ok(), 401: r.unauthorized, 404: r.notFound },
 });
+
+// V4 governance endpoints share their validation contracts with the services.
+function registerV4Operation(method: string, path: string, summary: string, params: z.ZodTypeAny,
+  options: { body?: z.ZodTypeAny; status?: number; board?: boolean; headers?: z.ZodTypeAny; description?: string } = {}) {
+  if (options.board) BOARD_ONLY_OPERATIONS.add(operationKey(method, path));
+  registry.registerPath({ method, path, tags: [path.includes("/memory/") ? "memory" : path.includes("/automation-artifacts") ? "automation-artifacts" : "workflows"],
+    summary, ...(options.description ? { description: options.description } : {}),
+    request: { params, ...(options.body ? { body: jsonBody(options.body) } : {}), ...(options.headers ? { headers: options.headers } : {}) },
+    responses: { [options.status ?? 200]: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict, 422: r.unprocessable },
+  });
+}
+const v4CompanyParams = z.object({ companyId: z.string().uuid() });
+const v4ArtifactParams = v4CompanyParams.extend({ artifactId: z.string().uuid() });
+const artifactBase = "/api/companies/{companyId}/automation-artifacts";
+registerV4Operation("get", artifactBase, "List governed Automation Artifacts", v4CompanyParams, { board: true });
+registerV4Operation("post", artifactBase, "Create an immutable versioned Automation Artifact", v4CompanyParams, { board: true, body: createAutomationArtifactSchema, status: 201 });
+registerV4Operation("get", `${artifactBase}/{artifactId}`, "Get an Automation Artifact and its versions", v4ArtifactParams, { board: true });
+registerV4Operation("post", `${artifactBase}/{artifactId}/versions`, "Append an immutable artifact version", v4ArtifactParams, { board: true, body: appendAutomationArtifactVersionSchema, status: 201 });
+registerV4Operation("post", `${artifactBase}/{artifactId}/evaluate`, "Evaluate the current artifact version security gates", v4ArtifactParams, { board: true });
+registerV4Operation("post", `${artifactBase}/{artifactId}/status`, "Transition a qualified artifact status", v4ArtifactParams, { board: true, body: transitionAutomationArtifactStatusSchema });
+registerV4Operation("post", `${artifactBase}/{artifactId}/archive`, "Archive an Automation Artifact", v4ArtifactParams, { board: true, body: archiveAutomationArtifactSchema });
+const memoryBase = "/api/companies/{companyId}/memory";
+registerV4Operation("get", `${memoryBase}/jobs`, "List Memory maintenance jobs (owner or administrator)", v4CompanyParams, { board: true });
+registerV4Operation("post", `${memoryBase}/jobs`, "Enqueue idempotent Memory maintenance (owner or administrator)", v4CompanyParams, { board: true, body: memoryMaintenanceInputSchema, status: 202,
+  headers: z.object({ "Idempotency-Key": z.string().trim().min(1).max(160) }) });
+registerV4Operation("get", `${memoryBase}/export`, "Export visible shared Memory as a JSON attachment", v4CompanyParams, { board: true });
+registerV4Operation("get", `${memoryBase}/deletion-ledger`, "Export the content-free deletion ledger", v4CompanyParams, { board: true, description: "Available while Memory is disabled; requires an owner or administrator." });
+registerV4Operation("post", `${memoryBase}/deletion-ledger/restore`, "Restore deletion protection before restoring Memory data", v4CompanyParams, { board: true, body: memoryDeletionLedgerInputSchema, description: "Available while Memory is disabled; requires an owner or administrator." });
+registerV4Operation("delete", `${memoryBase}/records/{recordId}`, "Forget a shared Memory record and its derived content", v4CompanyParams.extend({ recordId: z.string().uuid() }), { board: true });
+registerV4Operation("get", `${memoryBase}/retention-policy`, "Get the Memory retention policy and management permission", v4CompanyParams, { board: true });
+registerV4Operation("put", `${memoryBase}/retention-policy`, "Set the Memory retention policy", v4CompanyParams, { board: true, body: memoryRetentionPolicyInputSchema });
+registerV4Operation("post", `${memoryBase}/source-deletions`, "Forget Memory and derived content originating from a source", v4CompanyParams, { board: true, body: memorySourceDeletionInputSchema });
+const optimizerBase = "/api/companies/{companyId}/workflows/{workflowId}";
+const optimizerParams = v4CompanyParams.extend({ workflowId: z.string().uuid() });
+registerV4Operation("get", `${optimizerBase}/optimizer-evaluations`, "List optimizer qualification evaluations", optimizerParams);
+registerV4Operation("post", `${optimizerBase}/optimizer-suggestions/{suggestionId}/propose`, "Propose a bounded pure optimizer candidate from reviewed runs", optimizerParams.extend({ suggestionId: z.string().uuid() }), { board: true, body: z.object({}).strict() });
+registerV4Operation("post", `${optimizerBase}/optimizer-suggestions/{suggestionId}/compile`, "Compile an explicit pure optimizer candidate with invariant and case contracts", optimizerParams.extend({ suggestionId: z.string().uuid() }), { board: true, body: optimizerCandidateRequestSchema, status: 201 });
+for (const [action, summary] of [
+  ["evaluate", "Evaluate compiler, replay, invariants and fixture gates"], ["shadow", "Start non-authoritative shadow evaluation"],
+  ["request-approval", "Request identified human promotion approval"], ["canary", "Prepare an approved bounded optimizer canary"],
+  ["activate", "Activate an optimizer candidate after successful actual canaries"], ["retire", "Retire an optimizer candidate"],
+]) registerV4Operation("post", `${optimizerBase}/optimizer-evaluations/{evaluationId}/${action}`, summary, optimizerParams.extend({ evaluationId: z.string().uuid() }), { board: true, body: z.object({}).strict() });
+const runBase = "/api/companies/{companyId}/workflow-runs/{runId}";
+const runParams = v4CompanyParams.extend({ runId: z.string().uuid() });
+registerV4Operation("get", `${runBase}/review`, "Get an immutable workflow run review", runParams);
+registerV4Operation("post", `${runBase}/review`, "Record an identified human review and explicit corrections", runParams, { board: true, body: workflowRunReviewSchema, status: 201 });
+for (const action of ["task-result", "direct-result"]) registerV4Operation("post", `${runBase}/nodes/{nodeId}/${action}`, "Submit a typed result from the active assigned agent execution", runParams.extend({ nodeId: z.string() }), { body: z.object({ result: z.unknown() }).strict(), status: 201,
+  description: "Requires a run-bound agent JWT, current delegated authority and the assigned active heartbeat. Results are schema validated and limited to 1 MB." });
+registerV4Operation("get", `${runBase}/tool-reviews`, "List durable workflow tool review requests", runParams);
+for (const decision of ["approve", "reject"]) registerV4Operation("post", `${runBase}/tool-reviews/{requestId}/${decision}`, `${decision === "approve" ? "Approve" : "Reject"} a bound workflow tool request`, runParams.extend({ requestId: z.string().uuid() }), { board: true });
 
 // ─── Memory ──────────────────────────────────────────────────────────────────
 

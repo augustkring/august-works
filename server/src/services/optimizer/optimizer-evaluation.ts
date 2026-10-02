@@ -14,32 +14,19 @@ import { executeAutomationArtifactTypeScriptSandbox } from "../automation-artifa
 import { assertMemoryRecordsRetained, lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { persistActivity, publishActivity } from "../activity-log.js";
-import { assertWorkflowOutputSchema, validateWorkflowOutput } from "../workflows/workflow-output-schema.js";
+import { validateWorkflowOutput } from "../workflows/workflow-output-schema.js";
 import { evaluateWorkflowTransformMapping } from "../workflows/workflow-transform-expression.js";
-import { evaluateWorkflowConditionExpression, parseWorkflowConditionExpression } from "../workflows/workflow-condition-expression.js";
+import { evaluateWorkflowConditionExpression } from "../workflows/workflow-condition-expression.js";
 import { compileOptimizerCandidate } from "./optimizer-candidate-compiler.js";
 import { evaluateOptimizerHistoricalReplay } from "./optimizer-historical-replay.js";
 import { optimizerShapeHash, optimizerTraceService } from "./optimizer-trace.js";
 import { evaluateOptimizerPromotion, optimizerPromotionService } from "./optimizer-promotion.js";
 import { approvalService } from "../approvals.js";
 
+import { optimizerCandidateRequestSchema } from "../v4-api-contracts.js";
+export { optimizerCandidateRequestSchema } from "../v4-api-contracts.js";
+
 const SYSTEM: AutomationArtifactMutationActor = { principal: { type: "system", service: "workflow-optimizer" } };
-export const optimizerCandidateRequestSchema = z.object({
-  kind: z.enum(["expression", "transform", "typescript"]), sourceCode: z.string().min(1).max(64_000),
-  inputSchema: z.record(z.string(), z.unknown()), outputSchema: z.record(z.string(), z.unknown()),
-  invariants: z.array(z.object({ id: z.string().min(1).max(80), description: z.string().min(1).max(500),
-    critical: z.boolean().default(true), expression: z.string().min(1).max(2_000) }).strict()).min(1).max(16),
-  cases: z.array(z.object({ id: z.string().min(1).max(80), category: z.enum(["boundary", "shape_variant"]), input: z.unknown() }).strict()).min(2).max(16),
-}).strict().superRefine((value, ctx) => {
-  try {
-    assertWorkflowOutputSchema(value.inputSchema); assertWorkflowOutputSchema(value.outputSchema);
-    for (const invariant of value.invariants) parseWorkflowConditionExpression(invariant.expression);
-    if (!value.invariants.some((item) => item.critical)) throw new Error("At least one critical business invariant is required");
-    if (!value.cases.some((item) => item.category === "boundary") || !value.cases.some((item) => item.category === "shape_variant")) throw new Error("Boundary and shape-variant cases are required");
-    if (new Set(value.invariants.map((item) => item.id)).size !== value.invariants.length || new Set(value.cases.map((item) => item.id)).size !== value.cases.length) throw new Error("Case and invariant IDs must be unique");
-    if (Buffer.byteLength(JSON.stringify(value), "utf8") > 256_000) throw new Error("Candidate request exceeds the size limit");
-  } catch (error) { ctx.addIssue({ code: z.ZodIssueCode.custom, message: error instanceof Error ? error.message : "Invalid candidate contract" }); }
-});
 
 export function evaluateCandidateInvariant(expression: string, input: unknown, output: unknown) {
   return evaluateWorkflowConditionExpression(expression, { trigger: { input, output }, variables: {}, steps: {} });
