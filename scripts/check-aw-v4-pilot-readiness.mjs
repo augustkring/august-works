@@ -3,9 +3,30 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-const repoRoot = process.cwd();
+const repoRoot = path.resolve(import.meta.dirname, "..");
 const manifestPath = path.join(repoRoot, "evals", "aw-v4", "pilot-readiness.json");
 const SECURITY_MANIFEST_PATH = "evals/aw-v4/security-gates.json";
+const expectedRepositoryEvidence = {
+  security_hard_gates: {
+    file: "scripts/run-aw-v4-security-evals.mjs",
+    contains: "Generated-code sandbox prerequisites are unavailable",
+  },
+  migration_cutover: {
+    file: "doc/operations/aw-v4-migration-cutover.md",
+    contains: "--apply --require-ready",
+  },
+  migration_reconciliation_tests: {
+    file: "server/src/__tests__/aw-v4-migration-reconciliation.test.ts",
+  },
+  product_ia_navigation: {
+    file: "ui/src/components/Sidebar.test.tsx",
+    contains: "Overview",
+  },
+  governance_surface: {
+    file: "ui/src/pages/Governance.test.tsx",
+    contains: "Governance",
+  },
+};
 const instanceSettingsPath = path.join(
   repoRoot,
   "packages",
@@ -361,6 +382,11 @@ if (
 ) {
   fail("repositoryEvidence must be a non-empty array.");
 }
+exactStringSet(
+  manifest.repositoryEvidence.map((entry) => entry?.id),
+  Object.keys(expectedRepositoryEvidence),
+  "repositoryEvidence ids",
+);
 const evidenceIds = new Set();
 for (const entry of manifest.repositoryEvidence) {
   if (!entry || typeof entry !== "object") {
@@ -371,23 +397,43 @@ for (const entry of manifest.repositoryEvidence) {
     fail("Duplicate repository evidence id: " + id);
   }
   evidenceIds.add(id);
-  const absolute = repositoryFile(
-    nonEmptyString(entry.file, "repositoryEvidence[" + id + "].file"),
+  const expectedEntry = expectedRepositoryEvidence[id];
+  if (!expectedEntry) {
+    fail("Unknown repository evidence id: " + id);
+  }
+  const entryFile = nonEmptyString(
+    entry.file,
+    "repositoryEvidence[" + id + "].file",
   );
-  if (entry.contains !== undefined) {
-    const contains = nonEmptyString(
-      entry.contains,
-      "repositoryEvidence[" + id + "].contains",
+  if (entryFile !== expectedEntry.file) {
+    fail(
+      "Repository evidence " +
+        id +
+        " must reference canonical file " +
+        expectedEntry.file +
+        ".",
     );
-    if (!readFileSync(absolute, "utf8").includes(contains)) {
+  }
+  const absolute = repositoryFile(entryFile);
+  if (expectedEntry.contains !== undefined) {
+    if (entry.contains !== expectedEntry.contains) {
+      fail(
+        "Repository evidence " +
+          id +
+          " must use the canonical content assertion.",
+      );
+    }
+    if (!readFileSync(absolute, "utf8").includes(expectedEntry.contains)) {
       fail(
         "Repository evidence " +
           id +
           " is missing expected content in " +
-          entry.file +
+          entryFile +
           ".",
       );
     }
+  } else if (entry.contains !== undefined) {
+    fail("Repository evidence " + id + " must not add an ad-hoc content assertion.");
   }
 }
 
