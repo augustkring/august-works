@@ -323,7 +323,9 @@ for (const flag of manifest.requiredDefaultOffFlags) {
   if (metadata.default !== false) {
     fail("featureFlagMetadata[" + flag + "].default must be false.");
   }
-  nonEmptyString(metadata.scope, "featureFlagMetadata[" + flag + "].scope");
+  if (metadata.scope !== "instance") {
+    fail("featureFlagMetadata[" + flag + "].scope must be instance.");
+  }
   if (
     !Array.isArray(metadata.dependencies) ||
     metadata.dependencies.some((value) => typeof value !== "string")
@@ -351,6 +353,13 @@ for (const flag of manifest.requiredDefaultOffFlags) {
   );
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reviewDate)) {
     fail("featureFlagMetadata[" + flag + "].reviewDate must be YYYY-MM-DD.");
+  }
+  const reviewDateValue = new Date(reviewDate + "T00:00:00.000Z");
+  if (
+    Number.isNaN(reviewDateValue.getTime()) ||
+    reviewDateValue.toISOString().slice(0, 10) !== reviewDate
+  ) {
+    fail("featureFlagMetadata[" + flag + "].reviewDate must be a real calendar date.");
   }
   nonEmptyString(
     metadata.cleanupCondition,
@@ -587,6 +596,14 @@ if (
   Number.isNaN(recordedAt.getTime())
 ) {
   fail("recordedAt must be an explicit ISO-8601 timestamp with timezone.");
+}
+const recordedCalendarDate = evidence.recordedAt.slice(0, 10);
+const recordedCalendarValue = new Date(recordedCalendarDate + "T00:00:00.000Z");
+if (
+  Number.isNaN(recordedCalendarValue.getTime()) ||
+  recordedCalendarValue.toISOString().slice(0, 10) !== recordedCalendarDate
+) {
+  fail("recordedAt must contain a real calendar date.");
 }
 if (recordedAt.getTime() > Date.now() + 5 * 60 * 1000) {
   fail("recordedAt cannot be materially in the future.");
