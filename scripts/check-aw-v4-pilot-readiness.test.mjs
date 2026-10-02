@@ -133,6 +133,34 @@ test("high-impact feature fails without explicit approval", () => {
   });
 });
 
+test("high-impact feature passes with dependencies and explicit approval", () => {
+  const evidence = completeEvidence({
+    rollout: {
+      stage: "pilot",
+      enabledFeatureFlags: [
+        "enableFoundationV1",
+        "enableWorkflowsV1",
+        "enableAutomationArtifactsV1",
+        "enableAutomationArtifactCodeExecutionV1",
+      ],
+      rollbackOwner: "pilot-operator",
+      rollbackVerified: true,
+    },
+    highImpactApprovals: [
+      {
+        flag: "enableAutomationArtifactCodeExecutionV1",
+        approved: true,
+        evidence: "artifact://security-approval/code-execution",
+      },
+    ],
+  });
+  withEvidence(evidence, (file) => {
+    const result = run(["--require-evidence", "--evidence", file]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /pilot evidence valid/);
+  });
+});
+
 test("migration blockers fail closed", () => {
   const evidence = completeEvidence({
     migration: {
