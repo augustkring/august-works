@@ -72,7 +72,9 @@ Every V4 high-impact feature in the readiness manifest remains explicitly
 default-off in code. The same manifest records the required rollout metadata for
 each governed V4 flag: owner, default, scope, dependencies, rollback behavior,
 review date, and cleanup condition. The validator requires a one-to-one match
-between this metadata and the governed flag set.
+between this metadata and the governed flag set. An overdue review date blocks
+pilot readiness until the flag is reviewed, retired, or given a new justified
+review date.
 
 Enable only capabilities included in the selected customer allowlist or policy.
 
