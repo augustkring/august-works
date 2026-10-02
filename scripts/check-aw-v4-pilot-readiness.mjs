@@ -133,6 +133,23 @@ function httpsReference(value, label) {
   return reference;
 }
 
+function githubActionsRunReference(value, label) {
+  const reference = httpsReference(value, label);
+  const parsed = new URL(reference);
+  if (
+    parsed.hostname.toLowerCase() !== "github.com" ||
+    !/^\/augustkring\/august-works\/actions\/runs\/\d+\/?$/u.test(
+      parsed.pathname,
+    )
+  ) {
+    fail(
+      label +
+        " must reference a GitHub Actions run for augustkring/august-works.",
+    );
+  }
+  return reference;
+}
+
 function durableEvidenceReference(value, label) {
   const reference = nonEmptyString(value, label);
   if (/^https:\/\/\S+$/iu.test(reference)) {
@@ -508,8 +525,8 @@ for (const key of [
     fail("automated." + key + " must be true.");
   }
 }
-httpsReference(automated.ciRunUrl, "automated.ciRunUrl");
-httpsReference(
+githubActionsRunReference(automated.ciRunUrl, "automated.ciRunUrl");
+githubActionsRunReference(
   automated.securityGateRunUrl,
   "automated.securityGateRunUrl",
 );
