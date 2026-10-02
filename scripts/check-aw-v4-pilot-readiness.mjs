@@ -73,6 +73,10 @@ const expectedRestrictedPilotFlags = [
   "enableWorkflowOptimizerPromotion",
 ];
 
+const evidenceMode =
+  process.argv.includes("--evidence") ||
+  process.argv.includes("--require-evidence");
+
 const expectedManualChecks = [
   "migration_rehearsal",
   "tenant_security_review",
@@ -363,11 +367,14 @@ for (const flag of manifest.requiredDefaultOffFlags) {
   }
   const reviewDeadline = new Date(reviewDate + "T23:59:59.999Z");
   if (reviewDeadline.getTime() < Date.now()) {
-    fail(
+    const message =
       "featureFlagMetadata[" +
-        flag +
-        "].reviewDate is overdue; review or retire the rollout flag before pilot.",
-    );
+      flag +
+      "].reviewDate is overdue; review or retire the rollout flag before pilot.";
+    if (evidenceMode) {
+      fail(message);
+    }
+    console.warn("[aw-v4-pilot] warning: " + message);
   }
   nonEmptyString(
     metadata.cleanupCondition,
