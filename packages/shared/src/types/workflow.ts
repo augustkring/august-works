@@ -1,3 +1,5 @@
+import type { ExecutionPrincipal } from "../august-works-platform.js";
+
 export const WORKFLOW_STATUSES = ["active", "paused", "archived"] as const;
 export type WorkflowStatus = (typeof WORKFLOW_STATUSES)[number];
 
@@ -33,6 +35,8 @@ export interface WorkflowNodeV1 {
   retryPolicy?: WorkflowRetryPolicy;
   timeoutSeconds?: number;
   continueOnFailure?: boolean;
+  failurePolicy?: "fail_workflow" | "follow_failure_branch" | "continue_with_null" | "wait_for_human";
+  inputSchema?: Record<string, unknown>;
 }
 
 export interface WorkflowEdgeV1 {
@@ -367,6 +371,8 @@ export interface WorkflowRun {
   status: WorkflowRunStatus;
   source: WorkflowRunSource;
   triggerPayload: Record<string, unknown>;
+  executionPrincipal?: ExecutionPrincipal | null;
+  executionAgentRunId?: string | null;
   responsibleUserId: string | null;
   idempotencyKey: string | null;
   correlationId: string | null;
@@ -392,6 +398,13 @@ export interface WorkflowStepRun {
   status: WorkflowStepRunStatus;
   inputJson: unknown;
   outputJson: unknown;
+  memoryRecordIds?: string[];
+  failureResolution?: { policy: "follow_failure_branch" | "continue_with_null" | "wait_for_human"; resolved: boolean } | null;
+  childWorkflowRunId?: string | null;
+  taskResultJson?: unknown;
+  taskResultAcceptedAt?: Date | null;
+  taskResultRunId?: string | null;
+  payloadDeleted?: boolean;
   startedAt: Date | null;
   finishedAt: Date | null;
   durationMs: number | null;
@@ -406,11 +419,14 @@ export interface WorkflowStepRun {
 }
 
 export const WORKFLOW_WAIT_KINDS = [
+  "tool_action",
   "delay",
   "human_interaction",
   "external_callback",
   "task_completion",
   "external_agent_run",
+  "direct_agent_run",
+  "subworkflow",
 ] as const;
 export type WorkflowWaitKind = (typeof WORKFLOW_WAIT_KINDS)[number];
 

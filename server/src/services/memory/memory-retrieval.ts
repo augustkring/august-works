@@ -16,7 +16,8 @@ export interface MemoryRetrievalScope {
 
 export interface RetrieveEligibleMemoryInput {
   companyId: string;
-  agentId: string;
+  agentId: string | null;
+  actor?: MemoryMutationActor;
   runId?: string | null;
   responsibleUserId?: string | null;
   projectId?: string | null;
@@ -130,6 +131,8 @@ function recordStillEligible(
 }
 
 function retrievalActor(input: RetrieveEligibleMemoryInput): MemoryMutationActor {
+  if (input.actor) return input.actor;
+  if (!input.agentId) throw unprocessable("Memory retrieval requires an attributable principal");
   return {
     principal: {
       type: "agent",
@@ -169,6 +172,7 @@ export function resolveMemoryRetrievalScopes(
   }
 
   if (input.allowPrivate) {
+    if (!input.agentId) throw unprocessable("Private Memory retrieval requires its owning agent");
     scopes.push({ scopeType: "agent", scopeId: input.agentId });
   }
 

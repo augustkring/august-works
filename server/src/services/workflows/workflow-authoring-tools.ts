@@ -146,6 +146,8 @@ function nodeMatchesUpdates(
   ) {
     return false;
   }
+  if (updates.failurePolicy !== undefined && (node.failurePolicy ?? null) !== updates.failurePolicy) return false;
+  if (updates.inputSchema !== undefined && !isDeepStrictEqual(node.inputSchema ?? null, updates.inputSchema)) return false;
   return true;
 }
 
@@ -183,6 +185,10 @@ function applyNodeUpdates(
   else if (updates.continueOnFailure !== undefined) {
     next.continueOnFailure = updates.continueOnFailure;
   }
+  if (updates.failurePolicy === null) delete next.failurePolicy;
+  else if (updates.failurePolicy !== undefined) next.failurePolicy = updates.failurePolicy;
+  if (updates.inputSchema === null) delete next.inputSchema;
+  else if (updates.inputSchema !== undefined) next.inputSchema = updates.inputSchema;
 
   return next;
 }

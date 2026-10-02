@@ -17,6 +17,11 @@ Current implementation status:
 
 ## Dependency Lockfile Policy
 
+The TypeScript 7 package supplies the native typecheck CLI. Scripts that inspect
+TypeScript syntax use the separately pinned `typescript-compiler-api` alias;
+the native CLI does not export the JavaScript compiler API. Keep AST-based
+security checks on that alias rather than replacing them with text matching.
+
 GitHub Actions owns `pnpm-lock.yaml`.
 
 - Do not commit `pnpm-lock.yaml` in pull requests.

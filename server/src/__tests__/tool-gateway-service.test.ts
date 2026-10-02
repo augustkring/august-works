@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { workflowService } from "../services/workflows/workflow-service.js";
+import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -32,6 +34,9 @@ import {
   toolInvocations,
   toolPolicies,
   workflows,
+  workflowRuns,
+  workflowStepRuns,
+  workflowWaits,
 } from "@paperclipai/db";
 import type { PluginToolDispatcher } from "../services/plugin-tool-dispatcher.js";
 import type { VercelConnectClient } from "../services/vercel-connect.js";
@@ -212,6 +217,136 @@ describeEmbeddedPostgres("tool gateway service", () => {
 
   afterAll(async () => {
     await tempDb?.cleanup();
+  });
+
+  it("executes a pinned connector through a workflow and denies catalogue drift before another provider call", async () => {
+    const { company, agent, run } = await createRunFixture(db);
+    const { connection, catalogEntry } = await createRemoteMcpToolFixture(db, company.id);
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow workflow connector",
+      policyType: "allow", selectors: { connectionId: connection.id } });
+    let calls = 0;
+    const provider = async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      if (body.method === "tools/call") calls++;
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id,
+        result: { content: [{ type: "text", text: "reviewed connector output" }] } }),
+        { headers: { "content-type": "application/json" } });
+    };
+    const gateway = createTestToolGatewayService(db, { remoteHttpRequest: provider });
+    const actor = { principal: { type: "agent" as const, agentId: agent.id }, runId: run.id };
+    const svc = workflowService(db);
+    const workflow = await svc.create(company.id, { name: "Pinned connector" }, actor);
+    const draft = await svc.updateDraft(company.id, workflow.id, {
+      expectedRevisionId: workflow.draftRevisionId!, graph: { version: 1, variables: [], settings: {},
+        nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+          { id: "connector", type: "connector.action", name: "Read", position: { x: 100, y: 0 }, config: {
+            toolCatalogEntryId: catalogEntry.id, connectionId: connection.id,
+            catalogVersionHash: catalogEntry.versionHash, catalogSchemaHash: catalogEntry.schemaHash, input: {},
+          } }], edges: [{ id: "e1", source: "start", target: "connector" }] },
+    }, actor);
+    await svc.publish(company.id, workflow.id, { expectedDraftRevisionId: draft.draftRevisionId!,
+      expectedPublishedRevisionId: null, approvalId: null }, actor);
+    const executor = workflowExecutorService(db, { toolGateway: gateway });
+    const completed = await executor.startManualRun(company.id, workflow.id, { input: {} }, actor, "workflow-connector");
+    expect(completed.run.status).toBe("succeeded");
+    const step = completed.steps.find((item) => item.nodeId === "connector")!;
+    expect(step).toMatchObject({ status: "succeeded", toolInvocationId: expect.any(String) });
+    expect(calls).toBe(1);
+    const [receipt] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, step.toolInvocationId!));
+    expect(receipt.workflowResultJson).toEqual(step.outputJson);
+    await db.update(toolCatalogEntries).set({ versionHash: randomUUID() }).where(eq(toolCatalogEntries.id, catalogEntry.id));
+    const denied = await executor.startManualRun(company.id, workflow.id, { input: {} }, actor, "workflow-connector-drift");
+    expect(denied.run).toMatchObject({ status: "failed", failureCode: "workflow_connector_drift" });
+    expect(calls).toBe(1);
+  });
+
+  it("parks a user workflow for signed tool review, recovers its receipt, and blocks late approval after cancellation", async () => {
+    const { company } = await createRunFixture(db);
+    const { connection, catalogEntry } = await createRemoteMcpToolFixture(db, company.id);
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user",
+      principalId: "workflow-owner", membershipRole: "owner", status: "active" });
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Review workflow connector",
+      policyType: "require_approval", selectors: { connectionId: connection.id } });
+    let calls = 0;
+    const gateway = createTestToolGatewayService(db, { remoteHttpRequest: async (_url, init) => {
+      const body = JSON.parse(String(init.body));
+      if (body.method === "tools/call") calls++;
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id,
+        result: { content: [{ type: "text", text: "approved user result" }] } }),
+        { headers: { "content-type": "application/json" } });
+    } });
+    const actor = { principal: { type: "user" as const, userId: "workflow-owner" } };
+    const svc = workflowService(db);
+    const workflow = await svc.create(company.id, { name: "Reviewed connector" }, actor);
+    const draft = await svc.updateDraft(company.id, workflow.id, {
+      expectedRevisionId: workflow.draftRevisionId!, graph: { version: 1, variables: [], settings: {},
+        nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+          { id: "connector", type: "connector.action", name: "Read", position: { x: 100, y: 0 }, config: {
+            toolCatalogEntryId: catalogEntry.id, connectionId: connection.id,
+            catalogVersionHash: catalogEntry.versionHash, catalogSchemaHash: catalogEntry.schemaHash, input: {},
+          } }], edges: [{ id: "e1", source: "start", target: "connector" }] },
+    }, actor);
+    await svc.publish(company.id, workflow.id, { expectedDraftRevisionId: draft.draftRevisionId!,
+      expectedPublishedRevisionId: null, approvalId: null }, actor);
+    const executor = workflowExecutorService(db, { toolGateway: gateway });
+    const waiting = await executor.startManualRun(company.id, workflow.id, { input: {} }, actor, "reviewed-workflow");
+    expect(waiting.run.status).toBe("waiting");
+    expect(waiting.waits).toMatchObject([{ kind: "tool_action", status: "active" }]);
+    expect(calls).toBe(0);
+    const [request] = await db.select().from(toolActionRequests);
+    expect(request).toMatchObject({ issueId: null, interactionId: null, status: "pending", requestedByUserId: "workflow-owner" });
+    // Recreate a worker crash after the signed request commits but before the
+    // workflow wait commits. Recovery must bind that same pending request.
+    await db.transaction(async (tx) => {
+      await tx.delete(workflowWaits).where(eq(workflowWaits.workflowRunId, waiting.run.id));
+      await tx.update(workflowStepRuns).set({ status: "running", toolInvocationId: null })
+        .where(and(eq(workflowStepRuns.workflowRunId, waiting.run.id), eq(workflowStepRuns.nodeId, "connector")));
+      await tx.update(workflowRuns).set({ status: "running", executionOwnerId: "crashed-worker",
+        leaseExpiresAt: new Date(0), ownerHeartbeatAt: new Date(0) }).where(eq(workflowRuns.id, waiting.run.id));
+    });
+    const afterCrash = workflowExecutorService(db, { toolGateway: gateway });
+    expect(await afterCrash.recoverExpiredRuns()).toMatchObject({ recovered: 1, failedRunIds: [] });
+    expect((await afterCrash.getRun(company.id, waiting.run.id))?.waits)
+      .toMatchObject([{ kind: "tool_action", status: "active", referenceId: request.invocationId }]);
+    expect(await db.select().from(toolActionRequests)).toHaveLength(1);
+    expect(calls).toBe(0);
+    await gateway.approveActionRequest({ companyId: company.id, actionRequestId: request.id, actor: { userId: "reviewer" } });
+    expect(calls).toBe(1);
+    // A restarted executor consumes the stored receipt without invoking the provider.
+    const restarted = workflowExecutorService(db, { toolGateway: gateway });
+    expect(await restarted.recoverExpiredRuns()).toMatchObject({ recovered: 1, failedRunIds: [] });
+    const completed = await restarted.getRun(company.id, waiting.run.id);
+    expect(completed?.run.status).toBe("succeeded");
+    const step = completed!.steps.find((item) => item.nodeId === "connector" && item.status === "succeeded")!;
+    const [receipt] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, request.invocationId));
+    expect(receipt).toMatchObject({ actorType: "user", actorId: "workflow-owner", workflowRunId: waiting.run.id });
+    expect(step.outputJson).toEqual(receipt.workflowResultJson);
+    expect(receipt.workflowResultJson).not.toBeNull();
+    await restarted.recoverExpiredRuns();
+    expect(calls).toBe(1);
+    const cancelled = await executor.startManualRun(company.id, workflow.id, { input: {} }, actor, "cancelled-review-workflow");
+    expect(cancelled.run.status).toBe("waiting");
+    const requests = await db.select().from(toolActionRequests);
+    const pending = requests.find((item) => item.status === "pending")!;
+    await executor.cancelRun(company.id, cancelled.run.id, { reason: "Operator cancelled" }, actor);
+    await expect(gateway.approveActionRequest({ companyId: company.id, actionRequestId: pending.id,
+      actor: { userId: "reviewer" } })).rejects.toMatchObject({ reasonCode: "action_not_pending" });
+    expect(calls).toBe(1);
+    const rejected = await executor.startManualRun(company.id, workflow.id, { input: {} }, actor, "rejected-review-workflow");
+    const rejectedRequest = (await db.select().from(toolActionRequests)).find((item) => item.status === "pending")!;
+    await gateway.declineActionRequest({ companyId: company.id, actionRequestId: rejectedRequest.id, actor: { userId: "reviewer" } });
+    await restarted.recoverExpiredRuns();
+    expect((await restarted.getRun(company.id, rejected.run.id))?.run).toMatchObject({ status: "failed", failureCode: "workflow_tool_review_declined" });
+    const expired = await executor.startManualRun(company.id, workflow.id, { input: {} }, actor, "expired-review-workflow");
+    await restarted.recoverExpiredRuns(20, new Date(Date.now() + 61 * 60_000));
+    expect((await restarted.getRun(company.id, expired.run.id))?.run).toMatchObject({ status: "failed", failureCode: "workflow_tool_review_expired" });
+    const revoked = await executor.startManualRun(company.id, workflow.id, { input: {} }, actor, "revoked-review-workflow");
+    const revokedRequest = (await db.select().from(toolActionRequests)).find((item) => item.status === "pending")!;
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalId, "workflow-owner")));
+    await expect(gateway.approveActionRequest({ companyId: company.id, actionRequestId: revokedRequest.id,
+      actor: { userId: "reviewer" } })).rejects.toMatchObject({ details: { code: "workflow_execution_principal_revoked" } });
+    expect((await restarted.getRun(company.id, revoked.run.id))?.run.status).toBe("waiting");
+    expect(calls).toBe(1);
   });
 
   it("exposes Memory self-tools only when the Memory feature gates are enabled", async () => {

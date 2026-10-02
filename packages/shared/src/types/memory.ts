@@ -295,6 +295,17 @@ export interface MemoryJob {
   updatedAt: Date;
 }
 
+export interface MemoryMaintenanceJobSummary {
+  id: string;
+  operationType: MemoryJobOperationType;
+  status: MemoryJobStatus;
+  attemptNumber: number;
+  submittedAt: Date;
+  finishedAt: Date | null;
+  errorCode: string | null;
+  result: Record<string, unknown> | null;
+}
+
 export interface MemoryJobListQuery {
   status?: MemoryJobStatus;
   effectiveState?: MemoryJobEffectiveState;

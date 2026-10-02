@@ -75,6 +75,7 @@ import { issueThreadInteractions } from "./issue_thread_interactions.js";
 import { issues } from "./issues.js";
 import { plugins } from "./plugins.js";
 import { projects } from "./projects.js";
+import { workflowRuns } from "./workflows.js";
 import { projectWorkspaces } from "./project_workspaces.js";
 
 export const toolApplications = pgTable(
@@ -728,6 +729,10 @@ export const toolInvocations = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
     idempotencyKey: text("idempotency_key"),
+    idempotencyRequestHash: text("idempotency_request_hash"),
+    workflowResultJson: jsonb("workflow_result_json").$type<unknown>(),
+    workflowRunId: uuid("workflow_run_id").references(() => workflowRuns.id, { onDelete: "set null" }),
+    workflowNodeId: text("workflow_node_id"),
     actorType: text("actor_type").notNull().default("system"),
     actorId: text("actor_id"),
     agentId: uuid("agent_id").references(() => agents.id, { onDelete: "set null" }),
@@ -774,6 +779,7 @@ export const toolInvocations = pgTable(
   },
   (table) => [
     index("tool_invocations_company_created_idx").on(table.companyId, table.createdAt),
+    index("tool_invocations_company_workflow_idx").on(table.companyId, table.workflowRunId),
     index("tool_invocations_run_idx").on(table.companyId, table.runId),
     index("tool_invocations_issue_idx").on(table.companyId, table.issueId),
     index("tool_invocations_gateway_idx").on(table.companyId, table.gatewayId),

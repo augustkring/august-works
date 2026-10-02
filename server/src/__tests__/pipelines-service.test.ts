@@ -5,6 +5,8 @@ import {
   activityLog,
   agents,
   companies,
+  companyMemberships,
+  principalPermissionGrants,
   createDb,
   executionWorkspaces,
   heartbeatRuns,
@@ -91,6 +93,8 @@ describeEmbeddedPostgres("pipelineService", () => {
     await db.delete(projectWorkspaces);
     await db.delete(projects);
     await db.delete(agents);
+    await db.delete(principalPermissionGrants);
+    await db.delete(companyMemberships);
     await db.delete(companies);
     await db.delete(instanceSettings);
   });
@@ -105,6 +109,10 @@ describeEmbeddedPostgres("pipelineService", () => {
       issuePrefix: `P${randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       defaultResponsibleUserId: "board-user",
     }).returning();
+    await db.insert(companyMemberships).values({ companyId: company!.id, principalType: "user", principalId: userActor.userId,
+      status: "active", membershipRole: "owner" });
+    await db.insert(principalPermissionGrants).values({ companyId: company!.id, principalType: "user", principalId: userActor.userId,
+      permissionKey: "workflows:run", scope: {} });
     return company!;
   }
 
@@ -1868,7 +1876,7 @@ describeEmbeddedPostgres("pipelineService", () => {
       .select()
       .from(pipelineAutomationExecutions)
       .where(eq(pipelineAutomationExecutions.id, badExecution!.id));
-    expect(execution!.error).toContain("same company");
+    expect(execution!.error).toBe("automation_binding_changed");
     const events = await svc.listCaseEvents(company.id, created.case.id);
     expect(events.filter((event) => event.type === "automation_failed")).toHaveLength(1);
   });

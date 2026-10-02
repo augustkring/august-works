@@ -106,7 +106,12 @@ describe("managed install store", () => {
   });
 
   it("writes a stable shim with the validated runtime and custom store path", () => {
-    writeManagedShim(paths);
+    const previousUmask = process.umask(0o077);
+    try {
+      writeManagedShim(paths);
+    } finally {
+      process.umask(previousUmask);
+    }
     const shim = fs.readFileSync(paths.shimPath, "utf8");
     expect(shim).toContain(process.execPath);
     expect(shim).toContain(paths.currentPath);

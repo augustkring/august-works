@@ -1,3 +1,4 @@
+import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { randomUUID } from "node:crypto";
 import {
   afterAll,
@@ -163,7 +164,7 @@ describeEmbeddedPostgres("direct adapter native-runner isolation", () => {
         role: "engineer",
         status: "idle",
         adapterType,
-        adapterConfig: {},
+        adapterConfig: adapterType === "codex_local" ? mockedCodexAdapterConfig : {},
         runtimeConfig: {},
         permissions: {},
       });

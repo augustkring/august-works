@@ -1,3 +1,4 @@
+import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -186,7 +187,7 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       defaultEnvironmentId: environmentId,
       permissions: {},
@@ -408,7 +409,7 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
         role: "engineer",
         status: "idle",
         adapterType: "codex_local",
-        adapterConfig: {},
+        adapterConfig: mockedCodexAdapterConfig,
         runtimeConfig: {},
         defaultEnvironmentId: null,
         permissions: {},
@@ -422,7 +423,7 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
         role: "engineer",
         status: "idle",
         adapterType: "codex_local",
-        adapterConfig: {},
+        adapterConfig: mockedCodexAdapterConfig,
         runtimeConfig: {},
         defaultEnvironmentId: overrideEnvironmentId,
         permissions: {},
@@ -611,7 +612,7 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       defaultEnvironmentId: newEnvironmentId,
       permissions: {},

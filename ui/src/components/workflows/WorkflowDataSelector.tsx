@@ -51,10 +51,10 @@ function DataFields({
             <span className="min-w-0 truncate">
               {field.label}
               {field.required ? (
-                <span className="ml-1 text-[10px] text-muted-foreground">required</span>
+                <span className="ml-1 text-(length:--text-nano) text-muted-foreground">required</span>
               ) : null}
             </span>
-            <span className="shrink-0 text-[10px] text-muted-foreground">
+            <span className="shrink-0 text-(length:--text-nano) text-muted-foreground">
               {field.valueType}
               {field.sampleValue !== null
                 ? ` · ${JSON.stringify(field.sampleValue).slice(0, 32)}`
@@ -99,7 +99,7 @@ function Source({
       <div className="flex items-center justify-between gap-2 px-2 py-1">
         <div className="min-w-0">
           <p className="truncate text-xs font-medium">{source.label}</p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-(length:--text-nano) text-muted-foreground">
             {source.kind}{source.nodeType ? ` · ${source.nodeType}` : ""}
           </p>
         </div>
@@ -107,7 +107,7 @@ function Source({
           type="button"
           size="sm"
           variant="ghost"
-          className="h-7 px-2 text-[11px]"
+          className="h-7 px-2 text-(length:--text-micro)"
           onClick={() => onInsert(source.expression)}
         >
           Insert object
@@ -116,7 +116,7 @@ function Source({
       {source.fields.length > 0 ? (
         <DataFields fields={source.fields} query={query} onInsert={onInsert} />
       ) : (
-        <p className="px-2 py-2 text-[11px] text-muted-foreground">
+        <p className="px-2 py-2 text-(length:--text-micro) text-muted-foreground">
           No typed child fields are available yet. The whole value can still be inserted.
         </p>
       )}
@@ -179,7 +179,7 @@ export function WorkflowDataSelector({
       <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-2">
         <div>
           <p className="text-xs font-medium">Data</p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-(length:--text-nano) text-muted-foreground">
             Variables and upstream step outputs only.
           </p>
         </div>
@@ -192,7 +192,7 @@ export function WorkflowDataSelector({
                 aria-pressed={mode === value}
                 onClick={() => setMode(value)}
                 className={cn(
-                  "rounded px-2 py-1 text-[10px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "rounded px-2 py-1 text-(length:--text-nano) font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   mode === value ? "bg-accent" : "text-muted-foreground",
                 )}
               >

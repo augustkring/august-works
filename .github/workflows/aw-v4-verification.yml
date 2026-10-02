@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/august-works-unified-platform-v4
+      - feat/aw-v4-completion
+      - master
+  workflow_dispatch:
   pull_request:
     branches:
       - master
@@ -54,6 +57,9 @@ jobs:
       - name: Verify migration numbering and safety
         run: pnpm --filter @paperclipai/db check:migrations
 
+      - name: Verify UI design tokens
+        run: pnpm check:tokens && pnpm check:token-gates
+
       - name: Verify OpenClaw workflow smoke syntax
         run: bash -n scripts/smoke/openclaw-gateway-e2e.sh
 
@@ -66,7 +72,7 @@ jobs:
   tests:
     name: Repository tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -177,6 +183,53 @@ jobs:
       - name: Run deterministic security hard gates
         run: pnpm test:aw-v4-security-evals
 
+  product-browser:
+    name: V4 product browser journeys
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if ! pnpm install --frozen-lockfile; then
+            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
+            pnpm install --frozen-lockfile
+          fi
+
+      - name: Prepare workspace build dependencies
+        run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify V4 product journeys
+        run: pnpm exec playwright test --config tests/e2e/playwright.config.ts tests/e2e/aw-v4-completion.spec.ts
+
+      - name: Retain browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aw-v4-browser-failure
+          path: |
+            tests/e2e/test-results
+            tests/e2e/playwright-report
+          if-no-files-found: ignore
+
   pilot-readiness:
     name: Pilot readiness contract
     runs-on: ubuntu-24.04
@@ -185,6 +238,7 @@ jobs:
       - static-and-build
       - tests
       - security-evals
+      - product-browser
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -214,4 +268,3 @@ jobs:
 
       - name: Test customer-pilot readiness gate
         run: pnpm test:aw-v4-pilot-readiness
-

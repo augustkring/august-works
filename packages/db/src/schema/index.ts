@@ -132,13 +132,15 @@ export {
   memoryBindingTargets,
   memoryRecords,
   memoryEvidence,
+  memoryDeletionMarkers,
+  memoryRetentionPolicies,
 } from "./memory.js";
 export { memoryJobs } from "./memory_jobs.js";
 export {
   automationArtifacts,
   automationArtifactVersions,
 } from "./automation_artifacts.js";
-export { workflowOptimizerSuggestions } from "./workflow_optimizer.js";
+export { workflowOptimizerSuggestions, workflowRunReviews, workflowOptimizerEvaluations, workflowOptimizerObservations } from "./workflow_optimizer.js";
 export {
   workflows,
   workflowRevisions,

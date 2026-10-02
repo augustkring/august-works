@@ -75,6 +75,8 @@ export const workflowNodeV1Schema = z
     retryPolicy: workflowRetryPolicySchema.optional(),
     timeoutSeconds: z.number().int().min(1).max(86_400).optional(),
     continueOnFailure: z.boolean().optional(),
+    failurePolicy: z.enum(["fail_workflow", "follow_failure_branch", "continue_with_null", "wait_for_human"]).optional(),
+    inputSchema: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
 
@@ -261,6 +263,8 @@ export const workflowAuthoringUpdateStepInputSchema =
       retryPolicy: workflowRetryPolicySchema.optional(),
       timeoutSeconds: z.number().int().min(1).max(86_400).nullable().optional(),
       continueOnFailure: z.boolean().nullable().optional(),
+      failurePolicy: z.enum(["fail_workflow", "follow_failure_branch", "continue_with_null", "wait_for_human"]).nullable().optional(),
+      inputSchema: z.record(z.string(), z.unknown()).nullable().optional(),
     }).strict().refine(
       (updates) => Object.keys(updates).length > 0,
       "At least one step field must be updated",

@@ -14,6 +14,11 @@ import type {
   WorkflowDetail,
   WorkflowNodeDefinitionDescriptor,
   OptimizerSuggestionResponse,
+  WorkflowRunReview,
+  WorkflowOptimizerCandidateRequest,
+  WorkflowOptimizerEvaluationSummary,
+  OptimizerPromotionDecision,
+  OptimizerReplayEvaluation,
   WorkflowRun,
   WorkflowRunDetail,
   WorkflowRevision,
@@ -21,6 +26,24 @@ import type {
 import { api } from "./client";
 
 export const workflowsApi = {
+  optimizerEvaluations: (companyId: string, workflowId: string) => api.get<WorkflowOptimizerEvaluationSummary[]>(`/companies/${companyId}/workflows/${workflowId}/optimizer-evaluations`),
+  proposeOptimizerCandidate: (companyId: string, workflowId: string, suggestionId: string) =>
+    api.post<WorkflowOptimizerCandidateRequest>(`/companies/${companyId}/workflows/${workflowId}/optimizer-suggestions/${suggestionId}/propose`, {}),
+  compileOptimizerCandidate: (companyId: string, workflowId: string, suggestionId: string, input: WorkflowOptimizerCandidateRequest) =>
+    api.post<{ evaluationId: string; artifactId: string; artifactVersionId: string; replayEvaluation: OptimizerReplayEvaluation; gatesPassed: boolean }>(`/companies/${companyId}/workflows/${workflowId}/optimizer-suggestions/${suggestionId}/compile`, input),
+  optimizerAction: (companyId: string, workflowId: string, evaluationId: string, action: "evaluate" | "shadow" | "request-approval" | "canary" | "activate" | "retire") =>
+    api.post<{ evaluationId: string; decision?: OptimizerPromotionDecision; approvalId?: string; gatesPassed?: boolean }>(`/companies/${companyId}/workflows/${workflowId}/optimizer-evaluations/${evaluationId}/${action}`, {}),
+  runReview: (companyId: string, runId: string) => api.get<WorkflowRunReview | null>(`/companies/${companyId}/workflow-runs/${runId}/review`),
+  reviewRun: (companyId: string, runId: string, input: { humanCorrection: boolean; correctedOutputs: Record<string, unknown>; reason: string }) =>
+    api.post<WorkflowRunReview>(`/companies/${companyId}/workflow-runs/${runId}/review`, input),
+  toolReviews: (companyId: string, runId: string) => api.get<{
+    canReview: boolean;
+    reviews: Array<{ id: string; nodeId: string; toolName: string; status: string; risk: string | null;
+      preview: string | null; argumentsSummary: { summary?: string } | null;
+      approvalId: string | null; expiresAt: string | null }>;
+  }>(`/companies/${companyId}/workflow-runs/${runId}/tool-reviews`),
+  resolveToolReview: (companyId: string, runId: string, requestId: string, decision: "approve" | "reject") =>
+    api.post<WorkflowRunDetail>(`/companies/${companyId}/workflow-runs/${runId}/tool-reviews/${requestId}/${decision}`, {}),
   dataSelector: (
     companyId: string,
     input: WorkflowDataSelectorRequest,

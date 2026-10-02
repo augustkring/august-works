@@ -20,7 +20,9 @@ const agentsApiMock = vi.hoisted(() => ({
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
+  list: vi.fn(),
   optimizerSuggestions: vi.fn(),
+  optimizerEvaluations: vi.fn(),
   capabilities: vi.fn(),
   nodeRegistry: vi.fn(),
   capabilitySearch: vi.fn(),
@@ -157,6 +159,8 @@ describe("WorkflowBuilder", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     apiMock.get.mockResolvedValue(baseDetail);
+    apiMock.list.mockResolvedValue([]);
+    apiMock.optimizerEvaluations.mockResolvedValue([]);
     apiMock.optimizerSuggestions.mockResolvedValue({
       state: "disabled",
       workflowId: "workflow-1",
@@ -238,6 +242,7 @@ describe("WorkflowBuilder", () => {
       minimumObservationCount: 3,
       suggestions: [
         {
+          id: "suggestion-1",
           companyId: "company-1",
           workflowId: "workflow-1",
           workflowRevisionId: "revision-published",
@@ -279,18 +284,22 @@ describe("WorkflowBuilder", () => {
     await flush();
 
     expect(container.textContent).toContain("Optimizer");
-    expect(container.textContent).toContain("Suggestion only");
+    expect(container.textContent).toContain("Governed qualification");
     expect(container.textContent).toContain("Optimization available");
     expect(
       container.querySelector(
         '[aria-label="Optimizer suggestion: Deterministic transform"]',
       ),
     ).toBeTruthy();
-    expect(container.textContent).toContain("No production mutation");
+    expect(container.textContent).toContain("Current workflow remains authoritative");
+    expect(container.textContent).toContain("Qualification does not activate it");
+    expect(container.textContent).toContain("Generate from reviewed runs");
     const promote = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Promote",
     ) as HTMLButtonElement | undefined;
-    expect(promote?.disabled).toBe(true);
+    expect(promote).toBeUndefined();
+    expect(apiMock.publish).not.toHaveBeenCalled();
+    expect(apiMock.startRun).not.toHaveBeenCalled();
 
     flushSync(() => root.unmount());
   });

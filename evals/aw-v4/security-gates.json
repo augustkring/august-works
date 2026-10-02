@@ -172,6 +172,10 @@
         {
           "file": "server/src/__tests__/authorization-service.test.ts",
           "contains": "rechecks responsible-user membership on a new request actor after revocation"
+        },
+        {
+          "file": "server/src/services/workflows/workflow-direct-agent.test.ts",
+          "contains": "blocks prompt hydration and result submission when the initiating member is suspended"
         }
       ],
       "behaviorEvals": [
@@ -195,6 +199,14 @@
         {
           "file": "server/src/services/context/context-engine-integration.test.ts",
           "contains": "hydrates only eligible relevant shared and owner-private Memory into Context"
+        },
+        {
+          "file": "server/src/services/memory/memory-maintenance.test.ts",
+          "contains": "creates a pending lesson from an explicit operator proposal and erases its source lineage"
+        },
+        {
+          "file": "server/src/services/workflows/workflow-direct-agent.test.ts",
+          "contains": "erases delegated payloads, queues log erasure and blocks late or restored agent writes"
         }
       ],
       "behaviorEvals": []
@@ -376,6 +388,10 @@
         {
           "file": "server/src/services/memory/memory-service.test.ts",
           "contains": "revokes accepted memory durably and excludes it from eligible recall"
+        },
+        {
+          "file": "server/src/services/run-log-store.test.ts",
+          "contains": "erases local and mirrored payloads and rejects late writes after restart and pod roll"
         }
       ],
       "behaviorEvals": []
@@ -391,6 +407,10 @@
         {
           "file": "server/src/services/workflows/workflow-executor.test.ts",
           "contains": "retries a failed run as a new immutable run while reusing completed task side effects"
+        },
+        {
+          "file": "server/src/services/workflows/workflow-failure-policy.test.ts",
+          "contains": "parks the failed action for a bound human decision and does not repeat it"
         }
       ],
       "behaviorEvals": []
@@ -410,6 +430,10 @@
         {
           "file": "server/src/services/optimizer/optimizer-drift.test.ts",
           "contains": "immediately requires review for invariants and authority-changing dependencies"
+        },
+        {
+          "file": "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
+          "contains": "quarantines an active replacement when an authoritative reviewer corrects its output"
         }
       ],
       "behaviorEvals": [

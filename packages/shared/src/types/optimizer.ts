@@ -1,3 +1,4 @@
+import type { ExecutionPrincipal } from "../august-works-platform.js";
 import type {
   WorkflowEdgeV1,
   WorkflowJsonSchema,
@@ -5,6 +6,18 @@ import type {
   WorkflowRiskClass,
   WorkflowSideEffectClass,
 } from "./workflow.js";
+
+export interface WorkflowRunReview {
+  id: string;
+  companyId: string;
+  workflowRunId: string;
+  humanCorrection: boolean;
+  correctedOutputs: Record<string, unknown>;
+  reason: string;
+  reviewer: ExecutionPrincipal;
+  memoryRecordIds: string[];
+  reviewedAt: Date;
+}
 
 export const OPTIMIZER_EXECUTOR_TYPES = [
   "agent",
@@ -300,6 +313,33 @@ export interface OptimizerReplayCaseResult {
   unsupportedCases: string[];
 }
 
+export interface WorkflowOptimizerCandidateRequest {
+  kind: "expression" | "transform" | "typescript";
+  sourceCode: string;
+  inputSchema: Record<string, unknown>;
+  outputSchema: Record<string, unknown>;
+  invariants: Array<{ id: string; description: string; critical: boolean; expression: string }>;
+  cases: Array<{ id: string; category: "boundary" | "shape_variant"; input: unknown }>;
+}
+
+export interface WorkflowOptimizerEvaluationSummary {
+  id: string;
+  suggestionId: string;
+  nodeId: string;
+  workflowRevisionId: string;
+  artifactId: string;
+  artifactVersionId: string;
+  status: "testing" | "failed" | "shadow" | "canary" | "active" | "degraded" | "retired";
+  replayEvaluation: OptimizerReplayEvaluation | null;
+  shadowEvaluation: OptimizerShadowEvaluation;
+  approvalId: string | null;
+  canaryTrafficPercent: number;
+  committedCanaryCount: number;
+  committedActiveCount: number;
+  fallbackCount: number;
+  lastErrorCode: string | null;
+}
+
 export interface OptimizerReplayEvaluation {
   status: "passed" | "failed";
   reasonCode: string;
@@ -367,6 +407,7 @@ export const OPTIMIZER_FALLBACK_KINDS = [
   "human",
   "alternate_artifact",
   "fail_workflow",
+  "published_workflow",
 ] as const;
 export type OptimizerFallbackKind =
   (typeof OPTIMIZER_FALLBACK_KINDS)[number];

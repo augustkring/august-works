@@ -1,0 +1,1 @@
+ALTER TABLE "workflow_optimizer_observations" ADD COLUMN "shadow_result" jsonb;

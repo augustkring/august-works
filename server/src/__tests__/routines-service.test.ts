@@ -2923,11 +2923,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
 
   it("dispatches a workflow execution target without creating an issue or heartbeat run", async () => {
     const { companyId, projectId, svc, wakeups } = await seedFixture();
-    await db.insert(instanceSettings).values({
-      singletonKey: "default",
-      general: {},
-      experimental: { enableWorkflowsV1: true },
-    });
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true });
 
     const workflow = await createPublishedWorkflowFixture({
       companyId,
@@ -3034,11 +3030,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
 
   it("coalesces a matching routine dispatch into an active workflow run", async () => {
     const { companyId, projectId, svc, wakeups } = await seedFixture();
-    await db.insert(instanceSettings).values({
-      singletonKey: "default",
-      general: {},
-      experimental: { enableWorkflowsV1: true },
-    });
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true });
 
     const workflow = await createPublishedWorkflowFixture({
       companyId,

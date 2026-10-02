@@ -1,3 +1,4 @@
+import { Textarea } from "@/components/ui/textarea";
 import {
   useCallback,
   useDeferredValue,
@@ -164,12 +165,19 @@ function JsonObjectTextarea({
         className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
       />
       {error ? (
-        <p role="alert" className="mt-1 text-[11px] leading-4 text-destructive">
+        <p role="alert" className="mt-1 text-(length:--text-micro) leading-4 text-destructive">
           {error}
         </p>
       ) : null}
     </div>
   );
+}
+
+function switchBranchKeys(node: WorkflowNodeV1): string[] {
+  const config = node.config as Record<string, unknown>;
+  const cases = Array.isArray(config.cases) ? config.cases : [];
+  return [...new Set([...cases.flatMap((item) => item && typeof item.key === "string" ? [item.key] : []),
+    ...(typeof config.defaultBranch === "string" ? [config.defaultBranch] : [])])];
 }
 
 function defaultConfig(type: string): Record<string, unknown> | null {
@@ -180,6 +188,21 @@ function defaultConfig(type: string): Record<string, unknown> | null {
       return { mapping: { value: "{{input.value}}" } };
     case "core.condition":
       return { expression: "true" };
+    case "core.switch":
+      return { cases: [{ key: "match", expression: "true" }], defaultBranch: "default" };
+    case "core.merge":
+      return { mode: "all" };
+    case "core.parallel":
+      return { concurrency: 1 };
+    case "core.subworkflow":
+      return { workflowId: "", revisionId: "", inputMapping: {}, timeoutSeconds: 3600, cancellationPolicy: "propagate" };
+    case "core.map":
+      return { collection: "{{input.items}}", mapping: { value: "{{input.item}}" }, maxItems: 32, concurrency: 1, perItemTimeoutSeconds: 1, failurePolicy: "fail_workflow" };
+    case "core.http_request":
+      return { url: "", method: "GET", responseMode: "json", maxResponseBytes: 65_536, responseSchema: null };
+    case "native.foundation_query":
+    case "native.memory_recall":
+      return { query: "{{input.query}}", limit: 8 };
     case "core.wait":
       return { durationSeconds: 300 };
     case "work.create_task":
@@ -196,6 +219,8 @@ function defaultConfig(type: string): Record<string, unknown> | null {
         summary: "Approval required",
         consequence: "Review this step before the workflow continues.",
       };
+    case "agent.direct_call":
+      return { agentId: "", objective: "Return the requested bounded response", inputMapping: {}, expectedOutputSchema: { type: "object", additionalProperties: false, properties: { value: {} }, required: ["value"] }, timeoutSeconds: 120 };
     case "agent.external":
       return {
         agentId: "",
@@ -321,12 +346,12 @@ function WorkflowNodeCard({ data, selected }: NodeProps<BuilderNode>) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{data.workflowNode.name}</p>
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+          <p className="mt-0.5 truncate text-(length:--text-micro) text-muted-foreground">
             {definition?.displayName ?? data.workflowNode.type}
           </p>
         </div>
         {definition?.publishState === "draft_only" ? (
-          <span className="shrink-0 text-[10px] text-muted-foreground">draft</span>
+          <span className="shrink-0 text-(length:--text-nano) text-muted-foreground">draft</span>
         ) : null}
       </div>
       {data.workflowNode.type === "core.condition" ? (
@@ -343,10 +368,23 @@ function WorkflowNodeCard({ data, selected }: NodeProps<BuilderNode>) {
             position={Position.Right}
             style={{ top: "72%" }}
           />
-          <div className="mt-2 flex justify-end gap-2 text-[10px] text-muted-foreground">
+          <div className="mt-2 flex justify-end gap-2 text-(length:--text-nano) text-muted-foreground">
             <span>True</span>
             <span>False</span>
           </div>
+        </>
+      ) : data.workflowNode.type === "core.switch" ? (
+        <div className="mt-2 space-y-1 text-right text-(length:--text-nano) text-muted-foreground">
+          {switchBranchKeys(data.workflowNode).map((key, index, keys) => <div key={key}>
+            <Handle id={key} type="source" position={Position.Right} style={{ top: `${30 + (index + 1) * 60 / (keys.length + 1)}%` }} />
+            {key}
+          </div>)}
+        </div>
+      ) : ["follow_failure_branch", "wait_for_human"].includes(data.workflowNode.failurePolicy ?? "fail_workflow") ? (
+        <>
+          <Handle id="success" type="source" position={Position.Right} style={{ top: "38%" }} />
+          <Handle id="failure" type="source" position={Position.Right} style={{ top: "72%" }} />
+          <div className="mt-2 flex justify-end gap-2 text-(length:--text-nano) text-muted-foreground"><span>Success</span><span>Failure</span></div>
         </>
       ) : (
         <Handle type="source" position={Position.Right} />
@@ -378,7 +416,7 @@ export function WorkflowBuilder() {
   const [capabilitySearch, setCapabilitySearch] = useState("");
   const deferredCapabilitySearch = useDeferredValue(capabilitySearch);
   const [connectTargetId, setConnectTargetId] = useState("");
-  const [connectBranch, setConnectBranch] = useState<"true" | "false">("true");
+  const [connectBranch, setConnectBranch] = useState<string>("true");
 
   useEffect(() => {
     setBreadcrumbs([
@@ -483,22 +521,26 @@ export function WorkflowBuilder() {
     if (!connection.source || !connection.target) return;
     const sourceNode = nodes.find((node) => node.id === connection.source);
     const isCondition = sourceNode?.data.workflowNode.type === "core.condition";
+    const isSwitch = sourceNode?.data.workflowNode.type === "core.switch";
+    const isRecovery = ["follow_failure_branch", "wait_for_human"].includes(sourceNode?.data.workflowNode.failurePolicy ?? "fail_workflow");
+    const isBranching = isCondition || isSwitch || isRecovery;
     const branch = isCondition
       ? connection.sourceHandle === "true" || connection.sourceHandle === "false"
         ? connection.sourceHandle
         : null
-      : null;
+      : isSwitch && sourceNode && switchBranchKeys(sourceNode.data.workflowNode).includes(connection.sourceHandle ?? "")
+        ? connection.sourceHandle : isRecovery && ["success", "failure"].includes(connection.sourceHandle ?? "") ? connection.sourceHandle : null;
 
-    if (isCondition && !branch) {
+    if (isBranching && !branch) {
       pushToast({
-        title: "Choose a condition branch",
-        body: "Connect from either the True or False output.",
+        title: "Choose a branch",
+        body: "Connect from one of this step’s declared outputs.",
         tone: "error",
       });
       return;
     }
     if (
-      isCondition &&
+      isBranching &&
       edges.some(
         (edge) =>
           edge.source === connection.source &&
@@ -506,8 +548,8 @@ export function WorkflowBuilder() {
       )
     ) {
       pushToast({
-        title: `${branch === "true" ? "True" : "False"} branch already connected`,
-        body: "Each condition branch can activate one deterministic path.",
+        title: `${branch} branch already connected`,
+        body: "Each branch can activate one deterministic path.",
         tone: "error",
       });
       return;
@@ -726,7 +768,10 @@ export function WorkflowBuilder() {
       source: selectedNodeId,
       target: connectTargetId,
       sourceHandle:
-        selected?.data.workflowNode.type === "core.condition" ? connectBranch : null,
+        selected?.data.workflowNode.type === "core.condition" ? connectBranch
+          : selected?.data.workflowNode.type === "core.switch"
+            ? switchBranchKeys(selected.data.workflowNode).includes(connectBranch) ? connectBranch : switchBranchKeys(selected.data.workflowNode)[0] ?? null
+            : ["follow_failure_branch", "wait_for_human"].includes(selected?.data.workflowNode.failurePolicy ?? "fail_workflow") ? ["success", "failure"].includes(connectBranch) ? connectBranch : "success" : null,
       targetHandle: null,
     });
   };
@@ -833,7 +878,7 @@ export function WorkflowBuilder() {
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)_300px]">
+      <div className="grid min-h-0 flex-1 lg:grid-cols-(--gtc-workflow-builder)">
         <aside className="overflow-y-auto border-r border-border p-3">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Add step
@@ -892,18 +937,18 @@ export function WorkflowBuilder() {
                       <span className="min-w-0 truncate text-xs font-medium">
                         {candidate.title}
                       </span>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                      <span className="shrink-0 text-(length:--text-nano) text-muted-foreground">
                         {candidate.riskClass}
                       </span>
                     </div>
-                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                    <p className="mt-0.5 truncate text-(length:--text-nano) text-muted-foreground">
                       {sourceLabel}
                       {" · "}
                       {candidate.availability.status.replaceAll("_", " ")}
                       {candidate.publishState === "draft_only" ? " · draft only" : ""}
                     </p>
                     {candidate.description ? (
-                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-muted-foreground">
+                      <p className="mt-1 line-clamp-2 text-(length:--text-nano) leading-4 text-muted-foreground">
                         {candidate.description}
                       </p>
                     ) : null}
@@ -973,19 +1018,20 @@ export function WorkflowBuilder() {
 
             {selectedNodeId && nodes.length > 1 && capabilities?.edit ? (
               <div className="mt-4 space-y-2">
-                {selectedNode?.data.workflowNode.type === "core.condition" ? (
+                {selectedNode && (["core.condition", "core.switch"].includes(selectedNode.data.workflowNode.type) || ["follow_failure_branch", "wait_for_human"].includes(selectedNode.data.workflowNode.failurePolicy ?? "fail_workflow")) ? (
                   <label className="block text-xs font-medium">
                     Branch
                     <select
-                      value={connectBranch}
+                      value={selectedNode.data.workflowNode.type === "core.switch" && !switchBranchKeys(selectedNode.data.workflowNode).includes(connectBranch)
+                        ? switchBranchKeys(selectedNode.data.workflowNode)[0] ?? "" : ["follow_failure_branch", "wait_for_human"].includes(selectedNode.data.workflowNode.failurePolicy ?? "fail_workflow") && !["success", "failure"].includes(connectBranch) ? "success" : connectBranch}
                       onChange={(event) => {
                         const branch = event.target.value;
-                        if (branch === "true" || branch === "false") setConnectBranch(branch);
+                        setConnectBranch(branch);
                       }}
                       className="mt-1 h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
                     >
-                      <option value="true">True</option>
-                      <option value="false">False</option>
+                      {(selectedNode.data.workflowNode.type === "core.switch" ? switchBranchKeys(selectedNode.data.workflowNode) : ["follow_failure_branch", "wait_for_human"].includes(selectedNode.data.workflowNode.failurePolicy ?? "fail_workflow") ? ["success", "failure"] : ["true", "false"])
+                        .map((key) => <option key={key} value={key}>{key}</option>)}
                     </select>
                   </label>
                 ) : null}
@@ -1130,6 +1176,11 @@ function NodeInspector({
   const isCreateTaskNode = workflowNode.type === "work.create_task";
   const isAgentTaskNode = workflowNode.type === "agent.task";
   const isExternalAgentNode = workflowNode.type === "agent.external";
+  const isDirectAgentNode = workflowNode.type === "agent.direct_call";
+  const { data: childWorkflows = [] } = useQuery({
+    queryKey: queryKeys.workflows.list(companyId), queryFn: () => workflowsApi.list(companyId),
+    enabled: workflowNode.type === "core.subworkflow",
+  });
   const { data: taskProjects = [] } = useQuery({
     queryKey: queryKeys.projects.list(companyId, { includeArchived: false }),
     queryFn: () => projectsApi.list(companyId, { includeArchived: false }),
@@ -1138,7 +1189,7 @@ function NodeInspector({
   const { data: taskAgents = [] } = useQuery({
     queryKey: queryKeys.agents.list(companyId),
     queryFn: () => agentsApi.list(companyId),
-    enabled: isCreateTaskNode || isAgentTaskNode || isExternalAgentNode,
+    enabled: isCreateTaskNode || isAgentTaskNode || isExternalAgentNode || isDirectAgentNode,
   });
   const { data: taskUserDirectory } = useQuery({
     queryKey: queryKeys.access.companyUserDirectory(companyId),
@@ -1193,6 +1244,52 @@ function NodeInspector({
         />
       </label>
 
+      {workflowNode.type === "core.switch" && <label className="block space-y-1 text-xs font-medium">
+        Ordered cases and default branch
+        <JsonObjectTextarea value={config} disabled={!canEdit} ariaLabel="Switch configuration JSON"
+          onCommit={(value) => updateConfig(value ?? {})} />
+        <span className="block font-normal text-muted-foreground">Cases use deterministic expressions. Connect every case and the default to an explicit path.</span>
+      </label>}
+      {workflowNode.type === "core.merge" && <p className="text-xs text-muted-foreground">Joins all activated inputs and returns their outputs by source step.</p>}
+      {workflowNode.type === "core.parallel" && <p className="text-xs text-muted-foreground">Connect each explicit branch, then join them with Merge. V1 runs one branch step at a time and resumes from durable checkpoints.</p>}
+      {workflowNode.type === "core.subworkflow" && <div className="space-y-3">
+        <label className="block space-y-1 text-xs font-medium">Published child workflow
+          <select value={String(config.workflowId ?? "")} disabled={!canEdit} className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+            onChange={(event) => { const child = childWorkflows.find((item) => item.id === event.target.value); updateConfig({ workflowId: event.target.value, revisionId: child?.publishedRevisionId ?? "" }); }}>
+            <option value="" disabled>Select a published workflow</option>
+            {childWorkflows.filter((child) => child.status === "active" && child.publishedRevisionId).map((child) => <option key={child.id} value={child.id}>{child.name}</option>)}
+          </select>
+        </label>
+        <p className="text-xs text-muted-foreground">The selected published version is pinned when you save. Publishing a newer child version requires selecting it again.</p>
+        <label className="block space-y-1 text-xs font-medium">Child input mapping<JsonObjectTextarea value={config.inputMapping} disabled={!canEdit} ariaLabel="Subworkflow input expressions JSON" onCommit={(value) => updateConfig({ inputMapping: value ?? {} })} /></label>
+        <p className="text-xs text-muted-foreground">The child revision stays pinned. Parent cancellation propagates to the child and its accountable tasks.</p>
+      </div>}
+      {workflowNode.type === "core.map" && <div className="space-y-3">
+        <label className="block space-y-1 text-xs font-medium">Collection expression<Input value={String(config.collection ?? "")} disabled={!canEdit} onChange={(event) => updateConfig({ collection: event.target.value })} /></label>
+        <label className="block space-y-1 text-xs font-medium">Maximum items<Input type="number" min={1} max={128} value={Number(config.maxItems ?? 32)} disabled={!canEdit} onChange={(event) => updateConfig({ maxItems: Number(event.target.value) })} /></label>
+        <label className="block space-y-1 text-xs font-medium">Per-item mapping<JsonObjectTextarea value={config.mapping} disabled={!canEdit} ariaLabel="Map item expressions JSON" onCommit={(value) => updateConfig({ mapping: value ?? {} })} /></label>
+        <p className="text-xs text-muted-foreground">Each item uses input.item and input.index. Mapping runs sequentially with a bounded item count and timeout.</p>
+      </div>}
+      {workflowNode.type === "core.http_request" && <div className="space-y-3">
+        <label className="block space-y-1 text-xs font-medium">Public HTTPS URL
+          <Input type="url" value={String(config.url ?? "")} disabled={!canEdit} onChange={(event) => updateConfig({ url: event.target.value })} />
+        </label>
+        <label className="block space-y-1 text-xs font-medium">Response contract
+          <JsonObjectTextarea value={config} disabled={!canEdit} ariaLabel="HTTP request configuration JSON" onCommit={(value) => updateConfig(value ?? {})} />
+        </label>
+        <p className="text-xs text-muted-foreground">Reads the published URL with GET or HEAD. Redirects, private networks and embedded credentials are blocked. Use a connected action for authenticated calls.</p>
+      </div>}
+      {["native.foundation_query", "native.memory_recall"].includes(workflowNode.type) && <div className="space-y-3">
+        <label className="block space-y-1 text-xs font-medium">Search query
+          <Input value={String(config.query ?? "")} disabled={!canEdit} onChange={(event) => updateConfig({ query: event.target.value })} />
+          <span className="block font-normal text-muted-foreground">Use text or a typed expression such as {"{{input.query}}"}.</span>
+        </label>
+        <label className="block space-y-1 text-xs font-medium">Maximum results
+          <Input type="number" min={1} max={20} value={Number(config.limit ?? 8)} disabled={!canEdit}
+            onChange={(event) => updateConfig({ limit: boundedInteger(event.target.value, 1, 20, 8) })} />
+        </label>
+        <p className="text-xs text-muted-foreground">Returns approved Foundation or accepted collective Memory with source references.</p>
+      </div>}
       {workflowNode.type === "core.condition" ? (
         <label className="block space-y-1 text-xs font-medium">
           Condition
@@ -1201,7 +1298,7 @@ function NodeInspector({
             disabled={!canEdit}
             onChange={(event) => updateConfig({ expression: event.target.value })}
           />
-          <span className="block text-[11px] font-normal leading-4 text-muted-foreground">
+          <span className="block text-(length:--text-micro) font-normal leading-4 text-muted-foreground">
             Supports true/false, boolean data references and strict comparisons such as {"{{trigger.amount}} >= 50000"}.
           </span>
         </label>
@@ -1229,7 +1326,7 @@ function NodeInspector({
               })
             }
           />
-          <span className="block text-[11px] font-normal leading-4 text-muted-foreground">
+          <span className="block text-(length:--text-micro) font-normal leading-4 text-muted-foreground">
             The run is checkpointed and released while waiting; no browser request or worker stays open.
           </span>
         </label>
@@ -1434,7 +1531,7 @@ function NodeInspector({
               }
               className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <span className="block text-[11px] font-normal leading-4 text-muted-foreground">
+            <span className="block text-(length:--text-micro) font-normal leading-4 text-muted-foreground">
               Only the accountable task and its governed context are delegated.
               The agent does not inherit broader workflow authority.
             </span>
@@ -1459,15 +1556,36 @@ function NodeInspector({
               </span>
             </span>
           </label>
-          {config.expectedOutputSchema != null ? (
-            <div className="border-l-2 border-amber-500 pl-3 text-xs leading-5 text-muted-foreground">
-              Structured Agent Task output is draft-only until Tasks expose an
-              authoritative structured-result channel. Remove the expected
-              output schema before publishing.
-            </div>
-          ) : null}
+          <label className="block space-y-1 text-xs font-medium">Expected output schema (optional)
+            <JsonObjectTextarea value={config.expectedOutputSchema} disabled={!canEdit} allowNull rows={6}
+              ariaLabel="Agent Task expected output schema JSON" onCommit={(value) => updateConfig({ expectedOutputSchema: value })} />
+          </label>
+          <p className="text-xs text-muted-foreground">Structured results require waiting for task completion. The assigned agent submits a validated result before completing its task.</p>
         </>
       ) : null}
+
+      {isDirectAgentNode && <div className="space-y-3">
+        <label className="block space-y-1 text-xs font-medium">Direct call agent
+          <select value={String(config.agentId ?? "")} disabled={!canEdit} onChange={(event) => updateConfig({ agentId: event.target.value })}
+            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+            <option value="" disabled>Select an available agent</option>
+            {taskAgents.filter((agent) => ["idle", "running"].includes(agent.status)).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+          </select>
+        </label>
+        <label className="block space-y-1 text-xs font-medium">Direct call objective
+          <Textarea value={String(config.objective ?? "")} disabled={!canEdit} onChange={(event) => updateConfig({ objective: event.target.value })} />
+        </label>
+        <label className="block space-y-1 text-xs font-medium">Request input mapping
+          <JsonObjectTextarea value={config.inputMapping} disabled={!canEdit} ariaLabel="Direct call input expressions JSON" onCommit={(value) => updateConfig({ inputMapping: value ?? {} })} />
+        </label>
+        <label className="block space-y-1 text-xs font-medium">Required response schema
+          <JsonObjectTextarea value={config.expectedOutputSchema} disabled={!canEdit} ariaLabel="Direct call response schema JSON" onCommit={(value) => updateConfig({ expectedOutputSchema: value ?? {} })} />
+        </label>
+        <label className="block space-y-1 text-xs font-medium">Call timeout in seconds
+          <Input type="number" min={1} max={300} value={Number(config.timeoutSeconds ?? 120)} disabled={!canEdit} onChange={(event) => updateConfig({ timeoutSeconds: Number(event.target.value) })} />
+        </label>
+        <p className="text-xs text-muted-foreground">The call returns a validated response without creating a Task. Its agent retains its governed capabilities and budget.</p>
+      </div>}
 
       {workflowNode.type === "agent.external" ? (
         <>
@@ -1535,7 +1653,7 @@ function NodeInspector({
                 updateConfig({ expectedOutputSchema: value })
               }
             />
-            <span className="block text-[11px] font-normal leading-4 text-muted-foreground">
+            <span className="block text-(length:--text-micro) font-normal leading-4 text-muted-foreground">
               Optional JSON Schema. The workflow resumes only after the
               OpenClaw result matches this schema.
             </span>
@@ -1575,9 +1693,49 @@ function NodeInspector({
       ) : null}
 
       {workflowNode.type === "connector.action" ? (
-        <div className="border-l-2 border-border pl-3 text-xs leading-5 text-muted-foreground">
-          Connected tool selected through the governed capability resolver. Inputs are configured through the Data Selector in the next implementation step; raw connection IDs and credentials are not exposed here.
-        </div>
+        <>
+          <p className="text-xs text-muted-foreground">
+            The selected tool and catalogue version are pinned to this workflow.
+            Current grants, policies and credentials are checked again at execution.
+          </p>
+          <label className="block space-y-1 text-xs font-medium">Static input
+            <JsonObjectTextarea value={config.input} disabled={!canEdit} ariaLabel="Connector static input JSON"
+              onCommit={(value) => updateConfig({ input: value ?? {} })} />
+          </label>
+          <label className="block space-y-1 text-xs font-medium">Input mapping
+            <JsonObjectTextarea value={config.inputMapping} disabled={!canEdit} allowNull ariaLabel="Connector input mapping JSON"
+              onCommit={(value) => {
+                const next = { ...config };
+                if (value === null) delete next.inputMapping;
+                else next.inputMapping = value;
+                onUpdate({ config: next });
+              }} />
+          </label>
+          <p className="text-xs text-muted-foreground">An input mapping replaces static input. Use the Data Selector for values; store credentials in the connection.</p>
+        </>
+      ) : null}
+
+      {workflowNode.type === "automation.artifact" ? (
+        <>
+          <p className="text-xs text-muted-foreground">
+            This step uses the reviewed artifact version selected in the capability picker.
+            Changing or archiving that version blocks execution until this workflow is reviewed again.
+          </p>
+          <label className="block space-y-1 text-xs font-medium">
+            Input mapping
+            <JsonObjectTextarea value={config.inputMapping} disabled={!canEdit} allowNull
+              ariaLabel="Automation artifact input mapping JSON"
+              onCommit={(value) => {
+                const next = { ...config };
+                if (value === null) delete next.inputMapping;
+                else next.inputMapping = value;
+                onUpdate({ config: next });
+              }} />
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Leave the mapping empty to pass the previous step's output. Use the Data Selector to map typed values.
+          </p>
+        </>
       ) : null}
 
       {definition?.publishBlockedReason ? (
@@ -1592,6 +1750,19 @@ function NodeInspector({
             Execution policy
           </summary>
           <div className="mt-3 space-y-3">
+            <label className="block space-y-1 text-xs font-medium">On step failure
+              <select value={workflowNode.failurePolicy ?? "fail_workflow"} disabled={!canEdit}
+                className="w-full rounded-md border border-input bg-background px-3 py-2"
+                onChange={(event) => onUpdate({ failurePolicy: event.target.value as WorkflowNodeV1["failurePolicy"] })}>
+                <option value="fail_workflow">Fail workflow</option><option value="follow_failure_branch">Follow explicit failure branch</option>
+                <option value="continue_with_null">Continue with null</option><option value="wait_for_human">Wait for human approval of failure branch</option>
+              </select>
+            </label>
+            <p className="text-xs text-muted-foreground">Recovery keeps the failed action in history. Failure branches require success and failure connections; null continuation requires a nullable downstream input schema.</p>
+            <label className="block space-y-1 text-xs font-medium">Input schema
+              <JsonObjectTextarea value={workflowNode.inputSchema} disabled={!canEdit} allowNull ariaLabel="Node input schema JSON"
+                onCommit={(value) => onUpdate({ inputSchema: value ?? undefined })} />
+            </label>
             <label className="block space-y-1 text-xs font-medium">
               Retry
               <select
@@ -1700,7 +1871,7 @@ function NodeInspector({
               </div>
             ) : null}
 
-            <div className="text-[11px] leading-4 text-muted-foreground">
+            <div className="text-(length:--text-micro) leading-4 text-muted-foreground">
               <p>
                 Idempotency: {definition.idempotencyStrategy.replaceAll("_", " ")}
               </p>

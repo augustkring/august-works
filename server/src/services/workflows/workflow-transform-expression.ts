@@ -59,6 +59,13 @@ function parseReferencePath(raw: string): string[] {
 
     if (char === "[") {
       const remaining = input.slice(index + 1);
+      const numericIndex = /^(0|[1-9][0-9]*)\]/.exec(remaining);
+      if (numericIndex) {
+        if (!Number.isSafeInteger(Number(numericIndex[1]))) expressionError("Array index must be a safe non-negative integer");
+        segments.push(numericIndex[1]!);
+        index += numericIndex[0].length + 1;
+        continue;
+      }
       if (!remaining.startsWith('"')) {
         expressionError("Transform bracket references must use a JSON string key");
       }
@@ -133,13 +140,14 @@ function resolveReference(
   let current: unknown = referenceRoot(root, context);
 
   for (const segment of path) {
-    if (!isRecord(current) || !Object.prototype.hasOwnProperty.call(current, segment)) {
+    const indexedArray = Array.isArray(current) && /^(0|[1-9][0-9]*)$/.test(segment);
+    if ((!isRecord(current) && !indexedArray) || !Object.prototype.hasOwnProperty.call(current, segment)) {
       throw new WorkflowTransformExpressionError(
         "workflow_transform_reference_missing",
         `Transform reference could not resolve ${segments.join(".")}`,
       );
     }
-    current = current[segment];
+    current = (current as Record<string, unknown>)[segment];
   }
 
   return current;

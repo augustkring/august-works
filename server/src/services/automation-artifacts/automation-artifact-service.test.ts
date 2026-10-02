@@ -25,6 +25,8 @@ import {
 } from "./automation-artifact-service.js";
 import { automationArtifactRuntimeService } from "./automation-artifact-runtime.js";
 import { automationArtifactSecurityService } from "./automation-artifact-security.js";
+import { workflowService } from "../workflows/workflow-service.js";
+import { workflowExecutorService } from "../workflows/workflow-executor.js";
 import { and, eq } from "drizzle-orm";
 
 async function expectDatabaseCause(
@@ -727,6 +729,35 @@ describePg("Automation Artifact service", () => {
       user,
     );
     expect(executed.output).toEqual({ email: " BOB@Example.com " });
+
+    const workflowSvc = workflowService(db);
+    const workflow = await workflowSvc.create(seeded.company.id, { name: "Reviewed artifact workflow" }, user);
+    const draft = await workflowSvc.updateDraft(seeded.company.id, workflow.id, {
+      expectedRevisionId: workflow.draftRevisionId!,
+      graph: { version: 1, variables: [], settings: {}, nodes: [
+        { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+        { id: "artifact", type: "automation.artifact", name: "Copy email", position: { x: 0, y: 100 },
+          config: { artifactId: created.artifact.id, artifactVersionId: version.id } },
+      ], edges: [{ id: "start-artifact", source: "start", target: "artifact" }] },
+    }, user);
+    await workflowSvc.publish(seeded.company.id, workflow.id, {
+      expectedDraftRevisionId: draft.draftRevisionId!, expectedPublishedRevisionId: null, approvalId: null,
+    }, user);
+    const executor = workflowExecutorService(db);
+    const run = await executor.startManualRun(seeded.company.id, workflow.id,
+      { input: { email: "workflow@example.com" } }, user, "artifact-workflow-success");
+    expect(run.run.status).toBe("succeeded");
+    expect(run.steps.find((step) => step.nodeId === "artifact")).toMatchObject({
+      status: "succeeded", outputJson: { email: "workflow@example.com" },
+      inputJson: { artifactId: created.artifact.id, artifactVersionId: version.id,
+        input: { email: "workflow@example.com" } },
+    });
+    await service.archive(seeded.company.id, created.artifact.id,
+      { expectedLatestVersionId: version.id }, user);
+    const denied = await executor.startManualRun(seeded.company.id, workflow.id,
+      { input: { email: "workflow@example.com" } }, user, "artifact-workflow-revoked");
+    expect(denied.run).toMatchObject({ status: "failed", failureCode: "automation_artifact_not_active" });
+
   });
 
   it("rejects mismatched gate hashes and keeps generated-code execution behind its kill switch", async () => {

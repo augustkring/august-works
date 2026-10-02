@@ -1556,6 +1556,8 @@ export interface ToolAccessDecisionInput {
   };
   runContext?: {
     heartbeatRunId?: string | null;
+    workflowRunId?: string | null;
+    workflowNodeId?: string | null;
     issueId?: string | null;
     projectId?: string | null;
     routineId?: string | null;

@@ -61,6 +61,9 @@ function writeFileAtomic(filePath: string, contents: string, mode: number): void
   );
   try {
     fs.writeFileSync(temporaryPath, contents, { mode, flag: "wx" });
+    // Creation applies the caller's umask. Restore the explicit mode before
+    // publishing the executable shim or preserving an existing shell rc mode.
+    fs.chmodSync(temporaryPath, mode);
     fs.renameSync(temporaryPath, filePath);
   } finally {
     fs.rmSync(temporaryPath, { force: true });

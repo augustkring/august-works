@@ -25,6 +25,15 @@ const context = {
 };
 
 describe("workflow transform expression", () => {
+  it("reads existing array elements without exposing prototype methods or length", () => {
+    expect(evaluateWorkflowTransformExpression("{{input.payload.tags[0]}}", context)).toBe("priority");
+    expect(evaluateWorkflowTransformExpression('{{input.payload.tags["0"]}}', context)).toBe("priority");
+    for (const expression of ["{{input.payload.tags[1]}}", "{{input.payload.tags.constructor}}", "{{input.payload.tags.map}}", "{{input.payload.tags.length}}"]) {
+      expect(() => evaluateWorkflowTransformExpression(expression, context)).toThrow(/could not resolve/);
+    }
+    for (const expression of ["{{input.payload.tags[-1]}}", "{{input.payload.tags[variables.index]}}", "{{input.payload.tags[9007199254740992]}}"])
+      expect(() => parseWorkflowTransformExpression(expression)).toThrow();
+  });
   it("preserves the native value when the expression is exactly one reference", () => {
     expect(
       evaluateWorkflowTransformExpression("{{input.payload}}", context),

@@ -29,6 +29,27 @@ import type {
 import { agents } from "./agents.js";
 import { companies } from "./companies.js";
 
+// Keep the content-free deletion ledger when restoring older Memory payloads.
+export const memoryDeletionMarkers = pgTable("memory_deletion_markers", {
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  kind: text("kind").$type<"record" | "operation" | "source">().notNull(),
+  recordId: uuid("record_id"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  keyUq: uniqueIndex("memory_deletion_markers_company_key_uq").on(table.companyId, table.key),
+  kindCheck: check("memory_deletion_markers_kind_check", sql`${table.kind} in ('record','operation','source')`),
+  recordCheck: check("memory_deletion_markers_record_check", sql`(${table.kind} = 'record' and ${table.recordId} is not null) or (${table.kind} <> 'record' and ${table.recordId} is null)`),
+}));
+
+export const memoryRetentionPolicies = pgTable("memory_retention_policies", {
+  companyId: uuid("company_id").primaryKey().references(() => companies.id, { onDelete: "cascade" }),
+  maxAgeDays: integer("max_age_days"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  ageCheck: check("memory_retention_policies_age_check", sql`${table.maxAgeDays} is null or ${table.maxAgeDays} between 1 and 3650`),
+}));
+
 export const memoryBindings = pgTable(
   "memory_bindings",
   {

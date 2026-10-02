@@ -8,6 +8,7 @@ import { executionProjectionsForRuns } from "./execution-projection.js";
 import type { ExecutionProjection } from "@paperclipai/shared";
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
+import { forgetMemoryForDeletedIssue } from "./memory/memory-privacy.js";
 import {
   and,
   asc,
@@ -11336,6 +11337,7 @@ export function issueService(db: Db) {
           throw err;
         }
 
+        if (removedIssue) await forgetMemoryForDeletedIssue(tx as unknown as Db, removedIssue.companyId, removedIssue.id);
         if (removedIssue && attachmentAssetIds.length > 0) {
           await tx.delete(assets).where(
             inArray(

@@ -1180,7 +1180,7 @@ export function Routines() {
                     }
                   >
                     <SelectTrigger
-                      className="h-8 w-[118px]"
+                      className="h-8 w-(--sz-118px)"
                       aria-label="Execution target type"
                     >
                       <SelectValue />

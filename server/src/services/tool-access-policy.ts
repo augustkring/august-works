@@ -1410,6 +1410,9 @@ export function toolAccessPolicyService(db: Db) {
     if (!loaded.ok) throw new Error("Cannot record invocation for invalid tool access context");
     const { ctx, redaction } = loaded;
     const argumentsHash = redaction.summary.sha256 ?? sha256(input.request.arguments ?? {});
+    const idempotencyRequestHash = sha256({ actorType: ctx.actorType, actorId: ctx.actorId,
+      connectionId: ctx.connectionId, catalogEntryId: ctx.catalogEntryId, toolName: ctx.toolName,
+      arguments: input.request.arguments ?? {} });
     const idempotencyKey = input.request.idempotencyKey
       ?? (input.request.sideEffecting ? sideEffectIdempotencyKey(ctx, argumentsHash) : null);
     if (idempotencyKey) {
@@ -1417,7 +1420,14 @@ export function toolAccessPolicyService(db: Db) {
         eq(toolInvocations.companyId, input.companyId),
         eq(toolInvocations.idempotencyKey, idempotencyKey),
       ));
-      if (existing) return { invocation: existing, replayed: true, actionRequest: null };
+      if (existing) {
+        if (existing.idempotencyRequestHash ? existing.idempotencyRequestHash !== idempotencyRequestHash :
+          existing.actorType !== ctx.actorType || existing.actorId !== ctx.actorId ||
+          existing.connectionId !== ctx.connectionId || existing.toolName !== ctx.toolName || existing.argumentsHash !== argumentsHash) {
+          throw conflict("Idempotency key belongs to a different tool operation", { code: "tool_idempotency_conflict" });
+        }
+        return { invocation: existing, replayed: true, actionRequest: null };
+      }
     }
     const status = accessDecision.decision === "allow"
       ? "authorized"
@@ -1429,6 +1439,9 @@ export function toolAccessPolicyService(db: Db) {
     const [invocation] = await db.insert(toolInvocations).values({
       companyId: ctx.companyId,
       idempotencyKey,
+      idempotencyRequestHash,
+      workflowRunId: input.runContext?.workflowRunId ?? null,
+      workflowNodeId: input.runContext?.workflowNodeId ?? null,
       actorType: ctx.actorType,
       actorId: ctx.actorId,
       agentId: ctx.agentId,

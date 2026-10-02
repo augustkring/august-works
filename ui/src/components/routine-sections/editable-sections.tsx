@@ -157,7 +157,7 @@ export function OverviewSection({
               }))
             }
           >
-            <SelectTrigger className="h-8 w-[118px]" aria-label="Execution target type">
+            <SelectTrigger className="h-8 w-(--sz-118px)" aria-label="Execution target type">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

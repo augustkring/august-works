@@ -1,3 +1,4 @@
+import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -325,7 +326,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
       createdAt: new Date(),
@@ -499,7 +500,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {
         heartbeat: {
           wakeOnDemand: true,
@@ -735,7 +736,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
       createdAt: new Date(),
@@ -894,7 +895,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
       createdAt: new Date(),
@@ -1054,7 +1055,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       role: "engineer",
       status: "idle",
       adapterType: "codex_local",
-      adapterConfig: {},
+      adapterConfig: mockedCodexAdapterConfig,
       runtimeConfig: {},
       permissions: {},
       createdAt: new Date(),

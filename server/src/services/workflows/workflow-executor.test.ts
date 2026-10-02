@@ -1,3 +1,7 @@
+import { reviewWorkflowRun } from "../optimizer/optimizer-run-review.js";
+import { optimizerTraceService } from "../optimizer/optimizer-trace.js";
+import { workflowNodeRegistryService } from "./workflow-node-registry.js";
+import { submitWorkflowTaskResult } from "./workflow-task-result.js";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -121,6 +125,7 @@ describePg("Workflow executor V1", () => {
 
   async function seedPublishedAgentTaskWorkflow(input: {
     waitForCompletion: boolean;
+    totalDeadlineSeconds?: number;
     expectedOutputSchema?: Record<string, unknown> | null;
   }) {
     const companyId = randomUUID();
@@ -198,7 +203,7 @@ describePg("Workflow executor V1", () => {
           ]
         : [{ id: "e1", source: "start", target: "delegate" }],
       variables: [],
-      settings: {},
+      settings: { totalDeadlineSeconds: input.totalDeadlineSeconds ?? null },
     };
     const updated = await svc.updateDraft(
       companyId,
@@ -486,6 +491,24 @@ describePg("Workflow executor V1", () => {
     return { companyId, userId, workflow: published };
   }
 
+  it("records explicit immutable human correction evidence without rewriting execution history", async () => {
+    const seeded = await seedPublishedManualWorkflow();
+    const actor = { principal: { type: "user" as const, userId: seeded.userId } };
+    const executor = workflowExecutorService(db);
+    const completed = await executor.startManualRun(seeded.companyId, seeded.workflow.id, { input: { value: 7 } }, actor, "reviewed-run");
+    const traces = optimizerTraceService(db);
+    expect((await traces.normalizeWorkflowRun(seeded.companyId, completed.run.id)).humanCorrection).toBeUndefined();
+    const input = { humanCorrection: true, correctedOutputs: { start: { value: 8 } }, reason: "Reviewed and corrected the supplied value" };
+    await expect(reviewWorkflowRun(db, seeded.companyId, completed.run.id, input, { principal: { type: "agent", agentId: randomUUID() } })).rejects.toMatchObject({ status: 403 });
+    await expect(reviewWorkflowRun(db, seeded.companyId, completed.run.id, { ...input, correctedOutputs: {} }, actor)).rejects.toMatchObject({ status: 422 });
+    const review = await reviewWorkflowRun(db, seeded.companyId, completed.run.id, input, actor);
+    expect(await reviewWorkflowRun(db, seeded.companyId, completed.run.id, input, actor)).toEqual(review);
+    await expect(reviewWorkflowRun(db, seeded.companyId, completed.run.id, { humanCorrection: false, correctedOutputs: {}, reason: "Replace the review" }, actor)).rejects.toMatchObject({ status: 409 });
+    expect((await traces.normalizeWorkflowRun(seeded.companyId, completed.run.id)).humanCorrection).toBe(true);
+    expect((await executor.getRun(seeded.companyId, completed.run.id))?.steps[0]?.outputJson).toEqual({ value: 7 });
+    await expect(reviewWorkflowRun(db, randomUUID(), completed.run.id, input, actor)).rejects.toMatchObject({ status: 403 });
+  });
+
   it("persists a manual run and its trigger step before returning success", async () => {
     const seeded = await seedPublishedManualWorkflow();
     const result = await workflowExecutorService(db).startManualRun(
@@ -503,6 +526,7 @@ describePg("Workflow executor V1", () => {
       status: "succeeded",
       source: "manual",
       triggerPayload: { leadId: "lead-1" },
+      executionPrincipal: { type: "user", userId: seeded.userId },
       idempotencyKey: "manual-run-1",
       executionOwnerId: null,
     });
@@ -766,6 +790,119 @@ describePg("Workflow executor V1", () => {
     expect(await db.select().from(workflowRuns)).toHaveLength(1);
   });
 
+  async function seedSubworkflowParent(child: Awaited<ReturnType<typeof seedPublishedManualWorkflow>>) {
+    const svc = workflowService(db);
+    const actor = { principal: { type: "user" as const, userId: child.userId } };
+    const parent = await svc.create(child.companyId, { name: "Pinned parent" }, actor);
+    const draft = await svc.updateDraft(child.companyId, parent.id, { expectedRevisionId: parent.draftRevisionId!, graph: {
+      version: 1, nodes: [
+        { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+        { id: "child", type: "core.subworkflow", name: "Invoke child", position: { x: 100, y: 0 }, config: {
+          workflowId: child.workflow.id, revisionId: child.workflow.publishedRevisionId, inputMapping: { value: "{{trigger.value}}" }, timeoutSeconds: 60, cancellationPolicy: "propagate" } },
+      ], edges: [{ id: "invoke", source: "start", target: "child" }], variables: [], settings: {} } }, actor);
+    const published = await svc.publish(child.companyId, parent.id, { expectedDraftRevisionId: draft.draftRevisionId!, expectedPublishedRevisionId: null, approvalId: null }, actor);
+    return { parent: published, actor };
+  }
+
+  it("pins a durable child workflow and returns its typed terminal result once", async () => {
+    const child = await seedPublishedManualWorkflow();
+    const { parent, actor } = await seedSubworkflowParent(child);
+    const executor = workflowExecutorService(db);
+    const completed = await executor.startManualRun(child.companyId, parent.id, { input: { value: 42 } }, actor, "child-success");
+    expect(completed.run.status).toBe("succeeded");
+    expect(completed.steps.find((item) => item.nodeId === "child")?.outputJson).toMatchObject({ revisionId: child.workflow.publishedRevisionId, result: { value: 42 } });
+    const children = await db.select().from(workflowRuns).where(eq(workflowRuns.parentWorkflowRunId, completed.run.id));
+    expect(children).toHaveLength(1);
+    expect(children[0]).toMatchObject({ status: "succeeded", executionPrincipal: actor.principal, parentNodeId: "child" });
+    const replay = await executor.startManualRun(child.companyId, parent.id, { input: { value: 42 } }, actor, "child-success");
+    expect(replay.run.id).toBe(completed.run.id);
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.parentWorkflowRunId, completed.run.id))).toHaveLength(1);
+  });
+
+  it("recovers a child's durable wait and propagates parent cancellation", async () => {
+    const child = await seedPublishedGraph({ version: 1, nodes: [
+      { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+      { id: "wait", type: "core.wait", name: "Wait", position: { x: 100, y: 0 }, config: { durationSeconds: 1 } },
+    ], edges: [{ id: "delay", source: "start", target: "wait" }], variables: [], settings: {} });
+    const { parent, actor } = await seedSubworkflowParent(child);
+    const executor = workflowExecutorService(db);
+    const waiting = await executor.startManualRun(child.companyId, parent.id, { input: { value: 1 } }, actor, "child-wait");
+    expect(waiting.run.status).toBe("waiting");
+    const childId = waiting.steps.find((item) => item.nodeId === "child")!.childWorkflowRunId!;
+    expect(waiting.waits[0]).toMatchObject({ kind: "subworkflow", referenceId: childId });
+    const restarted = workflowExecutorService(db);
+    await restarted.recoverExpiredRuns(20, new Date(Date.now() + 2_000));
+    await restarted.recoverExpiredRuns();
+    expect((await restarted.getRun(child.companyId, waiting.run.id))?.run.status).toBe("succeeded");
+    const cancelled = await executor.startManualRun(child.companyId, parent.id, { input: { value: 2 } }, actor, "child-cancel");
+    const cancelledChildId = cancelled.steps.find((item) => item.nodeId === "child")!.childWorkflowRunId!;
+    expect((await executor.cancelRun(child.companyId, cancelled.run.id, { reason: "Stop parent and child" }, actor)).run.status).toBe("cancelled");
+    expect((await executor.getRun(child.companyId, cancelledChildId))?.run.status).toBe("cancelled");
+  });
+
+  it("rejects self-recursion and cross-company child revisions at publish", async () => {
+    const child = await seedPublishedManualWorkflow();
+    const other = await seedPublishedManualWorkflow();
+    for (const target of [child, other]) {
+      const graph: WorkflowGraphV1 = {
+        version: 1, nodes: [
+          { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+          { id: "child", type: "core.subworkflow", name: "Child", position: { x: 100, y: 0 }, config: { workflowId: target.workflow.id, revisionId: target.workflow.publishedRevisionId } },
+        ], edges: [{ id: "recurse", source: "start", target: "child" }], variables: [], settings: {} };
+      await expect(workflowNodeRegistryService(db).validatePublishGraph(child.companyId, graph, child.workflow.id)).rejects.toMatchObject({ status: 422 });
+    }
+  });
+
+  it("recovers explicitly split branches and completes an all-merge once", async () => {
+    const seeded = await seedPublishedGraph({ version: 1, variables: [], settings: {}, nodes: [
+      { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+      { id: "split", type: "core.parallel", name: "Split", position: { x: 100, y: 0 }, config: { concurrency: 1 } },
+      { id: "left", type: "core.wait", name: "Wait", position: { x: 200, y: 0 }, config: { durationSeconds: 1 } },
+      { id: "right", type: "core.transform", name: "Value", position: { x: 200, y: 100 }, config: { mapping: { value: "{{input.value}}" } } },
+      { id: "join", type: "core.merge", name: "Join all", position: { x: 300, y: 0 }, config: { mode: "all" } },
+      { id: "final", type: "core.transform", name: "Result", position: { x: 400, y: 0 }, config: { mapping: { value: "{{input.inputs.right.value}}" } } },
+    ], edges: [{ id: "e1", source: "start", target: "split" }, { id: "e2", source: "split", target: "left" },
+      { id: "e3", source: "split", target: "right" }, { id: "e4", source: "left", target: "join" },
+      { id: "e5", source: "right", target: "join" }, { id: "e6", source: "join", target: "final" }] });
+    const executor = workflowExecutorService(db);
+    const waiting = await executor.startManualRun(seeded.companyId, seeded.workflow.id, { input: { value: 42 } },
+      { principal: { type: "user", userId: seeded.userId } }, "explicit-split");
+    expect(waiting.run.status).toBe("waiting");
+    expect(await workflowExecutorService(db).recoverExpiredRuns(20, new Date(Date.now() + 2_000))).toMatchObject({ recovered: 1, failedRunIds: [] });
+    const completed = await executor.getRun(seeded.companyId, waiting.run.id);
+    expect(completed?.run.status).toBe("succeeded");
+    expect(completed?.steps.find((step) => step.nodeId === "final")?.outputJson).toEqual({ value: 42 });
+    expect(completed?.steps.filter((step) => step.nodeId === "join")).toMatchObject([{ attempt: 1, status: "succeeded" }]);
+    expect(await executor.recoverExpiredRuns()).toMatchObject({ recovered: 0 });
+  });
+
+  it.each([[75_000, "high"], [100, "normal"], [-1, "fallback"]] as const)("routes ordered switch cases and joins only the selected path (%s)", async (amount, selected) => {
+    const graph: WorkflowGraphV1 = { version: 1, variables: [], settings: {}, nodes: [
+      { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+      { id: "switch", type: "core.switch", name: "Route amount", position: { x: 100, y: 0 }, config: {
+        cases: [{ key: "high", expression: "{{trigger.amount}} >= 50000" },
+          { key: "normal", expression: "{{trigger.amount}} >= 0" }], defaultBranch: "fallback" } },
+      ...["high", "normal", "fallback"].map((key) => ({ id: key, type: "core.transform", name: key,
+        position: { x: 200, y: 0 }, config: { mapping: { path: key } } })),
+      { id: "join", type: "core.merge", name: "Join", position: { x: 300, y: 0 }, config: { mode: "all" } },
+      { id: "final", type: "core.transform", name: "Result", position: { x: 400, y: 0 }, config: { mapping: { selected: "{{input.inputs}}" } } },
+    ], edges: [{ id: "start-switch", source: "start", target: "switch" },
+      ...["high", "normal", "fallback"].flatMap((key) => [
+        { id: `switch-${key}`, source: "switch", target: key, sourceHandle: key },
+        { id: `${key}-join`, source: key, target: "join" },
+      ]), { id: "join-final", source: "join", target: "final" }] };
+    const seeded = await seedPublishedGraph(graph);
+    const executor = workflowExecutorService(db);
+    const result = await executor.startManualRun(seeded.companyId, seeded.workflow.id, { input: { amount } },
+      { principal: { type: "user", userId: seeded.userId } }, `switch-${amount}`);
+    expect(result.run.status).toBe("succeeded");
+    const byNode = new Map(result.steps.map((step) => [step.nodeId, step]));
+    expect(byNode.get("switch")?.outputJson).toEqual({ branchKey: selected });
+    expect(byNode.get("final")?.outputJson).toEqual({ selected: { [selected]: { path: selected } } });
+    for (const key of ["high", "normal", "fallback"]) expect(byNode.get(key)?.status).toBe(key === selected ? "succeeded" : "skipped");
+    expect(byNode.get("join")?.status).toBe("succeeded");
+  });
+
   it("executes only the selected condition branch and records the other branch as skipped", async () => {
     const seeded = await seedPublishedGraph({
       version: 1,
@@ -926,13 +1063,15 @@ describePg("Workflow executor V1", () => {
     child.stdout.setEncoding("utf8");
 
     const ready = new Promise<void>((resolve, reject) => {
+      // This is a cold tsx worker boot, not the workflow execution timeout.
+      // Wait for its committed side-effect marker under loaded CI hosts.
       const timer = setTimeout(() => {
         reject(
           new Error(
             `workflow process-kill fixture did not reach its kill point: ${stderr}`,
           ),
         );
-      }, 15_000);
+      }, 45_000);
       timer.unref?.();
 
       child.stdout.on("data", (chunk) => {
@@ -1054,7 +1193,7 @@ describePg("Workflow executor V1", () => {
         child.kill("SIGKILL");
       }
     }
-  }, 30_000);
+  }, 90_000);
 
   it("recovers an expired run from the last succeeded checkpoint without replaying it", async () => {
     const seeded = await seedPublishedGraph({
@@ -1281,6 +1420,24 @@ describePg("Workflow executor V1", () => {
         outputJson: { source: "recovery" },
       }),
     ]);
+  });
+
+  it("rechecks the initiating user's membership when a worker recovers a run", async () => {
+    const seeded = await seedPublishedManualWorkflow();
+    const now = new Date();
+    const old = new Date(now.getTime() - 120_000);
+    const [run] = await db.insert(workflowRuns).values({
+      companyId: seeded.companyId, workflowId: seeded.workflow.id,
+      workflowRevisionId: seeded.workflow.publishedRevisionId!, status: "queued", source: "manual",
+      triggerPayload: {}, responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
+      createdAt: old, updatedAt: old,
+    }).returning();
+    await db.delete(companyMemberships).where(eq(companyMemberships.companyId, seeded.companyId));
+    await workflowExecutorService(db).recoverExpiredRuns(10, now);
+    const detail = await workflowExecutorService(db).getRun(seeded.companyId, run!.id);
+    expect(detail?.run).toMatchObject({ status: "failed", failureCode: "workflow_execution_principal_revoked" });
+    expect(detail?.steps).toHaveLength(0);
   });
 
   it("does not steal a run while its execution lease is still valid", async () => {
@@ -2303,26 +2460,53 @@ describePg("Workflow executor V1", () => {
     ).toHaveLength(0);
   });
 
-  it("fails Agent Task publish when structured output has no authoritative task result channel", async () => {
-    await expect(
-      seedPublishedAgentTaskWorkflow({
-        waitForCompletion: true,
-        expectedOutputSchema: {
-          type: "object",
-          properties: {
-            score: { type: "number" },
-          },
-          required: ["score"],
-        },
-      }),
-    ).rejects.toMatchObject({
-      status: 422,
-      details: expect.objectContaining({
-        code: "workflow_node_invalid",
-        reason: "workflow_agent_task_structured_output_not_ready",
-        nodeType: "agent.task",
-      }),
-    });
+  it("enforces the workflow deadline while waiting and stops accountable child work", async () => {
+    const seeded = await seedPublishedAgentTaskWorkflow({ waitForCompletion: true, totalDeadlineSeconds: 1 });
+    const heartbeatRunId = randomUUID();
+    const heartbeat = { ...fakeHeartbeat({ companyId: seeded.companyId, agentId: seeded.agentId, runId: heartbeatRunId }),
+      cancelRun: vi.fn(async (id: string) => { await db.update(heartbeatRuns).set({ status: "cancelled" }).where(eq(heartbeatRuns.id, id)); }) };
+    const executor = workflowExecutorService(db, { heartbeat });
+    const waiting = await executor.startManualRun(seeded.companyId, seeded.workflow.id, { input: {} },
+      { principal: { type: "user", userId: seeded.userId } }, "waiting-deadline");
+    expect(waiting.run.status).toBe("waiting");
+    await executor.recoverExpiredRuns(20, new Date(Date.now() + 2_000));
+    expect((await executor.getRun(seeded.companyId, waiting.run.id))?.run).toMatchObject({ status: "failed", failureCode: "workflow_deadline_exceeded" });
+    expect((await issueService(db).getById(waiting.waits[0]!.referenceId!))?.status).toBe("cancelled");
+    expect(heartbeat.cancelRun).toHaveBeenCalledWith(heartbeatRunId, expect.any(String), expect.any(Object));
+  });
+
+  it("accepts an immutable structured Agent Task result only from its active task execution", async () => {
+    const seeded = await seedPublishedAgentTaskWorkflow({ waitForCompletion: true,
+      expectedOutputSchema: { type: "object", properties: { score: { type: "number" } }, required: ["score"], additionalProperties: false } });
+    const heartbeatRunId = randomUUID();
+    const executor = workflowExecutorService(db, { heartbeat: fakeHeartbeat({ companyId: seeded.companyId, agentId: seeded.agentId, runId: heartbeatRunId }) });
+    const waiting = await executor.startManualRun(seeded.companyId, seeded.workflow.id, { input: {} },
+      { principal: { type: "user", userId: seeded.userId } }, "structured-agent-task");
+    const issueId = waiting.waits[0]!.referenceId!;
+    const input = { companyId: seeded.companyId, workflowRunId: waiting.run.id, nodeId: "delegate",
+      agentId: seeded.agentId, heartbeatRunId, result: { score: 42 } };
+    await expect(submitWorkflowTaskResult(db, input)).rejects.toMatchObject({ status: 403 });
+    await db.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, heartbeatRunId));
+    await db.update(issues).set({ checkoutRunId: heartbeatRunId, executionRunId: heartbeatRunId, status: "in_progress" }).where(eq(issues.id, issueId));
+    await expect(submitWorkflowTaskResult(db, { ...input, agentId: randomUUID() })).rejects.toMatchObject({ status: 403 });
+    await expect(submitWorkflowTaskResult(db, { ...input, result: { score: "unvalidated" } })).rejects.toMatchObject({ status: 422 });
+    const accepted = await submitWorkflowTaskResult(db, input);
+    expect(await submitWorkflowTaskResult(db, input)).toEqual(accepted);
+    await expect(submitWorkflowTaskResult(db, { ...input, result: { score: 43 } })).rejects.toMatchObject({ status: 409 });
+    await issueService(db).update(issueId, { status: "done" });
+    const completed = await executor.getRun(seeded.companyId, waiting.run.id);
+    expect(completed?.run.status).toBe("succeeded");
+    expect(completed?.steps.find((step) => step.nodeId === "delegate")?.outputJson).toMatchObject({ result: { score: 42 }, heartbeatRunId });
+    await expect(submitWorkflowTaskResult(db, input)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("fails a terminal Agent Task that omitted its required structured result", async () => {
+    const seeded = await seedPublishedAgentTaskWorkflow({ waitForCompletion: true, expectedOutputSchema: { type: "object" } });
+    const executor = workflowExecutorService(db, { heartbeat: fakeHeartbeat({ companyId: seeded.companyId, agentId: seeded.agentId }) });
+    const waiting = await executor.startManualRun(seeded.companyId, seeded.workflow.id, { input: {} },
+      { principal: { type: "user", userId: seeded.userId } }, "missing-agent-task-result");
+    await issueService(db).update(waiting.waits[0]!.referenceId!, { status: "done" });
+    expect((await executor.getRun(seeded.companyId, waiting.run.id))?.run).toMatchObject({ status: "failed", failureCode: "workflow_task_result_missing" });
   });
 
   it("delegates Agent Task through the existing task and heartbeat runtime", async () => {

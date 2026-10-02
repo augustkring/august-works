@@ -168,6 +168,7 @@ export function automationArtifactRuntimeService(db: Db) {
       expectedVersionId: string,
       input: unknown,
       actor: AutomationArtifactMutationActor,
+      options: { timeoutMs?: number } = {},
     ) => {
       const binding = await resolveActiveBinding(
         companyId,
@@ -241,6 +242,7 @@ export function automationArtifactRuntimeService(db: Db) {
           sourceCode: binding.sourceCode,
           dependencyManifest: binding.dependencyManifest,
           value: input,
+          timeoutMs: options.timeoutMs,
         });
       } catch (error) {
         if (error instanceof AutomationArtifactCodeRuntimeError) {

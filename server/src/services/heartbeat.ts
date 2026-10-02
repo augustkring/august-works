@@ -1,3 +1,5 @@
+import { workflowDirectAgentPrompt } from "./workflows/workflow-direct-agent.js";
+import { heartbeatMemoryPayloadRetained, heartbeatMemoryPayloadVisible } from "./memory/memory-privacy.js";
 import { applyWorkspaceRestoreFailure } from "@paperclipai/adapter-utils/workspace-restore-result";
 import { hasWorkspaceRestoreFailure } from "@paperclipai/shared";
 import { externalConversationStateSql, nonIdleSlackIssueCondition } from "./slack-conversation-state.js";
@@ -10592,7 +10594,11 @@ export function heartbeatService(
       )
       .from(heartbeatRuns)
       .where(eq(heartbeatRuns.id, runId))
-      .then((rows) => rows[0] ?? null);
+      .then(async (rows) => {
+        const run = rows[0] ?? null;
+        if (!run || await heartbeatMemoryPayloadRetained(db, run.companyId, run.id)) return run;
+        return { ...run, contextSnapshot: {}, resultJson: null, runnerProfileJson: null, stdoutExcerpt: null, stderrExcerpt: null, error: null, logRef: null, logStore: null };
+      });
   }
 
   async function recordCurrentHeartbeatRunRuntimeProgress(
@@ -20907,6 +20913,8 @@ export function heartbeatService(
       } else {
         delete context.paperclipWakeComment;
       }
+      const directAgentPrompt = await workflowDirectAgentPrompt(db, agent.companyId, agent.id, run.id, context);
+      if (directAgentPrompt) taskMarkdown = directAgentPrompt;
       if (taskMarkdown) {
         context.paperclipTaskMarkdown = taskMarkdown;
       } else {
@@ -29329,7 +29337,7 @@ export function heartbeatService(
         .orderBy(desc(heartbeatRuns.createdAt));
 
       const rows = limit ? await query.limit(limit) : await query;
-      return rows.map((row) => {
+      return Promise.all(rows.map(async (row) => {
         const {
           contextIssueId,
           contextTaskId,
@@ -29357,6 +29365,7 @@ export function heartbeatService(
           resultCostUsdCamel?: string | null;
         };
 
+        if (!await heartbeatMemoryPayloadRetained(db, companyId, row.id)) return { ...rest, contextSnapshot: {}, resultJson: null, error: null, stdoutExcerpt: null, stderrExcerpt: null, logRef: null, logStore: null };
         return {
           ...rest,
           contextSnapshot: summarizeHeartbeatRunContextSnapshot({
@@ -29382,7 +29391,7 @@ export function heartbeatService(
                   costUsdCamel: resultCostUsdCamel,
                 }),
         };
-      });
+      }));
     },
 
     getRun,
@@ -29488,6 +29497,7 @@ export function heartbeatService(
         .where(
           and(
             eq(heartbeatRunEvents.runId, runId),
+            sql`exists (select 1 from ${heartbeatRuns} where ${heartbeatRuns.id} = ${heartbeatRunEvents.runId} and ${heartbeatMemoryPayloadVisible()})`,
             gt(heartbeatRunEvents.seq, afterSeq),
           ),
         )
@@ -29531,6 +29541,7 @@ export function heartbeatService(
       const runId =
         typeof runOrLookup === "string" ? runOrLookup : runOrLookup.id;
       if (!run) throw notFound("Heartbeat run not found");
+      if (!await heartbeatMemoryPayloadRetained(db, run.companyId, runId)) throw notFound("Run log was erased");
       if (!run.logStore || !run.logRef) throw notFound("Run log not found");
 
       const result = await runLogStore.read(

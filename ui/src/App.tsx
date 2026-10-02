@@ -46,6 +46,7 @@ import { Foundation } from "./pages/Foundation";
 import { Memory } from "./pages/Memory";
 import { Governance } from "./pages/Governance";
 import { Workflows } from "./pages/Workflows";
+import { AutomationArtifacts } from "./pages/AutomationArtifacts";
 import { WorkflowBuilder } from "./pages/WorkflowBuilder";
 import { WorkflowRuns } from "./pages/WorkflowRuns";
 import { WorkflowRun } from "./pages/WorkflowRun";
@@ -343,6 +344,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
         path="workflows"
         element={<WorkflowBuilderExperimentalGate><Workflows /></WorkflowBuilderExperimentalGate>}
       />
+      <Route path="automation-artifacts" element={<AutomationArtifacts />} />
       <Route
         path="workflows/:workflowId"
         element={<WorkflowBuilderExperimentalGate><WorkflowBuilder /></WorkflowBuilderExperimentalGate>}

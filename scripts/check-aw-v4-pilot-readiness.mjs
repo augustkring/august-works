@@ -2,7 +2,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import ts from "typescript";
+// The native TypeScript 7 CLI does not expose the JavaScript compiler API.
+import ts from "typescript-compiler-api";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const manifestPath = path.join(repoRoot, "evals", "aw-v4", "pilot-readiness.json");

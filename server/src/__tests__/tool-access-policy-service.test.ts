@@ -851,6 +851,9 @@ describeEmbeddedPostgres("tool access policy service", () => {
     expect(first.replayed).toBe(false);
     expect(replay.replayed).toBe(true);
     expect(replay.invocation.id).toBe(first.invocation.id);
+    await expect(toolAccessPolicyService(db).recordInvocation({ ...input,
+      request: { ...input.request, arguments: { to: "different@example.com" } },
+    }, decision)).rejects.toMatchObject({ status: 409, details: { code: "tool_idempotency_conflict" } });
   });
 
   it("derives a canonical idempotency key for side-effecting calls without caller-supplied keys", async () => {

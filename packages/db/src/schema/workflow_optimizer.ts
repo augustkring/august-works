@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  boolean,
   doublePrecision,
   index,
   integer,
@@ -18,7 +19,80 @@ import type {
   OptimizerSuggestionStatus,
 } from "@paperclipai/shared";
 import { companies } from "./companies.js";
-import { workflowRevisions, workflows } from "./workflows.js";
+import { workflowRevisions, workflowRuns, workflows } from "./workflows.js";
+import type { ExecutionPrincipal } from "@paperclipai/shared";
+import type { OptimizerCompilerResult, OptimizerReplayEvaluation, OptimizerShadowEvaluation, OptimizerShadowObservationResult } from "@paperclipai/shared";
+import { automationArtifacts, automationArtifactVersions } from "./automation_artifacts.js";
+
+export const workflowOptimizerEvaluations = pgTable("workflow_optimizer_evaluations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  suggestionId: uuid("suggestion_id").notNull().references(() => workflowOptimizerSuggestions.id, { onDelete: "restrict" }),
+  workflowId: uuid("workflow_id").notNull().references(() => workflows.id, { onDelete: "restrict" }),
+  workflowRevisionId: uuid("workflow_revision_id").notNull().references(() => workflowRevisions.id, { onDelete: "restrict" }),
+  nodeId: text("node_id").notNull(),
+  artifactId: uuid("artifact_id").notNull().references(() => automationArtifacts.id, { onDelete: "restrict" }),
+  artifactVersionId: uuid("artifact_version_id").notNull().references(() => automationArtifactVersions.id, { onDelete: "restrict" }),
+  contentHash: text("content_hash").notNull(),
+  status: text("status").notNull().default("testing"),
+  compilerResult: jsonb("compiler_result").$type<OptimizerCompilerResult>(),
+  replayEvaluation: jsonb("replay_evaluation").$type<OptimizerReplayEvaluation>(),
+  shadowEvaluation: jsonb("shadow_evaluation").$type<OptimizerShadowEvaluation>(),
+  invariants: jsonb("invariants").$type<Array<{ id: string; description: string; critical: boolean; expression: string }>>().notNull().default([]),
+  sourceRunIds: jsonb("source_run_ids").$type<string[]>().notNull().default([]),
+  memoryRecordIds: jsonb("memory_record_ids").$type<string[]>().notNull().default([]),
+  knownInputShapes: jsonb("known_input_shapes").$type<string[]>().notNull().default([]),
+  approvalId: uuid("approval_id"),
+  canaryTrafficPercent: integer("canary_traffic_percent").notNull().default(20),
+  createdBy: jsonb("created_by").$type<ExecutionPrincipal>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  companyWorkflowIdx: index("workflow_optimizer_evaluations_company_workflow_idx").on(table.companyId, table.workflowId),
+  activeNodeUq: uniqueIndex("workflow_optimizer_evaluations_live_node_uq").on(table.companyId, table.workflowRevisionId, table.nodeId)
+    .where(sql`${table.status} in ('shadow', 'canary', 'active')`),
+  versionUq: uniqueIndex("workflow_optimizer_evaluations_version_uq").on(table.companyId, table.artifactVersionId),
+  statusCheck: check("workflow_optimizer_evaluations_status_check", sql`${table.status} in ('testing', 'failed', 'shadow', 'canary', 'active', 'degraded', 'retired')`),
+  trafficCheck: check("workflow_optimizer_evaluations_traffic_check", sql`${table.canaryTrafficPercent} between 1 and 50`),
+}));
+
+export const workflowOptimizerObservations = pgTable("workflow_optimizer_observations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  evaluationId: uuid("evaluation_id").notNull().references(() => workflowOptimizerEvaluations.id, { onDelete: "cascade" }),
+  workflowRunId: uuid("workflow_run_id").notNull().references(() => workflowRuns.id, { onDelete: "cascade" }),
+  nodeId: text("node_id").notNull(),
+  mode: text("mode").notNull(),
+  candidateUsed: boolean("candidate_used").notNull(),
+  passed: boolean("passed").notNull(),
+  fallback: boolean("fallback").notNull(),
+  inputShapeHash: text("input_shape_hash").notNull(),
+  newInputShape: boolean("new_input_shape").notNull(),
+  invariantFailure: boolean("invariant_failure").notNull(),
+  shadowResult: jsonb("shadow_result").$type<OptimizerShadowObservationResult>(),
+  errorCode: text("error_code"),
+  durationMs: integer("duration_ms").notNull(),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  runNodeUq: uniqueIndex("workflow_optimizer_observations_evaluation_run_node_uq").on(table.companyId, table.evaluationId, table.workflowRunId, table.nodeId),
+  companyEvaluationIdx: index("workflow_optimizer_observations_company_evaluation_idx").on(table.companyId, table.evaluationId),
+  modeCheck: check("workflow_optimizer_observations_mode_check", sql`${table.mode} in ('shadow', 'canary', 'active')`),
+}));
+
+export const workflowRunReviews = pgTable("workflow_run_reviews", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  workflowRunId: uuid("workflow_run_id").notNull().references(() => workflowRuns.id, { onDelete: "cascade" }),
+  humanCorrection: boolean("human_correction").notNull(),
+  correctedOutputs: jsonb("corrected_outputs").$type<Record<string, unknown>>().notNull().default({}),
+  reason: text("reason").notNull(),
+  reviewer: jsonb("reviewer").$type<ExecutionPrincipal>().notNull(),
+  memoryRecordIds: jsonb("memory_record_ids").$type<string[]>().notNull().default([]),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  runUq: uniqueIndex("workflow_run_reviews_company_run_uq").on(table.companyId, table.workflowRunId),
+  companyReviewedIdx: index("workflow_run_reviews_company_reviewed_idx").on(table.companyId, table.reviewedAt),
+}));
 
 export const workflowOptimizerSuggestions = pgTable(
   "workflow_optimizer_suggestions",

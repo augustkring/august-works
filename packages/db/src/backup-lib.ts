@@ -881,6 +881,29 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
       emit("");
     }
 
+    // Preserve check constraints too: a logical restore must retain execution
+    // and tenant contract guards even when its migration receipts are current.
+    // Emit after functions, because a check may call a restored SQL function.
+    const allChecks = await sql<{
+      schema_name: string;
+      tablename: string;
+      constraint_name: string;
+      definition: string;
+    }[]>`
+      SELECT n.nspname AS schema_name, t.relname AS tablename,
+             c.conname AS constraint_name, pg_get_constraintdef(c.oid, true) AS definition
+      FROM pg_constraint c
+      JOIN pg_class t ON t.oid = c.conrelid
+      JOIN pg_namespace n ON n.oid = t.relnamespace
+      WHERE c.contype = 'c'
+        AND ${sql.unsafe(nonSystemSchemaPredicate("n.nspname"))}
+      ORDER BY n.nspname, t.relname, c.conname
+    `;
+    for (const check of allChecks) {
+      if (!includedTableNames.has(tableKey(check.schema_name, check.tablename))) continue;
+      emitStatement(`ALTER TABLE ${quoteQualifiedName(check.schema_name, check.tablename)} ADD CONSTRAINT ${quoteIdentifier(check.constraint_name)} ${check.definition};`);
+    }
+
     // Indexes (non-primary, non-unique-constraint)
     const allIndexes = await sql<{ schema_name: string; tablename: string; indexdef: string }[]>`
       SELECT schemaname AS schema_name, tablename, indexdef
