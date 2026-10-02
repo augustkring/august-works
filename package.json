@@ -92,7 +92,10 @@
     "test:lifecycle-baseline": "node tests/lifecycle-baseline/run.mjs",
     "test:lifecycle-baseline:support": "node --test tests/lifecycle-baseline/report.test.mjs",
     "test:lifecycle-baseline:typecheck": "tsc -p tests/lifecycle-baseline/tsconfig.json",
-    "migrate:aw-v4:reconcile": "pnpm run preflight:workspace-links && tsx scripts/reconcile-aw-v4-migrations.ts"
+    "migrate:aw-v4:reconcile": "pnpm run preflight:workspace-links && tsx scripts/reconcile-aw-v4-migrations.ts",
+    "check:aw-v4-pilot-readiness": "node scripts/check-aw-v4-pilot-readiness.mjs",
+    "verify:aw-v4-pilot-readiness": "node scripts/check-aw-v4-pilot-readiness.mjs --require-evidence",
+    "test:aw-v4-pilot-readiness": "node --test scripts/check-aw-v4-pilot-readiness.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
