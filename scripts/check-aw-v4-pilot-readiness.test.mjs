@@ -114,11 +114,36 @@ test("require-evidence fails closed without an evidence file", () => {
   assert.match(result.stderr, /requires --evidence/);
 });
 
-test("complete pilot evidence passes", () => {
+test("complete pilot evidence passes without echoing customer environment", () => {
   withEvidence(completeEvidence(), (file) => {
     const result = run(["--require-evidence", "--evidence", file]);
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.match(result.stdout, /pilot evidence valid/);
+    assert.doesNotMatch(result.stdout, /pilot-fixture/);
+  });
+});
+
+test("non-durable manual evidence reference fails closed", () => {
+  const evidence = completeEvidence();
+  evidence.manualChecks[0] = {
+    ...evidence.manualChecks[0],
+    evidence: "checked manually",
+  };
+  withEvidence(evidence, (file) => {
+    const result = run(["--require-evidence", "--evidence", file]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /durable evidence reference/);
+  });
+});
+
+test("non-ISO recordedAt fails closed", () => {
+  const evidence = completeEvidence({
+    recordedAt: "October 1, 2026 12:00 UTC",
+  });
+  withEvidence(evidence, (file) => {
+    const result = run(["--require-evidence", "--evidence", file]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /ISO-8601 timestamp with timezone/);
   });
 });
 
