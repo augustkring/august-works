@@ -5,6 +5,10 @@ import path from "node:path";
 import { stripTypeScriptTypes } from "node:module";
 import { parse } from "acorn";
 import {
+  redactDiagnosticText,
+  redactHomePathUserSegments,
+} from "@paperclipai/adapter-utils";
+import {
   buildLocalProcessSandboxSpawnTarget,
 } from "@paperclipai/adapter-utils/local-process-sandbox";
 
@@ -25,6 +29,7 @@ const PROCESS_LIMIT = 512;
 const FILE_DESCRIPTOR_LIMIT = 64;
 const CPU_SECONDS = 4;
 const PRLIMIT_PATH = "/usr/bin/prlimit";
+const MAX_SANDBOX_DIAGNOSTIC_CHARS = 1_024;
 
 const FORBIDDEN_IDENTIFIERS = new Set([
   "require",
@@ -480,6 +485,16 @@ type SandboxFailureCategory =
   | "process_limit"
   | "unknown_exit";
 
+function boundedSandboxDiagnostic(stderr: string): string | null {
+  const redacted = redactHomePathUserSegments(redactDiagnosticText(stderr))
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!redacted) return null;
+  return redacted.length > MAX_SANDBOX_DIAGNOSTIC_CHARS
+    ? `${redacted.slice(0, MAX_SANDBOX_DIAGNOSTIC_CHARS - 1)}…`
+    : redacted;
+}
+
 function classifySandboxFailure(stderr: string): SandboxFailureCategory {
   const normalized = stderr.toLowerCase();
   if (
@@ -691,35 +706,26 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
       );
     }
 
-    const commandSeparator = target.args.lastIndexOf("--");
-    if (commandSeparator < 0 || commandSeparator === target.args.length - 1) {
-      await target.cleanup?.();
-      throw new AutomationArtifactCodeRuntimeError(
-        "automation_artifact_code_runtime_unavailable",
-        "Qualified Linux sandbox command boundary is unavailable.",
-      );
-    }
-    const sandboxedCommand = target.args.slice(commandSeparator + 1);
-    const sandboxArgs = [
-      // Keep the caller's filesystem ownership mapping inside an unprivileged
-      // user namespace. Remapping to an unrelated UID would make the 0700
-      // ephemeral workspace unreadable before Node starts.
-      "--unshare-user",
-      ...target.args.slice(0, commandSeparator + 1),
-      PRLIMIT_PATH,
+    // Keep the already-qualified PR 41 topology: resource limits wrap the
+    // complete Bubblewrap process tree rather than rewriting the Bubblewrap
+    // command and inserting another namespace boundary inside it. This keeps
+    // filesystem/network isolation owned by the shared sandbox builder while
+    // applying RLIMITs to Bubblewrap and every descendant.
+    const prlimitArgs = [
       `--nproc=${PROCESS_LIMIT}`,
       `--cpu=${CPU_SECONDS}`,
       `--as=${ADDRESS_SPACE_CEILING_BYTES}`,
       `--nofile=${FILE_DESCRIPTOR_LIMIT}`,
       "--",
-      ...sandboxedCommand,
+      target.command,
+      ...target.args,
     ];
 
     let result: ProcessResult;
     try {
       result = await runBoundedProcess({
-        command: target.command,
-        args: sandboxArgs,
+        command: PRLIMIT_PATH,
+        args: prlimitArgs,
         cwd: "/",
         env: {
           LANG: "C.UTF-8",
@@ -754,9 +760,10 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     }
     if (result.exitCode !== 0) {
       const failureCategory = classifySandboxFailure(result.stderr);
+      const diagnostic = boundedSandboxDiagnostic(result.stderr);
       throw new AutomationArtifactCodeRuntimeError(
         "automation_artifact_code_execution_failed",
-        `Automation Artifact sandbox execution failed (${failureCategory}; exit=${result.exitCode ?? "signal"}).`,
+        `Automation Artifact sandbox execution failed (${failureCategory}; exit=${result.exitCode ?? "signal"})${diagnostic ? `: ${diagnostic}` : "."}`,
       );
     }
 
