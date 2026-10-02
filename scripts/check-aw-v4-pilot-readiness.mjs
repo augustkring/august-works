@@ -39,6 +39,16 @@ const expectedManualChecks = [
   "feature_flag_rollout_and_rollback",
   "external_agent_scope_smoke",
   "customer_support_owner",
+  "privacy_per_company_retention",
+  "privacy_memory_deletion",
+  "privacy_source_deletion_propagation",
+  "privacy_derived_index_deletion",
+  "privacy_sensitive_classification",
+  "privacy_export_capability",
+  "privacy_run_output_retention",
+  "privacy_optimizer_trace_retention",
+  "privacy_audit_access_control",
+  "privacy_backup_restore_deletion_semantics",
 ];
 
 function fail(message) {
@@ -521,5 +531,5 @@ console.log(
     evidence.environment +
     " at " +
     evidence.commitSha +
-    "; migration ready, rollback verified, and all manual C3 checks passed.",
+    "; migration ready, rollback verified, and all manual C3/privacy checks passed.",
 );
