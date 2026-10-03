@@ -41,6 +41,10 @@ const mockAgentsApi = vi.hoisted(() => ({
   getClaudeOAuthTokenStatus: vi.fn(),
 }));
 const mockCompaniesApi = vi.hoisted(() => ({ create: vi.fn() }));
+const mockAccessApi = vi.hoisted(() => ({
+  createCompanyInvite: vi.fn(),
+  getInviteOnboarding: vi.fn(),
+}));
 // The hire path resolves the Test environment before it probes: it reads the
 // environment list, the instance settings, and the experimental settings. The
 // test stubs these so the resolution settles on the local default, the same as
@@ -51,7 +55,7 @@ const mockInstanceSettingsApi = vi.hoisted(() => ({
   getExperimental: vi.fn(),
 }));
 
-const routerState = vi.hoisted(() => ({ pathname: "/" }));
+const routerState = vi.hoisted(() => ({ pathname: "/", navigate: vi.fn() }));
 const dialogState = vi.hoisted(() => ({
   onboardingOpen: false,
   onboardingOptions: {} as { initialStep?: number; companyId?: string },
@@ -71,6 +75,7 @@ const companyState = vi.hoisted(() => ({
 vi.mock("../api/goals", () => ({ goalsApi: mockGoalsApi }));
 vi.mock("@/api/adapters", () => ({ adaptersApi: mockAdaptersApi }));
 vi.mock("../api/companies", () => ({ companiesApi: mockCompaniesApi }));
+vi.mock("../api/access", () => ({ accessApi: mockAccessApi }));
 vi.mock("../api/agents", () => ({ agentsApi: mockAgentsApi }));
 vi.mock("../api/approvals", () => ({ approvalsApi: { create: vi.fn() } }));
 vi.mock("../api/issues", () => ({ issuesApi: { create: vi.fn() } }));
@@ -80,7 +85,7 @@ vi.mock("../api/instanceSettings", () => ({ instanceSettingsApi: mockInstanceSet
 
 vi.mock("@/lib/router", () => ({
   useLocation: () => ({ pathname: routerState.pathname }),
-  useNavigate: () => vi.fn(),
+  useNavigate: () => routerState.navigate,
   useParams: () => ({}),
 }));
 
@@ -102,9 +107,11 @@ const { OnboardingWizard } = await import("./OnboardingWizard");
 function currentStep(): "agent" | "closed" | "other" {
   const body = document.body;
   if (!body.querySelector("[role='dialog'], .fixed.inset-0")) return "closed";
-  // Keyed on the name field, which is the agent step's only control now that
-  // the role picker is gone.
-  if (body.querySelector("#onboarding-agent-name")) return "agent";
+  // Keyed on controls that only exist on the agent step.
+  if (
+    body.querySelector("#onboarding-agent-name") ||
+    body.textContent?.includes("Connect an existing agent")
+  ) return "agent";
   return "other";
 }
 
@@ -175,6 +182,7 @@ describe("OnboardingWizard — which step it lands on", () => {
     // an earlier case would decide the next one.
     localStorage.clear();
     routerState.pathname = "/";
+    routerState.navigate.mockReset();
     dialogState.onboardingOpen = false;
     dialogState.onboardingOptions = {};
     dialogState.onboardingRouteDismissed = false;
@@ -367,6 +375,11 @@ describe("OnboardingWizard — which step it lands on", () => {
     // then `/onboarding` left the wizard showing "create an organization" while
     // still holding it — and the next confirmation wrote into the old company.
     mockCompaniesApi.create.mockResolvedValue({ id: "company-1", issuePrefix: "PC1" });
+    mockAccessApi.createCompanyInvite.mockResolvedValue({
+      token: "invite-token",
+      onboardingTextPath: "/api/invites/invite-token/onboarding.txt",
+    });
+    mockAccessApi.getInviteOnboarding.mockRejectedValue(new Error("Not found"));
     mockGoalsApi.create.mockResolvedValue({ id: "goal-company-1" });
     routerState.pathname = "/onboarding";
     await render();
@@ -543,6 +556,13 @@ describe("OnboardingWizard — which step it lands on", () => {
      * putting something in the one field it has.
      */
     async function nameAgent(name = "Ada") {
+      if (!document.getElementById("onboarding-agent-name")) {
+        const option = [...document.body.querySelectorAll("button")].find((button) =>
+          button.textContent?.includes("August Works agent"),
+        );
+        expect(option, "the agent step should offer the managed-agent choice").toBeTruthy();
+        await press(option!);
+      }
       const field = document.getElementById("onboarding-agent-name") as HTMLInputElement;
       expect(field, "the agent step should render its name field").toBeTruthy();
       setControlledValue(field, name);
@@ -561,15 +581,15 @@ describe("OnboardingWizard — which step it lands on", () => {
     /**
      * The step's own CTA. By exact text, because "Back" sits beside it.
      *
-     * Two labels rather than one: the connect step calls its forward button
-     * "Connect", since there the press starts a sign-in rather than simply
-     * advancing. The rest of the arc still says "Next". These tests are about
-     * where a press lands, so either will do.
+     * The managed path advances with "Next", the connect step may say
+     * "Connect", and an existing runtime hands off with "Continue to setup".
+     * These tests are about where a press lands, so every forward label is
+     * intentionally accepted here.
      */
     function stepCta(): HTMLButtonElement {
       const cta = [...document.body.querySelectorAll("button")].find((b) => {
         const text = b.textContent?.trim();
-        return text === "Next" || text === "Connect";
+        return text === "Next" || text === "Connect" || text === "Prepare connection request";
       });
       expect(cta, "the step should render its forward button").toBeTruthy();
       return cta as HTMLButtonElement;
@@ -605,6 +625,42 @@ describe("OnboardingWizard — which step it lands on", () => {
       expect(payload.name).toBe("Ada");
     });
 
+    it("prepares one self-connection request for an existing agent", async () => {
+      await openOnAgentStep();
+      const option = [...document.body.querySelectorAll("button")].find((button) =>
+        button.textContent?.includes("Connect an existing agent"),
+      );
+      expect(option).toBeTruthy();
+      await press(option!);
+      await press(stepCta());
+      await settle();
+
+      expect(mockAccessApi.createCompanyInvite).toHaveBeenCalledWith("company-1", {
+        allowedJoinTypes: "agent",
+        humanRole: null,
+        agentMessage: null,
+      });
+      expect(document.body.textContent).toContain("Ask your agent to connect");
+      expect(routerState.navigate).not.toHaveBeenCalled();
+    });
+
+    it("does not ask the customer to identify OpenClaw or Hermes", async () => {
+      await openOnAgentStep();
+      expect(document.body.textContent).not.toContain("Connect an OpenClaw agent");
+      expect(document.body.textContent).not.toContain("Connect a Hermes agent");
+    });
+
+    it("lets a customer skip agent setup and return to the dashboard", async () => {
+      await openOnAgentStep();
+      const skip = [...document.body.querySelectorAll("button")].find((button) =>
+        button.textContent?.trim() === "Skip for now",
+      );
+      expect(skip).toBeTruthy();
+      await press(skip!);
+
+      expect(routerState.navigate).toHaveBeenCalledWith("/dashboard");
+    });
+
     it("does not offer a way back behind the step it entered on", async () => {
       // Step 1 creates a company. A run that already holds one must not be
       // able to walk into it, by the Back button or the progress bar.
@@ -620,7 +676,7 @@ describe("OnboardingWizard — which step it lands on", () => {
       // every one of them is inert — asserted over the whole set rather than
       // one segment, since a single enabled one is the whole defect.
       const segments = [...document.body.querySelectorAll("button")].filter((b) =>
-        ["Create your first agent", "Connect a model", "Review"].includes(
+        ["Add an agent", "Connect a runtime", "Review"].includes(
           b.getAttribute("aria-label") ?? "",
         ),
       ) as HTMLButtonElement[];

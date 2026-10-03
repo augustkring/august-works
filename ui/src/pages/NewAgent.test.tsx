@@ -334,7 +334,7 @@ describe("New agent setup", () => {
     expect(container.querySelector('[aria-label="Model"]')).toBeNull();
     await fill("Hermes API base URL", "https://hermes.example.com");
     await fill("API_SERVER_KEY", "hermes-test-key");
-    await click("Finish setup");
+    await click("Connect Hermes");
     expect(api.testEnvironment.mock.calls[0][2]).toMatchObject({
       adapterConfig: { apiBaseUrl: "https://hermes.example.com" },
       testCredentials: { API_SERVER_KEY: "hermes-test-key" },

@@ -87,7 +87,7 @@ export function SlackIdentityStep({ endpointId, command, testStartedAt, onConnec
           })}
         </div>
       )}
-      {!userId && !session.isPending && !health.isPending && <p role="alert" className="text-sm text-destructive">Sign in to Paperclip to link your Slack account. Refresh this page after signing in.</p>}
+      {!userId && !session.isPending && !health.isPending && <p role="alert" className="text-sm text-destructive">Sign in to August Works to link your Slack account. Refresh this page after signing in.</p>}
       {link.isError && <p role="alert" className="text-sm text-destructive">Couldn&apos;t link your account. Check that you are a member of this company and try again.</p>}
       <div className="flex items-center justify-between gap-3">
         <Button variant="ghost" className="text-muted-foreground" onClick={onSaveExit}>Save &amp; exit</Button>

@@ -72,8 +72,8 @@ interface EnvironmentDescriptor {
 
 const localEnvironmentDescriptor: EnvironmentDescriptor = {
   label: "Local",
-  detail: "Paperclip host",
-  title: "Local - Paperclip host",
+  detail: "August Works host",
+  title: "Local - August Works host",
 };
 
 const loadingEnvironmentDescriptor: EnvironmentDescriptor = {
@@ -134,11 +134,11 @@ function describeEnvironment(
   capabilities?: EnvironmentCapabilities | null,
 ): EnvironmentDescriptor {
   const detail = isPlatformManagedEnvironment(environment)
-    ? "Managed by Paperclip"
+    ? "Managed by August Works"
     : environment.driver === "sandbox"
       ? `${getSandboxProviderLabel(environment, capabilities)} sandbox provider`
       : environment.driver === "local"
-        ? "Paperclip host"
+        ? "August Works host"
         : formatEnvironmentDriver(environment.driver);
 
   return {
@@ -534,7 +534,7 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
       {agents && agents.length === 0 && (
         <EmptyState
           icon={Bot}
-          message="Create your first agent to get started."
+          message="Add an agent when you are ready."
           action="New Agent"
           onAction={openNewAgent}
         />

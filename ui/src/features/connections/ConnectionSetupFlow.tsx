@@ -793,7 +793,7 @@ function StandardConnectionSetupFlow({
     } catch (error) {
       if (controller.signal.aborted) return;
       setOAuthPhase("error");
-      setOAuthError(error instanceof Error ? error.message : "Paperclip couldn’t start secure sign-in. Try again.");
+      setOAuthError(error instanceof Error ? error.message : "August Works couldn’t start secure sign-in. Try again.");
       onPhaseChange?.("needs_retry");
     } finally {
       if (oauthHandoffAbortRef.current === controller) oauthHandoffAbortRef.current = null;
@@ -1227,7 +1227,7 @@ function StandardConnectionSetupFlow({
           ? "Your authorization expired or was revoked. Reconnect to continue."
           : error instanceof Error
             ? error.message
-            : "Paperclip couldn’t start secure sign-in. Try again.",
+            : "August Works couldn’t start secure sign-in. Try again.",
       );
     },
   });
@@ -1399,7 +1399,7 @@ function StandardConnectionSetupFlow({
             ? "Your authorization expired or was revoked. Reconnect to continue."
             : error instanceof Error
               ? error.message
-              : "Paperclip couldn’t start secure sign-in. Try again.",
+              : "August Works couldn’t start secure sign-in. Try again.",
         );
         return;
       }
@@ -2608,7 +2608,7 @@ export function OAuthConnectStateScreen({
           }
         : {
             title: `${serverName} couldn’t connect`,
-            body: error ?? "Paperclip couldn’t start secure sign-in. Try again.",
+            body: error ?? "August Works couldn’t start secure sign-in. Try again.",
           };
 
   return (
