@@ -233,7 +233,7 @@ DDL. The extra local monolithic `pnpm test:run` invocation was deliberately
 interrupted with exit 130 after complete identical-source CI coverage passed.
 Its log and unchanged-source report remain retained as interrupted evidence.
 
-Only two non-Markdown inputs changed after the complete CI test coverage:
+The next two non-Markdown changes were CI inputs:
 `scripts/e2e-shard.mjs` now matches the existing authenticated-suite exclusion,
 and the fork verification workflow runs V4, classic V5 and authenticated V5
 browser journeys in separate job instances. This prevents a completed fixture's
@@ -243,13 +243,25 @@ with real PostgreSQL and Chromium. The initial authenticated startup failure is
 retained separately. The workflow YAML parses and preserves the aggregate
 readiness requirement and separate failure artifacts.
 
+[The subsequent CI run](https://github.com/augustkring/august-works/actions/runs/37199321321)
+at `91179a4d5821bc6d96a798790c3f8534423009f6` also passes all 29 stable test
+jobs. One general server shard passed after a single retry. Its original failure
+is retained: an existing queue-concurrency fixture exceeded its three-second
+polling deadline. The final test-only change gives the fixture its own temporary
+application home and waits up to 15 seconds for the exact expected dispatch count
+while the first execution stays blocked. All 48 tests in the changed file and the
+server package typecheck pass locally. No production runtime source changed.
+The latest commit still requires its own GitHub checks.
+
 The final source hash is
-`f79808964d7240d4c4afcfeebaa9613450f16ef4480fe5ea8dde856e75c0ef95`.
-Reports distinguish the complete CI runtime coverage, final CI-only changes and
+`c1388b461d6756fda7dad7a2e5cd3a1df3d4f10afb21f4af59c9b420c22ed0f8`.
+Reports distinguish complete CI coverage, the final test-only change and
 local interrupted execution. The actual local instance starts correctly, has no
 companies, and retains all 20 V5 flags off in persisted settings. No paid provider
 calls were made. GitHub's Dependency Review reports disabled Dependency Graph;
 aggregate CI and independent review remain unfulfilled merge gates until the
-new head is checked and repository review configuration is corrected. Final
+new head is checked and repository review configuration is corrected. CodeRabbit
+skipped review because the PR exceeds its 100-file limit and available review
+capacity; its successful status does not constitute a completed review. Final
 cold backup and restoration status is recorded separately in the private
 `v5-recovery/backups/CURRENT.json` and its referenced verification report.

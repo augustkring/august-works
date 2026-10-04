@@ -1,5 +1,8 @@
 import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -144,6 +147,8 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
   let db!: ReturnType<typeof createDb>;
   let heartbeat!: ReturnType<typeof heartbeatService>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  const previousPaperclipHome = process.env.PAPERCLIP_HOME;
+  let fixtureHome: string | undefined;
   let beforeContinuationDispatchCheck:
     | ((input: { runId: string; issueId: string }) => Promise<void>)
     | null = null;
@@ -155,6 +160,8 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
     mockAdapterExecute.mock.calls.filter(([context]) => context?.runId === runId).length;
 
   beforeAll(async () => {
+    fixtureHome = await mkdtemp(path.join(os.tmpdir(), "paperclip-stale-queue-home-"));
+    process.env.PAPERCLIP_HOME = fixtureHome;
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-stale-queue-");
     db = createDb(tempDb.connectionString);
     heartbeat = heartbeatService(db, {
@@ -202,8 +209,16 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
   });
 
   afterAll(async () => {
-    await tempDb?.cleanup();
-  });
+    try {
+      await heartbeat?.drainActiveRunExecutions();
+      await db?.$client.end({ timeout: 5 });
+      await tempDb?.cleanup();
+    } finally {
+      if (previousPaperclipHome === undefined) delete process.env.PAPERCLIP_HOME;
+      else process.env.PAPERCLIP_HOME = previousPaperclipHome;
+      if (fixtureHome) await rm(fixtureHome, { recursive: true, force: true });
+    }
+  }, 30_000);
 
   async function seedCompanyAndAgent(opts: SeedOptions = {}): Promise<SeedResult> {
     const companyId = randomUUID();
@@ -352,7 +367,10 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
     });
     try {
       await heartbeat.resumeQueuedRuns();
-      expect(await waitForCondition(() => Promise.resolve(mockAdapterExecute.mock.calls.length > 0))).toBe(true);
+      expect(await waitForCondition(
+        () => Promise.resolve(mockAdapterExecute.mock.calls.length === (sameIssue ? 1 : 2)),
+        15_000,
+      )).toBe(true);
       const runs = await db.select().from(heartbeatRuns);
       const running = runs.filter((run) => run.status === "running");
       expect(running).toHaveLength(sameIssue ? 1 : 2);
