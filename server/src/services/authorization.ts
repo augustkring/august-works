@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  agentExecutionManifests,
   authUsers,
   companyMemberships,
   heartbeatRuns,
@@ -2301,6 +2302,7 @@ export function authorizationService(db: Db | DbTransaction) {
       action: AuthorizationAction;
       resource: AuthorizationResource;
       scope?: Record<string, unknown> | null;
+      enforceResponsibleUserIntersection?: boolean;
     },
     agentDecision: AuthorizationDecision,
   ): Promise<AuthorizationDecision> {
@@ -2381,7 +2383,7 @@ export function authorizationService(db: Db | DbTransaction) {
     });
 
     logger.warn({
-      authzMode: responsibleUserAuthzShadowMode() ? "shadow" : "enforce",
+      authzMode: !input.enforceResponsibleUserIntersection && responsibleUserAuthzShadowMode() ? "shadow" : "enforce",
       code: denied.code,
       reason: userDecision.reason,
       action: input.action,
@@ -2391,7 +2393,7 @@ export function authorizationService(db: Db | DbTransaction) {
       responsibleUserId,
     }, "responsible-user authorization intersection denied");
 
-    return responsibleUserAuthzShadowMode() ? agentDecision : denied;
+    return !input.enforceResponsibleUserIntersection && responsibleUserAuthzShadowMode() ? agentDecision : denied;
   }
 
   async function decide(input: {
@@ -2399,7 +2401,16 @@ export function authorizationService(db: Db | DbTransaction) {
     action: AuthorizationAction;
     resource: AuthorizationResource;
     scope?: Record<string, unknown> | null;
+    enforceResponsibleUserIntersection?: boolean;
   }): Promise<AuthorizationDecision> {
+    // A V5 run remains subject to strict human intersection even during a
+    // rollout rollback or while legacy authorization runs in shadow mode.
+    if (!input.enforceResponsibleUserIntersection && responsibleUserAuthzShadowMode()
+      && input.actor.type === "agent" && input.actor.runId && input.actor.agentId) {
+      const [manifest] = await db.select({ id: agentExecutionManifests.id }).from(agentExecutionManifests)
+        .where(and(eq(agentExecutionManifests.runId, input.actor.runId), eq(agentExecutionManifests.companyId, input.resource.companyId!), eq(agentExecutionManifests.agentId, input.actor.agentId))).limit(1);
+      if (manifest) input = { ...input, enforceResponsibleUserIntersection: true };
+    }
     const agentDecision = await decideBase(input);
     return applyResponsibleUserIntersection(input, agentDecision);
   }

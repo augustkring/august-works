@@ -1,3 +1,4 @@
+import { isUuidLike } from "@paperclipai/shared";
 import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog } from "@paperclipai/db";
@@ -45,7 +46,7 @@ import {
   listCatalogSkillsOrEmpty,
   readCatalogSkillFile,
 } from "../services/skills-catalog.js";
-import { badRequest, conflict, forbidden, unauthorized } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound, unauthorized } from "../errors.js";
 import { assertAuthenticated, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { getTelemetryClient } from "../telemetry.js";
 import {
@@ -95,6 +96,14 @@ export function companySkillRoutes(db: Db) {
   const issues = issueService(db);
   const heartbeat = heartbeatService(db);
   const skillPolicies = companySkillPolicyService(db);
+  router.use("/companies/:companyId/skills/:skillId", async (req, _res, next) => {
+    const companyId = req.params.companyId as string, skillId = req.params.skillId as string;
+    if (isUuidLike(skillId)) {
+      assertCompanyAccess(req, companyId);
+      if (!(await svc.canReadSkill(companyId, skillId, req.actor))) throw notFound("Skill not found");
+    }
+    next();
+  });
 
   function asString(value: unknown): string | null {
     if (typeof value !== "string") return null;
@@ -331,7 +340,7 @@ export function companySkillRoutes(db: Db) {
       ],
       folderId: firstQueryString(req.query.folderId),
       includeSubtree: optionalQueryBoolean(req.query.includeSubtree),
-    }));
+    }), req.actor);
     res.json(result);
   });
 
@@ -369,7 +378,7 @@ export function companySkillRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     const skillId = req.params.skillId as string;
     assertCompanyAccess(req, companyId);
-    res.json(await svc.listVersions(companyId, skillId));
+    res.json(await svc.listVersions(companyId, skillId, req.actor));
   });
 
   router.get("/companies/:companyId/skills/:skillId/versions/:versionId", async (req, res) => {
@@ -377,7 +386,7 @@ export function companySkillRoutes(db: Db) {
     const skillId = req.params.skillId as string;
     const versionId = req.params.versionId as string;
     assertCompanyAccess(req, companyId);
-    const result = await svc.getVersion(companyId, skillId, versionId);
+    const result = await svc.getVersion(companyId, skillId, versionId, req.actor);
     if (!result) {
       res.status(404).json({ error: "Skill version not found" });
       return;

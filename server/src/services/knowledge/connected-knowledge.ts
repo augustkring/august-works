@@ -477,6 +477,7 @@ function connectedKnowledgeRequestFromContext(
   ];
 
   return connectedKnowledgeRequestSchema.parse({
+    enforceResponsibleUserIntersection: input.request.enforceResponsibleUserIntersection,
     companyId: input.request.companyId,
     agentId: input.request.agentId,
     responsibleUserId: input.request.responsibleUserId ?? null,

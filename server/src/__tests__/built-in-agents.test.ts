@@ -128,8 +128,8 @@ describeEmbeddedPostgres("built-in agents", () => {
     await db.delete(issueThreadInteractions);
     await db.delete(issues);
     await db.delete(builtInManagedResources);
-    await db.delete(companySkillVersions);
     await db.delete(companySkills);
+    await db.delete(companySkillVersions);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
     await db.delete(agentConfigRevisions);

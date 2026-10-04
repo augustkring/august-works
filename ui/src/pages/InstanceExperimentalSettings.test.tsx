@@ -3,7 +3,7 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { INSTANCE_FEATURE_KEYS } from "@paperclipai/shared";
+import { INSTANCE_FEATURE_KEYS, v5FeatureFlagsSchema } from "@paperclipai/shared";
 import type {
   InstanceExperimentalSettings as InstanceExperimentalSettingsPayload,
   InstanceExperimentalSettingsWithManaged,
@@ -70,6 +70,7 @@ const PAPERCLIP_RUNNER_TOGGLE_SELECTOR =
 
 function defaultExperimentalSettings(): InstanceExperimentalSettingsPayload {
   return {
+    ...v5FeatureFlagsSchema.parse({}),
     enableEnvironments: false,
     enableNativeRunner: false,
     enableManagedSandboxOnly: false,
@@ -973,6 +974,7 @@ describe("InstanceExperimentalSettings — card ordering and headings (PAP-393)"
     );
     expect(headings).toEqual([
       "Experimental features",
+      "V5 agent runtime and project control",
       "Paperclip Developer Mode",
       "Legacy",
     ]);

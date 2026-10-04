@@ -194,7 +194,8 @@ describeEmbeddedPostgres("native Codex server vertical slice", () => {
       resumeProviderSessionId: null,
       completionContract: native.completionContract,
       timeoutMs: 30_000,
-      environment: {},
+      // The fake provider must never edit the operator's real Codex configuration.
+      environment: { CODEX_HOME: resolve(runtimeRoot, "codex-home") },
       runnerBinary,
       runtimeRoot,
       providerLaunch: {
@@ -221,9 +222,11 @@ describeEmbeddedPostgres("native Codex server vertical slice", () => {
       },
       onSpawn: async () => undefined,
     });
-    const result = await execute.catch((error) => {
+    const result = await execute.catch(async (error) => {
+      const state = JSON.parse(await readFile(resolve(runtimeRoot!, "runner", runId, "runner-state.json"), "utf8"));
+      const failures = Object.values(state.processedCommands ?? {}).filter((command) => typeof command === "object" && command !== null && "status" in command && command.status === "failed");
       throw new Error(
-        `${error instanceof Error ? error.message : String(error)}\n${logs.join("")}`,
+        `${error instanceof Error ? error.message : String(error)}\n${logs.join("")}\nFailed fixture commands: ${JSON.stringify(failures)}`,
       );
     });
 
@@ -318,7 +321,8 @@ describeEmbeddedPostgres("native Codex server vertical slice", () => {
       resumeProviderSessionId: "codex-thread-1",
       completionContract: resumedNative.completionContract,
       timeoutMs: 30_000,
-      environment: {},
+      // The fake provider must never edit the operator's real Codex configuration.
+      environment: { CODEX_HOME: resolve(runtimeRoot, "codex-home") },
       runnerBinary,
       runtimeRoot,
       providerLaunch: {

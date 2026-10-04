@@ -918,7 +918,7 @@ async function syncInDirectoryMapping(input: {
           'cleanup_compare() { if [ -d "$compare_dir" ]; then find "$compare_dir" -type d -exec chmod u+w {} +; rm -rf "$compare_dir"; fi; rm -f "$compare_tar" "$compare_list"; };',
           "trap cleanup_compare EXIT;",
           'mkdir -m 700 "$compare_dir" || exit 43;',
-          `tar -xf ${shellQuote(remoteTar)} --no-same-owner --delay-directory-restore -C "$compare_dir" || exit 43;`,
+          `tar -xf ${shellQuote(remoteTar)} --no-same-owner --same-permissions --delay-directory-restore -C "$compare_dir" || exit 43;`,
           '(cd "$compare_dir" && find . -mindepth 1 -maxdepth 1 -print0) > "$compare_list" || exit 43;',
           'tar -cf "$compare_tar" --format=pax -C "$compare_dir" --null -T "$compare_list" || exit 43;',
           `if tar -df "$compare_tar" -C ${shellQuote(mapping.targetPath)} >/dev/null 2>&1; then rm -f ${shellQuote(remoteTar)}; exit 0; fi;`,
@@ -927,8 +927,9 @@ async function syncInDirectoryMapping(input: {
         ] : []),
         // BSD archives may revisit a directory after its parent's files. Keep
         // GNU tar from restoring a read-only skill directory's mode before all
-        // of its children are extracted; final permissions remain unchanged.
-        `tar -xf ${shellQuote(remoteTar)} --delay-directory-restore -C ${shellQuote(mapping.targetPath)} || { echo "extract failed"; exit 43; };`,
+        // of its children are extracted. Preserve host-authored permission bits
+        // independently of the sandbox umask, while retaining the sandbox owner.
+        `tar -xf ${shellQuote(remoteTar)} --no-same-owner --same-permissions --delay-directory-restore -C ${shellQuote(mapping.targetPath)} || { echo "extract failed"; exit 43; };`,
         `rm -f ${shellQuote(remoteTar)};`,
       ].join("\n");
       // `extractTarball` span: one round trip — re-check the path, `tar -xf`, and

@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, timestamp, date, index, jsonb } from "drizzle-orm/pg-core";
-import type { AgentEnvConfig } from "@paperclipai/shared";
+import { pgTable, uuid, text, timestamp, date, index, jsonb, unique } from "drizzle-orm/pg-core";
+import type { AgentEnvConfig, RoadmapPolicy } from "@paperclipai/shared";
 import { companies } from "./companies.js";
 import { goals } from "./goals.js";
 import { agents } from "./agents.js";
@@ -15,6 +15,7 @@ export const projects = pgTable(
     status: text("status").notNull().default("backlog"),
     leadAgentId: uuid("lead_agent_id").references(() => agents.id),
     targetDate: date("target_date"),
+    roadmapPolicy: jsonb("roadmap_policy").$type<RoadmapPolicy>(),
     color: text("color"),
     icon: text("icon"),
     env: jsonb("env").$type<AgentEnvConfig>(),
@@ -26,6 +27,7 @@ export const projects = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    companyIdUq: unique("projects_company_id_uq").on(table.companyId, table.id),
     companyIdx: index("projects_company_idx").on(table.companyId),
   }),
 );

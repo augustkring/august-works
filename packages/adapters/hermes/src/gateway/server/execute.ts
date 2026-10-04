@@ -118,7 +118,7 @@ function normalizeSessionKeyStrategy(value: unknown): SessionKeyStrategy {
   return "issue";
 }
 
-function normalizeBaseUrl(value: string): URL | null {
+export function normalizeBaseUrl(value: string): URL | null {
   try {
     const url = new URL(value);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
@@ -336,6 +336,7 @@ function buildRunBody(ctx: AdapterExecutionContext, sessionKey: string | null): 
     input,
     instructions,
     ...(sessionKey ? { session_id: sessionKey } : {}),
+    ...(ctx.providerRuntime ? { agent_id: ctx.providerRuntime.providerAgentRef, profile_id: ctx.providerRuntime.providerProfileRef } : {}),
   };
 }
 
@@ -704,6 +705,11 @@ export function mapFinalResultForTest(input: {
       output: output ?? "",
       usage: usage ?? null,
       cost_usd: costUsd,
+      providerReceipt: {
+        agentId: nonEmpty(payload.agent_id),
+        profileRef: nonEmpty(payload.profile_id),
+        sessionId: extractSessionId(payload),
+      },
     },
   };
 }
@@ -719,6 +725,7 @@ async function stopRun(input: {
     const stopped = await fetchJson(apiUrl(input.baseUrl, `/v1/runs/${encodeURIComponent(input.runId)}/stop`), {
       method: "POST",
       headers: input.headers,
+      signal: AbortSignal.timeout(5_000),
     });
     await input.ctx.onLog("stdout", `[hermes-gateway] stop requested for run ${input.runId}\n`);
     return asRecord(stopped);
@@ -740,6 +747,7 @@ async function fetchFinalStatus(input: {
       const status = await fetchJson(apiUrl(input.baseUrl, `/v1/runs/${encodeURIComponent(input.runId)}`), {
         method: "GET",
         headers: input.headers,
+        signal: AbortSignal.timeout(Math.max(1, Math.min(5_000, deadline - Date.now()))),
       });
       const record = asRecord(status);
       const normalized = extractStatus(status);
@@ -827,13 +835,16 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   const reconnectMs = Math.floor(clamp(parseNonNegativeNumber(ctx.config.eventReconnectMs, DEFAULT_EVENT_RECONNECT_MS), 250, 30_000));
   const pollIntervalMs = Math.floor(clamp(parseNonNegativeNumber(ctx.config.pollIntervalMs, DEFAULT_POLL_INTERVAL_MS), 250, 10_000));
   const strategy = normalizeSessionKeyStrategy(ctx.config.sessionKeyStrategy);
-  const sessionKey = resolveSessionKey({
+  const legacySessionKey = resolveSessionKey({
     strategy,
     companyId: ctx.agent.companyId,
     agentId: ctx.agent.id,
     runId: ctx.runId,
     issueId: issueIdFromContext(ctx),
   });
+  const sessionKey = ctx.providerRuntime
+    ? `${ctx.providerRuntime.sessionNamespace}:${strategy === "agent" ? "agent" : strategy === "issue" && issueIdFromContext(ctx) ? `issue:${issueIdFromContext(ctx)}` : `run:${ctx.runId}`}`
+    : legacySessionKey;
   const extraHeaders = parseHeaders(ctx.config.headers);
   const runHeaders = buildHeaders({
     apiKey,
@@ -874,6 +885,11 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   await ctx.onLog("stdout", `[hermes-gateway] creating run at ${createRunUrl} (timeout=${timeoutSec}s, session=${strategy})\n`);
   await ctx.onLog("stdout", `[hermes-gateway] request headers (redacted): ${stringifyForLog(redactForLog(runHeaders, [], 0, redactText), 3_000)}\n`);
 
+  await ctx.onCancellationReady?.();
+  if (ctx.signal?.aborted) return {
+    exitCode: null, signal: null, timedOut: false, errorCode: "cancelled", errorMessage: "Hermes execution was cancelled before dispatch",
+    resultJson: { executionCancellation: { state: "acknowledged", acknowledgedAt: new Date().toISOString() } },
+  };
   let runId: string | null = null;
   try {
     // This adapter has no local child process, so crossing into the first
@@ -884,6 +900,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       method: "POST",
       headers: runHeaders,
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs || 60_000),
     });
     runId = extractRunId(created);
     if (!runId) {
@@ -929,25 +946,43 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     timeoutTimer = setTimeout(() => resolve("timeout"), timeoutMs);
   });
 
-  const outcome = await Promise.race([state.terminalPromise, timeoutPromise]);
+  let onAbort!: () => void;
+  const cancelled = new Promise<"cancelled">((resolve) => { onAbort = () => resolve("cancelled"); });
+  ctx.signal?.addEventListener("abort", onAbort, { once: true });
+  if (ctx.signal?.aborted) onAbort();
+  const outcome = await Promise.race([state.terminalPromise, timeoutPromise, cancelled]);
+  ctx.signal?.removeEventListener("abort", onAbort);
   if (timeoutTimer) clearTimeout(timeoutTimer);
   controller.abort();
 
+  if (outcome === "cancelled") {
+    await stopRun({ ctx, baseUrl, headers: eventHeaders, runId, redactText });
+    const finalStatus = await fetchFinalStatus({ baseUrl, headers: eventHeaders, runId, deadlineMs: STOP_GRACE_MS });
+    const confirmed = Boolean(finalStatus && TERMINAL_STATUSES.has(extractStatus(finalStatus) ?? ""));
+    return {
+      exitCode: null, signal: null, timedOut: false,
+      errorCode: confirmed ? "cancelled" : "cancellation_unconfirmed",
+      errorMessage: confirmed ? "Hermes execution was cancelled" : "Hermes provider termination could not be confirmed",
+      resultJson: { run_id: runId, status: extractStatus(finalStatus), executionCancellation: { state: confirmed ? "acknowledged" : "unconfirmed", ...(confirmed ? { acknowledgedAt: new Date().toISOString() } : {}) } },
+    };
+  }
   if (outcome === "timeout") {
     await stopRun({ ctx, baseUrl, headers: eventHeaders, runId, redactText });
     const finalStatus = await fetchFinalStatus({ baseUrl, headers: eventHeaders, runId, deadlineMs: STOP_GRACE_MS });
+    const confirmed = Boolean(finalStatus && TERMINAL_STATUSES.has(extractStatus(finalStatus) ?? ""));
     return {
       exitCode: 1,
       signal: null,
       timedOut: true,
-      errorCode: "hermes_gateway_timeout",
-      errorMessage: `Hermes gateway run timed out after ${timeoutSec}s.`,
+      errorCode: confirmed ? "hermes_gateway_timeout" : "cancellation_unconfirmed",
+      errorMessage: confirmed ? `Hermes gateway run timed out after ${timeoutSec}s.` : "Hermes wait timed out; provider termination could not be confirmed",
       provider: "hermes_gateway",
       resultJson: {
         run_id: runId,
         status: extractStatus(finalStatus) ?? "timeout",
         last_event: state.lastEventName,
         final_status: redactForLog(finalStatus, [], 0, redactText),
+        executionCancellation: { state: confirmed ? "acknowledged" : "unconfirmed" },
       },
       sessionParams: {
         hermesRunId: runId,

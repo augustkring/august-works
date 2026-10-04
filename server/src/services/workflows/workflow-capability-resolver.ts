@@ -235,6 +235,7 @@ export function workflowCapabilityResolverService(db: Db) {
     search: async (
       companyId: string,
       rawInput: WorkflowCapabilitySearchQuery,
+      authorize?: (candidate: WorkflowCapabilityCandidate) => Promise<boolean>,
     ) => {
       const parsed = workflowCapabilitySearchQuerySchema.parse(rawInput);
       const candidateLimit = Math.max(parsed.limit * 6, 100);
@@ -469,10 +470,11 @@ export function workflowCapabilityResolverService(db: Db) {
           publishState: "ready", publishBlockedReason: null,
           source: { registryNodeType: "automation.artifact" },
         }));
-      const candidates = rankWorkflowCapabilities(
-        [...core, ...artifactCandidates, ...tools, ...agentCandidates],
-        parsed,
-      );
+      // V5 consumers apply current actor policy before ranking/disclosure.
+      const pool = [...core, ...artifactCandidates, ...tools, ...agentCandidates];
+      const visible: WorkflowCapabilityCandidate[] = [];
+      for (const candidate of pool) if (!authorize || await authorize(candidate)) visible.push(candidate);
+      const candidates = rankWorkflowCapabilities(visible, parsed);
       return { query: parsed.q, candidates };
     },
   };

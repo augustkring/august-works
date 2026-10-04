@@ -22,12 +22,27 @@ async function importFreshInstrumentation() {
   return await import("../instrumentation.js");
 }
 
+function mockMissingOtelPackages() {
+  vi.doMock("node:module", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("node:module")>();
+    return { ...actual, createRequire: (...args: Parameters<typeof actual.createRequire>) => {
+      const real = actual.createRequire(...args), fake = ((id: string) => real(id)) as typeof real;
+      fake.resolve = ((id: string, options?: unknown) => {
+        if (id.startsWith("@opentelemetry/")) throw Object.assign(new Error("Missing optional peer fixture"), { code: "MODULE_NOT_FOUND" });
+        return real.resolve(id, options as never);
+      }) as typeof real.resolve;
+      return fake;
+    } };
+  });
+}
+
 beforeEach(() => {
   delete process.env[ENDPOINT_ENV];
   delete process.env[PROTOCOL_ENV];
 });
 
 afterEach(() => {
+  vi.doUnmock("node:module");
   if (originalEndpoint === undefined) delete process.env[ENDPOINT_ENV];
   else process.env[ENDPOINT_ENV] = originalEndpoint;
   if (originalProtocol === undefined) delete process.env[PROTOCOL_ENV];
@@ -73,6 +88,7 @@ describe("instrumentationReady", () => {
   });
 
   it("settles with a diagnostic instead of throwing when the endpoint is set but packages are missing", async () => {
+    mockMissingOtelPackages();
     process.env[ENDPOINT_ENV] = "http://collector:4318";
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -133,6 +149,7 @@ describe("checkExactPeerVersions", () => {
 
 describe("bootstrapOtel exact-version gate", () => {
   it("does not mention the two exporters OTEL_EXPORTER_OTLP_PROTOCOL did not select", async () => {
+    mockMissingOtelPackages();
     process.env[ENDPOINT_ENV] = "http://collector:4318";
     process.env[PROTOCOL_ENV] = "http/json";
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -155,6 +172,7 @@ describe("bootstrapOtel exact-version gate", () => {
   });
 
   it("emits exactly one diagnostic when the endpoint is set and packages are absent", async () => {
+    mockMissingOtelPackages();
     process.env[ENDPOINT_ENV] = "http://collector:4318";
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 

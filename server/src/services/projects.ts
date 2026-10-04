@@ -1,3 +1,4 @@
+import { assertRoadmapFieldOwnership } from "./roadmap-field-ownership.js";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -871,6 +872,7 @@ export function projectService(db: Db) {
         .where(eq(projects.id, id))
         .then((rows) => rows[0] ?? null);
       if (!existingProject) return null;
+      await assertRoadmapFieldOwnership(db, existingProject.companyId, id, projectData, existingProject);
       if (ids && ids.length > 0) {
         await assertGoalsBelongToCompany(db, existingProject.companyId, ids);
       }

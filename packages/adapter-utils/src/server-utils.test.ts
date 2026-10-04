@@ -164,7 +164,10 @@ async function waitForPidExit(pid: number, timeoutMs = 2_000) {
         const status = await fs.readFile(`/proc/${pid}/status`, "utf8");
         if (/^State:\s+Z\b/m.test(status)) return true;
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+        // A process can disappear between kill(pid, 0) and reading its status.
+        // Linux may report either a removed proc entry or a vanished process.
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "ENOENT" || code === "ESRCH") return true;
         throw error;
       }
     }

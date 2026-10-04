@@ -1,5 +1,10 @@
+import { documentRevisions } from "./document_revisions.js";
 import {
   type AnyPgColumn,
+  type PgTableExtraConfig,
+  check,
+  foreignKey,
+  unique,
   pgTable,
   uuid,
   text,
@@ -10,7 +15,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type { CompanySkillFileInventoryEntry, CompanySkillSharingScope } from "@paperclipai/shared";
+import type { CompanySkillFileInventoryEntry, CompanySkillSharingScope, SkillEvaluationBinding } from "@paperclipai/shared";
 import { agents } from "./agents.js";
 import { companies } from "./companies.js";
 import { issues } from "./issues.js";
@@ -47,11 +52,25 @@ export const companySkills = pgTable(
     installCount: integer("install_count").notNull().default(0),
     forkCount: integer("fork_count").notNull().default(0),
     currentVersionId: uuid("current_version_id").references((): AnyPgColumn => companySkillVersions.id, { onDelete: "set null" }),
+    lifecycleState: text("lifecycle_state").notNull().default("draft"),
+    ownerAgentId: uuid("owner_agent_id"),
+    activeVersionId: uuid("active_version_id"),
+    headVersionId: uuid("head_version_id"),
+    lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
+    nextReviewAt: timestamp("next_review_at", { withTimezone: true }),
+    degradedReason: text("degraded_reason"),
+    reviewPolicy: jsonb("review_policy").$type<{ reviewIntervalDays: number; stewardUserId: string | null }>().notNull().default({ reviewIntervalDays: 90, stewardUserId: null }),
+    promotionPolicy: jsonb("promotion_policy").$type<{ allowAutonomousPromotion: boolean; minimumPairedTrials: number; minimumOutcomeScore: number; maximumCostRegressionRatio: number; requireHumanReview: boolean }>().notNull().default({ allowAutonomousPromotion: false, minimumPairedTrials: 2, minimumOutcomeScore: 0.9, maximumCostRegressionRatio: 1.25, requireHumanReview: true }),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => ({
+  (table): PgTableExtraConfig => ({
+    companyIdUnique: unique("company_skills_company_id_uq").on(table.companyId, table.id),
+    lifecycleCheck: check("company_skills_lifecycle_check", sql`${table.lifecycleState} in ('draft','proposed','testing','active','needs_revalidation','degraded','deprecated','revoked')`),
+    ownerCompanyFk: foreignKey({ columns: [table.companyId, table.ownerAgentId], foreignColumns: [agents.companyId, agents.id] }),
+    activeVersionFk: foreignKey({ columns: [table.companyId, table.id, table.activeVersionId], foreignColumns: [companySkillVersions.companyId, companySkillVersions.companySkillId, companySkillVersions.id] }),
+    headVersionFk: foreignKey({ columns: [table.companyId, table.id, table.headVersionId], foreignColumns: [companySkillVersions.companyId, companySkillVersions.companySkillId, companySkillVersions.id] }),
     companyKeyUniqueIdx: uniqueIndex("company_skills_company_key_idx").on(table.companyId, table.key),
     companyNameIdx: index("company_skills_company_name_idx").on(table.companyId, table.name),
     companyFolderIdx: index("company_skills_company_folder_idx").on(table.companyId, table.folderId),
@@ -78,11 +97,21 @@ export const companySkillVersions = pgTable(
     releaseName: text("release_name"),
     releasedAt: timestamp("released_at", { withTimezone: true }),
     fileInventory: jsonb("file_inventory").$type<CompanySkillVersionFileInventoryEntry[]>().notNull().default([]),
+    state: text("state").notNull().default("candidate"),
+    visibility: text("visibility").notNull().default("company"),
+    sourcePlaybookRevisionId: uuid("source_playbook_revision_id"),
+    validationSummary: jsonb("validation_summary").$type<Record<string, unknown>>(),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
     authorAgentId: uuid("author_agent_id").references(() => agents.id, { onDelete: "set null" }),
     authorUserId: text("author_user_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => ({
+  (table): PgTableExtraConfig => ({
+    sourcePlaybookRevisionFk: foreignKey({ name: "company_skill_versions_source_playbook_revision_fk", columns: [table.companyId, table.sourcePlaybookRevisionId], foreignColumns: [documentRevisions.companyId, documentRevisions.id] }),
+    companySkillVersionUnique: unique("company_skill_versions_company_skill_id_uq").on(table.companyId, table.companySkillId, table.id),
+    activeVersionUnique: uniqueIndex("company_skill_versions_one_active_idx").on(table.companySkillId).where(sql`${table.state} = 'active'`),
+    stateCheck: check("company_skill_versions_state_check", sql`${table.state} in ('candidate','testing','validated','active','rejected','superseded')`),
     companySkillRevisionUniqueIdx: uniqueIndex("company_skill_versions_skill_revision_idx").on(
       table.companySkillId,
       table.revisionNumber,
@@ -206,6 +235,7 @@ export const companySkillTestRuns = pgTable(
     skillVersionId: uuid("skill_version_id").notNull().references(() => companySkillVersions.id, { onDelete: "restrict" }),
     agentId: uuid("agent_id").notNull().references(() => agents.id, { onDelete: "restrict" }),
     agentConfigSnapshot: jsonb("agent_config_snapshot").$type<Record<string, unknown>>().notNull().default({}),
+    evaluationContext: jsonb("evaluation_context").$type<SkillEvaluationBinding>(),
     issueId: uuid("issue_id").notNull().references(() => issues.id, { onDelete: "restrict" }),
     templateId: text("template_id"),
     templateName: text("template_name"),
@@ -224,6 +254,8 @@ export const companySkillTestRuns = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    companyIdUnique: unique("company_skill_test_runs_company_id_uq").on(table.companyId, table.id),
+    evaluationBindingUnique: uniqueIndex("company_skill_test_runs_eval_binding_uq").on(table.companyId, sql`(${table.evaluationContext}->>'evaluationRunId')`, sql`(${table.evaluationContext}->>'caseId')`, sql`(${table.evaluationContext}->>'arm')`, sql`(${table.evaluationContext}->>'trial')`).where(sql`${table.evaluationContext} is not null`),
     companySkillCreatedIdx: index("company_skill_test_runs_company_skill_created_idx").on(
       table.companyId,
       table.skillId,

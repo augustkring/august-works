@@ -1,0 +1,3 @@
+ALTER TABLE "agent_execution_manifests" DROP CONSTRAINT "agent_execution_manifests_context_manifest_id_context_manifests_id_fk";
+--> statement-breakpoint
+ALTER TABLE "agent_execution_manifests" ADD CONSTRAINT "agent_execution_manifests_company_context_fk" FOREIGN KEY ("company_id","context_manifest_id") REFERENCES "public"."context_manifests"("company_id","id") ON DELETE no action ON UPDATE no action;

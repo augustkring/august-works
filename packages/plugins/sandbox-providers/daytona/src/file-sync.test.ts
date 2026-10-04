@@ -266,6 +266,7 @@ function createRecordingSandbox(input: {
 function createRealExecSandbox(input?: {
   uploadOverride?: (uploads: Array<{ source: string; destination: string }>) => Promise<boolean>;
   commandEnv?: NodeJS.ProcessEnv;
+  commandUmask?: number;
 }) {
   const commands: RecordedCommand[] = [];
   return {
@@ -274,7 +275,10 @@ function createRealExecSandbox(input?: {
       process: {
         executeCommand: async (command: string) => {
           commands.push({ command });
-          const result = spawnSync("/bin/sh", ["-c", command], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: input?.commandEnv });
+          const commandWithUmask = input?.commandUmask === undefined
+            ? command
+            : `umask ${input.commandUmask.toString(8)}\n${command}`;
+          const result = spawnSync("/bin/sh", ["-c", commandWithUmask], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: input?.commandEnv });
           return { exitCode: result.status ?? 1, result: (result.stdout ?? "") + (result.stderr ?? "") };
         },
       },
@@ -298,7 +302,7 @@ const gnuTar = ["gtar", "tar"].map((candidate) => {
   return resolved && spawnSync(resolved, ["--version"], { encoding: "utf8" }).stdout?.includes("GNU tar") ? resolved : null;
 }).find(Boolean);
 
-it.skipIf(!gnuTar)("extracts interleaved read-only skill directories with GNU tar and preserves their modes", async () => {
+it.skipIf(!gnuTar).each([{ mask: 0o022, label: "022" }, { mask: 0o077, label: "077" }])("extracts interleaved read-only skill directories with GNU tar and preserves their modes (umask $label)", async ({ mask }) => {
   const root = await fs.mkdtemp("/tmp/paperclip-daytona-readonly-");
   const source = path.join(root, "source");
   const remoteDir = path.join(root, "remote");
@@ -310,9 +314,11 @@ it.skipIf(!gnuTar)("extracts interleaved read-only skill directories with GNU ta
   await fs.symlink(gnuTar!, path.join(bin, "tar"));
   await fs.writeFile(path.join(source, "references", "overview.md"), "overview", { mode: 0o444 });
   await fs.writeFile(path.join(source, "references", "agents", "qa.md"), "QA instructions", { mode: 0o444 });
+  for (const file of ["references/overview.md", "references/agents/qa.md"]) await fs.chmod(path.join(source, file), 0o444);
   for (const dir of ["references/agents", "references"]) await fs.chmod(path.join(source, dir), 0o555);
   try {
     const { sandbox } = createRealExecSandbox({
+      commandUmask: mask,
       commandEnv: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
       uploadOverride: async (uploads) => {
         for (const upload of uploads) {
@@ -350,13 +356,14 @@ it.skipIf(!gnuTar)("extracts interleaved read-only skill directories with GNU ta
 
   } finally {
     for (const base of [source, target]) {
-      for (const dir of ["references/agents", "references"]) await fs.chmod(path.join(base, dir), 0o700).catch(() => undefined);
+      for (const file of ["references/overview.md", "references/agents/qa.md"]) await fs.chmod(path.join(source, file), 0o444);
+  for (const dir of ["references/agents", "references"]) await fs.chmod(path.join(base, dir), 0o700).catch(() => undefined);
     }
     await fs.rm(root, { recursive: true, force: true });
   }
 }, 30_000);
 
-it.skipIf(!gnuTar)("uploads gzip directory archives and preserves content, executable modes, and symlinks", async () => {
+it.skipIf(!gnuTar).each([{ mask: 0o022, label: "022" }, { mask: 0o077, label: "077" }])("uploads gzip directory archives and preserves content, executable modes, and symlinks (umask $label)", async ({ mask }) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-daytona-gzip-dir-"));
   const source = path.join(root, "source");
   const remoteDir = path.join(root, "remote");
@@ -367,11 +374,13 @@ it.skipIf(!gnuTar)("uploads gzip directory archives and preserves content, execu
   await fs.mkdir(bin);
   await fs.symlink(gnuTar!, path.join(bin, "tar"));
   await fs.writeFile(path.join(source, "bin", "tool.sh"), "#!/bin/sh\necho ok\n", { mode: 0o755 });
+  await fs.chmod(path.join(source, "bin", "tool.sh"), 0o755);
   await fs.symlink("bin/tool.sh", path.join(source, "tool-link"));
 
   try {
     let uploadedArchiveBytes: Buffer | undefined;
     const { sandbox } = createRealExecSandbox({
+      commandUmask: mask,
       commandEnv: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
       uploadOverride: async (uploads) => {
         uploadedArchiveBytes = await fs.readFile(uploads[0]!.source);

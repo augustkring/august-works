@@ -195,6 +195,16 @@ export interface AdapterRuntimeEvent {
 }
 
 export interface AdapterExecutionContext {
+  /** Server-owned V5 binding, supplied after current local authorization. */
+  providerRuntime?: {
+    providerType?: string;
+    providerBindingId: string;
+    providerAgentRef: string;
+    providerProfileRef: string;
+    sessionNamespace: string;
+    isolationMode: "isolated_per_presence" | "shared_trusted_runtime";
+    capabilitySnapshotHash: string;
+  };
   /** Run-scoped operator cancellation; adapters must settle before returning. */
   signal?: AbortSignal;
   /** Opt in to signal-based cancellation before starting provider work. */
@@ -454,6 +464,12 @@ export interface ServerAdapterModule {
   type: string;
   execute(ctx: AdapterExecutionContext): Promise<AdapterExecutionResult>;
   testEnvironment(ctx: AdapterEnvironmentTestContext): Promise<AdapterEnvironmentTestResult>;
+  /** Deterministic provider metadata; discovery alone never proves conformance. */
+  discoverCapabilities?: (ctx: AdapterEnvironmentTestContext) => Promise<Omit<import("@paperclipai/shared").ProviderCapabilitySnapshot, "hash">>;
+  /** Same canonical endpoint used by execute, before physical-runtime alias checks. */
+  canonicalProviderEndpoint?: (value: string) => string | null;
+  /** Adapter-owned observations from real, operator-approved retained probes. */
+  testProviderConformance?: (ctx: ProviderConformanceContext) => Promise<Record<string, boolean>>;
   acp?: AcpTargetDescriptor;
   listSkills?: (ctx: AdapterSkillContext) => Promise<AdapterSkillSnapshot>;
   syncSkills?: (ctx: AdapterSkillContext, desiredSkills: string[]) => Promise<AdapterSkillSnapshot>;
@@ -542,6 +558,20 @@ export interface ServerAdapterModule {
    * API-key-only vendor) omits it. The capability data holds no secret.
    */
   loginCapability?: import("./login-capability.js").AdapterLoginCapability;
+}
+
+export interface ProviderConformanceTarget {
+  companyId: string;
+  agentId: string;
+  providerAgentRef: string;
+  providerProfileRef: string;
+  sessionNamespace: string;
+}
+export interface ProviderConformanceContext {
+  snapshot: import("@paperclipai/shared").ProviderCapabilitySnapshot;
+  primary: ProviderConformanceTarget;
+  peer: ProviderConformanceTarget | null;
+  probe: (target: ProviderConformanceTarget, input: { prompt: string; cancelAfterMs?: number; structured?: boolean }) => Promise<{ result: AdapterExecutionResult; streamObserved: boolean; cancellationRequested: boolean }>;
 }
 
 // ---------------------------------------------------------------------------

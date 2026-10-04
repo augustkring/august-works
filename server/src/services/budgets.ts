@@ -495,6 +495,23 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
   }
 
   return {
+    projectSummary: async (companyId: string, projectId: string): Promise<BudgetPolicySummary[] | null> => {
+      const rows = await db.select().from(budgetPolicies).where(and(
+        eq(budgetPolicies.companyId, companyId), eq(budgetPolicies.scopeType, "project"),
+        eq(budgetPolicies.scopeId, projectId), eq(budgetPolicies.metric, "billed_cents"), eq(budgetPolicies.isActive, true),
+      )).limit(3);
+      for (const row of rows) {
+        if (row.amount <= 0) continue;
+        const conditions = [eq(costEvents.companyId, companyId), eq(costEvents.projectId, projectId), eq(costEvents.costStatus, "unknown")];
+        if (row.windowKind === "calendar_month_utc") {
+          const { start, end } = resolveWindow(row.windowKind);
+          conditions.push(gte(costEvents.occurredAt, start), lt(costEvents.occurredAt, end));
+        }
+        const [unknown] = await db.select({ id: costEvents.id }).from(costEvents).where(and(...conditions)).limit(1);
+        if (unknown) return null;
+      }
+      return Promise.all(rows.map((row) => buildPolicySummary(row)));
+    },
     listPolicies: async (companyId: string): Promise<BudgetPolicy[]> => {
       const rows = await listPolicyRows(companyId);
       return rows.map((row) => ({

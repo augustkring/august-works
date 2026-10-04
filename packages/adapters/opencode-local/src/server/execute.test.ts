@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -35,13 +35,16 @@ function probeResult(overrides: Record<string, unknown>) {
 
 describe("OpenCode local skill injection", () => {
   let configHome: string;
+  let fixtureHomeSpy: MockInstance<() => string>;
 
   beforeEach(async () => {
     configHome = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-opencode-test-config-"));
     vi.stubEnv("XDG_CONFIG_HOME", configHome);
+    fixtureHomeSpy = vi.spyOn(os, "homedir").mockReturnValue(configHome);
   });
 
   afterEach(async () => {
+    fixtureHomeSpy.mockRestore();
     vi.unstubAllEnvs();
     await fs.rm(configHome, { recursive: true, force: true });
   });
@@ -144,6 +147,7 @@ describe("OpenCode local skill injection", () => {
       expect((await fs.lstat(installedSkill)).isSymbolicLink()).toBe(true);
       expect(await fs.realpath(installedSkill)).toBe(await fs.realpath(skillSource));
       await expect(fs.lstat(path.join(processHome, ".claude", "skills", "paperclip"))).rejects.toThrow();
+      await expect(fs.lstat(path.join(configHome, ".claude", "skills", "paperclip"))).rejects.toThrow();
     } finally {
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;

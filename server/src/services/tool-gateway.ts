@@ -341,6 +341,12 @@ export interface ToolGatewaySession {
 
 export type ToolGatewayRuntimeSlot = ToolRuntimeSlotView;
 
+/** Server-owned delegation; never read from request bodies or gateway tokens. */
+export interface ScopedToolGatewayContext {
+  session: ToolGatewaySession;
+  assertCurrent: (tool?: ToolGatewayDescriptor) => Promise<void>;
+}
+
 export class ToolGatewayHttpError extends Error {
   constructor(
     public readonly status: number,
@@ -10087,10 +10093,32 @@ export function createToolGatewayService(
       return updated;
     },
 
-    async executeTool(input: ExecuteGatewayToolInput, workflowContext?: WorkflowGatewayContext) {
+    async listScopedTools(context: ScopedToolGatewayContext) {
+      await context.assertCurrent();
+      const tools = (await listToolsForContext(context.session)).filter(tool =>
+        tool.connectionId && ["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType));
+      const visible: ToolGatewayDescriptor[] = [];
+      // ponytail: bound per-tool authority checks to 100; paginate larger inventories.
+      for (const tool of tools.slice(0, 100)) {
+        try { await context.assertCurrent(tool); visible.push(tool); }
+        catch (error) {
+          if (!(error instanceof Error && "status" in error && error.status === 403)) throw error;
+        }
+      }
+      await context.assertCurrent();
+      return visible;
+    },
+
+    async executeTool(input: ExecuteGatewayToolInput, workflowContext?: WorkflowGatewayContext, scopedContext?: ScopedToolGatewayContext) {
+      if (scopedContext) {
+        if (workflowContext || input.approvedActionRequestId || input.callerHeaders || input.gatewayId || input.gatewayPublicId) {
+          throw new ToolGatewayHttpError(403, "Scoped tools cannot inherit another execution or approval", "scoped_tool_context_invalid");
+        }
+        await scopedContext.assertCurrent();
+      }
       const workflowBinding = workflowContext ? await resolveWorkflowConnectorSession(db, workflowContext,
         input.idempotencyKey, options.deploymentMode) : null;
-      const session = workflowBinding?.session ?? await getActiveSession(input.sessionToken, {
+      const session = scopedContext?.session ?? workflowBinding?.session ?? await getActiveSession(input.sessionToken, {
         gatewayId: input.gatewayId ?? null,
         gatewayPublicId: input.gatewayPublicId ?? null,
         protocolMethod: "tools/call",
@@ -10172,6 +10200,9 @@ export function createToolGatewayService(
         input = { ...input, tool: bound.name };
       }
       let tool = await findToolForSession(session, input.tool);
+      if (scopedContext && tool.providerType === "paperclip_virtual" && tool.name !== "run_tool") {
+        throw new ToolGatewayHttpError(403, "Scoped runs discover connected tools through tool.list", "scoped_tool_not_connected");
+      }
       if (workflowBinding && (tool.catalogEntryId !== workflowBinding.entry.id || tool.connectionId !== workflowBinding.entry.connectionId)) {
         throw new ToolGatewayHttpError(403, "Connector does not match its published binding", "workflow_connector_binding_invalid");
       }
@@ -10300,6 +10331,13 @@ export function createToolGatewayService(
         virtualToolName = "run_tool";
         tool = targetTool;
         requestedParameters = targetParameters;
+      }
+
+      if (scopedContext) {
+        if (!tool.connectionId || !["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType)) {
+          throw new ToolGatewayHttpError(403, "Scoped calls require a local connected tool", "scoped_tool_not_connected");
+        }
+        await scopedContext.assertCurrent(tool);
       }
 
       // Managed provider arguments are part of the governed call, not a
@@ -10737,7 +10775,7 @@ export function createToolGatewayService(
             throw new ToolGatewayHttpError(policyErrorStatus(accessDecision),
             accessDecision.explanation, accessDecision.reasonCode, { invocationId });
           }
-          if (session.workflowRunId && recorded.invocation.status !== "succeeded") throw new ToolGatewayHttpError(409,
+          if ((session.workflowRunId || scopedContext) && recorded.invocation.status !== "succeeded") throw new ToolGatewayHttpError(409,
             "The original tool operation is pending or failed; its effects cannot be repeated",
             "tool_idempotency_unsettled", { invocationId, status: recorded.invocation.status });
           await writeAudit({
@@ -10760,7 +10798,7 @@ export function createToolGatewayService(
             invocationId,
             status: "replayed" as const,
             tool: tool.name,
-            result: session.workflowRunId ? recorded.invocation.workflowResultJson : storedInvocationResult(recorded.invocation),
+            result: session.workflowRunId || scopedContext ? recorded.invocation.workflowResultJson : storedInvocationResult(recorded.invocation),
           };
         }
         if (accessDecision.decision === "require_approval") {
@@ -10845,6 +10883,7 @@ export function createToolGatewayService(
       try {
         const executionTimeoutMs = timeoutMs(input.timeoutMs);
         input.signal?.throwIfAborted();
+        await scopedContext?.assertCurrent(tool);
         if (
           tool.providerType === "paperclip_plugin" &&
           (!session.agentId || !session.runId)
@@ -10904,6 +10943,7 @@ export function createToolGatewayService(
           sensitiveMode: "redact",
           promptInjectionMode: "block",
         });
+        await scopedContext?.assertCurrent(tool);
         const completedAt = new Date();
         const validatedMcpResult = connectedMcpExecution
           ? asRecord(resultValidation.value)
@@ -10922,7 +10962,8 @@ export function createToolGatewayService(
             status: "succeeded",
             resultHash: resultValidation.summary.sha256 ?? null,
             resultSummary: resultValidation.summary,
-            workflowResultJson: session.workflowRunId ? typedWorkflowToolResult(tool, resultValidation.value) : null,
+            // Retain the validated scoped reply for exact, at-most-once replay.
+            workflowResultJson: scopedContext ? resultValidation.value : session.workflowRunId ? typedWorkflowToolResult(tool, resultValidation.value) : null,
             resultSizeBytes: resultValidation.summary.sizeBytes ?? null,
             completedAt,
             updatedAt: completedAt,

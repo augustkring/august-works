@@ -213,7 +213,7 @@ export const ISSUE_REVIEW_POLICIES = ["anyone", "not_creator", "human_only"] as 
 export type IssueReviewPolicy = (typeof ISSUE_REVIEW_POLICIES)[number];
 export const ISSUE_WORK_MODES = ["standard", "ask", "planning", "skill_test"] as const;
 export type IssueWorkMode = (typeof ISSUE_WORK_MODES)[number];
-export const ISSUE_HARNESS_KINDS = ["skill_test"] as const;
+export const ISSUE_HARNESS_KINDS = ["skill_test", "provider_conformance"] as const;
 export type IssueHarnessKind = (typeof ISSUE_HARNESS_KINDS)[number];
 export const MAX_ISSUE_REQUEST_DEPTH = 1024;
 

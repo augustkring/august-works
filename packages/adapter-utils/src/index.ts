@@ -1,3 +1,4 @@
+export { testGatewayProviderConformance } from "./provider-conformance.js";
 export type {
   AdapterAgent,
   AdapterRuntime,
@@ -33,6 +34,8 @@ export type {
   AdapterRuntimeCommandSpec,
   AcpTargetDescriptor,
   ServerAdapterModule,
+  ProviderConformanceContext,
+  ProviderConformanceTarget,
   QuotaWindow,
   ProviderQuotaResult,
   TranscriptEntry,

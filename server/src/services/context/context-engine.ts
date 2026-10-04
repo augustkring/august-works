@@ -84,6 +84,7 @@ export interface AssembleContextInput {
   companyId: string;
   agentId: string;
   responsibleUserId?: string | null;
+  enforceResponsibleUserIntersection?: boolean;
   runId?: string | null;
   issueId?: string | null;
   projectId?: string | null;
@@ -357,6 +358,7 @@ function foundationProvider(db: Db): ContextProvider {
     requirement: "optional",
     async retrieve({ request }) {
       const decision = await access.decide({
+        enforceResponsibleUserIntersection: request.enforceResponsibleUserIntersection,
         actor: {
           type: "agent",
           agentId: request.agentId,
@@ -543,6 +545,7 @@ function taskProvider(db: Db): ContextProvider {
         if (!issueScope) throw notFound("Context task not found");
 
         const decision = await access.decide({
+        enforceResponsibleUserIntersection: request.enforceResponsibleUserIntersection,
           actor: {
             type: "agent",
             agentId: request.agentId,
@@ -675,6 +678,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
       const principalDecision = await withContextStageDeadline(
         "authorization",
         () => access.decide({
+          enforceResponsibleUserIntersection: input.enforceResponsibleUserIntersection,
           actor: {
             type: "agent",
             agentId: input.agentId,

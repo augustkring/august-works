@@ -3240,3 +3240,22 @@ export {
   type CreateAutomationArtifact,
   type TransitionAutomationArtifactStatus,
 } from "./validators/automation-artifact.js";
+
+export * from "./v5-feature-flags.js";
+
+export * from "./agent-identities.js";
+export * from "./provider-capabilities.js";
+export * from "./organization.js";
+export * from "./cross-company-context.js";
+
+export * from "./role-packs.js";
+
+export * from "./skill-lifecycle.js";
+
+export * from "./execution-manifest.js";
+
+export * from "./playbooks.js";
+
+export * from "./project-control.js";
+
+export * from "./portfolio.js";

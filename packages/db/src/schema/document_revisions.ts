@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, index, uniqueIndex, unique } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { documents } from "./documents.js";
@@ -21,6 +21,8 @@ export const documentRevisions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    companyIdUq: unique("document_revisions_company_id_uq").on(table.companyId, table.id),
+    companyDocumentIdUq: unique("document_revisions_company_document_id_uq").on(table.companyId, table.documentId, table.id),
     documentRevisionUq: uniqueIndex("document_revisions_document_revision_uq").on(
       table.documentId,
       table.revisionNumber,

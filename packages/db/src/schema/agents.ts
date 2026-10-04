@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+import { agentIdentities } from "./agent_identities.js";
 import type { AgentAppearance } from "@paperclipai/shared";
 import {
   type AnyPgColumn,
@@ -18,6 +20,7 @@ export const agents = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id),
+    agentIdentityId: uuid("agent_identity_id").notNull().default(sql`NULL`).references(() => agentIdentities.id),
     name: text("name").notNull(),
     role: text("role").notNull().default("general"),
     title: text("title"),
@@ -42,6 +45,9 @@ export const agents = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    companyIdentityUnique: unique("agents_company_identity_uq").on(table.companyId, table.agentIdentityId),
+    companyIdIdentityUnique: unique("agents_company_id_identity_uq").on(table.companyId, table.id, table.agentIdentityId),
+    identityIdx: index("agents_identity_idx").on(table.agentIdentityId),
     companyIdUq: unique("agents_company_id_uq").on(table.companyId, table.id),
     companyStatusIdx: index("agents_company_status_idx").on(table.companyId, table.status),
     companyReportsToIdx: index("agents_company_reports_to_idx").on(table.companyId, table.reportsTo),

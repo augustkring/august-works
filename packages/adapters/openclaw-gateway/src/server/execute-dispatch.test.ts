@@ -7,6 +7,13 @@ const websocketState = vi.hoisted(() => ({
   failAgentRequests: 0,
   events: [] as string[],
   messages: [] as string[],
+  agentRequests: [] as Record<string, unknown>[],
+  methods: null as string[] | null,
+  holdRun: false,
+  waitTimedOut: false,
+  cancelled: false,
+  waitReplies: [] as Array<() => void>,
+  connections: [] as Record<string, unknown>[],
 }));
 
 vi.mock("ws", async () => {
@@ -38,6 +45,8 @@ vi.mock("ws", async () => {
     send(payload: string) {
       const request = JSON.parse(payload) as { id: string; method: string; params?: { message?: string } };
       if (request.method === "agent") websocketState.messages.push(request.params?.message ?? "");
+      if (request.method === "agent") websocketState.agentRequests.push(request.params ?? {});
+      if (request.method === "connect") websocketState.connections.push(request.params ?? {});
       websocketState.events.push(`send:${request.method}`);
       if (request.method === "agent" && websocketState.failAgentRequests > 0) {
         websocketState.failAgentRequests--;
@@ -46,8 +55,21 @@ vi.mock("ws", async () => {
         });
         return;
       }
+      if (request.method === "agent.wait" && websocketState.waitTimedOut && !websocketState.cancelled) {
+        queueMicrotask(() => this.emit("message", JSON.stringify({ type: "res", id: request.id, ok: true, payload: { status: "timeout" } })));
+        return;
+      }
+      if (request.method === "agent.wait" && websocketState.holdRun && !websocketState.cancelled) {
+        websocketState.waitReplies.push(() => this.emit("message", JSON.stringify({ type: "res", id: request.id, ok: true, payload: { status: "cancelled" } })));
+        return;
+      }
+      if (request.method === "chat.abort") { websocketState.cancelled = true; websocketState.waitReplies.forEach((reply) => reply()); }
       const responsePayload = request.method === "connect"
-        ? { protocol: 3 }
+        ? { protocol: 4, server: { version: "fixture-1" }, ...(websocketState.methods ? { features: { methods: websocketState.methods } } : {}) }
+        : request.method === "skills.status" ? { skills: [{ name: "fixture-skill", description: "Advertised fixture" }] }
+        : request.method === "tools.catalog" ? { tools: [{ id: "fixture-tool", name: "Fixture tool" }] }
+        : request.method === "agent" && websocketState.holdRun ? { status: "accepted", runId: "remote-run-1" }
+        : request.method === "agent.wait" && websocketState.cancelled ? { status: "cancelled" }
         : { status: "ok", runId: "remote-run-1", summary: "done" };
       queueMicrotask(() => {
         this.emit("message", JSON.stringify({
@@ -65,7 +87,7 @@ vi.mock("ws", async () => {
   return { WebSocket: FakeWebSocket };
 });
 
-import { execute } from "./execute.js";
+import { execute, discoverCapabilities } from "./execute.js";
 
 function createContext(input: {
   onDispatch?: () => void;
@@ -108,10 +130,58 @@ describe("openclaw_gateway execute dispatch boundary", () => {
     websocketState.failAgentRequests = 0;
     websocketState.events = [];
     websocketState.messages = [];
+    websocketState.agentRequests = [];
+    websocketState.methods = null;
+    websocketState.holdRun = false;
+    websocketState.waitTimedOut = false;
+    websocketState.cancelled = false;
+    websocketState.waitReplies = [];
+    websocketState.connections = [];
   });
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("routes a V5 presence through its pinned provider agent and namespace instead of legacy configuration", async () => {
+    const ctx = createContext();
+    ctx.config.agentId = "legacy-agent";
+    ctx.config.sessionKey = "shared-legacy-session";
+    ctx.providerRuntime = { providerBindingId: "binding-1", providerAgentRef: "presence-provider", providerProfileRef: "presence-profile", sessionNamespace: "aw:company-1:agent-1", isolationMode: "isolated_per_presence", capabilitySnapshotHash: "capabilities-1" };
+    expect((await execute(ctx)).exitCode).toBe(0);
+    expect(websocketState.agentRequests[0]).toMatchObject({ agentId: "presence-provider", sessionKey: "agent:presence-provider:aw:company-1:agent-1:issue:issue-1" });
+  });
+
+  it("discovers read-only method and inventory advertisements without issuing provider work or claiming isolation", async () => {
+    websocketState.methods = ["agent", "agent.wait", "chat.abort", "skills.status", "tools.catalog"];
+    const ctx = createContext(), result = await discoverCapabilities({ companyId: ctx.agent.companyId, adapterType: "openclaw_gateway", config: ctx.config });
+    expect(result).toMatchObject({ provider: "openclaw", version: "fixture-1", features: { sessions: true, cancellation: true, skillsDiscovery: true, toolDiscovery: true, memoryScoping: false, steering: false }, skills: [{ id: "fixture-skill" }], tools: [{ id: "fixture-tool" }] });
+    expect(websocketState.connections[0]?.scopes).toEqual(["operator.read"]);
+    expect(websocketState.agentRequests).toHaveLength(0);
+    await expect(discoverCapabilities({ companyId: ctx.agent.companyId, adapterType: "openclaw_gateway", config: { ...ctx.config, url: "ws://provider.test" } })).rejects.toThrow("secure gateway");
+  });
+
+  it("confirms a dispatched provider cancellation through its terminal wait result", async () => {
+    websocketState.methods = ["agent", "agent.wait", "chat.abort"];
+    websocketState.holdRun = true;
+    const ctx = createContext(), controller = new AbortController();
+    ctx.signal = controller.signal;
+    ctx.onCancellationReady = vi.fn(async () => {});
+    ctx.onDispatch = () => queueMicrotask(() => controller.abort());
+    expect(await execute(ctx)).toMatchObject({ errorCode: "cancelled", resultJson: { status: "cancelled" } });
+    expect(ctx.onCancellationReady).toHaveBeenCalledOnce();
+    expect(websocketState.events).toContain("send:chat.abort");
+  });
+
+  it.each([true, false])("settles a V5 wait timeout with actual stop proof (cancel advertised=%s)", async (canCancel) => {
+    websocketState.methods = canCancel ? ["agent", "agent.wait", "chat.abort"] : ["agent", "agent.wait"];
+    websocketState.holdRun = true; websocketState.waitTimedOut = true;
+    const ctx = createContext();
+    ctx.providerRuntime = { providerBindingId: "binding", providerAgentRef: "physical-agent", providerProfileRef: "profile", sessionNamespace: "scope", isolationMode: "isolated_per_presence", capabilitySnapshotHash: "hash" };
+    const result = await execute(ctx);
+    expect(result).toMatchObject({ timedOut: true, errorCode: canCancel ? "openclaw_gateway_wait_timeout" : "cancellation_unconfirmed", resultJson: { executionCancellation: { state: canCancel ? "acknowledged" : "unconfirmed" } } });
+    expect(websocketState.events.includes("send:chat.abort")).toBe(canCancel);
+    expect(websocketState.connectionAttempts).toBe(1);
   });
 
   it.each([false, true])("sends conversation policy without the issue-completion workflow (resumed=%s)", async (resumed) => {

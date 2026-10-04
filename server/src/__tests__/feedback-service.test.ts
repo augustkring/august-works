@@ -661,7 +661,8 @@ describeEmbeddedPostgres("feedbackService.saveIssueVote", () => {
     expect(JSON.stringify(issueContextItems)).toContain("[REDACTED_PHONE]");
     expect(sourceRun?.id).toBe(runId);
     expect(JSON.stringify(sourceRun)).toContain("gpt-5.4");
-    expect(skillItems?.[1]?.sourceLocator).toBe("https://github.com/octo/research/tree/main/skills/public-skill");
+    expect(skillItems).toHaveLength(2);
+    expect(skillItems?.find((skill) => skill.key === "octo/research/public-skill")?.sourceLocator).toBe("https://github.com/octo/research/tree/main/skills/public-skill");
     expect(instructions).toBeNull();
     expect(runtime?.configuredInstructionsBundleMode).toBe("external");
     expect(runtime?.configuredInstructionsFilePath).toBeNull();

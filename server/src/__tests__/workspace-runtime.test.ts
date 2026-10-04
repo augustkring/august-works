@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { parse as parseEnvContents } from "dotenv";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   activityLog,
   agents,
@@ -436,6 +436,14 @@ function createWorkspaceOperationRecorderDouble() {
   return { recorder, operations };
 }
 
+let defaultFixtureHome: string | null = null;
+beforeEach(async () => {
+  if (!process.env.PAPERCLIP_HOME) {
+    defaultFixtureHome = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-workspace-runtime-home-"));
+    process.env.PAPERCLIP_HOME = defaultFixtureHome;
+  }
+  process.env.PAPERCLIP_WORKTREES_DIR ??= path.join(process.env.PAPERCLIP_HOME, "worktrees");
+});
 afterEach(async () => {
   await Promise.all(
     Array.from(leasedRunIds).map(async (runId) => {
@@ -449,6 +457,7 @@ afterEach(async () => {
   delete process.env.PAPERCLIP_WORKTREES_DIR;
   delete process.env.DATABASE_URL;
   await resetRuntimeServicesForTests();
+  if (defaultFixtureHome) { await fs.rm(defaultFixtureHome, { recursive: true, force: true }); defaultFixtureHome = null; }
 });
 
 describe("sanitizeRuntimeServiceBaseEnv", () => {

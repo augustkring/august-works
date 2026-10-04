@@ -233,3 +233,20 @@ export { aiConnectionDefaults } from "./ai_connection_defaults.js";
 export { aiProviderDefaults } from "./ai_provider_defaults.js";
 export * from "./email.js";
 export { announcementDismissals, announcementPublications } from "./announcement_dismissals.js";
+
+export * from "./agent_identities.js";
+export * from "./agent_provider_bindings.js";
+export * from "./organization.js";
+export * from "./cross_company_context.js";
+
+export * from "./role_packs.js";
+
+export * from "./skill_lifecycle.js";
+
+export * from "./execution_manifests.js";
+
+export * from "./playbooks.js";
+
+export * from "./project_control.js";
+
+export * from "./portfolio_capabilities.js";

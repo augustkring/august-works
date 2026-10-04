@@ -1,6 +1,6 @@
 import type { AdapterSessionCodec } from "@paperclipai/adapter-utils";
 
-export { execute, resolveSessionKey, parseSseFramesForTest, mapFinalResultForTest } from "./execute.js";
+export { execute, normalizeBaseUrl, resolveSessionKey, parseSseFramesForTest, mapFinalResultForTest } from "./execute.js";
 export { testEnvironment } from "./test.js";
 export { getConfigSchema } from "./config-schema.js";
 
@@ -43,3 +43,6 @@ export const sessionCodec: AdapterSessionCodec = {
     return readString(params.hermesSessionId) ?? readString(params.sessionKey) ?? readString(params.hermesRunId);
   },
 };
+
+export { discoverCapabilities } from "./capabilities.js";
+export { testProviderConformance } from "./conformance.js";

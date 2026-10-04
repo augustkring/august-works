@@ -60,6 +60,7 @@ export const connectedKnowledgeProviderDescriptorSchema: z.ZodType<ConnectedKnow
 export const connectedKnowledgeRequestSchema: z.ZodType<ConnectedKnowledgeRequest> =
   z
     .object({
+      enforceResponsibleUserIntersection: z.boolean().optional(),
       companyId: z.string().guid(),
       agentId: z.string().guid(),
       responsibleUserId: boundedNullableIdSchema,

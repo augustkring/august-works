@@ -1,4 +1,5 @@
 import { experimentalApiMetadata } from "./experimental-api-metadata.js";
+import { v5ApiPaths } from "./v5-api-paths.js";
 import {
   experimentalApiPaths,
   experimentalApiQueries,
@@ -11671,6 +11672,29 @@ for (const [method, path, body] of experimentalApiPaths) {
       400: responses.badRequest,
       403: responses.forbidden,
       404: responses.notFound,
+    },
+  });
+}
+
+for (const operation of v5ApiPaths) {
+  registry.registerPath({
+    method: operation.method,
+    path: operation.path,
+    tags: ["V5"],
+    summary: `${operation.method.toUpperCase()} ${operation.path}`,
+    description: "Requires the applicable V5 feature flags and current local actor authority. Identities, profiles, manifests, Role Packs and Skills grant no access by themselves. Feature rollback and foreign objects preserve the 404 boundary.",
+    request: {
+      params: z.object(Object.fromEntries([...operation.path.matchAll(/\{([^}]+)\}/g)].map((match) => [match[1], z.string()]))),
+      ...(operation.path.endsWith("/runtime/capabilities") ? { query: z.object({ q: z.string().max(200).optional() }) } : {}),
+      ...(operation.body ? { body: { required: true, content: { "application/json": { schema: operation.body } } } } : {}),
+    },
+    responses: {
+      [operation.successStatus]: responses.ok(),
+      400: responses.badRequest,
+      403: responses.forbidden,
+      404: responses.notFound,
+      409: responses.conflict,
+      422: { description: "The requested transition is incompatible with the current governed state." },
     },
   });
 }

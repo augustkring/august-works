@@ -1,3 +1,4 @@
+import { assertRoadmapFieldOwnership } from "./roadmap-field-ownership.js";
 import { mirrorSlackBoardComment, slackBoardReplyBindings } from "./slack-board-messages.js";
 import { assertAgentRunWriteAllowed } from "../agent-run-cancellation.js";
 import { externalConversationStateSql, nonIdleSlackIssueCondition, resumeSlackConversation } from "./slack-conversation-state.js";
@@ -4952,6 +4953,14 @@ const issueListSelect = {
   unblockDescriptor: issues.unblockDescriptor,
   blockedTransitionAt: issues.blockedTransitionAt,
   blockedOwnerNotifiedAt: issues.blockedOwnerNotifiedAt,
+  plannedStartAt: issues.plannedStartAt,
+  plannedEndAt: issues.plannedEndAt,
+  forecastStartAt: issues.forecastStartAt,
+  forecastEndAt: issues.forecastEndAt,
+  forecastConfidence: issues.forecastConfidence,
+  forecastReason: issues.forecastReason,
+  milestoneId: issues.milestoneId,
+  estimatedEffortMinutes: issues.estimatedEffortMinutes,
   startedAt: issues.startedAt,
   completedAt: issues.completedAt,
   cancelledAt: issues.cancelledAt,
@@ -10611,6 +10620,7 @@ export function issueService(db: Db) {
         .where(idPredicate)
         .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
       if (!existing) return null;
+      await assertRoadmapFieldOwnership(dbOrTx as Db, existing.companyId, existing.projectId, data, existing);
       if (data.parentId !== undefined && data.parentId !== existing.parentId) {
         await assertExecutionTaskParent(dbOrTx, existing.companyId, data.parentId);
       }

@@ -1,3 +1,4 @@
+import type { V5FeatureFlags } from "../v5-feature-flags.js";
 import type { FeedbackDataSharingPreference } from "./feedback.js";
 
 export const DAILY_RETENTION_PRESETS = [3, 7, 14] as const;
@@ -41,7 +42,7 @@ export interface InstanceGeneralSettings {
   executionMode?: InstanceExecutionMode;
 }
 
-export interface InstanceExperimentalSettings {
+export interface InstanceExperimentalSettings extends V5FeatureFlags {
   enableEnvironments: boolean;
   /**
    * Exposes the experimental Paperclip Runner adapter for new selections.

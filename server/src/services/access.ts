@@ -408,6 +408,7 @@ export function accessService(db: Db) {
     action: Parameters<typeof authorization.decide>[0]["action"];
     resource: AuthorizationResource;
     scope?: Record<string, unknown> | null;
+    enforceResponsibleUserIntersection?: boolean;
   }) {
     return authorization.decide(input);
   }

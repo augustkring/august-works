@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { getArtifactSandboxTestSupport } from "../../__tests__/helpers/artifact-sandbox.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
@@ -59,10 +59,7 @@ async function expectDatabaseCause(
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe.sequential : describe.skip;
 
-const qualifiedLinuxArtifactSandbox =
-  process.platform === "linux" &&
-  existsSync("/usr/bin/bwrap") &&
-  existsSync("/usr/bin/prlimit");
+const qualifiedLinuxArtifactSandbox = (await getArtifactSandboxTestSupport()).supported;
 
 function userActor(userId: string): AutomationArtifactMutationActor {
   const principal: ExecutionPrincipal = { type: "user", userId };
