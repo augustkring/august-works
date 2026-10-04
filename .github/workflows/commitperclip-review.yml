@@ -33,14 +33,12 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Generate commitperclip token
+      - name: Select review token
         id: token
-        run: |
-          TOKEN=$(node .github/scripts/get-bot-token.mjs)
-          echo "::add-mask::$TOKEN"
-          echo "value=$TOKEN" >> $GITHUB_OUTPUT
+        run: node .github/scripts/get-review-token.mjs
         env:
           COMMITPERCLIP_KEY: ${{ secrets.COMMITPERCLIP_KEY }}
+          WORKFLOW_TOKEN: ${{ github.token }}
 
       - name: Run quality gates
         id: quality
@@ -49,6 +47,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.token.outputs.value }}
+          COMMENT_AUTHOR: ${{ steps.token.outputs.comment_author }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -59,5 +58,5 @@ jobs:
           github.event.pull_request.user.login != 'dependabot[bot]' &&
           steps.quality.outcome == 'failure'
         run: |
-          echo "One or more quality gates failed. See commitperclip comment on the PR for details."
+          echo "One or more quality gates failed. See the quality-check comment on the PR for details."
           exit 1
