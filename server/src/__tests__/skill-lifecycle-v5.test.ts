@@ -39,6 +39,7 @@ describe.skipIf(!support.supported)("V5 immutable Skill candidates", () => {
     const cases = [{ name: "Positive", input: "Evaluate this matching task", shouldTrigger: true, risk: "low" as const, rubric: { requiredText: [], forbiddenText: [], requiredTools: [], prohibitedTools: [], maximumCostCents: null, maximumRuntimeMs: null, requiresHumanJudgement: true } }, { name: "Negative", input: "An unrelated task", shouldTrigger: false, risk: "low" as const, rubric: { requiredText: [], forbiddenText: [], requiredTools: [], prohibitedTools: [], maximumCostCents: null, maximumRuntimeMs: null, requiresHumanJudgement: true } }];
     const original = await svc.createSuite(f.actor, f.home, f.skillId, { name: "Initial cases", requiredForPromotion: true, cases });
     const historicalCases = (await svc.getSuite(f.actor, f.home, f.skillId, original.id)).cases;
+    expect(historicalCases).toEqual([...original.cases].sort((a, b) => a.id.localeCompare(b.id)));
     const input = { reason: "Replace obsolete domain examples with reviewed current cases", replacement: { name: "Updated cases", requiredForPromotion: true, cases: cases.map((item) => ({ ...item, input: item.input + " for the updated domain" })) } };
     await expect(svc.replaceSuite({ type: "agent", source: "agent_jwt", agentId: f.presence.id, companyId: f.home, onBehalfOfUserId: f.userId }, f.home, f.skillId, original.id, input)).rejects.toMatchObject({ status: 403 });
     const next = await svc.replaceSuite(f.actor, f.home, f.skillId, original.id, input);

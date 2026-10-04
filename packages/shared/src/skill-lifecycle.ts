@@ -31,3 +31,5 @@ export const createGovernedSkillSchema = z.object({ slug: z.string().regex(/^[a-
 
 export type SkillPromotionPolicy = z.infer<typeof skillPromotionPolicySchema>;
 export type SkillReviewPolicy = z.infer<typeof skillReviewPolicySchema>;
+
+export const reviewSkillOverlapSchema = z.object({ rationale: z.string().trim().min(20).max(4000) }).strict();

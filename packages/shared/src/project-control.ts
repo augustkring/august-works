@@ -32,3 +32,7 @@ export type RoadmapProposalRequest = z.input<typeof roadmapProposalSchema>;
 export type CreateMilestoneInput = z.input<typeof createMilestoneSchema>;
 
 export const updateMilestoneSchema = z.object({ expectedUpdatedAt: instant, name: z.string().trim().min(1).max(200).optional(), description: z.string().max(4000).optional(), status: z.enum(MILESTONE_STATUSES).optional(), targetDate: calendarDate.nullable().optional(), plannedStartAt: instant.nullable().optional(), plannedEndAt: instant.nullable().optional() }).strict().refine((v) => !v.plannedStartAt || !v.plannedEndAt || Date.parse(v.plannedEndAt) >= Date.parse(v.plannedStartAt), "Milestone end must not precede start");
+
+export const createRoadmapBaselineSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
+
+export const reviewRoadmapProposalSchema = z.object({ accept: z.boolean(), rationale: z.string().trim().min(10).max(4000) }).strict();

@@ -35,4 +35,7 @@ export const attachProviderBindingSchema = z.object({
   providerBindingId: z.string().uuid(),
   providerProfileRef: z.string().min(1).max(200),
 }).strict();
+export const providerConformanceInputSchema = z.object({ acknowledgeProviderRuns: z.literal(true), maximumCostCents: z.number().int().min(1).max(10000), isolationPeer: z.object({ companyId: z.string().uuid(), agentId: z.string().uuid() }).strict().nullable().default(null) }).strict();
 export const acknowledgeSharedRuntimeSchema = z.object({ warningVersion: z.literal(PROVIDER_ISOLATION_WARNING_VERSION), acknowledged: z.literal(true) }).strict();
+
+export const revalidateProviderBindingSchema = z.object({ expectedSnapshotHash: z.string().min(1).max(100), rationale: z.string().trim().min(20).max(4000) }).strict();

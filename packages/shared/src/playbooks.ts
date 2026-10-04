@@ -22,3 +22,5 @@ export interface PlaybookReviewResult {
   synchronizationFailures: Array<{ skillId: string | null; reason: string }>;
 }
 export type ProjectPlaybookSkillInput = z.input<typeof projectPlaybookSkillSchema>;
+
+export const reviewPlaybookProposalSchema = z.object({ accept: z.boolean(), rationale: z.string().trim().min(10).max(4000) }).strict();

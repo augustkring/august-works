@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import type { AcpRuntimeOptions } from "acpx/runtime";
 import type { AdapterExecutionContext, AdapterRuntimeMcpAccess } from "@paperclipai/adapter-utils";
 import {
@@ -48,6 +48,10 @@ import {
 
 
 const tempRoots: string[] = [];
+let fixtureHomeSpy: MockInstance<() => string>;
+beforeEach(async () => {
+  fixtureHomeSpy = vi.spyOn(os, "homedir").mockReturnValue(await makeTempRoot());
+});
 
 async function makeTempRoot() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-acpx-skills-"));
@@ -56,6 +60,7 @@ async function makeTempRoot() {
 }
 
 afterEach(async () => {
+  fixtureHomeSpy?.mockRestore();
   // A remote run stages a process-session bridge whose detached event writer can
   // still be flushing a trailing event file into `.../process-sessions/<id>/events`
   // when the run's own best-effort `client.remove(sessionDir)` (which production

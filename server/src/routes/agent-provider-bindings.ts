@@ -1,9 +1,8 @@
 import { providerDiscoveryService } from "../services/provider-discovery.js";
-import { providerConformanceService, providerConformanceInputSchema } from "../services/provider-conformance.js";
-import { z } from "zod";
+import { providerConformanceService } from "../services/provider-conformance.js";
 import { Router } from "express";
 import type { Db } from "@paperclipai/db";
-import { acknowledgeSharedRuntimeSchema, attachProviderBindingSchema, createProviderBindingSchema } from "@paperclipai/shared";
+import { revalidateProviderBindingSchema, acknowledgeSharedRuntimeSchema, attachProviderBindingSchema, createProviderBindingSchema, providerConformanceInputSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { assertCompanyAccess } from "./authz.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
@@ -34,7 +33,7 @@ export function agentProviderBindingRoutes(db: Db) {
     const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId);
     res.json(await providerConformanceService(db).test(req.actor, companyId, req.params.agentId as string, req.body));
   });
-  router.post(`${base}/revalidate`, validate(z.object({ expectedSnapshotHash: z.string().min(1).max(100), rationale: z.string().trim().min(20).max(4000) }).strict()), async (req, res) => {
+  router.post(`${base}/revalidate`, validate(revalidateProviderBindingSchema), async (req, res) => {
     const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId);
     res.json(await svc.revalidate(req.actor, companyId, req.params.agentId as string, req.body.expectedSnapshotHash, req.body.rationale));
   });

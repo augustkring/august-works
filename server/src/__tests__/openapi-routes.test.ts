@@ -12,6 +12,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROUTES_DIR = path.resolve(__dirname, "../routes");
 
 const apiPrefixes: Record<string, string> = {
+  "agent-identities.ts": "/api",
+  "agent-provider-bindings.ts": "/api",
+  "agent-runtime-fabric.ts": "/api",
+  "cross-company-context.ts": "/api",
+  "organization.ts": "/api",
+  "playbooks.ts": "/api",
+  "portfolio.ts": "/api",
+  "project-control.ts": "/api",
+  "role-packs.ts": "/api",
+  "skill-evaluations.ts": "/api",
+  "skill-lifecycle.ts": "/api",
   "pipelines.ts": "/api",
   "cases.ts": "/api",
   "smoke-lab.ts": "/api",
@@ -173,6 +184,7 @@ function loadActualRoutes() {
     if (explicitOpenApiCoverageExclusions.has(file)) continue;
     const prefix = apiPrefixes[file];
     const source = fs.readFileSync(path.join(ROUTES_DIR, file), "utf8");
+    const localConstants = Object.fromEntries([...source.matchAll(/\b([A-Za-z_$][\w$]*)\s*=\s*(["'`])([^"'`]+)\2/g)].map((match) => [match[1], match[3]]));
     if (!prefix) {
       if (ROUTER_METHOD_PATTERN.test(source)) {
         unknownRouteFiles.push(file);
@@ -182,13 +194,18 @@ function loadActualRoutes() {
 
     for (const match of source.matchAll(ROUTE_LITERAL_PATTERN)) {
       const method = match[1].toUpperCase();
-      const routePath = match[2];
+      const routePath = match[2].replace(/\$\{([A-Za-z_$][\w$]*)\}/g, (placeholder, name: string) => localConstants[name] ?? placeholder);
       const operation = `${method} ${normalizeExpressPath(resolveMountedPath(file, prefix, routePath))}`;
       if (explicitOpenApiOperationCoverageExclusions.has(operation)) {
         excludedRoutes.add(operation);
       } else {
         routes.add(operation);
       }
+    }
+
+    for (const match of source.matchAll(/router\.(get|post|put|patch|delete)\(\s*([A-Za-z_$][\w$]*)\s*,/g)) {
+      const routePath = localConstants[match[2]];
+      if (routePath) routes.add(`${match[1].toUpperCase()} ${normalizeExpressPath(resolveMountedPath(file, prefix, routePath))}`);
     }
 
     if (
@@ -755,6 +772,24 @@ describe("openapi routes", () => {
     expect(
       spec.paths["/api/chat-webhooks/{publicId}/{provider}"],
     ).toBeUndefined();
+  });
+
+  it("documents bounded V5 consent, strict draft creation and canonical schedule review", () => {
+    const spec = buildOpenApiSpec();
+    const conformance = spec.paths["/api/companies/{companyId}/agents/{agentId}/provider-binding/conformance"].post;
+    const input = conformance.requestBody.content["application/json"].schema;
+    expect(input.additionalProperties).toBe(false);
+    expect(input.required).toEqual(expect.arrayContaining(["acknowledgeProviderRuns", "maximumCostCents"]));
+    expect(input.properties.acknowledgeProviderRuns).toEqual({ type: "boolean", enum: [true] });
+    expect(input.properties.maximumCostCents).toMatchObject({ type: "integer", minimum: 1, maximum: 10000 });
+    for (const code of [403, 404, 409]) expect(conformance.responses[code]).toBeDefined();
+    const draft = spec.paths["/api/companies/{companyId}/skills/governed-drafts"].post;
+    expect(draft.responses[201]).toBeDefined();
+    expect(draft.requestBody.content["application/json"].schema.additionalProperties).toBe(false);
+    const search = spec.paths["/api/companies/{companyId}/runtime/capabilities"].get;
+    expect(search.parameters).toContainEqual(expect.objectContaining({ name: "q", in: "query", required: false, schema: { type: "string", maxLength: 200 } }));
+    const review = spec.paths["/api/companies/{companyId}/projects/{projectId}/roadmap/proposals/{proposalId}/review"].post;
+    expect(review.requestBody.content["application/json"].schema.required).toEqual(expect.arrayContaining(["accept", "rationale"]));
   });
 
   it("covers the mounted server routes exactly", () => {

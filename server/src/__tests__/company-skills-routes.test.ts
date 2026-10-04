@@ -1503,7 +1503,9 @@ describe("company skill mutation permissions", () => {
       categories: ["git", "memory"],
       scope: "company",
       include: ["lastEditor"],
-    });
+      folderId: undefined,
+      includeSubtree: undefined,
+    }, { type: "board", source: "local_implicit" });
 
     await request(app).get("/api/companies/company-1/skills/categories").expect(200);
     expect(mockCompanySkillService.categoryCounts).toHaveBeenCalledWith("company-1");

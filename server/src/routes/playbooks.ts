@@ -1,7 +1,6 @@
 import { Router } from "express";
 import type { Db } from "@paperclipai/db";
-import { createPlaybookSchema, playbookDraftSchema, updatePlaybookMetadataSchema, proposePlaybookSchema, reviewPlaybookSchema, linkPlaybookSkillSchema, projectPlaybookSkillSchema } from "@paperclipai/shared";
-import { z } from "zod";
+import { reviewPlaybookProposalSchema, createPlaybookSchema, playbookDraftSchema, updatePlaybookMetadataSchema, proposePlaybookSchema, reviewPlaybookSchema, linkPlaybookSkillSchema, projectPlaybookSkillSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { assertCompanyAccess } from "./authz.js";
 import { playbookService } from "../services/playbooks.js";
@@ -22,7 +21,7 @@ export function playbookRoutes(db: Db) {
   router.patch(`${base}/:id/metadata`, validate(updatePlaybookMetadataSchema), async (req, res) => { res.json(await svc.updateMetadata(req.actor, req.params.companyId as string, req.params.id as string, req.body)); });
   router.post(`${base}/:id/review`, validate(reviewPlaybookSchema), async (req, res) => { res.json(await svc.review(req.actor, req.params.companyId as string, req.params.id as string, req.body)); });
   router.post(`${base}/:id/proposals`, validate(proposePlaybookSchema), async (req, res) => { res.status(201).json(await svc.propose(req.actor, req.params.companyId as string, req.params.id as string, req.body)); });
-  router.post(`${base}/:id/proposals/:proposalId/review`, validate(z.object({ accept: z.boolean(), rationale: z.string().trim().min(10).max(4000) }).strict()), async (req, res) => { res.json(await svc.reviewProposal(req.actor, req.params.companyId as string, req.params.id as string, req.params.proposalId as string, req.body.accept, req.body.rationale)); });
+  router.post(`${base}/:id/proposals/:proposalId/review`, validate(reviewPlaybookProposalSchema), async (req, res) => { res.json(await svc.reviewProposal(req.actor, req.params.companyId as string, req.params.id as string, req.params.proposalId as string, req.body.accept, req.body.rationale)); });
   router.post(`${base}/:id/skill-links`, validate(linkPlaybookSkillSchema), async (req, res) => { res.status(201).json(await svc.linkSkill(req.actor, req.params.companyId as string, req.params.id as string, req.body)); });
   router.post(`${base}/:id/compile-skill-candidate`, validate(projectPlaybookSkillSchema), async (req, res) => { res.status(201).json(await svc.projectSkill(req.actor, req.params.companyId as string, req.params.id as string, req.body)); });
   return router;

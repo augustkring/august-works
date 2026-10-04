@@ -3,6 +3,7 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { agents, agentIdentities, agentPresenceRuntimeBindings, heartbeatRuns, type Db } from "@paperclipai/db";
 import type { ProviderConformanceTarget } from "@paperclipai/adapter-utils";
 import { z } from "zod";
+import { providerConformanceInputSchema } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../errors.js";
 import { getServerAdapter } from "../adapters/index.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -16,7 +17,7 @@ import { budgetService } from "./budgets.js";
 import { costService } from "./costs.js";
 import { logActivity } from "./activity-log.js";
 
-export const providerConformanceInputSchema = z.object({ acknowledgeProviderRuns: z.literal(true), maximumCostCents: z.number().int().min(1).max(10000), isolationPeer: z.object({ companyId: z.string().uuid(), agentId: z.string().uuid() }).strict().nullable().default(null) }).strict();
+export { providerConformanceInputSchema } from "@paperclipai/shared";
 
 /** Operator-only bootstrapping, with real retained runs and no platform tools. */
 export function providerConformanceService(db: Db) {

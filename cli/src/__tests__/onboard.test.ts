@@ -89,6 +89,7 @@ function createFreshConfigPath() {
 }
 
 describe("onboard", () => {
+  let fixtureHome: string;
   beforeEach(() => {
     process.env = { ...ORIGINAL_ENV };
     delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
@@ -112,6 +113,8 @@ describe("onboard", () => {
     delete process.env.PAPERCLIP_OPEN_ON_LISTEN;
     delete process.env.PAPERCLIP_NO_BROWSER;
     delete process.env.HOST;
+    fixtureHome = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-onboard-home-"));
+    process.env.PAPERCLIP_HOME = fixtureHome;
     runCommandMock.mockReset();
   });
 
@@ -119,6 +122,7 @@ describe("onboard", () => {
     process.env = { ...ORIGINAL_ENV };
     process.chdir(ORIGINAL_CWD);
     process.exitCode = ORIGINAL_EXIT_CODE;
+    fs.rmSync(fixtureHome, { recursive: true, force: true });
   });
 
   it("preserves an existing config when rerun without flags", async () => {
