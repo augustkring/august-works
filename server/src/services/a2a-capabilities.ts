@@ -32,16 +32,26 @@ export function mapA2AAgentCard(raw: unknown) {
   const features = Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map((key) => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>;
   features.skillsDiscovery = true;
   features.structuredOutput = card.defaultOutputModes?.includes("application/json") ?? false;
-  return { provider: "a2a", version: card.version, protocolVersion: card.protocolVersion ?? null, providerOrganization: card.provider?.organization ?? null, interfaces, securityRequirements: card.securityRequirements ?? card.security ?? [], features, skills: card.skills.map((skill) => ({ id: skill.id, name: skill.name, description: skill.description, version: card.version })), tools: [], discoveredAt: new Date().toISOString() };
+  // A supported transport declares operations, never passing conformance.
+  if (card.protocolVersion === "0.3.0" && interfaces.some(item => item.protocol.toUpperCase() === "JSONRPC")) {
+    features.sessions = true;
+    features.cancellation = true;
+  }
+  return { provider: "a2a", streaming: card.capabilities.streaming ?? false, providerAgentRef: card.name, version: card.version, protocolVersion: card.protocolVersion ?? null, providerOrganization: card.provider?.organization ?? null, interfaces, securityRequirements: card.securityRequirements ?? card.security ?? [], features, skills: card.skills.map((skill) => ({ id: skill.id, name: skill.name, description: skill.description, version: card.version })), tools: [], discoveredAt: new Date().toISOString() };
 }
 
 export const discoverA2ACapabilities: NonNullable<ServerAdapterModule["discoverCapabilities"]> = async (ctx: AdapterEnvironmentTestContext) => {
   const configured = ctx.config.agentCardUrl;
   const base = typeof ctx.config.url === "string" ? new URL(ctx.config.url) : null;
   const url = endpoint.parse(typeof configured === "string" ? configured : base ? new URL("/.well-known/agent-card.json", base).toString() : "");
+  if (base && new URL(url).origin !== base.origin) throw new Error("Agent Card must use the configured provider origin");
   const headers = z.record(z.string(), z.string()).parse(ctx.config.headers ?? {});
   const response = await guardedHttpAdapterFetch(url, { method: "GET", headers: { ...headers, Accept: "application/json" }, signal: AbortSignal.timeout(10_000), redirect: "error" });
   if (!response.ok) { await response.body?.cancel(); throw new Error("Agent Card is unavailable"); }
+  return mapA2AAgentCard(await readA2AJsonResponse(response));
+};
+
+export async function readA2AJsonResponse(response: Response): Promise<unknown> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error("Empty Agent Card response");
   const chunks: Uint8Array[] = []; let size = 0;
@@ -54,5 +64,5 @@ export const discoverA2ACapabilities: NonNullable<ServerAdapterModule["discoverC
       chunks.push(value);
     }
   } finally { reader.releaseLock(); }
-  return mapA2AAgentCard(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-};
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}

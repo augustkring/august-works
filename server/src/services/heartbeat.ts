@@ -1,4 +1,4 @@
-import { recordEagerSkillLoading, recordSkillExecutionCompletion } from "./skill-usage.js";
+import { recordEagerSkillLoading, recordSkillExecutionCompletion, reconcileSkillExecutionCompletions } from "./skill-usage.js";
 import { agentRuntimeFabricService } from "./agent-runtime-fabric.js";
 import { agentProviderBindingService } from "./agent-provider-bindings.js";
 import { workflowDirectAgentPrompt } from "./workflows/workflow-direct-agent.js";
@@ -19392,6 +19392,9 @@ export function heartbeatService(
       );
     }
 
+    await reconcileSkillExecutionCompletions(db).catch((err) => {
+      logger.warn({ err }, "failed to reconcile retained Skill usage observations");
+    });
     return { reaped: reaped.length, runIds: reaped };
   }
 
@@ -24764,6 +24767,9 @@ export function heartbeatService(
         }
         if (v5Fabric && adapterResult.errorCode === "cancellation_unconfirmed") {
           await agentProviderBindingService(db).markUnavailable(agent.companyId, agent.id, "provider_termination_unconfirmed");
+        }
+        if (v5Fabric && adapterResult.errorCode === "provider_capability_drift") {
+          await agentProviderBindingService(db).markUnavailable(agent.companyId, agent.id, "discovery_failed");
         }
         const processCancellation =
           processRunCancellationSettlements.get(run.id) ??

@@ -1,7 +1,7 @@
 import type { ProviderConformanceContext, ServerAdapterModule } from "./types.js";
 
 type Probe = Awaited<ReturnType<ProviderConformanceContext["probe"]>>;
-function receipt(probe: Probe) { return probe.result.resultJson?.providerReceipt as { agentId?: string; profileRef?: string; sessionId?: string } | undefined; }
+function receipt(probe: Probe) { return probe.result.resultJson?.providerReceipt as { agentId?: string; profileRef?: string; sessionId?: string; isolationKey?: string } | undefined; }
 function output(probe: Probe) { return typeof probe.result.resultJson?.output === "string" ? probe.result.resultJson.output.trim() : ""; }
 function succeeded(probe: Probe) { return probe.result.exitCode === 0 && !probe.result.timedOut && !probe.result.errorCode && probe.result.resultJson?.status === "completed"; }
 function routed(probe: Probe, target: ProviderConformanceContext["primary"]) { return receipt(probe)?.agentId === target.providerAgentRef && receipt(probe)?.profileRef === target.providerProfileRef; }
@@ -24,7 +24,7 @@ export const testGatewayProviderConformance: NonNullable<ServerAdapterModule["te
       const unseen = await ctx.probe(ctx.peer, { prompt: "Output exactly the AW_PROBE marker from earlier messages in this conversation. Use no tools or external memory search. If none exists, output exactly NONE." });
       const peerWrite = await ctx.probe(ctx.peer, { prompt: `Retain ${peerNonce} in this test conversation and output exactly ${peerNonce}. Use no tools and change no external resources.` });
       const isolated = await ctx.probe(ctx.primary, { prompt: "Output exactly the most recent AW_PROBE marker from this conversation. Use no tools or external memory search. If none exists, output exactly NONE." });
-      checks.memoryScoping = succeeded(unseen) && routed(unseen, ctx.peer) && output(unseen) === "NONE" && receipt(unseen)?.sessionId !== receipt(first)?.sessionId && succeeded(peerWrite) && routed(peerWrite, ctx.peer) && output(peerWrite) === peerNonce && succeeded(isolated) && routed(isolated, ctx.primary) && output(isolated) === nonce && ctx.primary.providerProfileRef !== ctx.peer.providerProfileRef;
+      checks.memoryScoping = succeeded(unseen) && routed(unseen, ctx.peer) && output(unseen) === "NONE" && receipt(unseen)?.sessionId !== receipt(first)?.sessionId && succeeded(peerWrite) && routed(peerWrite, ctx.peer) && output(peerWrite) === peerNonce && succeeded(isolated) && routed(isolated, ctx.primary) && output(isolated) === nonce && ctx.primary.providerProfileRef !== ctx.peer.providerProfileRef && (ctx.snapshot.provider !== "paperclip_native" || Boolean(receipt(first)?.isolationKey && receipt(unseen)?.isolationKey && receipt(first)?.isolationKey !== receipt(unseen)?.isolationKey));
     }
   }
   if (ctx.snapshot.features.structuredOutput) {
@@ -32,7 +32,7 @@ export const testGatewayProviderConformance: NonNullable<ServerAdapterModule["te
     try { const parsed = JSON.parse(output(structured)); checks.structuredOutput = succeeded(structured) && routed(structured, ctx.primary) && parsed.marker === nonce && Object.keys(parsed).length === 1; } catch { /* absent structured evidence remains false */ }
   }
   const cancelled = await ctx.probe(ctx.primary, { prompt: "This is an operator cancellation probe. Produce a long sequence of numbers until cancelled. Use no tools and change no external resources.", cancelAfterMs: 500 });
-  checks.cancel = cancelled.result.errorCode === "cancelled" && ["cancelled", "canceled", "stopped"].includes(String(cancelled.result.resultJson?.status));
+  checks.cancel = cancelled.cancellationRequested && cancelled.result.errorCode === "cancelled" && ["cancelled", "canceled", "stopped"].includes(String(cancelled.result.resultJson?.status));
   // No steering/sync contract is implemented in this adapter yet. If advertised,
   // the server requires it and qualification fails instead of guessing support.
   return checks;

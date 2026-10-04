@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { agents, agentIdentities, agentPresenceRuntimeBindings, heartbeatRuns, type Db } from "@paperclipai/db";
-import type { ProviderConformanceTarget } from "@paperclipai/adapter-utils";
+import { agents, agentIdentities, agentPresenceRuntimeBindings, heartbeatRuns, issues, type Db } from "@paperclipai/db";
+import { testGatewayProviderConformance, type ProviderConformanceTarget } from "@paperclipai/adapter-utils";
+import { executeNativeProviderConformance } from "./native-provider-conformance.js";
+import { executeA2A } from "./a2a-execution.js";
 import { z } from "zod";
 import { providerConformanceInputSchema } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../errors.js";
@@ -15,6 +17,7 @@ import { hashContextPolicySnapshot } from "./context/context-manifest.js";
 import { secretService } from "./secrets.js";
 import { budgetService } from "./budgets.js";
 import { costService } from "./costs.js";
+import { withV5ActivityTransaction } from "./v5-mutations.js";
 import { logActivity } from "./activity-log.js";
 
 export { providerConformanceInputSchema } from "@paperclipai/shared";
@@ -39,12 +42,18 @@ export function providerConformanceService(db: Db) {
         return { agent, binding, target: { companyId: cid, agentId: aid, providerAgentRef: binding.provider.providerAgentRef, providerProfileRef: binding.runtime.providerProfileRef, sessionNamespace: `${binding.runtime.providerSessionNamespace}:conformance:${randomUUID()}` } satisfies ProviderConformanceTarget };
       }
       const primary = await target(companyId, agentId), adapter = getServerAdapter(primary.agent.adapterType);
-      if (!adapter.testProviderConformance) throw conflict("This adapter has no deterministic conformance driver and cannot be qualified manually");
+      const isA2A = primary.binding.provider.providerType === "a2a";
+      const isNative = primary.binding.provider.providerType === "paperclip_native";
+      const testConformance = isA2A || isNative ? testGatewayProviderConformance : adapter.testProviderConformance;
+      if (!testConformance) throw conflict("This adapter has no deterministic conformance driver and cannot be qualified manually");
       const peer = input.isolationPeer ? await target(input.isolationPeer.companyId, input.isolationPeer.agentId) : null;
       if (peer && (peer.agent.agentIdentityId !== primary.agent.agentIdentityId || peer.agent.id === agentId || peer.agent.adapterType !== primary.agent.adapterType || peer.binding.provider.providerType !== primary.binding.provider.providerType || peer.binding.provider.providerEndpointRef !== primary.binding.provider.providerEndpointRef)) throw conflict("Isolation tests require another explicit local presence of this identity on the same provider endpoint");
       const configurationHash = hashContextPolicySnapshot({ adapterType: primary.agent.adapterType, adapterConfig: primary.agent.adapterConfig });
       const discovered = await providerDiscoveryService(db).discover(actor, companyId, agentId), snapshot = discovered.capabilitySnapshot!;
+      const peerSnapshot = isA2A && peer ? (await providerDiscoveryService(db).discover(actor, peer.agent.companyId, peer.agent.id)).capabilitySnapshot! : snapshot;
+      const sessions = new Map<string, { id: string | null; params: Record<string, unknown> | null }>();
       const runIds: string[] = [], groupId = randomUUID(); let spentCents = 0, unknownCost = false;
+      const harnessIssues = new Map<string, string>();
       const probes = new Map([primary, ...(peer ? [peer] : [])].map((entry) => [entry.agent.id, entry]));
       async function assertTargetCurrent(entry: typeof primary) {
         const current = await bindings.getForPresence(actor, entry.agent.companyId, entry.agent.id);
@@ -57,7 +66,7 @@ export function providerConformanceService(db: Db) {
       }
       let checks: Record<string, boolean> = {}, failure: string | null = null;
       try {
-        checks = await adapter.testProviderConformance({ snapshot, primary: primary.target, peer: peer?.target ?? null, probe: async (requested, probe) => {
+        checks = await testConformance({ snapshot, primary: primary.target, peer: peer?.target ?? null, probe: async (requested, probe) => {
           const entry = probes.get(requested.agentId);
           if (!entry || requested !== entry.target || runIds.length >= 10 || unknownCost || spentCents >= input.maximumCostCents) throw conflict("Conformance probe ceiling or cost guard reached; review retained evidence");
           const cid = requested.companyId, aid = requested.agentId;
@@ -66,17 +75,25 @@ export function providerConformanceService(db: Db) {
           if (await budgetService(db).getInvocationBlock(cid, aid)) throw forbidden("Current company/agent budget blocks conformance");
           const [identity] = await db.select().from(agentIdentities).where(eq(agentIdentities.id, entry.agent.agentIdentityId)).limit(1);
           if (identity?.status !== "active") throw forbidden("Logical identity stopped during conformance");
+          if (isNative && !harnessIssues.has(aid)) {
+            const harness = await withV5ActivityTransaction(db, async (tx, publications) => {
+            const [created] = await tx.insert(issues).values({ companyId: cid, title: "Synthetic provider qualification", description: "Operator-requested provider conformance. No company context or platform tools are granted.", status: "in_progress", assigneeAgentId: aid, hiddenAt: new Date(), harnessKind: "provider_conformance" }).returning();
+            await logActivity(tx, { companyId: cid, actorType: "user", actorId: userId, action: "provider.conformance_harness_created", entityType: "issue", entityId: created!.id, details: { groupId, agentId: aid } }, publications);
+            return created!;
+            });
+            harnessIssues.set(aid, harness.id);
+          }
           const resolved = await secretService(db).resolveAdapterConfigForRuntime(cid, entry.agent.adapterConfig, { consumerType: "agent", consumerId: aid, responsibleUserId: userId, actorType: "user", actorId: userId, actorSource: actor.source === "local_implicit" ? "local_implicit" : "session" });
           const run = await db.transaction(async (tx) => {
             const [current] = await tx.select().from(agents).where(and(eq(agents.companyId, cid), eq(agents.id, aid))).limit(1).for("update");
             if (!current || !["idle", "error"].includes(current.status) || hashContextPolicySnapshot(current.adapterConfig) !== hashContextPolicySnapshot(entry.agent.adapterConfig)) throw conflict("Local presence/configuration changed during conformance");
             const active = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, cid), eq(heartbeatRuns.agentId, aid), inArray(heartbeatRuns.status, ["queued", "running"]))).limit(1);
             if (active.length) throw conflict("Wait for existing provider work to settle before conformance");
-            const [row] = await tx.insert(heartbeatRuns).values({ companyId: cid, agentId: aid, responsibleUserId: userId, invocationSource: "on_demand", triggerDetail: "provider_conformance", status: "running", startedAt: new Date(), contextSnapshot: { providerConformanceGroupId: groupId, profileRef: requested.providerProfileRef, containsCompanyContext: false, platformToolsGranted: false } }).returning();
+            const [row] = await tx.insert(heartbeatRuns).values({ companyId: cid, agentId: aid, responsibleUserId: userId, invocationSource: "on_demand", triggerDetail: "provider_conformance", status: "running", startedAt: new Date(), contextSnapshot: { providerConformanceGroupId: groupId, profileRef: requested.providerProfileRef, ...(isNative ? { providerConformanceIssueId: harnessIssues.get(aid) } : {}), containsCompanyContext: false, platformToolsGranted: false } }).returning();
             await tx.update(agents).set({ status: "running" }).where(eq(agents.id, aid)); return row!;
           });
           runIds.push(run.id);
-          const controller = new AbortController(); let streamObserved = false, excerpt = "", cancelTimer: ReturnType<typeof setTimeout> | null = null, checking = false;
+          const controller = new AbortController(); let streamObserved = false, cancellationRequested = false, excerpt = "", cancelTimer: ReturnType<typeof setTimeout> | null = null, checking = false;
           const timeout = setTimeout(() => controller.abort(), 25_000);
           const guard = setInterval(() => { if (checking) return; checking = true; void (async () => {
             await assertTargetCurrent(entry);
@@ -87,7 +104,8 @@ export function providerConformanceService(db: Db) {
           })().catch(() => controller.abort()).finally(() => { checking = false; }); }, 1000);
           try {
             const config = { ...resolved.config, instructions: "Follow only this synthetic conformance prompt. Use no tools, files or external resources. Do not access company data.", paperclipApiUrl: undefined, sessionKeyStrategy: "agent", timeoutSec: 20, payloadTemplate: { input: probe.prompt, message: probe.prompt, toolsets: [], skills: [], max_tokens: 128, ...(probe.structured ? { response_format: { type: "json_object" } } : {}) } };
-            const result = await adapter.execute({ runId: run.id, agent: entry.agent, runtime: { sessionId: null, sessionDisplayId: null, sessionParams: null, taskKey: null }, config, context: { conversationMode: true }, providerRuntime: { providerBindingId: entry.binding.provider.id, providerAgentRef: requested.providerAgentRef, providerProfileRef: requested.providerProfileRef, sessionNamespace: requested.sessionNamespace, isolationMode: entry.binding.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime", capabilitySnapshotHash: snapshot.hash }, signal: controller.signal, onLog: async (_stream, text) => { if (text.includes("[hermes-gateway:event]") || text.includes("[openclaw-gateway:event]")) streamObserved = true; if (excerpt.length < 16000) excerpt += text.slice(0, 16000 - excerpt.length); }, onDispatch: () => { if (probe.cancelAfterMs) cancelTimer = setTimeout(() => controller.abort(), probe.cancelAfterMs); } });
+            const result = await (isA2A ? executeA2A : isNative ? executeNativeProviderConformance : adapter.execute)({ runId: run.id, agent: entry.agent, runtime: { sessionId: sessions.get(aid)?.id ?? null, sessionDisplayId: null, sessionParams: sessions.get(aid)?.params ?? null, taskKey: null }, config, context: { conversationMode: true, providerConformanceIssueId: harnessIssues.get(aid) }, providerRuntime: { providerType: entry.binding.provider.providerType, providerBindingId: entry.binding.provider.id, providerAgentRef: requested.providerAgentRef, providerProfileRef: requested.providerProfileRef, sessionNamespace: requested.sessionNamespace, isolationMode: entry.binding.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime", capabilitySnapshotHash: entry === primary ? snapshot.hash : peerSnapshot.hash }, signal: controller.signal, onLog: async (_stream, text) => { if (text.includes("[hermes-gateway:event]") || text.includes("[openclaw-gateway:event]") || text.includes("[a2a:event]") || text.includes("[native-conformance:event]")) streamObserved = true; if (excerpt.length < 16000) excerpt += text.slice(0, 16000 - excerpt.length); }, onDispatch: () => { if (probe.cancelAfterMs) cancelTimer = setTimeout(() => { cancellationRequested = true; controller.abort(); }, probe.cancelAfterMs); } });
+            sessions.set(aid, { id: result.sessionId ?? null, params: result.sessionParams ?? null });
             if (result.errorCode === "cancellation_unconfirmed") {
               await bindings.markUnavailable(cid, aid, "provider_termination_unconfirmed");
             }
@@ -97,7 +115,7 @@ export function providerConformanceService(db: Db) {
             const costCents = known ? Math.ceil(reported * 100) : 0; spentCents += costCents; unknownCost ||= !known;
             await costService(db, { cancelWorkForScope: async () => controller.abort() }).createEvent(cid, { agentId: aid, heartbeatRunId: run.id, provider: result.provider ?? entry.agent.adapterType, model: result.model ?? "unknown", costCents, costStatus: known ? "reported" : "unknown", billingType: result.billingType ?? "unknown", inputTokens: result.usage?.inputTokens ?? 0, outputTokens: result.usage?.outputTokens ?? 0, occurredAt: new Date() });
             await logActivity(db, { companyId: cid, actorType: "user", actorId: userId, runId: run.id, agentId: aid, action: "provider.conformance_probe_settled", entityType: "heartbeat_run", entityId: run.id, details: { groupId, status, costKnown: known, ...(known ? { costCents } : {}) } });
-            return { result, streamObserved };
+            return { result, streamObserved, cancellationRequested };
           } catch (error) {
             await db.update(heartbeatRuns).set({ status: "failed", finishedAt: new Date(), errorCode: "provider_conformance_failed", error: "Provider probe failed; inspect the configured connection", stdoutExcerpt: excerpt }).where(and(eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running"))); throw error;
           } finally {
@@ -106,13 +124,21 @@ export function providerConformanceService(db: Db) {
           }
         } });
       } catch { failure = "Conformance stopped: a probe failed, authority/configuration changed, or cost evidence/ceiling prevented further runs."; }
+      if (unknownCost && !failure) failure = "Provider qualification requires actual cost evidence for every probe, including cancellation.";
+      for (const [aid, id] of harnessIssues) {
+        const successful = !failure && !unknownCost && providerConformanceRequirements(snapshot, primary.binding.provider.isolationMode).every(key => checks[key]);
+        await withV5ActivityTransaction(db, async (tx, publications) => {
+          await tx.update(issues).set({ status: successful ? "done" : "blocked", completedAt: successful ? new Date() : null }).where(and(eq(issues.id, id), eq(issues.assigneeAgentId, aid)));
+          await logActivity(tx, { companyId: probes.get(aid)!.agent.companyId, actorType: "user", actorId: userId, action: "provider.conformance_harness_settled", entityType: "issue", entityId: id, details: { groupId, status: successful ? "done" : "blocked" } }, publications);
+        });
+      }
       try { for (const entry of probes.values()) await assertTargetCurrent(entry); }
       catch {
         await bindings.markUnavailable(companyId, agentId, "conformance_invalidated");
         throw conflict("A tested profile/configuration or its authorization changed; repeat conformance");
       }
       const { hash: _hash, ...snapshotInput } = snapshot;
-      const binding = await bindings.recordDiscovery(companyId, agentId, snapshotInput, checks, { configurationHash, runtimeId: primary.binding.runtime.id, profileRef: primary.target.providerProfileRef, bindingId: primary.binding.provider.id, ...(peer ? { isolationPeer: { companyId: peer.agent.companyId, agentId: peer.agent.id, runtimeId: peer.binding.runtime.id, bindingId: peer.binding.provider.id, profileRef: peer.target.providerProfileRef, configurationHash: hashContextPolicySnapshot({ adapterType: peer.agent.adapterType, adapterConfig: peer.agent.adapterConfig }) } } : {}) });
+      const binding = await bindings.recordDiscovery(companyId, agentId, snapshotInput, checks, { accountingComplete: !unknownCost, configurationHash, runtimeId: primary.binding.runtime.id, profileRef: primary.target.providerProfileRef, bindingId: primary.binding.provider.id, ...(peer ? { isolationPeer: { companyId: peer.agent.companyId, agentId: peer.agent.id, runtimeId: peer.binding.runtime.id, bindingId: peer.binding.provider.id, profileRef: peer.target.providerProfileRef, configurationHash: hashContextPolicySnapshot({ adapterType: peer.agent.adapterType, adapterConfig: peer.agent.adapterConfig }) } } : {}) });
       return { binding, checks, requiredChecks: providerConformanceRequirements(snapshot, binding.isolationMode), runIds, groupId, spentCents: unknownCost ? null : spentCents, failure };
     },
   };

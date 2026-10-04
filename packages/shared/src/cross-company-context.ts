@@ -21,6 +21,8 @@ export const scopedRuntimeActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("task.forecast"), companyId: z.string().uuid(), projectId: z.string().uuid(), taskId: z.string().uuid(), forecast: taskForecastPatchSchema }).strict(),
   z.object({ action: z.literal("task.propose_plan"), companyId: z.string().uuid(), projectId: z.string().uuid(), proposal: roadmapProposalSchema }).strict(),
   z.object({ action: z.literal("playbook.propose"), companyId: z.string().uuid(), playbookId: z.string().uuid(), proposal: proposePlaybookSchema }).strict(),
+  z.object({ action: z.literal("tool.list"), companyId: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("tool.invoke"), companyId: z.string().uuid(), tool: z.string().trim().min(1).max(300), parameters: z.record(z.string(), z.unknown()).default({}).refine(value => JSON.stringify(value).length <= 64_000, "Tool arguments exceed the scoped limit"), idempotencyKey: z.string().trim().min(1).max(200).optional() }).strict(),
 ]);
 export type ScopedRuntimeAction = z.infer<typeof scopedRuntimeActionSchema>;
 export const crossCompanyContextRequestSchema = z.object({

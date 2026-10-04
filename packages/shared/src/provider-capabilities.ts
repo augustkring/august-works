@@ -19,7 +19,9 @@ export const providerCapabilitySnapshotSchema = z.object({
   interfaces: z.array(z.object({ protocol: z.string().min(1).max(100), url: z.string().url().max(2000) }).strict()).max(16).optional(),
   securityRequirements: z.array(z.record(z.string().min(1).max(100), z.array(z.string().max(200)).max(32))).max(16).optional(),
   providerOrganization: z.string().max(200).nullable().optional(),
+  providerAgentRef: z.string().min(1).max(200).optional(),
   protocolVersion: z.string().max(100).nullable().optional(),
+  streaming: z.boolean().optional(),
 }).strict();
 export type ProviderCapabilitySnapshot = z.infer<typeof providerCapabilitySnapshotSchema>;
 export const PROVIDER_ISOLATION_WARNING_VERSION = "v5-shared-runtime-1";

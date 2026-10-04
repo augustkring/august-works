@@ -9,7 +9,7 @@ function fixture(leak = false, wrongRouting = false): ProviderConformanceContext
     const marker = input.prompt.match(/AW_PROBE_[a-f0-9]{32}/)?.[0];
     if (marker) state.set(leak ? "shared" : target.sessionNamespace, marker);
     const output = marker ?? state.get(leak ? "shared" : target.sessionNamespace) ?? "NONE";
-    return { streamObserved: true, result: { exitCode: input.cancelAfterMs ? null : 0, signal: null, timedOut: false, costUsd: 0, ...(input.cancelAfterMs ? { errorCode: "cancelled" } : {}), resultJson: { status: input.cancelAfterMs ? "cancelled" : "completed", output, providerReceipt: { agentId: wrongRouting ? "other" : target.providerAgentRef, profileRef: target.providerProfileRef, sessionId: target.sessionNamespace } } } };
+    return { streamObserved: true, cancellationRequested: Boolean(input.cancelAfterMs), result: { exitCode: input.cancelAfterMs ? null : 0, signal: null, timedOut: false, costUsd: 0, ...(input.cancelAfterMs ? { errorCode: "cancelled" } : {}), resultJson: { status: input.cancelAfterMs ? "cancelled" : "completed", output, providerReceipt: { agentId: wrongRouting ? "other" : target.providerAgentRef, profileRef: target.providerProfileRef, sessionId: target.sessionNamespace } } } };
   }) };
 }
 describe("real-probe conformance interpretation (local protocol fixtures)", () => {
@@ -22,6 +22,11 @@ describe("real-probe conformance interpretation (local protocol fixtures)", () =
     expect((await testProviderConformance(fixture(true))).memoryScoping).toBe(false);
     expect((await testProviderConformance(fixture(false, true))).identity).toBe(false);
     expect((await testProviderConformance({ ...fixture(), peer: null })).memoryScoping).toBe(false);
+  });
+  it("a provider-cancelled response is not proof of an operator-requested cancellation", async () => {
+    const context = fixture(), probe = context.probe;
+    context.probe = async (target, input) => ({ ...await probe(target, input), cancellationRequested: false });
+    expect((await testProviderConformance(context)).cancel).toBe(false);
   });
   it("a completed run is not evidence that cancellation works", async () => {
     const context = fixture(), probe = context.probe;

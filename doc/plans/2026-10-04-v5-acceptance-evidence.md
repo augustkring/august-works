@@ -19,11 +19,23 @@ Its truncated patches were not used as a source snapshot or executed.
   Unconfirmed provider termination pauses the local presence and invalidates its
   binding on conformance and normal execution. V5 wait timeouts require stop
   confirmation; agent finalization preserves a concurrent pause or termination.
-  Hermes and OpenClaw use real gateway dispatch/cancellation hooks. A2A Agent
-  Cards use bounded, guarded discovery and stable protocol/security metadata.
+  Hermes and OpenClaw use real gateway dispatch/cancellation hooks. A2A 0.3.0
+  JSON-RPC uses guarded RPC/SSE, retained task/context IDs and owned task receipts.
+  Native qualification uses the existing local Codex, OpenCode and ACPX session
+  backends with synthetic hidden harness tasks and no platform tools. Native
+  profile names alone cannot establish physical isolation. Native contract drift
+  invalidates old proof. All conformance runs require actual cost evidence,
+  including the last cancellation probe. Contract v5.2 requires fresh proof.
 - Expiring execution scopes and immutable execution manifests. Every use checks
   current local presence and represented-human authority. Scoped task reads,
   forecasts, plan proposals and Playbook proposals retain source provenance.
+  Connected tool discovery/invocation uses the existing gateway with a local
+  target presence and represented human. It creates no guest run or bearer
+  credential. Guest tool replies require explicit confidential-sharing policy,
+  keep their classification, and recheck authority before dispatch/disclosure.
+  Writes require act scope and an idempotency key. Pending/failed calls cannot
+  be replayed as success; validated settled replies are retained for exact replay.
+  Task-bound or approval-gated tools retain their existing prerequisites.
 - Target-accepted relationships, local organizational units and versioned Role
   Pack overlays. These records do not grant access. Deterministic resolution
   filters current policy and pins behavior versions within explicit budgets.
@@ -32,6 +44,9 @@ Its truncated patches were not used as a source snapshot or executed.
   Executor teardown records loaded observations for committed terminal runs,
   including failure, interruption, cancellation and timeout, with unknown outcomes
   and idempotent per-version events. A running/recovering run is never completed.
+  Startup and periodic orphan reaping reconcile observations left behind by
+  executor loss or durable native finalization. The atomic insert observes only
+  settled legacy or committed native runs. It preserves unknown outcomes.
   Required evaluation suites can be replaced atomically while preserving old
   cases and evaluation history. Private and classified boundaries survive
   rollout rollback.
@@ -94,36 +109,42 @@ cookies and Origin/CSRF checks. They cover company switching, foreign-object
 denial, revoked membership and feature rollback. Browser fixtures do not call
 paid providers.
 
-## Remaining implementation and operational requirements
+## Activation and external requirements
 
-This checkpoint is not full V5 acceptance or a production release.
+The code is prepared behind flags. Full V5 acceptance and production activation
+still require actual participating companies and provider proof. On 2026-10-04
+the user confirmed that companies, presences, provider profiles and a pilot budget
+are not available. No paid pilot is run or treated as a merge prerequisite for
+this dormant implementation.
 
-1. Add the native `paperclip_runner` V5 discovery/conformance bridge to the native
-   coordinator. Existing native execution regressions pass, but they do not
-   qualify a new V5 provider binding. Native bindings remain unqualified.
-2. Complete A2A execution/conformance transport integration. Agent Card discovery
-   is advertisement, not proof. A2A bindings remain unqualified.
-3. Extend the scoped action wrapper to general guest-company connected tools.
-   The current wrapper supports the four documented task/Playbook actions.
-   Existing local tool-session/run ownership cannot be bypassed by a fabricated
-   guest run or primary-company credential.
-4. Reconcile retained Skill observations after process loss and durable recovery
-   that completes outside the active executor. The shared executor teardown now
-   covers terminal fast/exceptional returns; a missing observation or unknown
-   outcome still cannot serve as promotion evidence.
-5. Curate/import the supplied Role Pack Skill/Playbook sources into the actual
-   selected companies and evaluate/promote them under local policy. Unresolved
-   required references fail closed. Do not publish private uploads globally or
-   mark unevaluated candidates active.
-6. Configure real provider profiles and credentials in the Secret Store, name
-   the pilot companies/presences and declare a budget. Execute the full pilot,
-   retain actual receipts/costs/cancellation/isolation proof, and assess all hard
-   gates. Internal fixture receipts never count as live evidence.
-7. Run CI and independent review before merge. The local GitHub API credential
-   was rejected, so GitHub duplicate search, PR creation and CI/Greptile status
-   are not certified by this document.
+1. Select actual companies and local presences. Curate/import the private supplied
+   Role Pack Skill/Playbook sources there, then evaluate and promote under local
+   policy. Unresolved required references stay blocked. Private uploads are not
+   published globally and imported candidates do not become active automatically.
+2. Configure providers and credentials in the Secret Store and declare a budget.
+   Exercise all hard gates with real traces, costs, stop and isolation receipts.
+   Internal protocol fixtures never count as live proof. Unknown monetary cost
+   on any probe prevents qualification and cannot be replaced by acknowledgement.
+3. The local native conformance bridge covers Codex, OpenCode and ACPX. Codex
+   requires a canonical, process-owned, private CODEX_HOME; peer profiles must
+   actually differ. Managed Claude, AWS AgentCore and remote native conformance
+   need their own included transport before a V5 binding can qualify. Existing
+   V4 execution support is separate. Unsupported V5 bindings stay unqualified.
+4. A2A execution covers protocol 0.3.0 JSON-RPC only. Its profile reference is the
+   actual configured interface URL, not an arbitrary label. Other versions and
+   transports remain discovery-only. Streaming, context continuity and separate
+   profiles must be proved; Agent Cards grant no August Works authority.
+5. Run GitHub CI and independent review before merge. GitHub API access was
+   verified on 2026-10-04 after the earlier CONNECT block. No prior PR exists for
+   the V5 branch. PR creation and CI/Greptile results must be observed separately;
+   Git transport access is not their evidence. Merge must retain all 20 flags off
+   until activation evidence is reviewed.
 
-## Verification record
+## Verification record — earlier checkpoint
+
+The following counts and source hash belong to the earlier retained checkpoint.
+The finishing changes have a separate final verification record below.
+
 
 The complete supported stable-suite cover is green across frozen runs, complete
 retries of failed jobs, and completion of the last workspace group. It contains
@@ -189,3 +210,12 @@ configuration and cold database state. They are private workspace files outside
 the repository; they have not been uploaded to a real Paperclip issue because
 this session has no task/run identity or API credentials. Recovery instructions,
 checksums and restore reports remain alongside the archives.
+
+## Finishing verification — in progress
+
+The new regressions cover real PostgreSQL authority and usage reconciliation,
+exact tool replay, revoked disclosure, native harness provenance, actual profile
+separation, provider drift, RPC/SSE parsing, host cancellation and missing final
+cost evidence. The complete Hermes package has 90 passing tests. Required full
+repository checks and a new cold backup are in progress. Earlier backup files,
+Git history and verification logs remain retained.

@@ -197,6 +197,7 @@ export interface AdapterRuntimeEvent {
 export interface AdapterExecutionContext {
   /** Server-owned V5 binding, supplied after current local authorization. */
   providerRuntime?: {
+    providerType?: string;
     providerBindingId: string;
     providerAgentRef: string;
     providerProfileRef: string;
@@ -570,7 +571,7 @@ export interface ProviderConformanceContext {
   snapshot: import("@paperclipai/shared").ProviderCapabilitySnapshot;
   primary: ProviderConformanceTarget;
   peer: ProviderConformanceTarget | null;
-  probe: (target: ProviderConformanceTarget, input: { prompt: string; cancelAfterMs?: number; structured?: boolean }) => Promise<{ result: AdapterExecutionResult; streamObserved: boolean }>;
+  probe: (target: ProviderConformanceTarget, input: { prompt: string; cancelAfterMs?: number; structured?: boolean }) => Promise<{ result: AdapterExecutionResult; streamObserved: boolean; cancellationRequested: boolean }>;
 }
 
 // ---------------------------------------------------------------------------

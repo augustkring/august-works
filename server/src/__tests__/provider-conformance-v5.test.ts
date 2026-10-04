@@ -1,19 +1,20 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
-import { agents, heartbeatRuns, costEvents, createDb } from "@paperclipai/db";
+import { agents, heartbeatRuns, costEvents, issues, createDb } from "@paperclipai/db";
 import type { ServerAdapterModule } from "@paperclipai/adapter-utils";
 import { PROVIDER_CAPABILITY_FEATURES } from "@paperclipai/shared";
 import { registerServerAdapter, unregisterServerAdapter } from "../adapters/registry.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
+import * as nativeBridge from "../services/native-provider-conformance.js";
 import { providerConformanceService } from "../services/provider-conformance.js";
 import { providerDiscoveryService } from "../services/provider-discovery.js";
 
 const support = await getEmbeddedPostgresTestSupport(), adapterType = "aw_v5_conformance_fixture";
 describe.skipIf(!support.supported)("operator conformance accounting and authority (internal adapter fixtures)", () => {
   let db!: ReturnType<typeof createDb>, database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
-  let reportedCost: number | undefined = 0, changeConfiguration = false, discoveryFails = false, terminationUnconfirmed = false;
+  let reportedCost: number | undefined = 0, unknownLastCost = false, callCount = 0, changeConfiguration = false, discoveryFails = false, terminationUnconfirmed = false;
   const adapter: ServerAdapterModule = {
     type: adapterType,
     testEnvironment: async () => ({ adapterType, status: "pass", checks: [], testedAt: new Date().toISOString() }),
@@ -26,7 +27,7 @@ describe.skipIf(!support.supported)("operator conformance accounting and authori
       if (changeConfiguration) await db.update(agents).set({ adapterConfig: { changed: true } }).where(eq(agents.id, ctx.agent.id));
       await ctx.onLog("stdout", "Local fixture transport event\n");
       if (terminationUnconfirmed) return { exitCode: null, signal: null, timedOut: false, errorCode: "cancellation_unconfirmed", costUsd: 0, resultJson: { status: "unknown" } };
-      return { exitCode: 0, signal: null, timedOut: false, ...(reportedCost !== undefined ? { costUsd: reportedCost } : {}), resultJson: { status: "completed" } };
+      return { exitCode: 0, signal: null, timedOut: false, ...(reportedCost !== undefined && !(unknownLastCost && ++callCount === 2) ? { costUsd: reportedCost } : {}), resultJson: { status: "completed" } };
     },
     testProviderConformance: async (ctx) => {
       await ctx.probe(ctx.primary, { prompt: "Synthetic protocol fixture" });
@@ -38,7 +39,7 @@ describe.skipIf(!support.supported)("operator conformance accounting and authori
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v5-provider-conformance-"); db = createDb(database.connectionString); await enableV5ForTest(db); registerServerAdapter(adapter); });
   afterAll(async () => { unregisterServerAdapter(adapterType); await database?.cleanup(); });
   async function fixture() {
-    reportedCost = 0; changeConfiguration = false; discoveryFails = false; terminationUnconfirmed = false;
+    reportedCost = 0; unknownLastCost = false; callCount = 0; changeConfiguration = false; discoveryFails = false; terminationUnconfirmed = false;
     const f = await seedV5Presences(db), bindings = agentProviderBindingService(db);
     await db.update(agents).set({ adapterType, adapterConfig: {} }).where(eq(agents.id, f.presence.id));
     const binding = await bindings.create(f.actor, f.home, f.presence.id, { providerType: "custom", providerAgentRef: f.presence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
@@ -60,10 +61,48 @@ describe.skipIf(!support.supported)("operator conformance accounting and authori
     const costs = await db.select().from(costEvents).where(and(eq(costEvents.companyId, f.home), inArray(costEvents.heartbeatRunId, result.runIds))); expect(costs).toHaveLength(2);
     await expect(agentProviderBindingService(db).assertRuntime(f.home, f.presence.id)).resolves.toBeDefined();
   });
+  it("invalidates native proof when the included backend contract changes", async () => {
+    const f = await seedV5Presences(db), bindings = agentProviderBindingService(db);
+    await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: { provider: "codex" } }).where(eq(agents.id, f.presence.id));
+    const binding = await bindings.create(f.actor, f.home, f.presence.id, { providerType: "paperclip_native", providerAgentRef: f.presence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
+    await bindings.attach(f.actor, f.home, f.presence.id, { providerBindingId: binding.id, providerProfileRef: "native-fixture-profile" });
+    const snapshot = await nativeBridge.discoverNativeCapabilities({ companyId: f.home, adapterType: "paperclip_runner", config: {} });
+    // Injected historic fixture proof, never evidence of a live provider.
+    await bindings.recordDiscovery(f.home, f.presence.id, { ...snapshot, version: "former-native-contract" }, { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, resume: true, memoryScoping: true });
+    await expect(bindings.assertRuntime(f.home, f.presence.id)).rejects.toMatchObject({ status: 409 });
+    expect((await bindings.getForPresence(f.actor, f.home, f.presence.id))!.runtime.status).toBe("degraded");
+  });
+  it("retains a native harness task and stops qualification when actual cost is unknown", async () => {
+    const f = await seedV5Presences(db), bindings = agentProviderBindingService(db);
+    await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: { provider: "codex" } }).where(eq(agents.id, f.presence.id));
+    const binding = await bindings.create(f.actor, f.home, f.presence.id, { providerType: "paperclip_native", providerAgentRef: f.presence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
+    await bindings.attach(f.actor, f.home, f.presence.id, { providerBindingId: binding.id, providerProfileRef: "native-fixture-profile" });
+    const probe = vi.spyOn(nativeBridge, "executeNativeProviderConformance").mockImplementation(async ctx => {
+      expect(ctx.authToken).toBeUndefined(); expect(ctx.runtimeTools).toBeUndefined();
+      const [task] = await db.select().from(issues).where(eq(issues.id, String(ctx.context.providerConformanceIssueId)));
+      expect(task).toMatchObject({ companyId: f.home, assigneeAgentId: f.presence.id, harnessKind: "provider_conformance" }); expect(task!.hiddenAt).toBeTruthy();
+      return { exitCode: 0, signal: null, timedOut: false, resultJson: { status: "completed", output: "Synthetic fixture; no live provider proof" } };
+    });
+    try {
+      const result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
+      expect(probe).toHaveBeenCalledTimes(1); expect(result.spentCents).toBeNull(); expect(result.binding.status).toBe("unqualified");
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, result.runIds[0]!));
+      const [task] = await db.select().from(issues).where(eq(issues.id, String(run!.contextSnapshot?.providerConformanceIssueId)));
+      expect(task!.status).toBe("blocked"); expect(task!.completedAt).toBeNull();
+    } finally { probe.mockRestore(); }
+  });
   it("unknown cost stops further probes and cannot fabricate passing conformance", async () => {
     const f = await fixture(); reportedCost = undefined;
     const result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
     expect(result.runIds).toHaveLength(1); expect(result.spentCents).toBeNull(); expect(result.binding.status).toBe("unqualified"); expect(result.failure).toBeTruthy();
+  });
+  it("unknown accounting on the last probe cannot bypass qualification or be manually revalidated", async () => {
+    const f = await fixture(); unknownLastCost = true;
+    const result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
+    expect(result.runIds).toHaveLength(2); expect(result.binding.status).toBe("unqualified"); expect(result.spentCents).toBeNull(); expect(result.failure).toContain("every probe");
+    const bindings = agentProviderBindingService(db), record = await bindings.getForPresence(f.actor, f.home, f.presence.id);
+    expect(record!.runtime.conformanceReport?.accountingComplete).toBe(false);
+    await expect(bindings.revalidate(f.actor, f.home, f.presence.id, result.binding.capabilitySnapshot!.hash, "Operator cannot replace missing actual accounting with an acknowledgement")).rejects.toMatchObject({ status: 409 });
   });
   it("pins the isolation peer and rejects later changes to its tested physical profile", async () => {
     const f = await fixture(), bindings = agentProviderBindingService(db);

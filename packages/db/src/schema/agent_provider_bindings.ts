@@ -36,7 +36,7 @@ export const agentPresenceRuntimeBindings = pgTable("agent_presence_runtime_bind
   providerSessionNamespace: text("provider_session_namespace").notNull(),
   qualifiedConfigurationHash: text("qualified_configuration_hash"),
   conformanceSnapshotHash: text("conformance_snapshot_hash"),
-  conformanceReport: jsonb("conformance_report").$type<{ adapterContractVersion: string; providerVersion: string | null; testedAt: string; profileRef: string; checks: Record<string, boolean> }>(),
+  conformanceReport: jsonb("conformance_report").$type<{ adapterContractVersion: string; accountingComplete?: boolean; providerVersion: string | null; testedAt: string; profileRef: string; checks: Record<string, boolean> }>(),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -12,6 +12,8 @@ import { hashContextPolicySnapshot } from "./context/context-manifest.js";
 import { makeProviderCapabilitySnapshot, providerCapabilityChanges, providerConformanceRequirements } from "./provider-capabilities.js";
 import { getServerAdapter } from "../adapters/index.js";
 
+const PROVIDER_CONFORMANCE_CONTRACT_VERSION = "aw-provider-conformance-v5.2";
+
 type IsolationPeerProof = { companyId: string; agentId: string; runtimeId: string; bindingId: string; profileRef: string; configurationHash: string };
 
 export function agentProviderBindingService(db: Db) {
@@ -184,7 +186,7 @@ export function agentProviderBindingService(db: Db) {
     },
     // Internal entry point for adapter-owned deterministic discovery/conformance.
     // No HTTP route accepts snapshots or evidence supplied by an agent/model.
-    recordDiscovery: async (companyId: string, agentId: string, snapshotInput: Omit<ProviderCapabilitySnapshot, "hash">, evidence: Record<string, boolean>, expected?: { configurationHash: string; runtimeId: string; profileRef: string; bindingId: string; isolationPeer?: IsolationPeerProof }) => {
+    recordDiscovery: async (companyId: string, agentId: string, snapshotInput: Omit<ProviderCapabilitySnapshot, "hash">, evidence: Record<string, boolean>, expected?: { configurationHash: string; runtimeId: string; profileRef: string; bindingId: string; accountingComplete?: boolean; isolationPeer?: IsolationPeerProof }) => {
       await assertV5Enabled(db, "agent_provider_bindings_v5");
       const snapshot = makeProviderCapabilitySnapshot(snapshotInput);
       const result = await withV5ActivityTransaction(db, async (tx, publications) => {
@@ -197,7 +199,7 @@ export function agentProviderBindingService(db: Db) {
         if (!binding || binding.status === "revoked") throw conflict("Provider binding is revoked");
         if (binding.providerType !== snapshot.provider) throw conflict("Provider discovery identity does not match the binding");
         const drift = providerCapabilityChanges(binding.capabilitySnapshot, snapshot);
-        const qualified = providerConformanceRequirements(snapshot, binding.isolationMode).every((key) => evidence[key] === true);
+        const qualified = expected?.accountingComplete !== false && providerConformanceRequirements(snapshot, binding.isolationMode).every((key) => evidence[key] === true);
         const status = !qualified ? "unqualified" : drift.changed || binding.status === "degraded" ? "degraded" : "active";
         const [updated] = await tx.update(agentProviderBindings).set({
           capabilitySnapshot: snapshot, capabilitySnapshotHash: snapshot.hash,
@@ -208,7 +210,7 @@ export function agentProviderBindingService(db: Db) {
           status: status === "active" ? "active" : "degraded", updatedAt: new Date(),
           qualifiedConfigurationHash: qualified ? hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) : null,
           conformanceSnapshotHash: qualified ? snapshot.hash : null,
-          conformanceReport: { adapterContractVersion: "aw-provider-conformance-v5.1", providerVersion: snapshot.version, testedAt: new Date().toISOString(), profileRef: runtime.providerProfileRef, checks: evidence, ...(expected?.isolationPeer ? { isolationPeer: expected.isolationPeer } : {}) },
+          conformanceReport: { adapterContractVersion: PROVIDER_CONFORMANCE_CONTRACT_VERSION, ...(expected ? { accountingComplete: expected.accountingComplete === true } : {}), providerVersion: snapshot.version, testedAt: new Date().toISOString(), profileRef: runtime.providerProfileRef, checks: evidence, ...(expected?.isolationPeer ? { isolationPeer: expected.isolationPeer } : {}) },
         }).where(eq(agentPresenceRuntimeBindings.id, runtime.id));
         await logActivity(tx, { companyId, actorType: "system", actorId: "provider-discovery", action: drift.changed ? "provider_binding.capability_drift_detected" : "provider_binding.capabilities_discovered", entityType: "agent_provider_binding", entityId: binding.id, details: { hash: snapshot.hash, status, lostFeatures: drift.lostFeatures, versionChanged: drift.versionChanged } }, publications);
         return updated!;
@@ -229,7 +231,7 @@ export function agentProviderBindingService(db: Db) {
         if (!binding || binding.status === "revoked" || !binding.capabilitySnapshot || binding.capabilitySnapshot.hash !== expectedSnapshotHash) throw conflict("Provider capabilities changed; repeat review");
         await assertIsolationPeerCurrent(tx, runtime.conformanceReport);
         const report = runtime.conformanceReport, checks = report?.checks as Record<string, unknown> | undefined;
-        if (runtime.qualifiedConfigurationHash !== hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) || runtime.conformanceSnapshotHash !== expectedSnapshotHash || report?.profileRef !== runtime.providerProfileRef || report?.adapterContractVersion !== "aw-provider-conformance-v5.1" || !providerConformanceRequirements(binding.capabilitySnapshot, binding.isolationMode).every((key) => checks?.[key] === true)) throw conflict("Revalidation requires fresh, passing adapter-owned conformance for this exact local profile and configuration");
+        if (runtime.qualifiedConfigurationHash !== hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) || runtime.conformanceSnapshotHash !== expectedSnapshotHash || report?.profileRef !== runtime.providerProfileRef || report?.adapterContractVersion !== PROVIDER_CONFORMANCE_CONTRACT_VERSION || report?.accountingComplete === false || !providerConformanceRequirements(binding.capabilitySnapshot, binding.isolationMode).every((key) => checks?.[key] === true)) throw conflict("Revalidation requires fresh, passing adapter-owned conformance for this exact local profile and configuration");
         if (binding.isolationMode === "shared_trusted_runtime") { await assertV5Enabled(tx, "shared_trusted_runtime_v5"); const peers = await tx.select({ companyId: agentPresenceRuntimeBindings.companyId }).from(agentPresenceRuntimeBindings).where(and(eq(agentPresenceRuntimeBindings.providerBindingId, binding.id), ne(agentPresenceRuntimeBindings.status, "revoked"))).limit(501); if (peers.length > 500) throw conflict("Provider presence limit reached"); await assertSharedAcknowledgements(tx, binding.id, peers.map((peer) => peer.companyId)); }
         const [updated] = await tx.update(agentProviderBindings).set({ status: "active", updatedAt: new Date() }).where(eq(agentProviderBindings.id, binding.id)).returning();
         await tx.update(agentPresenceRuntimeBindings).set({ status: "active", updatedAt: new Date() }).where(eq(agentPresenceRuntimeBindings.id, runtime.id));
@@ -241,11 +243,19 @@ export function agentProviderBindingService(db: Db) {
       const [record] = await db.select({ runtime: agentPresenceRuntimeBindings, provider: agentProviderBindings }).from(agentPresenceRuntimeBindings)
         .innerJoin(agentProviderBindings, eq(agentPresenceRuntimeBindings.providerBindingId, agentProviderBindings.id))
         .where(and(eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, agentId))).limit(1);
-      if (!record || record.runtime.status !== "active" || record.provider.status !== "active" || !record.provider.capabilitySnapshot) throw conflict("A qualified active provider binding is required");
+      if (!record || record.runtime.status !== "active" || record.provider.status !== "active" || !record.provider.capabilitySnapshot || record.runtime.conformanceReport?.adapterContractVersion !== PROVIDER_CONFORMANCE_CONTRACT_VERSION || record.runtime.conformanceReport?.accountingComplete === false) throw conflict("A qualified active provider binding is required");
       const presence = await localPresence(db, companyId, agentId);
       if (record.runtime.qualifiedConfigurationHash !== hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig })
         || record.runtime.conformanceSnapshotHash !== record.provider.capabilitySnapshot.hash
         || record.runtime.conformanceReport?.profileRef !== record.runtime.providerProfileRef) throw conflict("Provider profile/configuration changed; repeat conformance and dependency validation");
+      if (record.provider.providerType === "paperclip_native" && presence.adapterType === "paperclip_runner") {
+        const { discoverNativeCapabilities } = await import("./native-provider-conformance.js");
+        const current = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId, adapterType: presence.adapterType, config: presence.adapterConfig }));
+        if (current.hash !== record.provider.capabilitySnapshot.hash) {
+          await agentProviderBindingService(db).markUnavailable(companyId, agentId, "discovery_failed");
+          throw conflict("Native capability contract changed; repeat conformance");
+        }
+      }
       await assertIsolationPeerCurrent(db, record.runtime.conformanceReport);
       if (record.provider.isolationMode === "shared_trusted_runtime") {
         await assertV5Enabled(db, "shared_trusted_runtime_v5");

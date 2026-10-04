@@ -58,20 +58,16 @@ The Studio pages and authenticated browser scenarios are implemented. Canonical
 review, immutable candidates, suite replacement, baseline preservation and
 membership/flag rollback have been verified in browser and PostgreSQL checks.
 
-Recursive typecheck, the complete build and UI token gates pass at the latest
-source checkpoint. The complete regression suite is running through the supported shards after
-fixture fixes. Independent coverage includes all 910 server test files. The full Hermes
-and Pi package checks pass separately because the repository's stable test
-wrapper does not include those projects. Deterministic project health and the
-bundled Project Planning & Execution Skill have focused coverage.
+The earlier complete checkpoint has 27,922 passing stable-wrapper tests and
+58 actual skips over all 910 server source test files. Its complete source,
+Git history, 336 migration hashes and cold PostgreSQL restore were verified.
+The finishing work adds scoped connected tools, local native and A2A protocol
+bridges, exact replay, full probe accounting and post-crash Skill reconciliation.
+These changes are undergoing a fresh full verification and cold backup.
 
-The baseline and an intermediate full V5 backup were restored and verified,
-including file checksums, Git objects, migrations and cold PostgreSQL startup.
-Later source checkpoints retain all subsequent changes. Final Git persistence,
-a new full backup and exact verification record remain in progress.
-
-The ordered wave checkboxes describe complete acceptance, not model or endpoint
-availability. Native/A2A conformance integration, general scoped connected tools,
-post-crash usage reconciliation, actual-company library curation and live provider pilots
-remain explicit requirements. Unsupported providers stay unqualified. No live
-pilot gate is marked passed from fixture results.
+The ordered wave checkboxes describe full activation acceptance. Actual-company
+library curation and live provider pilots remain external activation conditions;
+the user currently has no pilot companies, presences, profiles or budget.
+Unsupported conformance transports remain unqualified. All 20 flags stay off.
+CI and independent review must pass before merge. Local fixtures do not certify
+live provider isolation or pilot hard gates.

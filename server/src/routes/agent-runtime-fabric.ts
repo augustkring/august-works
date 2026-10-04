@@ -24,7 +24,7 @@ export function agentRuntimeFabricRoutes(db: Db) {
   });
   router.post("/companies/:companyId/runs/:runId/scoped-actions", validate(scopedRuntimeActionSchema), async (req, res) => {
     const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId);
-    res.json(await scopedRuntimeActionService(db).execute(req.actor, companyId, req.params.runId as string, req.body));
+    res.json(await scopedRuntimeActionService(db, req.app.locals.toolGateway).execute(req.actor, companyId, req.params.runId as string, req.body));
   });
   router.get("/companies/:companyId/runs/:runId/execution-manifest", async (req, res) => {
     const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId);

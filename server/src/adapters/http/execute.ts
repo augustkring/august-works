@@ -1,8 +1,10 @@
 import type { AdapterExecutionContext, AdapterExecutionResult } from "../types.js";
 import { asString, asNumber, parseObject } from "../utils.js";
 import { guardedHttpAdapterFetch } from "./remote-fetch.js";
+import { executeA2A } from "../../services/a2a-execution.js";
 
 export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExecutionResult> {
+  if (ctx.providerRuntime?.providerType === "a2a") return executeA2A(ctx);
   const { config, runId, agent, context } = ctx;
   const url = asString(config.url, "");
   if (!url) throw new Error("HTTP adapter missing url");
