@@ -1,4 +1,4 @@
-import { resolveAwDeploymentProfile } from "../aw-deployment.js";
+import { resolveAwDeploymentProfile } from "../deployment-profile.js";
 import { createHash } from "node:crypto";
 
 export type CloudInstanceEnv = Record<string, string | undefined>;
