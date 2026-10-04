@@ -2,6 +2,7 @@ import type {
   AdapterExecutionContext,
   AdapterExecutionResult,
   AdapterRuntimeServiceReport,
+  ServerAdapterModule,
 } from "@paperclipai/adapter-utils";
 import {
   asNumber,
@@ -764,6 +765,7 @@ class GatewayWsClient {
 
   close() {
     if (!this.ws) return;
+    this.failPending(new Error("gateway client closed"));
     this.ws.close(1000, "paperclip-complete");
     this.ws = null;
   }
@@ -831,6 +833,41 @@ class GatewayWsClient {
     pending.reject(err);
   }
 }
+
+/** Read-only discovery uses the same signed gateway transport as execution. */
+export const discoverCapabilities: NonNullable<ServerAdapterModule["discoverCapabilities"]> = async (ctx) => {
+  const url = normalizeUrl(asString(ctx.config.url, ""));
+  if (!url || !["ws:", "wss:"].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.protocol === "ws:" && !isLoopbackHost(url.hostname)) throw new Error("V5 OpenClaw discovery requires a secure gateway endpoint");
+  const headers = toStringRecord(ctx.config.headers), token = resolveAuthToken(ctx.config, headers), password = nonEmpty(ctx.config.password), deviceToken = nonEmpty(ctx.config.deviceToken);
+  if (token && !headerMapHasIgnoreCase(headers, "authorization")) headers.authorization = toAuthorizationHeaderValue(token);
+  const identity = parseBoolean(ctx.config.disableDeviceAuth) ? null : resolveDeviceIdentity(ctx.config);
+  const clientId = nonEmpty(ctx.config.clientId) ?? DEFAULT_CLIENT_ID, clientMode = nonEmpty(ctx.config.clientMode) ?? DEFAULT_CLIENT_MODE, role = nonEmpty(ctx.config.role) ?? DEFAULT_ROLE, scopes = ["operator.read"];
+  const client = new GatewayWsClient({ url: url.toString(), headers, onEvent: () => {}, onLog: async () => {} });
+  const inventory = (value: unknown) => {
+    if (!Array.isArray(value) || value.length > 500) throw new Error("Invalid OpenClaw capability inventory");
+    return value.map((entry) => {
+      const item = asRecord(entry), id = nonEmpty(item?.id) ?? nonEmpty(item?.key) ?? nonEmpty(item?.name), name = nonEmpty(item?.name) ?? id;
+      if (!item || !id || id.length > 200 || !name || name.length > 200 || item.description !== undefined && (typeof item.description !== "string" || item.description.length > 2000)) throw new Error("Invalid OpenClaw capability descriptor");
+      return { id, name, description: typeof item.description === "string" ? item.description : "", version: nonEmpty(item.version) };
+    });
+  };
+  try {
+    const hello = await client.connect((nonce) => {
+      const signedAtMs = Date.now(), params: Record<string, unknown> = { minProtocol: PROTOCOL_VERSION, maxProtocol: PROTOCOL_VERSION, client: { id: clientId, version: DEFAULT_CLIENT_VERSION, platform: process.platform, mode: clientMode }, role, scopes, auth: { ...(token ? { token } : {}), ...(password ? { password } : {}), ...(deviceToken ? { deviceToken } : {}) } };
+      if (identity) params.device = { id: identity.deviceId, publicKey: identity.publicKeyRawBase64Url, signature: signDevicePayload(identity.privateKeyPem, buildDeviceAuthPayloadV3({ deviceId: identity.deviceId, clientId, clientMode, role, scopes, signedAtMs, token, nonce, platform: process.platform, deviceFamily: null })), signedAt: signedAtMs, nonce };
+      return params;
+    }, 10_000);
+    const advertised = asRecord(hello?.features)?.methods;
+    if (!Array.isArray(advertised) || advertised.length > 500 || advertised.some((method) => typeof method !== "string")) throw new Error("Gateway method discovery is unavailable");
+    const methods = new Set(advertised), skillDiscovery = methods.has("skills.status"), toolDiscovery = methods.has("tools.catalog");
+    const agentId = nonEmpty(ctx.config.agentId);
+    const skills = skillDiscovery ? inventory(asRecord(await client.request("skills.status", agentId ? { agentId } : {}, { timeoutMs: 10_000 }))?.skills) : [];
+    const tools = toolDiscovery ? inventory(asRecord(await client.request("tools.catalog", agentId ? { agentId } : {}, { timeoutMs: 10_000 }))?.tools) : [];
+    const version = nonEmpty(asRecord(hello?.server)?.version);
+    if (version && version.length > 200) throw new Error("Invalid gateway version");
+    return { provider: "openclaw", version, features: { sessions: methods.has("agent") && methods.has("agent.wait"), cancellation: methods.has("chat.abort"), steering: false, structuredOutput: false, skillsDiscovery: skillDiscovery, skillsSync: false, toolDiscovery, memoryScoping: false }, skills, tools, discoveredAt: new Date().toISOString() };
+  } finally { client.close(); }
+};
 
 async function autoApproveDevicePairing(params: {
   url: string;
@@ -1098,7 +1135,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   const clientMode = nonEmpty(ctx.config.clientMode) ?? DEFAULT_CLIENT_MODE;
   const clientVersion = nonEmpty(ctx.config.clientVersion) ?? DEFAULT_CLIENT_VERSION;
   const role = nonEmpty(ctx.config.role) ?? DEFAULT_ROLE;
-  const scopes = normalizeScopes(ctx.config.scopes);
+  const scopes = ctx.providerRuntime && ctx.config.scopes === undefined ? ["operator.read", "operator.write"] : normalizeScopes(ctx.config.scopes);
   const deviceFamily = nonEmpty(ctx.config.deviceFamily);
   const disableDeviceAuth = parseBoolean(ctx.config.disableDeviceAuth, false);
 
@@ -1125,14 +1162,17 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
   const sessionKeyStrategy = normalizeSessionKeyStrategy(ctx.config.sessionKeyStrategy);
   const configuredSessionKey = nonEmpty(ctx.config.sessionKey);
-  const configuredAgentId = nonEmpty(ctx.config.agentId);
-  const sessionKey = resolveSessionKey({
+  const configuredAgentId = ctx.providerRuntime ? ctx.providerRuntime.providerAgentRef : nonEmpty(ctx.config.agentId);
+  const legacySessionKey = resolveSessionKey({
     strategy: sessionKeyStrategy,
     configuredSessionKey,
     agentId: configuredAgentId,
     runId: ctx.runId,
     issueId: wakePayload.issueId,
   });
+  const sessionKey = ctx.providerRuntime
+    ? prefixSessionKeyForAgent(`${ctx.providerRuntime.sessionNamespace}:${sessionKeyStrategy === "issue" && wakePayload.issueId ? `issue:${wakePayload.issueId}` : sessionKeyStrategy === "run" ? `run:${ctx.runId}` : "agent"}`, configuredAgentId)
+    : legacySessionKey;
 
   const templateMessage = nonEmpty(payloadTemplate.message) ?? nonEmpty(payloadTemplate.text);
   const message = joinPromptSections([
@@ -1195,6 +1235,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   };
 
   while (true) {
+    if (ctx.signal?.aborted) return { exitCode: null, signal: null, timedOut: false, errorCode: "cancelled", errorMessage: "Execution cancelled before provider dispatch" };
     const trackedRunIds = new Set<string>([ctx.runId]);
     const assistantChunks: string[] = [];
     let lifecycleError: string | null = null;
@@ -1254,6 +1295,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       onEvent,
       onLog: ctx.onLog,
     });
+    let onAbort: (() => void) | null = null;
 
     try {
       deviceIdentity = disableDeviceAuth ? null : resolveDeviceIdentity(parseObject(ctx.config));
@@ -1325,6 +1367,10 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       // setup and backoff. The first agent request is the remote-work boundary:
       // once it is sent, retrying would be unsafe because the gateway may have
       // accepted work even if the response is lost.
+      if (ctx.signal?.aborted) return { exitCode: null, signal: null, timedOut: false, errorCode: "cancelled", errorMessage: "Execution cancelled before provider dispatch" };
+      const gatewayMethods = asRecord(hello?.features)?.methods;
+      const supportsCancellation = Array.isArray(gatewayMethods) && gatewayMethods.includes("chat.abort");
+      if (supportsCancellation) await ctx.onCancellationReady?.();
       reportDispatch();
       const acceptedPayload = await client.request<Record<string, unknown>>("agent", agentParams, {
         timeoutMs: connectTimeoutMs,
@@ -1355,11 +1401,26 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       }
 
       if (acceptedStatus !== "ok") {
-        const waitPayload = await client.request<Record<string, unknown>>(
+        const cancelled = new Promise<"cancelled">((resolve) => { onAbort = () => resolve("cancelled"); });
+        ctx.signal?.addEventListener("abort", onAbort!, { once: true });
+        if (ctx.signal?.aborted) onAbort!();
+        const waitOrCancelled = await Promise.race([client.request<Record<string, unknown>>(
           "agent.wait",
           { runId: acceptedRunId, timeoutMs: waitTimeoutMs },
           { timeoutMs: waitTimeoutMs + connectTimeoutMs },
-        );
+        ), cancelled]);
+        if (waitOrCancelled === "cancelled") {
+          let terminal: Record<string, unknown> | null = null;
+          if (supportsCancellation) {
+            try {
+              await client.request("chat.abort", { sessionKey, runId: acceptedRunId }, { timeoutMs: 5_000 });
+              terminal = await client.request("agent.wait", { runId: acceptedRunId, timeoutMs: 4_000 }, { timeoutMs: 5_000 });
+            } catch { /* a request to stop is not evidence of termination */ }
+          }
+          const confirmed = terminal && ["cancelled", "canceled", "aborted", "stopped"].includes(String(terminal.status));
+          return { exitCode: null, signal: null, timedOut: false, errorCode: confirmed ? "cancelled" : "cancellation_unconfirmed", errorMessage: confirmed ? "OpenClaw provider termination confirmed" : "OpenClaw provider termination could not be confirmed", resultJson: terminal ? { ...terminal, ...(confirmed ? { status: "cancelled" } : {}) } : null };
+        }
+        const waitPayload = waitOrCancelled;
 
         latestResultPayload = waitPayload;
 
@@ -1426,7 +1487,9 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       const runtimeServices = extractRuntimeServicesFromMeta(agentMeta ?? mergedMeta);
       const provider = nonEmpty(agentMeta?.provider) ?? nonEmpty(mergedMeta.provider) ?? "openclaw";
       const model = nonEmpty(agentMeta?.model) ?? nonEmpty(mergedMeta.model) ?? null;
-      const costUsd = asNumber(agentMeta?.costUsd ?? mergedMeta.costUsd, 0);
+      const reportedCost = agentMeta?.costUsd ?? mergedMeta.costUsd;
+      const costUsd = typeof reportedCost === "number" && Number.isFinite(reportedCost) && reportedCost >= 0 ? reportedCost : null;
+      const receipt = asRecord(agentMeta?.providerReceipt) ?? asRecord(mergedMeta.providerReceipt);
 
       await ctx.onLog(
         "stdout",
@@ -1440,12 +1503,13 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         provider,
         ...(model ? { model } : {}),
         ...(usage ? { usage } : {}),
-        ...(costUsd > 0 ? { costUsd } : {}),
-        resultJson: asRecord(latestResultPayload),
+        ...(costUsd !== null ? { costUsd } : {}),
+        resultJson: { ...asRecord(latestResultPayload), output: summary, status: "completed", ...(receipt ? { providerReceipt: receipt } : {}) },
         ...(runtimeServices.length > 0 ? { runtimeServices } : {}),
         ...(summary ? { summary } : {}),
       };
     } catch (err) {
+      if (ctx.signal?.aborted && dispatchReported) return { exitCode: null, signal: null, timedOut: false, errorCode: "cancellation_unconfirmed", errorMessage: "OpenClaw transport lost before provider termination was confirmed", resultJson: asRecord(latestResultPayload) };
       const message = err instanceof Error ? err.message : String(err);
       const lower = message.toLowerCase();
       const timedOut = lower.includes("timeout");
@@ -1525,6 +1589,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         resultJson: asRecord(latestResultPayload),
       };
     } finally {
+      if (onAbort) ctx.signal?.removeEventListener("abort", onAbort);
       client.close();
     }
   }

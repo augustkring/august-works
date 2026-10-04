@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, index, jsonb, unique } from "drizzle-orm/pg-core";
 import type { SourceTrustMetadata } from "@paperclipai/shared";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
@@ -25,6 +25,7 @@ export const documents = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    companyIdUnique: unique("documents_company_id_uq").on(table.companyId, table.id),
     companyUpdatedIdx: index("documents_company_updated_idx").on(table.companyId, table.updatedAt),
     companyCreatedIdx: index("documents_company_created_idx").on(table.companyId, table.createdAt),
     titleSearchIdx: index("documents_title_search_idx").using("gin", table.title.op("gin_trgm_ops")),

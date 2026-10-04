@@ -703,4 +703,20 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     ]);
     expect(result.markdown).not.toContain("durable customer value");
   });
+
+  it("enforces the represented human's source permission for V5 even in shadow mode", async () => {
+    const seeded = await seed();
+    await db.insert(principalPermissionGrants).values({ companyId: seeded.companyId, principalType: "agent", principalId: seeded.agent.id, permissionKey: "foundation:read", scope: null });
+    await createApprovedFoundation({ companyId: seeded.companyId, userId: seeded.userId, key: "enterprise-strategy", body: "# Enterprise strategy\nEnterprise strategy requires confidential source permission.", sensitivity: "internal" });
+    const priorMode = process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE;
+    process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE = "shadow";
+    try {
+      const result = await contextEngineService(db).assemble({ companyId: seeded.companyId, agentId: seeded.agent.id, responsibleUserId: seeded.userId, query: "enterprise strategy", enforceResponsibleUserIntersection: true });
+      expect(result.packet.foundation).toEqual([]);
+      expect(result.markdown).not.toContain("requires confidential source permission");
+    } finally {
+      if (priorMode === undefined) delete process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE;
+      else process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE = priorMode;
+    }
+  });
 });

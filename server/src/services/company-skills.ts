@@ -1,10 +1,13 @@
+import { instanceSettingsService } from "./instance-settings.js";
+import { v5FeatureEnabled } from "@paperclipai/shared";
+import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { logger } from "../middleware/logger.js";
 import { removeRuntimeSkillCache, resolveRuntimeSkillCache, runtimeSkillCacheSpec } from "./runtime-skill-cache.js";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, asc, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents as agentsTable,
@@ -16,6 +19,8 @@ import {
   companySkillTestInputs,
   companySkillTestRunTemplates,
   companySkillTestRuns,
+  companySkillEvalRuns,
+  companySkillEvalCases,
   companySkillVersions,
   companySkills,
   costEvents,
@@ -369,6 +374,8 @@ export type ProjectSkillScanTarget = {
 };
 
 type RuntimeSkillEntryOptions = {
+  selectedSkillKeys?: Set<string>;
+  allowCandidateVersionsForTest?: boolean;
   materializeMissing?: boolean;
   versionSelections?: Map<string, string | null>;
 };
@@ -440,6 +447,15 @@ function selectCompanySkillColumns() {
     installCount: companySkills.installCount,
     forkCount: companySkills.forkCount,
     currentVersionId: companySkills.currentVersionId,
+    lifecycleState: companySkills.lifecycleState,
+    activeVersionId: companySkills.activeVersionId,
+    headVersionId: companySkills.headVersionId,
+    ownerAgentId: companySkills.ownerAgentId,
+    degradedReason: companySkills.degradedReason,
+    lastValidatedAt: companySkills.lastValidatedAt,
+    nextReviewAt: companySkills.nextReviewAt,
+    reviewPolicy: companySkills.reviewPolicy,
+    promotionPolicy: companySkills.promotionPolicy,
     metadata: companySkills.metadata,
     createdAt: companySkills.createdAt,
     updatedAt: companySkills.updatedAt,
@@ -1784,6 +1800,7 @@ function toCompanySkill(row: CompanySkillRow): CompanySkill {
     installCount: Math.max(0, row.installCount ?? 0),
     forkCount: Math.max(0, row.forkCount ?? 0),
     currentVersionId: row.currentVersionId ?? null,
+    lifecycleState: row.lifecycleState as CompanySkill["lifecycleState"],
     metadata: isPlainRecord(row.metadata) ? row.metadata : null,
   };
 }
@@ -1904,6 +1921,8 @@ function serializeVersionFileInventory(
 function toCompanySkillVersion(row: CompanySkillVersionRow): CompanySkillVersion {
   return {
     ...row,
+    state: row.state as CompanySkillVersion["state"],
+    visibility: row.visibility as CompanySkillVersion["visibility"],
     label: row.label ?? null,
     releaseId: row.releaseId ?? null,
     releaseName: row.releaseName ?? null,
@@ -3104,6 +3123,7 @@ export function companySkillService(db: Db) {
         key: companySkills.key,
         slug: companySkills.slug,
         sourceType: companySkills.sourceType,
+        activeVersionId: companySkills.activeVersionId,
         sourceLocator: companySkills.sourceLocator,
         trustLevel: companySkills.trustLevel,
         fileInventory: companySkills.fileInventory,
@@ -3120,7 +3140,9 @@ export function companySkillService(db: Db) {
     }));
     const missingIds = new Set(await findMissingLocalSkillIds(skills));
 
+    const governed = v5FeatureEnabled(await instanceSettingsService(db).getExperimental(), "skill_lifecycle_v5");
     for (const skill of skills) {
+      if (governed && skill.activeVersionId) continue;
       if (skill.sourceType !== "local_path") continue;
       if (isPaperclipBundledSkillKey(skill.key) || asString(skill.metadata?.sourceKind) === "paperclip_bundled") continue;
 
@@ -3203,8 +3225,26 @@ export function companySkillService(db: Db) {
     }
   }
 
-  async function list(companyId: string, query: CompanySkillListQuery = {}): Promise<CompanySkillListItem[]> {
+  async function privateSkillCondition(companyId: string, actor?: AuthorizationActor) {
+    if (!actor) return undefined;
+    if (actor.type === "board" && (await authorizationService(db).decide({ actor, action: "users:manage_permissions", resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true })).allowed) return undefined;
+    const ownership = actor.type === "agent"
+      ? eq(companySkills.ownerAgentId, actor.agentId ?? "00000000-0000-0000-0000-000000000000")
+      : sql`exists (select 1 from ${companySkillVersions} where ${companySkillVersions.id} = ${companySkills.headVersionId} and ${companySkillVersions.companyId} = ${companyId} and ${companySkillVersions.authorUserId} = ${actor.type === "board" ? actor.userId ?? "" : ""})`;
+    const v5Enabled = v5FeatureEnabled(await instanceSettingsService(db).getExperimental(), "skill_lifecycle_v5");
+    // Disabling a rollout flag must not disclose retained V5 private drafts.
+    return and(sql`coalesce(${companySkills.metadata}->>'sensitivity', 'internal') in ('public', 'internal')`, or(ne(companySkills.sharingScope, "private"), !v5Enabled ? isNull(companySkills.headVersionId) : undefined, ownership));
+  }
+
+  async function canReadSkill(companyId: string, skillId: string, actor: AuthorizationActor) {
+    const condition = await privateSkillCondition(companyId, actor);
+    const [row] = await db.select({ id: companySkills.id }).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId), condition)).limit(1);
+    return Boolean(row);
+  }
+
+  async function list(companyId: string, query: CompanySkillListQuery = {}, actor?: AuthorizationActor): Promise<CompanySkillListItem[]> {
     await ensureSkillInventoryCurrent(companyId);
+    const privateCondition = await privateSkillCondition(companyId, actor);
     const [dbRows, folderListing] = await Promise.all([db
       .select({
         id: companySkills.id,
@@ -3239,7 +3279,7 @@ export function companySkillService(db: Db) {
         updatedAt: companySkills.updatedAt,
       })
       .from(companySkills)
-      .where(eq(companySkills.companyId, companyId))
+      .where(and(eq(companySkills.companyId, companyId), privateCondition))
       .orderBy(asc(companySkills.name), asc(companySkills.key))
       .then((entries) => entries.map((entry) => toCompanySkillListRow(entry as CompanySkillListDbRow))),
       folderSvc.list(companyId, "skill"),
@@ -3381,7 +3421,15 @@ export function companySkillService(db: Db) {
       ?? await getByKey(companyId, ref);
   }
 
-  async function getVersion(companyId: string, skillId: string, versionId: string): Promise<CompanySkillVersion | null> {
+  async function canReadPrivateVersion(companyId: string, version: CompanySkillVersionRow, actor: AuthorizationActor) {
+    if (version.visibility !== "private") return true;
+    if (actor.type === "agent") return version.authorAgentId === actor.agentId && actor.companyId === companyId;
+    if (actor.source === "local_implicit" || version.authorUserId === actor.userId) return true;
+    return (await authorizationService(db).decide({ actor, action: "users:manage_permissions", resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true })).allowed;
+  }
+
+  async function getVersion(companyId: string, skillId: string, versionId: string, actor?: AuthorizationActor): Promise<CompanySkillVersion | null> {
+    if (actor && !(await canReadSkill(companyId, skillId, actor))) return null;
     const row = await db
       .select()
       .from(companySkillVersions)
@@ -3391,6 +3439,7 @@ export function companySkillService(db: Db) {
         eq(companySkillVersions.id, versionId),
       ))
       .then((rows) => rows[0] ?? null);
+    if (row && actor && !(await canReadPrivateVersion(companyId, row, actor))) return null;
     return row ? toCompanySkillVersion(row) : null;
   }
 
@@ -3564,7 +3613,8 @@ export function companySkillService(db: Db) {
     return out;
   }
 
-  async function listVersions(companyId: string, skillId: string): Promise<CompanySkillVersion[]> {
+  async function listVersions(companyId: string, skillId: string, actor?: AuthorizationActor): Promise<CompanySkillVersion[]> {
+    if (actor && !(await canReadSkill(companyId, skillId, actor))) throw notFound("Skill not found");
     const skill = await getById(companyId, skillId);
     if (!skill) throw notFound("Skill not found");
     const rows = await db
@@ -3572,7 +3622,8 @@ export function companySkillService(db: Db) {
       .from(companySkillVersions)
       .where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, skillId)))
       .orderBy(desc(companySkillVersions.revisionNumber));
-    return rows.map((row) => toCompanySkillVersion(row));
+    const allowed = actor ? await Promise.all(rows.map(async (row) => (await canReadPrivateVersion(companyId, row, actor)) ? row : null)) : rows;
+    return allowed.filter((row): row is CompanySkillVersionRow => row !== null).map(toCompanySkillVersion);
   }
 
   async function createVersion(
@@ -4426,6 +4477,7 @@ export function companySkillService(db: Db) {
     input: CompanySkillCreateRequest,
     actor: SkillActor | null = null,
   ): Promise<CompanySkill> {
+    if (actor?.type === "agent" && v5FeatureEnabled(await instanceSettingsService(db).getExperimental(), "skill_lifecycle_v5")) throw conflict("Use a governed private/proposed Skill candidate under the company proposal policy");
     if (input.folderId) await folderSvc.validateSkillFolder(companyId, input.folderId);
     const slug = normalizeSkillSlug(input.slug ?? input.name) ?? "skill";
     const key = `company/${companyId}/${slug}`;
@@ -4599,6 +4651,10 @@ export function companySkillService(db: Db) {
       const skill = await getById(companyId, skillId, tx);
       if (!skill) throw notFound("Skill not found");
       if (skill.slug !== initial.slug) throw conflict("Skill was renamed. Retry the operation.");
+      if (v5FeatureEnabled(await instanceSettingsService(db).getExperimental(), "skill_lifecycle_v5")) {
+        const [state] = await tx.select({ activeVersionId: companySkills.activeVersionId }).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId))).limit(1).for("update");
+        if (state?.activeVersionId) throw conflict("Active procedures must be changed through an immutable candidate version");
+      }
       return mutate(skill, tx);
     });
   }
@@ -5988,16 +6044,26 @@ export function companySkillService(db: Db) {
   ): Promise<PaperclipSkillEntry[]> {
     const skills = await listFull(companyId);
 
+    const lifecycleEnabled = v5FeatureEnabled(await instanceSettingsService(db).getExperimental(), "skill_lifecycle_v5");
     const out: PaperclipSkillEntry[] = [];
     for (const skill of skills) {
-      const sourceResolution = await resolveRuntimeSkillSource(companyId, skill, options);
+      if (options.selectedSkillKeys && !options.selectedSkillKeys.has(skill.key)) continue;
+      const selectedVersionId = options.versionSelections?.get(skill.key) ?? (lifecycleEnabled ? skill.activeVersionId : null);
+      if (lifecycleEnabled) {
+        if (!selectedVersionId) continue;
+        const selected = await getVersion(companyId, skill.id, selectedVersionId);
+        if (!selected || selected.visibility === "private") continue;
+        if (!options.allowCandidateVersionsForTest && (skill.lifecycleState !== "active" || selected.state !== "active" || selectedVersionId !== skill.activeVersionId)) continue;
+      }
+      const pinnedOptions = selectedVersionId ? { ...options, versionSelections: new Map([[skill.key, selectedVersionId]]) } : options;
+      const sourceResolution = await resolveRuntimeSkillSource(companyId, skill, pinnedOptions);
       if (!sourceResolution) continue;
 
       out.push({
         key: skill.key,
         runtimeName: buildSkillRuntimeName(skill.key, skill.slug),
         source: sourceResolution.source,
-        versionId: options.versionSelections?.get(skill.key) ?? null,
+        versionId: selectedVersionId ?? null,
         currentVersionId: skill.currentVersionId,
         sourceStatus: sourceResolution.status,
         missingDetail: sourceResolution.status === "missing" ? sourceResolution.detail : null,
@@ -6609,10 +6675,22 @@ export function companySkillService(db: Db) {
       ? await getVersion(companyId, skillId, input.skillVersionId)
       : await ensureRunSkillVersion(companyId, skill, actor);
     if (!version) throw notFound("Skill version not found");
+    if (version.visibility === "private") throw forbidden("Submit this private candidate for company review before running a shared test harness");
+    if (input.evaluationBinding) {
+      if (actor?.type !== "user") throw forbidden("Paired evaluation runs require an attributable human operator");
+      const binding = input.evaluationBinding;
+      const [evaluation] = await db.select().from(companySkillEvalRuns).where(and(eq(companySkillEvalRuns.companyId, companyId), eq(companySkillEvalRuns.skillId, skillId), eq(companySkillEvalRuns.id, binding.evaluationRunId))).limit(1);
+      if (!evaluation || evaluation.status !== "running" || evaluation.createdByUserId !== actor.userId || binding.trial >= evaluation.trials) throw conflict("Evaluation test binding is unavailable or outside its current operator/trial scope");
+      const [testCase] = await db.select().from(companySkillEvalCases).where(and(eq(companySkillEvalCases.companyId, companyId), eq(companySkillEvalCases.suiteId, evaluation.suiteId), eq(companySkillEvalCases.id, binding.caseId))).limit(1);
+      const expectedVersion = binding.arm === "candidate" ? evaluation.candidateVersionId : evaluation.championVersionId;
+      if (!testCase || expectedVersion !== version.id || testCase.input.trim() !== inputSnapshot.trim()) throw conflict("Evaluation test input and version must match the pinned case/arm");
+    }
     const runId = randomUUID();
     const issueId = randomUUID();
     const outputDocumentKey = "output";
-    const templateSnapshot = await resolveTestRunTemplateSnapshot(companyId, input);
+    // Paired trigger evaluation must not instruct either arm to invoke the
+    // Skill under test. The pinned case is the complete task input.
+    const templateSnapshot = input.evaluationBinding ? null : await resolveTestRunTemplateSnapshot(companyId, input);
     const renderedTemplateBody = templateSnapshot?.templateBody
       ? renderSkillTestTemplate(templateSnapshot.templateBody, {
         skillName: skill.name,
@@ -6683,6 +6761,7 @@ export function companySkillService(db: Db) {
           skillVersionId: version.id,
           agentId: agent.id,
           agentConfigSnapshot: snapshotAgentConfig(agent),
+          evaluationContext: input.evaluationBinding ?? null,
           issueId,
           templateId: templateSnapshot?.templateId ?? null,
           templateName: templateSnapshot?.templateName ?? null,
@@ -7189,6 +7268,7 @@ export function companySkillService(db: Db) {
     auditSkill,
     installUpdate,
     resetSkill,
+    canReadSkill,
     listRuntimeSkillEntries,
   };
 }

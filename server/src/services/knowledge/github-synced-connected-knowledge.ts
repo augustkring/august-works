@@ -563,6 +563,7 @@ export function githubSyncedConnectedKnowledgeProvider(
       }
 
       const decision = await access.decide({
+        enforceResponsibleUserIntersection: request.enforceResponsibleUserIntersection,
         actor: {
           type: "agent",
           agentId: request.agentId,

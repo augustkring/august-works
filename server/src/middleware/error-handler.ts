@@ -128,6 +128,24 @@ export function errorHandler(
   res: Response,
   _next: NextFunction,
 ) {
+  // Drizzle wraps PostgreSQL constraint errors in `cause`. These named
+  // V5 constraints are expected conflicts; never expose the SQL or parameters.
+  let constraintError: unknown = err;
+  for (let depth = 0; depth < 3 && constraintError && typeof constraintError === "object"; depth++) {
+    const pg = constraintError as { code?: string; constraint_name?: string; cause?: unknown };
+    if (pg.code === "23514" && ["aw_v5_home_requires_rehome_or_archive", "aw_v5_identity_association_immutable", "aw_v5_published_role_pack_immutable", "aw_v5_skill_version_immutable", "aw_v5_execution_manifest_immutable", "aw_v5_eval_case_immutable", "aw_v5_playbook_revision_immutable", "aw_v5_schedule_baseline_immutable", "aw_v5_dependency_company_boundary", "aw_v5_dependency_cycle", "aw_v5_publication_immutable"].includes(pg.constraint_name ?? "")) {
+      res.status(409).json({ error: pg.constraint_name === "aw_v5_identity_association_immutable"
+        ? "Agent identity association cannot be changed"
+        : pg.constraint_name === "aw_v5_published_role_pack_immutable" ? "Published Role Pack versions cannot be modified"
+        : pg.constraint_name === "aw_v5_home_requires_rehome_or_archive" ? "Archive the identity or select a new home before removing its home presence or company"
+        : pg.constraint_name === "aw_v5_dependency_company_boundary" ? "Dependencies must remain within the current company"
+        : pg.constraint_name === "aw_v5_dependency_cycle" ? "Dependency graph must remain acyclic"
+        : "This governed revision or evidence record is immutable; create a new revision",
+        code: pg.constraint_name });
+      return;
+    }
+    constraintError = pg.cause;
+  }
   if (err instanceof HttpError) {
     const details =
       err.details &&

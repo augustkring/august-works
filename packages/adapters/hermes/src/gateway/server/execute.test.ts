@@ -80,6 +80,45 @@ describe("parseSseFramesForTest", () => {
 });
 
 describe("execute", () => {
+  it.each(["none", "run"])("uses a unique server-owned run namespace for session strategy %s", async (strategy) => {
+    const ctx = makeCtx({ apiBaseUrl: "http://127.0.0.1:8642", apiKey: "secret", sessionKeyStrategy: strategy });
+    ctx.providerRuntime = { providerBindingId: "binding", providerAgentRef: "profile", providerProfileRef: "profile", isolationMode: "isolated_per_presence", sessionNamespace: "aw:v5:company:local:agent:presence", capabilitySnapshotHash: "hash" };
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect((init?.headers as Record<string, string>)["X-Hermes-Session-Key"]).toBe(`aw:v5:company:local:agent:presence:run:${ctx.runId}`);
+      if (String(input).endsWith("/v1/runs")) expect(JSON.parse(String(init?.body))).toMatchObject({ agent_id: "profile", profile_id: "profile" });
+      return String(input).endsWith("/v1/runs")
+        ? new Response(JSON.stringify({ run_id: "provider-run", status: "started" }))
+        : new Response(sseStream('event: run.completed\ndata: {"status":"completed","output":"done"}\n\n'), { headers: { "content-type": "text/event-stream" } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    expect((await execute(ctx)).exitCode).toBe(0);
+  });
+
+  it("acknowledges operator cancellation only after the remote run is terminal", async () => {
+    const controller = new AbortController(), ctx = makeCtx({ apiBaseUrl: "http://127.0.0.1:8642", apiKey: "secret" });
+    ctx.signal = controller.signal;
+    ctx.onCancellationReady = vi.fn(async () => undefined);
+    ctx.onLog = vi.fn(async (_stream, text) => { if (text.includes("run created:")) controller.abort(); });
+    const events: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input); events.push(url);
+      if (url.endsWith("/v1/runs")) return new Response(JSON.stringify({ run_id: "provider-run", status: "started" }));
+      if (url.endsWith("/events")) return new Response(sseStream(""));
+      if (url.endsWith("/stop")) return new Response(JSON.stringify({ status: "stopping" }));
+      expect(events.some((event) => event.endsWith("/stop"))).toBe(true);
+      return new Response(JSON.stringify({ status: "cancelled" }));
+    }));
+    expect(await execute(ctx)).toMatchObject({ errorCode: "cancelled", resultJson: { executionCancellation: { state: "acknowledged" } } });
+    expect(ctx.onCancellationReady).toHaveBeenCalledOnce();
+  });
+
+  it("does not dispatch when operator cancellation already occurred", async () => {
+    const controller = new AbortController(); controller.abort();
+    const ctx = makeCtx({ apiBaseUrl: "http://127.0.0.1:8642", apiKey: "secret" }); ctx.signal = controller.signal;
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    expect((await execute(ctx)).errorCode).toBe("cancelled");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("rejects remote plain HTTP unless the unsafe dev escape hatch is enabled", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ run_id: "unexpected" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

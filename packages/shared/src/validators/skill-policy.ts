@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const SKILL_POLICY_ACTIONS = [
+  "skills.use",
   "skills.create",
   "skills.import",
   "skills.install",
@@ -9,6 +10,10 @@ export const SKILL_POLICY_ACTIONS = [
   "skills.test",
   "skills.reset",
   "skills.remove",
+  "skills.propose",
+  "skills.approve",
+  "skills.promote",
+  "skills.deprecate",
 ] as const;
 
 export const SKILL_POLICY_SOURCE_TYPES = [

@@ -1,0 +1,1 @@
+ALTER TABLE "company_skill_versions" ADD COLUMN "visibility" text DEFAULT 'company' NOT NULL;

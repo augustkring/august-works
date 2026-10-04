@@ -1,3 +1,4 @@
+import { V5_FEATURES, type V5FeatureKey } from "./v5-feature-flags.js";
 import { z } from "zod";
 import { instanceExperimentalSettingsSchema } from "./validators/instance.js";
 
@@ -41,7 +42,10 @@ export interface FeatureCatalogEntry {
   selfHostedDefault: boolean;
 }
 
+const v5Catalog = Object.fromEntries(Object.entries(V5_FEATURES).map(([key, [title, description]]) => [key, { title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false }])) as Record<V5FeatureKey, FeatureCatalogEntry>;
+
 export const INSTANCE_FEATURE_CATALOG: Record<InstanceFeatureKey, FeatureCatalogEntry> = {
+  ...v5Catalog,
   enableEnvironments: {
     title: "Environments",
     description:

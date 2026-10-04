@@ -3128,3 +3128,13 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
 @media (max-width: 767px) {
   .plugin-app-shell-overlays { bottom: var(--plugin-shell-mobile-bottom); }
 }
+
+/* V5 calendar geometry is data-driven; dimensions use the shared token layer. */
+.v5-roadmap-frame {
+  display: grid;
+  grid-template-columns: calc(var(--spacing) * 64) minmax(calc(var(--v5-roadmap-columns) * var(--spacing) * 16), 1fr);
+}
+.v5-roadmap-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--v5-roadmap-columns), minmax(0, 1fr));
+}

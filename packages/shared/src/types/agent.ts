@@ -76,6 +76,7 @@ export interface AgentChainOfCommandEntry {
 
 export interface Agent {
   id: string;
+  agentIdentityId?: string | null;
   companyId: string;
   name: string;
   urlKey: string;

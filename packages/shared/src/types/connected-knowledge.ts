@@ -64,6 +64,7 @@ export interface ConnectedKnowledgeProviderDescriptor {
 }
 
 export interface ConnectedKnowledgeRequest {
+  enforceResponsibleUserIntersection?: boolean;
   companyId: string;
   agentId: string;
   responsibleUserId: string | null;

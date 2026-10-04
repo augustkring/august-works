@@ -113,6 +113,8 @@ import {
 } from "@paperclipai/adapter-opencode-local";
 import {
   execute as openclawGatewayExecute,
+  discoverCapabilities as openclawGatewayDiscoverCapabilities,
+  testProviderConformance as openclawGatewayTestProviderConformance,
   testEnvironment as openclawGatewayTestEnvironment,
 } from "@paperclipai/adapter-openclaw-gateway/server";
 import {
@@ -792,6 +794,8 @@ const openclawGatewayAdapter: ServerAdapterModule = {
   type: "openclaw_gateway",
   runtimeToolDelivery: "invocation_context",
   execute: openclawGatewayExecute,
+  discoverCapabilities: openclawGatewayDiscoverCapabilities,
+  testProviderConformance: openclawGatewayTestProviderConformance,
   testEnvironment: openclawGatewayTestEnvironment,
   models: openclawGatewayModels,
   supportsLocalAgentJwt: false,

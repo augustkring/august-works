@@ -1,3 +1,4 @@
+import { v5FeatureFlagShape } from "../v5-feature-flags.js";
 import { z } from "zod";
 import { DEFAULT_FEEDBACK_DATA_SHARING_PREFERENCE } from "../types/feedback.js";
 import {
@@ -40,6 +41,7 @@ export const patchInstanceGeneralSettingsSchema = z
   .strict();
 
 export const instanceExperimentalSettingsSchema = z.object({
+  ...v5FeatureFlagShape,
   enableEnvironments: z.boolean().default(false),
   enableNativeRunner: z.boolean().default(true),
   enableManagedSandboxOnly: z.boolean().default(false),

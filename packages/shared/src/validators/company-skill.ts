@@ -1,6 +1,7 @@
+import { skillEvaluationBindingSchema } from "../skill-lifecycle.js";
 import { z } from "zod";
 
-export const companySkillSourceTypeSchema = z.enum(["local_path", "github", "url", "catalog", "skills_sh"]);
+export const companySkillSourceTypeSchema = z.enum(["local_path", "github", "url", "catalog", "skills_sh", "generated"]);
 export const companySkillTrustLevelSchema = z.enum(["markdown_only", "assets", "scripts_executables"]);
 export const companySkillCompatibilitySchema = z.enum(["compatible", "unknown", "invalid"]);
 export const companySkillSourceBadgeSchema = z.enum(["paperclip", "github", "local", "url", "catalog", "skills_sh"]);
@@ -501,6 +502,7 @@ export const companySkillTestRunSchema = z.object({
 });
 
 export const companySkillTestRunCreateSchema = z.object({
+  evaluationBinding: skillEvaluationBindingSchema.optional(),
   inputId: z.string().guid().nullable().optional(),
   content: z.string().min(1).nullable().optional(),
   agentId: z.string().guid(),

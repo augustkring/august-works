@@ -495,6 +495,13 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
   }
 
   return {
+    projectSummary: async (companyId: string, projectId: string): Promise<BudgetPolicySummary[]> => {
+      const rows = await db.select().from(budgetPolicies).where(and(
+        eq(budgetPolicies.companyId, companyId), eq(budgetPolicies.scopeType, "project"),
+        eq(budgetPolicies.scopeId, projectId), eq(budgetPolicies.metric, "billed_cents"), eq(budgetPolicies.isActive, true),
+      )).limit(3);
+      return Promise.all(rows.map((row) => buildPolicySummary(row)));
+    },
     listPolicies: async (companyId: string): Promise<BudgetPolicy[]> => {
       const rows = await listPolicyRows(companyId);
       return rows.map((row) => ({

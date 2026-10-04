@@ -60,8 +60,8 @@ describeEmbeddedPostgres("companyService", () => {
     await db.delete(routineTriggers);
     await db.delete(routines);
     await db.delete(builtInManagedResources);
-    await db.delete(companySkillVersions);
     await db.delete(companySkills);
+    await db.delete(companySkillVersions);
     await db.delete(heartbeatRunEvents);
     await db.delete(heartbeatRuns);
     await db.delete(agentWakeupRequests);

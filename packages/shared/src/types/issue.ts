@@ -822,6 +822,14 @@ export interface Issue {
   executionWorkspaceId: string | null;
   executionWorkspacePreference: string | null;
   executionWorkspaceSettings: IssueExecutionWorkspaceSettings | null;
+  plannedStartAt?: Date | null;
+  plannedEndAt?: Date | null;
+  forecastStartAt?: Date | null;
+  forecastEndAt?: Date | null;
+  forecastConfidence?: number | null;
+  forecastReason?: string | null;
+  milestoneId?: string | null;
+  estimatedEffortMinutes?: number | null;
   startedAt: Date | null;
   completedAt: Date | null;
   cancelledAt: Date | null;

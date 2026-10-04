@@ -8,7 +8,7 @@ import type {
   ManagedSettingMetadata,
   PatchInstanceExperimentalSettings,
 } from "@paperclipai/shared";
-import { experimentalSettingKey } from "@paperclipai/shared";
+import { V5_FEATURE_KEYS, V5_FEATURES, V5_ROLLOUT, V5_FEATURE_DEPENDENCIES, V5_BASE_FEATURE_REQUIREMENTS, v5FeatureEnabled, experimentalSettingKey } from "@paperclipai/shared";
 import { instanceSettingsApi } from "@/api/instanceSettings";
 import { useHiddenSettings } from "@/hooks/useHiddenSettings";
 import { getWorktreeInstanceId, isWorktreeRuntime } from "../lib/worktree-branding";
@@ -534,6 +534,19 @@ export function InstanceExperimentalSettings() {
         )}
       </section>
 
+      {V5_FEATURE_KEYS.some((key) => !hiddenSettings.has(experimentalSettingKey(key))) && <section className="space-y-3" aria-labelledby="v5-features-heading">
+        <div className="space-y-1">
+          <h2 id="v5-features-heading" className="text-sm font-semibold">V5 agent runtime and project control</h2>
+          <p className="text-sm text-muted-foreground">All V5 features default off. Review current authorization, provider qualification and rollback before enabling them.</p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {[...V5_FEATURE_KEYS].sort((a, b) => V5_FEATURES[a][0].localeCompare(V5_FEATURES[b][0], "en", { sensitivity: "base" })).map((key) => {
+            const required = [...(V5_BASE_FEATURE_REQUIREMENTS[key] ?? []), ...(V5_FEATURE_DEPENDENCIES[key] ?? [])];
+            const blocked = required.filter((dependency) => experimentalQuery.data?.[dependency] !== true);
+            return <ExperimentalToggleCard key={key} title={V5_FEATURES[key][0]} description={V5_FEATURES[key][1]} checked={experimentalQuery.data?.[key] === true} onCheckedChange={(checked) => toggleMutation.mutate({ [key]: checked })} disabled={toggleMutation.isPending || managedKeys[key]?.managed === true || experimentalQuery.data?.[key] !== true && blocked.length > 0} settingKey={key} managed={managedKeys[key]} ariaLabel={`Toggle ${V5_FEATURES[key][0]} experimental setting`} footnote={`Owner: ${V5_ROLLOUT[key].owner}. ${blocked.length ? `Enable required features first: ${blocked.join(", ")}. ` : ""}${experimentalQuery.data?.[key] && !v5FeatureEnabled(experimentalQuery.data, key) ? "Inactive while a dependency is disabled. " : ""}Rollback disables this feature and its dependent behavior while retaining immutable data.`} />;
+          })}
+        </div>
+      </section>}
       {showDeveloperSection ? (
         <section className="space-y-3" aria-labelledby="developer-mode-heading">
           <div className="space-y-1">

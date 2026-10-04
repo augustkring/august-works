@@ -1,3 +1,5 @@
+import { recordEagerSkillLoading, recordSkillExecutionCompletion } from "./skill-usage.js";
+import { agentRuntimeFabricService } from "./agent-runtime-fabric.js";
 import { workflowDirectAgentPrompt } from "./workflows/workflow-direct-agent.js";
 import { heartbeatMemoryPayloadRetained, heartbeatMemoryPayloadVisible } from "./memory/memory-privacy.js";
 import { applyWorkspaceRestoreFailure } from "@paperclipai/adapter-utils/workspace-restore-result";
@@ -21332,10 +21334,21 @@ export function heartbeatService(
       } else {
         delete context.paperclipSecrets;
       }
-      const effectiveResolvedConfig = applyRunScopedMentionedSkillKeys(
-        resolvedConfig,
-        runScopedSkillKeys,
-      );
+      const v5Fabric = await agentRuntimeFabricService(db).prepare({
+        companyId: agent.companyId, agentId: agent.id, runId: run.id,
+        responsibleUserId: run.responsibleUserId, issueId: issueRef?.id ?? null,
+        query: [safeWakeCommentContext?.body, issueRef?.title, issueRef?.description].filter(Boolean).join("\n").slice(0, 500),
+        scopeRequestId: readNonEmptyString(parseObject(context.paperclipWake).v5ScopeRequestId) ?? readNonEmptyString(context.v5ScopeRequestId),
+      });
+      if (v5Fabric) {
+        context.v5ExecutionManifestId = v5Fabric.record.id;
+        context.v5GovernedContext = v5Fabric.contextMarkdown;
+        if (!v5Fabric.testSelected) delete context.paperclipSkillTest;
+      }
+      const eagerV5Skills = v5Fabric?.manifest.skills.filter((pin) => pin.loadPoint !== "on_demand");
+      const effectiveResolvedConfig = v5Fabric
+        ? writePaperclipSkillSyncPreference(resolvedConfig, eagerV5Skills!.map((pin) => ({ key: pin.key, versionId: pin.versionId })))
+        : applyRunScopedMentionedSkillKeys(resolvedConfig, runScopedSkillKeys);
       const runtimeSkillPreference = readPaperclipSkillSyncPreference(
         effectiveResolvedConfig,
       );
@@ -21344,7 +21357,8 @@ export function heartbeatService(
       const runtimeSkillEntries = await (async () => {
         try {
           return await companySkills.listRuntimeSkillEntries(agent.companyId, {
-            versionSelections: skillVersionSelectionMap(
+            ...(v5Fabric ? { selectedSkillKeys: new Set(eagerV5Skills!.map((pin) => pin.key)), allowCandidateVersionsForTest: Boolean(pinnedSkillTestContext), versionSelections: new Map(eagerV5Skills!.map((pin) => [pin.key, pin.versionId])) } : {}),
+            versionSelections: v5Fabric ? new Map(eagerV5Skills!.map((pin) => [pin.key, pin.versionId])) : skillVersionSelectionMap(
               runtimeSkillPreference.desiredSkillEntries,
               {
                 versionPinsEnabled:
@@ -21366,6 +21380,7 @@ export function heartbeatService(
           throw error;
         }
       })();
+      if (v5Fabric) await recordEagerSkillLoading(db, agent.companyId, run.id, agent.id);
       nativeRunnerPreparationSpans.push({
         name: "skills.prepare",
         parentName: "task.prepare",
@@ -23482,7 +23497,7 @@ export function heartbeatService(
                   })
                 : null;
             const pinnedPlanMarkdown = pinnedPlan?.body ?? "";
-            const governedContextMarkdown =
+            const governedContextMarkdown = v5Fabric?.contextMarkdown ??
               await assembleFreshNativeGovernedContext(db, {
                 enabled:
                   experimentalInstanceSettings.enableContextEngineV1 === true,
@@ -24321,6 +24336,9 @@ export function heartbeatService(
                   }
                 : {}),
             };
+            if (v5Fabric) {
+              adapterContext.paperclipTaskMarkdown = [readNonEmptyString(adapterContext.paperclipTaskMarkdown), "## Governed execution context", v5Fabric.contextMarkdown].filter(Boolean).join("\n\n");
+            }
             const runtimeTools = createAdapterRuntimeToolAccess({
               agentId: agent.id,
               companyId: agent.companyId,
@@ -24381,6 +24399,7 @@ export function heartbeatService(
                     runtime: runtimeForAdapter,
                     config: runtimeConfig,
                     context: adapterContext,
+                    providerRuntime: v5Fabric?.providerRuntime,
                     executionContinuation: executionContinuation ?? null,
                     runtimeCommandSpec:
                       adapter.getRuntimeCommandSpec?.(runtimeConfig) ?? null,
@@ -25018,6 +25037,7 @@ export function heartbeatService(
 
         const finalizedRun = persistedRun ?? (await getRun(run.id));
         if (finalizedRun) {
+          if (v5Fabric) await recordSkillExecutionCompletion(db, agent.companyId, run.id, agent.id);
           await appendRunEvent(finalizedRun, {
             eventType: "lifecycle",
             stream: "system",

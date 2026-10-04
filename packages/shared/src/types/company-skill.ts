@@ -1,7 +1,7 @@
 import type { IssueAttachment, IssueDocument } from "./issue.js";
 import type { IssueWorkProduct } from "./work-product.js";
 
-export type CompanySkillSourceType = "local_path" | "github" | "url" | "catalog" | "skills_sh";
+export type CompanySkillSourceType = "local_path" | "github" | "url" | "catalog" | "skills_sh" | "generated";
 
 export type CompanySkillTrustLevel = "markdown_only" | "assets" | "scripts_executables";
 
@@ -32,6 +32,13 @@ export interface CompanySkillVersionFileInventoryEntry extends CompanySkillFileI
 }
 
 export interface CompanySkill {
+  lifecycleState?: "draft" | "proposed" | "testing" | "active" | "needs_revalidation" | "degraded" | "deprecated" | "revoked";
+  activeVersionId?: string | null;
+  headVersionId?: string | null;
+  ownerAgentId?: string | null;
+  degradedReason?: string | null;
+  lastValidatedAt?: Date | null;
+  nextReviewAt?: Date | null;
   id: string;
   companyId: string;
   folderId?: string | null;
@@ -154,6 +161,8 @@ export interface CompanySkillCategoryCount {
 }
 
 export interface CompanySkillVersion {
+  state?: "candidate" | "testing" | "validated" | "active" | "rejected" | "superseded";
+  visibility?: "company" | "private";
   id: string;
   companyId: string;
   companySkillId: string;
@@ -528,6 +537,7 @@ export interface CompanySkillTestRunCostSummary {
 }
 
 export interface CompanySkillTestRun {
+  evaluationContext?: import("../skill-lifecycle.js").SkillEvaluationBinding | null;
   id: string;
   companyId: string;
   skillId: string;
@@ -557,6 +567,7 @@ export interface CompanySkillTestRun {
 }
 
 export interface CompanySkillTestRunCreateRequest {
+  evaluationBinding?: import("../skill-lifecycle.js").SkillEvaluationBinding;
   inputId?: string | null;
   content?: string | null;
   agentId: string;

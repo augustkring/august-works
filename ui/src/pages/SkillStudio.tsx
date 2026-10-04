@@ -52,6 +52,8 @@ import { useOptionalToastActions } from "../context/ToastContext";
 import { classifySkillDenial } from "@/lib/skill-policy-denial";
 import { agentsApi } from "@/api/agents";
 import { companySkillsApi } from "@/api/companySkills";
+import { instanceSettingsApi } from "@/api/instanceSettings";
+import { v5FeatureEnabled } from "@paperclipai/shared";
 import { issuesApi } from "@/api/issues";
 import { queryKeys } from "@/lib/queryKeys";
 import { copyTextToClipboard } from "@/lib/clipboard";
@@ -277,6 +279,8 @@ export function SkillStudio() {
   const { setBreadcrumbs } = useBreadcrumbs();
   const navigate = useNavigate();
   const companyId = selectedCompanyId ?? "";
+  const experimental = useQuery({ queryKey: queryKeys.instance.experimentalSettings, queryFn: () => instanceSettingsApi.getExperimental() });
+  const governanceEnabled = v5FeatureEnabled(experimental.data ?? {}, "skill_lifecycle_v5");
   const isCreateMode = location.pathname.replace(/\/+$/, "").endsWith("/skills/studio/new");
   const forkFromSkillId = isCreateMode ? searchParams.get("forkFrom")?.trim() || null : null;
   // New skills created from a folder context (e.g. My Skills) carry their
@@ -349,13 +353,13 @@ export function SkillStudio() {
   }
   if (!skillId) {
     return (
-      <StudioLanding
+      <>{governanceEnabled && <div className="flex justify-end px-4 pt-3"><Link className="text-sm text-primary underline" to="/skills/governed/new">New governed Skill</Link></div>}<StudioLanding
         companyId={companyId}
         skills={skillsQuery.data ?? []}
         skillsLoading={skillsQuery.isLoading}
         onSelectSkill={(nextSkillId) => navigate(skillStudioRoute(nextSkillId))}
         onCreateNew={() => navigate(skillStudioNewRoute())}
-      />
+      /></>
     );
   }
   if (detailQuery.isLoading) {
@@ -366,12 +370,12 @@ export function SkillStudio() {
   }
 
   return (
-    <StudioShell
+    <><div className="flex justify-end gap-3 px-4 pt-3">{governanceEnabled && <><Link className="text-sm text-primary underline" to={`/skills/${skillId}/governance`}>Review Skill lifecycle and evaluations</Link><Link className="text-sm text-primary underline" to="/skills/governed/new">New governed Skill</Link></>}</div><StudioShell
       companyId={companyId}
       skill={detailQuery.data}
       skills={skillsQuery.data ?? []}
       skillsLoading={skillsQuery.isLoading}
-    />
+    /></>
   );
 }
 

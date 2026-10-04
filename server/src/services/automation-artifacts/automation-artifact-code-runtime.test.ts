@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { getArtifactSandboxTestSupport } from "../../__tests__/helpers/artifact-sandbox.js";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -130,10 +130,8 @@ describe("Automation Artifact generated-code policy", () => {
 });
 
 
-const qualifiedLinuxSandbox =
-  process.platform === "linux" &&
-  existsSync("/usr/bin/bwrap") &&
-  existsSync("/usr/bin/prlimit");
+const sandboxSupport = await getArtifactSandboxTestSupport();
+const qualifiedLinuxSandbox = sandboxSupport.supported;
 
 const describeQualifiedSandbox = qualifiedLinuxSandbox
   ? describe

@@ -6,13 +6,16 @@ import {
   text,
   timestamp,
   integer,
+  doublePrecision,
   jsonb,
   index,
   uniqueIndex,
   unique,
   bigint,
   check,
+  foreignKey,
 } from "drizzle-orm/pg-core";
+import { projectMilestones } from "./project_control.js";
 import { agents } from "./agents.js";
 import { projects } from "./projects.js";
 import { goals } from "./goals.js";
@@ -82,6 +85,14 @@ export const issues = pgTable(
     unblockDescriptor: jsonb("unblock_descriptor").$type<IssueUnblockDescriptor | null>(),
     blockedTransitionAt: timestamp("blocked_transition_at", { withTimezone: true }),
     blockedOwnerNotifiedAt: timestamp("blocked_owner_notified_at", { withTimezone: true }),
+    plannedStartAt: timestamp("planned_start_at", { withTimezone: true }),
+    plannedEndAt: timestamp("planned_end_at", { withTimezone: true }),
+    forecastStartAt: timestamp("forecast_start_at", { withTimezone: true }),
+    forecastEndAt: timestamp("forecast_end_at", { withTimezone: true }),
+    forecastConfidence: doublePrecision("forecast_confidence"),
+    forecastReason: text("forecast_reason"),
+    milestoneId: uuid("milestone_id"),
+    estimatedEffortMinutes: integer("estimated_effort_minutes"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
@@ -100,6 +111,12 @@ export const issues = pgTable(
       and ${table.conversationState} in ('active', 'waiting')
       and ${table.status} not in ('done', 'cancelled')
     )`),
+    milestoneFk: foreignKey({ name: "issues_company_project_milestone_fk", columns: [table.companyId, table.projectId, table.milestoneId], foreignColumns: [projectMilestones.companyId, projectMilestones.projectId, projectMilestones.id] }),
+    planningDatesCheck: check("issues_planning_dates_check", sql`${table.plannedStartAt} is null or ${table.plannedEndAt} is null or ${table.plannedEndAt} >= ${table.plannedStartAt}`),
+    forecastDatesCheck: check("issues_forecast_dates_check", sql`${table.forecastStartAt} is null or ${table.forecastEndAt} is null or ${table.forecastEndAt} >= ${table.forecastStartAt}`),
+    milestoneProjectCheck: check("issues_milestone_project_check", sql`${table.milestoneId} is null or ${table.projectId} is not null`),
+    forecastConfidenceCheck: check("issues_forecast_confidence_check", sql`${table.forecastConfidence} is null or ${table.forecastConfidence} between 0 and 1`),
+    effortCheck: check("issues_estimated_effort_check", sql`${table.estimatedEffortMinutes} is null or ${table.estimatedEffortMinutes} between 1 and 525600`),
     companyIdUq: unique("issues_company_id_uq").on(table.companyId, table.id),
     companyStatusIdx: index("issues_company_status_idx").on(table.companyId, table.status),
     companyHarnessKindIdx: index("issues_company_harness_kind_idx").on(table.companyId, table.harnessKind),

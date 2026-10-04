@@ -1,3 +1,12 @@
+import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
+import { V5Gate } from "./components/V5Gate";
+import { Playbooks } from "./pages/Playbooks";
+import { ProjectRoadmap } from "./pages/ProjectRoadmap";
+import { Portfolio, PortfolioCapabilities } from "./pages/Portfolio";
+import { RolePacks } from "./pages/RolePacks";
+import { SkillGovernance } from "./pages/SkillGovernance";
+import { NewGovernedSkill } from "./pages/NewGovernedSkill";
+import { AgentRuntimeFabric } from "./pages/AgentRuntimeFabric";
 import { lazy, Suspense, type ReactNode } from "react";
 import type { ToolConnectionCredentialSource } from "@paperclipai/shared";
 import { Navigate, Outlet, Route, Routes, useActiveCompanyPrefix, useLocation, useParams } from "@/lib/router";
@@ -298,6 +307,17 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="agents/:agentId/:tab" element={<AgentDetail />} />
       <Route path="agents/:agentId/runs/:runId" element={<AgentDetail />} />
       <Route path="projects" element={<Projects />} />
+      <Route path="playbooks" element={<V5Gate feature="playbooks_v5"><Playbooks /></V5Gate>} />
+      <Route path="playbooks/:playbookId" element={<V5Gate feature="playbooks_v5"><Playbooks /></V5Gate>} />
+      <Route path="org-units" element={<V5Gate feature="org_units_v5"><OrgUnits /></V5Gate>} />
+      <Route path="relationships" element={<V5Gate feature="company_relationships_v5"><CompanyRelationships /></V5Gate>} />
+      <Route path="runtime" element={<V5Gate feature="agent_identities_v5"><AgentRuntimeFabric /></V5Gate>} />
+      <Route path="role-packs" element={<V5Gate feature="role_packs_v5"><RolePacks /></V5Gate>} />
+      <Route path="portfolio" element={<V5Gate feature="portfolio_view_v5"><Portfolio /></V5Gate>} />
+      <Route path="portfolio-capabilities" element={<V5Gate feature="portfolio_skill_sharing_v5"><PortfolioCapabilities /></V5Gate>} />
+      <Route path="skills/:skillId/governance" element={<V5Gate feature="skill_lifecycle_v5"><SkillGovernance /></V5Gate>} />
+      <Route path="skills/governed/new" element={<V5Gate feature="skill_lifecycle_v5"><NewGovernedSkill /></V5Gate>} />
+      <Route path="projects/:projectId/roadmap" element={<V5Gate feature="project_roadmap_v5"><ProjectRoadmap /></V5Gate>} />
       <Route path="projects/:projectId" element={<ProjectDetail />} />
       <Route path="projects/:projectId/overview" element={<ProjectDetail />} />
       <Route path="projects/:projectId/issues" element={<ProjectDetail />} />
@@ -867,6 +887,14 @@ export function App() {
           <Route path="agents/:agentId/:tab" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/:agentId/runs/:runId" element={<UnprefixedBoardRedirect />} />
           <Route path="projects" element={<UnprefixedBoardRedirect />} />
+          <Route path="playbooks/*" element={<UnprefixedBoardRedirect />} />
+          <Route path="org-units" element={<UnprefixedBoardRedirect />} />
+          <Route path="relationships" element={<UnprefixedBoardRedirect />} />
+          <Route path="runtime" element={<UnprefixedBoardRedirect />} />
+          <Route path="role-packs" element={<UnprefixedBoardRedirect />} />
+          <Route path="portfolio" element={<UnprefixedBoardRedirect />} />
+          <Route path="portfolio-capabilities" element={<UnprefixedBoardRedirect />} />
+          <Route path="projects/:projectId/roadmap" element={<UnprefixedBoardRedirect />} />
           <Route path="projects/:projectId" element={<UnprefixedBoardRedirect />} />
           <Route path="projects/:projectId/overview" element={<UnprefixedBoardRedirect />} />
           <Route path="projects/:projectId/issues" element={<UnprefixedBoardRedirect />} />

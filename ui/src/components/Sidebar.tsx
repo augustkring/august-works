@@ -1,3 +1,4 @@
+import { v5FeatureEnabled } from "@paperclipai/shared";
 import {
   Inbox,
   ListChecks,
@@ -178,6 +179,13 @@ export function Sidebar({ children }: { children?: ReactNode }) {
             liveCount={liveRunCount}
           />
           {showFoundation ? <SidebarNavItem to="/foundation" label="Foundation" icon={BookOpen} /> : null}
+          {v5FeatureEnabled(experimentalSettings ?? {}, "playbooks_v5") && <SidebarNavItem to="/playbooks" label="Playbooks" icon={BookOpen} />}
+          {v5FeatureEnabled(experimentalSettings ?? {}, "agent_identities_v5") && <SidebarNavItem to="/runtime" label="Agent runtime" icon={Network} />}
+          {v5FeatureEnabled(experimentalSettings ?? {}, "org_units_v5") && <SidebarNavItem to="/org-units" label="Organization units" icon={Users} />}
+          {v5FeatureEnabled(experimentalSettings ?? {}, "company_relationships_v5") && <SidebarNavItem to="/relationships" label="Company relationships" icon={GitBranch} />}
+          {v5FeatureEnabled(experimentalSettings ?? {}, "role_packs_v5") && <SidebarNavItem to="/role-packs" label="Role Packs" icon={Layers} />}
+          {v5FeatureEnabled(experimentalSettings ?? {}, "portfolio_view_v5") && <SidebarNavItem to="/portfolio" label="August OS" icon={LayoutGrid} />}
+          {v5FeatureEnabled(experimentalSettings ?? {}, "portfolio_skill_sharing_v5") && <SidebarNavItem to="/portfolio-capabilities" label="Shared capabilities" icon={Package} />}
           {streamlinedUiEnabled ? (
             <SidebarNavItem to="/agents" label="Agents" icon={Users} />
           ) : showMemory ? (
