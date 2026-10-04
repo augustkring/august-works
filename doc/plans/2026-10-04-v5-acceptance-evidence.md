@@ -16,6 +16,9 @@ Its truncated patches were not used as a source snapshot or executed.
   serialize and cancellation runs after transaction commit.
 - Provider bindings with per-presence defaults, explicit shared-state consent,
   discovery hashes, current peer/configuration proof and drift invalidation.
+  Unconfirmed provider termination pauses the local presence and invalidates its
+  binding on conformance and normal execution. V5 wait timeouts require stop
+  confirmation; agent finalization preserves a concurrent pause or termination.
   Hermes and OpenClaw use real gateway dispatch/cancellation hooks. A2A Agent
   Cards use bounded, guarded discovery and stable protocol/security metadata.
 - Expiring execution scopes and immutable execution manifests. Every use checks
@@ -42,7 +45,7 @@ Its truncated patches were not used as a source snapshot or executed.
 - Roadmap calendar and accessible table, keyboard proposals, drag/resize,
   named baselines, plan/forecast/actual rails, scoped export and deterministic
   health. Health exposes source tasks, milestone variance and authorized project
-  budget observations. Missing observations remain unknown. A 72-hour default
+  budget observations. Missing observations and explicitly unknown billed costs remain unknown. A 72-hour default
   reports missing task updates; it does not claim the absence of all activity.
 - Bundled `task-planning` Skill, titled Project Planning & Execution, reused by
   CEO/CTO planning requirements and available to local project-lead overlays.
@@ -117,9 +120,13 @@ Latest recursive typecheck, complete build and UI token gates pass. The complete
 `pnpm test:run` is still running at this documentation checkpoint. Focused
 regressions pass for provider termination and rollback (16), metadata/evaluation
 replacement (22), gateway/Agent Card integration (20), health/planning/budgets
-(24), the full Hermes package (89) and full Pi package (74). The two classic
-browser flows and authenticated boundary flow passed before the final health UI
-addition; the classic flow is being repeated with health disclosure assertions.
+(24), the full Hermes package (89) and full Pi package (74). Gateway timeout and
+qualification checks pass. Three recovery timing failures in a parallel focused
+run passed when repeated in the stable runner’s private configuration. A further
+conformance/native-cancellation check passed 14 tests; unknown project cost
+observations passed 21 health/budget checks. The two classic
+browser flows pass with health disclosure assertions. The authenticated boundary
+flow also passes on the final health/planner implementation.
 
 The first broad run found fixture/configuration regressions. Their fixes retain
 the original behavioral assertions. Its failure count is not presented as a
@@ -137,4 +144,5 @@ changes. A new full archive and bundle are required after final verification.
 Archives include Git history, complete files, migrations, private runtime
 configuration and cold database state. They are private workspace files outside
 the repository; they have not been uploaded to a real Paperclip issue because
-this session has no task/run identity or API credentials. Recovery instructions,+checksums and restore reports remain alongside the archives.
+this session has no task/run identity or API credentials. Recovery instructions,
+checksums and restore reports remain alongside the archives.

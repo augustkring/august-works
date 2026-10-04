@@ -145,6 +145,8 @@ export function agentProviderBindingService(db: Db) {
     },
     markUnavailable: async (companyId: string, agentId: string, reason: "discovery_failed" | "conformance_invalidated" | "provider_termination_unconfirmed") => {
       const result = await withV5ActivityTransaction(db, async (tx, publications) => {
+        if (reason === "provider_termination_unconfirmed") await tx.update(agents).set({ status: "paused", updatedAt: new Date() })
+          .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId), ne(agents.status, "terminated")));
         const [runtime] = await tx.select().from(agentPresenceRuntimeBindings).where(and(eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, agentId))).limit(1).for("update");
         if (!runtime || runtime.status === "revoked") return null;
         const [binding] = await tx.select().from(agentProviderBindings).where(eq(agentProviderBindings.id, runtime.providerBindingId)).limit(1).for("update");

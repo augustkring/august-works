@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { createDb, documentRevisions, issues, issueRelations, projects, projectScheduleBaselines, companySkills, companySkillVersions } from "@paperclipai/db";
+import { createDb, costEvents, documentRevisions, issues, issueRelations, projects, projectScheduleBaselines, companySkills, companySkillVersions } from "@paperclipai/db";
 import { createPlaybookSchema, playbookDraftSchema, proposePlaybookSchema, roadmapProposalSchema, roadmapPolicySchema, createMilestoneSchema, projectPlaybookSkillSchema } from "@paperclipai/shared";
 import { skillLifecycleService } from "../services/skill-lifecycle.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -10,6 +10,7 @@ import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } fro
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { playbookService } from "../services/playbooks.js";
 import { projectControlService, roadmapHealth } from "../services/project-control.js";
+import { budgetService } from "../services/budgets.js";
 
 it("health reports unknown when there is no committed schedule", () => { expect(roadmapHealth([], new Date("2026-10-03T00:00:00Z")).status).toBe("unknown"); });
 const support = await getEmbeddedPostgresTestSupport();
@@ -17,6 +18,15 @@ describe.skipIf(!support.supported)("V5 canonical procedures and schedule", () =
   let db!: ReturnType<typeof createDb>, database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v5-playbook-roadmap-"); db = createDb(database.connectionString); await enableV5ForTest(db); });
   afterAll(async () => { await database?.cleanup(); });
+  it("keeps project utilization unknown when a billed cost is missing and isolates other projects", async () => {
+    const f = await seedV5Presences(db), budgets = budgetService(db);
+    const [first, second] = await db.insert(projects).values([{ companyId: f.home, name: "Known observations" }, { companyId: f.home, name: "Unknown costs" }]).returning();
+    for (const project of [first!, second!]) await budgets.upsertPolicy(f.home, { scopeType: "project", scopeId: project.id, amount: 100, windowKind: "lifetime" }, f.userId);
+    await db.insert(costEvents).values({ companyId: f.home, agentId: f.presence.id, projectId: second!.id, provider: "internal-fixture", model: "internal-fixture", costCents: 0, costStatus: "unknown", occurredAt: new Date() });
+    expect(await budgets.projectSummary(f.home, second!.id)).toBeNull();
+    expect(await budgets.projectSummary(f.home, first!.id)).toMatchObject([{ observedAmount: 0, utilizationPercent: 0 }]);
+    expect(await budgets.projectSummary(f.guest, second!.id)).toEqual([]);
+  });
   it("makes Project Planning & Execution available locally without an active V5 version", async () => {
     const f = await seedV5Presences(db), svc = companySkillService(db);
     const skills = await svc.list(f.home);

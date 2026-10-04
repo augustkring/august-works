@@ -969,18 +969,20 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   if (outcome === "timeout") {
     await stopRun({ ctx, baseUrl, headers: eventHeaders, runId, redactText });
     const finalStatus = await fetchFinalStatus({ baseUrl, headers: eventHeaders, runId, deadlineMs: STOP_GRACE_MS });
+    const confirmed = Boolean(finalStatus && TERMINAL_STATUSES.has(extractStatus(finalStatus) ?? ""));
     return {
       exitCode: 1,
       signal: null,
       timedOut: true,
-      errorCode: "hermes_gateway_timeout",
-      errorMessage: `Hermes gateway run timed out after ${timeoutSec}s.`,
+      errorCode: confirmed ? "hermes_gateway_timeout" : "cancellation_unconfirmed",
+      errorMessage: confirmed ? `Hermes gateway run timed out after ${timeoutSec}s.` : "Hermes wait timed out; provider termination could not be confirmed",
       provider: "hermes_gateway",
       resultJson: {
         run_id: runId,
         status: extractStatus(finalStatus) ?? "timeout",
         last_event: state.lastEventName,
         final_status: redactForLog(finalStatus, [], 0, redactText),
+        executionCancellation: { state: confirmed ? "acknowledged" : "unconfirmed" },
       },
       sessionParams: {
         hermesRunId: runId,

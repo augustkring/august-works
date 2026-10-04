@@ -10,6 +10,7 @@ const websocketState = vi.hoisted(() => ({
   agentRequests: [] as Record<string, unknown>[],
   methods: null as string[] | null,
   holdRun: false,
+  waitTimedOut: false,
   cancelled: false,
   waitReplies: [] as Array<() => void>,
   connections: [] as Record<string, unknown>[],
@@ -52,6 +53,10 @@ vi.mock("ws", async () => {
         queueMicrotask(() => {
           this.emit("close", 1006, Buffer.from("ECONNRESET"));
         });
+        return;
+      }
+      if (request.method === "agent.wait" && websocketState.waitTimedOut && !websocketState.cancelled) {
+        queueMicrotask(() => this.emit("message", JSON.stringify({ type: "res", id: request.id, ok: true, payload: { status: "timeout" } })));
         return;
       }
       if (request.method === "agent.wait" && websocketState.holdRun && !websocketState.cancelled) {
@@ -128,6 +133,7 @@ describe("openclaw_gateway execute dispatch boundary", () => {
     websocketState.agentRequests = [];
     websocketState.methods = null;
     websocketState.holdRun = false;
+    websocketState.waitTimedOut = false;
     websocketState.cancelled = false;
     websocketState.waitReplies = [];
     websocketState.connections = [];
@@ -165,6 +171,17 @@ describe("openclaw_gateway execute dispatch boundary", () => {
     expect(await execute(ctx)).toMatchObject({ errorCode: "cancelled", resultJson: { status: "cancelled" } });
     expect(ctx.onCancellationReady).toHaveBeenCalledOnce();
     expect(websocketState.events).toContain("send:chat.abort");
+  });
+
+  it.each([true, false])("settles a V5 wait timeout with actual stop proof (cancel advertised=%s)", async (canCancel) => {
+    websocketState.methods = canCancel ? ["agent", "agent.wait", "chat.abort"] : ["agent", "agent.wait"];
+    websocketState.holdRun = true; websocketState.waitTimedOut = true;
+    const ctx = createContext();
+    ctx.providerRuntime = { providerBindingId: "binding", providerAgentRef: "physical-agent", providerProfileRef: "profile", sessionNamespace: "scope", isolationMode: "isolated_per_presence", capabilitySnapshotHash: "hash" };
+    const result = await execute(ctx);
+    expect(result).toMatchObject({ timedOut: true, errorCode: canCancel ? "openclaw_gateway_wait_timeout" : "cancellation_unconfirmed", resultJson: { executionCancellation: { state: canCancel ? "acknowledged" : "unconfirmed" } } });
+    expect(websocketState.events.includes("send:chat.abort")).toBe(canCancel);
+    expect(websocketState.connectionAttempts).toBe(1);
   });
 
   it.each([false, true])("sends conversation policy without the issue-completion workflow (resumed=%s)", async (resumed) => {

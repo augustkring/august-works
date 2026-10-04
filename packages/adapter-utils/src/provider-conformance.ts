@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { ProviderConformanceContext, ServerAdapterModule } from "./types.js";
 
 type Probe = Awaited<ReturnType<ProviderConformanceContext["probe"]>>;
@@ -10,7 +9,7 @@ function routed(probe: Probe, target: ProviderConformanceContext["primary"]) { r
 export const testGatewayProviderConformance: NonNullable<ServerAdapterModule["testProviderConformance"]> = async (ctx) => {
   // ponytail: exercise each adapter’s retained gateway protocol and retain each real run.
   // Advertisements and model claims never stand in for routing/cancel receipts.
-  const nonce = `AW_PROBE_${randomUUID().replaceAll("-", "")}`;
+  const nonce = `AW_PROBE_${globalThis.crypto.randomUUID().replaceAll("-", "")}`;
   const checks: Record<string, boolean> = { connect: true, identity: false, start: false, stream: false, wait: false, cancel: false, resume: false, memoryScoping: false, structuredOutput: false, steering: false, skillsSync: false, skillsDiscovery: ctx.snapshot.features.skillsDiscovery, toolDiscovery: ctx.snapshot.features.toolDiscovery };
   const first = await ctx.probe(ctx.primary, { prompt: `Retain the marker ${nonce} in this test conversation. Output exactly ${nonce}. Use no tools and change no external resources.` });
   checks.identity = routed(first, ctx.primary);
@@ -21,7 +20,7 @@ export const testGatewayProviderConformance: NonNullable<ServerAdapterModule["te
     const resumed = await ctx.probe(ctx.primary, { prompt: "Output exactly the AW_PROBE marker retained earlier in this conversation. Use no tools. If none exists, output exactly NONE." });
     checks.resume = succeeded(resumed) && routed(resumed, ctx.primary) && Boolean(receipt(first)?.sessionId) && receipt(first)?.sessionId === receipt(resumed)?.sessionId && output(resumed) === nonce;
     if (ctx.peer && checks.resume) {
-      const peerNonce = `AW_PROBE_${randomUUID().replaceAll("-", "")}`;
+      const peerNonce = `AW_PROBE_${globalThis.crypto.randomUUID().replaceAll("-", "")}`;
       const unseen = await ctx.probe(ctx.peer, { prompt: "Output exactly the AW_PROBE marker from earlier messages in this conversation. Use no tools or external memory search. If none exists, output exactly NONE." });
       const peerWrite = await ctx.probe(ctx.peer, { prompt: `Retain ${peerNonce} in this test conversation and output exactly ${peerNonce}. Use no tools and change no external resources.` });
       const isolated = await ctx.probe(ctx.primary, { prompt: "Output exactly the most recent AW_PROBE marker from this conversation. Use no tools or external memory search. If none exists, output exactly NONE." });

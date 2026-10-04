@@ -1426,6 +1426,21 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
         const waitStatus = nonEmpty(waitPayload?.status)?.toLowerCase() ?? "";
         if (waitStatus === "timeout") {
+          if (ctx.providerRuntime) {
+            let terminal: Record<string, unknown> | null = null;
+            if (supportsCancellation) {
+              try {
+                await client.request("chat.abort", { sessionKey, runId: acceptedRunId }, { timeoutMs: 5_000 });
+                terminal = await client.request("agent.wait", { runId: acceptedRunId, timeoutMs: 4_000 }, { timeoutMs: 5_000 });
+              } catch { /* the provider must report terminal state */ }
+            }
+            const confirmed = terminal && ["cancelled", "canceled", "aborted", "stopped", "ok", "completed"].includes(String(terminal.status));
+            return { exitCode: 1, signal: null, timedOut: true,
+              errorCode: confirmed ? "openclaw_gateway_wait_timeout" : "cancellation_unconfirmed",
+              errorMessage: confirmed ? "OpenClaw wait timed out; provider termination confirmed" : "OpenClaw wait timed out; provider termination could not be confirmed",
+              resultJson: terminal ? { ...terminal, executionCancellation: { state: confirmed ? "acknowledged" : "unconfirmed" } } : { executionCancellation: { state: "unconfirmed" } },
+            };
+          }
           return {
             exitCode: 1,
             signal: null,
@@ -1510,6 +1525,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       };
     } catch (err) {
       if (ctx.signal?.aborted && dispatchReported) return { exitCode: null, signal: null, timedOut: false, errorCode: "cancellation_unconfirmed", errorMessage: "OpenClaw transport lost before provider termination was confirmed", resultJson: asRecord(latestResultPayload) };
+      if (ctx.providerRuntime && dispatchReported) return { exitCode: 1, signal: null, timedOut: false, errorCode: "cancellation_unconfirmed", errorMessage: "OpenClaw failed after provider dispatch; provider termination could not be confirmed", resultJson: { executionCancellation: { state: "unconfirmed" } } };
       const message = err instanceof Error ? err.message : String(err);
       const lower = message.toLowerCase();
       const timedOut = lower.includes("timeout");

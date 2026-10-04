@@ -1,5 +1,6 @@
 import { recordEagerSkillLoading, recordSkillExecutionCompletion } from "./skill-usage.js";
 import { agentRuntimeFabricService } from "./agent-runtime-fabric.js";
+import { agentProviderBindingService } from "./agent-provider-bindings.js";
 import { workflowDirectAgentPrompt } from "./workflows/workflow-direct-agent.js";
 import { heartbeatMemoryPayloadRetained, heartbeatMemoryPayloadVisible } from "./memory/memory-privacy.js";
 import { applyWorkspaceRestoreFailure } from "@paperclipai/adapter-utils/workspace-restore-result";
@@ -17983,7 +17984,7 @@ export function heartbeatService(
         lastHeartbeatAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(agents.id, agentId))
+      .where(and(eq(agents.id, agentId), ne(agents.status, "paused"), ne(agents.status, "terminated")))
       .returning()
       .then((rows) => rows[0] ?? null);
 
@@ -24760,6 +24761,9 @@ export function heartbeatService(
               );
             }
           }
+        }
+        if (v5Fabric && adapterResult.errorCode === "cancellation_unconfirmed") {
+          await agentProviderBindingService(db).markUnavailable(agent.companyId, agent.id, "provider_termination_unconfirmed");
         }
         const processCancellation =
           processRunCancellationSettlements.get(run.id) ??
