@@ -59,7 +59,8 @@ review, immutable candidates, suite replacement, baseline preservation and
 membership/flag rollback have been verified in browser and PostgreSQL checks.
 
 Recursive typecheck, the complete build and UI token gates pass at the latest
-source checkpoint. The complete regression suite is running. The full Hermes
+source checkpoint. The complete regression suite is running through the supported shards after
+fixture fixes. Independent coverage includes all 910 server test files. The full Hermes
 and Pi package checks pass separately because the repository's stable test
 wrapper does not include those projects. Deterministic project health and the
 bundled Project Planning & Execution Skill have focused coverage.
@@ -71,6 +72,6 @@ a new full backup and exact verification record remain in progress.
 
 The ordered wave checkboxes describe complete acceptance, not model or endpoint
 availability. Native/A2A conformance integration, general scoped connected tools,
-exceptional-path usage, actual-company library curation and live provider pilots
+post-crash usage reconciliation, actual-company library curation and live provider pilots
 remain explicit requirements. Unsupported providers stay unqualified. No live
 pilot gate is marked passed from fixture results.

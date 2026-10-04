@@ -29,6 +29,9 @@ Its truncated patches were not used as a source snapshot or executed.
   filters current policy and pins behavior versions within explicit budgets.
 - Private Skill candidates, immutable versions, overlap reviews, paired evidence,
   guarded promotion, dependency invalidation and retained usage observations.
+  Executor teardown records loaded observations for committed terminal runs,
+  including failure, interruption, cancellation and timeout, with unknown outcomes
+  and idempotent per-version events. A running/recovering run is never completed.
   Required evaluation suites can be replaced atomically while preserving old
   cases and evaluation history. Private and classified boundaries survive
   rollout rollback.
@@ -100,8 +103,10 @@ This checkpoint is not full V5 acceptance or a production release.
    The current wrapper supports the four documented task/Playbook actions.
    Existing local tool-session/run ownership cannot be bypassed by a fabricated
    guest run or primary-company credential.
-4. Complete usage outcomes on every fast/exceptional heartbeat termination path.
-   Unknown or absent outcomes cannot serve as promotion evidence.
+4. Reconcile retained Skill observations after process loss and durable recovery
+   that completes outside the active executor. The shared executor teardown now
+   covers terminal fast/exceptional returns; a missing observation or unknown
+   outcome still cannot serve as promotion evidence.
 5. Curate/import the supplied Role Pack Skill/Playbook sources into the actual
    selected companies and evaluate/promote them under local policy. Unresolved
    required references fail closed. Do not publish private uploads globally or
@@ -116,22 +121,32 @@ This checkpoint is not full V5 acceptance or a production release.
 
 ## Verification record
 
-Latest recursive typecheck, complete build and UI token gates pass. The complete
-`pnpm test:run` is still running at this documentation checkpoint. Focused
-regressions pass for provider termination and rollback (16), metadata/evaluation
-replacement (22), gateway/Agent Card integration (20), health/planning/budgets
-(24), the full Hermes package (89) and full Pi package (74). Gateway timeout and
-qualification checks pass. Three recovery timing failures in a parallel focused
-run passed when repeated in the stable runner’s private configuration. A further
-conformance/native-cancellation check passed 14 tests; unknown project cost
-observations passed 21 health/budget checks. The two classic
-browser flows pass with health disclosure assertions. The authenticated boundary
-flow also passes on the final health/planner implementation.
+Latest recursive typecheck, complete build and UI token gates pass. Two classic
+browser flows and the authenticated company-boundary/rollback flow pass. The full
+Hermes package passes 89 tests, and Pi passes 74 separately because the stable
+wrapper omits those projects. Focused provider/cancellation, immutable metadata,
+evaluation replacement, project health/budget and rollback regressions pass.
 
-The first broad run found fixture/configuration regressions. Their fixes retain
-the original behavioral assertions. Its failure count is not presented as a
-clean test result. The final result and exact commit will be recorded before
-handoff. No CI or external provider evidence is inferred from local tests.
+The two monolithic stable runs failed and are retained as failed evidence. The
+second general-server phase reported 14,198 passing and 11 failing tests; its
+failure prevented the later workspace and serialized phases from starting.
+Fresh focused verification of the affected files passes 209 tests, and the
+GitHub reorder case passes separately. Fixes retain all privacy, immutable-record
+and dependency-provisioning assertions: Skill/feedback assertions use stable
+record identity, and worktree fixtures use an owned writable worktree directory.
+Five new PostgreSQL regressions cover terminal Skill observations, local run
+ownership, unknown outcomes, no premature completion and concurrent idempotence.
+
+A complete run through the repository's supported shards is in progress. An
+independent file-set check found two colocated suites that were omitted from the
+old shard partition. The stable wrapper now discovers serialized suites across
+the same source tree as general suites; its 24 Node control tests pass. The new
+partition covers all 910 server test files without overlap, including the chat
+and native-runner suites, plus all workspace groups from the normal stable
+wrapper. Chat shards verify exact case identity coverage using Vitest collection.
+
+The completed result, source hash and final commit will be recorded before
+handoff. No GitHub CI or external provider evidence is inferred from local tests.
 
 ## Recovery
 

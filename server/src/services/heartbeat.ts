@@ -25041,7 +25041,6 @@ export function heartbeatService(
 
         const finalizedRun = persistedRun ?? (await getRun(run.id));
         if (finalizedRun) {
-          if (v5Fabric) await recordSkillExecutionCompletion(db, agent.companyId, run.id, agent.id);
           await appendRunEvent(finalizedRun, {
             eventType: "lifecycle",
             stream: "system",
@@ -26027,6 +26026,11 @@ export function heartbeatService(
               return latestRun;
             },
           );
+        }
+        if (latestRun && isHeartbeatRunTerminalStatus(latestRun.status)) {
+          await recordSkillExecutionCompletion(db, run.companyId, run.id, run.agentId).catch((err) => {
+            logger.warn({ err, runId: run.id }, "failed to settle terminal Skill usage observations");
+          });
         }
         // Warm retention is earned only by a fully successful turn. A failed,
         // cancelled, or timed-out run stops the reusable sandbox so the next

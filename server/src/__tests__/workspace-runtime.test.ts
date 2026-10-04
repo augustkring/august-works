@@ -442,6 +442,7 @@ beforeEach(async () => {
     defaultFixtureHome = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-workspace-runtime-home-"));
     process.env.PAPERCLIP_HOME = defaultFixtureHome;
   }
+  process.env.PAPERCLIP_WORKTREES_DIR ??= path.join(process.env.PAPERCLIP_HOME, "worktrees");
 });
 afterEach(async () => {
   await Promise.all(

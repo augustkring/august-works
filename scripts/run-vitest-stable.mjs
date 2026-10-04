@@ -18,7 +18,6 @@ const serializedShardDurations = loadShardDurations(
 );
 const serverRoot = path.join(repoRoot, "server");
 const serverSrcDir = path.join(repoRoot, "server", "src");
-const serverTestsDir = path.join(repoRoot, "server", "src", "__tests__");
 const nonServerProjects = [
   "@paperclipai/shared",
   "@paperclipai/skills-catalog",
@@ -477,7 +476,9 @@ function runSerializedSuites(routeTests, shardIndex, shardCount) {
   }
 }
 
-const routeTests = walk(serverTestsDir)
+// Colocated route suites also need the serialized lane. Use the same source
+// tree as general-server so sharding cannot silently omit those files.
+const routeTests = walk(serverSrcDir)
   .filter((file) => isRouteOrAuthzTest(toRepoPath(file)))
   .map((file) => ({
     repoPath: toRepoPath(file),
