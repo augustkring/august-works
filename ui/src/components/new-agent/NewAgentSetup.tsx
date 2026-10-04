@@ -84,7 +84,17 @@ export function NewAgentSetup() {
     <Setup
       key={`${selectedCompanyId}:${params.get("name")}:${params.get("adapterType")}:${params.get("runnerProvider")}`}
       companyId={selectedCompanyId}
-      name={params.get("name") ?? ""}
+      // OpenClaw and Hermes are existing runtimes, not freshly created
+      // managed agents. Their connection flow identifies the runtime, so do
+      // not ask the customer to invent a second name before connecting it.
+      name={
+        params.get("name") ??
+        (params.get("adapterType") === "openclaw_gateway"
+          ? "OpenClaw agent"
+          : params.get("adapterType") === "hermes_gateway"
+            ? "Hermes agent"
+            : "")
+      }
       adapterType={params.get("adapterType") ?? ""}
       runnerProvider={params.get("runnerProvider") ?? "codex"}
       createdAgentId={params.get("createdAgentId")}
@@ -110,6 +120,7 @@ function Setup({
   const { openNewIssue } = useDialogActions();
   const appearanceDraft = useAgentAppearanceDraft(`${companyId}:new-agent`);
   const isRunner = adapterType === "paperclip_runner";
+  const isOpenClawGateway = adapterType === "openclaw_gateway";
   const brandType = isRunner
     ? runnerProvider === "claude"
       ? "claude_local"
@@ -127,8 +138,15 @@ function Setup({
   const chooseProvider = multiProvider || brandType === "hermes_local";
   const hasCredentialField =
     chooseProvider || Boolean(SETUP_CREDENTIAL_KEYS[adapterType]);
-  const showModel = !["cursor_cloud", "hermes_gateway"].includes(adapterType);
+  const showModel = ![
+    "cursor_cloud",
+    "hermes_gateway",
+    "openclaw_gateway",
+  ].includes(adapterType);
   const [gatewayUrl, setGatewayUrl] = useState("");
+  const [openClawGatewayUrl, setOpenClawGatewayUrl] = useState("");
+  const [openClawGatewayToken, setOpenClawGatewayToken] = useState("");
+  const [openClawAgentId, setOpenClawAgentId] = useState("");
   const [kimiModel, setKimiModel] = useState("");
   const [kimiBaseUrl, setKimiBaseUrl] = useState("");
   const [kimiProtocol, setKimiProtocol] = useState("kimi");
@@ -337,6 +355,13 @@ function Setup({
       thinkingEffort: effort,
       dangerouslyBypassSandbox: adapterType === "codex_local",
       envBindings: nextConnection?.env ?? {},
+      ...(isOpenClawGateway
+        ? {
+            url: openClawGatewayUrl.trim(),
+            authToken: openClawGatewayToken,
+            agentId: openClawAgentId.trim(),
+          }
+        : {}),
       ...(isRunner
         ? {
             adapterSchemaValues: {
@@ -405,6 +430,16 @@ function Setup({
       } catch {
         throw new Error("Enter the Hermes API base URL.");
       }
+    }
+    if (isOpenClawGateway) {
+      try {
+        const url = new URL(openClawGatewayUrl.trim());
+        if (!["ws:", "wss:"].includes(url.protocol)) throw new Error();
+      } catch {
+        throw new Error("Enter an OpenClaw Gateway URL using ws:// or wss://.");
+      }
+      if (!openClawGatewayToken.trim())
+        throw new Error("Enter the OpenClaw Gateway token.");
     }
     if (usingKimiApi && !kimiModel.trim())
       throw new Error("Enter the Kimi API model name.");
@@ -641,7 +676,7 @@ function Setup({
                   ·{" "}
                   {runnerProvider === "codex"
                     ? "Native app server runner"
-                    : "Paperclip Runner"}
+                    : "August Works Runner"}
                 </span>
               )}
             </div>
@@ -712,7 +747,7 @@ function Setup({
                   <OnboardingCard className="mx-auto">
                     <div className="mb-8">
                       <OnboardingHeading
-                        title="Connect a model"
+                        title="Connect a runtime"
                         lede={`Connect ${name} to ${connectionAdapter === "claude_local" ? "Claude" : connectionAdapter === "grok_local" ? "Grok" : "OpenAI"}.`}
                         center
                       />
@@ -806,7 +841,11 @@ function Setup({
                     }}
                   >
                     <h2 className="text-xl font-semibold">
-                      Configure your agent
+                      {isOpenClawGateway
+                        ? "Connect OpenClaw"
+                        : adapterType === "hermes_gateway"
+                          ? "Connect Hermes"
+                          : "Configure your agent"}
                     </h2>
                     <fieldset disabled={busy} className="space-y-8">
                       <section className="space-y-5">
@@ -1024,6 +1063,56 @@ function Setup({
                             />
                           </Field>
                         )}
+                        {isOpenClawGateway && (
+                          <div className="space-y-5">
+                            <Field
+                              label="OpenClaw Gateway URL"
+                              hint="Use the WebSocket address for the OpenClaw Gateway, for example wss://gateway.example.com."
+                            >
+                              <Input
+                                aria-label="OpenClaw Gateway URL"
+                                type="url"
+                                autoComplete="url"
+                                value={openClawGatewayUrl}
+                                onChange={(event) => {
+                                  setOpenClawGatewayUrl(event.target.value);
+                                  resetTest();
+                                }}
+                                placeholder="wss://gateway.example.com"
+                              />
+                            </Field>
+                            <Field
+                              label="OpenClaw Gateway token"
+                              hint="This token is stored securely and sent only to your OpenClaw Gateway."
+                            >
+                              <Input
+                                aria-label="OpenClaw Gateway token"
+                                type="password"
+                                autoComplete="off"
+                                value={openClawGatewayToken}
+                                onChange={(event) => {
+                                  setOpenClawGatewayToken(event.target.value);
+                                  resetTest();
+                                }}
+                                placeholder="Required"
+                              />
+                            </Field>
+                            <Field
+                              label="OpenClaw agent ID"
+                              hint="Optional. Leave blank when the Gateway can resolve its default agent."
+                            >
+                              <Input
+                                aria-label="OpenClaw agent ID"
+                                value={openClawAgentId}
+                                onChange={(event) => {
+                                  setOpenClawAgentId(event.target.value);
+                                  resetTest();
+                                }}
+                                placeholder="Optional"
+                              />
+                            </Field>
+                          </div>
+                        )}
                         {usingKimiApi && (
                           <div className="grid gap-5 sm:grid-cols-2">
                             <Field label="Kimi API model name">
@@ -1097,9 +1186,11 @@ function Setup({
                           </div>
                         )}
                       </section>
-                      {!["cursor_cloud", "hermes_gateway"].includes(
-                        adapterType,
-                      ) && (
+                      {![
+                        "cursor_cloud",
+                        "hermes_gateway",
+                        "openclaw_gateway",
+                      ].includes(adapterType) && (
                         <section className="space-y-5">
                           <h3 className="text-sm font-semibold">Environment</h3>
                           <select
@@ -1134,6 +1225,15 @@ function Setup({
                       error={error}
                       disabled={!ready || busy}
                       onTest={() => void runTest()}
+                      descriptions={
+                        isOpenClawGateway
+                          ? {
+                              idle: "Check that your OpenClaw Gateway can respond.",
+                              running: "Checking the OpenClaw Gateway response…",
+                              fail: "Check your Gateway URL and token, then try again.",
+                            }
+                          : undefined
+                      }
                     />
                     {error && testState !== "fail" && (
                       <p role="alert" className="text-sm text-destructive">
@@ -1163,7 +1263,13 @@ function Setup({
                           Boolean(connectionAdapter && !connection)
                         }
                       >
-                        {saving ? "Creating…" : "Finish setup"}
+                        {saving
+                          ? "Connecting…"
+                          : isOpenClawGateway
+                            ? "Connect OpenClaw"
+                            : adapterType === "hermes_gateway"
+                              ? "Connect Hermes"
+                              : "Finish setup"}
                         <Check className="size-4" />
                       </Button>
                     </div>

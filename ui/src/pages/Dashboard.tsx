@@ -1,11 +1,5 @@
 import { AgentIdentity } from "../components/AgentIdentity";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "@/lib/router";
-import {
-  onboardingStepForCompany,
-  shouldRouteAgentlessCompanyToOnboarding,
-} from "../lib/onboarding-route";
-import { claimOnboardingOffer } from "../lib/onboarding-auto-open";
 import { Link } from "@/lib/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { dashboardApi } from "../api/dashboard";
@@ -73,7 +67,6 @@ export function derivePausedAgentBanner(agents: Agent[] | undefined): PausedAgen
 export function Dashboard() {
   const { selectedCompanyId, companies } = useCompany();
   const { openOnboarding } = useDialogActions();
-  const location = useLocation();
   const { setBreadcrumbs } = useBreadcrumbs();
   const [animatedActivityIds, setAnimatedActivityIds] = useState<Set<string>>(new Set());
   const seenActivityIdsRef = useRef<Set<string>>(new Set());
@@ -113,46 +106,6 @@ export function Dashboard() {
       ]);
     },
   });
-
-  // A company with no agent cannot do anything — no runs, no tasks, nothing
-  // to show. The banner below already says so and offers a link; this takes
-  // the customer there instead of asking them to notice.
-  //
-  // It also closes the gap a Cloud-provisioned stack falls into. Cloud creates
-  // the company before the tenant boots, so the companyless redirect never
-  // fires and a seeded customer lands here, on an empty dashboard, straight
-  // out of signup.
-  //
-  // Opened as the dialog rather than navigated to: the wizard is already
-  // mounted globally, so there is no route to race and no redirect to loop.
-  // Placed with the other hooks — the early returns below mean anything
-  // further down would be called conditionally.
-  //
-  // The company and the step are both passed. Opening with empty options would
-  // start the wizard at the front door with no company, and the new-company
-  // path there would create a *second* company instead of giving this one an
-  // agent.
-  const shouldOpenOnboarding = shouldRouteAgentlessCompanyToOnboarding({
-    pathname: location.pathname,
-    agentsLoaded: agents !== undefined,
-    agentsRefreshing,
-    agentCount: agents?.length ?? 0,
-  });
-  // Auto-open once per company. Every input to the effect sits behind a query,
-  // so a refetch re-runs it, and the customer can also navigate away and come
-  // back — both would otherwise call `openOnboarding` again and reopen a
-  // wizard that was deliberately closed. `claimOnboardingOffer` holds the
-  // companies already offered; see it for why that outlives this component.
-  useEffect(() => {
-    if (!shouldOpenOnboarding || !selectedCompanyId) return;
-    if (!claimOnboardingOffer(selectedCompanyId)) return;
-    openOnboarding({
-      companyId: selectedCompanyId,
-      initialStep: onboardingStepForCompany(),
-    });
-    // No mission lookup to wait on any more: the step this opens is the same
-    // whatever the goals say, so waiting only delayed the open.
-  }, [shouldOpenOnboarding, selectedCompanyId, openOnboarding]);
 
   useEffect(() => {
     setBreadcrumbs([{ label: "Dashboard" }]);
@@ -297,7 +250,7 @@ export function Dashboard() {
       return (
         <EmptyState
           icon={LayoutDashboard}
-          message="Welcome to Paperclip. Set up your first organization and agent to get started."
+          message="Welcome to August Works. Create an organization, then add agents when you are ready."
           action="Get Started"
           onAction={openOnboarding}
         />
@@ -312,9 +265,8 @@ export function Dashboard() {
     return <PageSkeleton variant="dashboard" />;
   }
 
-  // Same rule as the auto-offer above: a list still being refreshed may be the
-  // empty one cached before the first hire, and the banner's "Create one here"
-  // opens the same agent step the offer does.
+  // Wait for a fresh list before showing the empty-state prompt. An agent can
+  // have just been added in another tab while this query is refreshing.
   const hasNoAgents = agents !== undefined && !agentsRefreshing && agents.length === 0;
   const pausedBanner = derivePausedAgentBanner(agents);
   const pausedImportedCount =
@@ -362,14 +314,14 @@ export function Dashboard() {
           <div className="flex items-center gap-2.5">
             <Bot className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <p className="text-sm text-amber-900 dark:text-amber-100">
-              You have no agents.
+              No agents connected yet.
             </p>
           </div>
           <button
             onClick={() => openOnboarding({ initialStep: 3, companyId: selectedCompanyId! })}
             className="text-sm font-medium text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100 underline underline-offset-2 shrink-0"
           >
-            Create one here
+            Add an agent
           </button>
         </div>
       )}

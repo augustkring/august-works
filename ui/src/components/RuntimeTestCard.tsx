@@ -44,12 +44,14 @@ export function RuntimeTestCard({
   error,
   onTest,
   disabled = false,
+  descriptions,
 }: {
   state: TestState | "warn";
   result: AdapterEnvironmentTestResult | null;
   error?: string | null;
   onTest: () => void;
   disabled?: boolean;
+  descriptions?: Partial<Record<TestState | "warn", string>>;
 }) {
   const content = copy[state];
   const Icon =
@@ -92,7 +94,9 @@ export function RuntimeTestCard({
           >
             <h3 className="text-sm font-medium">{content.title}</h3>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              {state === "fail" && error ? error : content.description}
+              {state === "fail" && error
+                ? error
+                : (descriptions?.[state] ?? content.description)}
             </p>
           </div>
           <Button

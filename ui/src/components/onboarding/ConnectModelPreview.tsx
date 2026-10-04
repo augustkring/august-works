@@ -106,8 +106,8 @@ export function ConnectModelPreview({
         <div className="pt-6">
           <OnboardingHeading
             center
-            title="Connect a model"
-            lede="Paperclip works with your existing subscription or API keys."
+            title="Connect a runtime"
+            lede="August Works works with your existing subscription or API keys."
           />
         </div>
 

@@ -308,11 +308,11 @@ function ConnectFlowPreview({
         <div className="pt-6">
           <OnboardingHeading
             center
-            title={done ? "Connected" : "Connect a model"}
+            title={done ? "Connected" : "Connect a runtime"}
             lede={
               done
                 ? "The step advances straight to Review — there is no success screen."
-                : "Paperclip works with your existing subscription or API keys."
+                : "August Works works with your existing subscription or API keys."
             }
           />
         </div>
