@@ -2,11 +2,15 @@
 
 This foundation is closed by default. It does not qualify a production service. Public signup, verification/reset email, durable customer onboarding and commercial billing are not yet implemented.
 
+Production qualification must also review existing local agent execution and plugin/environment bootstrap paths for the pooled service. Selecting the SaaS profile does not provide the hosted runtime isolation that later infrastructure and runtime waves must implement.
+
 ## Profiles
 
 `AW_DEPLOYMENT_PROFILE` selects `local`, `legacy_managed_stack` or `saas`. It is separate from `PAPERCLIP_DEPLOYMENT_MODE` (`local_trusted` or `authenticated`). An absent profile preserves existing local/legacy behavior. An explicit local/SaaS profile rejects legacy Cloud tenant credentials or `PAPERCLIP_MANAGED_CONFIG`; do not use a profile to weaken a Cloud floor.
 
 SaaS selects authenticated/public mode, an explicit HTTPS Better Auth URL and secure host-only cookies. Cloud control, identity assertion and portfolio proxy routes are absent. Workspace-handoff authentication is absent. The product company directory and live subscriptions require membership, including for instance admins. Existing company creation remains operator-only until the durable onboarding slice replaces it.
+
+Managed child/worktree services strip inherited `AW_` configuration, just as they strip parent `PAPERCLIP_` configuration. A child must not inherit the parent's SaaS profile, public origin or platform credentials. Explicit service overrides are still applied after sanitization.
 
 ## Origin source
 

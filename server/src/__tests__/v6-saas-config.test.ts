@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getCookies } from "better-auth/cookies";
 import type { BetterAuthOptions } from "better-auth";
 import { loadConfig } from "../config.js";
+import { createApp } from "../app.js";
 import {
   activePublicAppOrigins, assertSaasRolloutReady, parsePublicAppOrigin, publicAppUrl,
   resolveAwDeploymentProfile, resolvePublicOriginConfig, resolveSaasTrustProxy,
@@ -28,7 +29,6 @@ function saasEnvironment() {
 
 describe("V6 deployment ownership and rollout", () => {
   it("refuses to construct a SaaS app with implicit authority or missing origin policy", async () => {
-    const { createApp } = await import("../app.js");
     await expect(createApp({} as never, { deploymentProfile: "saas", deploymentMode: "local_trusted" } as never))
       .rejects.toThrow(/SaaS app requires/);
     await expect(createApp({} as never, { deploymentProfile: "saas", deploymentMode: "authenticated", deploymentExposure: "public" } as never))

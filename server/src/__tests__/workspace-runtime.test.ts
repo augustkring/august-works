@@ -467,6 +467,11 @@ describe("sanitizeRuntimeServiceBaseEnv", () => {
       DATABASE_URL: "postgres://example.test/paperclip",
       PAPERCLIP_HOME: "/tmp/paperclip-home",
       PAPERCLIP_INSTANCE_ID: "runtime-instance",
+      AW_DEPLOYMENT_PROFILE: "saas",
+      AW_PUBLIC_APP_ORIGIN: "https://parent.example.test",
+      AW_ALLOWED_APP_ORIGINS: "https://allowed.example.test",
+      AW_LEGACY_APP_ORIGINS: "https://old.example.test",
+      AW_PLATFORM_CREDENTIAL: "parent-only-fixture",
       BETTER_AUTH_URL: "https://parent.example.test",
       BETTER_AUTH_BASE_URL: "https://legacy-parent.example.test",
       npm_config_tailscale_auth: "true",
@@ -476,6 +481,11 @@ describe("sanitizeRuntimeServiceBaseEnv", () => {
 
     expect(sanitized.PAPERCLIP_HOME).toBeUndefined();
     expect(sanitized.PAPERCLIP_INSTANCE_ID).toBeUndefined();
+    expect(sanitized.AW_DEPLOYMENT_PROFILE).toBeUndefined();
+    expect(sanitized.AW_PUBLIC_APP_ORIGIN).toBeUndefined();
+    expect(sanitized.AW_ALLOWED_APP_ORIGINS).toBeUndefined();
+    expect(sanitized.AW_LEGACY_APP_ORIGINS).toBeUndefined();
+    expect(sanitized.AW_PLATFORM_CREDENTIAL).toBeUndefined();
     expect(sanitized.BETTER_AUTH_URL).toBeUndefined();
     expect(sanitized.BETTER_AUTH_BASE_URL).toBeUndefined();
     expect(sanitized.DATABASE_URL).toBeUndefined();
