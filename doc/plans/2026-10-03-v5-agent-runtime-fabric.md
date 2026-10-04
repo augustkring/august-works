@@ -63,7 +63,11 @@ The earlier complete checkpoint has 27,922 passing stable-wrapper tests and
 Git history, 336 migration hashes and cold PostgreSQL restore were verified.
 The finishing work adds scoped connected tools, local native and A2A protocol
 bridges, exact replay, full probe accounting and post-crash Skill reconciliation.
-These changes are undergoing a fresh full verification and cold backup.
+The complete supported tests now pass in exact-head CI shards over all 912 server
+source test files and 14 workspace projects. Local typecheck/build, explicit
+scoped/protocol regressions and all three V5 browser flows pass. The final CI-only
+changes and the deliberately interrupted duplicate local run are documented in
+the evidence report. Read the private backup index for final cold restore status.
 
 The ordered wave checkboxes describe full activation acceptance. Actual-company
 library curation and live provider pilots remain external activation conditions;

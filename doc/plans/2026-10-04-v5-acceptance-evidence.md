@@ -135,8 +135,8 @@ this dormant implementation.
    transports remain discovery-only. Streaming, context continuity and separate
    profiles must be proved; Agent Cards grant no August Works authority.
 5. Run GitHub CI and independent review before merge. GitHub API access was
-   verified on 2026-10-04 after the earlier CONNECT block. No prior PR exists for
-   the V5 branch. PR creation and CI/Greptile results must be observed separately;
+   verified on 2026-10-04 after the earlier CONNECT block. [PR #32](https://github.com/augustkring/august-works/pull/32) is open. Complete
+   CI test coverage is observed separately from aggregate policy gates and review;
    Git transport access is not their evidence. Merge must retain all 20 flags off
    until activation evidence is reviewed.
 
@@ -172,7 +172,7 @@ commands remain failed evidence; this is not one clean monolithic execution.
 The final non-Markdown source was frozen at code commit
 `bcaaf346e1785ecd8aac9edafb55dbc135b00846` with SHA-256
 `8aea6f77516cebe84db2c25738055895ca057a1e84e1d465e70cd2ea48f0462f`. Records, commands, raw summaries and source changes
-between checkpoints are in the private `complete-verification-effective-report.json`
+between checkpoints are in the private `complete-verification-effective-report-before-finishing.json`
 and its referenced reports. Later repository documentation updates do not change
 that source hash. The original full runs and retry failure logs are retained.
 
@@ -211,11 +211,45 @@ the repository; they have not been uploaded to a real Paperclip issue because
 this session has no task/run identity or API credentials. Recovery instructions,
 checksums and restore reports remain alongside the archives.
 
-## Finishing verification — in progress
+## Finishing verification
 
-The new regressions cover real PostgreSQL authority and usage reconciliation,
-exact tool replay, revoked disclosure, native harness provenance, actual profile
-separation, provider drift, RPC/SSE parsing, host cancellation and missing final
-cost evidence. The complete Hermes package has 90 passing tests. Required full
-repository checks and a new cold backup are in progress. Earlier backup files,
-Git history and verification logs remain retained.
+The finishing runtime source was frozen with SHA-256
+`70fa89175d3cac3da92aa534fe53c9ce94bea5761e540dc4d1138690201c7d17`
+and committed as `8b7cdfc2d39c7326c0a3312820175abc8931fccc`.
+[The PR CI run](https://github.com/augustkring/august-works/actions/runs/37196833256)
+passes all stable-suite test jobs: 12 general server shards, three chat shards,
+nine serialized shards, both UI/CLI shards, the remaining workspace group and
+both Runner Vitest lanes. The final Runner lane retains the native integration
+suite excluded from the general PR shards. Source selection was independently
+verified as a complete, non-overlapping partition of all 912 server source test
+files and all 14 stable-wrapper workspace projects. Fresh test totals and actual
+skip counts are not inferred without raw CI logs.
+
+The additional server vendor-script suite passes five tests. The changed Hermes
+package passes 90 tests separately. Recursive typecheck, complete build, token
+gates and module boundaries pass locally. `pnpm db:generate` reports no schema
+change; the new accounting field refines existing JSON typing and needs no new
+DDL. The extra local monolithic `pnpm test:run` invocation was deliberately
+interrupted with exit 130 after complete identical-source CI coverage passed.
+Its log and unchanged-source report remain retained as interrupted evidence.
+
+Only two non-Markdown inputs changed after the complete CI test coverage:
+`scripts/e2e-shard.mjs` now matches the existing authenticated-suite exclusion,
+and the fork verification workflow runs V4, classic V5 and authenticated V5
+browser journeys in separate job instances. This prevents a completed fixture's
+PostgreSQL Unix lock from blocking the next fixture. All 11 partition checks
+pass. Both classic V5 browser tests and the dedicated authenticated test pass
+with real PostgreSQL and Chromium. The initial authenticated startup failure is
+retained separately. The workflow YAML parses and preserves the aggregate
+readiness requirement and separate failure artifacts.
+
+The final source hash is
+`f79808964d7240d4c4afcfeebaa9613450f16ef4480fe5ea8dde856e75c0ef95`.
+Reports distinguish the complete CI runtime coverage, final CI-only changes and
+local interrupted execution. The actual local instance starts correctly, has no
+companies, and retains all 20 V5 flags off in persisted settings. No paid provider
+calls were made. GitHub's Dependency Review reports disabled Dependency Graph;
+aggregate CI and independent review remain unfulfilled merge gates until the
+new head is checked and repository review configuration is corrected. Final
+cold backup and restoration status is recorded separately in the private
+`v5-recovery/backups/CURRENT.json` and its referenced verification report.

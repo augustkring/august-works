@@ -211,9 +211,22 @@ jobs:
         run: pnpm test:aw-v4-security-evals
 
   product-browser:
-    name: V4 product browser journeys
+    name: Product browser (${{ matrix.journey }})
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - journey: V4 product journeys
+            config: tests/e2e/playwright.config.ts
+            spec: tests/e2e/aw-v4-completion.spec.ts
+          - journey: V5 planning and governed behavior
+            config: tests/e2e/playwright.config.ts
+            spec: tests/e2e/aw-v5-runtime-fabric.spec.ts
+          - journey: V5 authenticated company boundaries
+            config: tests/e2e/aw-v5-authenticated.config.ts
+            spec: tests/e2e/aw-v5-authenticated.spec.ts
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -244,17 +257,18 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Verify V4 product journeys
-        run: pnpm exec playwright test --config tests/e2e/playwright.config.ts tests/e2e/aw-v4-completion.spec.ts
+      - name: Verify product browser journey
+        run: pnpm exec playwright test --config '${{ matrix.config }}' '${{ matrix.spec }}'
 
       - name: Retain browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: aw-v4-browser-failure
+          name: product-browser-failure-${{ strategy.job-index }}
           path: |
             tests/e2e/test-results
             tests/e2e/playwright-report
+            test-results/v5-authenticated
           if-no-files-found: ignore
 
   pilot-readiness:
