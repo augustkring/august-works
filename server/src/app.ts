@@ -1,3 +1,4 @@
+import { publicOriginGuard } from "./middleware/public-origin-guard.js";
 import { portfolioRoutes } from "./routes/portfolio.js";
 import { projectControlRoutes } from "./routes/project-control.js";
 import { playbookRoutes } from "./routes/playbooks.js";
@@ -28,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import type { Db } from "@paperclipai/db";
 import {
   derivePaperclipViteHmrPort,
+  type AwDeploymentProfile,
   type DeploymentExposure,
   type DeploymentMode,
 } from "@paperclipai/shared";
@@ -488,10 +490,12 @@ export async function createApp(
     databaseBackupService?: InstanceDatabaseBackupService;
     databaseBackupHealth?: InspectDatabaseBackupHealthOptions;
     deploymentMode: DeploymentMode;
+    deploymentProfile?: AwDeploymentProfile;
     deploymentExposure: DeploymentExposure;
     allowedHostnames: string[];
     bindHost: string;
     authPublicBaseUrl?: string;
+    publicAppOrigins?: readonly string[];
     chatWebhookPublicBaseUrl?: string;
     authReady: boolean;
     companyDeletionEnabled: boolean;
@@ -517,6 +521,11 @@ export async function createApp(
     bundledPluginCatalogRoot?: string;
   },
 ) {
+  if (opts.deploymentProfile === "saas" && (
+    opts.deploymentMode !== "authenticated" || opts.deploymentExposure !== "public" || !opts.publicAppOrigins?.length
+  )) {
+    throw new Error("SaaS app requires authenticated public mode and configured public origins");
+  }
   const app = express();
   app.locals.paperclipDb = db;
   const captureRawBody = (
@@ -531,6 +540,10 @@ export async function createApp(
   // Default is unset → Express trusts nothing, which is the only safe choice
   // when the server may be reachable without a known reverse proxy in front.
   applyTrustProxy(app, parseTrustProxyEnv(process.env.TRUST_PROXY));
+  if (opts.publicAppOrigins) {
+    app.locals.publicAppOrigins = opts.publicAppOrigins;
+    app.use(publicOriginGuard(opts.publicAppOrigins));
+  }
 
   app.use(
     COMPANY_IMPORT_API_PATH,
@@ -570,7 +583,7 @@ export async function createApp(
       bindHost: opts.bindHost,
     }),
   );
-  app.use(cloudRuntimeIdentityMiddleware(db));
+  if (opts.deploymentProfile !== "saas") app.use(cloudRuntimeIdentityMiddleware(db));
   // Connection-intent tools carry their own short-lived, run-bound bearer and
   // must be reachable by remote adapters that intentionally do not receive an
   // agent API key. Every request revalidates the active heartbeat row.
@@ -584,7 +597,7 @@ export async function createApp(
   // After the actor middleware on purpose: a valid Cloud control assertion
   // REPLACES whatever actor the request otherwise resolved to, and only on
   // the one endpoint it authorizes (see the middleware for the contract).
-  app.use(cloudControlMiddleware());
+  if (opts.deploymentProfile !== "saas") app.use(cloudControlMiddleware());
   app.use("/api/auth", authRoutes(db));
   if (opts.betterAuthHandler) {
     app.all("/api/auth/{*authPath}", opts.betterAuthHandler);
@@ -666,7 +679,7 @@ export async function createApp(
     }),
   );
   api.use(openApiRoutes());
-  api.use("/cloud", cloudRoutes());
+  if (opts.deploymentProfile !== "saas") api.use("/cloud", cloudRoutes());
   api.use("/companies", companyRoutes(db, opts.storageService));
   api.use(llmRoutes(db));
   api.use(folderRoutes(db));

@@ -3259,3 +3259,6 @@ export * from "./playbooks.js";
 export * from "./project-control.js";
 
 export * from "./portfolio.js";
+
+export * from "./aw-deployment.js";
+export * from "./v6-feature-flags.js";

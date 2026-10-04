@@ -1,3 +1,4 @@
+import { resolveAwDeploymentProfile } from "../aw-deployment.js";
 import { createHash } from "node:crypto";
 
 export type CloudInstanceEnv = Record<string, string | undefined>;
@@ -26,10 +27,7 @@ function normalizeOptionalEnvValue(value: string | undefined): string | null {
 export function isCloudManagedInstance(
   env: CloudInstanceEnv = process.env,
 ): boolean {
-  return (
-    normalizeOptionalEnvValue(env.PAPERCLIP_CLOUD_TENANT_SERVER_TOKEN) !== null ||
-    env.PAPERCLIP_MANAGED_CONFIG !== undefined
-  );
+  return resolveAwDeploymentProfile(env) === "legacy_managed_stack";
 }
 
 /**

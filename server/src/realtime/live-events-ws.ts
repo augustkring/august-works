@@ -5,7 +5,7 @@ import type { Duplex } from "node:stream";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agentApiKeys, companyMemberships, instanceUserRoles } from "@paperclipai/db";
-import type { DeploymentMode } from "@paperclipai/shared";
+import type { AwDeploymentProfile, DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import { logger } from "../middleware/logger.js";
 import { subscribeCompanyLiveEvents } from "../services/live-events.js";
@@ -128,6 +128,7 @@ async function authorizeUpgrade(
   url: URL,
   opts: {
     deploymentMode: DeploymentMode;
+    deploymentProfile?: AwDeploymentProfile;
     resolveSessionFromHeaders?: (headers: Headers) => Promise<BetterAuthSessionResult | null>;
     resolveCloudActor?: (req: IncomingMessage) => Promise<CloudUpgradeActor | null>;
   },
@@ -153,7 +154,7 @@ async function authorizeUpgrade(
     // cloud actor is authoritative: authorize against its membership scope.
     // Absent/invalid cloud headers fall through to the session path, so
     // self-hosted behavior is unchanged.
-    if (opts.resolveCloudActor) {
+    if (opts.resolveCloudActor && opts.deploymentProfile !== "saas") {
       const cloudActor = await opts.resolveCloudActor(req);
       if (cloudActor) {
         if (!cloudActor.companyIds.includes(companyId)) return null;
@@ -174,7 +175,7 @@ async function authorizeUpgrade(
     if (!userId) return null;
 
     const [roleRow, memberships] = await Promise.all([
-      db
+      opts.deploymentProfile === "saas" ? Promise.resolve(null) : db
         .select({ id: instanceUserRoles.id })
         .from(instanceUserRoles)
         .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
@@ -229,6 +230,7 @@ export function setupLiveEventsWebSocketServer(
   db: Db,
   opts: {
     deploymentMode: DeploymentMode;
+    deploymentProfile?: AwDeploymentProfile;
     resolveSessionFromHeaders?: (headers: Headers) => Promise<BetterAuthSessionResult | null>;
     /**
      * Resolves a Cloud-proxied browser's identity from the trusted
@@ -318,6 +320,7 @@ export function setupLiveEventsWebSocketServer(
 
     void authorizeUpgrade(db, req, companyId, url, {
       deploymentMode: opts.deploymentMode,
+      deploymentProfile: opts.deploymentProfile,
       resolveSessionFromHeaders: opts.resolveSessionFromHeaders,
       resolveCloudActor: opts.resolveCloudActor,
     })

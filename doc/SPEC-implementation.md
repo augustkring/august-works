@@ -1718,3 +1718,7 @@ Agents cannot
 read or change these preferences. The legacy instance general setting is retained
 for API compatibility but no longer controls shortcut behavior in the app;
 users opt in individually after the upgrade.
+
+## August Works V6 SaaS foundation
+
+Deployment ownership is independent of authentication mode. The additive `saas` profile uses pooled companies, current memberships, configured HTTPS origins and the same HTTP/WebSocket ingress policy. It never selects implicit local authority or uses a Cloud-pinned primary company. Public signup remains closed until the auth/email implementation is qualified. See [the post-V5 matrix](plans/2026-10-04-aw-v6-foundation.md) and [V6 architecture decisions](adr/V6-ARCHITECTURE-DECISIONS.md).

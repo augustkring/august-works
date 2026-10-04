@@ -1,3 +1,4 @@
+import { resolveAwDeploymentProfile, resolvePublicOriginConfig, resolveSaasTrustProxy, parsePublicAppOrigin } from "./aw-deployment.js";
 import { readConfigFile } from "./config-file.js";
 import { parseChatWebhookPublicBaseUrl } from "./chat-webhook-public-url.js";
 import { execFileSync } from "node:child_process";
@@ -14,6 +15,8 @@ import {
   DEPLOYMENT_MODES,
   SECRET_PROVIDERS,
   STORAGE_PROVIDERS,
+  type AwDeploymentProfile,
+  type PublicOriginConfig,
   type BindMode,
   type AuthBaseUrlMode,
   type DeploymentExposure,
@@ -56,6 +59,8 @@ const TAILSCALE_DETECT_TIMEOUT_MS = 3000;
 type DatabaseMode = "embedded-postgres" | "postgres";
 
 export interface Config {
+  deploymentProfile: AwDeploymentProfile;
+  publicOriginConfig: PublicOriginConfig | undefined;
   deploymentMode: DeploymentMode;
   deploymentExposure: DeploymentExposure;
   bind: BindMode;
@@ -119,6 +124,30 @@ function detectTailnetBindHost(): string | undefined {
 }
 
 export function loadConfig(): Config {
+  const deploymentProfile = resolveAwDeploymentProfile();
+  const isSaas = deploymentProfile === "saas";
+  const publicOriginConfig = isSaas ? resolvePublicOriginConfig() : undefined;
+  if (isSaas) {
+    resolveSaasTrustProxy(process.env.TRUST_PROXY);
+    if (process.env.PAPERCLIP_DEPLOYMENT_MODE && process.env.PAPERCLIP_DEPLOYMENT_MODE !== "authenticated") {
+      throw new Error("SaaS requires authenticated deployment mode");
+    }
+    if (process.env.PAPERCLIP_DEPLOYMENT_EXPOSURE && process.env.PAPERCLIP_DEPLOYMENT_EXPOSURE !== "public") {
+      throw new Error("SaaS requires public deployment exposure");
+    }
+    if (process.env.PAPERCLIP_AUTH_BASE_URL_MODE && process.env.PAPERCLIP_AUTH_BASE_URL_MODE !== "explicit") {
+      throw new Error("SaaS requires explicit auth base URL mode");
+    }
+    for (const name of ["PAPERCLIP_PUBLIC_URL", "PAPERCLIP_AUTH_PUBLIC_BASE_URL", "BETTER_AUTH_URL", "BETTER_AUTH_BASE_URL", "PAPERCLIP_API_URL", "PAPERCLIP_MANAGED_RUNTIME_PUBLIC_URL"]) {
+      const value = process.env[name]?.trim();
+      if (value && parsePublicAppOrigin(value) !== publicOriginConfig!.primaryAppOrigin) {
+        throw new Error(`${name} conflicts with AW_PUBLIC_APP_ORIGIN`);
+      }
+    }
+    if (process.env.PAPERCLIP_AUTH_RATE_LIMIT_ENABLED?.trim().toLowerCase() === "false") {
+      throw new Error("SaaS auth rate limiting cannot be disabled");
+    }
+  }
   const fileConfig = readConfigFile();
   const fileDatabaseMode =
     (fileConfig?.database.mode === "postgres" ? "postgres" : "embedded-postgres") as DatabaseMode;
@@ -172,7 +201,7 @@ export function loadConfig(): Config {
     deploymentModeFromEnvRaw && DEPLOYMENT_MODES.includes(deploymentModeFromEnvRaw as DeploymentMode)
       ? (deploymentModeFromEnvRaw as DeploymentMode)
       : null;
-  const deploymentMode: DeploymentMode = deploymentModeFromEnv ?? fileConfig?.server.deploymentMode ?? "local_trusted";
+  const deploymentMode: DeploymentMode = isSaas ? "authenticated" : deploymentModeFromEnv ?? fileConfig?.server.deploymentMode ?? "local_trusted";
   const strictModeFromEnv = process.env.PAPERCLIP_SECRETS_STRICT_MODE;
   const secretsStrictMode =
     strictModeFromEnv !== undefined
@@ -184,7 +213,7 @@ export function loadConfig(): Config {
     DEPLOYMENT_EXPOSURES.includes(deploymentExposureFromEnvRaw as DeploymentExposure)
       ? (deploymentExposureFromEnvRaw as DeploymentExposure)
       : null;
-  const deploymentExposure: DeploymentExposure =
+  const deploymentExposure: DeploymentExposure = isSaas ? "public" :
     deploymentMode === "local_trusted"
       ? "private"
       : (deploymentExposureFromEnv ?? fileConfig?.server.exposure ?? "private");
@@ -216,14 +245,15 @@ export function loadConfig(): Config {
   ].find((value): value is string => typeof value === "string" && value.trim().length > 0);
   const managedRuntimePublicUrl = process.env.PAPERCLIP_MANAGED_RUNTIME_PUBLIC_URL?.trim() || undefined;
   const authPublicBaseUrlRaw = configuredAuthPublicBaseUrlRaw ?? managedRuntimePublicUrl;
-  const authPublicBaseUrl = authPublicBaseUrlRaw?.trim() || undefined;
-  const authBaseUrlMode: AuthBaseUrlMode =
+  const authPublicBaseUrl = publicOriginConfig?.primaryAppOrigin ?? (authPublicBaseUrlRaw?.trim() || undefined);
+  const authBaseUrlMode: AuthBaseUrlMode = isSaas ? "explicit" :
     authBaseUrlModeFromEnv ??
     (configuredAuthPublicBaseUrlRaw === undefined && managedRuntimePublicUrl
       ? "explicit"
       : fileConfig?.auth?.baseUrlMode ?? (authPublicBaseUrl ? "explicit" : "auto"));
   const disableSignUpFromEnv = process.env.PAPERCLIP_AUTH_DISABLE_SIGN_UP;
-  const authDisableSignUp: boolean =
+  // Public sign-up remains closed until the V6 auth/email slice is implemented.
+  const authDisableSignUp: boolean = isSaas ? true :
     disableSignUpFromEnv !== undefined
       ? disableSignUpFromEnv === "true"
       : (fileConfig?.auth?.disableSignUp ?? false);
@@ -315,6 +345,8 @@ export function loadConfig(): Config {
   }
 
   return {
+    deploymentProfile,
+    publicOriginConfig,
     deploymentMode,
     deploymentExposure,
     bind: resolvedBind.bind,

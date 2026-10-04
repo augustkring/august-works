@@ -41,6 +41,8 @@ function requestHost(req: Request): string | undefined {
 }
 
 function trustedOriginsForRequest(req: Request) {
+  const configured = req.app?.locals.publicAppOrigins as readonly string[] | undefined;
+  if (configured) return new Set(configured);
   const origins = new Set(DEFAULT_DEV_ORIGINS.map((value) => value.toLowerCase()));
   const host = requestHost(req);
   if (host) {
@@ -66,6 +68,7 @@ export function trustedBoardMutationOrigin(req: Request): string | null {
   const allowedOrigins = trustedOriginsForRequest(req);
   const origin = parseOrigin(req.header("origin"));
   if (origin && allowedOrigins.has(origin)) return origin;
+  if (req.app?.locals.publicAppOrigins && req.header("origin") !== undefined) return null;
 
   const refererOrigin = parseOrigin(req.header("referer"));
   if (refererOrigin && allowedOrigins.has(refererOrigin)) return refererOrigin;

@@ -4,6 +4,8 @@
 // instrumentationReady before opening DB connections or constructing the
 // HTTP server, so trace coverage does not depend on incidental timing.
 import { instrumentationReady, shutdownInstrumentation } from "./instrumentation.js";
+import { assertSaasRolloutReady, activePublicAppOrigins } from "./aw-deployment.js";
+import { setupPublicOriginUpgradeGuard } from "./middleware/public-origin-guard.js";
 import { sentryReady, shutdownSentry, captureException } from "./sentry.js";
 import { waitForPendingRunFailureReports } from "./services/run-failure-report.js";
 import { verifyStoppedNativeSessionForReplacement } from "./services/native-runtime/native-session-executor.js";
@@ -650,8 +652,15 @@ async function startServerWithDatabaseTeardown(
   // A claimed warm-pool stack may restart while its provider environment still
   // names the pool host. Restore the signed, durable identity before Better
   // Auth, routes, or child-runtime configuration capture any public URL.
-  const restoredCloudRuntimeIdentity = await initializeCloudRuntimeIdentity(db as any);
+  const restoredCloudRuntimeIdentity = config.deploymentProfile === "saas"
+    ? null : await initializeCloudRuntimeIdentity(db as any);
   if (restoredCloudRuntimeIdentity) config = loadConfig();
+
+  const v6RolloutFlags = config.deploymentProfile === "saas"
+    ? await instanceSettingsService(db).getExperimental() : {};
+  assertSaasRolloutReady(config.deploymentProfile, v6RolloutFlags);
+  const publicAppOrigins = config.publicOriginConfig
+    ? activePublicAppOrigins(config.publicOriginConfig, v6RolloutFlags) : undefined;
 
   if (config.deploymentMode === "local_trusted" && !isLoopbackHost(config.host)) {
     throw new Error(
@@ -683,7 +692,7 @@ async function startServerWithDatabaseTeardown(
     port: requestedListenPort,
     hostname: config.host,
   });
-  if (config.authBaseUrlMode === "explicit" && config.authPublicBaseUrl) {
+  if (config.deploymentProfile !== "saas" && config.authBaseUrlMode === "explicit" && config.authPublicBaseUrl) {
     config.authPublicBaseUrl = rewriteLoopbackUrlPort(config.authPublicBaseUrl, listenPort);
   }
   
@@ -719,11 +728,14 @@ async function startServerWithDatabaseTeardown(
       resolveBetterAuthSession,
       resolveBetterAuthSessionFromHeaders,
     } = await import("./auth/better-auth.js");
-    const derivedTrustedOrigins = deriveAuthTrustedOrigins(config, { listenPort });
+    const derivedTrustedOrigins = deriveAuthTrustedOrigins(config, { listenPort, publicAppOrigins });
     const envTrustedOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
       .split(",")
       .map((value) => value.trim())
       .filter((value) => value.length > 0);
+    if (config.deploymentProfile === "saas" && envTrustedOrigins.some((origin) => !derivedTrustedOrigins.includes(origin))) {
+      throw new Error("BETTER_AUTH_TRUSTED_ORIGINS cannot widen the SaaS public origin configuration");
+    }
     const effectiveTrustedOrigins = Array.from(new Set([...derivedTrustedOrigins, ...envTrustedOrigins]));
     logger.info(
       {
@@ -907,10 +919,12 @@ async function startServerWithDatabaseTeardown(
         }
       : undefined,
     deploymentMode: config.deploymentMode,
+    deploymentProfile: config.deploymentProfile,
     deploymentExposure: config.deploymentExposure,
     allowedHostnames: config.allowedHostnames,
     bindHost: config.host,
     authPublicBaseUrl: config.authPublicBaseUrl,
+    publicAppOrigins,
     chatWebhookPublicBaseUrl: config.chatWebhookPublicBaseUrl,
     authReady,
     companyDeletionEnabled: config.companyDeletionEnabled,
@@ -923,6 +937,9 @@ async function startServerWithDatabaseTeardown(
     managedPluginAutoInstall,
   });
   const server = createServer(app as unknown as Parameters<typeof createServer>[0]);
+  if (publicAppOrigins) {
+    setupPublicOriginUpgradeGuard(server, publicAppOrigins, app.get("trust proxy fn"));
+  }
 
   // Increase keep-alive timeouts to safely outlive default idle timeouts
   // of common reverse proxies and load balancers (like AWS ALB, Nginx, or Traefik).
@@ -963,6 +980,7 @@ async function startServerWithDatabaseTeardown(
   });
   setupLiveEventsWebSocketServer(server, db as any, {
     deploymentMode: config.deploymentMode,
+    deploymentProfile: config.deploymentProfile,
     resolveSessionFromHeaders,
     // Cloud-proxied browsers carry trusted x-paperclip-cloud-* headers instead
     // of a local Better Auth session; without this lane every live-events
