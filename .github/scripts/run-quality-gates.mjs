@@ -2,9 +2,9 @@
 /**
  * run-quality-gates.mjs
  * Orchestrates all quality gates. Fetches PR data once, runs all gates,
- * posts or updates a single consolidated comment via commitperclip.
+ * posts or updates one consolidated comment under the selected bot identity.
  *
- * Env: GH_TOKEN, GH_REPO, PR_NUMBER, PR_AUTHOR, PR_BRANCH
+ * Env: GH_TOKEN, GH_REPO, PR_NUMBER, PR_AUTHOR, PR_BRANCH, COMMENT_AUTHOR
  * Exit: 0 if all quality gates pass, 1 if any fail.
  */
 import { fileURLToPath } from 'node:url';
@@ -20,10 +20,22 @@ import { checkReleaseBootstrap } from './check-pr-release-bootstrap.mjs';
 import { checkCoauthors, fetchAllPullRequestCommits } from './check-pr-coauthors.mjs';
 
 const COMMENT_SIGNATURE = '— commitperclip';
+const WORKFLOW_COMMENT_SIGNATURE = '<!-- paperclip-pr-quality-gates -->\n— Paperclip quality checks';
 
-function buildComment(author, failures, informational) {
+function commentIdentity(commentAuthor) {
+  if (commentAuthor === 'github-actions[bot]') {
+    return { authors: ['github-actions[bot]'], signature: WORKFLOW_COMMENT_SIGNATURE };
+  }
+  if (commentAuthor === 'commitperclip[bot]') {
+    return { authors: ['commitperclip[bot]', 'commitperclip'], signature: COMMENT_SIGNATURE };
+  }
+  throw new Error('Unsupported quality-gate comment author.');
+}
+
+export function buildComment(author, failures, informational, commentAuthor = 'commitperclip[bot]') {
+  const { signature } = commentIdentity(commentAuthor);
   if (failures.length === 0 && informational.length === 0) {
-    return `✅ All checks passing — ready for Greptile review and maintainer approval.\n\n${COMMENT_SIGNATURE}`;
+    return `✅ All checks passing — ready for Greptile review and maintainer approval.\n\n${signature}`;
   }
 
   const lines = [
@@ -43,13 +55,14 @@ function buildComment(author, failures, informational) {
 
   lines.push(
     '\nOnce updated, push a new commit and these checks will re-run automatically.\n',
-    COMMENT_SIGNATURE
+    signature
   );
 
   return lines.join('\n');
 }
 
-export async function findExistingComment(fetchFromGitHub, token, repo, prNumber) {
+export async function findExistingComment(fetchFromGitHub, token, repo, prNumber, commentAuthor = 'commitperclip[bot]') {
+  const { authors, signature } = commentIdentity(commentAuthor);
   for (let page = 1; ; page += 1) {
     const comments = await fetchFromGitHub(
       `/repos/${repo}/issues/${prNumber}/comments?per_page=100&page=${page}`,
@@ -57,8 +70,7 @@ export async function findExistingComment(fetchFromGitHub, token, repo, prNumber
     );
 
     const existing = comments.find(
-      c => (c.user.login === 'commitperclip[bot]' || c.user.login === 'commitperclip') &&
-           c.body.includes(COMMENT_SIGNATURE)
+      c => authors.includes(c.user.login) && c.body.includes(signature)
     );
     if (existing) return existing;
 
@@ -83,7 +95,8 @@ async function upsertComment(token, repo, prNumber, body, existing) {
 }
 
 async function main() {
-  const { GH_TOKEN, GH_REPO, PR_NUMBER, PR_AUTHOR, PR_BRANCH } = process.env;
+  const { GH_TOKEN, GH_REPO, PR_NUMBER, PR_AUTHOR, PR_BRANCH, COMMENT_AUTHOR = 'commitperclip[bot]' } = process.env;
+  commentIdentity(COMMENT_AUTHOR);
 
   if (!GH_TOKEN || !GH_REPO || !PR_NUMBER) {
     console.error('ERROR: GH_TOKEN, GH_REPO, PR_NUMBER env vars required');
@@ -150,10 +163,10 @@ async function main() {
   ];
   const allPassed = allFailures.length === 0;
 
-  const commentBody = buildComment(author, allFailures, informational);
+  const commentBody = buildComment(author, allFailures, informational, COMMENT_AUTHOR);
 
   // Post comment if there are failures/informational, or update existing comment
-  const existing = await findExistingComment(ghFetch, GH_TOKEN, GH_REPO, prNumber);
+  const existing = await findExistingComment(ghFetch, GH_TOKEN, GH_REPO, prNumber, COMMENT_AUTHOR);
   if (allFailures.length > 0 || informational.length > 0 || existing) {
     await upsertComment(GH_TOKEN, GH_REPO, prNumber, commentBody, existing);
   }
