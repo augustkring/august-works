@@ -258,10 +258,36 @@ The final source hash is
 Reports distinguish complete CI coverage, the final test-only change and
 local interrupted execution. The actual local instance starts correctly, has no
 companies, and retains all 20 V5 flags off in persisted settings. No paid provider
-calls were made. GitHub's Dependency Review reports disabled Dependency Graph;
-aggregate CI and independent review remain unfulfilled merge gates until the
-new head is checked and repository review configuration is corrected. CodeRabbit
+calls were made. Dependency Graph has since been enabled. Dependency Review
+now passes, but the overall base-branch review job cannot generate its token
+because `COMMITPERCLIP_KEY` is absent. Its quality gates have not run.
+Aggregate CI at the final review-fix head and independent review remain
+unfulfilled merge gates until that head is checked and the review integration
+is corrected. CodeRabbit
 skipped review because the PR exceeds its 100-file limit and available review
 capacity; its successful status does not constitute a completed review. Final
 cold backup and restoration status is recorded separately in the private
 `v5-recovery/backups/CURRENT.json` and its referenced verification report.
+
+
+## Operator-requested author review
+
+At `1c11d2eba422155aafc3b2940f59812587f869bd`, all 29 stable-suite test jobs,
+full typecheck/build, security gates and V4/V5 product browser lanes pass.
+GitHub reports 64 successful checks, two skipped Storybook checks and one
+failed review check. The Dependency Review step in that failed job passes;
+token generation fails before the quality gates execute.
+
+[The author review](2026-10-04-v5-self-review.md) documents three reproduced
+findings and their fixes: viewer mutation of Roadmap proposals, discarded
+required Role Pack Skills when the resolver is disabled, and the UI's incorrect
+Role Pack version state field. The new PostgreSQL regressions preserve pending
+proposals and prevent a manifest from being created without required Skills.
+The new browser journey creates, publishes and pins a Role Pack through the
+actual APIs and Studio. All 36 affected/related backend tests and all three
+classic V5 browser tests pass. Recursive typecheck, full build and token/module
+gates pass.
+The review-fix source fingerprint is
+`118ed1c4c89a2593e4b2cd3e128e36d041f7c5ad9f1db8c06e28b64536fdb386`.
+This author review does not constitute independent approval or a Greptile score.
+The final build and cold-backup evidence are retained in the recovery kit.

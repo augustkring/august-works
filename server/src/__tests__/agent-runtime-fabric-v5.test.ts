@@ -29,6 +29,26 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
   let db!: ReturnType<typeof createDb>, database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v5-runtime-"); db = createDb(database.connectionString); await enableV5ForTest(db); const [settings] = await db.select().from(instanceSettings); await db.update(instanceSettings).set({ experimental: { ...settings!.experimental, role_packs_v5: false, skill_resolver_v5: false } }).where(eq(instanceSettings.singletonKey, "default")); });
   afterAll(async () => { await database?.cleanup(); });
+  it("does not discard required Role Pack Skills when their resolver is disabled", async () => {
+    const f = await seedV5Presences(db), providers = agentProviderBindingService(db), svc = agentRuntimeFabricService(db);
+    const binding = await providers.create(f.actor, f.home, f.presence.id, { providerType: "paperclip_native", providerAgentRef: f.presence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
+    await providers.attach(f.actor, f.home, f.presence.id, { providerBindingId: binding.id, providerProfileRef: f.presence.id });
+    await providers.recordDiscovery(f.home, f.presence.id, { provider: "paperclip_native", version: "internal-fixture", features: Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>, skills: [], tools: [], discoveredAt: new Date().toISOString() }, { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true });
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId, status: "running" }).returning();
+    const [settings] = await db.select().from(instanceSettings).where(eq(instanceSettings.singletonKey, "default"));
+    const input = { companyId: f.home, agentId: f.presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: null, query: "Review security permissions" };
+    try {
+      await db.update(instanceSettings).set({ experimental: { ...settings!.experimental, role_packs_v5: true, skill_resolver_v5: false } }).where(eq(instanceSettings.singletonKey, "default"));
+      await expect(svc.prepare(input)).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, run!.id))).toEqual([]);
+      await db.update(instanceSettings).set({ experimental: { ...settings!.experimental, role_packs_v5: true, skill_resolver_v5: true } }).where(eq(instanceSettings.singletonKey, "default"));
+      // Enabling the resolver cannot fabricate the still-missing required Skill.
+      await expect(svc.prepare(input)).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, run!.id))).toEqual([]);
+    } finally {
+      await db.update(instanceSettings).set({ experimental: settings!.experimental }).where(eq(instanceSettings.singletonKey, "default"));
+    }
+  });
   it("allows explicitly authorized guest act forecasts, denies read/contribute mutations and rechecks revoked humans", async () => {
     const f = await seedV5Presences(db), providers = agentProviderBindingService(db), fabric = agentRuntimeFabricService(db), cross = crossCompanyContextService(db), actions = scopedRuntimeActionService(db);
     const features = Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map((key) => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>;

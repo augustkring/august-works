@@ -6,6 +6,46 @@ async function json(response: APIResponse) {
   return response.json();
 }
 
+test("Role Pack drafts can be published and assigned with a pinned version from the Studio", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  page.setDefaultTimeout(10_000);
+  const flags = await json(await request.get("/api/instance/settings/experimental"));
+  const company = await json(await request.post("/api/companies", { data: { name: `V5 browser roles ${Date.now()}` } }));
+  const base = `/api/companies/${company.id}/role-packs`;
+  const roleFlags = { enableFoundationV1: true, enableContextEngineV1: true, agent_identities_v5: true, agent_provider_bindings_v5: true, agent_runtime_fabric_v5: true, org_units_v5: true, role_packs_v5: true };
+  try {
+    await json(await request.patch("/api/instance/settings/experimental", { data: roleFlags }));
+    await page.goto(`/${company.issuePrefix}/role-packs`, { waitUntil: "domcontentloaded" });
+    await page.getByLabel("Stable key", { exact: true }).fill("reviewed-operations");
+    await page.getByLabel("Name", { exact: true }).fill("Reviewed operations");
+    await page.getByRole("button", { name: "Create pack", exact: true }).click();
+    await expect(page.getByText("Reviewed operations requirements", { exact: true })).toBeVisible();
+    await page.getByRole("combobox", { name: "Requirement type", exact: true }).selectOption("required_policy");
+    await page.getByLabel("Local key or reference", { exact: true }).fill("approval_before_side_effects");
+    await page.getByRole("button", { name: "Add requirement to draft", exact: true }).click();
+    await page.getByLabel("Version change summary", { exact: true }).fill("Require approval before side effects");
+    await page.getByRole("button", { name: "Save new version", exact: true }).click();
+    const pack = (await json(await request.get(base))).find((row: { key: string }) => row.key === "reviewed-operations");
+    await expect.poll(async () => (await json(await request.get(`${base}/${pack.id}`))).versions.length).toBe(1);
+    const draft = (await json(await request.get(`${base}/${pack.id}`))).versions[0];
+    expect(draft.state).toBe("draft");
+    await expect(page.getByRole("combobox", { name: "Inspect version", exact: true }).locator("option", { hasText: "Revision 1 · draft" })).toHaveCount(1);
+    const publish = page.getByRole("button", { name: "Publish inspected version", exact: true });
+    await expect(publish).toBeEnabled();
+    await publish.click();
+    await expect.poll(async () => (await json(await request.get(`${base}/${pack.id}`))).publishedVersionId).toBe(draft.id);
+    await expect(publish).toBeDisabled();
+    await page.getByLabel("Pin inspected published version", { exact: true }).check();
+    const assign = page.getByRole("button", { name: "Assign pack", exact: true });
+    await expect(assign).toBeEnabled();
+    const assigned = page.waitForResponse((response) => response.url().endsWith(`${base}/assignments`) && response.request().method() === "PUT");
+    await assign.click();
+    expect(await json(await assigned)).toMatchObject({ companyId: company.id, scopeType: "company", scopeId: company.id, rolePackId: pack.id, versionPolicy: "pinned", pinnedVersionId: draft.id });
+  } finally {
+    await json(await request.patch("/api/instance/settings/experimental", { data: Object.fromEntries(Object.keys(roleFlags).map((key) => [key, flags[key]])) }));
+  }
+});
+
 const enabled = {
   project_roadmap_v5: true, project_forecast_v5: true, project_plan_vs_actual_v5: true,
   playbooks_v5: true, skill_lifecycle_v5: true,

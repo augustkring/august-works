@@ -9,7 +9,7 @@ export interface PlaybookDetail extends Omit<PlaybookSummary, "title" | "latestR
   links: Array<{ id: string; skillId: string; skillVersionId: string; playbookRevisionId: string; relationType: string; syncPolicy: string; drifted: boolean }>;
 }
 export interface RolePackSummary { id: string; key: string; name: string; description: string; publishedVersionId: string | null }
-export interface RolePackDetail extends RolePackSummary { versions: Array<{ id: string; revisionNumber: number; summary: string; status: string }> }
+export interface RolePackDetail extends RolePackSummary { versions: Array<{ id: string; revisionNumber: number; summary: string; state: "draft" | "published" }> }
 export interface IdentityPresence { id: string; name: string; status: string; homeCompanyId: string; agentId: string }
 export interface ProviderPresence { provider: { id: string; providerType: string; providerAgentRef: string; isolationMode: string; status: string; capabilitySnapshot: { hash: string; version: string; features: Record<string, boolean> } | null }; runtime: { providerProfileRef: string; providerSessionNamespace: string; status: string; isolationAcknowledgedAt: string | null } }
 export interface PortfolioRelease { id: string; companyId: string; assetType: "skill" | "playbook"; assetId: string; versionId: string; title: string; key: string; classification: string; hash: string; releaseNotes: string; createdAt: string }
@@ -43,7 +43,7 @@ export const v5Api = {
   capabilities: (cid: string, query = "") => api.get<ExecutionManifestCapability[]>(`${company(cid)}/runtime/capabilities?q=${encodeURIComponent(query)}`),
   rolePacks: (cid: string) => api.get<RolePackSummary[]>(`${company(cid)}/role-packs`),
   rolePack: (cid: string, id: string) => api.get<RolePackDetail>(`${company(cid)}/role-packs/${encodeURIComponent(id)}`),
-  roleVersion: (cid: string, id: string, vid: string) => api.get<{ id: string; status: string; items: RolePackItem[] }>(`${company(cid)}/role-packs/${encodeURIComponent(id)}/versions/${encodeURIComponent(vid)}`),
+  roleVersion: (cid: string, id: string, vid: string) => api.get<{ id: string; state: "draft" | "published"; items: RolePackItem[] }>(`${company(cid)}/role-packs/${encodeURIComponent(id)}/versions/${encodeURIComponent(vid)}`),
   roleCatalog: (cid: string) => api.get<Array<{ key: string; name: string; version: string; items: RolePackItem[] }>>(`${company(cid)}/role-packs/catalog`),
   portfolio: (companyIds: string[]) => api.post<{ companies: PortfolioCompanySummary[]; unavailableCompanyIds: string[] }>("/portfolio/summary", { companyIds }),
   releases: (cid: string) => api.get<PortfolioRelease[]>(`${company(cid)}/portfolio-capabilities`),

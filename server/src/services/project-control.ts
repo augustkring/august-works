@@ -126,6 +126,9 @@ export function projectControlService(db: Db) {
     review: async (actor: AuthorizationActor, companyId: string, projectId: string, proposalId: string, accept: boolean, rationale: string) => {
       const userId = v5HumanActorId(actor); if (rationale.trim().length < 10 || rationale.length > 4000) throw unprocessable("Review rationale must contain 10–4000 characters");
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        // Rejecting or marking a proposal stale also mutates project governance.
+        // Require the same planning authority before every decision branch.
+        await assertV5Authorization(tx, actor, companyId, "tasks:assign", { type: "project", companyId, projectId });
         const row = await project(tx, actor, companyId, projectId, true), [proposal] = await tx.select().from(projectRoadmapProposals).where(and(eq(projectRoadmapProposals.companyId, companyId), eq(projectRoadmapProposals.projectId, projectId), eq(projectRoadmapProposals.id, proposalId))).limit(1).for("update");
         if (!proposal || proposal.status !== "pending") throw conflict("A pending Roadmap proposal is required");
         let stale = row.updatedAt.toISOString() !== proposal.patch.expectedProjectUpdatedAt;

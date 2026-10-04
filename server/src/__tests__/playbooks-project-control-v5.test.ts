@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { createDb, costEvents, documentRevisions, issues, issueRelations, projects, projectScheduleBaselines, companySkills, companySkillVersions } from "@paperclipai/db";
+import { createDb, costEvents, documentRevisions, issues, issueRelations, projects, projectScheduleBaselines, companySkills, companySkillVersions, companyMemberships, principalPermissionGrants, projectRoadmapProposals } from "@paperclipai/db";
 import { createPlaybookSchema, playbookDraftSchema, proposePlaybookSchema, roadmapProposalSchema, roadmapPolicySchema, createMilestoneSchema, projectPlaybookSkillSchema } from "@paperclipai/shared";
 import { skillLifecycleService } from "../services/skill-lifecycle.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -146,6 +146,24 @@ describe.skipIf(!support.supported)("V5 canonical procedures and schedule", () =
     expect(stored.startedAt).toEqual(actualStart); expect(stored.completedAt).toBeNull(); expect(stored.plannedEndAt?.toISOString()).toBe("2026-10-10T00:00:00.000Z");
     expect((await svc.get(f.actor, f.home, project!.id)).health.status).toBe("at_risk");
     await expect(db.update(projectScheduleBaselines).set({ name: "Change original" }).where(eq(projectScheduleBaselines.id, baseline.id))).rejects.toThrow();
+  });
+  it.each(["reject", "accept_stale", "reject_stale"] as const)("keeps a viewer from deciding a roadmap proposal: %s", async (decision) => {
+    const f = await seedV5Presences(db), svc = projectControlService(db);
+    const [project] = await db.insert(projects).values({ companyId: f.home, name: "Viewer review boundary" }).returning();
+    const [issue] = await db.insert(issues).values({ companyId: f.home, projectId: project!.id, title: "Commitment" }).returning();
+    const view = await svc.get(f.actor, f.home, project!.id);
+    const proposal = await svc.propose(f.actor, f.home, project!.id, roadmapProposalSchema.parse({
+      expectedProjectUpdatedAt: view.projectUpdatedAt,
+      reason: "Propose a commitment that requires an authorized human decision",
+      changes: [{ issueId: issue!.id, expectedUpdatedAt: issue!.updatedAt.toISOString(), patch: { plannedEndAt: "2026-10-12T00:00:00Z" } }],
+    }));
+    if (decision.endsWith("stale")) await db.update(projects).set({ updatedAt: new Date(Date.parse(view.projectUpdatedAt) + 1000) }).where(eq(projects.id, project!.id));
+    await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId), eq(companyMemberships.principalType, "user")));
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.home), eq(principalPermissionGrants.principalId, f.userId), eq(principalPermissionGrants.principalType, "user")));
+    expect((await svc.get(f.actor, f.home, project!.id)).proposals.some((item) => item.id === proposal.id)).toBe(true);
+    await expect(svc.review(f.actor, f.home, project!.id, proposal.id, decision === "accept_stale", "A viewer must not decide another person's proposal")).rejects.toMatchObject({ status: 403 });
+    expect((await db.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id, proposal.id)))[0]).toMatchObject({ status: "pending", reviewedByUserId: null });
+    expect((await db.select().from(issues).where(eq(issues.id, issue!.id)))[0]!.plannedEndAt).toBeNull();
   });
   it("rejects foreign milestones, dependency cycles and dual ownership of planned dates", async () => {
     const f = await seedV5Presences(db), svc = projectControlService(db);
