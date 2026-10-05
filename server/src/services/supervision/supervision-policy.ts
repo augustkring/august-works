@@ -7,6 +7,23 @@ export interface SupervisionSnapshot {
   hasVerifiedCompletion: boolean; verifierBudgetAvailable: boolean; independentVerifierRequired: boolean;
 }
 export interface ArbiterDecision { action: SupervisionAction; reasonCode: string; effect: "none" | "stop" | "dispatch" | "verify" | "reassign"; allowed: boolean; }
+/** Advisory semantic evidence cannot resume, retry, spawn, reassign or finish.
+ * Its positive observation has no runtime effect. Completion-like output is
+ * only eligible for independent review after native deterministic checks. */
+export function arbitrateSemanticTrajectory(input: {
+  verdict: "on_track" | "off_track" | "uncertain" | "possible_completion";
+  planStatus: string; deterministicFailures: readonly string[];
+  liveAttempts: number; verifierCallsAvailable: boolean; verificationDepthAvailable: boolean;
+}): ArbiterDecision {
+  if (input.verdict === "off_track") return { action: "PAUSE", reasonCode: "observable_semantic_off_track", effect: "stop", allowed: true };
+  if (input.verdict === "uncertain") return { action: "ESCALATE_HUMAN", reasonCode: "semantic_trajectory_uncertain", effect: "stop", allowed: true };
+  if (input.verdict === "possible_completion") {
+    if (["running", "verifying"].includes(input.planStatus) && input.deterministicFailures.length === 0 && input.liveAttempts === 0 && input.verifierCallsAvailable && input.verificationDepthAvailable)
+      return { action: "START_VERIFIER", reasonCode: "semantic_result_requires_independent_review", effect: "verify", allowed: true };
+    return { action: "ESCALATE_HUMAN", reasonCode: "semantic_completion_not_established", effect: "stop", allowed: true };
+  }
+  return { action: "CONTINUE", reasonCode: "advisory_trajectory_on_track", effect: "none", allowed: true };
+}
 /** Only a server-observed snapshot enters this policy. Recommendations never grant authority. */
 export function arbitrateSupervision(snapshot: SupervisionSnapshot, recommendation: SupervisionAction | null, humanAuthorized = false): ArbiterDecision {
   const result = (action: SupervisionAction, reasonCode: string, effect: ArbiterDecision["effect"] = "none", allowed = true): ArbiterDecision => ({ action, reasonCode, effect, allowed });

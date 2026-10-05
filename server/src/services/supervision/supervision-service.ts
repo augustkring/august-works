@@ -27,6 +27,8 @@ export function supervisionService(db: Db, options: {
   semanticVerifier?: {
     configured(companyId: string): boolean;
     verify(actor: AuthorizationActor, input: { companyId: string; planId: string; workerId: string | null; idempotencyKey: string }): Promise<{ id: string; result: string }>;
+    trajectoryConfigured?(companyId: string): boolean;
+    trajectory?(actor: AuthorizationActor, input: { companyId: string; planId: string; workerId: string | null; idempotencyKey: string; expectedPlanVersion: number; expectedResultHash: string }): Promise<{ id: string; result: string; requiresHuman?: boolean }>;
   };
 } = {}) {
   async function observe(companyId: string, id: string, human?: { actor: AuthorizationActor; input: SupervisionInterventionInput }) {
@@ -171,10 +173,44 @@ export function supervisionService(db: Db, options: {
         intervention = record ?? null;
       }
       if (intervention) await logActivity(tx, { companyId, actorType: human ? "user" : "system", actorId: human ? v7HumanActorId(human.actor) : "supervision", action: "supervision.intervention", entityType: "orchestration_plan", entityId: id, details: { interventionId: intervention.id, recommendation: intervention.recommendation, decisionAction: decision.action, reasonCode: decision.reasonCode, signalIds } }, publications);
+      if (!human && actor && decision.action === "CONTINUE" && decision.effect === "none" && enabled && plan.status === "running" && progressed && outputs.length > 0 &&
+          snapshot.verifierBudgetAvailable && plan.supervisionPolicy.maxVerificationDepth > 0 && options.semanticVerifier?.trajectory && options.semanticVerifier.trajectoryConfigured?.(companyId)) {
+        // The existing leased intervention queue owns this checkpoint. Exact
+        // packet pins prevent changed output being evaluated as the old job.
+        const pending = await tx.select({ id: supervisionInterventions.id }).from(supervisionInterventions).where(and(eq(supervisionInterventions.companyId,companyId),eq(supervisionInterventions.planId,id),
+          eq(supervisionInterventions.reasonCode,"semantic_trajectory_checkpoint"),inArray(supervisionInterventions.status,["pending","running"])));
+        if (pending.length + plan.verifierCallsUsed < plan.supervisionPolicy.maxVerifierCalls) {
+          const { verificationService } = await import("./verification-service.js");
+          const packet = await verificationService(tx).currentPacket(actor,companyId,id,null);
+          const key = nativeSha256({ planId: id,planVersion: packet.planVersion,resultHash: packet.resultHash,purpose: "semantic_trajectory_checkpoint" });
+          const [checkpoint] = await tx.insert(supervisionSignals).values({ companyId,planId: id,sessionId: session.id,signalType: "verification_needed",severity: "info",
+            sourceType: "semantic_trajectory_checkpoint",sourceRef: id,facts: { planVersion: packet.planVersion,resultHash: packet.resultHash,workerId: null,completionCertified: false },
+            snapshotHash: packet.resultHash,dedupKey: key,expiresAt: new Date(now.getTime()+120000) }).onConflictDoNothing().returning();
+          if (checkpoint) {
+            const [job] = await tx.insert(supervisionInterventions).values({ companyId,planId: id,sessionId: session.id,signalIds: [checkpoint.id],recommendation: "CONTINUE",decisionAction: "CONTINUE",
+              reasonCode: "semantic_trajectory_checkpoint",policySnapshotHash: nativeSha256(plan.supervisionPolicy),expectedPlanVersion: plan.version,
+              requestedByType: "system",requestedById: "semantic-trajectory",idempotencyKey: `trajectory-checkpoint:${key}`,status: "pending" }).onConflictDoNothing().returning();
+            if (job) await logActivity(tx,{ companyId,actorType: "system",actorId: "supervision",action: "supervision.semantic_checkpoint_queued",entityType: "orchestration_plan",entityId: id,
+              details: { interventionId: job.id,signalId: checkpoint.id,resultHash: packet.resultHash,completionCertified: false } },publications);
+          }
+        }
+      }
       return { snapshot, decision, intervention };
     });
     await executeIssuePostCommitActions(db,postCommitActions);
     return outcome;
+  }
+  async function fenceUnavailableSemanticJob(job: typeof supervisionInterventions.$inferSelect) {
+              await withV7ActivityTransaction(db, async (tx, publications) => {
+                await lockMemoryPrivacy(tx, job.companyId);
+                const [current] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId))).for("update");
+                if (!current || current.erasedAt || ["completed","cancelled","failed"].includes(current.status)) return;
+                const changed = current.status !== "paused";
+                const [fenced] = await tx.update(orchestrationPlans).set({ status: "paused",version: current.version+Number(changed),updatedAt: new Date() }).where(eq(orchestrationPlans.id,current.id)).returning();
+                const live = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId,job.companyId),eq(orchestrationWorkerAttempts.planId,job.planId),eq(orchestrationWorkerAttempts.status,"running")));
+                const stop = await enqueueSupervisionStop(tx,fenced!,{ actorType: "system",actorId: "supervision",action: "ESCALATE_HUMAN",reasonCode: `semantic_review_unavailable:${job.id}`,rationale: "Independent model review is unavailable; human resolution is required",attemptIds: live.map(a => a.id) });
+                await logActivity(tx,{ companyId: job.companyId,actorType: "system",actorId: "supervision",action: "verification.model_unavailable",entityType: "orchestration_plan",entityId: job.planId,details: { interventionId: job.id,stopInterventionId: stop?.id ?? null,completionCertified: false } },publications);
+              });
   }
   async function deliverStops(limit = 20, companyId?: string) {
     let applied = 0, failed = 0;
@@ -182,7 +218,7 @@ export function supervisionService(db: Db, options: {
     for (let n = 0; n < limit; n++) {
       const owner = randomUUID();
       const job = await db.transaction(async tx => {
-        const [row] = await tx.select().from(supervisionInterventions).where(and(companyId ? eq(supervisionInterventions.companyId,companyId) : undefined, sql`(${supervisionInterventions.status}='pending' or (${supervisionInterventions.status}='running' and ${supervisionInterventions.leaseExpiresAt}<now())) and ${supervisionInterventions.decisionAction} in ('STOP','PAUSE','ESCALATE_HUMAN','RETRY','START_VERIFIER') and ${supervisionInterventions.attempts}<3 and not (${supervisionInterventions.id}::text = any(select jsonb_array_elements_text(${JSON.stringify(seen)}::jsonb)))`)).orderBy(supervisionInterventions.createdAt).limit(1).for("update", { skipLocked: true });
+        const [row] = await tx.select().from(supervisionInterventions).where(and(companyId ? eq(supervisionInterventions.companyId,companyId) : undefined, sql`(${supervisionInterventions.status}='pending' or (${supervisionInterventions.status}='running' and ${supervisionInterventions.leaseExpiresAt}<now())) and (${supervisionInterventions.decisionAction} in ('STOP','PAUSE','ESCALATE_HUMAN','RETRY','START_VERIFIER') or (${supervisionInterventions.decisionAction}='CONTINUE' and ${supervisionInterventions.reasonCode}='semantic_trajectory_checkpoint')) and ${supervisionInterventions.attempts}<3 and not (${supervisionInterventions.id}::text = any(select jsonb_array_elements_text(${JSON.stringify(seen)}::jsonb)))`)).orderBy(supervisionInterventions.createdAt).limit(1).for("update", { skipLocked: true });
         if (!row) return null;
         const [claimed] = await tx.update(supervisionInterventions).set({ status: "running", leaseOwner: owner, leaseExpiresAt: new Date(Date.now()+300000), attempts: row.attempts+1 }).where(eq(supervisionInterventions.id,row.id)).returning();
         return claimed!;
@@ -191,7 +227,35 @@ export function supervisionService(db: Db, options: {
       seen.push(job.id);
       try {
         let verificationInteractionId: string | null = null;
-        if (job.decisionAction === "START_VERIFIER") {
+        if (job.decisionAction === "CONTINUE" && job.reasonCode === "semantic_trajectory_checkpoint") {
+          const [plan] = await db.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId)));
+          const principal = plan?.executionPrincipal;
+          const actor: AuthorizationActor | null = principal?.type === "user" ? { type: "board",source: "session",userId: principal.userId } : null;
+          if (!actor || !plan || plan.erasedAt || plan.status !== "running" || plan.version !== job.expectedPlanVersion ||
+              !options.semanticVerifier?.trajectory || !options.semanticVerifier.trajectoryConfigured?.(job.companyId)) throw conflict("Semantic trajectory checkpoint is no longer admissible");
+          await assertDerivedManager(db,actor,job.companyId); await assertV7Enabled(db,"supervision_v7"); await assertV7Enabled(db,"verifier_v7");
+          const [checkpoint] = await db.select().from(supervisionSignals).where(and(eq(supervisionSignals.companyId,job.companyId),eq(supervisionSignals.planId,job.planId),inArray(supervisionSignals.id,job.signalIds),eq(supervisionSignals.sourceType,"semantic_trajectory_checkpoint")));
+          if (!checkpoint || !checkpoint.expiresAt || checkpoint.expiresAt.getTime() <= Date.now() || checkpoint.facts.planVersion !== plan.version ||
+              typeof checkpoint.facts.resultHash !== "string" || !/^[a-f0-9]{64}$/.test(checkpoint.facts.resultHash)) throw conflict("Semantic trajectory evidence checkpoint expired");
+          let requiresHuman = true;
+          try {
+            const result = await options.semanticVerifier.trajectory(actor,{ companyId: job.companyId,planId: job.planId,workerId: null,
+              idempotencyKey: `semantic-trajectory:${job.id}`,expectedPlanVersion: job.expectedPlanVersion,expectedResultHash: checkpoint.facts.resultHash });
+            requiresHuman = result.requiresHuman ?? result.result !== "on_track";
+          } catch {
+            await fenceUnavailableSemanticJob(job);
+          }
+          if (requiresHuman) {
+            await assertDerivedManager(db,actor,job.companyId); await assertV7Enabled(db,"supervision_v7");
+            const { verificationService } = await import("./verification-service.js");
+            const packet = await verificationService(db).packet(actor,job.companyId,job.planId,null);
+            const interaction = await issueThreadInteractionService(db).create({ id: packet.issueId,companyId: job.companyId },{
+              kind: "request_confirmation",resolverPolicy: "human_only",continuationPolicy: "none",addresseeUserId: principal!.type === "user" ? principal!.userId : undefined,
+              idempotencyKey: `v7-trajectory-human:${job.id}`,title: "Observed work needs human review",summary: "Review the original objective and saved evidence in Orchestration before deciding how work should continue.",
+              payload: { version: 1,allowDeclineReason: true,prompt: "Review the observed work and its original objective?" } },{ userId: v7HumanActorId(actor) });
+            verificationInteractionId = interaction.id;
+          }
+        } else if (job.decisionAction === "START_VERIFIER") {
           const [plan] = await db.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId)));
           const principal = plan?.executionPrincipal;
           const actor: AuthorizationActor | null = principal?.type === "user" ? { type: "board", source: "session", userId: principal.userId } : principal?.type === "system" && principal.service === "local-board" ? { type: "board", source: "local_implicit" } : null;
@@ -207,19 +271,7 @@ export function supervisionService(db: Db, options: {
               await options.semanticVerifier.verify(actor, { companyId: job.companyId, planId: job.planId,
                 workerId: job.targetWorkerId, idempotencyKey: `semantic-verifier:${job.id}` });
             } catch {
-              // Missing/expired qualification, exhausted call budget and an
-              // unknown provider outcome all resolve through accountable human
-              // review. No delivery retry may resend this model request.
-              await withV7ActivityTransaction(db, async (tx, publications) => {
-                await lockMemoryPrivacy(tx, job.companyId);
-                const [current] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId))).for("update");
-                if (!current || current.erasedAt || ["completed","cancelled","failed"].includes(current.status)) return;
-                const changed = current.status !== "paused";
-                const [fenced] = await tx.update(orchestrationPlans).set({ status: "paused",version: current.version+Number(changed),updatedAt: new Date() }).where(eq(orchestrationPlans.id,current.id)).returning();
-                const live = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId,job.companyId),eq(orchestrationWorkerAttempts.planId,job.planId),eq(orchestrationWorkerAttempts.status,"running")));
-                const stop = await enqueueSupervisionStop(tx,fenced!,{ actorType: "system",actorId: "supervision",action: "ESCALATE_HUMAN",reasonCode: `semantic_review_unavailable:${job.id}`,rationale: "Independent model review is unavailable; human resolution is required",attemptIds: live.map(a => a.id) });
-                await logActivity(tx,{ companyId: job.companyId,actorType: "system",actorId: "supervision",action: "verification.model_unavailable",entityType: "orchestration_plan",entityId: job.planId,details: { interventionId: job.id,stopInterventionId: stop?.id ?? null,completionCertified: false } },publications);
-              });
+              await fenceUnavailableSemanticJob(job);
             }
             // Read again after inference; stale owner/source/version cannot
             // publish a continuation or revive a cancelled plan.
@@ -247,7 +299,8 @@ export function supervisionService(db: Db, options: {
           if (updated) await logActivity(tx, { companyId: job.companyId, actorType: "system", actorId: "supervision", action: "supervision.intervention_applied", entityType: "orchestration_plan", entityId: job.planId, details: { interventionId: job.id, verificationInteractionId } }, publications);
         }); applied++;
       } catch {
-        await db.update(supervisionInterventions).set({ status: job.attempts >= 3 ? "failed" : "pending", leaseOwner: null, leaseExpiresAt: null, lastErrorCode: job.decisionAction === "START_VERIFIER" ? "human_verification_request_unconfirmed" : job.decisionAction === "RETRY" ? "canonical_retry_unconfirmed" : "qualified_stop_unconfirmed" }).where(and(eq(supervisionInterventions.id,job.id),eq(supervisionInterventions.leaseOwner,owner))); failed++;
+        if (job.reasonCode === "semantic_trajectory_checkpoint") await fenceUnavailableSemanticJob(job).catch(() => {});
+        await db.update(supervisionInterventions).set({ status: job.attempts >= 3 ? "failed" : "pending", leaseOwner: null, leaseExpiresAt: null, lastErrorCode: job.reasonCode === "semantic_trajectory_checkpoint" ? "semantic_trajectory_unconfirmed" : job.decisionAction === "START_VERIFIER" ? "human_verification_request_unconfirmed" : job.decisionAction === "RETRY" ? "canonical_retry_unconfirmed" : "qualified_stop_unconfirmed" }).where(and(eq(supervisionInterventions.id,job.id),eq(supervisionInterventions.leaseOwner,owner))); failed++;
       }
     }
     return { applied, failed };

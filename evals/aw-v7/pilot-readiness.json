@@ -24,8 +24,9 @@
     {
       "id": "automated_read_only_semantic_consumer",
       "wave": 9,
-      "status": "incomplete",
-      "source": "server/src/services/supervision/verification-service.ts"
+      "status": "implemented_and_verified",
+      "source": "server/src/services/supervision/read-only-model-verifier.ts",
+      "verificationScope": "Native PostgreSQL, actual encrypted grants and private transport fixtures; live calibration and provider qualification remain operating evidence"
     }
   ],
   "journey": [
@@ -79,6 +80,9 @@
     "server/src/__tests__/v7-free-core.integration.test.ts",
     "server/src/__tests__/v7-work-signals.integration.test.ts",
     "server/src/__tests__/v7-learning.integration.test.ts",
-    "server/src/__tests__/v7-portability.integration.test.ts"
+    "server/src/__tests__/v7-portability.integration.test.ts",
+    "server/src/__tests__/v7-read-only-model-verifier.integration.test.ts",
+    "server/src/__tests__/v7-read-only-model-transport.test.ts",
+    "server/src/__tests__/v7-model-reservations.integration.test.ts"
   ]
 }

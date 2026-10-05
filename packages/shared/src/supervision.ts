@@ -7,6 +7,6 @@ export type SupervisionPolicy = z.infer<typeof supervisionPolicySchema>;
 export type SupervisionAction = typeof SUPERVISION_ACTIONS[number];
 export type SupervisionSignalType = typeof SUPERVISION_SIGNALS[number];
 export type SupervisionInterventionInput = z.input<typeof supervisionInterventionSchema>;
-export interface SupervisionSignalView { id: string; planId: string; signalType: SupervisionSignalType; severity: string; sourceRef: string; facts: Record<string, unknown>; observedAt: string; expiresAt: string | null; }
+export interface SupervisionSignalView { modelReservationId?: string | null; id: string; planId: string; signalType: SupervisionSignalType; severity: string; sourceRef: string; facts: Record<string, unknown>; observedAt: string; expiresAt: string | null; }
 export interface SupervisionInterventionView { id: string; planId: string; recommendation: SupervisionAction; decisionAction: SupervisionAction; reasonCode: string; status: string; expectedPlanVersion: number; requestedByType: string; requestedById: string | null; rationale: string | null; createdAt: string; }
 export interface SupervisionView { sessions: Array<{ id: string; status: string; lastObservedAt: string | null; policy: SupervisionPolicy }>; signals: SupervisionSignalView[]; interventions: SupervisionInterventionView[]; }

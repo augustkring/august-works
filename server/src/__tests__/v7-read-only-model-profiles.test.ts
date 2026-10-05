@@ -80,7 +80,7 @@ describe("deployment-pinned read-only model qualifications", () => {
     const p = profile();
     expect(
       assertReadOnlyModelProfileCurrent(p, sourceSha, protectedOrigin),
-    ).toEqual(p);
+    ).toEqual({ ...p,purposes: ["read_only_verification"] });
     for (const altered of [
       { ...p, tariff: { ...p.tariff, sourceSha: "e".repeat(40) } },
       { ...p, tariff: { ...p.tariff, expiresAt: new Date(0).toISOString() } },

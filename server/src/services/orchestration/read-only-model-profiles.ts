@@ -17,6 +17,11 @@ export const readOnlyModelProfileSchema = z
     reviewerAgentId: z.string().uuid(),
     binding: aiConnectionBindingSchema,
     contract: z.literal("anthropic-text-messages-2023-06-01"),
+    purposes: z
+      .array(z.enum(["read_only_verification", "read_only_trajectory"]))
+      .min(1)
+      .max(2)
+      .default(["read_only_verification"]),
     tariff: modelTariffCeilingSchema,
     maximumEnvelopeBytes: z.number().int().min(1024).max(262144),
     inputTokensUpperBound: z.number().int().min(1).max(2000000),
@@ -43,7 +48,7 @@ export const readOnlyModelProfileSchema = z
         message: "An exact Anthropic model revision is required",
       });
   });
-export type ReadOnlyModelProfile = z.infer<typeof readOnlyModelProfileSchema>;
+export type ReadOnlyModelProfile = z.input<typeof readOnlyModelProfileSchema>;
 
 export function assertReadOnlyModelProfileCurrent(
   profile: ReadOnlyModelProfile,

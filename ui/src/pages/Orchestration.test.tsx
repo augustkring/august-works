@@ -32,9 +32,11 @@ async function setField(label: string, value: string) {
 it("keeps a simple internal draft single-worker and preserves the selected canonical Task version", async () => {
   await render();
   await setField("Task", fixture.task); await setField("Objective", "Prepare the retained launch analysis draft"); await setField("Business invariant", "All market claims cite retained evidence");
+  await setField("Independent assessment call limit", "2");
   vi.mocked(orchestrationApi.create).mockRejectedValue(new Error("Server fixture stops before dispatch"));
   await act(async () => Array.from(container!.querySelectorAll("button")).find(button => button.textContent === "Save plan")!.click());
   expect(orchestrationApi.create).toHaveBeenCalledWith(fixture.company, expect.objectContaining({ issueId: fixture.task, expectedIssueUpdatedAt: "2026-10-05T00:00:00.000Z", workload: "semantic", riskClass: "C0", budgets: expect.objectContaining({ maxWorkerCount: 1, maxParallelWorkers: 1 }), workers: [{ key: "worker", issueId: fixture.task }] }));
+  expect(orchestrationApi.create).toHaveBeenCalledWith(fixture.company, expect.objectContaining({ supervisionPolicy: expect.objectContaining({ maxVerifierCalls: 2 }) }));
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
   expect(container!.textContent).toContain("Server fixture stops before dispatch");
 });
