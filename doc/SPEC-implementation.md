@@ -1732,3 +1732,7 @@ Experimental updates lock the singleton and merge/validate/write within one tran
 ### V7 Readiness and Knowledge Quality
 
 The default-off Readiness page and `/api/companies/:companyId/readiness` APIs assess a specific agent, subject and action. Internal drafts may carry advisory knowledge gaps; external/material actions require current approved Foundation and governance evidence. Purpose-sensitive actions require explicit purpose evidence. Thirteen dimensions remain separate; no aggregate score grants permission. Assessments are immutable snapshots, scoped to their requesting principal, and expire. Findings can be resolved only against a current successful assessment of the same subject/action. System criteria remain mandatory when company criteria are added.
+
+### V7 Foundation discovery (experimental)
+
+With `foundation_bootstrap_v7` effectively enabled, company discovery uses an existing assigned Task to analyze authorized Context evidence. Bootstrap candidates remain private to the requesting human and selected worker until explicit draft/proposal creation. Every claim is source-linked; current source permissions, versions and sensitivity are checked again before publication. Discovery never approves Foundation. Human answers resume the canonical Task through normal runtime dispatch, with normal task recovery available if dispatch fails.

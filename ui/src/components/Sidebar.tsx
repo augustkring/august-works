@@ -178,6 +178,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
             icon={LayoutDashboard}
             liveCount={liveRunCount}
           />
+          {v7FeatureEnabled(experimentalSettings ?? {}, "foundation_bootstrap_v7") && <SidebarNavItem to="/foundation/discovery" label="Company discovery" icon={BookOpen} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "readiness_engine_v7") && <SidebarNavItem to="/readiness" label="Readiness" icon={ShieldCheck} />}
           {showFoundation ? <SidebarNavItem to="/foundation" label="Foundation" icon={BookOpen} /> : null}
           {v5FeatureEnabled(experimentalSettings ?? {}, "playbooks_v5") && <SidebarNavItem to="/playbooks" label="Playbooks" icon={BookOpen} />}

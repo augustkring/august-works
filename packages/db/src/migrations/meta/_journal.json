@@ -2451,6 +2451,13 @@
       "when": 1791192437014,
       "tag": "0351_lazy_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 352,
+      "version": "7",
+      "when": 1791193746714,
+      "tag": "0352_burly_yellowjacket",
+      "breakpoints": true
     }
   ]
 }

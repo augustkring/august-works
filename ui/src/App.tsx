@@ -53,6 +53,7 @@ import { IssueChatLongThreadPerf } from "./pages/IssueChatLongThreadPerf";
 import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
 import { Readiness } from "./pages/Readiness";
+import { FoundationBootstrap } from "./pages/FoundationBootstrap";
 import { V7FeatureGate } from "./components/V7FeatureGate";
 import { Memory } from "./pages/Memory";
 import { Governance } from "./pages/Governance";
@@ -359,6 +360,8 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       {import.meta.env.DEV ? (
         <Route path="tests/perf/long-thread" element={<IssueChatLongThreadPerf />} />
       ) : null}
+      <Route path="foundation/discovery" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
+      <Route path="foundation/discovery/:bootstrapRunId" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
       <Route path="readiness" element={<V7FeatureGate feature="readiness_engine_v7"><Readiness /></V7FeatureGate>} />
       <Route
         path="foundation"

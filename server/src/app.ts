@@ -64,6 +64,7 @@ import { companyRoutes } from "./routes/companies.js";
 import { companySkillRoutes } from "./routes/company-skills.js";
 import { foundationRoutes } from "./routes/foundation.js";
 import { readinessRoutes } from "./routes/readiness.js";
+import { foundationBootstrapRoutes } from "./routes/foundation-bootstrap.js";
 import { workflowRoutes } from "./routes/workflows.js";
 import { automationArtifactRoutes } from "./routes/automation-artifacts.js";
 import { memoryRoutes } from "./routes/memory.js";
@@ -710,6 +711,7 @@ export async function createApp(
   api.use(agentProviderBindingRoutes(db));
   api.use(crossCompanyContextRoutes(db));
   api.use(organizationRoutes(db));
+  api.use(foundationBootstrapRoutes(db));
   api.use(foundationRoutes(db));
   api.use(readinessRoutes(db));
   api.use(workflowRoutes(db));
