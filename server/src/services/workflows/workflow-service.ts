@@ -1,3 +1,4 @@
+import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -194,6 +195,7 @@ export function workflowService(db: Db) {
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
+        await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         await assertProjectReference(txDb, companyId, input.projectId);
         const now = new Date();
         const actorData = actorFields(actor);
@@ -245,6 +247,7 @@ export function workflowService(db: Db) {
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
+        await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         const workflow = await lockWorkflow(tx, companyId, workflowId);
         if (!workflow) throw notFound("Workflow not found");
         assertMutableWorkflow(workflow);
@@ -317,6 +320,7 @@ export function workflowService(db: Db) {
       const publishedDetail = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
+        await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         const workflow = await lockWorkflow(tx, companyId, workflowId);
         if (!workflow) throw notFound("Workflow not found");
         assertMutableWorkflow(workflow);

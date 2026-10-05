@@ -23,6 +23,7 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { createBetterAuthHandler, createBetterAuthInstance } from "../auth/better-auth.js";
 import type { Config } from "../config.js";
+import { publicOriginGuard } from "../middleware/public-origin-guard.js";
 
 const ORIGIN = "http://127.0.0.1:41999";
 const EMAIL = "founder@example.com";
@@ -119,5 +120,41 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     expect(signIn.status).toBe(200);
     expect(signIn.body?.user?.email).toBe(EMAIL);
     expect(sessionCookies(signIn).length).toBeGreaterThan(0);
+  });
+
+  it("keeps existing credentials usable in SaaS with secure cookies while refusing public signup", async () => {
+    const origin = "https://ai.augustworks.dk";
+    const config: Config = {
+      ...testConfig(),
+      deploymentProfile: "saas",
+      deploymentExposure: "public",
+      authPublicBaseUrl: origin,
+      publicOriginConfig: { primaryAppOrigin: origin, allowedAppOrigins: [origin], legacyOrigins: [] },
+      authDisableSignUp: true,
+    };
+    const auth = createBetterAuthInstance(db, config, [origin]);
+    const saas = express();
+    saas.set("trust proxy", "loopback");
+    saas.use(publicOriginGuard([origin]));
+    saas.all("/api/auth/{*authPath}", createBetterAuthHandler(auth));
+    const post = (path: string) => request(saas).post(`/api/auth/${path}`)
+      .set("Host", "ai.augustworks.dk").set("X-Forwarded-Proto", "https").set("Origin", origin);
+    const signUp = await post("sign-up/email").send({ email: "new-saas@example.invalid", password: PASSWORD, name: "New customer" });
+    expect(signUp.status).toBe(400);
+    expect(signUp.body.code).toBe("EMAIL_PASSWORD_SIGN_UP_DISABLED");
+    const signIn = await post("sign-in/email").send({ email: EMAIL, password: PASSWORD });
+    expect(signIn.status).toBe(200);
+    const cookies = sessionCookies(signIn);
+    expect(cookies.length).toBeGreaterThan(0);
+    expect(cookies[0]).toMatch(/; Secure/i);
+    expect(cookies[0]).toMatch(/; HttpOnly/i);
+    expect(cookies[0]).toMatch(/; SameSite=Lax/i);
+    expect(cookies[0]).not.toMatch(/; Domain=/i);
+    const session = await request(saas).get("/api/auth/get-session")
+      .set("Host", "ai.augustworks.dk").set("X-Forwarded-Proto", "https")
+      .set("Cookie", cookies.map((cookie) => cookie.split(";", 1)[0]).join("; "));
+    expect(session.status).toBe(200);
+    expect(session.body.user.email).toBe(EMAIL);
+    expect(await db.select().from(authAccounts)).toHaveLength(1);
   });
 });

@@ -11,8 +11,16 @@ export function isNewAgentAdapterAllowed(
   {
     cloud,
     nativeRunnerEnabled,
-  }: { cloud: boolean; nativeRunnerEnabled: boolean },
+    saas,
+  }: { cloud: boolean; nativeRunnerEnabled: boolean; saas?: boolean },
 ) {
+  if (saas)
+    return [
+      "openclaw_gateway",
+      "hermes_gateway",
+      "http",
+      "cursor_cloud",
+    ].includes(type);
   if (cloud) return CLOUD_ADAPTERS.has(type);
   return type !== "paperclip_runner" || nativeRunnerEnabled;
 }

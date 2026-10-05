@@ -3259,3 +3259,15 @@ export * from "./playbooks.js";
 export * from "./project-control.js";
 
 export * from "./portfolio.js";
+
+export * from "./aw-deployment.js";
+export * from "./v6-feature-flags.js";
+export * from "./billing/catalog.js";
+export * from "./saas-contracts.js";
+export * from "./saas-types.js";
+export * from "./runtime-host-contracts.js";
+export * from "./runtime-relay-contracts.js";
+
+export type { SaasOperationsSnapshot, SaasSupportStatus, SaasProviderInventory } from "./saas-operations.js";
+export { saasCostReportSchema } from "./saas-costs.js";
+export type { SaasCostSnapshot } from "./saas-costs.js";

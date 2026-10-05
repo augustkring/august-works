@@ -1,9 +1,14 @@
+import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network-policy.js";
 /// <reference path="./types/express.d.ts" />
 // Kicks off the OTel bootstrap as early as possible (no-op unless
 // OTEL_EXPORTER_OTLP_ENDPOINT is set). startServer() awaits
 // instrumentationReady before opening DB connections or constructing the
 // HTTP server, so trace coverage does not depend on incidental timing.
 import { instrumentationReady, shutdownInstrumentation } from "./instrumentation.js";
+import { assertSaasRolloutReady, activePublicAppOrigins } from "./aw-deployment.js";
+import { assertDatabaseRestoreAdmission } from "./services/saas/database-admission.js";
+import { saasAuthDelivery } from "./services/saas/auth-delivery.js";
+import { setupPublicOriginUpgradeGuard } from "./middleware/public-origin-guard.js";
 import { sentryReady, shutdownSentry, captureException } from "./sentry.js";
 import { waitForPendingRunFailureReports } from "./services/run-failure-report.js";
 import { verifyStoppedNativeSessionForReplacement } from "./services/native-runtime/native-session-executor.js";
@@ -107,12 +112,12 @@ import { createFeedbackTraceShareClientFromConfig } from "./services/feedback-sh
 import { buildRuntimeApiCandidateUrls, choosePrimaryRuntimeApiUrl } from "./runtime-api.js";
 import { isLoopbackHost, rewriteLoopbackUrlPort } from "./url-utils.js";
 import { createPluginWorkerManager } from "./services/plugin-worker-manager.js";
-import { createStorageServiceFromConfig } from "./storage/index.js";
+import { configureSaasStorageService, createStorageServiceFromConfig } from "./storage/index.js";
 import { printStartupBanner } from "./startup-banner.js";
 import { getBoardClaimWarningUrl, initializeBoardClaimChallenge } from "./board-claim.js";
 import { maybePersistWorktreeRuntimePorts } from "./worktree-config.js";
 import { initTelemetry, getTelemetryClient } from "./telemetry.js";
-import { conflict } from "./errors.js";
+import { conflict, forbidden } from "./errors.js";
 import { ensureDecisionSigningSecret } from "./services/decision-signing.js";
 import { createDecisionRetentionNotifyOriginAgent, createDecisionWakeOriginAgent } from "./services/decision-wakeup.js";
 import {
@@ -216,6 +221,7 @@ async function startServerWithDatabaseTeardown(
   await sentryReady;
   ensureDecisionSigningSecret();
   let config = loadConfig();
+  installSaasAdapterNetworkPolicy(config.saasPlatform?.runtime.relayPort??3102);
   initTelemetry({ enabled: config.telemetryEnabled });
   if (process.env.PAPERCLIP_SECRETS_PROVIDER === undefined) {
     process.env.PAPERCLIP_SECRETS_PROVIDER = config.secretsProvider;
@@ -267,6 +273,10 @@ async function startServerWithDatabaseTeardown(
   ): Promise<MigrationSummary> {
     const autoApply = opts?.autoApply === true;
     let state = await inspectMigrations(connectionString);
+    if (config.deploymentProfile === "saas") {
+      if (state.status === "upToDate") return "already applied";
+      throw new Error("SaaS requires an operator migration with the dedicated migrator role before startup. The application cannot apply or repair migration history.");
+    }
     if (state.status === "needsMigrations" && state.reason === "pending-migrations") {
       const repair = await reconcilePendingMigrationHistory(connectionString);
       if (repair.repairedMigrations.length > 0) {
@@ -646,12 +656,26 @@ async function startServerWithDatabaseTeardown(
     await Promise.all(clients.map((client) => endDatabaseClient(client, 5)));
   };
   startupDatabase.close = closeDatabaseClients;
+  await assertDatabaseRestoreAdmission(db);
   
   // A claimed warm-pool stack may restart while its provider environment still
   // names the pool host. Restore the signed, durable identity before Better
   // Auth, routes, or child-runtime configuration capture any public URL.
-  const restoredCloudRuntimeIdentity = await initializeCloudRuntimeIdentity(db as any);
+  const restoredCloudRuntimeIdentity = config.deploymentProfile === "saas"
+    ? null : await initializeCloudRuntimeIdentity(db as any);
   if (restoredCloudRuntimeIdentity) config = loadConfig();
+
+  const v6RolloutFlags = config.deploymentProfile === "saas"
+    ? await instanceSettingsService(db).getExperimental() : {};
+  assertSaasRolloutReady(config.deploymentProfile, v6RolloutFlags);
+  const publicAppOrigins = config.publicOriginConfig
+    ? activePublicAppOrigins(config.publicOriginConfig, v6RolloutFlags) : undefined;
+  const platform = config.deploymentProfile === "saas" && config.saasPlatform && config.publicOriginConfig
+    ? (await import("./services/saas/platform.js")).saasPlatform(db as any, config.saasPlatform, config.publicOriginConfig) : undefined;
+  platform?.configureLogs();
+  if (config.deploymentProfile === "saas" && !platform && Object.entries(v6RolloutFlags).some(([key,value]) => value === true && !["saas_deployment_profile_v6", "domain_dual_origin_v6", "domain_new_primary_v6"].includes(key))) {
+    throw new Error("SaaS product features require validated AW_PLATFORM_ENV configuration");
+  }
 
   if (config.deploymentMode === "local_trusted" && !isLoopbackHost(config.host)) {
     throw new Error(
@@ -683,7 +707,7 @@ async function startServerWithDatabaseTeardown(
     port: requestedListenPort,
     hostname: config.host,
   });
-  if (config.authBaseUrlMode === "explicit" && config.authPublicBaseUrl) {
+  if (config.deploymentProfile !== "saas" && config.authBaseUrlMode === "explicit" && config.authPublicBaseUrl) {
     config.authPublicBaseUrl = rewriteLoopbackUrlPort(config.authPublicBaseUrl, listenPort);
   }
   
@@ -719,11 +743,14 @@ async function startServerWithDatabaseTeardown(
       resolveBetterAuthSession,
       resolveBetterAuthSessionFromHeaders,
     } = await import("./auth/better-auth.js");
-    const derivedTrustedOrigins = deriveAuthTrustedOrigins(config, { listenPort });
+    const derivedTrustedOrigins = deriveAuthTrustedOrigins(config, { listenPort, publicAppOrigins });
     const envTrustedOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
       .split(",")
       .map((value) => value.trim())
       .filter((value) => value.length > 0);
+    if (config.deploymentProfile === "saas" && envTrustedOrigins.some((origin) => !derivedTrustedOrigins.includes(origin))) {
+      throw new Error("BETTER_AUTH_TRUSTED_ORIGINS cannot widen the SaaS public origin configuration");
+    }
     const effectiveTrustedOrigins = Array.from(new Set([...derivedTrustedOrigins, ...envTrustedOrigins]));
     logger.info(
       {
@@ -737,7 +764,9 @@ async function startServerWithDatabaseTeardown(
       },
       "Authenticated mode auth origin configuration",
     );
-    const auth = createBetterAuthInstance(db as any, config, effectiveTrustedOrigins);
+    const auth = platform && config.publicOriginConfig
+      ? createBetterAuthInstance(db as any, config, effectiveTrustedOrigins, saasAuthDelivery(db as any, platform.email, config.publicOriginConfig, v6RolloutFlags))
+      : createBetterAuthInstance(db as any, config, effectiveTrustedOrigins);
     betterAuthHandler = createBetterAuthHandler(auth);
     resolveSession = (req) => resolveBetterAuthSession(auth, req);
     resolveSessionFromHeaders = (headers) => resolveBetterAuthSessionFromHeaders(auth, headers);
@@ -795,7 +824,8 @@ async function startServerWithDatabaseTeardown(
   }
 
   const uiMode = config.uiDevMiddleware ? "vite-dev" : config.serveUi ? "static" : "none";
-  const storageService = createStorageServiceFromConfig(config);
+  const storageService = platform?.storage ?? createStorageServiceFromConfig(config);
+  if(platform)configureSaasStorageService(storageService);
   const feedback = feedbackService(db as any, {
     shareClient: createFeedbackTraceShareClientFromConfig(config),
   });
@@ -826,6 +856,7 @@ async function startServerWithDatabaseTeardown(
       throw conflict(message);
     }
 
+    if(config.deploymentProfile==="saas")throw forbidden("SaaS database backup uses the separate encrypted backup operator job");
     databaseBackupInFlight = true;
     const startedAt = new Date();
     const startedAtMs = Date.now();
@@ -882,7 +913,7 @@ async function startServerWithDatabaseTeardown(
   // Managed instances drive bundled plugin auto-install from the managed-config
   // document parsed fail-closed above (`plugins.autoInstall`). Absent env means
   // self-hosted: createApp falls back to its built-in kubernetes-only default.
-  const managedPluginAutoInstall = managedConfig?.plugins.autoInstall ?? null;
+  const managedPluginAutoInstall = config.deploymentProfile === "saas" ? [] : managedConfig?.plugins.autoInstall ?? null;
   const app = await createApp(db as any, {
     uiMode,
     serverPort: listenPort,
@@ -907,10 +938,13 @@ async function startServerWithDatabaseTeardown(
         }
       : undefined,
     deploymentMode: config.deploymentMode,
+    deploymentProfile: config.deploymentProfile,
+    saasPlatform: platform,
     deploymentExposure: config.deploymentExposure,
     allowedHostnames: config.allowedHostnames,
     bindHost: config.host,
     authPublicBaseUrl: config.authPublicBaseUrl,
+    publicAppOrigins,
     chatWebhookPublicBaseUrl: config.chatWebhookPublicBaseUrl,
     authReady,
     companyDeletionEnabled: config.companyDeletionEnabled,
@@ -923,6 +957,9 @@ async function startServerWithDatabaseTeardown(
     managedPluginAutoInstall,
   });
   const server = createServer(app as unknown as Parameters<typeof createServer>[0]);
+  if (publicAppOrigins) {
+    setupPublicOriginUpgradeGuard(server, publicAppOrigins, app.get("trust proxy fn"));
+  }
 
   // Increase keep-alive timeouts to safely outlive default idle timeouts
   // of common reverse proxies and load balancers (like AWS ALB, Nginx, or Traefik).
@@ -957,12 +994,17 @@ async function startServerWithDatabaseTeardown(
 
   let startupListenerBound = false;
   try {
-  setupRunnerPrpWebSocketServer(server, { apiUrl: configuredApiUrl });
-  setupEnvironmentCustomImageTerminalWebSocketServer(server, db as any, {
-    pluginWorkerManager,
-  });
+  if (platform) {
+    platform.runtime.relay.attach(server);
+    await platform.runtime.relay.listen(platform.config.runtime.relayPort ?? 3102);
+  }
+  if(config.deploymentProfile!=="saas") {
+    setupRunnerPrpWebSocketServer(server, { apiUrl: configuredApiUrl });
+    setupEnvironmentCustomImageTerminalWebSocketServer(server, db as any, { pluginWorkerManager });
+  }
   setupLiveEventsWebSocketServer(server, db as any, {
     deploymentMode: config.deploymentMode,
+    deploymentProfile: config.deploymentProfile,
     resolveSessionFromHeaders,
     // Cloud-proxied browsers carry trusted x-paperclip-cloud-* headers instead
     // of a local Better Auth session; without this lane every live-events
@@ -1015,118 +1057,120 @@ async function startServerWithDatabaseTeardown(
     logger.error({ err }, "startup reconciliation of managed runtime control operations failed");
   }
 
-  void reconcilePersistedRuntimeServicesOnStartup(db as any)
-    .then((result) => {
-      if (
-        result.reconciled > 0
-        || result.restarted > 0
-        || result.restartFailed > 0
-        || result.backfilled > 0
-      ) {
+  if (config.deploymentProfile !== "saas") {
+    void reconcilePersistedRuntimeServicesOnStartup(db as any)
+      .then((result) => {
+        if (
+          result.reconciled > 0
+          || result.restarted > 0
+          || result.restartFailed > 0
+          || result.backfilled > 0
+        ) {
+          logger.warn(
+            {
+              reconciled: result.reconciled,
+              adopted: result.adopted,
+              stopped: result.stopped,
+              // Managed HTTP-only services taken down so they come back on a
+              // verified HTTPS origin (PAP-17158).
+              httpsBackfilled: result.backfilled,
+              restarted: result.restarted,
+              restartFailed: result.restartFailed,
+            },
+            "reconciled persisted runtime services from a previous server process",
+          );
+        }
+      })
+      .catch((err) => {
+        logger.error({ err }, "startup reconciliation of persisted runtime services failed");
+      });
+
+    // Backfill auth.json into any already-isolated codex_local managed home that
+    // was created by the #8272 isolation guard before the Phase 1 seeding fix.
+    // Idempotent; the Phase 1 execute-time seeding covers new strandings.
+    void reconcileCodexLocalManagedHomesOnStartup(db)
+      .then((result) => {
+        if (result.seeded > 0 || result.failed > 0) {
+          logger.warn(
+            { seeded: result.seeded, failed: result.failed, scanned: result.scanned },
+            "reconciled codex_local managed homes (backfilled missing auth)",
+          );
+        }
+        if (result.sourceAuthMissing > 0) {
+          logger.warn(
+            { sourceAuthMissing: result.sourceAuthMissing, scanned: result.scanned },
+            "could not backfill codex_local managed homes because shared Codex auth is missing",
+          );
+        }
+      })
+      .catch((err) => {
+        logger.error({ err }, "startup reconciliation of codex_local managed homes failed");
+      });
+
+    void reconcileBuiltInAgentsOnStartup(db as any)
+      .then((result) => {
+        if (
+          result.reconciled > 0
+          || result.unknown > 0
+          || result.duplicates > 0
+          || result.autoEnsured > 0
+          || result.companyFailures > 0
+        ) {
+          logger.warn(
+            result,
+            "startup reconciliation of built-in agents complete",
+          );
+        }
+      })
+      .catch((err) => {
+        logger.error({ err }, "startup reconciliation of built-in agents failed");
+      });
+
+    // Force the instance onto the Kubernetes sandbox provider when configured via
+    // env (PAPERCLIP_EXECUTION_MODE=kubernetes). Runs BEFORE the heartbeat resumes
+    // queued runs so the policy + managed k8s environments are in place. A bad
+    // PAPERCLIP_EXECUTION_MODE / PAPERCLIP_K8S_* value throws and fails startup
+    // (fail-loud) rather than silently allowing local execution.
+    try {
+      const policyResult = await bootstrapExecutionPolicyFromEnv(db as any);
+      if (policyResult) {
         logger.warn(
           {
-            reconciled: result.reconciled,
-            adopted: result.adopted,
-            stopped: result.stopped,
-            // Managed HTTP-only services taken down so they come back on a
-            // verified HTTPS origin (PAP-17158).
-            httpsBackfilled: result.backfilled,
-            restarted: result.restarted,
-            restartFailed: result.restartFailed,
+            executionMode: policyResult.executionMode,
+            companiesConfigured: policyResult.companiesConfigured,
           },
-          "reconciled persisted runtime services from a previous server process",
+          "forced execution policy applied at startup",
         );
       }
-    })
-    .catch((err) => {
-      logger.error({ err }, "startup reconciliation of persisted runtime services failed");
-    });
-
-  // Backfill auth.json into any already-isolated codex_local managed home that
-  // was created by the #8272 isolation guard before the Phase 1 seeding fix.
-  // Idempotent; the Phase 1 execute-time seeding covers new strandings.
-  void reconcileCodexLocalManagedHomesOnStartup(db)
-    .then((result) => {
-      if (result.seeded > 0 || result.failed > 0) {
-        logger.warn(
-          { seeded: result.seeded, failed: result.failed, scanned: result.scanned },
-          "reconciled codex_local managed homes (backfilled missing auth)",
-        );
-      }
-      if (result.sourceAuthMissing > 0) {
-        logger.warn(
-          { sourceAuthMissing: result.sourceAuthMissing, scanned: result.scanned },
-          "could not backfill codex_local managed homes because shared Codex auth is missing",
-        );
-      }
-    })
-    .catch((err) => {
-      logger.error({ err }, "startup reconciliation of codex_local managed homes failed");
-    });
-
-  void reconcileBuiltInAgentsOnStartup(db as any)
-    .then((result) => {
-      if (
-        result.reconciled > 0
-        || result.unknown > 0
-        || result.duplicates > 0
-        || result.autoEnsured > 0
-        || result.companyFailures > 0
-      ) {
-        logger.warn(
-          result,
-          "startup reconciliation of built-in agents complete",
-        );
-      }
-    })
-    .catch((err) => {
-      logger.error({ err }, "startup reconciliation of built-in agents failed");
-    });
-
-  // Force the instance onto the Kubernetes sandbox provider when configured via
-  // env (PAPERCLIP_EXECUTION_MODE=kubernetes). Runs BEFORE the heartbeat resumes
-  // queued runs so the policy + managed k8s environments are in place. A bad
-  // PAPERCLIP_EXECUTION_MODE / PAPERCLIP_K8S_* value throws and fails startup
-  // (fail-loud) rather than silently allowing local execution.
-  try {
-    const policyResult = await bootstrapExecutionPolicyFromEnv(db as any);
-    if (policyResult) {
-      logger.warn(
-        {
-          executionMode: policyResult.executionMode,
-          companiesConfigured: policyResult.companiesConfigured,
-        },
-        "forced execution policy applied at startup",
-      );
+    } catch (err) {
+      logger.error({ err }, "failed to apply forced execution policy from environment");
+      throw err;
     }
-  } catch (err) {
-    logger.error({ err }, "failed to apply forced execution policy from environment");
-    throw err;
-  }
 
-  // Ensure sandbox environments declared in the managed-config document
-  // (`environments` section) before the heartbeat resumes queued runs. The
-  // document already parsed fail-closed above; the ensure step itself is
-  // fail-safe per entry (a degraded boot beats a fleet-wide crash loop), but
-  // a contradictory deployment that also forces PAPERCLIP_EXECUTION_MODE
-  // throws here and fails startup. `pluginsReady` sequences the ensure after
-  // the bundled-plugin install/load pass so a declared environment never
-  // activates before its provider driver is registered; the worker manager
-  // additionally gates each entry on a live plugin worker (and archives the
-  // row of a provider that did not come up).
-  try {
-    const bundledPluginsStartup = (app as { locals?: { bundledPluginsStartup?: Promise<unknown> } })
-      .locals?.bundledPluginsStartup;
+    // Ensure sandbox environments declared in the managed-config document
+    // (`environments` section) before the heartbeat resumes queued runs. The
+    // document already parsed fail-closed above; the ensure step itself is
+    // fail-safe per entry (a degraded boot beats a fleet-wide crash loop), but
+    // a contradictory deployment that also forces PAPERCLIP_EXECUTION_MODE
+    // throws here and fails startup. `pluginsReady` sequences the ensure after
+    // the bundled-plugin install/load pass so a declared environment never
+    // activates before its provider driver is registered; the worker manager
+    // additionally gates each entry on a live plugin worker (and archives the
+    // row of a provider that did not come up).
+    try {
+      const bundledPluginsStartup = (app as { locals?: { bundledPluginsStartup?: Promise<unknown> } })
+        .locals?.bundledPluginsStartup;
     const managedEnvironmentsResult = await applyManagedEnvironments(db as any, managedConfig, {
-      pluginsReady: bundledPluginsStartup,
-      workerManager: pluginWorkerManager,
-    });
-    if (managedEnvironmentsResult) {
-      logger.warn(managedEnvironmentsResult, "managed sandbox environments ensured from managed config");
+        pluginsReady: bundledPluginsStartup,
+        workerManager: pluginWorkerManager,
+      });
+      if (managedEnvironmentsResult) {
+        logger.warn(managedEnvironmentsResult, "managed sandbox environments ensured from managed config");
+      }
+    } catch (err) {
+      logger.error({ err }, "failed to apply managed environments from managed config");
+      throw err;
     }
-  } catch (err) {
-    logger.error({ err }, "failed to apply managed environments from managed config");
-    throw err;
   }
 
   let drainHeartbeatRunsForShutdown: ((
@@ -1904,6 +1948,7 @@ async function startServerWithDatabaseTeardown(
     throw err;
   }
 
+  platform?.start();
   setStartupRecoveryPhase("ready");
   logger.info(`Server startup recovery complete on ${config.host}:${listenPort}`);
   void systemdNotify(["--ready", `--status=Listening on ${config.host}:${listenPort}`]).then((notified) => {
@@ -2021,6 +2066,7 @@ async function startServerWithDatabaseTeardown(
 
     const appShutdown = (app as { locals?: { paperclipShutdown?: () => Promise<void> } }).locals
       ?.paperclipShutdown;
+    await platform?.stop();
     const stopEmbeddedPostgres = embeddedPostgres && embeddedPostgresStartedByThisProcess
       ? () => embeddedPostgresSupervisor?.shutdown() ?? embeddedPostgres!.stop()
       : null;
@@ -2074,6 +2120,7 @@ async function startServerWithDatabaseTeardown(
     shutdown: (signal = "SIGTERM") => shutdown(signal, false),
   };
   } catch (error) {
+    await platform?.stop();
     if (startupListenerBound) {
       await new Promise<void>((resolveClose) => {
         try {

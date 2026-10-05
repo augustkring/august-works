@@ -1,3 +1,4 @@
+import { isSaasDeployment } from "../deployment-profile.js";
 /**
  * @fileoverview Adapter management REST API routes
  *
@@ -64,7 +65,7 @@ const execFileAsync = promisify(execFile);
  * bundled-only plugin install floor in plugin-install-guard.ts).
  */
 function assertAdapterCodeInstallAllowed() {
-  if (isCloudManagedInstance()) {
+  if (isCloudManagedInstance()||isSaasDeployment()) {
     throw forbidden("Adapter installation is platform-managed on cloud-managed instances", {
       code: "adapter_install_platform_managed",
     });
@@ -283,6 +284,7 @@ export function adapterRoutes(options: {
     const nativeRunnerEnabled = await options.getNativeRunnerEnabled?.().catch(() => false) ?? false;
     if (!nativeRunnerEnabled) disabledSet.add("paperclip_runner");
 
+    if(isSaasDeployment())for(const adapter of registeredAdapters)if(!["openclaw_gateway","hermes_gateway","http","cursor_cloud"].includes(adapter.type))disabledSet.add(adapter.type);
     const result: AdapterInfo[] = registeredAdapters.map((adapter) =>
       buildAdapterInfo(adapter, externalRecords.get(adapter.type), disabledSet),
     ).sort((a, b) => a.type.localeCompare(b.type));

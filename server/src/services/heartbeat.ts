@@ -1,3 +1,4 @@
+import { assertSaasExecutionAdmission } from "./saas/execution-admission.js";
 import { recordEagerSkillLoading, recordSkillExecutionCompletion, reconcileSkillExecutionCompletions } from "./skill-usage.js";
 import { agentRuntimeFabricService } from "./agent-runtime-fabric.js";
 import { agentProviderBindingService } from "./agent-provider-bindings.js";
@@ -17177,6 +17178,8 @@ export function heartbeatService(
       );
       return null;
     }
+    try { await assertSaasExecutionAdmission(db,agent); }
+    catch { await cancelRunInternal(run.id,"Cancelled because SaaS execution admission is closed");return null; }
     const invokability = companyAgents
       ? evaluateAgentInvokability(toAgentOrgRow(agent), companyAgents)
       : await getAgentInvokability(agent);
@@ -20205,6 +20208,8 @@ export function heartbeatService(
         if (failedRun) await releaseIssueExecutionAndPromote(failedRun);
         return;
       }
+
+      await assertSaasExecutionAdmission(db,agent);
 
       // The claimed adapter identity is immutable recovery evidence. Do not
       // execute a newly selected adapter under a previous adapter's claim.
@@ -26271,6 +26276,7 @@ export function heartbeatService(
 
     let agent = await getAgent(agentId);
     if (!agent) throw notFound("Agent not found");
+    await assertSaasExecutionAdmission(db,agent);
     if (issueId) {
       const conversation = await getIssueExecutionContext(agent.companyId, issueId);
       if (isConversation(conversation)) {

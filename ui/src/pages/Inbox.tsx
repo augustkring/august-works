@@ -1,3 +1,4 @@
+import { SaasNotifications } from "@/components/SaasNotifications";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -792,7 +793,7 @@ function InboxCollectionToolbar({
 
 export function Inbox() {
   const { enabled: streamlinedUiEnabled } = useStreamlinedUiEnabled();
-  return streamlinedUiEnabled ? <StreamlinedInbox /> : <LegacyInbox />;
+  return <><SaasNotifications />{streamlinedUiEnabled ? <StreamlinedInbox /> : <LegacyInbox />}</>;
 }
 
 function StreamlinedInbox() {

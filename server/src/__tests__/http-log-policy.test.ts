@@ -27,6 +27,10 @@ describe("isPrivateWebhookHttpRequest", () => {
     ).toBe(true);
     for (const path of [
       "/api/routine-triggers/public",
+      "/api/webhooks/paddle?private=fixture",
+      "/api/webhooks/mailgun",
+      "/api/internal/runtime/enroll",
+      "http://host.invalid/api/internal/runtime/../private-component",
       "/api/routine-triggers/public/private-id/fire",
       "https://host.invalid/api/routine-triggers/public/../private-id",
       "/api/chat-webhooks",
@@ -60,6 +64,9 @@ describe("isPrivateWebhookHttpRequest", () => {
 });
 
 describe("isSecretSensitiveHttpRequest", () => {
+  it("protects account password confirmation failures including scoped requests", () => {
+    expect(isSecretSensitiveHttpRequest("POST", "/api/saas/account/deletion?expectedUserId=fixture")).toBe(true);
+  });
   it("identifies credential-bearing chat setup mutations", () => {
     expect(
       isSecretSensitiveHttpRequest(

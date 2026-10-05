@@ -1,0 +1,9 @@
+[Unit]
+Description=Schedule August Works encrypted database archives
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=5min
+Unit=aw-database-backup.service
+[Install]
+WantedBy=timers.target

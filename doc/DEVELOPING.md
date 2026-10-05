@@ -1618,3 +1618,7 @@ disconnected, visible active queries refresh every 15 seconds. This fallback
 stops when the socket opens, the tab is hidden, or the provider unmounts. A
 reconnected socket also refreshes visible queries to recover missed events.
 Run log views retain their existing HTTP polling fallback.
+
+## August Works V6 foundation
+
+The additive SaaS ownership profile and public origin contract are documented in [the V6 foundation runbook](operations/aw-v6-foundation.md). Existing local and legacy Cloud deployment behavior remains supported. All V6 rollout flags default off.

@@ -1,5 +1,6 @@
+import { eq } from "drizzle-orm";
 import { Router, type Request } from "express";
-import { companies, type Db } from "@paperclipai/db";
+import { authUsers, companies, type Db } from "@paperclipai/db";
 import {
   patchInstanceSettingsSchema,
   patchInstanceExperimentalSettingsSchema,
@@ -117,14 +118,41 @@ function withTaskDrainTransition<T>(run: () => Promise<T>): Promise<T> {
   return turn;
 }
 
-export function instanceSettingsRoutes(db: Db) {
+export function instanceSettingsRoutes(
+  db: Db,
+  options?: { deploymentProfile?: string; operatorUserIds?: readonly string[] },
+) {
   const router = Router();
   const svc = instanceSettingsService(db);
   const environments = environmentService(db);
   const heartbeat = heartbeatService(db);
+  async function assertCanManage(req: Request) {
+    if (options?.deploymentProfile !== "saas") {
+      assertCanManageInstanceSettings(req);
+      return;
+    }
+    if (
+      req.actor.type !== "board" || req.actor.source !== "session" ||
+      !req.actor.userId || !options.operatorUserIds?.includes(req.actor.userId)
+    ) throw forbidden("Named SaaS operator access required");
+    const [user] = await db
+      .select({ verified: authUsers.emailVerified })
+      .from(authUsers)
+      .where(eq(authUsers.id, req.actor.userId))
+      .limit(1);
+    if (!user?.verified) throw forbidden("Verified SaaS operator account required");
+  }
+
+  async function assertCanRead(req: Request) {
+    if (
+      options?.deploymentProfile === "saas" && req.actor.type === "board" &&
+      req.actor.userId && options.operatorUserIds?.includes(req.actor.userId)
+    ) return assertCanManage(req);
+    assertBoardOrgAccess(req);
+  }
 
   router.get("/instance/settings", async (req, res) => {
-    assertBoardOrgAccess(req);
+    await assertCanRead(req);
     res.json(await svc.get());
   });
 
@@ -132,7 +160,7 @@ export function instanceSettingsRoutes(db: Db) {
     "/instance/settings",
     validate(patchInstanceSettingsSchema),
     async (req, res) => {
-      assertCanManageInstanceSettings(req);
+      await assertCanManage(req);
       if (Object.prototype.hasOwnProperty.call(req.body, "defaultEnvironmentId")) {
         await assertEnvironmentSelectionForCompany(
           environments,
@@ -188,7 +216,7 @@ export function instanceSettingsRoutes(db: Db) {
   router.get("/instance/settings/general", async (req, res) => {
     // General settings (e.g. feedbackDataSharingPreference) are readable by any
     // authenticated org member or instance admin. Only PATCH requires instance-admin.
-    assertBoardOrgAccess(req);
+    await assertCanRead(req);
     res.json(await svc.getGeneral());
   });
 
@@ -196,7 +224,7 @@ export function instanceSettingsRoutes(db: Db) {
     "/instance/settings/general",
     validate(patchInstanceGeneralSettingsSchema),
     async (req, res) => {
-      assertCanManageInstanceSettings(req);
+      await assertCanManage(req);
       // Floor: on cloud-managed instances the execution mode is pinned by the
       // platform (the execution-policy bootstrap writes it at boot). No
       // instance admin — including a computed owner-admin — may change it: a
@@ -251,7 +279,7 @@ export function instanceSettingsRoutes(db: Db) {
     // Experimental settings are readable by any authenticated org member
     // or instance admin. Updating them remains instance-admin only because
     // this payload includes instance-wide operational controls.
-    assertBoardOrgAccess(req);
+    await assertCanRead(req);
     res.json(await svc.getExperimental());
   });
 
@@ -259,7 +287,7 @@ export function instanceSettingsRoutes(db: Db) {
     "/instance/settings/experimental",
     validate(patchInstanceExperimentalSettingsSchema),
     async (req, res) => {
-      assertCanManageInstanceSettings(req);
+      await assertCanManage(req);
       // Hiding the whole Experimental page floors every toggle; otherwise
       // only individually hidden keys are floored.
       const hidden = getHiddenSettings();
@@ -296,7 +324,7 @@ export function instanceSettingsRoutes(db: Db) {
   );
 
   router.get("/instance/task-drain", async (req, res) => {
-    assertBoardOrgAccess(req);
+    await assertCanRead(req);
     res.json(heartbeat.getTaskDrainStatus());
   });
 
@@ -304,7 +332,7 @@ export function instanceSettingsRoutes(db: Db) {
     "/instance/task-drain",
     validate(startTaskDrainRequestSchema),
     async (req, res) => {
-      assertCanManageInstanceSettings(req);
+      await assertCanManage(req);
       const actor = getActorInfo(req);
       const companyIds = await svc.listCompanyIds();
       const ttlMs = req.body.ttlMs ?? null;
@@ -358,7 +386,7 @@ export function instanceSettingsRoutes(db: Db) {
   );
 
   router.delete("/instance/task-drain", async (req, res) => {
-    assertCanManageInstanceSettings(req);
+    await assertCanManage(req);
     const actor = getActorInfo(req);
     const companyIds = await svc.listCompanyIds();
     // See the POST handler above for why the whole read-audit-apply
@@ -417,7 +445,7 @@ export function instanceSettingsRoutes(db: Db) {
   // on the instance, which a board member scoped to one company must not
   // be able to infer.
   router.get("/instance/lifecycle", async (req, res) => {
-    assertCanManageInstanceSettings(req);
+    await assertCanManage(req);
     const stackId = getCloudStackContext()?.stackId;
     if (!stackId) {
       res.status(404).json({ error: "not_cloud_managed" });
@@ -445,7 +473,7 @@ export function instanceSettingsRoutes(db: Db) {
   // `lifecycle:unarchive-primary` control assertion; instance admins hold
   // the same power through PATCH /api/companies/:id already.
   router.post("/instance/lifecycle/unarchive-primary", async (req, res) => {
-    assertCanManageInstanceSettings(req);
+    await assertCanManage(req);
     const stackId = getCloudStackContext()?.stackId;
     if (!stackId) {
       res.status(404).json({ error: "not_cloud_managed" });

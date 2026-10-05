@@ -1,0 +1,50 @@
+name: august-works-v6
+services:
+  control:
+    image: ${AW_CONTROL_IMAGE:?Digest-pinned control image required}
+    network_mode: host
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    cpus: 2
+    mem_limit: 4g
+    restart: unless-stopped
+    stop_grace_period: 90s
+    env_file: /etc/august-works/platform.env
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=1770
+    logging:
+      driver: local
+      options: { max-size: 20m, max-file: "3" }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const origin=new URL(process.env.AW_PUBLIC_APP_ORIGIN);fetch('http://127.0.0.1:3100/api/health',{headers:{host:origin.host,'x-forwarded-proto':'https','x-forwarded-host':origin.host},signal:AbortSignal.timeout(4000)}).then(async r=>{const h=await r.json();if(!r.ok||h.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 20s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+  edge:
+    image: ${AW_CADDY_IMAGE:?Digest-pinned Caddy image required}
+    network_mode: host
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    environment:
+      AW_PRIMARY_HOST: ${AW_PRIMARY_HOST:?Primary hostname required}
+      AW_LEGACY_HOST: ${AW_LEGACY_HOST:?Legacy hostname required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging:
+      driver: local
+      options: { max-size: 10m, max-file: "3" }
+volumes:
+  caddy-data:
+  caddy-config:

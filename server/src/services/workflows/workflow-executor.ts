@@ -1,3 +1,4 @@
+import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { WorkflowCheckpointError } from "./workflow-errors.js";
 import { assertWorkflowTaskAssignmentAuthorized } from "./workflow-task-authority.js";
 import { directAgentConfig, dispatchDirectAgent } from "./workflow-direct-agent.js";
@@ -6029,6 +6030,8 @@ async function executeWorkflowGraph(
   };
 
   while (current) {
+    try { await assertSaasDomainAdmission(db, ownedRun.companyId, "workflows.use"); }
+    catch { await failRun(db, ownedRun, actor, "workflow_commercial_admission_closed", "Workflow work is suspended until account access is restored"); return; }
     ownedRun = await renewRunLease(db, ownedRun);
     if (remainingWorkflowDeadlineMs(ownedRun, graph, new Date()) === 0) {
       await failRun(db, ownedRun, actor, "workflow_deadline_exceeded", "Workflow execution reached its total deadline");

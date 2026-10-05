@@ -1,0 +1,1 @@
+ALTER TABLE "billing_entitlement_overrides" ADD CONSTRAINT "billing_entitlement_overrides_value_ck" CHECK (jsonb_typeof("billing_entitlement_overrides"."value")='boolean' or (jsonb_typeof("billing_entitlement_overrides"."value")='string' and ("billing_entitlement_overrides"."value" #>> '{}') ~ '^[0-9]{1,40}$'));

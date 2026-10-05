@@ -25,6 +25,9 @@ describe.skipIf(!support.supported)("V5 identity migration", () => {
       await sql`DROP TABLE agent_execution_manifests`;
       await sql`DROP TABLE provider_shared_runtime_acknowledgements`;
       await sql`DROP TABLE agent_presence_runtime_bindings`;
+      // V6 adds this dependency after the V5 expansion. Detach it only in
+      // this disposable pre-V5 fixture and restore it once V5 is reapplied.
+      await sql`ALTER TABLE runtime_cells DROP CONSTRAINT runtime_cells_provider_binding_id_agent_provider_bindings_id_fk`;
       await sql`DROP TABLE agent_provider_bindings`;
       await sql`ALTER TABLE agents DROP COLUMN agent_identity_id CASCADE`;
       await sql`DROP TABLE agent_identities`;
@@ -37,6 +40,8 @@ describe.skipIf(!support.supported)("V5 identity migration", () => {
       for (const statement of expansion.split("--> statement-breakpoint")) if (statement.trim()) await sql.unsafe(statement);
       await sql`ALTER TABLE agents ALTER COLUMN agent_identity_id SET DEFAULT NULL`;
       await sql`ALTER TABLE agents ALTER COLUMN agent_identity_id SET NOT NULL`;
+      await sql`ALTER TABLE runtime_cells ADD CONSTRAINT runtime_cells_provider_binding_id_agent_provider_bindings_id_fk
+        FOREIGN KEY (provider_binding_id) REFERENCES agent_provider_bindings(id)`;
       const [reconciliation] = await sql`SELECT count(*)::int AS total,
         count(*) FILTER (WHERE agent_identity_id IS NOT NULL)::int AS linked,
         count(*) FILTER (WHERE permissions = '{"canCreateAgents":false,"canCreateSkills":false}'::jsonb)::int AS preserved

@@ -9,6 +9,7 @@ import {
   authSessions,
   authUsers,
   authVerifications,
+  authRateLimits,
 } from "@paperclipai/db";
 import type { Config } from "../config.js";
 import { resolvePaperclipInstanceId } from "../home-paths.js";
@@ -57,10 +58,15 @@ export function deriveAuthCookiePrefix(instanceId = resolvePaperclipInstanceId()
   return `paperclip-${scopedInstanceId}`;
 }
 
-export function buildBetterAuthAdvancedOptions(input: { disableSecureCookies: boolean }) {
+export function buildBetterAuthAdvancedOptions(input: { disableSecureCookies: boolean; saas?: boolean }) {
   return {
     cookiePrefix: deriveAuthCookiePrefix(),
-    ...(input.disableSecureCookies ? { useSecureCookies: false } : {}),
+    ...(input.saas ? {
+      useSecureCookies: true,
+      crossSubDomainCookies: { enabled: false },
+      defaultCookieAttributes: { secure: true, httpOnly: true, sameSite: "lax" as const },
+    } : {}),
+    ...(!input.saas && input.disableSecureCookies ? { useSecureCookies: false } : {}),
   };
 }
 
@@ -181,7 +187,11 @@ function headersFromExpressRequest(req: Request): Headers {
   return headersFromNodeHeaders(req.headers);
 }
 
-export function deriveAuthTrustedOrigins(config: Config, opts?: { listenPort?: number }): string[] {
+export function deriveAuthTrustedOrigins(config: Config, opts?: { listenPort?: number; publicAppOrigins?: readonly string[] }): string[] {
+  if (config.deploymentProfile === "saas") {
+    if (!config.publicOriginConfig) throw new Error("SaaS public origin configuration is missing");
+    return [...(opts?.publicAppOrigins ?? [config.publicOriginConfig.primaryAppOrigin])];
+  }
   const baseUrl = config.authBaseUrlMode === "explicit" ? config.authPublicBaseUrl : undefined;
   const trustedOrigins = new Set<string>();
 
@@ -222,6 +232,7 @@ export function resolveWorkspaceHandoffIdentity(
   config: Config,
   env: NodeJS.ProcessEnv = process.env,
 ): WorkspaceHandoffExpectedIdentity | null {
+  if (config.deploymentProfile === "saas") return null;
   const key = resolveWorkspaceHandoffLocalKey(env);
   if (!key) return null;
   const configuredOrigin =
@@ -238,7 +249,16 @@ export function resolveWorkspaceHandoffIdentity(
   };
 }
 
-export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins: string[]): BetterAuthInstance {
+export type SaasAuthDelivery = {
+  signupEnabled: boolean;
+  verificationRequired: boolean;
+  sendVerification(input: { user: { id: string; email: string }; url: string; token: string }): Promise<void>;
+  sendPasswordReset(input: { user: { id: string; email: string }; url: string; token: string }): Promise<void>;
+  recordSecurityEvent(userId: string, action: "email_verified" | "password_reset_completed"): Promise<void>;
+};
+
+export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins: string[], saasDelivery?: SaasAuthDelivery): BetterAuthInstance {
+  if (saasDelivery && config.deploymentProfile !== "saas") throw new Error("SaaS authentication delivery requires SaaS profile");
   const baseUrl = config.authBaseUrlMode === "explicit" ? config.authPublicBaseUrl : undefined;
   const publicUrl = process.env.PAPERCLIP_PUBLIC_URL?.trim() || baseUrl;
   const managedRuntimePublicUrl = process.env.PAPERCLIP_MANAGED_RUNTIME_PUBLIC_URL?.trim() || undefined;
@@ -249,7 +269,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       "For local development, set BETTER_AUTH_SECRET=paperclip-dev-secret in your .env file.",
     );
   }
-  const disableSecureCookies = shouldDisableSecureAuthCookies({
+  const disableSecureCookies = config.deploymentProfile !== "saas" && shouldDisableSecureAuthCookies({
     deploymentMode: config.deploymentMode,
     deploymentExposure: config.deploymentExposure,
     authBaseUrlMode: config.authBaseUrlMode,
@@ -268,19 +288,36 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
         session: authSessions,
         account: authAccounts,
         verification: authVerifications,
+        ...(config.deploymentProfile === "saas" ? {rateLimit:authRateLimits} : {}),
       },
     }),
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: false,
-      disableSignUp: config.authDisableSignUp,
+      requireEmailVerification: saasDelivery?.verificationRequired ?? false,
+      disableSignUp: config.deploymentProfile === "saas" ? !(saasDelivery?.signupEnabled) : config.authDisableSignUp,
+      ...(saasDelivery ? {
+        minPasswordLength: 12,
+        maxPasswordLength: 128,
+        resetPasswordTokenExpiresIn: 900,
+        revokeSessionsOnPasswordReset: true,
+        sendResetPassword: saasDelivery.sendPasswordReset,
+        onPasswordReset: async ({ user }: { user: { id: string } }) => saasDelivery.recordSecurityEvent(user.id, "password_reset_completed"),
+      } : {}),
     },
-    rateLimit: buildBetterAuthRateLimitOptions({
+    ...(saasDelivery ? { emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: true,
+      autoSignInAfterVerification: false,
+      expiresIn: 3600,
+      sendVerificationEmail: saasDelivery.sendVerification,
+      afterEmailVerification: async (user: { id: string }) => saasDelivery.recordSecurityEvent(user.id, "email_verified"),
+    } } : {}),
+    rateLimit: { ...buildBetterAuthRateLimitOptions({
       deploymentMode: config.deploymentMode,
       deploymentExposure: config.deploymentExposure,
-      override: process.env.PAPERCLIP_AUTH_RATE_LIMIT_ENABLED,
-    }),
-    advanced: buildBetterAuthAdvancedOptions({ disableSecureCookies }),
+      override: config.deploymentProfile === "saas" ? "true" : process.env.PAPERCLIP_AUTH_RATE_LIMIT_ENABLED,
+    }), ...(config.deploymentProfile === "saas" ? { storage: "database" as const } : {}) },
+    advanced: buildBetterAuthAdvancedOptions({ disableSecureCookies, saas: config.deploymentProfile === "saas" }),
     // Registered only for a managed workspace instance: the plugin is what makes
     // `Open workspace` password-independent, and a control-plane instance that
     // was never handed a workspace key must not expose the exchange at all.
@@ -311,7 +348,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
 
   const defaultAuth = betterAuth(authConfig);
   const supportsManagedLoopbackAuth = Boolean(
-    !disableSecureCookies &&
+    config.deploymentProfile !== "saas" && !disableSecureCookies &&
     isHttpsUrl(publicUrl) &&
     isHttpsUrl(managedRuntimePublicUrl),
   );

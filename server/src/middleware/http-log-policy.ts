@@ -39,6 +39,7 @@ function normalizePath(url: string): string {
 
 const SECRET_SENSITIVE_HTTP_PATHS = [
   /^\/api\/chat-endpoints\/[^/]+\/setup(?:-secret)?(?:\/|$)/,
+  /^\/api\/saas\/account\/deletion(?:\/|$)/,
 ];
 const SECRET_SENSITIVE_HTTP_METHODS = new Set(["POST", "PUT", "PATCH"]);
 
@@ -53,7 +54,7 @@ export function isPrivateWebhookHttpRequest(
     // Do not let URL dot-segment normalization erase an explicitly supplied
     // ingress namespace on a malformed absolute-form callback.
     const rawPath = pathname.replace(/^https?:\/\/[^/]*/i, "");
-    if (/^\/api\/(?:chat-webhooks|routine-triggers\/public)(?:\/|$)/i.test(rawPath)) return true;
+    if (/^\/api\/(?:chat-webhooks|routine-triggers\/public|webhooks|internal\/runtime)(?:\/|$)/i.test(rawPath)) return true;
     try {
       pathname = new URL(url).pathname;
     } catch {
@@ -62,7 +63,8 @@ export function isPrivateWebhookHttpRequest(
   }
   // This namespace is reserved for provider ingress, including malformed or
   // unknown callback paths. Rejecting a route must not make its payload public.
-  return /^\/api\/(?:chat-webhooks|routine-triggers\/public)(?:\/|$)/i.test(pathname);
+  // SaaS provider and host-agent ingress has the same raw-body privacy boundary.
+  return /^\/api\/(?:chat-webhooks|routine-triggers\/public|webhooks|internal\/runtime)(?:\/|$)/i.test(pathname);
 }
 
 /**

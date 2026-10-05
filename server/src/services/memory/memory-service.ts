@@ -1,3 +1,4 @@
+import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { createHash } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -513,6 +514,7 @@ async function insertCandidate(
 ) {
   await assertMemorySourcesRetained(tx, companyId, input.evidence);
   await assertActorCompanyScope(tx, companyId, actor);
+  await assertSaasDomainAdmission(tx, companyId, "memory.use");
   await assertScopeReferences(tx, companyId, input);
   await assertAgentPrivateOwnership(input, actor);
   const binding = await assertBindingAllowsCandidate(tx, companyId, input);
@@ -786,6 +788,7 @@ export function memoryService(db: Db) {
       }
       requireHumanOrSystem(actor, "configure");
       await assertActorCompanyScope(db, companyId, actor);
+      await assertSaasDomainAdmission(db, companyId, "memory.use");
 
       try {
         return await db.transaction(async (tx) => {
@@ -832,6 +835,7 @@ export function memoryService(db: Db) {
       }
       requireHumanOrSystem(actor, "configure");
       await assertActorCompanyScope(db, companyId, actor);
+      await assertSaasDomainAdmission(db, companyId, "memory.use");
       try {
         const [binding] = await db
           .insert(memoryBindings)
@@ -867,6 +871,7 @@ export function memoryService(db: Db) {
       }
       requireHumanOrSystem(actor, "configure");
       await assertActorCompanyScope(db, companyId, actor);
+      await assertSaasDomainAdmission(db, companyId, "memory.use");
       const binding = await bindingForCompany(db, companyId, bindingId);
       if (!binding) throw notFound("Memory binding not found");
 
@@ -1018,6 +1023,7 @@ export function memoryService(db: Db) {
       const corrected = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
+      await assertSaasDomainAdmission(txDb, companyId, "memory.use");
 
         const source = await txDb
           .select()
@@ -1184,6 +1190,7 @@ export function memoryService(db: Db) {
       const shared = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
+      await assertSaasDomainAdmission(txDb, companyId, "memory.use");
 
         const source = await txDb
           .select()
@@ -1497,6 +1504,7 @@ export function memoryService(db: Db) {
       const created = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
+      await assertSaasDomainAdmission(txDb, companyId, "memory.use");
         const existing = await txDb
           .select()
           .from(memoryRecords)
@@ -1585,6 +1593,7 @@ export function memoryService(db: Db) {
       const reviewed = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
+      await assertSaasDomainAdmission(txDb, companyId, "memory.use");
         const record = await txDb
           .select()
           .from(memoryRecords)

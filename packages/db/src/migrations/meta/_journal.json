@@ -2353,6 +2353,97 @@
       "when": 1791075052867,
       "tag": "0337_tough_kinsey_walden",
       "breakpoints": true
+    },
+    {
+      "idx": 338,
+      "version": "7",
+      "when": 1791147594282,
+      "tag": "0338_tiny_bloodscream",
+      "breakpoints": true
+    },
+    {
+      "idx": 339,
+      "version": "7",
+      "when": 1791148730237,
+      "tag": "0339_overconfident_pyro",
+      "breakpoints": true
+    },
+    {
+      "idx": 340,
+      "version": "7",
+      "when": 1791151404101,
+      "tag": "0340_thick_gertrude_yorkes",
+      "breakpoints": true
+    },
+    {
+      "idx": 341,
+      "version": "7",
+      "when": 1791152864837,
+      "tag": "0341_black_karma",
+      "breakpoints": true
+    },
+    {
+      "idx": 342,
+      "version": "7",
+      "when": 1791155485158,
+      "tag": "0342_glorious_proteus",
+      "breakpoints": true
+    },
+    {
+      "idx": 343,
+      "version": "7",
+      "when": 1791156963862,
+      "tag": "0343_odd_the_call",
+      "breakpoints": true
+    },
+    {
+      "idx": 344,
+      "version": "7",
+      "when": 1791157184826,
+      "tag": "0344_dark_morlocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 345,
+      "version": "7",
+      "when": 1791161455559,
+      "tag": "0345_odd_tarantula",
+      "breakpoints": true
+    },
+    {
+      "idx": 346,
+      "version": "7",
+      "when": 1791163105902,
+      "tag": "0346_strange_jocasta",
+      "breakpoints": true
+    },
+    {
+      "idx": 347,
+      "version": "7",
+      "when": 1791164391324,
+      "tag": "0347_flippant_kitty_pryde",
+      "breakpoints": true
+    },
+    {
+      "idx": 348,
+      "version": "7",
+      "when": 1791164851270,
+      "tag": "0348_gifted_karnak",
+      "breakpoints": true
+    },
+    {
+      "idx": 349,
+      "version": "7",
+      "when": 1791165795153,
+      "tag": "0349_whole_tombstone",
+      "breakpoints": true
+    },
+    {
+      "idx": 350,
+      "version": "7",
+      "when": 1791174320408,
+      "tag": "0350_faulty_young_avengers",
+      "breakpoints": true
     }
   ]
 }

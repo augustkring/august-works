@@ -1,4 +1,4 @@
-import { v5FeatureFlagsSchema } from "@paperclipai/shared";
+import { v5FeatureFlagsSchema, v6FeatureFlagsSchema } from "@paperclipai/shared";
 import type { Db } from "@paperclipai/db";
 import { companies, instanceSettings } from "@paperclipai/db";
 
@@ -256,6 +256,7 @@ export function normalizeExperimentalSettings(raw: unknown): InstanceExperimenta
       enablePaperclipDeveloperMode: parsed.data.enablePaperclipDeveloperMode ?? false,
       enableSimplifiedEnglishInteractions: parsed.data.enableSimplifiedEnglishInteractions ?? false,
       ...v5FeatureFlagsSchema.parse(parsed.data),
+      ...v6FeatureFlagsSchema.parse(parsed.data),
       enableFoundationV1: parsed.data.enableFoundationV1 ?? false,
       enableContextEngineV1: parsed.data.enableContextEngineV1 ?? false,
       enableWorkflowsV1: parsed.data.enableWorkflowsV1 ?? false,
@@ -321,6 +322,7 @@ export function normalizeExperimentalSettings(raw: unknown): InstanceExperimenta
     enablePaperclipDeveloperMode: false,
     enableSimplifiedEnglishInteractions: false,
     ...v5FeatureFlagsSchema.parse({}),
+    ...v6FeatureFlagsSchema.parse({}),
     enableFoundationV1: false,
     enableContextEngineV1: false,
     enableWorkflowsV1: false,

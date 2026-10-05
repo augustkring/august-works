@@ -1,3 +1,4 @@
+import { adapterWebSocketOptions } from "@paperclipai/adapter-utils/network-policy";
 import type {
   AdapterExecutionContext,
   AdapterExecutionResult,
@@ -667,6 +668,7 @@ class GatewayWsClient {
     this.ws = new WebSocket(this.opts.url, {
       headers: this.opts.headers,
       maxPayload: 25 * 1024 * 1024,
+      ...await adapterWebSocketOptions(this.opts.url),
     });
 
     const ws = this.ws;

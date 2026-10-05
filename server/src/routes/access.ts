@@ -20,6 +20,7 @@ import {
   assets,
   agentApiKeys,
   authUsers,
+  authSecurityEvents,
   companies,
   companyLogos,
   companyMemberships,
@@ -1734,6 +1735,7 @@ function buildInviteOnboardingManifest(
     bindHost: string;
     allowedHostnames: string[];
     authPublicBaseUrl?: string;
+    saasInviteRecipient?: (invite:typeof invites.$inferSelect,userId:string)=>Promise<void>;
   }
 ) {
   const baseUrl = resolveBaseUrl(req, opts.authPublicBaseUrl);
@@ -1834,6 +1836,7 @@ export function buildInviteOnboardingTextDocument(
     bindHost: string;
     allowedHostnames: string[];
     authPublicBaseUrl?: string;
+    saasInviteRecipient?: (invite:typeof invites.$inferSelect,userId:string)=>Promise<void>;
   }
 ) {
   const manifest = buildInviteOnboardingManifest(req, token, invite, opts);
@@ -2643,6 +2646,7 @@ export function accessRoutes(
     inviteResolutionNetwork?: Partial<InviteResolutionNetwork>;
     inviteRateLimiter?: InviteRateLimiter;
     authPublicBaseUrl?: string;
+    saasInviteRecipient?: (invite:typeof invites.$inferSelect,userId:string)=>Promise<void>;
   }
 ) {
   const router = Router();
@@ -3192,6 +3196,8 @@ export function accessRoutes(
       },
     });
 
+    if(opts.saasInviteRecipient)await db.insert(authSecurityEvents).values({userId:input.joinRequest.requestingUserId,companyId:input.companyId,action:"invite_accepted",expiresAt:new Date(Date.now()+90*86400000)});
+
     return approved ?? {
       ...input.joinRequest,
       status: "approved",
@@ -3323,6 +3329,7 @@ export function accessRoutes(
     async (req, res) => {
       const companyId = req.params.companyId as string;
       await assertCompanyPermission(req, companyId, "users:invite");
+      if(opts.saasInviteRecipient&&req.body.allowedJoinTypes!=="agent")throw conflict("Send a recipient-bound invitation from Members",{code:"SAAS_EMAIL_INVITE_REQUIRED"});
       const { token, created, normalizedAgentMessage } =
         await createCompanyInviteForCompany({
           req,
@@ -3664,6 +3671,7 @@ export function accessRoutes(
             .then((rows) => rows[0] ?? null)
         : null;
 
+      if(opts.saasInviteRecipient && invite.inviteType==="bootstrap_ceo")throw notFound("Invite not found");
       if (invite.inviteType === "bootstrap_ceo") {
         if (inviteAlreadyAccepted) throw notFound("Invite not found");
         if (req.body.requestType !== "human") {
@@ -3749,6 +3757,7 @@ export function accessRoutes(
         }
       }
 
+      if(requestType==="human"&&opts.saasInviteRecipient)await opts.saasInviteRecipient(invite,req.actor.userId!);
       const actorEmail =
         requestType === "human" ? await resolveActorEmail(db, req) : null;
       const actorRequestingUserId =

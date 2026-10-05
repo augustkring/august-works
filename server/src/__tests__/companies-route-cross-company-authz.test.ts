@@ -224,6 +224,21 @@ describe.sequential("company route cross-company authorization", () => {
     resetMockDefaults();
   });
 
+  it.each([false, true])("SaaS limits the product directory and stats to memberships (admin=%s)", async (isInstanceAdmin) => {
+    vi.stubEnv("AW_DEPLOYMENT_PROFILE", "saas");
+    vi.stubEnv("PAPERCLIP_CLOUD_TENANT_SERVER_TOKEN", undefined);
+    vi.stubEnv("PAPERCLIP_MANAGED_CONFIG", undefined);
+    try {
+      mockCompanyService.list.mockResolvedValue([createCompany(companyBId), createCompany(companyAId)]);
+      mockCompanyService.stats.mockResolvedValue({ [companyAId]: { agents: 1 }, [companyBId]: { agents: 99 } });
+      const app = await createApp(boardActor({ userId: "owner-a", isInstanceAdmin, companyIds: [companyAId] }));
+      const directory = await request(app).get("/api/companies").expect(200);
+      expect(directory.body.map((company: { id: string }) => company.id)).toEqual([companyAId]);
+      const stats = await request(app).get("/api/companies/stats").expect(200);
+      expect(stats.body).toEqual({ [companyAId]: { agents: 1 } });
+    } finally { vi.unstubAllEnvs(); }
+  });
+
   it.each(["session", "board_key", "cloud_tenant"])(
     "limits navigable companies to memberships for a %s instance admin",
     async (source) => {

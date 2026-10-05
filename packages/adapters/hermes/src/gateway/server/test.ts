@@ -1,3 +1,4 @@
+import { adapterNetworkFetch } from "@paperclipai/adapter-utils/network-policy";
 import type {
   AdapterEnvironmentCheck,
   AdapterEnvironmentTestContext,
@@ -132,7 +133,7 @@ export async function testEnvironment(
 
   try {
     const healthUrl = apiUrl(parsed, "/health");
-    const response = await fetch(healthUrl, {
+    const response = await adapterNetworkFetch(healthUrl, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${apiKey}`,

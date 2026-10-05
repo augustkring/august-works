@@ -114,6 +114,14 @@ import { AdapterManager } from "./pages/AdapterManager";
 import { PluginPage } from "./pages/PluginPage";
 import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
+import { SaasOperationsPage } from "./pages/SaasOperations";
+import { SaasWelcomePage } from "./pages/SaasWelcome";
+import { SaasRuntimesPage } from "./pages/SaasRuntimes";
+import { SaasSupportPage } from "./pages/SaasSupport";
+import { SaasDeletionPage } from "./pages/SaasDeletion";
+import { SaasBillingPage } from "./pages/SaasBilling";
+import { SaasAccountPage, SaasResetPasswordPage } from "./pages/SaasAccount";
+import { useSaasCapabilities } from "./hooks/useSaasCapabilities";
 import { BoardClaimPage } from "./pages/BoardClaim";
 import { CliAuthPage } from "./pages/CliAuth";
 import { InviteLandingPage } from "./pages/InviteLanding";
@@ -180,6 +188,11 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="onboarding" element={<OnboardingRoutePage />} />
       <Route path="companies" element={<Companies />} />
       <Route path="company/settings" element={<CompanySettings />} />
+      <Route path="company/settings/billing" element={<SaasBillingPage />} />
+      <Route path="company/settings/runtime" element={<SaasRuntimesPage />} />
+      <Route path="company/settings/support" element={<SaasSupportPage />} />
+      <Route path="company/settings/deletion" element={<SaasDeletionPage />} />
+      <Route path="company/settings/security" element={<SaasAccountPage />} />
       <Route path="company/settings/environments" element={<Navigate to="/company/settings/instance/environments" replace />} />
       <Route path="company/settings/cloud-upstream" element={<Navigate to="/company/export" replace />} />
       <Route element={<HiddenSettingsPageGate pageKey="company.members" />}>
@@ -613,6 +626,7 @@ function legacyToolsRedirectTarget(tab?: string) {
 }
 
 export function OnboardingRoutePage() {
+  const saas = useSaasCapabilities();
   const { companies } = useCompany();
   const { openOnboarding } = useDialogActions();
   const { t } = useTranslation();
@@ -623,6 +637,7 @@ export function OnboardingRoutePage() {
   const matchedCompany = companyPrefix
     ? companies.find((company) => company.issuePrefix.toUpperCase() === companyPrefix.toUpperCase()) ?? null
     : null;
+  if (saas.data?.onboarding) return <SaasWelcomePage />;
   // The OnboardingWizard auto-opens on this route (and can also be opened
   // explicitly). While it is showing it covers the whole screen, so the
   // launcher card below must not stay interactive behind it — otherwise users
@@ -814,6 +829,9 @@ export function App() {
       <Routes>
         <Route path="oauth-handoff" element={<PaperclipCloudOAuthHandoffPage />} />
         <Route path="auth" element={<AuthPage />} />
+        <Route path="saas/operations" element={<SaasOperationsPage />} />
+        <Route path="saas/welcome" element={<SaasWelcomePage />} />
+        <Route path="saas/reset-password" element={<SaasResetPasswordPage />} />
         <Route path="board-claim/:token" element={<BoardClaimPage />} />
         <Route path="cli-auth/:id" element={<CliAuthPage />} />
         <Route path="invite/:token" element={<InviteLandingPage />} />

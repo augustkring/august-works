@@ -9,10 +9,14 @@ import { AsciiArtAnimation } from "@/components/AsciiArtAnimation";
 import { PaperclipLoading } from "@/components/AnimatedPaperclipIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PaperclipLockup } from "../components/PaperclipLockup";
+import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
+import { Link } from "@/lib/router";
 
 type AuthMode = "sign_in" | "sign_up";
 
 export function AuthPage() {
+  const saas = useSaasCapabilities();
+  const [verificationSent, setVerificationSent] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -24,8 +28,11 @@ export function AuthPage() {
   const errorId = "auth-error";
 
   const nextPath = useMemo(
-    () => searchParams.get("next") || getRememberedInvitePath() || "/",
-    [searchParams],
+    () => {
+      const path = searchParams.get("next") || getRememberedInvitePath() || (saas.data ? "/saas/welcome" : "/");
+      return /^\/(?!\/)/.test(path) && !/[\\\r\n]/.test(path) ? path : "/";
+    },
+    [searchParams, saas.data],
   );
   const { data: session, isLoading: isSessionLoading } = useQuery({
     queryKey: queryKeys.auth.session,
@@ -53,6 +60,7 @@ export function AuthPage() {
     },
     onSuccess: async () => {
       setError(null);
+      if (mode === "sign_up" && saas.data?.emailVerification) { setVerificationSent(true); return; }
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
       await queryClient.invalidateQueries({ queryKey: queryKeys.health });
       // Reset rather than invalidate: the `["companies"]` entry is shared app-wide and
@@ -70,7 +78,7 @@ export function AuthPage() {
   const canSubmit =
     email.trim().length > 0 &&
     password.trim().length > 0 &&
-    (mode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
+    (mode === "sign_in" || (name.trim().length > 0 && password.trim().length >= (saas.data ? 12 : 8)));
 
   if (isSessionLoading) {
     return (
@@ -93,13 +101,15 @@ export function AuthPage() {
           </div>
 
           <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? "Sign in to Paperclip" : "Create your Paperclip account"}
+            {mode === "sign_in" ? (saas.data ? "Sign in to August Works" : "Sign in to Paperclip") : (saas.data ? "Create your August Works account" : "Create your Paperclip account")}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === "sign_in"
               ? "Use your email and password to access this instance."
-              : "Create an account for this instance. Email confirmation is not required in v1."}
+              : saas.data?.emailVerification ? "Verify your email to start setting up your organization." : "Create an account for this instance. Email confirmation is not required in v1."}
           </p>
+          {verificationSent && <p role="status" className="saas-muted">Check your email for a verification link, then sign in to continue.</p>}
+          {searchParams.get("accountDeletion") === "requested" && <p role="status" className="saas-muted">Your account deletion was requested and access has been revoked. Personal credential cleanup may still be in progress.</p>}
 
           <form
             className="mt-6 space-y-4"
@@ -185,7 +195,7 @@ export function AuthPage() {
             </Button>
           </form>
 
-          <div className="mt-5 text-sm text-muted-foreground">
+          {(!saas.data || saas.data.signup || mode === "sign_up") && <div className="mt-5 text-sm text-muted-foreground">
             {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
             <button
               type="button"
@@ -197,7 +207,8 @@ export function AuthPage() {
             >
               {mode === "sign_in" ? "Create one" : "Sign in"}
             </button>
-          </div>
+          </div>}
+          {saas.data && <p className="saas-muted"><Link className="saas-link" to="/saas/reset-password">Forgot password?</Link></p>}
         </div>
       </div>
 

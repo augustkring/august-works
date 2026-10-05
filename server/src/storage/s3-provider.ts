@@ -74,6 +74,8 @@ export function createS3StorageProvider(config: S3ProviderConfig): StorageProvid
     region,
     endpoint: config.endpoint,
     forcePathStyle: Boolean(config.forcePathStyle),
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
 
   return {
@@ -89,6 +91,7 @@ export function createS3StorageProvider(config: S3ProviderConfig): StorageProvid
           ContentType: input.contentType,
           ContentLength: input.contentLength,
         }),
+        { abortSignal: AbortSignal.timeout(30000) },
       );
     },
 
@@ -101,6 +104,7 @@ export function createS3StorageProvider(config: S3ProviderConfig): StorageProvid
             Key: key,
             Range: input.range ? `bytes=${input.range.start}-${input.range.end}` : undefined,
           }),
+          { abortSignal: AbortSignal.timeout(30000) },
         );
 
         return {
@@ -125,6 +129,7 @@ export function createS3StorageProvider(config: S3ProviderConfig): StorageProvid
             Bucket: bucket,
             Key: key,
           }),
+          { abortSignal: AbortSignal.timeout(30000) },
         );
 
         return {
@@ -148,6 +153,7 @@ export function createS3StorageProvider(config: S3ProviderConfig): StorageProvid
           Bucket: bucket,
           Key: key,
         }),
+        { abortSignal: AbortSignal.timeout(30000) },
       );
     },
   };

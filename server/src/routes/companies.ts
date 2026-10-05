@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { isSaasDeployment } from "../deployment-profile.js";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import { and, count as countFn, eq } from "drizzle-orm";
@@ -384,7 +385,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     // Navigation needs the same membership scope as company detail routes.
     // Instance admins can inspect the directory without membership, but that
     // visibility alone does not let them open a company's inbox or tasks.
-    if (scope === "accessible") {
+    if (scope === "accessible" || isSaasDeployment()) {
       res.json(result.filter((company) => hasCompanyAccess(req, company.id)));
       return;
     }
@@ -398,7 +399,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
 
   router.get("/stats", async (req, res) => {
     assertBoard(req);
-    const allowed = req.actor.source === "local_implicit" || req.actor.isInstanceAdmin
+    const allowed = !isSaasDeployment() && (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin)
       ? null
       : new Set(req.actor.companyIds ?? []);
     const stats = await svc.stats();

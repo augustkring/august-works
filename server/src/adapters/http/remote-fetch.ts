@@ -1,3 +1,4 @@
+import { isSaasDeployment } from "../../deployment-profile.js";
 import {
   guardedRemoteHttpFetch,
   type GuardedRemoteHttpFetchOptions,
@@ -68,7 +69,8 @@ export async function guardedHttpAdapterFetch(
   options: HttpAdapterFetchOptions = {},
 ): Promise<Response> {
   const endpoint = parseRemoteHttpEndpoint(url.toString(), endpointError);
-  const allowlist = options.privateEndpointAllowlist ?? httpAdapterPrivateEndpointAllowlist();
+  if(isSaasDeployment() && (endpoint.protocol!=="https:"||endpoint.username||endpoint.password||endpoint.hash))throw endpointError("SaaS HTTP adapters require public HTTPS without embedded credentials","saas_http_endpoint_denied");
+  const allowlist = isSaasDeployment()?new Set<string>():options.privateEndpointAllowlist ?? httpAdapterPrivateEndpointAllowlist();
   return guardedRemoteHttpFetch(endpoint, init, {
     ...options,
     allowPrivateNetwork: allowlist.has(endpoint.origin.toLowerCase()),

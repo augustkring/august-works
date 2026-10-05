@@ -3138,3 +3138,21 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
   display: grid;
   grid-template-columns: repeat(var(--v5-roadmap-columns), minmax(0, 1fr));
 }
+
+/* SaaS product surfaces share the existing spacing, type and semantic color tokens. */
+@layer components {
+  .saas-page { @apply flex flex-col gap-6 p-6 mx-auto w-full max-w-3xl; }
+  .saas-section { @apply flex flex-col gap-4; }
+  .saas-row { @apply flex items-center justify-between gap-4; }
+  .saas-footer { @apply flex items-center justify-between gap-4; }
+  .saas-title { @apply text-xl font-semibold; }
+  .saas-subtitle { @apply text-base font-semibold; }
+  .saas-muted { @apply text-sm text-muted-foreground; }
+  .saas-error { @apply text-sm text-destructive; }
+  .saas-link { @apply text-sm text-primary underline underline-offset-4; }
+  .saas-label { @apply flex flex-col gap-2 text-sm; }
+  .saas-input { @apply w-full rounded-md border border-border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring; }
+  .saas-machine { @apply font-mono text-sm; }
+  .saas-steps { @apply flex flex-wrap gap-3 text-sm text-muted-foreground; }
+  .saas-steps [aria-current="step"] { @apply font-semibold text-foreground; }
+}

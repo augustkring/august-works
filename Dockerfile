@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.20
-FROM node:24-trixie-slim AS base
+ARG AW_NODE_IMAGE=node:24-trixie-slim
+FROM ${AW_NODE_IMAGE} AS base
 ARG USER_UID=1000
 ARG USER_GID=1000
 RUN apt-get update \
@@ -300,3 +301,23 @@ COPY --chown=node:node --from=cloud-plugins /app/packages/plugins/sandbox-provid
 # both a CommonJS `require.resolve` and an ECMAScript `import` — an entry
 # on `NODE_PATH` would satisfy only the first and silently fail the second.
 COPY --chown=node:node --from=cloud-server-deps /app/.cloud-server-deps/node_modules /app/server/node_modules
+
+# V6 control plane: remote providers only, no globally installed local model CLIs.
+# CI/deployment must supply a digest-pinned base and deploy the resulting image by digest.
+FROM ${AW_NODE_IMAGE} AS saas
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tini && rm -rf /var/lib/apt/lists/*
+COPY --chown=node:node --from=build /app /app
+ENV NODE_ENV=production HOME=/tmp/aw-home HOST=127.0.0.1 PORT=3100 SERVE_UI=true \
+    PAPERCLIP_HOME=/tmp/aw-home PAPERCLIP_INSTANCE_ID=default \
+    AW_DEPLOYMENT_PROFILE=saas PAPERCLIP_DEPLOYMENT_MODE=authenticated PAPERCLIP_DEPLOYMENT_EXPOSURE=public
+USER node
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "--import", "./server/node_modules/tsx/dist/loader.mjs", "server/dist/index.js"]
+
+# Separate operator image. PostgreSQL 17 is the managed database major version.
+FROM saas AS saas-backup
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client-17 && rm -rf /var/lib/apt/lists/*
+USER node
+CMD ["node", "--import", "./server/node_modules/tsx/dist/loader.mjs", "server/scripts/v6-database-backup.mjs", "backup"]
