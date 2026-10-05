@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { agents, completionContracts, documents, heartbeatRuns, issueDocuments, issueThreadInteractions, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSessions, supervisionSignals, supervisionInterventions, toolInvocations, type Db } from "@paperclipai/db";
+import { agentExecutionManifests, contextManifestMemoryRoots, memoryRecords, issuePlanDecompositions, agents, completionContracts, documents, heartbeatRuns, issueDocuments, issueThreadInteractions, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSessions, supervisionSignals, supervisionInterventions, toolInvocations, type Db } from "@paperclipai/db";
 import { supervisionInterventionSchema, v7FeatureEnabled, type SupervisionInterventionInput, type SupervisionSignalType, type ReadinessAction } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
-import { assertV7Authorization, v7HumanActorId } from "../v7-authorization.js";
+import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { assertDerivedManager } from "../memory/derived-memory.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
@@ -16,6 +16,7 @@ import { orchestrationRuntimeControl } from "../orchestration/orchestration-runt
 import { reconcileOrchestrationAttempts } from "../orchestration/orchestration-admission.js";
 import { issueService, executeIssuePostCommitActions, type IssuePostCommitAction } from "../issues.js";
 import { retainedOrchestrationContract } from "../orchestration/orchestration-contracts.js";
+import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { logger } from "../../middleware/logger.js";
 import { conflict, notFound } from "../../errors.js";
 import { arbitrateSupervision, type SupervisionSnapshot } from "./supervision-policy.js";
@@ -42,7 +43,7 @@ export function supervisionService(db: Db) {
       if (!human && enabled && !plan.erasedAt && plan.status === "running" && session.lastObservedAt && now.getTime() - session.lastObservedAt.getTime() < plan.supervisionPolicy.minCheckIntervalSeconds * 1000) return null;
       await reconcileOrchestrationAttempts(tx, plan);
       const workers = await tx.select().from(orchestrationWorkers).where(and(eq(orchestrationWorkers.companyId, companyId), eq(orchestrationWorkers.planId, id)));
-      const attempts = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, id))).orderBy(desc(orchestrationWorkerAttempts.createdAt));
+      const attempts = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, id))).orderBy(desc(orchestrationWorkerAttempts.createdAt),orchestrationWorkerAttempts.id);
       const tasks = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, [...new Set([plan.issueId, ...workers.map(w => w.issueId)])]))).for("share");
       const contracts = await tx.select().from(completionContracts).where(and(eq(completionContracts.companyId, companyId), inArray(completionContracts.id, [plan.completionContractId, ...workers.map(w => w.completionContractId)])));
       const sourceCurrent = !plan.erasedAt && contracts.length === new Set([plan.completionContractId, ...workers.map(w => w.completionContractId)]).size && contracts.every(c => c.contractJson.payloadDeleted !== true);
@@ -50,6 +51,12 @@ export function supervisionService(db: Db) {
       const actor: AuthorizationActor | null = principal?.type === "user" ? { type: "board", source: "session", userId: principal.userId } : principal?.type === "system" && principal.service === "local-board" ? { type: "board", source: "local_implicit" } : null;
       let authorityCurrent = Boolean(actor), readinessAllows = true;
       const live = attempts.filter(a => a.status === "running");
+      if (plan.mode === "planned_parallel") {
+        const [accepted] = await tx.select().from(issuePlanDecompositions).where(and(eq(issuePlanDecompositions.companyId,companyId),eq(issuePlanDecompositions.sourceIssueId,plan.issueId),eq(issuePlanDecompositions.acceptedPlanRevisionId,plan.acceptedPlanRevisionId!)));
+        const [currentPlan] = await tx.select({ revision: documents.latestRevisionId }).from(issueDocuments).innerJoin(documents,and(eq(documents.companyId,issueDocuments.companyId),eq(documents.id,issueDocuments.documentId))).where(and(eq(issueDocuments.companyId,companyId),eq(issueDocuments.issueId,plan.issueId),eq(issueDocuments.key,"plan")));
+        const [confirmation] = accepted?.acceptedInteractionId ? await tx.select({ status: issueThreadInteractions.status }).from(issueThreadInteractions).where(and(eq(issueThreadInteractions.companyId,companyId),eq(issueThreadInteractions.id,accepted.acceptedInteractionId))) : [];
+        if (currentPlan?.revision !== plan.acceptedPlanRevisionId || accepted?.status !== "completed" || confirmation?.status !== "accepted") authorityCurrent = false;
+      }
       const authorizationFailure = (error: unknown) => error && typeof error === "object" && "status" in error && [403,404,409].includes(Number(error.status));
       for (const worker of workers) {
         const task = tasks.find(t => t.id === worker.issueId), root = tasks.find(t => t.id === plan.issueId);
@@ -62,7 +69,23 @@ export function supervisionService(db: Db) {
           for (const attempt of live.filter(a => a.workerId === worker.id && a.runId)) {
             const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, attempt.runId!)));
             if (!run) { authorityCurrent = false; continue; }
-            await assertV7Authorization(tx, { type: "agent", source: "agent_jwt", companyId, agentId: worker.agentId!, runId: run.id, onBehalfOfUserId: run.responsibleUserId }, companyId, "issue:mutate", resource);
+            const workerActor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId, agentId: worker.agentId!, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
+            await assertV7Authorization(tx,workerActor,companyId,"issue:mutate",resource);
+            if (attempt.executionManifestId) {
+              const [manifest] = await tx.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId,companyId),eq(agentExecutionManifests.id,attempt.executionManifestId),eq(agentExecutionManifests.runId,run.id)));
+              if (!manifest) { authorityCurrent = false; continue; }
+              const roots = await tx.select({ pin: contextManifestMemoryRoots,root: memoryRecords }).from(contextManifestMemoryRoots).innerJoin(memoryRecords,and(eq(memoryRecords.companyId,contextManifestMemoryRoots.companyId),eq(memoryRecords.id,contextManifestMemoryRoots.memoryRecordId))).where(and(eq(contextManifestMemoryRoots.companyId,companyId),eq(contextManifestMemoryRoots.manifestId,manifest.contextManifestId))).limit(129);
+              if (roots.length>128) authorityCurrent = false;
+              for (const { pin,root } of roots) {
+                if (root.deletedAt || root.revokedAt || root.retentionState !== "active" || root.updatedAt.toISOString() !== pin.sourceVersion || (root.expiresAt && root.expiresAt.getTime()<=Date.now()) || (root.scopeType === "agent" && root.ownerAgentId !== worker.agentId)) authorityCurrent = false;
+                if (root.scopeType === "project") await assertV7Authorization(tx,workerActor,companyId,"project:read",{ type: "project",companyId,projectId: root.scopeId });
+              }
+              if (enabled && sourceCurrent) {
+                const currentProvider = await agentProviderBindingService(tx).assertRuntime(companyId,worker.agentId!);
+                const pinned = manifest.manifest.providers.find(p => p.companyId === companyId && p.agentId === worker.agentId);
+                if (!pinned || pinned.providerBindingId !== currentProvider.provider.id || pinned.profileRef !== currentProvider.runtime.providerProfileRef || pinned.snapshotHash !== currentProvider.provider.capabilitySnapshot?.hash) authorityCurrent = false;
+              }
+            }
           }
         } catch (error) { if (!authorizationFailure(error)) throw error; authorityCurrent = false; }
         if (enabled && sourceCurrent && authorityCurrent && actor && worker.agentId && plan.status === "running") {
@@ -139,7 +162,7 @@ export function supervisionService(db: Db) {
         // Execution/reassignment/verification require their qualified consumers; no status-only success.
         const [record] = await tx.insert(supervisionInterventions).values({ companyId, planId: id, sessionId: session.id, signalIds, recommendation: input?.action ?? decision.action, decisionAction: decision.action, reasonCode: decision.reasonCode, policySnapshotHash: nativeSha256(plan.supervisionPolicy), expectedPlanVersion: plan.version,
           requestedByType: human ? "user" : "system", requestedById: human ? v7HumanActorId(human.actor) : "supervision", rationale: input?.rationale ?? null, targetWorkerId: input?.workerId ?? null, targetAgentId: input?.reassignToAgentId ?? null,
-          idempotencyKey: nativeSha256({ plan: id, version: plan.version, snapshotHash, action: decision.action, requester: human ? v7HumanActorId(human.actor) : "supervision" }), status: decision.effect === "dispatch" && decision.allowed ? "pending" : ["none","reassign"].includes(decision.effect) && decision.allowed ? "applied" : "blocked", completedAt: now }).onConflictDoNothing().returning();
+          idempotencyKey: nativeSha256({ plan: id, version: plan.version, snapshotHash, action: decision.action, requester: human ? v7HumanActorId(human.actor) : "supervision" }), status: (decision.effect === "dispatch" || (decision.effect === "verify" && v7FeatureEnabled(experimental,"verifier_v7"))) && decision.allowed ? "pending" : ["none","reassign"].includes(decision.effect) && decision.allowed ? "applied" : "blocked", completedAt: now }).onConflictDoNothing().returning();
         intervention = record ?? null;
       }
       if (intervention) await logActivity(tx, { companyId, actorType: human ? "user" : "system", actorId: human ? v7HumanActorId(human.actor) : "supervision", action: "supervision.intervention", entityType: "orchestration_plan", entityId: id, details: { interventionId: intervention.id, recommendation: intervention.recommendation, decisionAction: decision.action, reasonCode: decision.reasonCode, signalIds } }, publications);
@@ -154,7 +177,7 @@ export function supervisionService(db: Db) {
     for (let n = 0; n < limit; n++) {
       const owner = randomUUID();
       const job = await db.transaction(async tx => {
-        const [row] = await tx.select().from(supervisionInterventions).where(and(companyId ? eq(supervisionInterventions.companyId,companyId) : undefined, sql`(${supervisionInterventions.status}='pending' or (${supervisionInterventions.status}='running' and ${supervisionInterventions.leaseExpiresAt}<now())) and ${supervisionInterventions.decisionAction} in ('STOP','PAUSE','ESCALATE_HUMAN','RETRY') and ${supervisionInterventions.attempts}<3 and not (${supervisionInterventions.id}::text = any(select jsonb_array_elements_text(${JSON.stringify(seen)}::jsonb)))`)).orderBy(supervisionInterventions.createdAt).limit(1).for("update", { skipLocked: true });
+        const [row] = await tx.select().from(supervisionInterventions).where(and(companyId ? eq(supervisionInterventions.companyId,companyId) : undefined, sql`(${supervisionInterventions.status}='pending' or (${supervisionInterventions.status}='running' and ${supervisionInterventions.leaseExpiresAt}<now())) and ${supervisionInterventions.decisionAction} in ('STOP','PAUSE','ESCALATE_HUMAN','RETRY','START_VERIFIER') and ${supervisionInterventions.attempts}<3 and not (${supervisionInterventions.id}::text = any(select jsonb_array_elements_text(${JSON.stringify(seen)}::jsonb)))`)).orderBy(supervisionInterventions.createdAt).limit(1).for("update", { skipLocked: true });
         if (!row) return null;
         const [claimed] = await tx.update(supervisionInterventions).set({ status: "running", leaseOwner: owner, leaseExpiresAt: new Date(Date.now()+300000), attempts: row.attempts+1 }).where(eq(supervisionInterventions.id,row.id)).returning();
         return claimed!;
@@ -162,7 +185,19 @@ export function supervisionService(db: Db) {
       if (!job) break;
       seen.push(job.id);
       try {
-        if (job.decisionAction === "RETRY") {
+        let verificationInteractionId: string | null = null;
+        if (job.decisionAction === "START_VERIFIER") {
+          const [plan] = await db.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId)));
+          const principal = plan?.executionPrincipal;
+          const actor: AuthorizationActor | null = principal?.type === "user" ? { type: "board", source: "session", userId: principal.userId } : principal?.type === "system" && principal.service === "local-board" ? { type: "board", source: "local_implicit" } : null;
+          if (!actor || !plan || !["running","paused","verifying"].includes(plan.status)) throw conflict("Independent review is no longer admissible");
+          await assertDerivedManager(db,actor,job.companyId);
+          await assertV7Enabled(db,"verifier_v7");
+          const { verificationService } = await import("./verification-service.js");
+          const packet = await verificationService(db).packet(actor,job.companyId,job.planId,job.targetWorkerId);
+          const interaction = await issueThreadInteractionService(db).create({ id: packet.issueId,companyId: job.companyId },{ kind: "request_confirmation",resolverPolicy: "human_only",continuationPolicy: "none",addresseeUserId: principal?.type === "user" ? principal.userId : undefined,idempotencyKey: `v7-verification:${job.planId}:${packet.resultHash}`,title: "Independent result review required",summary: "Review the saved outputs, original evidence and contract in Orchestration. Acknowledging this request does not certify completion.",payload: { version: 1,allowDeclineReason: true,prompt: "Review this result in Orchestration before marking it complete?" } },{ userId: v7HumanActorId(actor) });
+          verificationInteractionId = interaction.id;
+        } else if (job.decisionAction === "RETRY") {
           const [plan] = await db.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId)));
           const principal = plan?.executionPrincipal;
           const actor: AuthorizationActor | null = principal?.type === "user" ? { type: "board", source: "session", userId: principal.userId } : principal?.type === "system" && principal.service === "local-board" ? { type: "board", source: "local_implicit" } : null;
@@ -175,10 +210,10 @@ export function supervisionService(db: Db) {
           const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId))).for("update");
           await reconcileOrchestrationAttempts(tx, plan!);
           const [updated] = await tx.update(supervisionInterventions).set({ status: "applied", leaseOwner: null, leaseExpiresAt: null, completedAt: new Date(), lastErrorCode: null }).where(and(eq(supervisionInterventions.id,job.id),eq(supervisionInterventions.leaseOwner,owner))).returning();
-          if (updated) await logActivity(tx, { companyId: job.companyId, actorType: "system", actorId: "supervision", action: "supervision.intervention_applied", entityType: "orchestration_plan", entityId: job.planId, details: { interventionId: job.id } }, publications);
+          if (updated) await logActivity(tx, { companyId: job.companyId, actorType: "system", actorId: "supervision", action: "supervision.intervention_applied", entityType: "orchestration_plan", entityId: job.planId, details: { interventionId: job.id, verificationInteractionId } }, publications);
         }); applied++;
       } catch {
-        await db.update(supervisionInterventions).set({ status: job.attempts >= 3 ? "failed" : "pending", leaseOwner: null, leaseExpiresAt: null, lastErrorCode: "qualified_stop_unconfirmed" }).where(and(eq(supervisionInterventions.id,job.id),eq(supervisionInterventions.leaseOwner,owner))); failed++;
+        await db.update(supervisionInterventions).set({ status: job.attempts >= 3 ? "failed" : "pending", leaseOwner: null, leaseExpiresAt: null, lastErrorCode: job.decisionAction === "START_VERIFIER" ? "human_verification_request_unconfirmed" : job.decisionAction === "RETRY" ? "canonical_retry_unconfirmed" : "qualified_stop_unconfirmed" }).where(and(eq(supervisionInterventions.id,job.id),eq(supervisionInterventions.leaseOwner,owner))); failed++;
       }
     }
     return { applied, failed };

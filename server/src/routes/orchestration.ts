@@ -1,9 +1,10 @@
 import { Router } from "express";
 import type { Db } from "@paperclipai/db";
-import { createOrchestrationPlanSchema, orchestrationDecisionSchema, supervisionInterventionSchema } from "@paperclipai/shared";
+import { createOrchestrationPlanSchema, orchestrationDecisionSchema, supervisionInterventionSchema, verificationReviewSchema, trajectoryReviewSchema } from "@paperclipai/shared";
 import { assertCompanyAccess } from "./authz.js";
 import { validate } from "../middleware/validate.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import { verificationService } from "../services/supervision/verification-service.js";
 import { supervisionService } from "../services/supervision/supervision-service.js";
 import { orchestrationRuntimeControl } from "../services/orchestration/orchestration-runtime-control.js";
 export function orchestrationRoutes(db: Db) {
@@ -20,5 +21,9 @@ export function orchestrationRoutes(db: Db) {
   router.get("/companies/:companyId/orchestration/plans/:id/supervision", async (req,res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req,companyId); res.json(await supervisionService(db).get(req.actor,companyId,req.params.id as string)); });
   router.get("/companies/:companyId/orchestration/plans/:id/signals", async (req,res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req,companyId); res.json((await supervisionService(db).get(req.actor,companyId,req.params.id as string)).signals); });
   router.post("/companies/:companyId/orchestration/plans/:id/intervene", validate(supervisionInterventionSchema), async (req,res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req,companyId); const supervisor = supervisionService(db); const result = await supervisor.intervene(req.actor,companyId,req.params.id as string,req.body); res.json({ ...result, delivery: await supervisor.deliverStops(20,companyId) }); });
+  router.get("/companies/:companyId/orchestration/plans/:id/verification-packet", async (req,res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req,companyId); const workerId = typeof req.query.workerId === "string" ? req.query.workerId : null; res.json(await verificationService(db).packet(req.actor,companyId,req.params.id as string,workerId)); });
+  router.get("/companies/:companyId/orchestration/plans/:id/verifications", async (req,res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req,companyId); res.json(await verificationService(db).list(req.actor,companyId,req.params.id as string)); });
+  router.post("/companies/:companyId/orchestration/plans/:id/verify",validate(verificationReviewSchema),async (req,res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req,companyId); res.json(await verificationService(db).review(req.actor,companyId,req.params.id as string,req.body)); });
+  router.post("/companies/:companyId/orchestration/plans/:id/trajectory-reviews",validate(trajectoryReviewSchema),async (req,res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req,companyId); res.json(await verificationService(db).trajectory(req.actor,companyId,req.params.id as string,req.body)); });
   return router;
 }

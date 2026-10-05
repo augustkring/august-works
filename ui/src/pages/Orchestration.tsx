@@ -1,3 +1,4 @@
+import { OrchestrationVerification } from "@/components/OrchestrationVerification";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { orchestrationApi } from "@/api/orchestration";
@@ -90,6 +91,7 @@ export function Orchestration() {
       <label className="block text-sm">Decision rationale<Input value={rationale} onChange={event => setRationale(event.target.value)} /></label>
       <div className="flex items-center justify-between"><div className="flex gap-2"><Button variant="outline" disabled={decision.isPending || rationale.trim().length < 20} onClick={() => decision.mutate("cancel")}>Cancel plan</Button><Button variant="outline" disabled={decision.isPending || rationale.trim().length < 20} onClick={() => decision.mutate("pause")}>Pause</Button></div><Button disabled={decision.isPending || rationale.trim().length < 20 || !["draft", "ready", "paused"].includes(detail.data.status)} onClick={() => decision.mutate("start")}>Start / resume</Button></div>
       <div className="flex flex-wrap gap-2">{(["STOP","RETRY","START_VERIFIER","STEER"] as const).map(action => <Button key={action} variant="outline" disabled={intervention.isPending || rationale.trim().length < 20} onClick={() => intervention.mutate(action)}>{action === "STEER" ? "Pause for guidance" : action === "START_VERIFIER" ? "Request verification" : action === "RETRY" ? "Retry within limits" : "Stop workers"}</Button>)}</div>
+      <OrchestrationVerification key={`${companyId}:${selected}:${detail.data.version}`} companyId={companyId} plan={detail.data} onReviewed={refresh} />
       {runtimeOutcome && <div role="status"><p className="text-sm">Runtime dispatch / Stop result</p><pre className="overflow-auto rounded-md bg-muted p-3 text-xs">{runtimeOutcome}</pre></div>}
     </section>}
   </div>;

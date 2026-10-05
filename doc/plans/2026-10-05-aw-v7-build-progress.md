@@ -13,9 +13,9 @@ The user has requested implementation of the whole brief. Work continues through
 | 4 | Hindsight spike and adoption decision | DEFER decision recorded against pinned v0.10.2 source; no production provider admitted |
 | 5 | Observations and Mental Models | Implemented with reviewed root lineage, leased rebuilds, Context/UI and erasure guards; local verification passing |
 | 6 | Organizational Learning | Core and eight native target adapters verified, including evaluated Optimizer candidates; Agent Package adapter belongs to Wave 15; broader evaluation and integrated acceptance remain open |
-| 7 | Bounded orchestration | Core admission and control implemented; verified terminal acceptance and join release continue in Waves 8–9 |
+| 7 | Bounded orchestration | Canonical admission/control and reviewed terminal acceptance/joins verified locally; broader compound-budget and automated-provider qualification remains scoped |
 | 8 | Deterministic supervision | Canonical observer, deterministic arbiter, durable Stop/retry queue and stopped-worker reassignment implemented; local verification passing |
-| 9 | Semantic supervision and verification | Pending implementation |
+| 9 | Semantic supervision and verification | Evidence-bound human trajectory review and independent completion consumer verified; automated read-only semantic provider remains a qualification dependency of Waves 11–15 |
 | 10 | Work Signals and follow-up | Pending implementation |
 | 11 | Sandbox abstraction | Pending implementation |
 | 12 | OpenShell backend and qualification | Pending implementation |
@@ -126,3 +126,16 @@ Pause/Stop fence the plan before a durable, leased intervention runs the existin
 Signals and interventions are company/plan scoped, attributed, hash-bound and visible through the plan API/UI. Referenced signals must match the current observed snapshot. Checks cannot reset across resume/session replacement. Database guards enforce policy/principal pins, monotonic counters, approved material-tool dispatch, unchanged live Task topology, session/decision pins and flag-independent erasure of intervention prose. Unconfirmed Stop blocks resume.
 
 Verification: 21 migrated-PostgreSQL orchestration/supervision cases, seven pure arbiter cases and two UI cases pass (30 total). These include authority-revocation Stop, repeated real receipt failures, human-wait precedence, cumulative checks, crash/expired-lease recovery, concurrent controller claims, canonical reassignment, approval enforcement and self-certification denial. Server/UI types, migration safety, module boundaries and token gates pass. Semantic evaluator/verifier consumers and final repository-wide/live acceptance continue in the remaining waves.
+
+
+## Wave 9 accountable semantic review and verified joins
+
+Verification packets bind the current completion contract, saved output bodies and canonical revisions, declared output schemas, successful exact-arguments/approval receipts, surviving qualified Memory versions and actual worker/Workflow attempts. Stale hashes, incomplete joins, live/unsuccessful attempts, invalid schemas, missing business/evidence/prohibited-outcome judgments and material uncertainty cannot pass. An actual company administrator signs independent semantic judgments; agents cannot use the endpoint to grade their own output. High-impact completion requires explicit approval, and C4 stays closed pending a domain overlay. Human review is not counted or reported as an automated model invocation.
+
+Passing receipts atomically update the existing canonical worker/Task lifecycle, release explicit joins and eventually complete the coordinator Task. Database guards require current independent receipts before worker/plan completion, preserve immutable decision history and prevent changing/removing verified output/revision/receipt inputs while a dependent plan remains live. Erasure clears review prose and uncertainties with flags disabled, and restored payloads remain scrubbed. History listings return content-free receipt metadata; no provider reasoning is retained.
+
+A human trajectory reviewer can assess observed artifacts, flag off-track work and propose possible completion. Off-track evidence resolves to an attributed pause for guidance, followed by durable qualified Stop; possible completion cannot certify work. Recommendation and actual decision remain distinct. Requesting verification creates a real native human-only Task interaction with a current result hash and no automatic continuation; acknowledging it does not approve the contract. The UI presents output/source links and separate unchecked judgments, evidence choices, uncertainty, verdict and high-impact acknowledgement.
+
+The automatic read-only semantic evaluator/verifier adapter is not represented as qualified or active. Its provider, capability isolation, depth and pre-spend budget must be wired/qualified alongside the sandbox and Agent Package work in Waves 11–15. The implemented human consumer keeps material semantic completion governed in the meantime; this is not a claim of live LLM evaluation quality.
+
+Verification: 29 migrated-PostgreSQL orchestration/supervision/verification cases, seven deterministic policy cases and three UI cases pass (39 total). Nine existing Context/Runtime Fabric regressions also pass. Golden outcomes include schema failure, failed invariants, changed outputs, incomplete joins, exact side-effect evidence, high-impact approval, worker self-certification denial, off-track intervention, canonical human review requests and flag-independent erasure/restore. Migration/module/token gates and server/UI types are checked on this slice. Final repository-wide and real provider/customer qualification remain separate.

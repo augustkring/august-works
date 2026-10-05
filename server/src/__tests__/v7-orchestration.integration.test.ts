@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { agentExecutionManifests, agents, companyMemberships, completionContracts, documentRevisions, documents, heartbeatRuns, issueDocuments, issueThreadInteractions, memoryBindings, memoryRecords, contextManifestMemoryRoots, issues, orchestrationPlans, orchestrationWorkerAttempts, supervisionInterventions, supervisionSessions, toolInvocations, createDb } from "@paperclipai/db";
+import { agentExecutionManifests, agents, companyMemberships, completionContracts, documentRevisions, documents, heartbeatRuns, issueDocuments, issueThreadInteractions, memoryBindings, memoryRecords, contextManifestMemoryRoots, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, verificationRuns, supervisionInterventions, supervisionSessions, toolInvocations, createDb } from "@paperclipai/db";
 import { PROVIDER_CAPABILITY_FEATURES, createOrchestrationPlanSchema, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { verificationService } from "../services/supervision/verification-service.js";
 import { supervisionService } from "../services/supervision/supervision-service.js";
 import { agentIdentityService } from "../services/agent-identities.js";
 import { orchestrationRuntimeControl } from "../services/orchestration/orchestration-runtime-control.js";
@@ -252,6 +253,119 @@ const support = await getEmbeddedPostgresTestSupport();
     const results = await Promise.all([supervisionService(db).deliverStops(1,f.home),supervisionService(db).deliverStops(1,f.home)]);
     expect(results.reduce((sum,result) => sum+result.applied,0)).toBe(1);
     expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,execution.row.id)))[0]!.status).toBe("cancelled");
+  });
+
+  async function saveOutput(issueId=task.id,body="An independent reviewer must check the retained result") {
+    const [doc] = await db.insert(documents).values({ companyId: f.home,title: "Result",latestBody: body,createdByAgentId: f.presence.id }).returning();
+    const [revision] = await db.insert(documentRevisions).values({ companyId: f.home,documentId: doc!.id,revisionNumber: 1,body }).returning();
+    await db.update(documents).set({ latestRevisionId: revision!.id }).where(eq(documents.id,doc!.id));
+    await db.insert(issueDocuments).values({ companyId: f.home,issueId,documentId: doc!.id,key: "result" });
+    return doc!;
+  }
+  async function successful(execution: Awaited<ReturnType<typeof run>>) {
+    await db.update(heartbeatRuns).set({ status: "succeeded",finishedAt: new Date() }).where(eq(heartbeatRuns.id,execution.row.id));
+  }
+  function passing(packet: Awaited<ReturnType<ReturnType<typeof verificationService>["packet"]>>) {
+    return { expectedPlanVersion: packet.planVersion,workerId: packet.workerId,expectedResultHash: packet.resultHash,result: "pass" as const,rationale: "Independently checked the saved output against each declared requirement",objectiveSatisfied: true,businessInvariants: packet.contract.businessInvariants.map((_,index) => ({ index,satisfied: true,evidenceRefs: [packet.evidence[0]!.ref] })),evidenceRequirements: packet.contract.evidenceRequirements.map((_,index) => ({ index,satisfied: true,evidenceRefs: [packet.evidence[0]!.ref] })),prohibitedOutcomes: packet.contract.prohibitedOutcomes.map((_,index) => ({ index,satisfied: true,evidenceRefs: [packet.evidence[0]!.ref] })) };
+  }
+  it("completes the canonical Task only after current hash-bound independent semantic review", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true,verifier_v7: true });
+    const plan = await started(), execution = await run(); await execution.prepare(); await saveOutput(); await successful(execution);
+    await expect(db.update(orchestrationPlans).set({ status: "completed" }).where(eq(orchestrationPlans.id,plan.id))).rejects.toThrow();
+    await expect(db.update(orchestrationWorkers).set({ status: "completed" }).where(eq(orchestrationWorkers.planId,plan.id))).rejects.toThrow();
+    const verifier = verificationService(db), packet = await verifier.packet(f.actor,f.home,plan.id);
+    expect(packet.deterministicFailures).toEqual([]); expect(packet.policy.workerSelfCertification).toBe(false);
+    await expect(verifier.review({ type: "agent",source: "agent_jwt",companyId: f.home,agentId: f.presence.id,runId: execution.row.id },f.home,plan.id,passing(packet))).rejects.toMatchObject({ status: 403 });
+    const reviewed = await verifier.review(f.actor,f.home,plan.id,passing(packet)); expect(reviewed.result).toBe("pass"); expect(reviewed.workerAttemptId).not.toBeNull();
+    expect((await db.select().from(issues).where(eq(issues.id,task.id)))[0]!.status).toBe("done");
+    expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id,plan.id)))[0]!.status).toBe("completed");
+    await expect(db.update(verificationRuns).set({ result: "fail" }).where(eq(verificationRuns.id,reviewed.id))).rejects.toThrow();
+  });
+  it("rejects stale artifact approval and pauses on a failed business invariant", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true,verifier_v7: true });
+    const plan = await started(), execution = await run(); await execution.prepare(); const doc = await saveOutput(); await successful(execution);
+    const verifier = verificationService(db), old = await verifier.packet(f.actor,f.home,plan.id);
+    await db.update(documents).set({ latestBody: "A changed result needs independent review again" }).where(eq(documents.id,doc.id));
+    await expect(verifier.review(f.actor,f.home,plan.id,passing(old))).rejects.toMatchObject({ status: 409 });
+    const current = await verifier.packet(f.actor,f.home,plan.id), reviewed = await verifier.review(f.actor,f.home,plan.id,{ ...passing(current),businessInvariants: [{ index: 0,satisfied: false,evidenceRefs: [current.evidence[0]!.ref] }] });
+    expect(reviewed.result).toBe("fail"); expect(reviewed.failedInvariants).toContain("business_invariant:0");
+    expect((await db.select().from(issues).where(eq(issues.id,task.id)))[0]!.status).not.toBe("done");
+    expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id,plan.id)))[0]!.status).toBe("paused");
+  });
+  it("releases explicit joins after leaf verification and protects their pinned outputs until root review", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true,verifier_v7: true });
+    const { raw } = await parallel(), plan = await started(raw), verifier = verificationService(db);
+    const workers = (await orchestrationService(db).get(f.actor,f.home,plan.id)).workers;
+    const first = await run(raw.workers[0]!.issueId); await first.prepare(); const firstDoc = await saveOutput(raw.workers[0]!.issueId); await successful(first);
+    const packet = await verifier.packet(f.actor,f.home,plan.id,workers.find(w => w.issueId === raw.workers[0]!.issueId)!.id);
+    expect((await verifier.review(f.actor,f.home,plan.id,passing(packet))).result).toBe("pass");
+    await expect(db.update(documents).set({ latestBody: "Changed after releasing an explicit join" }).where(eq(documents.id,firstDoc.id))).rejects.toThrow();
+    await expect(db.delete(issueDocuments).where(eq(issueDocuments.documentId,firstDoc.id))).rejects.toThrow();
+    const second = await run(raw.workers[1]!.issueId); await second.prepare(); await saveOutput(raw.workers[1]!.issueId); await successful(second);
+    const packet2 = await verifier.packet(f.actor,f.home,plan.id,workers.find(w => w.issueId === raw.workers[1]!.issueId)!.id);
+    expect((await verifier.review(f.actor,f.home,plan.id,passing(packet2))).result).toBe("pass");
+    await saveOutput(); const finalPacket = await verifier.packet(f.actor,f.home,plan.id);
+    expect(finalPacket.deterministicFailures).toEqual([]); expect((await verifier.review(f.actor,f.home,plan.id,passing(finalPacket))).result).toBe("pass");
+    expect((await db.select().from(issues).where(eq(issues.id,task.id)))[0]!.status).toBe("done");
+  });
+  it("validates declared output schemas instead of accepting output existence", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true,verifier_v7: true });
+    const plan = await started({ ...input(),completionContract: { ...contract(),requiredOutputs: [{ key: "result",jsonSchema: { type: "object",required: ["approved"],properties: { approved: { const: true } },additionalProperties: false } }] } }), execution = await run();
+    await execution.prepare(); await saveOutput(task.id,'{"approved":false}'); await successful(execution);
+    const verifier = verificationService(db), packet = await verifier.packet(f.actor,f.home,plan.id);
+    expect(packet.deterministicFailures).toContain("output_schema_mismatch:result");
+    expect((await verifier.review(f.actor,f.home,plan.id,passing(packet))).result).toBe("fail");
+  });
+  it("requires actual side-effect receipts and explicit high-impact approval", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true,verifier_v7: true });
+    const plan = await started({ ...input(),riskClass: "C3",completionContract: { ...contract(),requiredPostconditions: [{ kind: "tool_receipt",toolName: "fixture_write",argumentsHash: "b".repeat(64),requireApproval: true }] } }), execution = await run(); await execution.prepare(); await saveOutput();
+    const [receipt] = await db.insert(toolInvocations).values({ companyId: f.home,issueId: task.id,runId: execution.row.id,agentId: f.presence.id,toolName: "fixture_write",argumentsHash: "b".repeat(64),riskLevel: "write",approvalState: "approved",status: "executing" }).returning();
+    await db.update(toolInvocations).set({ status: "succeeded",resultHash: "c".repeat(64) }).where(eq(toolInvocations.id,receipt!.id)); await successful(execution);
+    const verifier = verificationService(db), packet = await verifier.packet(f.actor,f.home,plan.id);
+    expect(packet.evidence.some(e => e.type === "tool_receipt")).toBe(true);
+    const missing = await verifier.review(f.actor,f.home,plan.id,passing(packet)); expect(missing.result).toBe("fail"); expect(missing.failedInvariants).toContain("explicit_high_impact_approval_missing");
+    const current = await verifier.packet(f.actor,f.home,plan.id); expect((await verifier.review(f.actor,f.home,plan.id,{ ...passing(current),explicitHighImpactApproval: true })).result).toBe("pass");
+  });
+  it("ties off-track semantic intervention to observable output while possible completion cannot certify it", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true,verifier_v7: true });
+    const plan = await started(), execution = await run(); await execution.prepare(); await saveOutput();
+    const verifier = verificationService(db), packet = await verifier.packet(f.actor,f.home,plan.id), base = { expectedPlanVersion: packet.planVersion,expectedResultHash: packet.resultHash,evidenceRefs: [packet.evidence[0]!.ref],rationale: "The saved output follows the wrong business objective" };
+    await verifier.trajectory(f.actor,f.home,plan.id,{ ...base,verdict: "possible_completion",reasonCode: "result_ready_for_review" });
+    expect((await db.select().from(issues).where(eq(issues.id,task.id)))[0]!.status).not.toBe("done");
+    await verifier.trajectory(f.actor,f.home,plan.id,{ ...base,verdict: "off_track",reasonCode: "wrong_objective" });
+    expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id,plan.id)))[0]!.status).toBe("paused");
+    expect(await supervisionService(db).deliverStops(20,f.home)).toMatchObject({ applied: 1,failed: 0 });
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,execution.row.id)))[0]!.status).toBe("cancelled");
+  });
+
+  it("erases retained verifier prose and blocks restored review payloads even after rollout rollback", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true,verifier_v7: true });
+    const plan = await started(), execution = await run(), prepared = await execution.prepare(); await saveOutput(); await successful(execution);
+    const [binding] = await db.insert(memoryBindings).values({ companyId: f.home,key: "verified-root",name: "Verification source",providerKey: "local" }).returning();
+    const [record] = await db.insert(memoryRecords).values({ companyId: f.home,bindingId: binding!.id,providerKey: "local",memoryType: "fact",scopeType: "company",content: "Authorized retained result source",reviewState: "accepted",verificationState: "human_verified",observedAt: new Date(),createdByActorType: "system",createdByActorId: "fixture" }).returning();
+    await db.insert(contextManifestMemoryRoots).values({ companyId: f.home,manifestId: prepared!.record.contextManifestId,memoryRecordId: record!.id,sourceVersion: record!.updatedAt.toISOString() });
+    const verifier = verificationService(db), packet = await verifier.packet(f.actor,f.home,plan.id);
+    const review = await verifier.review(f.actor,f.home,plan.id,{ ...passing(packet),rationale: "Sensitive retained review prose tied to the original source" }); expect(review.result).toBe("pass");
+    await instanceSettingsService(db).updateExperimental({ verifier_v7: false,supervision_v7: false,orchestration_v7: false });
+    await db.transaction(tx => purgeMemoryRecords(tx as unknown as typeof db,f.home,[record!.id]));
+    const [erased] = await db.select().from(verificationRuns).where(eq(verificationRuns.id,review.id));
+    expect(erased).toMatchObject({ review: null,uncertainties: [],erasedAt: expect.any(Date) });
+    await db.update(verificationRuns).set({ review: review.review,uncertainties: ["Restored source prose"] }).where(eq(verificationRuns.id,review.id));
+    expect((await db.select().from(verificationRuns).where(eq(verificationRuns.id,review.id)))[0]).toMatchObject({ review: null,uncertainties: [] });
+    await expect(verifier.packet(f.actor,f.home,plan.id)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("requests a real canonical human review without claiming that an automated verifier ran", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true,verifier_v7: true });
+    const plan = await started(), execution = await run(); await execution.prepare(); await saveOutput(); await successful(execution);
+    const supervisor = supervisionService(db);
+    expect((await supervisor.intervene(f.actor,f.home,plan.id,{ expectedPlanVersion: plan.version,action: "START_VERIFIER",rationale: "Request independent review of these actual saved outputs" }))?.intervention?.status).toBe("pending");
+    expect(await supervisor.deliverStops(20,f.home)).toMatchObject({ applied: 1,failed: 0 });
+    const interactions = await db.select().from(issueThreadInteractions).where(and(eq(issueThreadInteractions.companyId,f.home),eq(issueThreadInteractions.issueId,task.id)));
+    expect(interactions).toHaveLength(1); expect(interactions[0]).toMatchObject({ status: "pending",continuationPolicy: "none",effectiveResolverPolicy: "human_only",addresseeUserId: f.userId });
+    expect(await db.select().from(verificationRuns).where(eq(verificationRuns.planId,plan.id))).toHaveLength(0);
+    expect((await db.select().from(issues).where(eq(issues.id,task.id)))[0]!.status).not.toBe("done");
+    expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id,plan.id)))[0]!.verifierCallsUsed).toBe(0);
   });
 
 });

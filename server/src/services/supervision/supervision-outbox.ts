@@ -10,9 +10,9 @@ export async function ensureSupervisionSession(tx: Db, plan: SupervisedPlan) {
   const [created] = await tx.insert(supervisionSessions).values({ companyId: plan.companyId, planId: plan.id, policy: plan.supervisionPolicy, lastProgressAt: plan.startedAt }).returning();
   return created!;
 }
-export async function enqueueSupervisionStop(tx: Db, plan: SupervisedPlan, input: { actorType: "user" | "system"; actorId: string; rationale: string; action: SupervisionAction; reasonCode: string; attemptIds: string[]; signalIds?: string[] }) {
+export async function enqueueSupervisionStop(tx: Db, plan: SupervisedPlan, input: { actorType: "user" | "system"; actorId: string; rationale: string; action: SupervisionAction; recommendation?: SupervisionAction; reasonCode: string; attemptIds: string[]; signalIds?: string[] }) {
   const session = await ensureSupervisionSession(tx, plan);
-  const [row] = await tx.insert(supervisionInterventions).values({ companyId: plan.companyId, planId: plan.id, sessionId: session.id, recommendation: input.action, decisionAction: input.action,
+  const [row] = await tx.insert(supervisionInterventions).values({ companyId: plan.companyId, planId: plan.id, sessionId: session.id, recommendation: input.recommendation ?? input.action, decisionAction: input.action,
     reasonCode: input.reasonCode, policySnapshotHash: nativeSha256(plan.supervisionPolicy), expectedPlanVersion: plan.version, requestedByType: input.actorType, requestedById: input.actorId, rationale: input.rationale,
     signalIds: input.signalIds ?? [], targetAttemptIds: input.attemptIds, idempotencyKey: `stop:${plan.id}:${plan.version}:${input.reasonCode}`, status: "pending" }).onConflictDoNothing().returning();
   return row ?? null;
