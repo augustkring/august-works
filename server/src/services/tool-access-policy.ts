@@ -1,3 +1,4 @@
+import { governanceToolRestriction } from "./ai-governance/execution-gate.js";
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -865,7 +866,7 @@ export function toolAccessPolicyService(db: Db) {
       }
       agentId = run.agentId;
       const snapshot = isRecord(run.contextSnapshot) ? run.contextSnapshot : {};
-      const runIssueId = snapshotString(snapshot, "issueId");
+      const runIssueId = run.nativeIssueId ?? snapshotString(snapshot, "issueId");
       const runProjectId = snapshotString(snapshot, "projectId");
       const runRoutineId = snapshotString(snapshot, "routineId");
       if ((issueId && runIssueId && issueId !== runIssueId)
@@ -1177,7 +1178,7 @@ export function toolAccessPolicyService(db: Db) {
     });
   }
 
-  async function decide(input: ToolAccessDecisionInput): Promise<ToolAccessDecision> {
+  async function decideCore(input: ToolAccessDecisionInput): Promise<ToolAccessDecision> {
     const loaded = await loadContext(input);
     if (!loaded.ok) return loaded.decision;
     const { ctx, redaction } = loaded;
@@ -1310,6 +1311,16 @@ export function toolAccessPolicyService(db: Db) {
     }
 
     return decision("deny", "deny_default", "No effective tool profile, grant, or allow policy permits this call.", effectiveProfileIds, [], { redactionPlan: redaction.redactionPlan });
+  }
+
+  async function decide(input: ToolAccessDecisionInput): Promise<ToolAccessDecision> {
+    const base = await decideCore(input);
+    if (!base.allowed && base.decision !== "require_approval") return base;
+    const loaded = await loadContext(input); if (!loaded.ok) return loaded.decision;
+    const restriction = await governanceToolRestriction(db, loaded.ctx);
+    if (restriction.denyReason) return decision("deny", "deny_policy_block", restriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
+    if (restriction.requireHumanApproval && base.allowed) return decision("require_approval", "requires_approval_policy", "The reviewed use case requires a human decision for this material action.", base.effectiveProfileIds, base.matchedPolicyIds);
+    return base;
   }
 
   async function writeAudit(

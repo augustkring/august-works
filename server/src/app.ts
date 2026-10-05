@@ -1,3 +1,4 @@
+import { aiGovernanceRoutes } from "./routes/ai-governance.js";
 import { executionSandboxRoutes } from "./routes/execution-sandbox.js";
 import { orchestrationRoutes } from "./routes/orchestration.js";
 import { workSignalRoutes } from "./routes/work-signals.js";
@@ -726,6 +727,7 @@ export async function createApp(
   api.use(learningRoutes(db));
   api.use(orchestrationRoutes(db));
   api.use(workSignalRoutes(db));
+  api.use(aiGovernanceRoutes(db));
   api.use(executionSandboxRoutes(db, {
     operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
     nativeOperation: opts.saasPlatform ? (companyId, cellId, userId, action, idempotencyKey) => opts.saasPlatform!.runtime.request(companyId, cellId, userId, { action, idempotencyKey }) : undefined,

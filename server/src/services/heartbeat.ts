@@ -1,3 +1,4 @@
+import { governedNativeTaskRunFields } from "./ai-governance/execution-gate.js";
 import { assertSaasExecutionAdmission } from "./saas/execution-admission.js";
 import { recordEagerSkillLoading, recordSkillExecutionCompletion, reconcileSkillExecutionCompletions } from "./skill-usage.js";
 import { agentRuntimeFabricService } from "./agent-runtime-fabric.js";
@@ -14073,6 +14074,7 @@ export function heartbeatService(
       const queuedRun = await tx
         .insert(heartbeatRuns)
         .values({
+          ...(await governedNativeTaskRunFields(tx as unknown as Db, run.companyId, run.agentId, issue.id)),
           companyId: run.companyId,
           agentId: run.agentId,
           invocationSource: "automation",
@@ -15836,6 +15838,7 @@ export function heartbeatService(
         const scheduledRun = await tx
           .insert(heartbeatRuns)
           .values({
+            ...(await governedNativeTaskRunFields(tx as unknown as Db, run.companyId, run.agentId, run.nativeIssueId ?? readNonEmptyString(retryContextSnapshot.issueId))),
             companyId: run.companyId,
             agentId: run.agentId,
             invocationSource: "automation",
@@ -28094,6 +28097,7 @@ export function heartbeatService(
           const newRun = await tx
             .insert(heartbeatRuns)
             .values({
+              ...(await governedNativeTaskRunFields(tx as unknown as Db, agent.companyId, agentId, issue.id)),
               ...(explicitContinuation ? { id: explicitContinuationRunId } : {}),
               companyId: agent.companyId,
               agentId,

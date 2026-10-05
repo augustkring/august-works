@@ -1,3 +1,4 @@
+import { assertExecutionGovernance } from "./services/ai-governance/execution-gate.js";
 import { v7FeatureEnabled } from "@paperclipai/shared";
 import { and, eq } from "drizzle-orm";
 import { heartbeatRuns, instanceSettings, orchestrationPlans, orchestrationWorkerAttempts, type Db } from "@paperclipai/db";
@@ -26,6 +27,7 @@ export async function assertAgentRunWriteAllowed(tx: Db, companyId: string, acto
     .for("share");
   const stoppedForThisMutation = run?.status === "cancelled" && actor.stopId &&
     run.resultJson?.issueMutationStopId === actor.stopId;
+  if (!stoppedForThisMutation) await assertExecutionGovernance(tx, companyId, actor.agentId, actor.runId);
   const [orchestration] = await tx.select({ status: orchestrationPlans.status, startedAt: orchestrationPlans.startedAt, budgets: orchestrationPlans.budgets }).from(orchestrationWorkerAttempts)
     .innerJoin(orchestrationPlans, and(eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId), eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId)))
     .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, actor.runId))).for("share", { of: orchestrationPlans });

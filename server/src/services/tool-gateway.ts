@@ -1,3 +1,4 @@
+import { assertExecutionGovernance } from "./ai-governance/execution-gate.js";
 import { signalRunningProcess } from "@paperclipai/adapter-utils/server-utils";
 import { resolveWorkflowConnectorSession, type WorkflowGatewayContext } from "./workflows/workflow-connector-authority.js";
 import { validateWorkflowOutput, WorkflowOutputSchemaError } from "./workflows/workflow-output-schema.js";
@@ -2007,6 +2008,7 @@ export function createToolGatewayService(
         "session_run_inactive",
       );
     }
+    await assertExecutionGovernance(db, row.companyId, row.agentId, row.runId);
   }
 
   async function getActiveSession(
