@@ -44,13 +44,15 @@ export function openShellBackend(options: {
     if (!caps || result.generation !== identity.cellGeneration || result.imageDigest !== caps.sandboxImageDigest) throw conflict("OpenShell image, generation or qualification changed");
     return result;
   }
-  async function boundaryProof() {
+  async function boundaryProof(candidate: OpenShellPolicyDocument) {
     const boundary = projectOpenShellPolicy(options.boundary);
     if (boundary.unsupportedFeatures.length) throw conflict("OpenShell alone cannot enforce the configured maximum boundary", { code: "sandbox_projection_unsupported", unsupportedFeatures: boundary.unsupportedFeatures });
     const effective = await bridge.effectivePolicy(identity);
     const proof = await checkOpenShellBoundary({ ...options.prover, candidate: effective, boundary: boundary.document });
     if (proof.result !== "within_boundary" || ["filesystem", "network_l4", "network_rest", "process", "landlock"].some(domain => !proof.coveredDomains.includes(domain))) throw conflict("OpenShell effective policy did not earn a complete boundary proof", { code: "sandbox_boundary_unproven", result: proof.result, reasonCode: proof.reasonCode });
-    return proof;
+    const runProof = await checkOpenShellBoundary({ ...options.prover, candidate: effective, boundary: candidate });
+    if (runProof.result !== "within_boundary" || ["filesystem", "network_l4", "network_rest", "process", "landlock"].some(domain => !runProof.coveredDomains.includes(domain))) throw conflict("Provider composition widened the run's requested authority", { code: "sandbox_candidate_unproven", result: runProof.result, reasonCode: runProof.reasonCode });
+    return { boundary: proof, candidate: runProof };
   }
   async function contain(policyHash: string) {
     let revocationFailed = false;
@@ -86,7 +88,7 @@ export function openShellBackend(options: {
       const policyHash = nativeSha256(input.policy), receipt = await bridge.apply({ ...identity, document: projection.document, policyHash });
       if (!receipt.applied || receipt.policyHash !== policyHash) throw conflict("OpenShell did not observe the exact requested policy");
       try {
-        await boundaryProof();
+        await boundaryProof(projection.document);
         const after = await observed(input);
         if (!after.controlsHealthy || after.policyHash !== policyHash) throw conflict("OpenShell policy application has not been physically observed");
       } catch (error) { await contain(policyHash); throw error; }
@@ -102,7 +104,7 @@ export function openShellBackend(options: {
       if (projection.unsupportedFeatures.length) throw forbidden("OpenShell cannot enforce every requested control");
       const current = await observed(input), policyHash = nativeSha256(input.policy);
       if (!current.controlsHealthy || current.policyHash !== policyHash || !["ready", "stopped"].includes(current.state)) throw conflict("Current observed policy is required before workload admission");
-      try { await boundaryProof(); } catch (error) { await contain(policyHash); throw error; }
+      try { await boundaryProof(projection.document); } catch (error) { await contain(policyHash); throw error; }
       return bridge.start({ ...identity, expiresAt: input.expiresAt, policyHash, idempotencyKey: input.idempotencyKey });
     },
     inspectWorkload: observed,
