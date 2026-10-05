@@ -1,4 +1,5 @@
 import { orchestrationRoutes } from "./routes/orchestration.js";
+import { workSignalRoutes } from "./routes/work-signals.js";
 import { publicOriginGuard } from "./middleware/public-origin-guard.js";
 import { saasCommercialGuard } from "./middleware/saas-commercial-guard.js";
 import { saasRoutes } from "./routes/saas.js";
@@ -723,6 +724,7 @@ export async function createApp(
   api.use(derivedMemoryRoutes(db));
   api.use(learningRoutes(db));
   api.use(orchestrationRoutes(db));
+  api.use(workSignalRoutes(db));
   api.use(cognitiveMemoryRoutes(db));
   api.use(memoryRoutes(db));
   api.use(companySkillPolicyRoutes(db));

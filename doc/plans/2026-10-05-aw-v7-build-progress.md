@@ -16,7 +16,7 @@ The user has requested implementation of the whole brief. Work continues through
 | 7 | Bounded orchestration | Canonical admission/control and reviewed terminal acceptance/joins verified locally; broader compound-budget and automated-provider qualification remains scoped |
 | 8 | Deterministic supervision | Canonical observer, deterministic arbiter, durable Stop/retry queue and stopped-worker reassignment implemented; local verification passing |
 | 9 | Semantic supervision and verification | Evidence-bound human trajectory review and independent completion consumer verified; automated read-only semantic provider remains a qualification dependency of Waves 11–15 |
-| 10 | Work Signals and follow-up | Pending implementation |
+| 10 | Work Signals and follow-up | Conservative source-bound extraction, human Roadmap drafts and durable native review cards verified locally; semantic provider and live Slack qualification remain scoped |
 | 11 | Sandbox abstraction | Pending implementation |
 | 12 | OpenShell backend and qualification | Pending implementation |
 | 13 | AI purpose and assurance governance | Pending implementation |
@@ -139,3 +139,18 @@ A human trajectory reviewer can assess observed artifacts, flag off-track work a
 The automatic read-only semantic evaluator/verifier adapter is not represented as qualified or active. Its provider, capability isolation, depth and pre-spend budget must be wired/qualified alongside the sandbox and Agent Package work in Waves 11–15. The implemented human consumer keeps material semantic completion governed in the meantime; this is not a claim of live LLM evaluation quality.
 
 Verification: 29 migrated-PostgreSQL orchestration/supervision/verification cases, seven deterministic policy cases and three UI cases pass (39 total). Nine existing Context/Runtime Fabric regressions also pass. Golden outcomes include schema failure, failed invariants, changed outputs, incomplete joins, exact side-effect evidence, high-impact approval, worker self-certification denial, off-track intervention, canonical human review requests and flag-independent erasure/restore. Migration/module/token gates and server/UI types are checked on this slice. Final repository-wide and real provider/customer qualification remain separate.
+
+
+## Wave 10 source-bound Work Signals
+
+An actual live native Task worker can extract bounded coordination candidates from its accepted Slack delivery. The existing Slack authority resolver and governed tool gateway reread that exact participant message and channel; no alternative credential path or transcript store is added. The company, endpoint, original principal, current linked user, run, source revision, content/visibility hash, purpose and actual read invocation remain pinned. Signal text cannot grant authority. Local extraction recognizes eleven participant-claim types conservatively; ambiguous or relative dates abstain. This is not qualification of a general semantic model.
+
+Only the original linked participant with current Task access can review these candidates. The participant explicitly selects an existing, authorized project Task for a shared-source calendar date. Apply creates a canonical pending Roadmap proposal as a human actor. The existing planning review must reread the current source and pin source/identity locks before committing a date. Restricted sources use source-scoped review. Completion, ownership, approvals and other material claims do not silently change canonical truth.
+
+Follow-up reuses native human-only Task interactions with no execution continuation or direct Slack sends. A recorded human review request is delivered through the existing reconciliation loop, with a recoverable lease, a cumulative three-attempt limit, current access checks and canonical card idempotency. Pending follow-ups are suppressed per Task; ignored or withdrawn sources close their cards, including late recreated cards. No separate reminder scheduler or permanent privileged chat agent is introduced.
+
+Flag-independent PostgreSQL guards scrub candidate facts and stale pending Roadmap patches on native edit/delete, original-source redaction, identity/connection revocation and retention expiry. Tombstones and immutable source pins block restoration. A human-accepted planning decision remains its own canonical business record; withdrawing a source does not silently undo an approved commitment.
+
+Verification: twelve migrated-PostgreSQL candidate/recovery tests, three interpreter tests and one UI test pass. Existing Slack access/search and V5 project controls bring the combined run to 44 passing tests. Two selected native Slack provenance/Routine tests also pass; these are local fixtures, not connected-customer evidence. Shared build, server/UI TypeScript, migration safety, module boundaries and token gates pass in this slice. Default-off gates remain closed.
+
+Qualification limits: current extraction/review uses the original owned native run; a finished or replaced source run requires fresh extraction through an accepted Task continuation. General semantic interpretation, autonomous follow-up prioritization and a connected Slack pilot are not established by these fixtures. Other candidate types enter human review instead of unqualified domain mutations.

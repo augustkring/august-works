@@ -55,6 +55,7 @@ import { Foundation } from "./pages/Foundation";
 import { Readiness } from "./pages/Readiness";
 import { DerivedMemory } from "./pages/DerivedMemory";
 import { Orchestration } from "./pages/Orchestration";
+import { WorkSignals } from "./pages/WorkSignals";
 import { OrganizationalLearning } from "./pages/OrganizationalLearning";
 import { CognitiveMemory } from "./pages/CognitiveMemory";
 import { FoundationBootstrap } from "./pages/FoundationBootstrap";
@@ -381,6 +382,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       />
       <Route path="memory/intelligence" element={<V7FeatureGate feature="memory_observations_v7"><DerivedMemory /></V7FeatureGate>} />
       <Route path="orchestration" element={<V7FeatureGate feature="orchestration_v7"><Orchestration /></V7FeatureGate>} />
+      <Route path="work-signals" element={<V7FeatureGate feature="work_signals_v7"><WorkSignals /></V7FeatureGate>} />
       <Route path="memory/learning" element={<V7FeatureGate feature="learning_engine_v7"><OrganizationalLearning /></V7FeatureGate>} />
       <Route path="memory/cognitive" element={<V7FeatureGate feature="cognitive_memory_v7"><CognitiveMemory /></V7FeatureGate>} />
       <Route
@@ -877,6 +879,7 @@ export function App() {
           <Route path="routines/:routineId" element={<UnprefixedBoardRedirect />} />
           <Route path="review-queue" element={<UnprefixedBoardRedirect />} />
           <Route path="orchestration" element={<UnprefixedBoardRedirect />} />
+          <Route path="work-signals" element={<UnprefixedBoardRedirect />} />
           <Route path="learnings" element={<UnprefixedBoardRedirect />} />
           <Route path="cases" element={<UnprefixedBoardRedirect />} />
           <Route path="cases/:caseIdentifier" element={<UnprefixedBoardRedirect />} />

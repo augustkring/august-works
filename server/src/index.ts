@@ -1205,8 +1205,11 @@ async function startServerWithDatabaseTeardown(
   const workflowRecoveryExecutor = workflowExecutorService(db);
   const memoryJobs = memoryJobService(db);
   const supervisor = supervisionService(db);
+  const { workSignalService } = await import("./services/work-signals/work-signal-service.js");
   const executionControlSweeps = [
     ["supervision", () => supervisor.tick(20)],
+    ["work_signal_retention", () => workSignalService(db).expire(20)],
+    ["work_signal_followups", () => workSignalService(db).deliverFollowups(20)],
     ["finalization", () => reconcileAbandonedExecutionControl(db)],
     ["replacement", () => heartbeat ? reconcileSafeNativeReplacements(db, new Date(), { verifyStoppedSession: run => verifyStoppedNativeSessionForReplacement(db, run) }) : undefined],
     ["reconciliation_delivery", () => heartbeat ? deliverReconciledExecutions(db, heartbeat.wakeup) : undefined],

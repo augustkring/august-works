@@ -126,8 +126,16 @@ export function projectControlService(db: Db) {
     },
     review: async (actor: AuthorizationActor, companyId: string, projectId: string, proposalId: string, accept: boolean, rationale: string) => {
       const userId = v5HumanActorId(actor); if (rationale.trim().length < 10 || rationale.length > 4000) throw unprocessable("Review rationale must contain 10–4000 characters");
+      if (accept) {
+        const { workSignalService } = await import("./work-signals/work-signal-service.js");
+        await workSignalService(db).validateProposal(actor, companyId, proposalId);
+      }
       return withV5ActivityTransaction(db, async (tx, publications) => {
         await lockMemoryPrivacy(tx, companyId);
+        if (accept) {
+          const { workSignalService } = await import("./work-signals/work-signal-service.js");
+          await workSignalService(db).pinProposalSource(tx, actor, companyId, proposalId);
+        }
         // Rejecting or marking a proposal stale also mutates project governance.
         // Require the same planning authority before every decision branch.
         await assertV5Authorization(tx, actor, companyId, "tasks:assign", { type: "project", companyId, projectId });
