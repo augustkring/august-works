@@ -5,6 +5,11 @@ import type { StorageService } from "./types.js";
 
 let cachedStorageService: StorageService | null = null;
 let cachedSignature: string | null = null;
+let saasStorageService: StorageService | null = null;
+
+export function configureSaasStorageService(service: StorageService) {
+  saasStorageService = service;
+}
 
 function signatureForConfig(config: Config): string {
   return JSON.stringify({
@@ -23,6 +28,7 @@ export function createStorageServiceFromConfig(config: Config): StorageService {
 }
 
 export function getStorageService(): StorageService {
+  if (saasStorageService) return saasStorageService;
   const config = loadConfig();
   const signature = signatureForConfig(config);
   if (!cachedStorageService || cachedSignature !== signature) {

@@ -1,4 +1,5 @@
 import { resolveAwDeploymentProfile, resolvePublicOriginConfig, resolveSaasTrustProxy, parsePublicAppOrigin } from "./aw-deployment.js";
+import { loadSaasPlatformConfig, type SaasPlatformConfig } from "./saas-platform-config.js";
 import { readConfigFile } from "./config-file.js";
 import { parseChatWebhookPublicBaseUrl } from "./chat-webhook-public-url.js";
 import { execFileSync } from "node:child_process";
@@ -60,6 +61,7 @@ type DatabaseMode = "embedded-postgres" | "postgres";
 
 export interface Config {
   deploymentProfile: AwDeploymentProfile;
+  saasPlatform?: SaasPlatformConfig;
   publicOriginConfig: PublicOriginConfig | undefined;
   deploymentMode: DeploymentMode;
   deploymentExposure: DeploymentExposure;
@@ -126,6 +128,7 @@ function detectTailnetBindHost(): string | undefined {
 export function loadConfig(): Config {
   const deploymentProfile = resolveAwDeploymentProfile();
   const isSaas = deploymentProfile === "saas";
+  if (process.env.AW_PLATFORM_ENV && !isSaas) throw new Error("AW_PLATFORM_ENV requires AW_DEPLOYMENT_PROFILE=saas");
   const publicOriginConfig = isSaas ? resolvePublicOriginConfig() : undefined;
   if (isSaas) {
     resolveSaasTrustProxy(process.env.TRUST_PROXY);
@@ -288,10 +291,10 @@ export function loadConfig(): Config {
     companyDeletionEnvRaw !== undefined
       ? companyDeletionEnvRaw === "true"
       : deploymentMode === "local_trusted";
-  const databaseBackupEnabled =
+  const databaseBackupEnabled = deploymentProfile!=="saas" && (
     process.env.PAPERCLIP_DB_BACKUP_ENABLED !== undefined
       ? process.env.PAPERCLIP_DB_BACKUP_ENABLED === "true"
-      : (fileDatabaseBackup?.enabled ?? true);
+      : (fileDatabaseBackup?.enabled ?? true));
   const databaseBackupIntervalMinutes = Math.max(
     1,
     Number(process.env.PAPERCLIP_DB_BACKUP_INTERVAL_MINUTES) ||
@@ -346,6 +349,7 @@ export function loadConfig(): Config {
 
   return {
     deploymentProfile,
+    saasPlatform: deploymentProfile === "saas" ? loadSaasPlatformConfig() : undefined,
     publicOriginConfig,
     deploymentMode,
     deploymentExposure,

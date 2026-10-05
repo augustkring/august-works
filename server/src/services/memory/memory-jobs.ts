@@ -1,3 +1,4 @@
+import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { randomUUID } from "node:crypto";
 import { getRunLogStore, type RunLogStore } from "../run-log-store.js";
 import { isDeepStrictEqual } from "node:util";
@@ -424,6 +425,7 @@ export function memoryJobService(
   async function executeClaimed(job: MemoryJob): Promise<void> {
     const now = new Date();
     try {
+      if(job.operationType!=="retention")await assertSaasDomainAdmission(db,job.companyId,"memory.use");
       if (["dedupe", "compaction", "reflection", "index_refresh"].includes(job.operationType)) {
         if (!(await settings.getExperimental()).enableCollectiveMemoryV1) throw conflict("Memory maintenance is disabled");
         const publication = await db.transaction(async (tx) => {

@@ -1,0 +1,23 @@
+#cloud-config
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - nftables
+write_files:
+  - path: /etc/sysctl.d/90-august-works.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.ip_forward=0
+      net.ipv6.conf.all.forwarding=0
+  - path: /etc/ssh/sshd_config.d/90-august-works.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      X11Forwarding no
+runcmd:
+  - [install, -d, -m, "0700", /etc/august-works]
+  - [install, -d, -m, "0750", /opt/august-works]
+  - [sysctl, --system]
+  - [systemctl, reload, ssh]

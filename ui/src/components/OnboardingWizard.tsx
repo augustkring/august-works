@@ -116,6 +116,7 @@ import {
   resolveRouteOnboardingOptions,
 } from "../lib/onboarding-route";
 import { useCloudInstance } from "../hooks/useCloudInstance";
+import { useSaasCapabilities } from "../hooks/useSaasCapabilities";
 import { PillGuy } from "./onboarding/PillGuy";
 import { SleepingZs } from "./onboarding/SleepingZs";
 import {
@@ -481,6 +482,7 @@ function OnboardingWizardInner({
     onboardingRouteDismissed: routeDismissed,
     setOnboardingRouteDismissed: setRouteDismissed,
   } = useDialog();
+  const saas = useSaasCapabilities();
   const { companies, setSelectedCompanyId, loading: companiesLoading } = useCompany();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -521,7 +523,7 @@ function OnboardingWizardInner({
           cloudManaged: Boolean(cloudInstance),
         });
   const effectiveOnboardingOpen =
-    onboardingOpen || (routeOnboardingOptions !== null && !routeDismissed);
+    !saas.data && (onboardingOpen || (routeOnboardingOptions !== null && !routeDismissed));
   const effectiveOnboardingOptions = onboardingOpen
     ? onboardingOptions
     : routeOnboardingOptions ?? {};

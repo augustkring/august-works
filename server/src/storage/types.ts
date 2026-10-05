@@ -59,6 +59,13 @@ export interface PutFileResult {
   originalFilename: string | null;
 }
 
+export interface StorageAccounting {
+  reserve(companyId: string, objectKey: string, byteSize: number): Promise<void>;
+  stored(companyId: string, objectKey: string): Promise<void>;
+  deleting(companyId: string, objectKey: string): Promise<void>;
+  deleted(companyId: string, objectKey: string): Promise<void>;
+}
+
 export interface StorageService {
   provider: StorageProviderId;
   putFile(input: PutFileInput): Promise<PutFileResult>;

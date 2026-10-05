@@ -1,4 +1,8 @@
 import { publicOriginGuard } from "./middleware/public-origin-guard.js";
+import { saasCommercialGuard } from "./middleware/saas-commercial-guard.js";
+import { saasRoutes } from "./routes/saas.js";
+import { saasWebhookRoutes } from "./routes/saas-webhooks.js";
+import { runtimeHostRoutes } from "./routes/runtime-hosts.js";
 import { portfolioRoutes } from "./routes/portfolio.js";
 import { projectControlRoutes } from "./routes/project-control.js";
 import { playbookRoutes } from "./routes/playbooks.js";
@@ -491,6 +495,7 @@ export async function createApp(
     databaseBackupHealth?: InspectDatabaseBackupHealthOptions;
     deploymentMode: DeploymentMode;
     deploymentProfile?: AwDeploymentProfile;
+    saasPlatform?: import("./services/saas/platform.js").SaasPlatform;
     deploymentExposure: DeploymentExposure;
     allowedHostnames: string[];
     bindHost: string;
@@ -521,6 +526,7 @@ export async function createApp(
     bundledPluginCatalogRoot?: string;
   },
 ) {
+  const scopedStorage = opts.saasPlatform?.storage ?? opts.storageService;
   if (opts.deploymentProfile === "saas" && (
     opts.deploymentMode !== "authenticated" || opts.deploymentExposure !== "public" || !opts.publicAppOrigins?.length
   )) {
@@ -545,6 +551,10 @@ export async function createApp(
     app.use(publicOriginGuard(opts.publicAppOrigins));
   }
 
+  if (opts.saasPlatform) {
+    app.use(saasWebhookRoutes(opts.saasPlatform));
+    app.use(runtimeHostRoutes(opts.saasPlatform));
+  }
   app.use(
     COMPANY_IMPORT_API_PATH,
     express.json({
@@ -616,12 +626,12 @@ export async function createApp(
     webhookPublicBaseUrl: opts.chatWebhookPublicBaseUrl,
     resolveNativeQuestion: (interaction) =>
       deliverNativeQuestionResponse(db, interaction),
-    storage: opts.storageService,
+    storage: scopedStorage,
   });
   // Provider-authenticated ingress is intentionally outside the board
   // mutation guard. The Chat SDK adapter verifies the provider signature
   // before Paperclip persists or acts on any event.
-  const emailChannels = emailChannelService(db, { heartbeat: connectionIntentHeartbeat, storage: opts.storageService, publicBaseUrl: opts.chatWebhookPublicBaseUrl ?? opts.authPublicBaseUrl });
+  const emailChannels = emailChannelService(db, { heartbeat: connectionIntentHeartbeat, storage: scopedStorage, publicBaseUrl: opts.chatWebhookPublicBaseUrl ?? opts.authPublicBaseUrl });
   app.use(emailWebhookRoutes(emailChannels));
   app.use(chatWebhookRoutes(chatChannels));
   // The instance validates single-use registration state and its trusted
@@ -668,6 +678,10 @@ export async function createApp(
   const agentAvatars = agentAvatarRoutes();
   api.use(agentAvatars.router);
   api.use(boardMutationGuard());
+  if (opts.saasPlatform) {
+    api.use(saasCommercialGuard(db, opts.saasPlatform));
+    api.use(saasRoutes(db, opts.saasPlatform));
+  }
   api.use(
     "/health",
     healthRoutes(db, {
@@ -680,7 +694,7 @@ export async function createApp(
   );
   api.use(openApiRoutes());
   if (opts.deploymentProfile !== "saas") api.use("/cloud", cloudRoutes());
-  api.use("/companies", companyRoutes(db, opts.storageService));
+  api.use("/companies", companyRoutes(db, scopedStorage));
   api.use(llmRoutes(db));
   api.use(folderRoutes(db));
   api.use(companySkillRoutes(db));
@@ -788,10 +802,10 @@ export async function createApp(
       },
     }),
   );
-  api.use(assetRoutes(db, opts.storageService));
+  api.use(assetRoutes(db, scopedStorage));
   api.use(projectToolRoutes(db));
   api.use(projectRoutes(db));
-  api.use(caseRoutes(db, opts.storageService));
+  api.use(caseRoutes(db, scopedStorage));
   api.use(issueTreeControlRoutes(db, { pluginWorkerManager: workerManager }));
   api.use(fileResourceRoutes(db));
   api.use(routineRoutes(db, { pluginWorkerManager: workerManager }));
@@ -820,7 +834,7 @@ export async function createApp(
     chatChannelRoutes(db, {
       heartbeat: connectionIntentHeartbeat,
       publicBaseUrl: opts.authPublicBaseUrl,
-      storage: opts.storageService,
+      storage: scopedStorage,
       service: chatChannels,
     }),
   );
@@ -841,7 +855,10 @@ export async function createApp(
   api.use(announcementRoutes(db, { ...opts.announcements, version: opts.hostVersion ?? serverVersion }));
   api.use(resourceMembershipRoutes(db));
   api.use(inboxDismissalRoutes(db));
-  api.use(instanceSettingsRoutes(db));
+  api.use(instanceSettingsRoutes(db, {
+    deploymentProfile: opts.deploymentProfile,
+    operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
+  }));
   if (opts.databaseBackupService) {
     api.use(instanceDatabaseBackupRoutes(opts.databaseBackupService));
   }
@@ -878,7 +895,7 @@ export async function createApp(
   // Issue routes are intentionally mounted after the gateway is constructed because
   // issue approval endpoints delegate to it. The intervening routers use distinct
   // route prefixes, so this dependency does not change issue-route precedence.
-  api.use(issueRoutes(db, opts.storageService, {
+  api.use(issueRoutes(db, scopedStorage, {
     chatRunRetries: chatChannels,
     feedbackExportService: opts.feedbackExportService,
     pluginWorkerManager: workerManager,
@@ -994,6 +1011,7 @@ export async function createApp(
       bindHost: opts.bindHost,
       allowedHostnames: opts.allowedHostnames,
       authPublicBaseUrl: opts.authPublicBaseUrl,
+      saasInviteRecipient:opts.saasPlatform?(invite,userId)=>opts.saasPlatform!.invitations.assertRecipient(invite,userId):undefined,
     }),
   );
   app.use("/api", api);

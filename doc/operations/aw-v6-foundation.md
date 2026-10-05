@@ -1,14 +1,14 @@
 # V6 SaaS foundation configuration
 
-This foundation is closed by default. It does not qualify a production service. Public signup, verification/reset email, durable customer onboarding and commercial billing are not yet implemented.
+The V6 implementation is closed by default. It does not qualify a production service. Verified authentication, encrypted transactional email, onboarding, billing, runtime control and recovery are implemented. See [the V6 operations guide](aw-v6-runtime.md) and [the evidence matrix](aw-v6-evidence.md) for the current boundary between source implementation and deployment qualification.
 
-Production qualification must also review existing local agent execution and plugin/environment bootstrap paths for the pooled service. Selecting the SaaS profile does not provide the hosted runtime isolation that later infrastructure and runtime waves must implement.
+The SaaS profile rejects local adapters, local workspace/terminal access and plugin bootstrap. Hosted cells use the separate host agent and outbound relay. Filesystem, kernel, provider and production-image isolation still require live qualification.
 
 ## Profiles
 
 `AW_DEPLOYMENT_PROFILE` selects `local`, `legacy_managed_stack` or `saas`. It is separate from `PAPERCLIP_DEPLOYMENT_MODE` (`local_trusted` or `authenticated`). An absent profile preserves existing local/legacy behavior. An explicit local/SaaS profile rejects legacy Cloud tenant credentials or `PAPERCLIP_MANAGED_CONFIG`; do not use a profile to weaken a Cloud floor.
 
-SaaS selects authenticated/public mode, an explicit HTTPS Better Auth URL and secure host-only cookies. Cloud control, identity assertion and portfolio proxy routes are absent. Workspace-handoff authentication is absent. The product company directory and live subscriptions require membership, including for instance admins. Existing company creation remains operator-only until the durable onboarding slice replaces it.
+SaaS selects authenticated/public mode, an explicit HTTPS Better Auth URL and secure host-only cookies. Cloud control, identity assertion and portfolio proxy routes are absent. Workspace-handoff authentication is absent. The product company directory and live subscriptions require membership, including for instance admins. The V6 company path uses versioned onboarding and a local billing-account transaction. Public signup requires the authentication and email dependency gates.
 
 Managed child/worktree services strip inherited `AW_` configuration, just as they strip parent `PAPERCLIP_` configuration. A child must not inherit the parent's SaaS profile, public origin or platform credentials. Explicit service overrides are still applied after sanitization.
 
@@ -18,7 +18,7 @@ Use `deploy/v6/saas.env.example` or `deploy/v6/staging.env.example` as configura
 
 Additional/legacy origin serving requires both `saas_deployment_profile_v6` and `domain_dual_origin_v6`. Until then, only the primary origin is active. Allowed origins remain HTTPS; being in the allowlist does not permit cross-origin browser session mutations. Changing the primary origin changes newly generated action URLs; it does not move cookies across domains or redirect sensitive token routes.
 
-Old public/auth/API URL environment variables may be absent or equal the configured primary origin. A conflicting value is a startup error. `BETTER_AUTH_TRUSTED_ORIGINS` cannot widen the active allowlist. OAuth/provider callback inventories and full domain rehearsal are later work.
+Old public/auth/API URL environment variables may be absent or equal the configured primary origin. A conflicting value is a startup error. `BETTER_AUTH_TRUSTED_ORIGINS` cannot widen the active allowlist. Follow the callback inventory and domain rehearsal in the operations guide before a cutover.
 
 ## Proxy contract
 
@@ -32,7 +32,7 @@ All 18 V6 flags are persisted through the existing operator-only instance experi
 
 Before starting a SaaS profile against an existing DB, an authorized operator can set `saas_deployment_profile_v6=true` through the existing local/authenticated instance administration path. A fresh installation needs the same reviewed settings bootstrap before SaaS admission. Do not enable implicit public local access to seed it. No new tenant feature flag API exists.
 
-The profile gate is read before listening. Disabling it requires a restart to close the service; it never converts the running process to local authority. Origins are also a startup snapshot; restart after changing origin/gate settings. Other V6 flags are contracts for future implementations, not working capabilities. Signup remains disabled in this slice regardless of `saas_self_signup_v6`.
+The profile gate is read before listening. Disabling it requires a restart to close the service; it never converts the running process to local authority. Origins are also a startup snapshot; restart after changing origin/gate settings. Product and background jobs use their dependency gates. Safety stops, deletion, retention and recovery do not depend on an active paid subscription. A restored database carries a persistent quarantine marker that refuses application startup in every profile.
 
 ## Verification
 

@@ -42,3 +42,12 @@ packages/paperclip-runner/scripts/*-smoke.mjs
 # they must survive the *.test.ts rule above.
 !packages/paperclip-runner/src/**/*.test.ts
 !packages/paperclip-runner/src/**/*.test.tsx
+
+# Local infrastructure state and operator secret files never enter an image.
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/*.auto.tfvars
+deploy/v6/platform.env
+deploy/v6/database-backup.env

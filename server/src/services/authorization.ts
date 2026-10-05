@@ -1,3 +1,4 @@
+import { isSaasDeployment } from "../deployment-profile.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -1643,6 +1644,11 @@ export function authorizationService(db: Db | DbTransaction) {
     if (input.actor.type === "board") {
       let taskAssignmentPolicyEffect: AssignmentPolicyEffect | null = null;
       if (input.actor.source === "local_implicit") {
+        if (isSaasDeployment()) return deny({
+          action: input.action,
+          reason: "deny_unauthenticated",
+          explanation: "SaaS requires authenticated company authority.",
+        });
         return allow({
           action: input.action,
           reason: "allow_local_board",
@@ -1656,6 +1662,7 @@ export function authorizationService(db: Db | DbTransaction) {
       // instance_admin row left behind by deployments that ran the
       // pre-hardening cloud_tenant path still elevates nothing.
       if (
+        !isSaasDeployment() &&
         !input.actor.ignoreInstanceAdmin &&
         (input.actor.isInstanceAdmin ||
           (input.actor.source !== "cloud_tenant" && await isInstanceAdmin(input.actor.userId)))

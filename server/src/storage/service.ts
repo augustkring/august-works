@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
-import type { StorageService, StorageProvider, PutFileInput, PutFileResult } from "./types.js";
+import type { StorageService, StorageProvider, StorageAccounting, PutFileInput, PutFileResult } from "./types.js";
 import { badRequest, forbidden, unprocessable } from "../errors.js";
 
 const MAX_SEGMENT_LENGTH = 120;
@@ -87,7 +87,7 @@ function assertPutFileInput(input: PutFileInput): void {
   }
 }
 
-export function createStorageService(provider: StorageProvider): StorageService {
+export function createStorageService(provider: StorageProvider, accounting?: StorageAccounting): StorageService {
   return {
     provider: provider.id,
 
@@ -96,12 +96,15 @@ export function createStorageService(provider: StorageProvider): StorageService 
       const objectKey = buildObjectKey(input.companyId, input.namespace, input.originalFilename);
       const byteSize = input.body.length;
       const contentType = input.contentType.trim().toLowerCase();
+      await accounting?.reserve(input.companyId, objectKey, byteSize);
       await provider.putObject({
         objectKey,
         body: input.body,
         contentType,
         contentLength: byteSize,
       });
+      // A lost provider or database acknowledgement retains the reservation for reconciliation.
+      await accounting?.stored(input.companyId, objectKey);
 
       return {
         provider: provider.id,
@@ -125,7 +128,13 @@ export function createStorageService(provider: StorageProvider): StorageService 
 
     async deleteObject(companyId: string, objectKey: string) {
       ensureCompanyPrefix(companyId, objectKey);
+      await accounting?.deleting(companyId, objectKey);
       await provider.deleteObject({ objectKey });
+      if (accounting) {
+        const confirmation = await provider.headObject({ objectKey });
+        if (confirmation.exists) throw unprocessable("Object deletion is awaiting confirmation");
+        await accounting.deleted(companyId, objectKey);
+      }
     },
   };
 }

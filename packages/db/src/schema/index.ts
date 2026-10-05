@@ -250,3 +250,7 @@ export * from "./playbooks.js";
 export * from "./project_control.js";
 
 export * from "./portfolio_capabilities.js";
+export * from "./saas_billing.js";
+export * from "./saas_lifecycle.js";
+export * from "./runtime_fleet.js";
+export * from "./saas_run_logs.js";

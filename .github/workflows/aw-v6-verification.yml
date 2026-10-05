@@ -1,0 +1,151 @@
+name: AW V6 Verification
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [feat/aw-v6-saas-foundation, master]
+  workflow_dispatch:
+    inputs:
+      node_image:
+        description: Qualified Node 24 base image with sha256 digest
+        required: true
+        type: string
+      host_base_image:
+        description: Qualified host base with Node 24, Docker CLI, XFS tools and iptables, with sha256 digest
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: aw-v6-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24.19.0
+          cache: pnpm
+      - name: Install the exact committed dependency graph
+        run: pnpm install --frozen-lockfile
+      - name: Compile runtime dependencies
+        run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && pnpm --filter @paperclipai/server prepare:runner-vendor
+      - name: Check all workspace contracts
+        run: pnpm -r typecheck
+      - name: Require real PostgreSQL test support
+        working-directory: server
+        run: pnpm exec tsx -e 'import { getEmbeddedPostgresTestSupport } from "@paperclipai/db"; getEmbeddedPostgresTestSupport().then(result => { if (!result.supported) throw new Error("PostgreSQL acceptance tests cannot run"); });'
+      - name: Test migrated SaaS domains and transport boundaries
+        working-directory: server
+        env:
+          AW_TEST_DATABASE_DUMP_IMAGE: postgres@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        run: |
+          docker pull "$AW_TEST_DATABASE_DUMP_IMAGE"
+          pnpm exec vitest run src/__tests__/v6- --maxWorkers=1
+      - name: Test host isolation, encrypted archives and release evidence
+        run: node --test deploy/v6/*.test.mjs deploy/v6/host-agent/*.test.mjs
+      - name: Test SaaS runtime account switches and usage presentation
+        working-directory: ui
+        run: pnpm exec vitest run src/pages/SaasRuntimes.test.tsx src/lib/infrastructureUsage.test.ts
+      - name: Build all workspace artifacts
+        run: pnpm build
+      - name: Inspect operator script syntax
+        run: node --check server/scripts/v6-release.mjs && node --check server/scripts/v6-database-backup.mjs
+      - name: Check UI tokens and module boundaries
+        run: pnpm check:token-gates && pnpm check:module-boundaries
+      - name: Install checksum-bound Terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/terraform.zip"
+          curl -fsSLo "$archive" https://releases.hashicorp.com/terraform/1.12.2/terraform_1.12.2_linux_amd64.zip
+          printf '%s  %s\n' 1eaed12ca41fcfe094da3d76a7e9aa0639ad3409c43be0103ee9f5a1ff4b7437 "$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/aw-terraform"
+          unzip -q "$archive" -d "$RUNNER_TEMP/aw-terraform"
+          printf '%s\n' "$RUNNER_TEMP/aw-terraform" >> "$GITHUB_PATH"
+      - name: Verify provider schemas and mocked staging and production plans
+        run: |
+          set -euo pipefail
+          terraform fmt -check -recursive infra
+          for environment in staging prod; do
+            terraform -chdir="infra/environments/$environment" init -backend=false -lockfile=readonly
+            terraform -chdir="infra/environments/$environment" validate
+            terraform -chdir="infra/environments/$environment" test
+          done
+  immutable-images:
+    if: github.event_name == 'workflow_dispatch'
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    env:
+      AW_NODE_IMAGE: ${{ inputs.node_image }}
+      AW_HOST_BASE_IMAGE: ${{ inputs.host_base_image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Require immutable image inputs
+        run: |
+          node -e 'for (const key of ["AW_NODE_IMAGE","AW_HOST_BASE_IMAGE"]) if (!/^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/.test(process.env[key] ?? "")) throw Error("Digest-pinned image required: " + key)'
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        id: control
+        with:
+          context: .
+          target: saas
+          push: true
+          tags: ghcr.io/${{ github.repository }}-v6-control:${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            AW_NODE_IMAGE=${{ inputs.node_image }}
+            PAPERCLIP_BUILD_COMMIT=${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        id: backup
+        with:
+          context: .
+          target: saas-backup
+          push: true
+          tags: ghcr.io/${{ github.repository }}-v6-backup:${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            AW_NODE_IMAGE=${{ inputs.node_image }}
+            PAPERCLIP_BUILD_COMMIT=${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        id: host
+        with:
+          context: .
+          file: deploy/v6/host-agent/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}-v6-host:${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+          build-args: AW_HOST_BASE_IMAGE=${{ inputs.host_base_image }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+      - name: Record built digests
+        env:
+          CONTROL_DIGEST: ${{ steps.control.outputs.digest }}
+          BACKUP_DIGEST: ${{ steps.backup.outputs.digest }}
+          HOST_DIGEST: ${{ steps.host.outputs.digest }}
+        run: node -e 'require("node:fs").writeFileSync("v6-images.json",JSON.stringify({sourceSha:process.env.GITHUB_SHA,control:process.env.CONTROL_DIGEST,backup:process.env.BACKUP_DIGEST,host:process.env.HOST_DIGEST},null,2))'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: v6-image-digests
+          path: v6-images.json

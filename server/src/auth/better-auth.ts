@@ -9,6 +9,7 @@ import {
   authSessions,
   authUsers,
   authVerifications,
+  authRateLimits,
 } from "@paperclipai/db";
 import type { Config } from "../config.js";
 import { resolvePaperclipInstanceId } from "../home-paths.js";
@@ -248,7 +249,16 @@ export function resolveWorkspaceHandoffIdentity(
   };
 }
 
-export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins: string[]): BetterAuthInstance {
+export type SaasAuthDelivery = {
+  signupEnabled: boolean;
+  verificationRequired: boolean;
+  sendVerification(input: { user: { id: string; email: string }; url: string; token: string }): Promise<void>;
+  sendPasswordReset(input: { user: { id: string; email: string }; url: string; token: string }): Promise<void>;
+  recordSecurityEvent(userId: string, action: "email_verified" | "password_reset_completed"): Promise<void>;
+};
+
+export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins: string[], saasDelivery?: SaasAuthDelivery): BetterAuthInstance {
+  if (saasDelivery && config.deploymentProfile !== "saas") throw new Error("SaaS authentication delivery requires SaaS profile");
   const baseUrl = config.authBaseUrlMode === "explicit" ? config.authPublicBaseUrl : undefined;
   const publicUrl = process.env.PAPERCLIP_PUBLIC_URL?.trim() || baseUrl;
   const managedRuntimePublicUrl = process.env.PAPERCLIP_MANAGED_RUNTIME_PUBLIC_URL?.trim() || undefined;
@@ -278,18 +288,35 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
         session: authSessions,
         account: authAccounts,
         verification: authVerifications,
+        ...(config.deploymentProfile === "saas" ? {rateLimit:authRateLimits} : {}),
       },
     }),
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: false,
-      disableSignUp: config.authDisableSignUp,
+      requireEmailVerification: saasDelivery?.verificationRequired ?? false,
+      disableSignUp: config.deploymentProfile === "saas" ? !(saasDelivery?.signupEnabled) : config.authDisableSignUp,
+      ...(saasDelivery ? {
+        minPasswordLength: 12,
+        maxPasswordLength: 128,
+        resetPasswordTokenExpiresIn: 900,
+        revokeSessionsOnPasswordReset: true,
+        sendResetPassword: saasDelivery.sendPasswordReset,
+        onPasswordReset: async ({ user }: { user: { id: string } }) => saasDelivery.recordSecurityEvent(user.id, "password_reset_completed"),
+      } : {}),
     },
-    rateLimit: buildBetterAuthRateLimitOptions({
+    ...(saasDelivery ? { emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: true,
+      autoSignInAfterVerification: false,
+      expiresIn: 3600,
+      sendVerificationEmail: saasDelivery.sendVerification,
+      afterEmailVerification: async (user: { id: string }) => saasDelivery.recordSecurityEvent(user.id, "email_verified"),
+    } } : {}),
+    rateLimit: { ...buildBetterAuthRateLimitOptions({
       deploymentMode: config.deploymentMode,
       deploymentExposure: config.deploymentExposure,
       override: config.deploymentProfile === "saas" ? "true" : process.env.PAPERCLIP_AUTH_RATE_LIMIT_ENABLED,
-    }),
+    }), ...(config.deploymentProfile === "saas" ? { storage: "database" as const } : {}) },
     advanced: buildBetterAuthAdvancedOptions({ disableSecureCookies, saas: config.deploymentProfile === "saas" }),
     // Registered only for a managed workspace instance: the plugin is what makes
     // `Open workspace` password-independent, and a control-plane instance that

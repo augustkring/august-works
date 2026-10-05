@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Check, ChevronRight } from "lucide-react";
 import { adaptersApi } from "@/api/adapters";
 import { instanceSettingsApi } from "@/api/instanceSettings";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
+import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { isNewAgentAdapterAllowed } from "@/lib/new-agent-adapters";
 import { queryKeys } from "@/lib/queryKeys";
 import { getAdapterDisplay } from "@/adapters/adapter-display-registry";
@@ -102,6 +103,7 @@ export function AgentBasicsDialog({
 }) {
   const id = useId();
   const cloud = Boolean(useCloudInstance());
+  const saas = Boolean(useSaasCapabilities().data);
   const experimental = useQuery({
     queryKey: queryKeys.instance.experimentalSettings,
     queryFn: instanceSettingsApi.getExperimental,
@@ -127,10 +129,11 @@ export function AgentBasicsDialog({
       !adapter.disabled &&
       isNewAgentAdapterAllowed(adapter.type, {
         cloud,
+        saas,
         nativeRunnerEnabled: experimental.data?.enableNativeRunner === true,
       }) &&
-      !["process", "http"].includes(adapter.type) &&
-      !getAdapterDisplay(adapter.type).comingSoon,
+      adapter.type !== "process" && (saas || adapter.type !== "http") &&
+      (saas || !getAdapterDisplay(adapter.type).comingSoon),
   );
   const validAdapter = choices.some((adapter) => adapter.type === adapterType);
   return (

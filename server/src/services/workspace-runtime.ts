@@ -677,7 +677,7 @@ export async function ensureServerWorkspaceLinksCurrent(
 export function sanitizeRuntimeServiceBaseEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...baseEnv };
   for (const key of Object.keys(env)) {
-    if (key.startsWith("PAPERCLIP_") || key.startsWith("AW_")) {
+    if (["PAPERCLIP_", "AW_", "PADDLE_", "MAILGUN_", "RUNTIME_CONTROL_", "AWS_", "UPCLOUD_", "RUN_LOG_"].some(prefix => key.startsWith(prefix))) {
       delete env[key];
     }
   }
@@ -686,6 +686,7 @@ export function sanitizeRuntimeServiceBaseEnv(baseEnv: NodeJS.ProcessEnv): NodeJ
   // Paperclip instance. Runtime/service overrides are merged back after sanitizing.
   delete env.BETTER_AUTH_URL;
   delete env.BETTER_AUTH_BASE_URL;
+  delete env.BETTER_AUTH_SECRET;
   delete env.DATABASE_URL;
   delete env.npm_config_tailscale_auth;
   delete env.npm_config_authenticated_private;

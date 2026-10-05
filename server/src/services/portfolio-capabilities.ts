@@ -1,3 +1,4 @@
+import { assertSaasDomainAdmission } from "./saas/domain-admission.js";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import { companySkills, companySkillVersions, companySkillDependencies, playbookDocuments, foundationDocuments, portfolioCapabilityPublications, portfolioCapabilitySubscriptions, type Db } from "@paperclipai/db";
 import { createGovernedSkillSchema, createPlaybookSchema, installPortfolioCapabilitySchema, publishPortfolioCapabilitySchema, skillCandidateInputSchema, type PortfolioCapabilitySnapshot } from "@paperclipai/shared";
@@ -16,7 +17,7 @@ import { availablePortfolioPublication, portfolioCompaniesRelated } from "./port
 export function portfolioCapabilityService(db: Db) {
   async function authorize(actor: AuthorizationActor, companyId: string, mutate = false) {
     await assertV5Enabled(db, "portfolio_skill_sharing_v5"); await assertV5Authorization(db, actor, companyId, "company_scope:read");
-    if (mutate) { v5HumanActorId(actor); await assertV5Authorization(db, actor, companyId, "users:manage_permissions"); }
+    if (mutate) { v5HumanActorId(actor); await assertV5Authorization(db, actor, companyId, "users:manage_permissions"); await assertSaasDomainAdmission(db,companyId,"portfolio.use"); }
   }
   async function publication(actor: AuthorizationActor, companyId: string, publicationId: string) {
     await authorize(actor, companyId);

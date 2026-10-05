@@ -1,0 +1,15 @@
+# Exact origins are also enforced by Express and on every WebSocket upgrade.
+{$AW_PRIMARY_HOST}, {$AW_LEGACY_HOST} {
+  encode zstd gzip
+  header {
+    Strict-Transport-Security "max-age=31536000"
+    X-Content-Type-Options nosniff
+    Referrer-Policy strict-origin-when-cross-origin
+    -Server
+  }
+  # Authentication/reset tokens must never enter an edge access log.
+  reverse_proxy 127.0.0.1:3100 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Host {host}
+  }
+}

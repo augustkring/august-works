@@ -1,0 +1,18 @@
+[Unit]
+Description=August Works encrypted database archive
+Requires=docker.service
+After=docker.service network-online.target
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/august-works/backup-image.env
+# backup-image.env contains only AW_BACKUP_IMAGE=registry/image@sha256:digest.
+# The root Docker client reads the secret file; the container runs as uid 1000.
+ExecStart=/usr/bin/docker run --rm --name aw-database-backup --network host --read-only --user 1000:1000 --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 128 --memory 1g --cpus 1 --tmpfs /tmp:rw,nosuid,nodev,size=64m,uid=1000,gid=1000 --env-file /etc/august-works/database-backup.env --mount type=bind,source=/var/lib/august-works/database-backup,target=/var/lib/aw-db-backup --mount type=bind,source=/etc/august-works/managed-db-ca.pem,target=/run/aw/db-ca.pem,readonly ${AW_BACKUP_IMAGE}
+TimeoutStartSec=30min
+TimeoutStopSec=30s
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/august-works/database-backup /run/docker.sock

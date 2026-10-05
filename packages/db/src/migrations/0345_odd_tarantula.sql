@@ -1,0 +1,2 @@
+ALTER TABLE "runtime_capacity_profiles" ADD COLUMN "commercial_product_key" text DEFAULT 'runtime_standard' NOT NULL;--> statement-breakpoint
+ALTER TABLE "runtime_capacity_profiles" ADD CONSTRAINT "runtime_capacity_profiles_product_ck" CHECK ("runtime_capacity_profiles"."commercial_product_key" in ('runtime_standard','runtime_performance','runtime_dedicated_gateway','runtime_dedicated_vm'));

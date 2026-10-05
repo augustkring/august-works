@@ -1,3 +1,4 @@
+import { assertSaasDomainAdmission } from "./saas/domain-admission.js";
 import { and, eq, isNull } from "drizzle-orm";
 import { approvals, companies, goals, issues, projects, projectMilestones, type Db } from "@paperclipai/db";
 import { portfolioRequestSchema, type PortfolioCompanySummary } from "@paperclipai/shared";
@@ -15,7 +16,7 @@ export function portfolioService(db: Db) {
       const input = portfolioRequestSchema.parse(raw), userId = v5HumanActorId(actor);
       const visible: PortfolioCompanySummary[] = [], unavailableCompanyIds: string[] = [];
       for (const companyId of input.companyIds) {
-        try { await assertV5Authorization(db, actor, companyId, "company_scope:read"); }
+        try { await assertV5Authorization(db, actor, companyId, "company_scope:read"); await assertSaasDomainAdmission(db,companyId,"portfolio.use"); }
         catch (error) { if (error instanceof Error && "status" in error && Number(error.status) === 403) { unavailableCompanyIds.push(companyId); continue; } throw error; }
         const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
         if (!company) { unavailableCompanyIds.push(companyId); continue; }

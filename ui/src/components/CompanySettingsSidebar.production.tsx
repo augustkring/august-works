@@ -27,6 +27,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useSidebar } from "@/context/SidebarContext";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { useHiddenSettings } from "@/hooks/useHiddenSettings";
+import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { usePluginSlots } from "@/plugins/slots";
 import { SidebarNavItem } from "./SidebarNavItem.production";
 
@@ -43,6 +44,7 @@ function isSandboxProviderOnly(plugin: PluginRecord): boolean {
 }
 
 export function CompanySettingsSidebar() {
+  const saas = useSaasCapabilities();
   const { selectedCompany, selectedCompanyId } = useCompany();
   const { isMobile, setSidebarOpen } = useSidebar();
   const { hidden: hiddenSettings } = useHiddenSettings();
@@ -101,6 +103,11 @@ export function CompanySettingsSidebar() {
       <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-auto-hide px-3 py-2">
         <div className="flex flex-col gap-0.5">
           <SidebarNavItem to="/company/settings" label="General" icon={SlidersHorizontal} end />
+          {saas.data?.billing && <SidebarNavItem to="/company/settings/billing" label="Billing and usage" icon={SlidersHorizontal} end />}
+          {saas.data?.runtime && <SidebarNavItem to="/company/settings/runtime" label="Managed runtimes" icon={SlidersHorizontal} end />}
+          {saas.data?.support && <SidebarNavItem to="/company/settings/support" label="Support access" icon={Shield} end />}
+          {saas.data?.deletion && <SidebarNavItem to="/company/settings/deletion" label="Delete organization" icon={Shield} end />}
+          {saas.data && <SidebarNavItem to="/company/settings/security" label="Account security" icon={Shield} end />}
           {showPage("instance.profile") && (
             <SidebarNavItem
               to={`${INSTANCE_SETTINGS_PATH_PREFIX}/profile`}

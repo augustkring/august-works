@@ -1,3 +1,5 @@
+import { isSaasDeployment } from "../deployment-profile.js";
+import { assertSaasRemoteAdapterConfig } from "./saas/execution-admission.js";
 import { agentAppearanceSchema, randomAgentAppearance, resolveAgentAppearance, agentAvatarUrl } from "@paperclipai/shared";
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
@@ -31,7 +33,7 @@ import {
 import {
   normalizePaperclipRunnerAdapterConfig,
 } from "@paperclipai/adapter-utils/server-utils";
-import { conflict, notFound, unprocessable } from "../errors.js";
+import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import {
   collectSecretRefs,
   collectUserSecretRefs,
@@ -703,6 +705,11 @@ export function agentService(db: Db) {
   ) {
     const existing = await getById(id);
     if (!existing) return null;
+    if(data.adapterType!==undefined||data.adapterConfig!==undefined)assertSaasRemoteAdapterConfig(data.adapterType??existing.adapterType,data.adapterConfig??existing.adapterConfig);
+    if (isSaasDeployment() && (data.adapterType !== undefined || data.adapterConfig !== undefined)
+      && !["openclaw_gateway","hermes_gateway","http","cursor_cloud"].includes(data.adapterType ?? existing.adapterType)) {
+      throw forbidden("SaaS agents require a remote provider",{code:"SAAS_LOCAL_EXECUTION_DISABLED"});
+    }
 
     if (existing.status === "terminated" && data.status && data.status !== "terminated") {
       throw conflict("Terminated agents cannot be resumed");
@@ -876,6 +883,8 @@ export function agentService(db: Db) {
     getById,
 
     create: async (companyId: string, data: Omit<typeof agents.$inferInsert, "companyId">, options?: CreateAgentOptions) => {
+      assertSaasRemoteAdapterConfig(data.adapterType??"process",data.adapterConfig??{});
+      if(isSaasDeployment() && !["openclaw_gateway","hermes_gateway","http","cursor_cloud"].includes(data.adapterType ?? "process"))throw forbidden("SaaS agents require a remote provider",{code:"SAAS_LOCAL_EXECUTION_DISABLED"});
       assertBuiltInAgentMetadataMutationAllowed(null, data.metadata, options);
       if (data.reportsTo) {
         await ensureManager(companyId, data.reportsTo);

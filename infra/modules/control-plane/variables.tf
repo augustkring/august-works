@@ -1,0 +1,11 @@
+variable "prefix" { type = string }
+variable "zone" { type = string }
+variable "plan" { type = string }
+variable "disk_gib" { type = number }
+variable "os_template" { type = string }
+variable "network_id" { type = string }
+variable "private_ip" { type = string }
+variable "labels" { type = map(string) }
+variable "ssh_public_keys" { type = list(string) }
+variable "admin_ipv4_addresses" { type = set(string) }
+variable "user_data" { type = string }

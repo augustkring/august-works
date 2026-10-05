@@ -1,3 +1,4 @@
+import { adapterNetworkFetch } from "@paperclipai/adapter-utils/network-policy";
 import type { ServerAdapterModule } from "@paperclipai/adapter-utils";
 import { allowsInsecureRemoteHttp, isRemotePlainHttp, remotePlainHttpDeniedMessage } from "./transport-security.js";
 import { normalizeBaseUrl } from "./execute.js";
@@ -29,7 +30,7 @@ export const discoverCapabilities: NonNullable<ServerAdapterModule["discoverCapa
   if (typeof apiKey !== "string" || !apiKey.trim()) throw new Error("A Hermes API credential is required");
   const signal = AbortSignal.timeout(10_000);
   async function get(path: string) {
-    const response = await fetch(`${base!.toString().replace(/\/$/, "")}${path}`, { headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" }, signal, redirect: "error" });
+    const response = await adapterNetworkFetch(`${base!.toString().replace(/\/$/, "")}${path}`, { headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" }, signal, redirect: "error" });
     if (!response.ok) { await response.body?.cancel(); throw new Error(`Hermes metadata unavailable (${response.status})`); }
     const reader = response.body?.getReader();
     if (!reader) throw new Error("Hermes metadata response is empty");

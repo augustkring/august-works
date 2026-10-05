@@ -1,3 +1,4 @@
+import { adapterNetworkFetch } from "@paperclipai/adapter-utils/network-policy";
 import type {
   AdapterExecutionContext,
   AdapterExecutionResult,
@@ -373,7 +374,7 @@ function fetchFailureMessage(err: unknown): string {
 async function fetchJson(input: RequestInfo | URL, init: RequestInit): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetch(input, init);
+    response = await adapterNetworkFetch(input, init);
   } catch (err) {
     const fetchErr = new Error(`Hermes gateway request failed: ${fetchFailureMessage(err)}`) as HermesHttpError;
     fetchErr.code = "hermes_gateway_connect_failed";
@@ -568,7 +569,7 @@ async function consumeEvents(input: {
 }): Promise<void> {
   while (!input.signal.aborted && !input.state.terminal) {
     try {
-      const response = await fetch(apiUrl(input.baseUrl, `/v1/runs/${encodeURIComponent(input.state.runId)}/events`), {
+      const response = await adapterNetworkFetch(apiUrl(input.baseUrl, `/v1/runs/${encodeURIComponent(input.state.runId)}/events`), {
         method: "GET",
         headers: input.headers,
         signal: input.signal,

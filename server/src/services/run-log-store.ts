@@ -474,6 +474,11 @@ function resolveRunLogS3(): DurableRunLogStoreOptions["s3"] {
 
 let cachedStore: RunLogStore | null = null;
 
+export function configureRunLogStore(store: RunLogStore): void {
+  if (cachedStore) throw new Error("Run log store must be configured before application services start");
+  cachedStore = store;
+}
+
 export function getRunLogStore() {
   if (cachedStore) return cachedStore;
   const basePath = process.env.RUN_LOG_BASE_PATH ?? path.resolve(resolvePaperclipInstanceRoot(), "data", "run-logs");

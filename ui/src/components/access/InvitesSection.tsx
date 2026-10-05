@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy } from "lucide-react";
+import { saasApi } from "@/api/saas";
+import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
+import { useAccountIdentity } from "@/api/companies-query";
 import { accessApi } from "@/api/access";
 import { ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -47,6 +50,10 @@ function isInviteHistoryRow(value: unknown): value is Awaited<ReturnType<typeof 
 
 /** The Invites tab of the Members page (extracted from the former standalone Invites page). */
 export function InvitesSection() {
+  const capabilities=useSaasCapabilities(),identity=useAccountIdentity();
+  const [recipient,setRecipient]=useState("");
+  const inviteAttempt=useRef<{fingerprint:string;key:string}|null>(null);
+  const saas=capabilities.data?.profile==="saas";
   const { selectedCompanyId } = useCompany();
   const { pushToast } = useToast();
   const queryClient = useQueryClient();
@@ -87,7 +94,8 @@ export function InvitesSection() {
     return copyText(url, "The invite URL is selected. Copy it manually from the field.", selectLatestInviteUrl);
   }
 
-  const inviteHistoryQueryKey = queryKeys.access.invites(selectedCompanyId ?? "", "all", INVITE_HISTORY_PAGE_SIZE);
+  const inviteHistoryQueryKey = [...queryKeys.access.invites(selectedCompanyId ?? "", "all", INVITE_HISTORY_PAGE_SIZE),...(saas?[identity.userId]:[])];
+  useEffect(()=>{setRecipient("");setLatestInviteUrl(null);inviteAttempt.current=null;},[selectedCompanyId,identity.userId]);
   const invitesQuery = useInfiniteQuery({
     queryKey: inviteHistoryQueryKey,
     queryFn: ({ pageParam }) =>
@@ -108,13 +116,16 @@ export function InvitesSection() {
   );
 
   const createInviteMutation = useMutation({
-    mutationFn: () =>
-      accessApi.createCompanyInvite(selectedCompanyId!, {
+    mutationFn: async () => {
+      if(saas){const fingerprint=[identity.userId,selectedCompanyId,recipient.trim().toLowerCase(),humanRole].join(":");if(inviteAttempt.current?.fingerprint!==fingerprint)inviteAttempt.current={fingerprint,key:crypto.randomUUID()};await saasApi.invite(selectedCompanyId!,identity.userId!,{email:recipient,role:humanRole==="operator"?"member":humanRole,idempotencyKey:inviteAttempt.current.key});return null;}
+      return accessApi.createCompanyInvite(selectedCompanyId!, {
         allowedJoinTypes: "human",
         humanRole,
         agentMessage: null,
-      }),
+      });
+    },
     onSuccess: async (invite) => {
+      if(!invite){await queryClient.invalidateQueries({queryKey:inviteHistoryQueryKey});pushToast({title:"Invitation queued",body:"The invitation will be emailed to the recipient.",tone:"success"});setRecipient("");inviteAttempt.current=null;return;}
       setLatestInviteUrl(invite.inviteUrl);
       setLatestInviteCopied(false);
       const copied = await copyText(invite.inviteUrl, "Copy the invite URL manually from the field below.");
@@ -171,18 +182,18 @@ export function InvitesSection() {
   return (
     <div className="max-w-6xl space-y-8">
       <p className="max-w-3xl text-sm text-muted-foreground">
-        Invite people to request access to this organization. New invite links are copied to your clipboard when they are
-        generated.
+        {saas?"Invite people by email. They must sign in with the verified email address receiving the invitation.":"Invite people to request access to this organization. New invite links are copied to your clipboard when they are generated."}
       </p>
 
       <section className="space-y-4 rounded-xl border border-border p-5">
         <div className="space-y-1">
           <h2 className="text-sm font-semibold">Invite a person</h2>
           <p className="text-sm text-muted-foreground">
-            Generate a human invite link and choose the default access it should request.
+            {saas?"Choose a recipient and their organization role.":"Generate a human invite link and choose the default access it should request."}
           </p>
         </div>
 
+        {saas&&<label className="saas-label">Recipient email<input className="saas-input" type="email" autoComplete="email" maxLength={254} value={recipient} onChange={event=>setRecipient(event.target.value)}/></label>}
         <fieldset className="space-y-3">
           <legend className="text-sm font-medium">Choose a role</legend>
           <div className="rounded-xl border border-border">
@@ -224,8 +235,8 @@ export function InvitesSection() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={() => createInviteMutation.mutate()} disabled={createInviteMutation.isPending}>
-            {createInviteMutation.isPending ? "Creating…" : "Create invite"}
+          <Button onClick={() => createInviteMutation.mutate()} disabled={createInviteMutation.isPending||capabilities.isPending||(saas&&(!identity.userId||!recipient.trim()))}>
+            {createInviteMutation.isPending ? "Creating…" : saas?"Send invitation":"Create invite"}
           </Button>
           <span className="text-sm text-muted-foreground">Invite history below keeps the audit trail.</span>
         </div>

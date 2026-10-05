@@ -1,6 +1,6 @@
 # August Works V6 architecture decisions
 
-Date: 2026-10-04. Status: implemented foundation decisions; production qualification remains open.
+Date: 2026-10-05. Status: implementation decisions; production qualification remains open. The implementation and live-evidence boundaries are tracked in [the evidence matrix](../operations/aw-v6-evidence.md).
 
 ## V6-ADR-001 — Pooled SaaS tenancy
 
@@ -116,7 +116,7 @@ Date: 2026-10-04. Status: implemented foundation decisions; production qualifica
 
 **Reversal trigger:** A real requirement for cross-domain session handoff, with a reviewed security design.
 
-**Evidence:** Origin parser, action URL and dual-origin integration tests. Wave 19 remains open.
+**Evidence:** Origin parser, action URL, dual-origin integration tests, public smoke harness and operations URL inventory. Live domain rehearsal remains open.
 
 **Assumptions:** The post-V5 authority/schema contracts remain valid.
 
@@ -142,7 +142,7 @@ Date: 2026-10-04. Status: implemented foundation decisions; production qualifica
 
 **Security effect:** Cloud credentials cannot be used as pooled SaaS authority.
 
-**Migration:** Existing unconfigured deployments retain their behavior. Signup remains closed pending auth/email implementation.
+**Migration:** Existing unconfigured deployments retain their behavior. Signup requires the implemented auth/email dependency gates and provider qualification.
 
 **Reversal trigger:** A reviewed end-of-life plan for legacy stacks.
 
@@ -184,23 +184,23 @@ Date: 2026-10-04. Status: implemented foundation decisions; production qualifica
 
 ## Required dependent ADR inventory
 
-The following decisions must be written before their first dependent implementation. This list records pending design work, not an implemented or live-qualified capability.
+The following decisions govern the dependent implementation. Their operations procedures are in [the V6 guide](../operations/aw-v6-runtime.md). A source decision does not qualify its provider or environment.
 
-| ADR | Decision topic | First dependent slice |
-| --- | --- | --- |
-| 002 | UpCloud Copenhagen primary cloud | Wave 2 |
-| 006 | Managed PostgreSQL | Wave 2 |
-| 007 | S3 object storage and backup region | Wave 2–3 |
-| 008 | IaC versus dynamic controller ownership | Wave 2 / 10 |
-| 009 | Managed OpenClaw cells | Wave 11 |
-| 010 | Outbound Runtime Host Agent | Wave 10 |
-| 011 | Runtime generations and fencing | Wave 10–11 |
-| 012 | BYOK commercial model | Wave 7–8 |
-| 013 | Paddle Merchant of Record | Wave 7 |
-| 014 | Local entitlements | Wave 7–8 |
-| 015 | Exact usage events | Wave 9 |
-| 016 | Mailgun EU transactional outbox | Before auth verification |
-| 017 | Durable onboarding | Before company creation |
-| 018 | Support and break-glass | Wave 16 |
-| 019 | Backup, recovery and encryption | Before deployment / runtime restore |
-| 022 | Portability and Scaleway trigger | Before provider infrastructure |
+| ADR | Decision, invariant and reason | Alternative / cost and failure consequence | Evidence and reversal condition |
+| --- | --- | --- | --- |
+| 002 | UpCloud Copenhagen primary cloud; private control/runtime SDNs and Finland objects. This follows the V6 regional requirement. | A multi-cloud launch increases baseline operations and failure coordination. Provider outage affects the pooled service. | Pinned IaC schema/mock plans and official API driver; live network/fencing remain open. Reverse after a measured region, legal, reliability or cost failure. |
+| 006 | Managed PostgreSQL 17 with verify-full TLS and separate app/migrator/backup roles. PostgreSQL owns transactions, locks and recovery state. | A self-managed production DB adds patch/failover duties. Managed DB costs enter fixed COGS; DB outage stops admission. | Real PostgreSQL migrations and role bootstrap tests. Qualify the provider's PG17 permissions/CA; reverse on measured managed-service constraints. |
+| 007 | S3-compatible, EU/Finland objects, with separate artifact/export/runtime/database buckets and least-privilege identities. | VM-local durable storage prevents reliable cold recovery. Separate identities increase setup but contain writer compromise. | IAM source and storage/archive tests. Versioning/lifecycle/retention require live tests. Reverse only with proven portability and erasure compatibility. |
+| 008 | Terraform owns fixed substrate; the PostgreSQL controller owns labelled dynamic hosts/disks. | Managing dynamic host churn through Terraform introduces dual ownership. State exposure is an operator risk. | Mock plans, ownership/unknown-create tests and provider inventory. Reverse when a replacement retains one canonical owner and recovery identity. |
+| 009 | Digest-pinned OpenClaw company cells, explicit quotas, private networks, no Docker socket or platform credentials. | A gateway embedded in the control plane weakens tenant isolation. Host packing lowers COGS but raises shared-host failure impact. | Standalone host engine and V5 relay/control tests. Actual kernel/XFS/image conformance remains open; reverse on measured isolation failure. |
+| 010 | Outbound RSA-authenticated host agent and encrypted commands; a separate loopback relay bridges current company/generation. | Public gateway ports enlarge the attack surface. The outbound connection adds bounded reconnection and heartbeat work. | Enrollment/replay/revocation and actual relay tests. Reverse only with equivalent network and credential containment. |
+| 011 | Generations, durable command claims and provider-confirmed fencing precede execution readmission. Unknown effects require reconciliation. | Blind retries can duplicate paid resources or execution. Fencing increases recovery time to preserve authority. | Concurrent admission, terminal evidence and lost-ack tests. Reverse only with a proven equivalent fence, never by timeout alone. |
+| 012 | Customers provide scoped model credentials; AW sells infrastructure and product access. Model keys enter only the assigned runtime's encrypted delegation/private config. | Reselling inference adds pricing and gross-margin exposure. BYOK adds customer setup and rotation responsibilities. | Fixed provider endpoints and scoped secret/config tests. Reverse after an explicit commercial/security redesign. |
+| 013 | Paddle is Merchant of Record; canonical provider reads repair reordered or ambiguous events. | A direct payment processor adds tax/accounting duties. Checkout availability depends on Paddle; local state remains readable during failure. | Durable encrypted receipts, checkout locks, cancellation and reconciliation tests. Reverse when a migration preserves subscription/customer ownership. |
+| 014 | Locally composed OR/SUM entitlements with exact bounded values, expiring overrides and grace/read recovery. Permissions always precede entitlement access. | Calling Paddle on every product request couples authorization to provider latency. Local state requires reconciliation. | Shared entitlement tests, real domain/HTTP denial tests and commercial suspension tests. Reverse only with equivalent outage/read recovery behavior. |
+| 015 | Deduplicated integer usage and transactional meter watermarks. Bill application artifacts, not internal logs or safety backups. Operator cost reports retain unknown amounts until evidence exists. | Floating point and invoice-total-only attribution conceal rounding and unused host costs. Exact integers simplify replay but need bounded aggregates. | Usage/storage/concurrency tests and COGS allocation tests. Reverse when another representation proves conservation and account ownership. |
+| 016 | Mailgun EU plus encrypted bounded outbox, logical delivery identity, suppression and expiring payloads. | Synchronous email in company/auth transactions couples availability to delivery. The outbox adds retries and operational queues. | Actual auth flows with provider fixtures and outbox fault tests. Live EU delivery remains open. Reverse with equivalent regional and lost-ack guarantees. |
+| 017 | Versioned resumable onboarding reuses companies, V5 identities, foundation documents and a backlog starter task. Completion requires successful matching execution. | A one-shot client wizard loses recovery state and can bypass budget/approval gates. The server state adds small fixed storage cost. | Real PostgreSQL retry and starter-task tests. Reverse only while preserving company ownership and actual completion evidence. |
+| 018 | Verified named operators; customer content requires owner-approved, named-scope, expiring consent. No unrestricted break-glass data endpoint. | Instance-admin product bypass would widen tenant authority. Operator recovery procedures are slower and auditable. | Operator HTTP denial, scope expiry/revocation and override tests. Reverse only after a separately reviewed, bounded emergency authority design. |
+| 019 | Independent encrypted runtime/database archives, authenticated erasure ledger and persistent quarantine before cold-recovery admission. | Provider snapshots alone do not prove credentials were revoked or deletions replayed. Independent archives and drills add internal COGS. | Actual PostgreSQL dump/restore, crypto/retention tests and quarantine admission refusal. Ledger completeness after arbitrary disaster is open; never reverse the erasure/fencing invariants. |
+| 022 | Keep provider interfaces narrow and resource IDs labelled; reconsider Scaleway only for measured legal, reliability, feature or COGS benefit after migration cost. | Premature multi-cloud execution adds duplicate ownership and state migration risk. Portability is an option, not a second active driver. | Separate IaC/controller boundaries and provider fixtures. A switch requires rehearsed DB/object/runtime migration and restoration of the same scope/fence guarantees. |

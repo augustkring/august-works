@@ -1,0 +1,3 @@
+ARG AW_NODE_IMAGE
+FROM ${AW_NODE_IMAGE}
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates docker.io xfsprogs iptables && rm -rf /var/lib/apt/lists/*

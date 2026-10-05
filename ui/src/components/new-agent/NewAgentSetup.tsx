@@ -10,6 +10,7 @@ import {
   setupProviderKeys,
 } from "@/lib/agent-setup-fields";
 import { testAgentSetup } from "@/lib/test-agent-setup";
+import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { isNewAgentAdapterAllowed } from "@/lib/new-agent-adapters";
 import { useEffect, useRef, useState } from "react";
@@ -294,9 +295,11 @@ function Setup({
   const usingKimiApi =
     adapterType === "kimi_local" && Boolean(apiKey.trim() || selectedBinding);
   const cloud = Boolean(useCloudInstance());
+  const saas = Boolean(useSaasCapabilities().data);
   const available =
     isNewAgentAdapterAllowed(adapterType, {
       cloud,
+      saas,
       nativeRunnerEnabled: experimental.data?.enableNativeRunner === true,
     }) &&
     adapters.data?.some(
@@ -304,7 +307,7 @@ function Setup({
         adapter.type === adapterType &&
         adapter.loaded &&
         !adapter.disabled &&
-        !getAdapterDisplay(adapterType).comingSoon,
+        (saas || !getAdapterDisplay(adapterType).comingSoon),
     );
   const ready = Boolean(
     available &&
