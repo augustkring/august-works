@@ -431,14 +431,16 @@ export function runtimeControlService(
     userId: string,
     input: z.infer<typeof runtimeOperationSchema>,
     now = new Date(),
-    systemActor?: "backup-scheduler",
+    systemActor?: "backup-scheduler" | "sandbox-guardian",
+    expectedGeneration?: string,
   ) {
+    if (systemActor === "sandbox-guardian" && (input.action !== "stop" || !expectedGeneration || !/^[1-9][0-9]{0,18}$/.test(expectedGeneration))) throw forbidden("Sandbox safety recovery only requests generation-bound native Stop");
     if (["start", "upgrade", "migrate", "restore"].includes(input.action))
       await entitlementService(db).require(
         companyId,
         "hosted_runtime.provision",
       );
-    const requestHash = sha256(JSON.stringify({ cellId, ...input, ...(systemActor ? { systemActor } : {}) }));
+    const requestHash = sha256(JSON.stringify({ cellId, ...input, ...(systemActor ? { systemActor } : {}), ...(expectedGeneration ? { expectedGeneration } : {}) }));
     return db.transaction(async (tx) => {
       const initial = await getCell(companyId, cellId);
       await tx
@@ -457,6 +459,7 @@ export function runtimeControlService(
         )
         .for("update");
       if (!cell) throw notFound("Runtime cell not found");
+      if (expectedGeneration && cell.generation.toString() !== expectedGeneration) throw conflict("Runtime generation changed before the safety operation");
       const [replay] = await tx
         .select()
         .from(runtimeOperations)
@@ -654,6 +657,7 @@ export function runtimeControlService(
           idempotencyKey: input.idempotencyKey,
           requestHash,
           desiredState: {
+            ...(expectedGeneration ? { expectedCellGeneration: expectedGeneration } : {}),
             ...(canaryOperatorId ? { canaryOperatorId } : {}),
             ...(input.imageDigest ? { imageDigest: input.imageDigest } : {}),
             ...(backupId ? { backupId } : {}),
@@ -676,7 +680,7 @@ export function runtimeControlService(
           action: "runtime." + input.action + "_requested",
           entityType: "runtime_cell",
           entityId: cellId,
-          details: { operationId: operation!.id, ...(systemActor ? { approvedByUserId: userId, scheduled: true } : {}) },
+          details: { operationId: operation!.id, ...(systemActor === "backup-scheduler" ? { approvedByUserId: userId, scheduled: true } : {}), ...(systemActor === "sandbox-guardian" ? { safetyRecovery: true, expectedCellGeneration: expectedGeneration } : {}) },
         });
       return operation!;
     });
@@ -731,6 +735,10 @@ export function runtimeControlService(
         .for("update")
         .limit(1);
       if (!cell || cell.deletedAt) throw conflict("Runtime unavailable");
+      if (typeof operation.desiredState.expectedCellGeneration === "string" && operation.desiredState.expectedCellGeneration !== cell.generation.toString()) {
+        await tx.update(runtimeOperations).set({ status: "CANCELED", errorCode: "stale_generation", completedAt: now, updatedAt: now }).where(eq(runtimeOperations.id, operation.id));
+        return true;
+      }
       if (
         ["provision", "start", "upgrade", "restore", "migrate"].includes(
           operation.operationType,

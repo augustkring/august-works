@@ -12,6 +12,10 @@ import {
 } from "@paperclipai/db";
 import { learningService } from "../services/learning/learning-service.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { readinessService } from "../services/readiness/readiness-service.js";
+import { foundationService } from "../services/foundation/foundation-service.js";
+import { accessService } from "../services/access.js";
+import { foundationDocuments } from "@paperclipai/db";
 import { purgeMemoryRecords } from "../services/memory/memory-privacy.js";
 import {
   memoryBindings,
@@ -889,6 +893,38 @@ const support = await getEmbeddedPostgresTestSupport();
       );
       const base = await service.preview(f.actor, f.home, installInput());
       expect(base.readiness.status).toBe("ready_with_warnings");
+    });
+    it("holds a material package update when model configuration changes and approved Foundation becomes stale together", async () => {
+      await enableStewards();
+      const foundation = foundationService(db), principal = { principal: { type: "user" as const, userId: f.userId } };
+      const draft = await foundation.createDraft(f.home, { foundationKey: "company_profile", category: "company", documentType: "profile", body: "Reviewed native company baseline", authorityLevel: "canonical", sensitivity: "internal" }, principal);
+      await foundation.submitForReview(f.home, draft.id, draft.latestRevisionId!, principal);
+      await foundation.approve(f.home, draft.id, draft.latestRevisionId!, principal);
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id, status: "active" }).onConflictDoNothing();
+      await db.insert(principalPermissionGrants).values(["company_scope:read", "foundation:read"].map(permissionKey => ({ companyId: f.home, principalType: "agent", principalId: f.presence.id, permissionKey }))).onConflictDoNothing();
+      const sourceAccess = await accessService(db).decide({ actor: { type: "agent", agentId: f.presence.id, companyId: f.home, onBehalfOfUserId: f.userId, source: "agent_jwt" }, enforceResponsibleUserIntersection: true, action: "foundation:read", resource: { type: "company", companyId: f.home } });
+      expect(sourceAccess.allowed, JSON.stringify(sourceAccess)).toBe(true);
+      const installed = await active(), current = await run();
+      const [subject] = await db.insert(issues).values({ companyId: f.home, title: "Review current company evidence", status: "todo", assigneeAgentId: f.presence.id }).returning();
+      const assessment = await readinessService(db).assess(f.home, { agentId: f.presence.id, actionClass: "internal_draft", subjectType: "task", subjectId: subject!.id, query: "Review company evidence" }, { actor: f.actor, principalId: `user:${f.userId}`, userId: f.userId });
+      expect(["ready", "ready_with_warnings"]).toContain(assessment.status);
+      expect(assessment.assessment.requirements.flatMap(item => item.evidenceRefs).some(ref => ref.sourceRef.startsWith(`foundation://${draft.id}/`))).toBe(true);
+      const next = await service.publish(f.actor, { ...input, version: "2.0.0", manifest: { ...input.manifest, requiredKnowledge: ["brand_positioning"] } });
+      await db.update(agents).set({ adapterConfig: { model: "unqualified-replacement-model" } }).where(eq(agents.id, f.presence.id));
+      await db.update(foundationDocuments).set({ validUntil: new Date(Date.now() - 1000) }).where(eq(foundationDocuments.id, draft.id));
+      await expect(assertPackageExecution(db, f.home, f.presence.id, current.id)).rejects.toBeDefined();
+      expect((await service.preview(f.actor, f.home, { ...installInput(), versionId: next.id })).readiness.status).toBe("blocked");
+      await maintainFoundationFindings(db, 100);
+      const findings = await db.select().from(knowledgeQualityFindings).where(eq(knowledgeQualityFindings.assessmentId, assessment.id));
+      expect(findings.filter(finding => finding.ruleVersion === "aw-v7-core-stewards-1")).toHaveLength(1);
+      await instanceSettingsService(db).updateExperimental({ agent_packages_v7: false, core_stewards_v7: false });
+      await reconcileAgentPackages(db, 100);
+      const [held] = await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.id, installed.id));
+      expect(held).toMatchObject({ status: "degraded", installedVersionId: versionId });
+      const stopped: string[] = [];
+      await deliverAgentPackageStops(db, async runId => { stopped.push(runId); }, 100);
+      expect(stopped).toContain(current.id);
+      expect(await db.select().from(foundationDocuments).where(eq(foundationDocuments.id, draft.id))).toHaveLength(1);
     });
     it("concurrent Stop controllers cannot claim the same live lease and retry budgets remain cumulative", async () => {
       const installed = await active();

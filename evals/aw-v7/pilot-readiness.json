@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "brief": "August Works V7-v2",
+  "sourceLedger": "doc/plans/2026-10-05-aw-v7-build-progress.md",
+  "implementationBlockers": [
+    {
+      "id": "native_openshell_host_bridge",
+      "wave": 12,
+      "status": "incomplete",
+      "source": "server/src/services/execution-sandbox/openshell-backend.ts"
+    },
+    {
+      "id": "credential_use_broker_and_revocation",
+      "wave": 12,
+      "status": "incomplete",
+      "source": "server/src/services/execution-sandbox/openshell-policy.ts"
+    },
+    {
+      "id": "pre_spend_model_reservation",
+      "wave": 7,
+      "status": "incomplete",
+      "source": "server/src/services/orchestration/orchestration-admission.ts"
+    },
+    {
+      "id": "automated_read_only_semantic_consumer",
+      "wave": 9,
+      "status": "incomplete",
+      "source": "server/src/services/supervision/verification-service.ts"
+    }
+  ],
+  "journey": [
+    "free_signup",
+    "foundation_bootstrap",
+    "readiness",
+    "package_or_custom_agent",
+    "managed_openshell_runtime",
+    "real_chat_work",
+    "supervision",
+    "human_approval",
+    "outcome",
+    "memory_observation",
+    "learning_proposal",
+    "governance_export",
+    "paid_capacity_change",
+    "downgrade_to_free"
+  ],
+  "faults": [
+    "model_outage",
+    "cognitive_provider_outage",
+    "sandbox_denial",
+    "runtime_host_loss",
+    "permission_revocation",
+    "stale_foundation",
+    "poisoned_external_content",
+    "billing_outage",
+    "human_non_response"
+  ],
+  "compoundCases": [
+    "poisoned_memory_unauthorized_tool_apparent_progress_exfiltration_escalation",
+    "work_state_extraction_rejects_sensitive_personal_inference",
+    "package_model_foundation_change_holds_rollout"
+  ],
+  "operatingEvidence": [
+    "openshell_host_kernel_image_controls",
+    "credential_no_raw_read_destination_revocation",
+    "model_budget_pre_spend_restart_replay",
+    "semantic_provider_independence_depth_budget",
+    "backup_restore_upgrade_host_loss",
+    "free_core_measured_cost_envelope",
+    "customer_specialist_outcomes_demand",
+    "enterprise_identity_receiver_exit",
+    "enterprise_contract_region_supplier_support"
+  ],
+  "localSuites": [
+    "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+    "server/src/__tests__/v7-sandbox.integration.test.ts",
+    "server/src/__tests__/v7-orchestration.integration.test.ts",
+    "server/src/__tests__/v7-agent-packages.integration.test.ts",
+    "server/src/__tests__/v7-free-core.integration.test.ts",
+    "server/src/__tests__/v7-work-signals.integration.test.ts",
+    "server/src/__tests__/v7-learning.integration.test.ts",
+    "server/src/__tests__/v7-portability.integration.test.ts"
+  ]
+}

@@ -2633,6 +2633,13 @@
       "when": 1791233244313,
       "tag": "0377_fine_lady_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 378,
+      "version": "7",
+      "when": 1791236480202,
+      "tag": "0378_v7_sandbox_source_invalidation",
+      "breakpoints": true
     }
   ]
 }

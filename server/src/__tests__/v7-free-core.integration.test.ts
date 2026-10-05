@@ -25,6 +25,8 @@ import {
   agentIdentities,
   agentProviderBindings,
   agentPresenceRuntimeBindings,
+  memoryBindings,
+  memoryRecords,
 } from "@paperclipai/db";
 import {
   FREE_CORE_ENTITLEMENTS,
@@ -41,6 +43,8 @@ import { applicationStorageService } from "../services/billing/storage.js";
 import { runtimeCommercialService } from "../services/runtime/commercial.js";
 import { isCompanyCapacityWait } from "../services/billing/capacity-admission.js";
 import { assertAgentRunWriteAllowed } from "../agent-run-cancellation.js";
+import { foundationService } from "../services/foundation/foundation-service.js";
+import { exportCompanyStateV7 } from "../services/enterprise/portability.js";
 import type { StorageProvider } from "../storage/types.js";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
@@ -245,6 +249,10 @@ const support = await getEmbeddedPostgresTestSupport();
       ).toBeGreaterThan(
         BigInt(String(FREE_CORE_ENTITLEMENTS["storage.included_bytes"])),
       );
+      const actor = { type: "board" as const, source: "session" as const, userId: "free-owner", companyIds: [companyId] };
+      const procedure = await foundationService(db).createDraft(companyId, { foundationKey: "retained_procedure", category: "company", documentType: "procedure", body: "Persistent company operating procedure", sensitivity: "internal" }, { principal: { type: "user", userId: "free-owner" } });
+      const [memoryBinding] = await db.insert(memoryBindings).values({ companyId, key: "retained-state", name: "Shared native state fixture", providerKey: "local" }).returning();
+      const [record] = await db.insert(memoryRecords).values({ companyId, bindingId: memoryBinding!.id, providerKey: "local", memoryType: "fact", scopeType: "company", content: "Persistent shared company fact", reviewState: "accepted", verificationState: "human_verified", observedAt: new Date(), createdByActorType: "user", createdByActorId: "free-owner" }).returning();
       const profile = "free-core-" + randomUUID();
       await db
         .insert(runtimeCapacityProfiles)
@@ -296,6 +304,12 @@ const support = await getEmbeddedPostgresTestSupport();
         (await db.select().from(agents).where(eq(agents.id, agentId)))[0]!
           .status,
       ).not.toBe("paused");
+      // The owner exit path spans actual commercial reconciliation, Foundation
+      // and native shared Memory, without requiring any V7 rollout flag.
+      const exported = await exportCompanyStateV7(db, actor, companyId);
+      expect(JSON.parse(exported.files["memory/records.json"]!).records.some((item: { id: string }) => item.id === record!.id)).toBe(true);
+      expect(exported.files["knowledge/revisions.json"]).toContain("Persistent company operating procedure");
+      expect(exported.files["foundation/documents.json"]).toContain(procedure.id);
     });
     it("prevents storage expansion above the new allowance while preserving existing customer objects", async () => {
       const paid = await subscription();

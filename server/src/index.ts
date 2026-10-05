@@ -1,4 +1,5 @@
 import { securityEventExportService } from "./services/enterprise/security-events.js";
+import { reconcileSandboxSafety } from "./services/execution-sandbox/sandbox-guardian.js";
 import { reconcileAgentPackages, deliverAgentPackageStops } from "./services/agent-packages/package-jobs.js";
 import { maintainFoundationFindings, maintainPackageUpdates } from "./services/stewards/core-stewards.js";
 import { reconcileGovernanceDeployments, deliverGovernanceStops } from "./services/ai-governance/governance-jobs.js";
@@ -1211,6 +1212,10 @@ async function startServerWithDatabaseTeardown(
   const supervisor = supervisionService(db);
   const { workSignalService } = await import("./services/work-signals/work-signal-service.js");
   const executionControlSweeps = [
+    ["sandbox_safety", () => reconcileSandboxSafety(db, {
+      hostMaxAgeSeconds: platform?.config.runtime.suspectSeconds,
+      requestStop: platform ? input => platform.runtime.request(input.companyId, input.cellId, "sandbox-guardian", { action: "stop", idempotencyKey: input.idempotencyKey }, new Date(), "sandbox-guardian", input.generation) : undefined,
+    }, 20)],
     ["agent_package_authority", () => reconcileAgentPackages(db, 20)],
     ["steward_foundation", () => maintainFoundationFindings(db, 20)],
     ["steward_package_updates", () => maintainPackageUpdates(db, 20)],
