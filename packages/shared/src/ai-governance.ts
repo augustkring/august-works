@@ -272,6 +272,7 @@ export interface GovernanceEvidencePack {
     sandboxStatus: string | null;
     boundaryPolicyHash: string | null;
     currentAuthority: boolean;
+    packages: Array<{ installationId: string; versionId: string; releaseHash: string; status: string; currentAuthority: boolean; releaseEvidence: import("./agent-packages.js").PackageRelease["releaseEvidence"] }>;
   }>;
   readiness: Array<{
     id: string;

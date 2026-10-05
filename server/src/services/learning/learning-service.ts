@@ -1,5 +1,6 @@
+import { agentPackageService } from "../agent-packages/package-service.js";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, workflowOptimizerEvaluations, rolePacks, rolePackItems, workflows, policyChangeProposals, memoryEvidence, issues, projects, companySkills, foundationDocuments, documents, playbookDocuments, readinessRequirements, type Db } from "@paperclipai/db";
+import { companyAgentPackageInstallations, agentPackageUpdateProposals, learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, workflowOptimizerEvaluations, rolePacks, rolePackItems, workflows, policyChangeProposals, memoryEvidence, issues, projects, companySkills, foundationDocuments, documents, playbookDocuments, readinessRequirements, type Db } from "@paperclipai/db";
 import { finishLearningCycleSchema, learningCycleSchema, learningHypothesisSchema, learningEvaluationSchema, proposeLearningChangeSchema, reviewLearningPolicySchema, EVIDENCE_SENSITIVITIES, roadmapPolicySchema, type MemoryScope, type LearningPolicyPayload, type ReadinessAction } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { AuthorizationActor } from "../authorization.js";
@@ -60,6 +61,9 @@ async function assertBaseline(db: Db, actor: AuthorizationActor, parent: Cycle, 
   } else if (input.targetDomain === "role_pack") {
     const [row] = await db.select().from(rolePacks).where(and(eq(rolePacks.companyId, companyId), eq(rolePacks.id, id), eq(rolePacks.status, "active")));
     if (row) baseline = `role_pack://${id}/${row.publishedVersionId ?? "none"}`;
+  } else if (input.targetDomain === "agent_package") {
+    const [row]=await db.select().from(companyAgentPackageInstallations).where(and(eq(companyAgentPackageInstallations.companyId,companyId),eq(companyAgentPackageInstallations.id,id)));
+    if(row){await assertV7Authorization(db,actor,companyId,"agents:configure",{type:"agent",companyId,agentId:row.agentId});baseline=`agent_package://${id}/${row.installedVersionId}/${row.version}`;}
   } else if (input.targetDomain === "project" || id !== companyId) {
     await assertV7Authorization(db, actor, companyId, "project:read", { type: "project", companyId, projectId: id });
     const [row] = await db.select().from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id)));
@@ -252,6 +256,12 @@ export function learningService(db: Db) {
             if (!input.change.draft.items.some(next => next.type === item.type && next.ref === item.ref && next.operation === "add" && next.versionId === item.versionId && (item.loadPoint !== "always" || next.loadPoint === "always"))) throw forbidden("Learning cannot remove or weaken required Role Pack items");
           }
           candidateId = (await rolePackService(tx).createVersion(actor, companyId, row.targetId, input.change.draft, publications)).id;
+        } else if (input.change.targetDomain === "agent_package") {
+          if (EVIDENCE_SENSITIVITIES.indexOf(sourceSensitivity)>EVIDENCE_SENSITIVITIES.indexOf("internal"))throw forbidden("Package proposals cannot distribute classified Learning roots");
+          const [installation]=await tx.select().from(companyAgentPackageInstallations).where(and(eq(companyAgentPackageInstallations.companyId,companyId),eq(companyAgentPackageInstallations.id,row.targetId))).for("update");
+          if(!installation||installation.version!==input.change.update.expectedVersion||installation.agentId!==input.change.update.agentId||installation.status==="uninstalled")throw conflict("Package installation baseline changed");
+          await assertV7Authorization(tx,actor,companyId,"agents:configure",{type:"agent",companyId,agentId:installation.agentId});
+          candidateId=(await agentPackageService(tx).proposeUpdate(actor,companyId,installation.id,input.change.update,publications)).id;
         } else {
           // Security/approval changes are human proposals; the native policy owner applies them separately.
           if (input.change.proposal.policyType === "project_roadmap") await assertV7Authorization(tx, actor, companyId, "tasks:assign", { type: "project", companyId, projectId: row.targetId });

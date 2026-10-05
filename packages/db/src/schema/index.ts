@@ -270,3 +270,4 @@ export { workSignalCandidates } from "./work_signals.js";
 export { runtimeSandboxBindings, sandboxQualificationRuns, runtimePolicySnapshots } from "./execution_sandbox.js";
 
 export * from "./ai_governance.js";
+export * from "./agent_packages.js";

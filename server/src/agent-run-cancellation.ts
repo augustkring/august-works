@@ -1,3 +1,4 @@
+import { assertPackageExecution } from "./services/agent-packages/execution-gate.js";
 import { assertExecutionGovernance } from "./services/ai-governance/execution-gate.js";
 import { assertManagedRuntimeCommercialAuthority } from "./services/billing/managed-runtime-admission.js";
 import { v7FeatureEnabled } from "@paperclipai/shared";
@@ -22,7 +23,7 @@ export async function assertAgentRunWriteAllowed(tx: Db, companyId: string, acto
   stopId?: string | null;
 }) {
   if (!actor.agentId) return;
-  if (!actor.runId) { await assertManagedRuntimeCommercialAuthority(tx, companyId, actor.agentId); return; }
+  if (!actor.runId) { await assertManagedRuntimeCommercialAuthority(tx, companyId, actor.agentId); await assertPackageExecution(tx, companyId, actor.agentId); return; }
   const [run] = await tx.select({ status: heartbeatRuns.status, resultJson: heartbeatRuns.resultJson })
     .from(heartbeatRuns).where(and(eq(heartbeatRuns.id, actor.runId),
       eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, actor.agentId)))
@@ -30,6 +31,7 @@ export async function assertAgentRunWriteAllowed(tx: Db, companyId: string, acto
   const stoppedForThisMutation = run?.status === "cancelled" && actor.stopId &&
     run.resultJson?.issueMutationStopId === actor.stopId;
   if (!stoppedForThisMutation) await assertManagedRuntimeCommercialAuthority(tx, companyId, actor.agentId);
+  if (!stoppedForThisMutation) await assertPackageExecution(tx, companyId, actor.agentId, actor.runId);
   if (!stoppedForThisMutation) await assertExecutionGovernance(tx, companyId, actor.agentId, actor.runId);
   const [orchestration] = await tx.select({ status: orchestrationPlans.status, startedAt: orchestrationPlans.startedAt, budgets: orchestrationPlans.budgets }).from(orchestrationWorkerAttempts)
     .innerJoin(orchestrationPlans, and(eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId), eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId)))

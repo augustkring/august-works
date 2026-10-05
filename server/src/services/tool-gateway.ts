@@ -1,3 +1,4 @@
+import { assertPackageExecution } from "./agent-packages/execution-gate.js";
 import { assertExecutionGovernance } from "./ai-governance/execution-gate.js";
 import { agentRunWritesRevoked } from "../agent-run-cancellation.js";
 import { assertManagedRuntimeCommercialAuthority } from "./billing/managed-runtime-admission.js";
@@ -1748,6 +1749,7 @@ export function createToolGatewayService(
     if (!ACTIVE_GATEWAY_RUN_STATUSES.has(run.status) || agentRunWritesRevoked(run)) {
       throw new ToolGatewayHttpError(403, "Run is not active", "run_inactive");
     }
+    await assertPackageExecution(db, input.companyId, input.agentId, input.runId);
     await assertExecutionGovernance(db, input.companyId, input.agentId, input.runId);
     await assertManagedRuntimeCommercialAuthority(db, input.companyId, input.agentId);
 
@@ -2015,6 +2017,7 @@ export function createToolGatewayService(
         "session_run_inactive",
       );
     }
+    await assertPackageExecution(db, row.companyId, row.agentId, row.runId);
     await assertExecutionGovernance(db, row.companyId, row.agentId, row.runId);
     await assertManagedRuntimeCommercialAuthority(db, row.companyId, row.agentId);
   }

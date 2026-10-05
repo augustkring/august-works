@@ -1,5 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
-import { companySkills, foundationDocuments, playbookDocuments, learningRetainedAssets, projectRoadmapProposals, projects, issues, readinessRequirements, policyChangeProposals, workflows, rolePacks, workflowOptimizerEvaluations, type learningDomainCandidates, type Db } from "@paperclipai/db";
+import { companyAgentPackageInstallations, agentPackageUpdateProposals, companySkills, foundationDocuments, playbookDocuments, learningRetainedAssets, projectRoadmapProposals, projects, issues, readinessRequirements, policyChangeProposals, workflows, rolePacks, workflowOptimizerEvaluations, type learningDomainCandidates, type Db } from "@paperclipai/db";
 import { roadmapPolicySchema } from "@paperclipai/shared";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 type Link = typeof learningDomainCandidates.$inferSelect;
@@ -13,6 +13,11 @@ export async function learningPromotionReceipt(db: Db, link: Link) {
     if (target?.status !== "approved" || !target.revision) return null;
     const [asset] = await db.select().from(learningRetainedAssets).where(and(eq(learningRetainedAssets.companyId, companyId), eq(learningRetainedAssets.candidateLinkId, link.id), eq(learningRetainedAssets.assetType, "document_revision"), eq(learningRetainedAssets.assetId, target.revision)));
     return asset && !asset.erasedAt ? { domain: link.targetDomain, targetId: id, versionId: target.revision } : null;
+  }
+  if(link.targetDomain==="agent_package"){
+    const[p]=await db.select().from(agentPackageUpdateProposals).where(and(eq(agentPackageUpdateProposals.companyId,companyId),eq(agentPackageUpdateProposals.id,link.candidateId)));
+    const[i]=await db.select().from(companyAgentPackageInstallations).where(and(eq(companyAgentPackageInstallations.companyId,companyId),eq(companyAgentPackageInstallations.id,id)));
+    return p?.status==="accepted"&&!p.erasedAt&&i&&i.version===p.acceptedInstallationVersion&&i.installedVersionId===p.proposal?.versionId?{domain:"agent_package",targetId:id,versionId:i.installedVersionId}:null;
   }
   if (link.targetDomain === "skill") {
     const [target] = await db.select().from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, id)));

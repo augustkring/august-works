@@ -1,3 +1,4 @@
+import { packageToolRestriction } from "./agent-packages/execution-gate.js";
 import { governanceToolRestriction } from "./ai-governance/execution-gate.js";
 import { agentRunWritesRevoked } from "../agent-run-cancellation.js";
 import { assertManagedRuntimeCommercialAuthority } from "./billing/managed-runtime-admission.js";
@@ -1324,9 +1325,11 @@ export function toolAccessPolicyService(db: Db) {
       try { await assertManagedRuntimeCommercialAuthority(db, input.companyId, loaded.ctx.agentId); }
       catch (error) { if (error && typeof error === "object" && "status" in error && error.status === 403) return decision("deny", "deny_policy_block", "Current managed runtime capacity is required.", base.effectiveProfileIds, base.matchedPolicyIds); throw error; }
     }
+    const packageRestriction = await packageToolRestriction(db, loaded.ctx);
+    if(packageRestriction.denyReason) return decision("deny", "deny_policy_block", packageRestriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
     const restriction = await governanceToolRestriction(db, loaded.ctx);
     if (restriction.denyReason) return decision("deny", "deny_policy_block", restriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
-    if (restriction.requireHumanApproval && base.allowed) return decision("require_approval", "requires_approval_policy", "The reviewed use case requires a human decision for this material action.", base.effectiveProfileIds, base.matchedPolicyIds);
+    if ((restriction.requireHumanApproval || packageRestriction.requireHumanApproval) && base.allowed) return decision("require_approval", "requires_approval_policy", "The reviewed use case requires a human decision for this material action.", base.effectiveProfileIds, base.matchedPolicyIds);
     return base;
   }
 

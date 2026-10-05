@@ -54,7 +54,9 @@ export async function governanceEvidencePack(
         'runtimeProfileRef',r.provider_profile_ref,'configurationHash',r.qualified_configuration_hash,
         'modelProvider',c.model_provider,'modelId',c.model_id,'imageDigest',c.active_image_digest,
         'sandboxBackend',s.backend,'sandboxProfile',s.profile,'sandboxStatus',s.status,
-        'boundaryPolicyHash',s.boundary_policy_hash,'currentAuthority',aw_v7_governance_deployment_current(d)
+        'boundaryPolicyHash',s.boundary_policy_hash,
+        'packages',coalesce((select jsonb_agg(jsonb_build_object('installationId',pi.id,'versionId',pi.installed_version_id,'releaseHash',pv.content_hash,'status',pi.status,'currentAuthority',aw_v7_package_installation_current(pi),'releaseEvidence',pv.release->'releaseEvidence')) from company_agent_package_installations pi join agent_package_versions pv on pv.id=pi.installed_version_id where pi.company_id=d.company_id and pi.agent_id=d.agent_id),'[]'::jsonb),
+        'currentAuthority',aw_v7_governance_deployment_current(d)
       ) as inventory from ai_use_case_deployments d
       join agents a on a.company_id=d.company_id and a.id=d.agent_id
       left join agent_presence_runtime_bindings r on r.company_id=a.company_id and r.agent_id=a.id
@@ -125,7 +127,7 @@ export async function governanceEvidencePack(
           "Private Memory, source bodies, credential material and connection configuration are excluded from this export.",
           "Readiness records are historical observations, not a grant of current execution authority or a substitute for independent outcome verification.",
           "Stop delivery acknowledges a cancellation request; physical stopping requires canonical runtime evidence.",
-          "Package qualification, subprocessor contracts and protected-host qualification require their own current authoritative evidence.",
+          "Package release references describe recorded publisher evidence; subprocessor contracts and actual protected-host qualification require independent current evidence.",
         ],
       }),
     ) as Omit<GovernanceEvidencePack, "packHash">;

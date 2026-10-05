@@ -3286,3 +3286,5 @@ export * from "./work-signals.js";
 export * from "./execution-sandbox.js";
 
 export * from "./ai-governance.js";
+export * from "./agent-packages.js";
+export * from "./agent-package-candidates.js";

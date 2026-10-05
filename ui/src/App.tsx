@@ -1,3 +1,4 @@
+import { AgentPackages } from "./pages/AgentPackages";
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
 import { Playbooks } from "./pages/Playbooks";
@@ -383,6 +384,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       />
       <Route path="memory/intelligence" element={<V7FeatureGate feature="memory_observations_v7"><DerivedMemory /></V7FeatureGate>} />
       <Route path="orchestration" element={<V7FeatureGate feature="orchestration_v7"><Orchestration /></V7FeatureGate>} />
+      <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><AgentPackages /></V7FeatureGate>} />
       <Route path="ai-governance" element={<V7FeatureGate feature="ai_use_cases_v7"><AIGovernance /></V7FeatureGate>} />
       <Route path="work-signals" element={<V7FeatureGate feature="work_signals_v7"><WorkSignals /></V7FeatureGate>} />
       <Route path="memory/learning" element={<V7FeatureGate feature="learning_engine_v7"><OrganizationalLearning /></V7FeatureGate>} />
@@ -882,7 +884,8 @@ export function App() {
           <Route path="review-queue" element={<UnprefixedBoardRedirect />} />
           <Route path="orchestration" element={<UnprefixedBoardRedirect />} />
           <Route path="work-signals" element={<UnprefixedBoardRedirect />} />
-          <Route path="ai-governance" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><AgentPackages /></V7FeatureGate>} />
+      <Route path="ai-governance" element={<UnprefixedBoardRedirect />} />
           <Route path="learnings" element={<UnprefixedBoardRedirect />} />
           <Route path="cases" element={<UnprefixedBoardRedirect />} />
           <Route path="cases/:caseIdentifier" element={<UnprefixedBoardRedirect />} />

@@ -1,9 +1,9 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agents, issues, workflows, readinessAssessments, readinessRequirements, knowledgeQualityFindings } from "@paperclipai/db";
+import { agentPackageVersions, companyAgentPackageInstallations, agents, issues, workflows, readinessAssessments, readinessRequirements, knowledgeQualityFindings } from "@paperclipai/db";
 import type { Request } from "express";
 import type { AssessReadiness, CreateReadinessRequirement, EvidenceItem } from "@paperclipai/shared";
-import { createReadinessRequirementSchema, resolveReadinessFindingSchema } from "@paperclipai/shared";
+import { createReadinessRequirementSchema, resolveReadinessFindingSchema, readinessCriterionSchema } from "@paperclipai/shared";
 import type { z } from "zod";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { accessService } from "../access.js";
@@ -92,7 +92,7 @@ export function readinessService(db: Db) {
       publish(publications);
       return row;
     },
-    assess: async (companyId: string, input: AssessReadiness, owner: ReadinessActor, parentPublications?: ActivityPublication[]) => {
+    assess: async (companyId: string, input: AssessReadiness, owner: ReadinessActor, parentPublications?: ActivityPublication[], nativePackageVersionId?: string) => {
       const [agent] = await db.select({ id: agents.id }).from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, input.agentId)));
       if (!agent) throw notFound("Agent not found");
       if (owner.actor.type === "agent" && owner.actor.agentId !== input.agentId) throw forbidden("Agents can assess only their own readiness");
@@ -103,6 +103,9 @@ export function readinessService(db: Db) {
       } else if (input.subjectType === "workflow") {
         const [subject] = await db.select({ id: workflows.id }).from(workflows).where(and(eq(workflows.companyId, companyId), eq(workflows.id, subjectId)));
         if (!subject) throw notFound("Workflow not found");
+      } else if (input.subjectType === "agent_package") {
+        const [subject]=await db.select().from(companyAgentPackageInstallations).where(and(eq(companyAgentPackageInstallations.companyId,companyId),eq(companyAgentPackageInstallations.id,subjectId),eq(companyAgentPackageInstallations.agentId,input.agentId)));
+        if(!subject||subject.status==="uninstalled")throw notFound("Package installation not found");nativePackageVersionId=subject.installedVersionId;
       } else if (input.subjectType !== "agent" || subjectId !== input.agentId) {
         throw unprocessable("This subject is not supported until its owning domain is available");
       }
@@ -143,7 +146,13 @@ export function readinessService(db: Db) {
         }
       }
       const custom = await requirements(companyId, input.actionClass);
-      const policies = [...mandatoryReadinessPolicy(input.actionClass), ...custom.map((row) => ({ key: row.requirementKey, version: row.version, criteria: row.criteria }))];
+      const packageRules: Parameters<typeof evaluateReadiness>[0]["requirements"] = [];
+      if(nativePackageVersionId){
+        const [release]=await db.select().from(agentPackageVersions).where(eq(agentPackageVersions.id,nativePackageVersionId));
+        if(!release||release.state!=="published"||!release.release.manifest.actionClasses.includes(input.actionClass))throw conflict("Current package capability qualification is required");
+        if(release.release.manifest.requiredKnowledge.length)packageRules.push({key:`system.package.${release.contentHash}`,version:1,criteria:release.release.manifest.requiredKnowledge.map(domain=>readinessCriterionSchema.parse({key:domain,domain,sourceClasses:["foundation"],mandatory:true,failureBehavior:"block",maxAgeSeconds:90*86400,allowedPurposes:[input.actionClass]}))});
+      }
+      const policies = [...packageRules, ...mandatoryReadinessPolicy(input.actionClass), ...custom.map((row) => ({ key: row.requirementKey, version: row.version, criteria: row.criteria }))];
       const evaluation = evaluateReadiness({ action: input.actionClass, requirements: policies, evidence });
       const publications: ActivityPublication[] = parentPublications ?? [];
       const row = await db.transaction(async (tx) => {

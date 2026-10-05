@@ -16,6 +16,9 @@ export const ENTITLEMENT_KEYS = [
   "privacy.manage",
   "export.use",
   "packages.preview",
+  "packages.chief_of_staff.use",
+  "packages.growth.use",
+  "packages.research.use",
   "execution.concurrent.max",
   "hosted_runtime.provision",
   "hosted_runtime.standard.max_cells",
@@ -43,6 +46,9 @@ export const EMPTY_ENTITLEMENTS: EntitlementMap = {
   "privacy.manage": false,
   "export.use": false,
   "packages.preview": false,
+  "packages.chief_of_staff.use": false,
+  "packages.growth.use": false,
+  "packages.research.use": false,
   "execution.concurrent.max": "0",
   "hosted_runtime.provision": false,
   "hosted_runtime.standard.max_cells": "0",
@@ -80,7 +86,7 @@ export type EntitlementKind =
   | "enterprise_operating_control";
 export function entitlementKind(key: EntitlementKey): EntitlementKind {
   if (typeof EMPTY_ENTITLEMENTS[key] === "string") return "capacity_limit";
-  return key === "hosted_runtime.provision"
+  return key.startsWith("packages.") && key !== "packages.preview" ? "managed_product" : key === "hosted_runtime.provision"
     ? "managed_product"
     : "core_capability";
 }
@@ -127,6 +133,9 @@ export const BILLING_PRODUCTS = {
       "hosted_runtime.dedicated_vm.max_cells": "1",
     },
   },
+  agent_package_chief_of_staff: { label: "Chief of Staff maintained package", entitlements: { "packages.chief_of_staff.use": true } },
+  agent_package_growth: { label: "Growth maintained package", entitlements: { "packages.growth.use": true } },
+  agent_package_research: { label: "Research maintained package", entitlements: { "packages.research.use": true } },
   storage: {
     label: "Additional storage",
     entitlements: { "storage.included_bytes": "10737418240" },

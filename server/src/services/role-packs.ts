@@ -96,7 +96,7 @@ export function rolePackService(db: Db) {
         await audit(tx, actor, companyId, row.id, "role_pack.assigned", publications); return assignment!;
       });
     },
-    resolve: async (actor: AuthorizationActor, companyId: string, agentId: string) => {
+    resolve: async (actor: AuthorizationActor, companyId: string, agentId: string, proposedAgentAssignment?: {rolePackId:string;versionId:string}) => {
       await readable(actor, companyId);
       const [agent] = await db.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).limit(1);
       if (!agent) throw notFound("Agent presence not found");
@@ -115,7 +115,12 @@ export function rolePackService(db: Db) {
         if (id) throw conflict("Organization ancestry is cyclic or exceeds its depth limit");
       }
       const scopeIds = [companyId, ...ancestry.keys(), agentId];
-      const assignments = await db.select().from(agentRolePackAssignments).where(and(eq(agentRolePackAssignments.companyId, companyId), inArray(agentRolePackAssignments.scopeId, scopeIds)));
+      let assignments = await db.select().from(agentRolePackAssignments).where(and(eq(agentRolePackAssignments.companyId, companyId), inArray(agentRolePackAssignments.scopeId, scopeIds)));
+      if(proposedAgentAssignment){
+        // Pure preview of a scoped native configuration; never persists a grant or assignment.
+        assignments=assignments.filter(a=>!(a.scopeType==="agent"&&a.scopeId===agentId));
+        assignments.push({id:"package-preview",companyId,scopeType:"agent",scopeId:agentId,rolePackId:proposedAgentAssignment.rolePackId,versionPolicy:"pinned",pinnedVersionId:proposedAgentAssignment.versionId,createdAt:new Date(),updatedAt:new Date()});
+      }
       const scopeOrder = [companyId, ...[...ancestry.keys()].sort((a, b) => (ancestry.get(b)! - ancestry.get(a)!) || unitById.get(a)!.slug.localeCompare(unitById.get(b)!.slug)), agentId];
       assignments.sort((a, b) => scopeOrder.indexOf(a.scopeId) - scopeOrder.indexOf(b.scopeId));
       const layers: RolePackItem[][] = [system.items], pins: Array<{ rolePackId: string; versionId: string; scopeType: string; scopeId: string }> = [];

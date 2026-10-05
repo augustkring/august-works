@@ -1,5 +1,5 @@
-import { and, eq, inArray } from "drizzle-orm";
-import { learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, policyChangeProposals, workflowOptimizerEvaluations, automationArtifacts, workflows, workflowRevisions, workflowRuns, rolePacks, rolePackVersions, rolePackItems,
+import { and, eq, sql, ne, inArray } from "drizzle-orm";
+import { learningCycles, companyAgentPackageInstallations, agentPackageUpdateProposals, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, policyChangeProposals, workflowOptimizerEvaluations, automationArtifacts, workflows, workflowRevisions, workflowRuns, rolePacks, rolePackVersions, rolePackItems,
   foundationChangeProposals, playbookChangeProposals, projectRoadmapProposals, companySkills, companySkillVersions, documentRevisions, documents, foundationSections, foundationDocuments, playbookDocuments, type Db } from "@paperclipai/db";
 
 /** Runs under the caller's company privacy lock, independently of rollout flags. */
@@ -34,6 +34,9 @@ export async function invalidateLearningMemory(tx: Db, companyId: string, record
     const candidates = await tx.update(workflowOptimizerEvaluations).set({ status: "retired", ...(erase ? { compilerResult: null, invariants: [] } : {}), updatedAt: now }).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), inArray(workflowOptimizerEvaluations.id, ids("automation_artifact")))).returning();
     if (candidates.length) await tx.update(automationArtifacts).set({ status: "deprecated", archivedAt: now, updatedAt: now }).where(and(eq(automationArtifacts.companyId, companyId), inArray(automationArtifacts.id, candidates.map(candidate => candidate.artifactId))));
   }
+  if(ids("agent_package").length)await tx.update(agentPackageUpdateProposals).set({status:"stale",...(erase?{proposal:null,reason:"",erasedAt:now}:{}),updatedAt:now}).where(and(eq(agentPackageUpdateProposals.companyId,companyId),inArray(agentPackageUpdateProposals.id,ids("agent_package"))));
+  const packageIds=assets.filter(a=>a.assetType==="agent_package_installation").map(a=>a.assetId);
+  if(packageIds.length)await tx.update(companyAgentPackageInstallations).set({status:"degraded",activationHash:null,readiness:null,version:sql`${companyAgentPackageInstallations.version}+1`,updatedAt:now}).where(and(eq(companyAgentPackageInstallations.companyId,companyId),inArray(companyAgentPackageInstallations.id,packageIds),ne(companyAgentPackageInstallations.status,"uninstalled")));
   const workflowRevisionIds = assets.filter(asset => asset.assetType === "workflow_revision").map(asset => asset.assetId);
   if (workflowRevisionIds.length) {
     const revisions = await tx.select().from(workflowRevisions).where(and(eq(workflowRevisions.companyId, companyId), inArray(workflowRevisions.id, workflowRevisionIds)));
