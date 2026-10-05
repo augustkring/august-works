@@ -1,8 +1,10 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { memoryObservations, memoryObservationEvidence, memoryModels, memoryModelEvidence, memoryModelVersions, memoryJobs, type Db } from "@paperclipai/db";
+import { invalidateLearningMemory } from "../learning/learning-privacy.js";
 /** Invalidates every historical root dependency; erasure also scrubs retained synthesis versions. */
 export async function invalidateDerivedMemory(tx: Db, companyId: string, recordIds: string[], erase = false) {
   if (!recordIds.length) return;
+  await invalidateLearningMemory(tx, companyId, recordIds, erase);
   const observationEdges = await tx.select({ id: memoryObservationEvidence.observationId }).from(memoryObservationEvidence).where(and(eq(memoryObservationEvidence.companyId, companyId), inArray(memoryObservationEvidence.memoryRecordId, recordIds)));
   const observationIds = [...new Set(observationEdges.map((edge) => edge.id))];
   const modelEdges = await tx.select({ id: memoryModelEvidence.modelId }).from(memoryModelEvidence).where(and(eq(memoryModelEvidence.companyId, companyId), inArray(memoryModelEvidence.memoryRecordId, recordIds)));

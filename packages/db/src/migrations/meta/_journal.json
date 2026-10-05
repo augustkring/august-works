@@ -2486,6 +2486,13 @@
       "when": 1791196770141,
       "tag": "0356_colossal_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 357,
+      "version": "7",
+      "when": 1791199528949,
+      "tag": "0357_chemical_korvac",
+      "breakpoints": true
     }
   ]
 }

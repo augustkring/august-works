@@ -12,7 +12,7 @@ The user has requested implementation of the whole brief. Work continues through
 | 3 | Cognitive provider contract | Implemented with stateless local/no-op providers; five integration tests plus V4 regressions pass |
 | 4 | Hindsight spike and adoption decision | DEFER decision recorded against pinned v0.10.2 source; no production provider admitted |
 | 5 | Observations and Mental Models | Implemented with reviewed root lineage, leased rebuilds, Context/UI and erasure guards; local verification passing |
-| 6 | Organizational Learning | Domain and evaluation-contract implementation in progress |
+| 6 | Organizational Learning | Core implemented and verified for Foundation/Skill/Playbook/project/policy; Workflow/Optimizer/Role Pack/package integration remains in progress |
 | 7 | Bounded orchestration | Pending implementation |
 | 8 | Deterministic supervision | Pending implementation |
 | 9 | Semantic supervision and verification | Pending implementation |
@@ -39,6 +39,8 @@ Verification: six policy tests and five migrated-PostgreSQL service/API tests pa
 ## Build environment
 
 Rust 1.97.1 with rustfmt is installed under `/workspace/aw-v7-toolchain`. The repository toolchain pin is unchanged. pnpm invocations use 9.15.4 through `/workspace/aw-v7-tools/pnpm`. Native prerequisites now run; the earlier missing-cargo limitation is historical. Baseline checks encountered in-progress source while new exports were being added; final checks will use a stable revision.
+
+The Wave 5 checkpoint passed repository-wide typecheck and build. Its initial full `test:run` was intentionally interrupted during general-server execution to continue implementation; it is not a passing full-suite result. The complete required suite will run on the final implementation. Official Node 24.19.0 headers were hash-verified and installed under `/workspace/aw-v7-node-headers`; build uses `npm_config_devdir` for the existing SO_PEERCRED native addon, without changing repository dependencies/toolchain pins.
 
 
 ## Explicit external acceptance gates
@@ -74,3 +76,13 @@ Mental models use an explicitly extractive local synthesis over selected current
 Context reads validate every surviving root version, purpose, scope, retention and current authorization. Derived evidence has no canonical authority domain and carries its original Memory IDs/versions. Root changes make observations need review and models need rebuild; stale prose is withheld. Erasure scrubs derived content and all retained model versions even with flags off. Context manifests retain content-free Memory-root lineage. Existing database erasure guards now cover Context consumers, late/restored writes, run events, Task outputs and compatible run-log erasure jobs; encrypted SaaS log buffers are excluded immediately while object erasure awaits its normal receipt.
 
 Verification: the Waves 1–5 migrated-PostgreSQL selection passes 57 tests; the eight final derived-memory cases also pass. Those cases cover review, poison/duplication, purpose, private/tenant/sensitivity boundaries, revocation, leased rebuild/history, restored deletion markers and late runtime writes. Existing Memory maintenance/job selection passes 21 tests before adding the Context erasure case. Server/UI types, module boundaries and token gates pass. Full final repository checks and live outcome qualification remain separate.
+
+## Wave 6 core implementation
+
+Cycles require accepted verified shared Memory linked to surviving completed canonical Tasks. Hypotheses bind the actual current target baseline, a normalized challenger hash, protected invariants, minimum paired evidence, quality floors and rollback paths. Only a current company administrator can sign the initial manual-review comparison. Distinct Task outcomes are reauthorized and version-checked before proposal creation. Human comparison establishes an association, not causation. Cheaper unsafe or lower-quality candidates fail.
+
+Five domain adapters create native Foundation, Skill, Playbook and Roadmap candidates or minimal typed governance proposals. They preserve sensitivity and scope. Roadmap dates remain unchanged by proposal creation. Native Skill evals remain necessary for promotion. Policy acceptance requires current native permissions, baseline and explicit human acknowledgement. Activity rows are atomic; nested Playbook/Roadmap proposal publications now join the parent transaction.
+
+Domain database guards reject acceptance/promotion after source changes with V7 off. Accepted document/Skill descendants inherit source lineage. Source erasure clears hypotheses, retained evaluations, proposals, accepted document/Skill content and Foundation sections. Restored and late writes are scrubbed. Native proposal/review/publication paths share the existing Memory privacy lock to serialize against deletion.
+
+Verification: ten new migrated-PostgreSQL Learning cases pass. The final five-file regression selection passes 51 cases, including existing Foundation, Skill, Playbook/Roadmap and derived-Memory behavior. Shared/server/UI types, module boundaries and token gates pass for this core. Workflow/Optimizer, Role Pack and Agent Package adapters, additional evaluation methods and integrated acceptance remain open; the Learning core is not a claim that Wave 6 or the entire brief is finished.

@@ -1,3 +1,4 @@
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { availablePortfolioPublication } from "./portfolio-source.js";
 import { skillDependencyStates } from "./skill-dependencies.js";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
@@ -116,6 +117,7 @@ export function skillLifecycleService(db: Db) {
     propose: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof skillCandidateInputSchema>, provenance?: SkillProvenance, parentPublications?: ActivityPublication[]) => {
       const input = skillCandidateInputSchema.parse(raw); await authorize(actor, companyId, "skills.propose");
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockMemoryPrivacy(tx, companyId);
         const row = await skill(tx, companyId, id, true); await authorize(actor, companyId, "skills.propose", row, tx);
         if (["revoked", "deprecated"].includes(row.lifecycleState)) throw conflict("Revoked/deprecated Skills cannot receive candidates");
         if (row.activeVersionId !== input.baseActiveVersionId) throw conflict("The active Skill changed; refresh before proposing");
@@ -179,6 +181,7 @@ export function skillLifecycleService(db: Db) {
     promote: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof skillPromotionInputSchema>) => {
       const input = skillPromotionInputSchema.parse(raw); await authorize(actor, companyId, "skills.promote");
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockMemoryPrivacy(tx, companyId);
         const row = await skill(tx, companyId, id, true); await authorize(actor, companyId, "skills.promote", row, tx);
         if (row.activeVersionId !== input.expectedActiveVersionId) throw conflict("The champion changed; repeat comparison against the current active version");
         if (["revoked", "deprecated"].includes(row.lifecycleState)) throw conflict("A revoked/deprecated Skill cannot be promoted");

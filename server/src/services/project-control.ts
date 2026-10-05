@@ -1,3 +1,4 @@
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { agents, approvals, companyMemberships, goals, issues, issueApprovals, issueRelations, projects, projectMilestones, projectRoadmapProposals, projectScheduleBaselines, type Db } from "@paperclipai/db";
 import { updateMilestoneSchema, createMilestoneSchema, roadmapPolicySchema, roadmapProposalSchema, taskForecastPatchSchema, type ProjectRoadmap, type RoadmapTask } from "@paperclipai/shared";
@@ -6,7 +7,7 @@ import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { assertV5Authorization, assertV5Enabled, v5HumanActorId } from "./v5-authorization.js";
 import { withV5ActivityTransaction } from "./v5-mutations.js";
-import { logActivity } from "./activity-log.js";
+import { logActivity, type ActivityPublication } from "./activity-log.js";
 
 import { budgetService } from "./budgets.js";
 import { roadmapHealth } from "./project-health.js";
@@ -111,7 +112,7 @@ export function projectControlService(db: Db) {
       await assertV5Authorization(db, actor, companyId, "tasks:assign", { type: "project", companyId, projectId });
       return withV5ActivityTransaction(db, async (tx, publications) => { await project(tx, actor, companyId, projectId, true); const current = await read(tx, actor, companyId, projectId); const [baseline] = await tx.insert(projectScheduleBaselines).values({ companyId, projectId, name: name.trim(), createdByUserId: userId, snapshot: { tasks: current.tasks, milestones: current.milestones, dependencies: current.dependencies } }).returning(); await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: "project.schedule_baseline_created", entityType: "project", entityId: projectId, details: { baselineId: baseline!.id, name: name.trim() } }, publications); return baseline!; });
     },
-    propose: async (actor: AuthorizationActor, companyId: string, projectId: string, raw: z.infer<typeof roadmapProposalSchema>) => {
+    propose: async (actor: AuthorizationActor, companyId: string, projectId: string, raw: z.infer<typeof roadmapProposalSchema>, parentPublications?: ActivityPublication[]) => {
       const input = roadmapProposalSchema.parse(raw);
       return withV5ActivityTransaction(db, async (tx, publications) => {
         const row = await project(tx, actor, companyId, projectId, true), policy = roadmapPolicySchema.parse(row.roadmapPolicy ?? {});
@@ -121,11 +122,12 @@ export function projectControlService(db: Db) {
         const [proposal] = await tx.insert(projectRoadmapProposals).values({ companyId, projectId, patch: input, reason: input.reason, risk: inspected.risk, status: autoApply ? "accepted" : "pending", createdByAgentId: actor.type === "agent" ? actor.agentId : null, createdByUserId: actor.type === "board" ? v5HumanActorId(actor) : null }).returning();
         if (autoApply) { for (const change of inspected.prepared) await tx.update(issues).set({ ...change.patch, updatedAt: new Date() }).where(eq(issues.id, change.row.id)); await tx.update(projects).set({ updatedAt: new Date() }).where(eq(projects.id, projectId)); }
         await logActivity(tx, { companyId, actorType: actor.type === "agent" ? "agent" : "user", actorId: actor.agentId ?? v5HumanActorId(actor), action: autoApply ? "project.low_risk_plan_applied" : "project.roadmap_proposed", entityType: "project", entityId: projectId, details: { proposalId: proposal!.id, risk: inspected.risk, changedTaskIds: input.changes.map((c) => c.issueId) } }, publications); return proposal!;
-      });
+      }, parentPublications);
     },
     review: async (actor: AuthorizationActor, companyId: string, projectId: string, proposalId: string, accept: boolean, rationale: string) => {
       const userId = v5HumanActorId(actor); if (rationale.trim().length < 10 || rationale.length > 4000) throw unprocessable("Review rationale must contain 10–4000 characters");
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockMemoryPrivacy(tx, companyId);
         // Rejecting or marking a proposal stale also mutates project governance.
         // Require the same planning authority before every decision branch.
         await assertV5Authorization(tx, actor, companyId, "tasks:assign", { type: "project", companyId, projectId });
