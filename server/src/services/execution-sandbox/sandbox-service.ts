@@ -31,7 +31,7 @@ export function executionSandboxService(db: Db, options: {
     const query = tx.select().from(runtimeSandboxBindings).where(and(eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, id)));
     const [row] = await (lock ? query.for("update") : query); if (!row) throw notFound("Sandbox binding not found"); return row;
   }
-  function identity(row: Binding): SandboxIdentity { return { companyId: row.companyId, bindingId: row.id, cellId: row.runtimeCellId, cellGeneration: row.cellGeneration, sandboxRef: row.sandboxRef ?? `cell:${row.runtimeCellId}:${row.cellGeneration}` }; }
+  function identity(row: Binding): SandboxIdentity { return { companyId: row.companyId, bindingId: row.id, cellId: row.runtimeCellId, cellGeneration: row.cellGeneration, sandboxRef: row.sandboxRef ?? (row.backend === "openshell" ? `aw-v7-${row.id}` : `cell:${row.runtimeCellId}:${row.cellGeneration}`) }; }
   function backend(row: Binding, actor: AuthorizationActor) {
     const selected = options.backendFor?.(row, actor);
     if (selected) { if (selected.backend !== row.backend) throw conflict("Registered backend does not match the immutable binding"); return selected; }
@@ -109,7 +109,9 @@ export function executionSandboxService(db: Db, options: {
       return withV7ActivityTransaction(db, async (tx, publications) => {
         const row = await binding(tx, actor, companyId, id, true); await access(tx, actor, companyId, true); const currentCell = await cell(tx, companyId, row.runtimeCellId);
         if (row.version !== expectedVersion || row.cellGeneration !== currentCell.generation.toString() || currentCell.status !== "STOPPED") throw conflict("Runtime changed during qualification");
-        const prepared = await selected.prepareSandbox(identity(row));
+        // An unavailable host qualification must remain a retained inconclusive
+        // report. Do not turn a configured image into preparation evidence.
+        const prepared = report.capabilities ? await selected.prepareSandbox(identity(row)) : { backendVersion: "unqualified", imageDigest: `cell:${currentCell.id}:${row.cellGeneration}` };
         if (report.capabilities && (report.capabilities.sandboxImageDigest !== prepared.imageDigest || report.capabilities.backendVersion !== prepared.backendVersion)) throw conflict("Observed backend image does not match the current sandbox");
         const [run] = await tx.insert(sandboxQualificationRuns).values({ companyId, bindingId: id, backend: row.backend, backendVersion: prepared.backendVersion, hostOrImageRef: prepared.imageDigest, kernelVersion: report.capabilities?.hostKernelVersion ?? null, suiteVersion: report.suiteVersion, evidenceKind: selected.evidenceKind, status: report.status, results: report.results, exceptions: report.exceptions, reportHash: report.reportHash, startedAt, completedAt: new Date() }).returning();
         const [updated] = await tx.update(runtimeSandboxBindings).set({ qualificationRunId: run!.id, capabilitySnapshot: report.capabilities, capabilitySnapshotHash: report.capabilities ? nativeSha256(report.capabilities) : null, status: report.status === "passed" && report.capabilities && selected.evidenceKind === "protected_host_report" ? "ready" : report.status === "failed" ? "failed" : "requested", version: row.version + 1, updatedAt: new Date() }).where(eq(runtimeSandboxBindings.id, id)).returning();

@@ -122,6 +122,12 @@ export function runtimeHostRoutes(platform: SaasPlatform) {
         );
     },
   );
+  router.post("/api/internal/runtime/hosts/:hostId/sandbox-commands/claim", async (req, res) => {
+    res.set("Cache-Control", "no-store").json(await platform.sandboxHosts.claim(String(req.params.hostId)));
+  });
+  router.post("/api/internal/runtime/hosts/:hostId/sandbox-commands/:commandId/complete", async (req, res) => {
+    res.set("Cache-Control", "no-store").json(await platform.sandboxHosts.complete(String(req.params.hostId), String(req.params.commandId), req.body));
+  });
   router.post(
     "/api/internal/runtime/hosts/:hostId/commands/:commandId/renew",
     async (req, res) => {

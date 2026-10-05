@@ -13,8 +13,9 @@ import { runtimeRequestSigningInput } from "../../../packages/shared/src/runtime
 import { atomicJson } from "./journal.mjs";
 import { hostGatewayRelay } from "./relay.mjs";
 import { runtimeEngine } from "./engine.mjs";
+import { openShellHostEngine } from "./openshell.mjs";
 
-const VERSION = "6.0.0";
+const VERSION = "6.0.1";
 const filename = process.env.AW_HOST_CONFIG_FILE ?? "/etc/aw-runtime/host.json";
 const config = JSON.parse(await readFile(filename, "utf8"));
 const origin = new URL(config.controlOrigin);
@@ -247,6 +248,12 @@ function decrypt(id, envelope) {
 }
 const engine = runtimeEngine({ backupEndpoint: config.backupEndpoint });
 await engine.initialize();
+const sandboxEngine = openShellHostEngine({ config: config.openshellCli, epoch: config.epoch, root });
+await sandboxEngine.initialize();
+async function fenceEngines() {
+  const outcomes = await Promise.allSettled([engine.fenceAll(), sandboxEngine.fenceAll()]);
+  if (outcomes.some(outcome => outcome.status === "rejected")) throw new Error("host_lease_fence_incomplete");
+}
 const relay = hostGatewayRelay({
   origin: origin.origin,
   proof: { hostId: config.hostId, epoch: config.epoch, sign: proof },
@@ -283,7 +290,7 @@ const guardian = setInterval(async () => {
   fenceActive = true;
   try {
     relay.stop();
-    await engine.fenceAll();
+    await fenceEngines();
   } catch {
     process.stderr.write("host_lease_fence_failed\n");
   } finally {
@@ -302,6 +309,15 @@ process.once("SIGINT", () => {
 while (!stopped) {
   try {
     const claimed = await request("/commands/claim");
+    if (!claimed) {
+      const sandboxClaim = await request("/sandbox-commands/claim");
+      if (sandboxClaim) {
+        const payload = decrypt(sandboxClaim.id, sandboxClaim.envelope);
+        const result = await sandboxEngine.execute(sandboxClaim.id, payload, sandboxClaim.deadlineAt);
+        await request("/sandbox-commands/" + sandboxClaim.id + "/complete", { ...result, claimToken: payload.claimToken, generation: payload.scope.cellGeneration });
+        await sandboxEngine.acknowledge(sandboxClaim.id);
+      }
+    }
     if (!claimed) {
       for (const recovery of await request("/commands/recovery")) {
         const receipt = await engine.receipt(recovery.id, recovery.generation);
@@ -366,4 +382,4 @@ while (!stopped) {
 clearInterval(timer);
 clearInterval(guardian);
 relay.stop();
-if (revoked) await engine.fenceAll();
+if (revoked) await fenceEngines();

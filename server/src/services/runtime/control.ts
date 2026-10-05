@@ -1024,6 +1024,7 @@ export function runtimeControlService(
         .where(
           and(
             eq(runtimeHostCommands.runtimeHostId, hostId),
+            inArray(runtimeHostCommands.commandType, ["provision", "start", "upgrade", "stop", "delete", "backup", "restore", "migrate", "rotate_gateway"]),
             ...(admitNew
               ? []
               : [

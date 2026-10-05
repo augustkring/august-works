@@ -3293,3 +3293,4 @@ export * from "./core-stewards.js";
 export * from "./enterprise.js";
 
 export * from "./security-events.js";
+export * from "./sandbox-host-contracts.js";

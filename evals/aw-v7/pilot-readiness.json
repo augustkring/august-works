@@ -7,7 +7,7 @@
       "id": "native_openshell_host_bridge",
       "wave": 12,
       "status": "incomplete",
-      "source": "server/src/services/execution-sandbox/openshell-backend.ts"
+      "source": "server/src/services/execution-sandbox/native-host-bridge.ts"
     },
     {
       "id": "credential_use_broker_and_revocation",

@@ -2,6 +2,7 @@ import { enterpriseRoutes } from "./routes/enterprise.js";
 import { agentPackageRoutes } from "./routes/agent-packages.js";
 import { aiGovernanceRoutes } from "./routes/ai-governance.js";
 import { executionSandboxRoutes } from "./routes/execution-sandbox.js";
+import { openShellBackend } from "./services/execution-sandbox/openshell-backend.js";
 import { orchestrationRoutes } from "./routes/orchestration.js";
 import { workSignalRoutes } from "./routes/work-signals.js";
 import { publicOriginGuard } from "./middleware/public-origin-guard.js";
@@ -734,6 +735,10 @@ export async function createApp(
   api.use(agentPackageRoutes(db, { operatorUserIds: opts.saasPlatform?.config.operatorUserIds, protectedEvidenceOrigin: opts.saasPlatform?.config.objects.endpoint, sourceSha: opts.saasPlatform?.config.deployment.sourceSha }));
   api.use(executionSandboxRoutes(db, {
     operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
+    backendFor: opts.saasPlatform?.config.runtime.openshellProver ? (binding, actor) => binding.backend === "openshell" ? openShellBackend({
+      identity: { companyId: binding.companyId, bindingId: binding.id, cellId: binding.runtimeCellId, cellGeneration: binding.cellGeneration, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` },
+      boundary: binding.boundaryPolicy, bridge: opts.saasPlatform!.sandboxHosts.bridge(actor), evidenceKind: "protected_host_report", prover: opts.saasPlatform!.config.runtime.openshellProver!,
+    }) : undefined : undefined,
     nativeOperation: opts.saasPlatform ? (companyId, cellId, userId, action, idempotencyKey) => opts.saasPlatform!.runtime.request(companyId, cellId, userId, { action, idempotencyKey }) : undefined,
   }));
   api.use(cognitiveMemoryRoutes(db));
