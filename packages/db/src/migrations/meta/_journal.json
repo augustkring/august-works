@@ -2647,6 +2647,13 @@
       "when": 1791240199600,
       "tag": "0379_v7_model_reservations",
       "breakpoints": true
+    },
+    {
+      "idx": 380,
+      "version": "7",
+      "when": 1791240692209,
+      "tag": "0380_slow_doorman",
+      "breakpoints": true
     }
   ]
 }

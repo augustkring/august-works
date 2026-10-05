@@ -23,7 +23,12 @@ import { arbitrateSupervision, type SupervisionSnapshot } from "./supervision-po
 import { ensureSupervisionSession, enqueueSupervisionStop } from "./supervision-outbox.js";
 
 /** Observes canonical facts, never hidden reasoning or worker-reported completion. */
-export function supervisionService(db: Db) {
+export function supervisionService(db: Db, options: {
+  semanticVerifier?: {
+    configured(companyId: string): boolean;
+    verify(actor: AuthorizationActor, input: { companyId: string; planId: string; workerId: string | null; idempotencyKey: string }): Promise<{ id: string; result: string }>;
+  };
+} = {}) {
   async function observe(companyId: string, id: string, human?: { actor: AuthorizationActor; input: SupervisionInterventionInput }) {
     const postCommitActions: IssuePostCommitAction[] = [];
     const outcome = await withV7ActivityTransaction(db, async (tx, publications) => {
@@ -194,7 +199,36 @@ export function supervisionService(db: Db) {
           await assertDerivedManager(db,actor,job.companyId);
           await assertV7Enabled(db,"verifier_v7");
           const { verificationService } = await import("./verification-service.js");
-          const packet = await verificationService(db).packet(actor,job.companyId,job.planId,job.targetWorkerId);
+          let packet = await verificationService(db).packet(actor,job.companyId,job.planId,job.targetWorkerId);
+          if (options.semanticVerifier?.configured(job.companyId)) {
+            // Every delivery retry retains this durable spend identity. A model
+            // recommendation still leaves the native human review outstanding.
+            try {
+              await options.semanticVerifier.verify(actor, { companyId: job.companyId, planId: job.planId,
+                workerId: job.targetWorkerId, idempotencyKey: `semantic-verifier:${job.id}` });
+            } catch {
+              // Missing/expired qualification, exhausted call budget and an
+              // unknown provider outcome all resolve through accountable human
+              // review. No delivery retry may resend this model request.
+              await withV7ActivityTransaction(db, async (tx, publications) => {
+                await lockMemoryPrivacy(tx, job.companyId);
+                const [current] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId))).for("update");
+                if (!current || current.erasedAt || ["completed","cancelled","failed"].includes(current.status)) return;
+                const changed = current.status !== "paused";
+                const [fenced] = await tx.update(orchestrationPlans).set({ status: "paused",version: current.version+Number(changed),updatedAt: new Date() }).where(eq(orchestrationPlans.id,current.id)).returning();
+                const live = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId,job.companyId),eq(orchestrationWorkerAttempts.planId,job.planId),eq(orchestrationWorkerAttempts.status,"running")));
+                const stop = await enqueueSupervisionStop(tx,fenced!,{ actorType: "system",actorId: "supervision",action: "ESCALATE_HUMAN",reasonCode: `semantic_review_unavailable:${job.id}`,rationale: "Independent model review is unavailable; human resolution is required",attemptIds: live.map(a => a.id) });
+                await logActivity(tx,{ companyId: job.companyId,actorType: "system",actorId: "supervision",action: "verification.model_unavailable",entityType: "orchestration_plan",entityId: job.planId,details: { interventionId: job.id,stopInterventionId: stop?.id ?? null,completionCertified: false } },publications);
+              });
+            }
+            // Read again after inference; stale owner/source/version cannot
+            // publish a continuation or revive a cancelled plan.
+            await assertDerivedManager(db,actor,job.companyId);
+            await assertV7Enabled(db,"verifier_v7");
+            const [current] = await db.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId)));
+            if (!current || current.erasedAt || !["running","paused","verifying"].includes(current.status)) throw conflict("Review authority changed during inference");
+            packet = await verificationService(db).packet(actor,job.companyId,job.planId,job.targetWorkerId);
+          }
           const interaction = await issueThreadInteractionService(db).create({ id: packet.issueId,companyId: job.companyId },{ kind: "request_confirmation",resolverPolicy: "human_only",continuationPolicy: "none",addresseeUserId: principal?.type === "user" ? principal.userId : undefined,idempotencyKey: `v7-verification:${job.planId}:${packet.resultHash}`,title: "Independent result review required",summary: "Review the saved outputs, original evidence and contract in Orchestration. Acknowledging this request does not certify completion.",payload: { version: 1,allowDeclineReason: true,prompt: "Review this result in Orchestration before marking it complete?" } },{ userId: v7HumanActorId(actor) });
           verificationInteractionId = interaction.id;
         } else if (job.decisionAction === "RETRY") {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { loadReadOnlyModelProfiles, type ReadOnlyModelProfile } from "./services/orchestration/read-only-model-profiles.js";
 
 const required = z.string().trim().min(1);
 const secret = z.string().min(32);
@@ -103,9 +104,12 @@ const schema = z.object({
   AW_DEPLOYMENT_SOURCE_SHA: z.string().regex(/^[a-f0-9]{40}$/),
   AW_RUNTIME_OPENSHELL_PROVER_PATH: required.refine(v => v.startsWith("/")).optional(),
   AW_RUNTIME_OPENSHELL_PROVER_SHA256: key.optional(),
+  AW_READ_ONLY_MODEL_PROFILES_PATH: required.refine(v => v.startsWith("/")).optional(),
+  AW_READ_ONLY_MODEL_PROFILES_SHA256: key.optional(),
 });
 
 export type SaasPlatformConfig = {
+  readOnlyModelProfiles?: ReadOnlyModelProfile[];
   environment: "staging" | "production";
   databaseUrl: string;
   runLogs?: {
@@ -325,6 +329,9 @@ export function loadSaasPlatformConfig(
       backupRetentionDays: v.RUNTIME_CONTROL_BACKUP_RETENTION_DAYS,
     },
     operatorUserIds: operators,
+    ...(v.AW_READ_ONLY_MODEL_PROFILES_PATH || v.AW_READ_ONLY_MODEL_PROFILES_SHA256 ? {
+      readOnlyModelProfiles: loadReadOnlyModelProfiles(v.AW_READ_ONLY_MODEL_PROFILES_PATH, v.AW_READ_ONLY_MODEL_PROFILES_SHA256?.toLowerCase()),
+    } : {}),
     deployment: {
       imageDigest: v.AW_DEPLOYMENT_IMAGE_DIGEST,
       sourceSha: v.AW_DEPLOYMENT_SOURCE_SHA,

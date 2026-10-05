@@ -1209,9 +1209,16 @@ async function startServerWithDatabaseTeardown(
   const executionControlSweepsInFlight = new Set<string>();
   const workflowRecoveryExecutor = workflowExecutorService(db);
   const memoryJobs = memoryJobService(db);
-  const supervisor = supervisionService(db);
+  const semanticVerifier = platform?.config.readOnlyModelProfiles?.length
+    ? (await import("./services/supervision/read-only-model-verifier.js")).readOnlyModelVerifier(db, {
+      profiles: platform.config.readOnlyModelProfiles, sourceSha: platform.config.deployment.sourceSha,
+      protectedEvidenceOrigin: platform.config.objects.endpoint,
+    }) : undefined;
+  const supervisor = supervisionService(db, { semanticVerifier });
+  const { expireModelReservations } = await import("./services/orchestration/model-reservations.js");
   const { workSignalService } = await import("./services/work-signals/work-signal-service.js");
   const executionControlSweeps = [
+    ["model_reservations", () => expireModelReservations(db)],
     ["sandbox_safety", () => reconcileSandboxSafety(db, {
       hostMaxAgeSeconds: platform?.config.runtime.suspectSeconds,
       requestStop: platform ? input => platform.runtime.request(input.companyId, input.cellId, "sandbox-guardian", { action: "stop", idempotencyKey: input.idempotencyKey }, new Date(), "sandbox-guardian", input.generation) : undefined,

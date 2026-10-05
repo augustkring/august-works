@@ -1,4 +1,4 @@
-import { and, eq, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import {
   issues,
   orchestrationPlans,
@@ -166,7 +166,7 @@ export function modelReservationService(
       throw forbidden(
         "Current initiating human and eligible plan are required for model spend",
       );
-    if (plan.budgets.maxModelCostMinor === null)
+    if (purpose === "worker_model" && plan.budgets.maxModelCostMinor === null)
       throw forbidden("Explicit model cost cap required for this broker");
     if (
       plan.startedAt &&
@@ -265,10 +265,13 @@ export function modelReservationService(
           return existing;
         }
         if (
-          plan.modelCostReserved + quote.maximumMinor >
-          plan.budgets.maxModelCostMinor!
+          plan.budgets.maxModelCostMinor !== null &&
+          plan.modelCostReserved + quote.maximumMinor > plan.budgets.maxModelCostMinor
         )
           throw forbidden("Cumulative model reservation budget exhausted");
+        if (input.purpose !== "worker_model" &&
+          (plan.verifierCallsUsed >= plan.supervisionPolicy.maxVerifierCalls || plan.supervisionPolicy.maxVerificationDepth < 1))
+          throw forbidden("The cumulative read-only model call budget is exhausted");
         const expiresAt = new Date(
           Math.min(
             Date.parse(quote.expiresAt),
@@ -476,30 +479,30 @@ export function modelReservationService(
         return updated!;
       });
     },
-    async expire(now = new Date()) {
-      // Unknown dispatch retains its complete debit; neither a timeout nor a
-      // cancelled preflight proves that provider billing is refundable.
-      const reserved = await db
-        .update(orchestrationModelReservations)
-        .set({ status: "cancelled", completedAt: now })
-        .where(
-          and(
-            eq(orchestrationModelReservations.status, "reserved"),
-            lte(orchestrationModelReservations.expiresAt, now),
-          ),
-        )
-        .returning({ id: orchestrationModelReservations.id });
-      const dispatched = await db
-        .update(orchestrationModelReservations)
-        .set({ status: "unknown", completedAt: now })
-        .where(
-          and(
-            eq(orchestrationModelReservations.status, "dispatched"),
-            lte(orchestrationModelReservations.expiresAt, now),
-          ),
-        )
-        .returning({ id: orchestrationModelReservations.id });
-      return { cancelled: reserved.length, unknown: dispatched.length };
-    },
+    expire: (now = new Date(), limit = 20) => expireModelReservations(db, now, limit),
   };
+}
+
+/** Flag- and configuration-independent reconciliation of existing debits. */
+export async function expireModelReservations(db: Db, now = new Date(), limit = 20) {
+      // A bounded safety sweep remains active after rollout rollback. Expiry
+      // never refunds an unknown provider charge or restores a call slot.
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        const rows = await tx.select().from(orchestrationModelReservations).where(and(
+          inArray(orchestrationModelReservations.status, ["reserved", "dispatched"]),
+          lte(orchestrationModelReservations.expiresAt, now),
+        )).orderBy(asc(orchestrationModelReservations.expiresAt), asc(orchestrationModelReservations.id))
+          .limit(Math.max(1, Math.min(100, Math.trunc(limit) || 20))).for("update", { skipLocked: true });
+        let cancelled = 0, unknown = 0;
+        for (const row of rows) {
+          const status = row.status === "reserved" ? "cancelled" : "unknown";
+          await tx.update(orchestrationModelReservations).set({ status, completedAt: now })
+            .where(eq(orchestrationModelReservations.id, row.id));
+          if (status === "cancelled") cancelled++; else unknown++;
+          await logActivity(tx, { companyId: row.companyId, actorType: "system", actorId: "model-broker",
+            action: "orchestration.model_reservation_expired", entityType: "orchestration_plan", entityId: row.planId,
+            details: { reservationId: row.id, status, maximumMinor: row.maximumMinor, debitRetained: true } }, publications);
+        }
+        return { cancelled, unknown };
+      });
 }

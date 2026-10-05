@@ -14,10 +14,11 @@ it("starts every semantic and high-impact acknowledgement unchecked and binds re
   const packet = { planId: plan.id,planVersion: 2,workerId: null,issueId: "task",contractId: "contract",contractHash: "sha256:contract",resultHash: "a".repeat(64),contract: { objective: "Review the consequential result",requiredOutputs: [{ key: "result",jsonSchema: null }],businessInvariants: ["Only the approved recipient receives the approved message"],evidenceRequirements: [],prohibitedOutcomes: [],requiredPostconditions: [] },evidence: [{ ref: "tool:approved-receipt",type: "tool_receipt",sourceId: "receipt",sourceVersion: "version",hash: "hash" }],deterministicFailures: [],liveAttempts: 0,riskClass: "C3",policy: { independentRequired: true,humanRequired: true,workerSelfCertification: false } } as VerificationPacket;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false,staleTime: Infinity } } });
   client.setQueryData(["verification-packet",companyId,plan.id,plan.version,null],packet);
-  client.setQueryData(["verification-history",companyId,plan.id,plan.version],[]);
+  client.setQueryData(["verification-history",companyId,plan.id,plan.version],[{ id: "model-review",result: "needs_human",reviewerType: "model",createdAt: "2026-10-05T00:00:00Z",erasedAt: null }]);
   const element = document.createElement("div"); document.body.append(element); const root = createRoot(element);
   try {
     await act(async () => root.render(<QueryClientProvider client={client}><OrchestrationVerification companyId={companyId} plan={plan} onReviewed={() => {}} /></QueryClientProvider>));
+    expect(element.textContent).toContain("Model assessment: needs human · human review required");
     expect(Array.from(element.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).every(input => !input.checked)).toBe(true);
     const rationale = Array.from(element.querySelectorAll("label")).find(label => label.textContent?.startsWith("Review rationale"))!.querySelector("input")!;
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(rationale,"Independently reviewed this exact consequential output"); rationale.dispatchEvent(new Event("input",{ bubbles: true })); });

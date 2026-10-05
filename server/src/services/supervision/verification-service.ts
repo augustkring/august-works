@@ -95,7 +95,7 @@ export function verificationService(db: Db) {
     list: async (actor: AuthorizationActor,companyId: string,id: string) => {
       await orchestrationService(db).get(actor,companyId,id,true);
       const rows = await db.select().from(verificationRuns).where(and(eq(verificationRuns.companyId,companyId),eq(verificationRuns.planId,id))).orderBy(desc(verificationRuns.createdAt)).limit(100);
-      return rows.map(row => ({ id: row.id,planId: row.planId,workerId: row.workerId,result: row.result,resultHash: row.resultHash,reviewerType: row.reviewerType,reviewerId: row.reviewerId,failedInvariants: row.failedInvariants,uncertainties: row.uncertainties.map(() => "material_uncertainty"),createdAt: row.createdAt,erasedAt: row.erasedAt }));
+      return rows.map(row => ({ modelReservationId: row.modelReservationId,id: row.id,planId: row.planId,workerId: row.workerId,result: row.result,resultHash: row.resultHash,reviewerType: row.reviewerType,reviewerId: row.reviewerId,failedInvariants: row.failedInvariants,uncertainties: row.uncertainties.map(() => "material_uncertainty"),createdAt: row.createdAt,erasedAt: row.erasedAt }));
     },
     trajectory: async (actor: AuthorizationActor,companyId: string,id: string,raw: TrajectoryReviewInput) => {
       const input = trajectoryReviewSchema.parse(raw);

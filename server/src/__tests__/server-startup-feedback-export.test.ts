@@ -243,6 +243,7 @@ vi.mock("../services/native-runtime/native-safe-replacement.js", () => ({
 
 // Startup scheduling uses a minimal connection mock. V7 domain correctness and
 // native schema constraints are exercised by their migrated PostgreSQL suites.
+vi.mock("../services/orchestration/model-reservations.js", () => ({ expireModelReservations: vi.fn(async () => ({ cancelled: 0, unknown: 0 })) }));
 vi.mock("../services/execution-sandbox/sandbox-guardian.js", () => ({ reconcileSandboxSafety: vi.fn(async () => ({ checked: 0, quarantined: 0, stopRequested: 0, stopPending: 0 })) }));
 vi.mock("../services/enterprise/security-events.js", () => ({ securityEventExportService: vi.fn(() => ({ tick: vi.fn(async () => null) })) }));
 vi.mock("../services/agent-packages/package-jobs.js", () => ({ reconcileAgentPackages: vi.fn(async () => null), deliverAgentPackageStops: vi.fn(async () => null) }));
@@ -441,6 +442,7 @@ vi.mock("../auth/better-auth.js", () => ({
 
 import { startServer } from "../index.ts";
 import { reconcileSafeNativeReplacements } from "../services/native-runtime/native-safe-replacement.js";
+import { expireModelReservations } from "../services/orchestration/model-reservations.js";
 import { reconcileSandboxSafety } from "../services/execution-sandbox/sandbox-guardian.js";
 import { EXECUTION_RECONCILIATION_INTERVAL_MS } from "../services/execution-control-deadline.js";
 
@@ -614,12 +616,14 @@ describe("startServer feedback export wiring", () => {
         { verifyStoppedSession: expect.any(Function) },
       );
       expect(reconcileSandboxSafety).toHaveBeenCalledExactlyOnceWith(createDbMock.mock.results[0]?.value, expect.any(Object), 20);
+      expect(expireModelReservations).toHaveBeenCalledExactlyOnceWith(createDbMock.mock.results[0]?.value);
 
       expect(executionControlTick).toBeDefined();
       executionControlTick?.();
       await new Promise<void>((resolve) => setImmediate(resolve));
       expect(reconcileSafeNativeReplacements).toHaveBeenCalledTimes(2);
       expect(reconcileSandboxSafety).toHaveBeenCalledTimes(2);
+      expect(expireModelReservations).toHaveBeenCalledTimes(2);
     } finally {
       setIntervalSpy.mockRestore();
     }

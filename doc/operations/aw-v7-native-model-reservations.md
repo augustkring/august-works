@@ -1,6 +1,6 @@
 # August Works V7 native model reservations
 
-Date: 2026-10-05. This implements the internal ledger and dispatch claim. It does not yet qualify a worker gateway, install a pricing profile or send a model request.
+Date: 2026-10-05. This implements the internal ledger and dispatch claim. The [read-only model consumer](aw-v7-read-only-model-consumer.md) uses it for independent assessments. The worker gateway remains unqualified, and no actual pricing profile or vendor account is installed in workspace verification.
 
 The broker accepts an operator-qualified immutable tariff ceiling through its private native registry callback. A request cannot supply its own tariff. Provider, exact model, USD minor units, input/output ceilings, fixed charge, current deployment SHA, qualification hash and finite expiry are pinned. Quotes round the aggregate charge upward using integer arithmetic. Token envelopes must be finite integers and are bounded. Unknown, expired, future or wrong-revision pricing stays closed. Converting input text to a proven billed-token upper bound remains the responsibility of the qualified provider consumer; character estimates and post-spend cost events are not a hard cap.
 
@@ -12,4 +12,6 @@ The ledger stores only input/authority/response hashes, native references, quote
 
 Local PostgreSQL tests verify concurrent oversubscription, replay, changed input/price/source, permission loss, dispatch claims, immutable receipts, expiry and unknown-outcome debit preservation. Tariffs and authority callbacks in those tests are explicit private fixtures. They do not prove real vendor prices, actual billed-token bounds or provider enforcement.
 
-The current worker plan-start/admission checks still reject a requested cost cap until every worker model call uses a qualified credential/price broker. The automatic read-only semantic consumer and its actual private model transport also remain implementation work. Do not enable a cap by removing those admission checks or by manually editing qualification metadata. The integrated pilot blocker remains open.
+Migration 0380 allows the separately qualified read-only consumer to reserve against a nullable monetary cap while charging the existing finite verifier-call allowance. Explicit monetary caps remain mandatory for worker reservations and are enforced whenever present. The bounded expiry sweep runs independently of rollout and profile configuration.
+
+The current worker plan-start/admission checks still reject a requested cost cap until every worker model call uses a qualified credential/price broker. Read-only assessment transport does not establish worker CLI or workload credential enforcement. Do not enable a cap by removing admission checks or manually editing qualification metadata. The integrated pilot blocker remains open.
