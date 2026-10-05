@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, policyChangeProposals,
+import { learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, policyChangeProposals, workflows, workflowRevisions, workflowRuns, rolePacks, rolePackVersions, rolePackItems,
   foundationChangeProposals, playbookChangeProposals, projectRoadmapProposals, companySkills, companySkillVersions, documentRevisions, documents, foundationSections, foundationDocuments, playbookDocuments, type Db } from "@paperclipai/db";
 
 /** Runs under the caller's company privacy lock, independently of rollout flags. */
@@ -30,6 +30,30 @@ export async function invalidateLearningMemory(tx: Db, companyId: string, record
   }
   if (!links.length) return;
   const assets = await tx.select().from(learningRetainedAssets).where(and(eq(learningRetainedAssets.companyId, companyId), inArray(learningRetainedAssets.candidateLinkId, links.map((link) => link.id))));
+  const workflowRevisionIds = assets.filter(asset => asset.assetType === "workflow_revision").map(asset => asset.assetId);
+  if (workflowRevisionIds.length) {
+    const revisions = await tx.select().from(workflowRevisions).where(and(eq(workflowRevisions.companyId, companyId), inArray(workflowRevisions.id, workflowRevisionIds)));
+    const workflowIds = [...new Set(revisions.map(revision => revision.workflowId))];
+    for (const id of workflowIds) {
+      const [workflow] = await tx.select().from(workflows).where(and(eq(workflows.companyId, companyId), eq(workflows.id, id))).for("update");
+      if (workflow) await tx.update(workflows).set({ ...(workflow.status === "archived" ? {} : { status: "paused" }),
+        ...(workflow.draftRevisionId && workflowRevisionIds.includes(workflow.draftRevisionId) ? { draftRevisionId: null } : {}),
+        ...(workflow.publishedRevisionId && workflowRevisionIds.includes(workflow.publishedRevisionId) ? { publishedRevisionId: null } : {}), updatedAt: now }).where(eq(workflows.id, id));
+    }
+    for (const revision of revisions) await tx.update(workflowRevisions).set({ state: ["published", "superseded"].includes(revision.state) ? "superseded" : "discarded", ...(erase ? { graph: { version: 1, nodes: [], edges: [], variables: [], settings: {} }, inputSchema: null, outputSchema: null, changeSummary: null } : {}) }).where(eq(workflowRevisions.id, revision.id));
+    const runs = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), inArray(workflowRuns.workflowRevisionId, workflowRevisionIds)));
+    for (const run of runs) await tx.update(workflowRuns).set({ ...(erase ? { triggerPayload: {}, failureMessage: null } : {}),
+      ...(!["succeeded", "failed", "cancelled"].includes(run.status) ? { status: "cancelled", finishedAt: now, executionOwnerId: null, leaseExpiresAt: null, failureCode: "learning_source_changed" } : {}), updatedAt: now }).where(eq(workflowRuns.id, run.id));
+  }
+  const packVersionIds = assets.filter(asset => asset.assetType === "role_pack_version").map(asset => asset.assetId);
+  if (packVersionIds.length) {
+    // Assignments remain in place and fail closed until a human supplies a reviewed replacement.
+    await tx.update(rolePacks).set({ publishedVersionId: null, updatedAt: now }).where(and(eq(rolePacks.companyId, companyId), inArray(rolePacks.publishedVersionId, packVersionIds)));
+    if (erase) {
+      await tx.update(rolePackVersions).set({ summary: "" }).where(and(eq(rolePackVersions.companyId, companyId), inArray(rolePackVersions.id, packVersionIds)));
+      await tx.delete(rolePackItems).where(and(eq(rolePackItems.companyId, companyId), inArray(rolePackItems.versionId, packVersionIds)));
+    }
+  }
   const versionIds = [...new Set([...ids("skill"), ...assets.filter((asset) => asset.assetType === "skill_version").map((asset) => asset.assetId)])];
   if (versionIds.length) {
     if (erase) await tx.update(companySkillVersions).set({ fileInventory: [], label: null, validationSummary: { erased: true }, state: "rejected" }).where(and(eq(companySkillVersions.companyId, companyId), inArray(companySkillVersions.id, versionIds)));
@@ -37,6 +61,7 @@ export async function invalidateLearningMemory(tx: Db, companyId: string, record
     for (const row of skills) await tx.update(companySkills).set(erase ? { lifecycleState: "degraded", activeVersionId: null, currentVersionId: null, markdown: "", fileInventory: [], description: null, publicShareToken: null, degradedReason: "Learning evidence erased", updatedAt: now }
       : { lifecycleState: "needs_revalidation", degradedReason: "Learning evidence changed", updatedAt: now }).where(eq(companySkills.id, row.id));
   }
+  if (erase) await tx.update(learningRetainedAssets).set({ erasedAt: now }).where(and(eq(learningRetainedAssets.companyId, companyId), inArray(learningRetainedAssets.candidateLinkId, links.map((link) => link.id))));
   const revisionIds = assets.filter((asset) => asset.assetType === "document_revision").map((asset) => asset.assetId);
   if (revisionIds.length) {
     if (erase) {

@@ -1,11 +1,13 @@
 import { z } from "zod";
+import { updateWorkflowDraftSchema } from "./validators/workflow.js";
+import { rolePackVersionInputSchema } from "./role-packs.js";
 import { memoryScopeSchema } from "./validators/memory.js";
 import { skillCandidateInputSchema } from "./skill-lifecycle.js";
 import { proposePlaybookSchema } from "./playbooks.js";
 import { roadmapProposalSchema, roadmapPolicySchema } from "./project-control.js";
 import { createReadinessRequirementSchema } from "./readiness.js";
 
-export const LEARNING_TARGETS = ["foundation", "skill", "playbook", "project", "policy"] as const;
+export const LEARNING_TARGETS = ["foundation", "skill", "playbook", "project", "policy", "workflow", "role_pack"] as const;
 export const learningCycleSchema = z.object({
   scope: memoryScopeSchema.refine((scope) => scope.type === "company" || scope.type === "project", "Learning requires an authorized shared company or project scope"),
   purpose: z.string().trim().min(1).max(240), trigger: z.string().trim().min(10).max(1000),
@@ -34,6 +36,8 @@ export const learningPolicyPayloadSchema = z.discriminatedUnion("policyType", [
   z.object({ policyType: z.literal("readiness_requirement"), requirement: createReadinessRequirementSchema }).strict(),
 ]);
 export const learningChangeSchema = z.discriminatedUnion("targetDomain", [
+  z.object({ targetDomain: z.literal("workflow"), draft: updateWorkflowDraftSchema }).strict(),
+  z.object({ targetDomain: z.literal("role_pack"), expectedPublishedVersionId: z.string().uuid().nullable(), draft: rolePackVersionInputSchema }).strict(),
   z.object({ targetDomain: z.literal("foundation"), baseRevisionId: z.string().uuid(), proposedBody: z.string().trim().min(1).max(100000), reason: z.string().trim().min(20).max(2000) }).strict(),
   z.object({ targetDomain: z.literal("skill"), candidate: skillCandidateInputSchema }).strict(),
   z.object({ targetDomain: z.literal("playbook"), proposal: proposePlaybookSchema }).strict(),

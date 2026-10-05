@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, policyChangeProposals, memoryEvidence, issues, projects, companySkills, foundationDocuments, documents, playbookDocuments, readinessRequirements, type Db } from "@paperclipai/db";
+import { learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, rolePacks, rolePackItems, workflows, policyChangeProposals, memoryEvidence, issues, projects, companySkills, foundationDocuments, documents, playbookDocuments, readinessRequirements, type Db } from "@paperclipai/db";
 import { learningCycleSchema, learningHypothesisSchema, learningEvaluationSchema, proposeLearningChangeSchema, reviewLearningPolicySchema, EVIDENCE_SENSITIVITIES, roadmapPolicySchema, type MemoryScope, type LearningPolicyPayload, type ReadinessAction } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { AuthorizationActor } from "../authorization.js";
@@ -8,6 +8,8 @@ import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { assertDerivedManager, derivedRoots } from "../memory/derived-memory.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { workflowService } from "../workflows/workflow-service.js";
+import { rolePackService } from "../role-packs.js";
 import { foundationService } from "../foundation/foundation-service.js";
 import { playbookService } from "../playbooks.js";
 import { skillLifecycleService } from "../skill-lifecycle.js";
@@ -49,6 +51,13 @@ async function assertBaseline(db: Db, actor: AuthorizationActor, parent: Cycle, 
     await assertV7Authorization(db, actor, companyId, "foundation:read");
     const [row] = await db.select().from(playbookDocuments).where(and(eq(playbookDocuments.companyId, companyId), eq(playbookDocuments.id, id)));
     if (row) baseline = `playbook://${id}/${row.approvedRevisionId ?? "none"}`;
+  } else if (input.targetDomain === "workflow") {
+    await assertV7Authorization(db, actor, companyId, "workflows:read");
+    const [row] = await db.select().from(workflows).where(and(eq(workflows.companyId, companyId), eq(workflows.id, id)));
+    if (row?.draftRevisionId && row.status !== "archived") baseline = `workflow://${id}/${row.draftRevisionId}`;
+  } else if (input.targetDomain === "role_pack") {
+    const [row] = await db.select().from(rolePacks).where(and(eq(rolePacks.companyId, companyId), eq(rolePacks.id, id), eq(rolePacks.status, "active")));
+    if (row) baseline = `role_pack://${id}/${row.publishedVersionId ?? "none"}`;
   } else if (input.targetDomain === "project" || id !== companyId) {
     await assertV7Authorization(db, actor, companyId, "project:read", { type: "project", companyId, projectId: id });
     const [row] = await db.select().from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id)));
@@ -199,6 +208,22 @@ export function learningService(db: Db) {
         } else if (input.change.targetDomain === "project") {
           if (parent.scopeType === "project" && parent.scopeId !== row.targetId) throw forbidden("Learning project target is outside the evidence scope");
           candidateId = (await projectControlService(tx).propose(actor, companyId, row.targetId, input.change.proposal, publications)).id;
+        } else if (input.change.targetDomain === "workflow") {
+          await assertV7Authorization(tx, actor, companyId, "workflows:edit");
+          if (EVIDENCE_SENSITIVITIES.indexOf(sourceSensitivity) > EVIDENCE_SENSITIVITIES.indexOf("internal")) throw forbidden("Workflow drafts cannot carry classified Learning roots");
+          await assertBaseline(tx, actor, parent, { expectedCycleVersion: parent.version, claim: row.claim, predictedEffect: row.predictedEffect, targetDomain: "workflow", targetId: row.targetId, riskClass: row.riskClass as "low", evaluationContract: row.evaluationContract });
+          const detail = await workflowService(tx).updateDraft(companyId, row.targetId, input.change.draft, { principal });
+          if (!detail.draftRevision || detail.draftRevision.id === input.change.draft.expectedRevisionId) throw conflict("Learning requires a distinct Workflow challenger");
+          candidateId = detail.draftRevision.id;
+        } else if (input.change.targetDomain === "role_pack") {
+          if (EVIDENCE_SENSITIVITIES.indexOf(sourceSensitivity) > EVIDENCE_SENSITIVITIES.indexOf("internal")) throw forbidden("Role Pack drafts cannot carry classified Learning roots");
+          const [target] = await tx.select().from(rolePacks).where(and(eq(rolePacks.companyId, companyId), eq(rolePacks.id, row.targetId))).for("update");
+          if (!target || target.publishedVersionId !== input.change.expectedPublishedVersionId) throw conflict("The Role Pack champion changed");
+          const required = target.publishedVersionId ? await tx.select().from(rolePackItems).where(and(eq(rolePackItems.companyId, companyId), eq(rolePackItems.versionId, target.publishedVersionId))) : [];
+          for (const { item } of required.filter(({ item }) => item.type.startsWith("required_") || item.type === "capability_expectation")) {
+            if (!input.change.draft.items.some(next => next.type === item.type && next.ref === item.ref && next.operation === "add" && next.versionId === item.versionId && (item.loadPoint !== "always" || next.loadPoint === "always"))) throw forbidden("Learning cannot remove or weaken required Role Pack items");
+          }
+          candidateId = (await rolePackService(tx).createVersion(actor, companyId, row.targetId, input.change.draft, publications)).id;
         } else {
           // Security/approval changes are human proposals; the native policy owner applies them separately.
           if (input.change.proposal.policyType === "project_roadmap") await assertV7Authorization(tx, actor, companyId, "tasks:assign", { type: "project", companyId, projectId: row.targetId });
@@ -206,6 +231,7 @@ export function learningService(db: Db) {
           const [created] = await tx.insert(policyChangeProposals).values({ companyId, targetId: row.targetId, policyType: input.change.proposal.policyType, proposal: input.change.proposal, reason: input.change.reason }).returning(); candidateId = created!.id;
         }
         const [link] = await tx.insert(learningDomainCandidates).values({ companyId, hypothesisId: id, evaluationId: evaluation.id, targetDomain: row.targetDomain, targetId: row.targetId, candidateId, candidateHash: row.evaluationContract.challengerHash }).returning();
+        if (["workflow", "role_pack"].includes(row.targetDomain)) await tx.insert(learningRetainedAssets).values({ companyId, candidateLinkId: link!.id, assetType: row.targetDomain === "workflow" ? "workflow_revision" : "role_pack_version", assetId: candidateId });
         await tx.update(learningHypotheses).set({ status: "proposal_created", version: row.version + 1, updatedAt: new Date() }).where(eq(learningHypotheses.id, id));
         await tx.update(learningCycles).set({ status: "proposing", version: parent.version + 1, updatedAt: new Date() }).where(eq(learningCycles.id, parent.id));
         await audit(tx, actor, companyId, parent.id, "learning.domain_proposal_created", publications, { hypothesisId: id, targetDomain: row.targetDomain, candidateId }); return link!;

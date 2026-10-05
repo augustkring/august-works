@@ -1,3 +1,4 @@
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -194,6 +195,7 @@ export function workflowService(db: Db) {
       const input = parsed.data;
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         await assertProjectReference(txDb, companyId, input.projectId);
@@ -246,6 +248,7 @@ export function workflowService(db: Db) {
       const patch = parsed.data;
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         const workflow = await lockWorkflow(tx, companyId, workflowId);
@@ -319,6 +322,7 @@ export function workflowService(db: Db) {
       }
       const publishedDetail = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         const workflow = await lockWorkflow(tx, companyId, workflowId);

@@ -12,7 +12,7 @@ The user has requested implementation of the whole brief. Work continues through
 | 3 | Cognitive provider contract | Implemented with stateless local/no-op providers; five integration tests plus V4 regressions pass |
 | 4 | Hindsight spike and adoption decision | DEFER decision recorded against pinned v0.10.2 source; no production provider admitted |
 | 5 | Observations and Mental Models | Implemented with reviewed root lineage, leased rebuilds, Context/UI and erasure guards; local verification passing |
-| 6 | Organizational Learning | Core implemented and verified for Foundation/Skill/Playbook/project/policy; Workflow/Optimizer/Role Pack/package integration remains in progress |
+| 6 | Organizational Learning | Core plus native Workflow/Role Pack adapters verified; Optimizer/package integration and broader evaluation remain in progress |
 | 7 | Bounded orchestration | Pending implementation |
 | 8 | Deterministic supervision | Pending implementation |
 | 9 | Semantic supervision and verification | Pending implementation |
@@ -86,3 +86,10 @@ Five domain adapters create native Foundation, Skill, Playbook and Roadmap candi
 Domain database guards reject acceptance/promotion after source changes with V7 off. Accepted document/Skill descendants inherit source lineage. Source erasure clears hypotheses, retained evaluations, proposals, accepted document/Skill content and Foundation sections. Restored and late writes are scrubbed. Native proposal/review/publication paths share the existing Memory privacy lock to serialize against deletion.
 
 Verification: ten new migrated-PostgreSQL Learning cases pass. The final five-file regression selection passes 51 cases, including existing Foundation, Skill, Playbook/Roadmap and derived-Memory behavior. Shared/server/UI types, module boundaries and token gates pass for this core. Workflow/Optimizer, Role Pack and Agent Package adapters, additional evaluation methods and integrated acceptance remain open; the Learning core is not a claim that Wave 6 or the entire brief is finished.
+
+
+### Wave 6 native Workflow and Role Pack adapters
+
+Learning creates a distinct native Workflow draft or Role Pack version and leaves publication separate. Required Role Pack entries cannot be removed, repinned or weakened by a Learning challenger. Native versions inherit original roots through later drafts, published pointers and Workflow execution rows. Consumers and publication enforce current source lineage independently of rollout flags. Revocation pauses affected Workflows and preserves Role Pack assignments in a blocked state until a human replaces their version. Erasure cancels active Workflow runs, clears affected version content and published Role Pack items; source-backed exceptions preserve ordinary immutable snapshot guards. Late writes cannot restore erased prose or drop execution root identities.
+
+Verification: twelve Learning integration cases plus fourteen native Workflow and four Role Pack regressions pass (30 migrated-PostgreSQL cases). Server/UI types pass. The policy review UI test also passes and checks that consent is specific to one proposal and version. Optimizer and Agent Package adapters remain open.
