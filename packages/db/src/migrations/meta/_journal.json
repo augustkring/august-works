@@ -2612,6 +2612,27 @@
       "when": 1791229140621,
       "tag": "0374_specialist_release_qualification",
       "breakpoints": true
+    },
+    {
+      "idx": 375,
+      "version": "7",
+      "when": 1791229922428,
+      "tag": "0375_futuristic_kronos",
+      "breakpoints": true
+    },
+    {
+      "idx": 376,
+      "version": "7",
+      "when": 1791232041076,
+      "tag": "0376_regular_shen",
+      "breakpoints": true
+    },
+    {
+      "idx": 377,
+      "version": "7",
+      "when": 1791233244313,
+      "tag": "0377_fine_lady_vermin",
+      "breakpoints": true
     }
   ]
 }

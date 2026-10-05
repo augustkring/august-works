@@ -1,0 +1,2 @@
+ALTER TABLE "enterprise_subject_bindings" DROP CONSTRAINT "enterprise_subject_binding_user_uq";--> statement-breakpoint
+CREATE UNIQUE INDEX "enterprise_subject_binding_active_user_uq" ON "enterprise_subject_bindings" USING btree ("company_id","provider_id","user_id") WHERE "enterprise_subject_bindings"."status"='active';

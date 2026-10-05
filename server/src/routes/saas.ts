@@ -1,3 +1,5 @@
+import { v7FeatureEnabled } from "@paperclipai/shared";
+import { instanceSettingsService } from "../services/instance-settings.js";
 import { z } from "zod";
 import { Router, type Request } from "express";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
@@ -105,6 +107,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
   router.get("/saas/capabilities", async (_req, res) => {
     res.json({
       profile: "saas",
+      enterpriseSso: v7FeatureEnabled(await instanceSettingsService(db).getExperimental(), "enterprise_identity_v7"),
       signup: await platform.enabled("saas_self_signup_v6"),
       emailVerification: await platform.enabled(
         "email_verification_required_v6",

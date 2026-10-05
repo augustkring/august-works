@@ -639,6 +639,7 @@ export function memoryService(db: Db) {
       return db.transaction(async (tx) => {
         const scopedDb = tx as unknown as Db;
         await assertActorCompanyScope(scopedDb, companyId, actor);
+        await lockMemoryPrivacy(scopedDb, companyId);
         const records = await scopedDb.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), memoryPayloadVisible(),
           actor.principal.type === "agent" ? and(eq(memoryRecords.scopeType, "agent"), eq(memoryRecords.ownerAgentId, actor.principal.agentId)) : ne(memoryRecords.scopeType, "agent")));
         const evidence = records.length ? await scopedDb.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId, companyId),

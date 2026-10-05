@@ -1,0 +1,15 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index f96a0588ae9d4a25d04fc8682fd1caacaf36fc31..52891756e1813eb88ef96c0c181de06acd873203 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -4222,7 +4222,9 @@ function createSCIMIdentityCoordinator(options) {
+ 				sources: sources.map((source) => ({ ...source }))
+ 			};
+ 			await runSCIMApplicationCallback(() => options.identity?.reconcileUser?.(state, { database: input.database }), "SCIM identity reconciliation failed");
+-			if (!active) await input.auth.internalAdapter.deleteUserSessions(userId);
++			// An application lifecycle callback owns global access reconciliation.
++			// Company SCIM inactivity must not revoke unrelated native memberships.
++			if (!active && !options.identity?.reconcileUser) await input.auth.internalAdapter.deleteUserSessions(userId);
+ 			return {
+ 				userId,
+ 				active,

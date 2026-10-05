@@ -1,3 +1,5 @@
+import { exportCompanyStateV7 } from "./enterprise/portability.js";
+import type { AuthorizationActor } from "./authorization.js";
 import { agentAppearanceSchema } from "@paperclipai/shared";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -3840,7 +3842,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
   async function exportBundle(
     companyId: string,
     input: CompanyPortabilityExport,
-    options: { preview?: boolean; allowExternalInstructions?: boolean } = {},
+    options: { preview?: boolean; allowExternalInstructions?: boolean; actor?: AuthorizationActor } = {},
   ): Promise<CompanyPortabilityExportResult> {
     const include = normalizeInclude({
       ...input.include,
@@ -4732,6 +4734,15 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     };
     resolved.manifest.envInputs = dedupeEnvInputs(envInputs);
     resolved.warnings.unshift(...warnings);
+
+    if (input.includeV7State) {
+      if (options.preview) finalFiles["august-works-state-v7.json"] = JSON.stringify({schema:"aw.company-state.v7",preview:true,requires:"current company owner",includes:["Foundation","shared Memory and lifecycle","eligible observations and models","Playbooks","Role Packs","package deployments","Workflows","governance","audit summary"]},null,2);
+      else {
+        if (!options.actor) throw forbidden("A current company owner must request the V7 export extension");
+        const state = await exportCompanyStateV7(db, options.actor, companyId);
+        finalFiles["august-works-state-v7.json"] = JSON.stringify(state, null, 2) + "\n";
+      }
+    }
 
     // Generate org chart PNG from manifest agents
     if (!options.preview && resolved.manifest.agents.length > 0) {

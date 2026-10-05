@@ -7,6 +7,7 @@ export interface SaasCapabilities {
   profile: "saas";
   signup: boolean;
   emailVerification: boolean;
+  enterpriseSso?: boolean;
   onboarding: boolean;
   billing: boolean;
   checkout: boolean;

@@ -23,6 +23,7 @@ export const V7_FEATURES = {
   free_core_commercial_v7: ["Free Core", "Permanent free baseline through existing billing and capacity contracts."],
   agent_packages_v7: ["Agent packages", "Immutable evaluated packages of existing Role Packs, Skills and Playbooks."],
   core_stewards_v7: ["Core stewards", "Event-driven stewardship through governed domain jobs."],
+  security_event_export_v7: ["Security event export", "Explicit company-owned, signed and bounded audit delivery."],
   enterprise_identity_v7: ["Enterprise identity", "Contracted enterprise identity with current membership authority."],
 } as const;
 
@@ -54,6 +55,7 @@ export const V7_FEATURE_DEPENDENCIES: Record<V7FeatureKey, readonly V7FeatureKey
   free_core_commercial_v7: [],
   agent_packages_v7: [],
   core_stewards_v7: ["readiness_engine_v7", "learning_engine_v7", "governance_evidence_v7"],
+  security_event_export_v7: ["governance_evidence_v7"],
   enterprise_identity_v7: ["governance_evidence_v7"],
 };
 
@@ -89,6 +91,7 @@ export const V7_BASE_FEATURE_REQUIREMENTS: Record<V7FeatureKey, readonly V7BaseF
   free_core_commercial_v7: ["billing_entitlements_v6", "billing_usage_v6"],
   agent_packages_v7: ["role_packs_v5", "skill_resolver_v5", "skill_lifecycle_v5", "playbooks_v5", "billing_v6"],
   core_stewards_v7: [],
+  security_event_export_v7: ["saas_deployment_profile_v6"],
   enterprise_identity_v7: ["saas_deployment_profile_v6"],
 };
 

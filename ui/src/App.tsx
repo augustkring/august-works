@@ -1,3 +1,5 @@
+import { SecurityEvents } from "./pages/SecurityEvents";
+import { Enterprise } from "./pages/Enterprise";
 import { AgentPackages } from "./pages/AgentPackages";
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
@@ -198,6 +200,8 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="onboarding" element={<OnboardingRoutePage />} />
       <Route path="companies" element={<Companies />} />
       <Route path="company/settings" element={<CompanySettings />} />
+      <Route path="company/settings/enterprise" element={<V7FeatureGate feature="enterprise_identity_v7"><Enterprise /></V7FeatureGate>} />
+      <Route path="company/settings/security-events" element={<V7FeatureGate feature="security_event_export_v7"><SecurityEvents /></V7FeatureGate>} />
       <Route path="company/settings/billing" element={<SaasBillingPage />} />
       <Route path="company/settings/runtime" element={<SaasRuntimesPage />} />
       <Route path="company/settings/support" element={<SaasSupportPage />} />
@@ -871,6 +875,8 @@ export function App() {
           <Route path="instance" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings/*" element={<LegacySettingsRedirect />} />
+          <Route path="company/settings/enterprise" element={<UnprefixedBoardRedirect />} />
+          <Route path="company/settings/security-events" element={<UnprefixedBoardRedirect />} />
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
           <Route path="overview" element={<UnprefixedBoardRedirect />} />
           <Route path="work" element={<UnprefixedBoardRedirect />} />

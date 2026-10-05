@@ -1,3 +1,4 @@
+import { securityEventExportService } from "./services/enterprise/security-events.js";
 import { reconcileAgentPackages, deliverAgentPackageStops } from "./services/agent-packages/package-jobs.js";
 import { maintainFoundationFindings, maintainPackageUpdates } from "./services/stewards/core-stewards.js";
 import { reconcileGovernanceDeployments, deliverGovernanceStops } from "./services/ai-governance/governance-jobs.js";
@@ -1217,6 +1218,7 @@ async function startServerWithDatabaseTeardown(
     ["governance_authority", () => reconcileGovernanceDeployments(db, 20)],
     ["governance_stops", () => heartbeat ? deliverGovernanceStops(db, (runId, reason) => heartbeat!.cancelRun(runId, reason), 20) : undefined],
     ["supervision", () => supervisor.tick(20)],
+    ["security_event_export", () => securityEventExportService(db).tick(10)],
     ["work_signal_retention", () => workSignalService(db).expire(20)],
     ["work_signal_followups", () => workSignalService(db).deliverFollowups(20)],
     ["finalization", () => reconcileAbandonedExecutionControl(db)],

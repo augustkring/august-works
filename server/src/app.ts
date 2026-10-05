@@ -1,3 +1,4 @@
+import { enterpriseRoutes } from "./routes/enterprise.js";
 import { agentPackageRoutes } from "./routes/agent-packages.js";
 import { aiGovernanceRoutes } from "./routes/ai-governance.js";
 import { executionSandboxRoutes } from "./routes/execution-sandbox.js";
@@ -729,6 +730,7 @@ export async function createApp(
   api.use(orchestrationRoutes(db));
   api.use(workSignalRoutes(db));
   api.use(aiGovernanceRoutes(db));
+  api.use(enterpriseRoutes(db, opts.saasPlatform ? { operatorUserIds: opts.saasPlatform.config.operatorUserIds, sourceSha: opts.saasPlatform.config.deployment.sourceSha, protectedEvidenceOrigin: opts.saasPlatform.config.objects.endpoint, appOrigin: opts.saasPlatform.origins.primaryAppOrigin } : undefined));
   api.use(agentPackageRoutes(db, { operatorUserIds: opts.saasPlatform?.config.operatorUserIds, protectedEvidenceOrigin: opts.saasPlatform?.config.objects.endpoint, sourceSha: opts.saasPlatform?.config.deployment.sourceSha }));
   api.use(executionSandboxRoutes(db, {
     operatorUserIds: opts.saasPlatform?.config.operatorUserIds,

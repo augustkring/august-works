@@ -227,6 +227,8 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           <SidebarNavItem to="/routines" label="Routines" icon={Repeat} />
           {v7FeatureEnabled(experimentalSettings ?? {}, "orchestration_v7") && <SidebarNavItem to="/orchestration" label="Orchestration" icon={Network} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "ai_use_cases_v7") && <SidebarNavItem to="/ai-governance" label="AI Governance" icon={BookOpen} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "enterprise_identity_v7") && <SidebarNavItem to="/company/settings/enterprise" label="Enterprise" icon={BookOpen} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "security_event_export_v7") && <SidebarNavItem to="/company/settings/security-events" label="Security event export" icon={BookOpen} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "work_signals_v7") && <SidebarNavItem to="/work-signals" label="Work Signals" icon={Network} />}
           {showWorkflows ? <SidebarNavItem to="/workflows" label="Workflows" icon={GitBranch} /> : null}
           {experimentalSettings?.enableAutomationArtifactsV1 === true ? <SidebarNavItem to="/automation-artifacts" label="Automation Artifacts" icon={GitBranch} /> : null}

@@ -3290,3 +3290,6 @@ export * from "./agent-packages.js";
 export * from "./agent-package-candidates.js";
 export * from "./specialist-packages.js";
 export * from "./core-stewards.js";
+export * from "./enterprise.js";
+
+export * from "./security-events.js";
