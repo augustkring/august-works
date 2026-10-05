@@ -22,7 +22,15 @@ describe.skipIf(!support.supported)("V5 identity migration", () => {
       await sql`DROP TABLE agent_execution_manifest_items`;
       await sql`DROP TABLE agent_execution_authorizations`;
       await sql`DROP TABLE agent_execution_scope_requests`;
+      // V7 adds references to the V5 manifest. Detach only those foreign keys
+      // in this disposable historical fixture, retaining their real definitions
+      // so the expansion can be tested without weakening production migrations.
+      const manifestDependents = await sql<{ table_name: string; constraint_name: string; definition: string }[]>`SELECT conrelid::regclass::text AS table_name, conname AS constraint_name, pg_get_constraintdef(oid) AS definition
+        FROM pg_constraint WHERE contype='f' AND confrelid='agent_execution_manifests'::regclass`;
+      for (const dependent of manifestDependents) await sql`ALTER TABLE ${sql(dependent.table_name)} DROP CONSTRAINT ${sql(dependent.constraint_name)}`;
       await sql`DROP TABLE agent_execution_manifests`;
+      await sql`DROP FUNCTION aw_v5_execution_manifest_immutable()`;
+      await sql`DROP FUNCTION aw_v5_execution_item_immutable()`;
       await sql`DROP TABLE provider_shared_runtime_acknowledgements`;
       await sql`DROP TABLE agent_presence_runtime_bindings`;
       // V6 adds this dependency after the V5 expansion. Detach it only in
@@ -38,6 +46,16 @@ describe.skipIf(!support.supported)("V5 identity migration", () => {
         FROM generate_series(1,1005) n`;
       const expansion = await readFile(new URL("./migrations/0321_broken_northstar.sql", import.meta.url), "utf8");
       for (const statement of expansion.split("--> statement-breakpoint")) if (statement.trim()) await sql.unsafe(statement);
+      // Restore the actual provenance expansion before reattaching later native
+      // references. The identity expansion does not create execution manifests.
+      const provenance = await readFile(new URL("./migrations/0331_bumpy_forge.sql", import.meta.url), "utf8");
+      for (const statement of provenance.split("--> statement-breakpoint")) {
+        // The shared heartbeat uniqueness constraint already exists in the
+        // disposable current database and was not removed with these tables.
+        if (statement.trim().startsWith('ALTER TABLE "heartbeat_runs"')) continue;
+        if (statement.trim()) await sql.unsafe(statement);
+      }
+      for (const dependent of manifestDependents) await sql`ALTER TABLE ${sql(dependent.table_name)} ADD CONSTRAINT ${sql(dependent.constraint_name)} ${sql.unsafe(dependent.definition)}`;
       await sql`ALTER TABLE agents ALTER COLUMN agent_identity_id SET DEFAULT NULL`;
       await sql`ALTER TABLE agents ALTER COLUMN agent_identity_id SET NOT NULL`;
       await sql`ALTER TABLE runtime_cells ADD CONSTRAINT runtime_cells_provider_binding_id_agent_provider_bindings_id_fk

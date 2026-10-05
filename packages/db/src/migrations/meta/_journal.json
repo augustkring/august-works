@@ -2640,6 +2640,13 @@
       "when": 1791236480202,
       "tag": "0378_v7_sandbox_source_invalidation",
       "breakpoints": true
+    },
+    {
+      "idx": 379,
+      "version": "7",
+      "when": 1791240199600,
+      "tag": "0379_v7_model_reservations",
+      "breakpoints": true
     }
   ]
 }

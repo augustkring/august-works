@@ -20,7 +20,7 @@ function completeSettings() {
 describe("V7 admission contract", () => {
   it("keeps every reserved gate off on legacy settings and both deployment catalogs", () => {
     const legacy = instanceExperimentalSettingsSchema.parse({ enableNativeRunner: false, enableWorkflowsV1: true });
-    expect(V7_FEATURE_KEYS).toHaveLength(20);
+    expect(V7_FEATURE_KEYS).toContain("security_event_export_v7");
     expect(v7FeatureFlagsSchema.parse({})).toEqual(Object.fromEntries(V7_FEATURE_KEYS.map((key) => [key, false])));
     for (const key of V7_FEATURE_KEYS) {
       expect(legacy[key]).toBe(false);

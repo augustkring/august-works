@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, integer, jsonb, timestamp, foreignKey, unique, uniqueIndex, check, index } from "drizzle-orm/pg-core";
-import type { ExecutionPrincipal, SupervisionPolicy, OrchestrationBudget } from "@paperclipai/shared";
+import type { ExecutionPrincipal, SupervisionPolicy, OrchestrationBudget, ModelReservationQuote } from "@paperclipai/shared";
 import { documentRevisions } from "./document_revisions.js";
 import { workflowRevisions } from "./workflows.js";
 import { toolInvocations } from "./tool_access.js";
@@ -50,3 +50,21 @@ export const orchestrationWorkerAttempts = pgTable("orchestration_worker_attempt
 export const orchestrationToolCharges = pgTable("orchestration_tool_charges", {
   invocationId: uuid("invocation_id").primaryKey().references(() => toolInvocations.id, { onDelete: "cascade" }), companyId: uuid("company_id").notNull(), planId: uuid("plan_id").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({ planFk: foreignKey({ columns: [t.companyId, t.planId], foreignColumns: [orchestrationPlans.companyId, orchestrationPlans.id] }) }));
+
+export const orchestrationModelReservations = pgTable("orchestration_model_reservations", {
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), planId: uuid("plan_id").notNull(), workerId: uuid("worker_id"), workerAttemptId: uuid("worker_attempt_id"),
+  purpose: text("purpose").$type<"worker_model" | "read_only_verification" | "read_only_trajectory">().notNull(),
+  principalUserId: text("principal_user_id").notNull(), idempotencyKey: text("idempotency_key").notNull(), requestHash: text("request_hash").notNull(), inputHash: text("input_hash").notNull(), authorityHash: text("authority_hash").notNull(),
+  quote: jsonb("quote").$type<ModelReservationQuote>().notNull(), maximumMinor: integer("maximum_minor").notNull(),
+  status: text("status").$type<"reserved" | "dispatched" | "completed" | "failed" | "unknown" | "cancelled">().notNull().default("reserved"),
+  providerResponseHash: text("provider_response_hash"), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), dispatchedAt: timestamp("dispatched_at", { withTimezone: true }), completedAt: timestamp("completed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  tenantUq: unique("orchestration_model_reservation_tenant_uq").on(t.companyId, t.id), keyUq: unique("orchestration_model_reservation_key_uq").on(t.companyId, t.planId, t.idempotencyKey),
+  planFk: foreignKey({ columns: [t.companyId, t.planId], foreignColumns: [orchestrationPlans.companyId, orchestrationPlans.id] }).onDelete("cascade"), workerFk: foreignKey({ columns: [t.companyId, t.planId, t.workerId], foreignColumns: [orchestrationWorkers.companyId, orchestrationWorkers.planId, orchestrationWorkers.id] }), attemptFk: foreignKey({ columns: [t.companyId, t.planId, t.workerAttemptId], foreignColumns: [orchestrationWorkerAttempts.companyId, orchestrationWorkerAttempts.planId, orchestrationWorkerAttempts.id] }),
+  statusCheck: check("orchestration_model_reservation_status_ck", sql`${t.status} in ('reserved','dispatched','completed','failed','unknown','cancelled')`),
+  purposeCheck: check("orchestration_model_reservation_purpose_ck", sql`${t.purpose} in ('worker_model','read_only_verification','read_only_trajectory')`),
+  costCheck: check("orchestration_model_reservation_cost_ck", sql`${t.maximumMinor} between 0 and 1000000 and (${t.quote}->>'maximumMinor')::int=${t.maximumMinor} and ${t.expiresAt}>${t.createdAt}`),
+  hashCheck: check("orchestration_model_reservation_hash_ck", sql`${t.requestHash} ~ '^[a-f0-9]{64}$' and ${t.inputHash} ~ '^[a-f0-9]{64}$' and ${t.authorityHash} ~ '^[a-f0-9]{64}$' and (${t.providerResponseHash} is null or ${t.providerResponseHash} ~ '^[a-f0-9]{64}$')`),
+  pendingIdx: index("orchestration_model_reservation_pending_idx").on(t.status, t.expiresAt),
+}));

@@ -211,7 +211,8 @@ vi.mock("detect-port", () => ({
   default: detectPortMock,
 }));
 
-vi.mock("@paperclipai/db", () => ({
+vi.mock("@paperclipai/db", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@paperclipai/db")>(),
   createDb: createDbMock,
   ensurePostgresDatabase: vi.fn(),
   getPostgresDataDirectory: vi.fn(),
@@ -239,6 +240,16 @@ vi.mock("../services/native-runtime/native-session-executor.js", () => ({
 vi.mock("../services/native-runtime/native-safe-replacement.js", () => ({
   reconcileSafeNativeReplacements: vi.fn(async () => ({ scanned: 0, scheduled: 0 })),
 }));
+
+// Startup scheduling uses a minimal connection mock. V7 domain correctness and
+// native schema constraints are exercised by their migrated PostgreSQL suites.
+vi.mock("../services/execution-sandbox/sandbox-guardian.js", () => ({ reconcileSandboxSafety: vi.fn(async () => ({ checked: 0, quarantined: 0, stopRequested: 0, stopPending: 0 })) }));
+vi.mock("../services/enterprise/security-events.js", () => ({ securityEventExportService: vi.fn(() => ({ tick: vi.fn(async () => null) })) }));
+vi.mock("../services/agent-packages/package-jobs.js", () => ({ reconcileAgentPackages: vi.fn(async () => null), deliverAgentPackageStops: vi.fn(async () => null) }));
+vi.mock("../services/stewards/core-stewards.js", () => ({ maintainFoundationFindings: vi.fn(async () => null), maintainPackageUpdates: vi.fn(async () => null) }));
+vi.mock("../services/ai-governance/governance-jobs.js", () => ({ reconcileGovernanceDeployments: vi.fn(async () => null), deliverGovernanceStops: vi.fn(async () => null) }));
+vi.mock("../services/supervision/supervision-service.js", () => ({ supervisionService: vi.fn(() => ({ tick: vi.fn(async () => null) })) }));
+vi.mock("../services/work-signals/work-signal-service.js", () => ({ workSignalService: vi.fn(() => ({ expire: vi.fn(async () => null), deliverFollowups: vi.fn(async () => null) })) }));
 
 vi.mock("../config.js", () => ({
   loadConfig: loadConfigMock,
@@ -430,6 +441,7 @@ vi.mock("../auth/better-auth.js", () => ({
 
 import { startServer } from "../index.ts";
 import { reconcileSafeNativeReplacements } from "../services/native-runtime/native-safe-replacement.js";
+import { reconcileSandboxSafety } from "../services/execution-sandbox/sandbox-guardian.js";
 import { EXECUTION_RECONCILIATION_INTERVAL_MS } from "../services/execution-control-deadline.js";
 
 describe("startServer feedback export wiring", () => {
@@ -601,11 +613,13 @@ describe("startServer feedback export wiring", () => {
         expect.any(Date),
         { verifyStoppedSession: expect.any(Function) },
       );
+      expect(reconcileSandboxSafety).toHaveBeenCalledExactlyOnceWith(createDbMock.mock.results[0]?.value, expect.any(Object), 20);
 
       expect(executionControlTick).toBeDefined();
       executionControlTick?.();
       await new Promise<void>((resolve) => setImmediate(resolve));
       expect(reconcileSafeNativeReplacements).toHaveBeenCalledTimes(2);
+      expect(reconcileSandboxSafety).toHaveBeenCalledTimes(2);
     } finally {
       setIntervalSpy.mockRestore();
     }
