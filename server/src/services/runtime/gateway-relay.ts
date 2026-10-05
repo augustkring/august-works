@@ -61,33 +61,37 @@ export function runtimeGatewayRelay(deps: Dependencies) {
     ws.send(JSON.stringify(value));
     return true;
   }
-  const verifyTimer = setInterval(() => {
-    if (checking || closed) return;
-    checking = true;
-    void (async () => {
-      for (const connection of hosts.values()) {
-        try {
-          if (!(await deps.hostCurrent(connection.host))) {
-            connection.ws.close(1008);
-            continue;
-          }
-          for (const channel of connection.channels.values()) {
-            try {
-              if (!(await deps.cellCurrent(channel.cellId, channel.scope)))
-                channel.ws.close(1008);
-            } catch {
-              channel.ws.close(1008);
+  let verifyTimer: ReturnType<typeof setInterval> | undefined;
+  function startVerification() {
+    if (verifyTimer || closed) return;
+    verifyTimer = setInterval(() => {
+      if (checking || closed) return;
+      checking = true;
+      void (async () => {
+        for (const connection of hosts.values()) {
+          try {
+            if (!(await deps.hostCurrent(connection.host))) {
+              connection.ws.close(1008);
+              continue;
             }
+            for (const channel of connection.channels.values()) {
+              try {
+                if (!(await deps.cellCurrent(channel.cellId, channel.scope)))
+                  channel.ws.close(1008);
+              } catch {
+                channel.ws.close(1008);
+              }
+            }
+          } catch {
+            connection.ws.close(1011);
           }
-        } catch {
-          connection.ws.close(1011);
         }
-      }
-    })().finally(() => {
-      checking = false;
-    });
-  }, 1000);
-  verifyTimer.unref();
+      })().finally(() => {
+        checking = false;
+      });
+    }, 1000);
+    verifyTimer.unref();
+  }
   publicWs.on("connection", (ws) => {
     pending++;
     if (pending > 50) {
@@ -245,6 +249,7 @@ export function runtimeGatewayRelay(deps: Dependencies) {
     });
   });
   function attach(server: Server) {
+    startVerification();
     server.on(
       "upgrade",
       (
@@ -269,6 +274,7 @@ export function runtimeGatewayRelay(deps: Dependencies) {
     );
   }
   async function listen(port: number) {
+    startVerification();
     await new Promise<void>((resolve, reject) => {
       privateHttp.once("error", reject);
       privateHttp.listen(port, "127.0.0.1", () => {

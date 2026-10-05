@@ -84,7 +84,10 @@ export interface BillingProvider {
     subscriptionId: string | null;
   }>;
   portal(customerId: string): Promise<string>;
-  cancelSubscription(id: string): Promise<void>;
+  cancelSubscription(
+    id: string,
+    effectiveFrom?: "next_billing_period" | "immediately",
+  ): Promise<void>;
   listSubscriptions(customerId: string): Promise<PaddleSubscription[]>;
   findCustomer(email: string, accountId: string): Promise<string | null>;
   findCheckout(
@@ -246,9 +249,9 @@ export function paddleProvider(
         throw new BillingProviderError("paddle_invalid_portal_url", false);
       return url.href;
     },
-    async cancelSubscription(id) {
+    async cancelSubscription(id, effectiveFrom = "next_billing_period") {
       await call("/subscriptions/" + encodeURIComponent(id) + "/cancel", {
-        effective_from: "next_billing_period",
+        effective_from: effectiveFrom,
       });
     },
     async listSubscriptions(customerId) {

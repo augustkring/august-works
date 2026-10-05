@@ -874,4 +874,55 @@ suite("V6 durable SaaS domains against migrated PostgreSQL", () => {
       "completed",
     );
   });
+  it("cancels paused subscriptions and closes billing only after confirmed provider cancellation", async () => {
+    for (const confirmed of [false, true]) {
+      const run = await saasOnboardingService(db).create(userId, {
+        name: "Paused subscription " + confirmed,
+        idempotencyKey: "paused-subscription-" + confirmed,
+      });
+      const customerId = "ctm_paused_" + confirmed;
+      await db
+        .update(billingAccounts)
+        .set({ providerCustomerId: customerId })
+        .where(eq(billingAccounts.id, run.billingAccountId));
+      const paused = {
+        ...subscription("2026-10-04T12:00:00Z", "paused"),
+        id: "sub_paused_" + confirmed,
+        customer_id: customerId,
+        current_billing_period: null,
+      };
+      const canceled = {
+        ...paused,
+        status: "canceled" as const,
+        updated_at: "2026-10-04T12:01:00Z",
+      };
+      const scopedProvider = {
+        ...provider,
+        getSubscription: vi
+          .fn()
+          .mockResolvedValueOnce(paused)
+          .mockResolvedValueOnce(confirmed ? canceled : paused),
+        cancelSubscription: vi.fn().mockResolvedValue(undefined),
+      };
+      const service = billingService(db, billingConfig, scopedProvider);
+      await service.normalize(paused, NOW);
+      if (confirmed)
+        expect(await service.offboardCompany(run.companyId)).toMatchObject({
+          cancellations: [paused.id],
+        });
+      else
+        await expect(
+          service.offboardCompany(run.companyId),
+        ).rejects.toMatchObject({ status: 409 });
+      expect(scopedProvider.cancelSubscription).toHaveBeenCalledWith(
+        paused.id,
+        "immediately",
+      );
+      const [account] = await db
+        .select()
+        .from(billingAccounts)
+        .where(eq(billingAccounts.id, run.billingAccountId));
+      expect(account!.status).toBe(confirmed ? "closed" : "active");
+    }
+  });
 });

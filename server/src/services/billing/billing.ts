@@ -749,7 +749,7 @@ export function billingService(
       .where(eq(billingSubscriptions.billingAccountId, account.id));
     const canceled: string[] = [];
     for (const subscription of subscriptions) {
-      if (["canceled", "paused"].includes(subscription.status)) continue;
+      if (subscription.status === "canceled") continue;
       let current = await provider.getSubscription(
         subscription.providerSubscriptionId,
       );
@@ -757,14 +757,21 @@ export function billingService(
         throw conflict("Billing provider ownership changed");
       if (
         current.status !== "canceled" &&
-        current.scheduled_change?.action !== "cancel"
+        (current.status === "paused" ||
+          current.scheduled_change?.action !== "cancel")
       ) {
-        await provider.cancelSubscription(current.id);
+        // A paused subscription can resume billing. Paddle requires immediate
+        // cancellation for this state, which has no current billing period.
+        const immediate = current.status === "paused";
+        await provider.cancelSubscription(
+          current.id,
+          immediate ? "immediately" : "next_billing_period",
+        );
         current = await provider.getSubscription(current.id);
         if (
           current.customer_id !== account.providerCustomerId ||
           (current.status !== "canceled" &&
-            current.scheduled_change?.action !== "cancel")
+            (immediate || current.scheduled_change?.action !== "cancel"))
         )
           throw conflict("Cancellation outcome requires reconciliation");
       }

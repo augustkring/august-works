@@ -39,6 +39,19 @@ terraform fmt -check -recursive infra
 
 Host-agent tests exercise real filesystem ownership changes to the cell uid/gid and need root, as the deployed host agent does. Use the absolute pinned Node executable with sudo. Archive, ledger, release and smoke tests run without root.
 
+The host firewall test additionally requires Linux `ip`, `iptables` and `unshare` with permission to create isolated mount/network namespaces. It establishes initial cell-to-host reachability, installs the engine's rules, verifies new connections are blocked, and verifies replies to host-initiated Gateway connections still arrive. It does not qualify the production host image or the complete Docker/XFS deployment.
+
+## Self-review corrections (2026-10-05)
+
+The source self-review covered current user/company authorization, billing reconciliation and cancellation, runtime host credentials/claims, relay and host isolation, scheduled backups, deletion and restore quarantine. It identified and corrected four concrete defects:
+
+- Host-bound traffic uses Linux `INPUT`, so the existing `DOCKER-USER` private-network rules alone did not deny new connections from a cell to the host. The engine now also denies non-established cell-to-host traffic. A real kernel namespace test reproduces reachability with the earlier rule set and proves denial with the correction, while preserving host-initiated Gateway replies.
+- Creating transaction-scoped runtime control services for backup/support work allocated an unused repeating relay timer each time. Relay verification now starts once when the relay is attached/listening, and stops with the relay. A lifecycle regression test covers idle construction, combined attach/listen and shutdown.
+- Company billing offboarding skipped paused Paddle subscriptions, which can later resume billing. It now fetches canonical state and cancels paused subscriptions immediately, as supported by Paddle's cancellation API. Migrated PostgreSQL tests verify confirmed cancellation closes the account and an unconfirmed outcome retains it for reconciliation; a provider contract test verifies the cancellation request.
+- The organization deletion form retained its name confirmation, export acknowledgement and request identifier after switching account/company. The form now remounts for each scope. UI tests use identically named organizations to verify fresh consent and a new request identifier after switching, while preserving the identifier for retries within the original scope.
+
+These are source review findings and local regression evidence. Self-review is not an independent review or a Greptile score. The repository's required review and the live/audit rollout gates below remain open.
+
 Run provider-schema validation and mock tests in both Terraform environment roots after initializing with `-backend=false -lockfile=readonly`. These operations do not apply real infrastructure. Use `server/src/__tests__/v6-` for a bounded acceptance rerun; use the full stable runner for regression coverage. Keep raw logs outside source control and record final results in the PR.
 
 ## Honest release boundary

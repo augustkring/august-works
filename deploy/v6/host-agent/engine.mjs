@@ -21,6 +21,42 @@ const exec = promisify(execFile);
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const DIGEST = /^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
+export function runtimeNetworkRules(cidr) {
+  if (!/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(cidr ?? ""))
+    throw new Error("network_cidr_unavailable");
+  // Host-bound packets traverse INPUT, not DOCKER-USER. Permit replies to
+  // host-initiated Gateway connections while denying new cell-to-host traffic.
+  return [
+    [
+      "INPUT",
+      "-s",
+      cidr,
+      "-m",
+      "conntrack",
+      "!",
+      "--ctstate",
+      "ESTABLISHED,RELATED",
+      "-j",
+      "DROP",
+    ],
+    ...[
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+      "192.168.0.0/16",
+      "169.254.0.0/16",
+      "100.64.0.0/10",
+      "127.0.0.0/8",
+    ].map((destination) => [
+      "DOCKER-USER",
+      "-s",
+      cidr,
+      "-d",
+      destination,
+      "-j",
+      "DROP",
+    ]),
+  ];
+}
 export async function command(binary, args, timeout = 60000) {
   // Provider credentials and command payloads are never shell source or process environment.
   const { stdout } = await exec(binary, args, {
@@ -231,17 +267,7 @@ export function runtimeEngine({
       await runner("docker", ["network", "inspect", network]),
     )[0];
     const cidr = details.IPAM?.Config?.[0]?.Subnet;
-    if (!/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(cidr ?? ""))
-      throw new Error("network_cidr_unavailable");
-    for (const destination of [
-      "10.0.0.0/8",
-      "172.16.0.0/12",
-      "192.168.0.0/16",
-      "169.254.0.0/16",
-      "100.64.0.0/10",
-      "127.0.0.0/8",
-    ]) {
-      const rule = ["DOCKER-USER", "-s", cidr, "-d", destination, "-j", "DROP"];
+    for (const rule of runtimeNetworkRules(cidr)) {
       try {
         await runner("iptables", ["-C", ...rule]);
       } catch {

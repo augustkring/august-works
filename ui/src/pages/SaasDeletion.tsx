@@ -7,6 +7,12 @@ import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/lib/router";
 export function SaasDeletionPage() {
+  const { selectedCompanyId } = useCompany();
+  const identity = useAccountIdentity();
+  return <SaasDeletionForm key={identity.userId + ":" + selectedCompanyId} />;
+}
+
+function SaasDeletionForm() {
   const { selectedCompanyId, selectedCompany } = useCompany(),
     identity = useAccountIdentity(),
     capabilities = useSaasCapabilities();

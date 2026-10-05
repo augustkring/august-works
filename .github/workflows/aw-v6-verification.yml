@@ -61,7 +61,7 @@ jobs:
         run: sudo "$(command -v node)" --test deploy/v6/host-agent/*.test.mjs
       - name: Test SaaS runtime account switches and usage presentation
         working-directory: ui
-        run: pnpm exec vitest run src/pages/SaasRuntimes.test.tsx src/lib/infrastructureUsage.test.ts
+        run: pnpm exec vitest run src/pages/SaasRuntimes.test.tsx src/pages/SaasDeletion.test.tsx src/lib/infrastructureUsage.test.ts
       - name: Build all workspace artifacts
         run: pnpm build
       - name: Inspect operator script syntax

@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { once } from "node:events";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { runtimeGatewayRelay } from "../services/runtime/gateway-relay.js";
 const hostId = "11111111-1111-4111-8111-111111111111",
@@ -87,6 +87,33 @@ async function setup() {
   };
 }
 describe("V6 private Gateway relay", () => {
+  it("does not allocate a verification timer for transaction-scoped control services", async () => {
+    const intervals = vi.spyOn(globalThis, "setInterval");
+    const cleared = vi.spyOn(globalThis, "clearInterval");
+    const relay = runtimeGatewayRelay({
+      authenticateHost: async () => ({ id: hostId, credentialVersion: 1 }),
+      authorizeCell: async () => ({
+        runtimeHostId: hostId,
+        companyId,
+        generation: "1",
+      }),
+      hostCurrent: async () => true,
+      cellCurrent: async () => true,
+    });
+    try {
+      expect(intervals).not.toHaveBeenCalled();
+      const server = createServer();
+      relay.attach(server);
+      await relay.listen(0);
+      expect(intervals).toHaveBeenCalledTimes(1);
+      const timer = intervals.mock.results[0]!.value;
+      await relay.stop();
+      expect(cleared).toHaveBeenCalledWith(timer);
+    } finally {
+      intervals.mockRestore();
+      cleared.mockRestore();
+    }
+  });
   it("multiplexes ordered Gateway frames and closes the channel when cell ownership changes", async () => {
     const fixture = await setup();
     const opening = once(fixture.host, "message");
