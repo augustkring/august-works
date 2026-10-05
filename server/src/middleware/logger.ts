@@ -63,6 +63,8 @@ function isPrivateWebhook(req: {
 }
 
 function privateWebhookLogUrl(url: unknown) {
+  if (typeof url === "string" && /\/api\/webhooks(?:\/|\?|$)/i.test(url)) return "/api/webhooks/:provider";
+  if (typeof url === "string" && /\/api\/internal\/runtime(?:\/|\?|$)/i.test(url)) return "/api/internal/runtime/:operation";
   return typeof url === "string" && /\/routine-triggers\/public(?:\/|$)/i.test(url)
     ? "/api/routine-triggers/public/:publicId/fire"
     : "/api/chat-webhooks/:publicId/:provider";
@@ -155,7 +157,14 @@ export function createHttpLogger(baseLogger: Logger) {
       return isPrivateWebhook(req)
         ? {
             ...value,
-            err: { type: "Error", message: "Chat webhook request failed" },
+            err: {
+              type: "Error",
+              message: /^\/api\/(?:webhooks|internal\/runtime)\//.test(
+                privateWebhookLogUrl(requestClassificationUrl(req)),
+              )
+                ? "SaaS ingress request failed"
+                : "Chat webhook request failed",
+            },
           }
         : value;
     },

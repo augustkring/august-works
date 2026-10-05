@@ -13,6 +13,10 @@ import { createHttpLogger } from "../middleware/logger.js";
 
 describe("HTTP logger redaction", () => {
   it.each([
+    { method: "POST", path: "/api/webhooks/paddle?token=private-url-canary" },
+    { method: "GET", path: "/api/webhooks/mailgun/private-url-canary" },
+    { method: "POST", path: "/api/internal/runtime/enroll?token=private-url-canary" },
+    { method: "PUT", path: "http://provider.invalid/api/internal/runtime/../private-url-canary" },
     { method: "POST", path: "/api/routine-triggers/public/private-url-canary/fire" },
     { method: "PUT", path: "/api/routine-triggers/public/private-url-canary/fire" },
 
@@ -98,10 +102,10 @@ describe("HTTP logger redaction", () => {
       const log = JSON.parse(output.trim());
       expect(log.req).toMatchObject({
         method,
-        url: path.includes("routine-triggers") ? "/api/routine-triggers/public/:publicId/fire" : "/api/chat-webhooks/:publicId/:provider",
+        url: path.includes("routine-triggers") ? "/api/routine-triggers/public/:publicId/fire" : path.includes("/api/webhooks") ? "/api/webhooks/:provider" : path.includes("/api/internal/runtime") ? "/api/internal/runtime/:operation" : "/api/chat-webhooks/:publicId/:provider",
       });
       expect(log.reqBody).toBe("[REDACTED]");
-      expect(log.err.message).toBe("Chat webhook request failed");
+      expect(log.err.message).toBe(path.includes("/api/webhooks") || path.includes("/api/internal/runtime") ? "SaaS ingress request failed" : "Chat webhook request failed");
       expect(log.res).toEqual({ statusCode: 405 });
       expect(log.responseTime).toEqual(expect.any(Number));
     },

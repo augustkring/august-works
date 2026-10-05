@@ -27,6 +27,10 @@ describe("isPrivateWebhookHttpRequest", () => {
     ).toBe(true);
     for (const path of [
       "/api/routine-triggers/public",
+      "/api/webhooks/paddle?private=fixture",
+      "/api/webhooks/mailgun",
+      "/api/internal/runtime/enroll",
+      "http://host.invalid/api/internal/runtime/../private-component",
       "/api/routine-triggers/public/private-id/fire",
       "https://host.invalid/api/routine-triggers/public/../private-id",
       "/api/chat-webhooks",
