@@ -29,11 +29,14 @@ pnpm install --frozen-lockfile
 pnpm -r typecheck
 AW_TEST_DATABASE_DUMP_IMAGE=postgres@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722 pnpm test:run
 pnpm build
-node --test deploy/v6/*.test.mjs deploy/v6/host-agent/*.test.mjs
+node --test deploy/v6/*.test.mjs
+sudo "$(command -v node)" --test deploy/v6/host-agent/*.test.mjs
 pnpm check:token-gates
 pnpm check:module-boundaries
 terraform fmt -check -recursive infra
 ```
+
+Host-agent tests exercise real filesystem ownership changes to the cell uid/gid and need root, as the deployed host agent does. Use the absolute pinned Node executable with sudo. Archive, ledger, release and smoke tests run without root.
 
 Run provider-schema validation and mock tests in both Terraform environment roots after initializing with `-backend=false -lockfile=readonly`. These operations do not apply real infrastructure. Use `server/src/__tests__/v6-` for a bounded acceptance rerun; use the full stable runner for regression coverage. Keep raw logs outside source control and record final results in the PR.
 

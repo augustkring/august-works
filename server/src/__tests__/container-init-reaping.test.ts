@@ -49,11 +49,15 @@ function entrypoints(source: string): string[] {
  * a passing mention of a package name in a comment cannot stand in for actually
  * installing it.
  */
-function aptPackages(source: string, stageName: string): string[] {
+function dockerStage(source: string, stageName: string): string {
   const froms = [...source.matchAll(/^FROM .*$/gm)];
   const startIdx = froms.findIndex((m) => new RegExp(`\\bAS ${stageName}\\b`).test(m[0]));
   expect(startIdx, `Dockerfile must declare a '${stageName}' stage`).toBeGreaterThanOrEqual(0);
-  const stage = source.slice(froms[startIdx].index ?? 0, froms[startIdx + 1]?.index ?? source.length);
+  return source.slice(froms[startIdx].index ?? 0, froms[startIdx + 1]?.index ?? source.length);
+}
+
+function aptPackages(source: string, stageName: string): string[] {
+  const stage = dockerStage(source, stageName);
   return [...stage.matchAll(/apt-get install[^\n]*/g)].flatMap((m) =>
     m[0]
       .replace(/apt-get install/, "")
@@ -75,18 +79,27 @@ describe("server image init", () => {
     expect(lines.length, "Dockerfile must declare an ENTRYPOINT").toBeGreaterThan(0);
     for (const line of lines) {
       expect(
-        line,
+        (JSON.parse(line.slice("ENTRYPOINT ".length)) as string[]).slice(0, 2),
         "node must not inherit PID 1: wrap the entrypoint in tini so adopted orphans are reaped",
-      ).toBe('ENTRYPOINT ["/usr/bin/tini", "--", "docker-entrypoint.sh"]');
+      ).toEqual(["/usr/bin/tini", "--"]);
     }
   });
 
   it("keeps the entrypoint in the exec chain so UID remapping and gosu still run", () => {
     // tini must wrap docker-entrypoint.sh, not replace it -- the entrypoint is
     // what remaps the node UID/GID and repairs volume ownership before exec'ing.
-    for (const line of entrypoints(dockerfile)) {
-      expect(line).toContain("docker-entrypoint.sh");
-    }
+    expect(entrypoints(dockerStage(dockerfile, "production"))).toEqual([
+      'ENTRYPOINT ["/usr/bin/tini", "--", "docker-entrypoint.sh"]',
+    ]);
+    expect(dockerfile).toMatch(/^FROM production AS cloud$/m);
+  });
+
+  it("runs the SaaS control plane as a fixed nonroot user behind tini", () => {
+    const stage = dockerStage(dockerfile, "saas");
+    expect(aptPackages(dockerfile, "saas")).toContain("tini");
+    expect(entrypoints(stage)).toEqual(['ENTRYPOINT ["/usr/bin/tini", "--"]']);
+    expect(stage).toMatch(/^USER node$/m);
+    expect(stage).toMatch(/^CMD \["node",/m);
   });
 
   it("keeps the agent-runtime image's init, which the server image mirrors", () => {

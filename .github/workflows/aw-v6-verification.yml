@@ -50,8 +50,10 @@ jobs:
         run: |
           docker pull "$AW_TEST_DATABASE_DUMP_IMAGE"
           pnpm exec vitest run src/__tests__/v6- --maxWorkers=1
-      - name: Test host isolation, encrypted archives and release evidence
-        run: node --test deploy/v6/*.test.mjs deploy/v6/host-agent/*.test.mjs
+      - name: Test encrypted archives, deletion ledgers and release evidence
+        run: node --test deploy/v6/*.test.mjs
+      - name: Test privileged host ownership, isolation and state restore
+        run: sudo "$(command -v node)" --test deploy/v6/host-agent/*.test.mjs
       - name: Test SaaS runtime account switches and usage presentation
         working-directory: ui
         run: pnpm exec vitest run src/pages/SaasRuntimes.test.tsx src/lib/infrastructureUsage.test.ts
