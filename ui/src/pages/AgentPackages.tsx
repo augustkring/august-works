@@ -23,6 +23,9 @@ export function AgentPackages() {
     [material, setMaterial] = useState(false),
     [useCaseId, setUseCaseId] = useState("");
   const [selected, setSelected] = useState<PackageCatalogView | null>(null),
+    [updatePolicy, setUpdatePolicy] = useState<"manual" | "auto_low_risk">(
+      "manual",
+    ),
     [agentId, setAgentId] = useState(""),
     [pins, setPins] = useState<Record<string, string>>({}),
     [internal, setInternal] = useState(false),
@@ -64,6 +67,7 @@ export function AgentPackages() {
     setUpdating(null);
     setMaterial(false);
     setUseCaseId("");
+    setUpdatePolicy("manual");
   }, [companyId, userId]);
   function input() {
     return packageInstallSchema.parse({
@@ -87,6 +91,7 @@ export function AgentPackages() {
           : [];
       }),
       acceptInternalEvaluation: internal,
+      updatePolicy,
       aiUseCaseId: useCaseId || null,
     });
   }
@@ -243,6 +248,7 @@ export function AgentPackages() {
                 setPreview(null);
                 setInternal(false);
                 setUpdating(null);
+                setUpdatePolicy("manual");
                 setUseCaseId("");
               }}
             >
@@ -325,6 +331,27 @@ export function AgentPackages() {
               </select>
             </label>
           )}
+          <label>
+            Update policy
+            <select
+              className="saas-input"
+              value={updatePolicy}
+              onChange={(e) => {
+                setUpdatePolicy(e.target.value as "manual" | "auto_low_risk");
+                setPreview(null);
+              }}
+            >
+              <option value="manual">Review every update</option>
+              <option value="auto_low_risk">
+                Configure unchanged-content updates automatically
+              </option>
+            </select>
+          </label>
+          <p className="text-muted-foreground">
+            Automatic updates preserve capabilities and access. New activation
+            is required; changes to purpose, knowledge, components or
+            permissions always need review.
+          </p>
           {selected.components
             .filter((c) =>
               [
@@ -483,6 +510,7 @@ export function AgentPackages() {
                     variant="outline"
                     onClick={() => {
                       setUpdating(row);
+                      setUpdatePolicy(row.updatePolicy);
                       setSelected(
                         catalog.data!.find(
                           (p) =>

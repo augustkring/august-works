@@ -1,0 +1,13 @@
+# Specialist evaluation and release gates — 2026-10-05
+
+The shipped Chief of Staff, Growth and Research definitions are candidates in `packages/shared/src/specialist-packages.ts`. They prepare internal drafts as AI software, with existing scoped native authority. Their optional connections do not silently become mandatory. A template is neither a customer-demand observation nor a qualified package release.
+
+Use `specialistCompletionContract(packageKey, caseKey)` to predeclare each of the three cases on existing native Tasks and orchestration plans before execution. Resolve and pin actual authorized Role Pack, Skill and approved Playbook components. Supply an actual evaluation-suite component and reviewed source/licensing references; uploaded filenames identify source assets only. Publish only through the configured first-party publisher with current protected release artifacts, independently including observed customer demand and protected holdout evidence. Do not promote local fixtures to real-customer evidence.
+
+Install and configure the approved package against an existing agent, reviewed intended purpose, native grants and provider presence. Preview Readiness, activate explicitly, bind the current native Task deployment, execute actual work and obtain independent human verification using the declared completion contract. Package output is not its own completion proof.
+
+`POST /api/companies/:companyId/agent-package-evaluations` accepts an installation ID and distinct `caseKey` / `verificationRunId` pairs. The projection rechecks current Task and Memory access, current output hashes, the full case contract, the successful actual package-pinned run and independent verification. A missing, stale, erased, foreign or unbound receipt cannot produce a passing report. The metadata report is hashed and can be saved alongside protected evaluation artifacts; it contains no private source bodies and confers no execution or publication authority.
+
+A passing projection covers current native human reviews only. Customer demand, protected holdout representativeness, provider/model portability, cost/latency, managed physical enforcement and procurement facts require independent observed evidence. These gates remain open in this workspace.
+
+For opted-in `auto_low_risk` installations, Core Stewards may configure a newer qualified release only when its manifest and component pins are identical and no native work is live. The installed version changes with system audit attribution, but activation is cleared. Purpose and execution authority must be reviewed again before subsequent work. Material changes never use this path.

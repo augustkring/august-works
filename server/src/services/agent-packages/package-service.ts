@@ -534,6 +534,116 @@ export function agentPackageService(
     );
   }
   return {
+    /** System consumer of the company's explicitly selected update policy.
+     * Reuses the original human's current authority only for authorization; the
+     * audit actor remains system. It never activates or approves material work. */
+    stewardUpdate: async (
+      companyId: string,
+      id: string,
+      nextVersionId: string,
+    ) => {
+      await assertV7Enabled(db, "core_stewards_v7");
+      await assertV7Enabled(db, "agent_packages_v7");
+      return withV7ActivityTransaction(db, async (tx, p) => {
+        await tx.execute(
+          sql`select singleton_key from instance_settings where singleton_key='default' for share`,
+        );
+        await assertV7Enabled(tx, "core_stewards_v7");
+        await assertV7Enabled(tx, "agent_packages_v7");
+        await lockMemoryPrivacy(tx, companyId);
+        const [row] = await tx
+          .select()
+          .from(companyAgentPackageInstallations)
+          .where(
+            and(
+              eq(companyAgentPackageInstallations.companyId, companyId),
+              eq(companyAgentPackageInstallations.id, id),
+            ),
+          )
+          .for("update");
+        if (
+          !row ||
+          row.status !== "active" ||
+          row.updatePolicy !== "auto_low_risk"
+        )
+          return { updated: false };
+        const actor: AuthorizationActor = {
+          type: "board",
+          source: "session",
+          userId: row.installedByUserId,
+          ignoreInstanceAdmin: true,
+        };
+        await access(tx, actor, companyId, row.agentId, true);
+        const before = await release(tx, row.installedVersionId, true),
+          after = await release(tx, nextVersionId, true);
+        available(after);
+        const semver = (v: string) => v.split(".").map(Number);
+        const previous = semver(before.version.version),
+          next = semver(after.version.version);
+        const firstDifference = next.findIndex(
+          (part, index) => part !== previous[index],
+        );
+        if (
+          after.package.id !== row.packageId ||
+          firstDifference < 0 ||
+          next[firstDifference]! <= previous[firstDifference]! ||
+          packageChangeIsMaterial(before.version.release, after.version.release)
+        )
+          return { updated: false };
+        const [safe] = await tx.execute(
+          sql`select aw_v7_package_installation_current(i) and not exists(select 1 from heartbeat_runs r where r.company_id=i.company_id and r.agent_id=i.agent_id and r.status in ('queued','running','scheduled_retry')) as current from company_agent_package_installations i where i.id=${id}::uuid and i.company_id=${companyId}::uuid`,
+        );
+        if (safe?.current !== true) return { updated: false };
+        await pins(
+          tx,
+          actor,
+          companyId,
+          packageInstallSchema.parse({
+            versionId: nextVersionId,
+            agentId: row.agentId,
+            components: row.components.map((c) => ({
+              key: c.key,
+              resourceId: c.resourceId,
+              versionId: c.versionId,
+            })),
+            aiUseCaseId: row.aiUseCaseId,
+            updatePolicy: row.updatePolicy,
+          }),
+          after.version.release,
+        );
+        await tx
+          .update(companyAgentPackageInstallations)
+          .set({
+            installedVersionId: nextVersionId,
+            status: "configuring",
+            version: row.version + 1,
+            activationHash: null,
+            readiness: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(companyAgentPackageInstallations.id, id));
+        await logActivity(
+          tx,
+          {
+            companyId,
+            actorType: "system",
+            actorId: "core-stewards",
+            action: "agent_package.low_risk_update_configured",
+            entityType: "agent_package_installation",
+            entityId: id,
+            details: {
+              policy: "auto_low_risk",
+              policyOwnerUserId: row.installedByUserId,
+              previousVersion: row.installedVersionId,
+              nextVersion: nextVersionId,
+              activationRequired: true,
+            },
+          },
+          p,
+        );
+        return { updated: true };
+      });
+    },
     proposeUpdate: async (
       actor: AuthorizationActor,
       companyId: string,

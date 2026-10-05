@@ -1,7 +1,8 @@
 import { entitlementService } from "../billing/entitlements.js";
 import { sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import type { ToolRiskLevel } from "@paperclipai/shared";
+import type { PackageRelease, ToolRiskLevel } from "@paperclipai/shared";
+import { packageReleaseBlockers } from "./package-policy.js";
 import { forbidden } from "../../errors.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 export async function assertPackageExecution(
@@ -33,18 +34,11 @@ export async function assertPackageExecution(
       { code: "package_run_pin_changed" },
     );
   await agentProviderBindingService(db).assertRuntime(companyId, agentId);
-  const release = record.release as {
-    manifest: {
-      audience: string;
-      maximumRisk: string;
-      purpose: string;
-      commercialProductKey:
-        | "agent_package_chief_of_staff"
-        | "agent_package_growth"
-        | "agent_package_research"
-        | null;
-    };
-  };
+  const release = record.release as PackageRelease;
+  if (packageReleaseBlockers(release).length)
+    throw forbidden("Package release qualification requires review", {
+      code: "package_release_qualification_changed",
+    });
   if (release.manifest.audience === "customer") {
     const entitlement = (
       {
@@ -93,6 +87,22 @@ export async function packageToolRestriction(
       return {
         denyReason:
           "Package actions require a classified native catalog capability.",
+      };
+    // Risk alone cannot distinguish a send, financial commitment or destructive
+    // mutation. Until the native catalog supplies that semantic classification,
+    // a draft-only package must never turn an approval into broader authority.
+    if (
+      risk !== "read" &&
+      !manifest.actionClasses.some((a) => a !== "internal_draft")
+    )
+      return {
+        denyReason:
+          "This package permits internal drafts only; tool side effects are outside its action envelope.",
+      };
+    if (risk !== "read")
+      return {
+        denyReason:
+          "Package side effects require a qualified native action-class mapping; a risk label or human approval alone cannot supply it.",
       };
     const ranks: Record<string, number> = {
       read: 0,

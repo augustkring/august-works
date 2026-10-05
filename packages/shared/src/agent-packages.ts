@@ -93,6 +93,7 @@ export const packageReleaseSchema = z
         scan: evidence.nullable(),
         evaluations: evidence.nullable(),
         protectedHoldout: evidence.nullable(),
+        customerDemand: evidence.nullable().optional(),
         sandboxQualification: evidence.nullable(),
         releaseAuthorization: evidence,
         unresolvedCritical: z.array(z.string().min(1).max(300)).max(30),

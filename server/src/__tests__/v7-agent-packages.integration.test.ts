@@ -1,3 +1,15 @@
+import {
+  maintainFoundationFindings,
+  maintainPackageUpdates,
+  coreStewardSummary,
+} from "../services/stewards/core-stewards.js";
+import { evaluateSpecialistPackage } from "../services/agent-packages/specialist-evaluation.js";
+import {
+  readinessAssessments,
+  knowledgeQualityFindings,
+  companyMemberships,
+  activityLog,
+} from "@paperclipai/db";
 import { learningService } from "../services/learning/learning-service.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { purgeMemoryRecords } from "../services/memory/memory-privacy.js";
@@ -81,6 +93,7 @@ const support = await getEmbeddedPostgresTestSupport();
         saas_deployment_profile_v6: true,
         billing_v6: true,
         agent_packages_v7: true,
+        core_stewards_v7: false,
       });
       f = await seedV5Presences(db);
       service = agentPackageService(db, {
@@ -237,6 +250,190 @@ const support = await getEmbeddedPostgresTestSupport();
           .returning()
       )[0]!;
     }
+    async function enableStewards() {
+      await instanceSettingsService(db).updateExperimental({
+        enableCollectiveMemoryV1: true,
+        readiness_engine_v7: true,
+        cognitive_memory_v7: true,
+        memory_observations_v7: true,
+        learning_engine_v7: true,
+        ai_use_cases_v7: true,
+        governance_evidence_v7: true,
+        core_stewards_v7: true,
+      });
+    }
+    it("Core Stewards configure only opted-in unchanged-content releases and retain a human activation boundary", async () => {
+      await enableStewards();
+      const installed = await service.install(f.actor, f.home, {
+        ...installInput(),
+        updatePolicy: "auto_low_risk",
+      });
+      const activated = await service.decide(
+        f.actor,
+        f.home,
+        installed.id,
+        "activate",
+        {
+          expectedVersion: 1,
+          reason: "Approve the explicit editorial update policy",
+        },
+      );
+      const next = await service.publish(f.actor, {
+        ...input,
+        version: "1.0.1",
+        releaseNotes: "Editorial correction",
+      });
+      const grants = await db.select().from(principalPermissionGrants);
+      expect((await maintainPackageUpdates(db)).configured).toBeGreaterThan(0);
+      const current = await service.get(f.actor, f.home, installed.id);
+      expect(current.installedVersionId).toBe(next.id);
+      expect(current.status).toBe("configuring");
+      expect(current.activationHash).toBeNull();
+      expect(current.version).toBe(activated.version + 1);
+      expect(await db.select().from(principalPermissionGrants)).toHaveLength(
+        grants.length,
+      );
+      const audit = await db
+        .select()
+        .from(activityLog)
+        .where(eq(activityLog.entityId, installed.id));
+      expect(
+        audit.find(
+          (a) => a.action === "agent_package.low_risk_update_configured",
+        )?.actorType,
+      ).toBe("system");
+      await expect(run()).rejects.toMatchObject({
+        cause: { code: "23514", message: "package_run_activation_required" },
+      });
+      expect((await maintainPackageUpdates(db)).configured).toBe(0);
+    });
+    it("automatic package stewardship cannot change material content, live work or revoked original-human authority", async () => {
+      await enableStewards();
+      const installed = await service.install(f.actor, f.home, {
+        ...installInput(),
+        updatePolicy: "auto_low_risk",
+      });
+      await service.decide(f.actor, f.home, installed.id, "activate", {
+        expectedVersion: 1,
+        reason: "Evaluate safe auto-update admission",
+      });
+      const next = await service.publish(f.actor, {
+        ...input,
+        version: "1.0.1",
+        releaseNotes: "Editorial correction",
+      });
+      const live = await run();
+      expect(
+        await service.stewardUpdate(f.home, installed.id, next.id),
+      ).toEqual({ updated: false });
+      await db
+        .update(heartbeatRuns)
+        .set({ status: "succeeded", finishedAt: new Date() })
+        .where(eq(heartbeatRuns.id, live.id));
+      const material = await service.publish(f.actor, {
+        ...input,
+        version: "1.1.0",
+        manifest: {
+          ...input.manifest,
+          knownLimitations: ["New limitation requiring explicit review"],
+        },
+      });
+      expect(
+        await service.stewardUpdate(f.home, installed.id, material.id),
+      ).toEqual({ updated: false });
+      await db
+        .update(companyMemberships)
+        .set({ status: "suspended" })
+        .where(sql`company_id=${f.home}::uuid and principal_id=${f.userId}`);
+      await expect(
+        service.stewardUpdate(f.home, installed.id, next.id),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(
+        (
+          await db
+            .select()
+            .from(companyAgentPackageInstallations)
+            .where(eq(companyAgentPackageInstallations.id, installed.id))
+        )[0]!.installedVersionId,
+      ).toBe(versionId);
+      await reconcileAgentPackages(db);
+    });
+    it("metadata-only Foundation stewardship is bounded, idempotent, principal scoped and disabled by default", async () => {
+      const assessedAt = new Date(Date.now() - 120000),
+        expiresAt = new Date(Date.now() - 60000);
+      const [assessment] = await db
+        .insert(readinessAssessments)
+        .values({
+          companyId: f.home,
+          agentId: f.presence.id,
+          principalId: `user:${f.userId}`,
+          subjectType: "agent",
+          subjectId: f.presence.id,
+          actionClass: "internal_draft",
+          riskClass: "low",
+          status: "ready_with_warnings",
+          requirementSnapshotHash: "a".repeat(64),
+          policySnapshotHash: "b".repeat(64),
+          requirementSnapshot: [],
+          assessment: {
+            status: "ready_with_warnings",
+            actionClass: "internal_draft",
+            riskClass: "low",
+            requirements: [],
+            assessedAt: assessedAt.toISOString(),
+            expiresAt: expiresAt.toISOString(),
+          },
+          assessedAt,
+          expiresAt,
+        })
+        .returning();
+      await instanceSettingsService(db).updateExperimental({
+        core_stewards_v7: false,
+      });
+      expect(await maintainFoundationFindings(db)).toEqual({
+        findingsCreated: 0,
+      });
+      await enableStewards();
+      await Promise.all([
+        maintainFoundationFindings(db),
+        maintainFoundationFindings(db),
+      ]);
+      const findings = await db
+        .select()
+        .from(knowledgeQualityFindings)
+        .where(eq(knowledgeQualityFindings.assessmentId, assessment!.id));
+      expect(findings).toHaveLength(1);
+      expect(findings[0]!.evidenceRefs).toEqual([]);
+      expect(
+        (await coreStewardSummary(db, f.actor, f.home)).ownReadinessFindings,
+      ).toBe(1);
+      expect(
+        (await coreStewardSummary(db, f.actor, f.guest)).ownReadinessFindings,
+      ).toBe(0);
+      expect((await maintainFoundationFindings(db)).findingsCreated).toBe(0);
+    });
+    it("specialist evaluation cannot synthesize a customer outcome from an installation or a foreign/missing review", async () => {
+      const candidate = await service.publish(f.actor, {
+        ...input,
+        packageKey: "aw-research-specialist",
+      });
+      const installed = await service.install(f.actor, f.home, {
+        ...installInput(),
+        versionId: candidate.id,
+      });
+      await expect(
+        evaluateSpecialistPackage(db, f.actor, f.home, {
+          installationId: installed.id,
+          cases: [{ caseKey: "synthesis", verificationRunId: randomUUID() }],
+        }),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        evaluateSpecialistPackage(db, f.actor, f.guest, {
+          installationId: installed.id,
+          cases: [{ caseKey: "synthesis", verificationRunId: randomUUID() }],
+        }),
+      ).rejects.toMatchObject({ status: 404 });
+    });
     it("install configures native pins without granting company or connection authority; activation permits a bounded internal draft", async () => {
       const grants = await db.select().from(principalPermissionGrants),
         connections = await db.select().from(connectionGrants);

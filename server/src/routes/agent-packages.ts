@@ -5,6 +5,7 @@ import {
   packageDecisionSchema,
   packageUpdateSchema,
   packageReleaseSchema,
+  specialistEvaluationSchema,
 } from "@paperclipai/shared";
 import {
   agentPackageService,
@@ -13,6 +14,7 @@ import {
 import { validate } from "../middleware/validate.js";
 import { assertCompanyAccess } from "./authz.js";
 import { conflict, notFound } from "../errors.js";
+import { evaluateSpecialistPackage } from "../services/agent-packages/specialist-evaluation.js";
 export function agentPackageRoutes(
   db: Db,
   options: PackagePublisherOptions = {},
@@ -84,6 +86,17 @@ export function agentPackageRoutes(
     "/companies/:companyId/agent-package-update-proposals",
     async (req, res) =>
       res.json(await service.proposals(req.actor, company(req))),
+  );
+  router.post(
+    "/companies/:companyId/agent-package-evaluations",
+    validate(specialistEvaluationSchema),
+    async (req, res) => {
+      const companyId = company(req);
+      res.setHeader("Cache-Control", "no-store");
+      res.json(
+        await evaluateSpecialistPackage(db, req.actor, companyId, req.body),
+      );
+    },
   );
   router.post(
     "/companies/:companyId/agent-package-update-proposals/:id/review",

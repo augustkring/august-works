@@ -1,4 +1,5 @@
 import { reconcileAgentPackages, deliverAgentPackageStops } from "./services/agent-packages/package-jobs.js";
+import { maintainFoundationFindings, maintainPackageUpdates } from "./services/stewards/core-stewards.js";
 import { reconcileGovernanceDeployments, deliverGovernanceStops } from "./services/ai-governance/governance-jobs.js";
 import { supervisionService } from "./services/supervision/supervision-service.js";
 import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network-policy.js";
@@ -1210,6 +1211,8 @@ async function startServerWithDatabaseTeardown(
   const { workSignalService } = await import("./services/work-signals/work-signal-service.js");
   const executionControlSweeps = [
     ["agent_package_authority", () => reconcileAgentPackages(db, 20)],
+    ["steward_foundation", () => maintainFoundationFindings(db, 20)],
+    ["steward_package_updates", () => maintainPackageUpdates(db, 20)],
     ["agent_package_stops", () => heartbeat ? deliverAgentPackageStops(db, (runId, reason) => heartbeat!.cancelRun(runId, reason), 20) : undefined],
     ["governance_authority", () => reconcileGovernanceDeployments(db, 20)],
     ["governance_stops", () => heartbeat ? deliverGovernanceStops(db, (runId, reason) => heartbeat!.cancelRun(runId, reason), 20) : undefined],

@@ -85,6 +85,9 @@ export function verificationService(db: Db) {
     return { planId: id,planVersion: plan.version,workerId,issueId,contractId,contractHash: row.canonicalSha256,contract,resultHash,evidence,deterministicFailures: failures,liveAttempts,riskClass: plan.riskClass,policy: { independentRequired: plan.verificationMode === "independent_required",humanRequired: plan.humanOversightMode === "required",workerSelfCertification: false } };
   }
   return {
+    // Internal projections use their caller's privacy lock and snapshot without
+    // reconciling attempts or publishing events before the outer commit.
+    currentPacket: (actor: AuthorizationActor, companyId: string, id: string, workerId: string|null = null) => packet(db, actor, companyId, id, workerId),
     packet: async (actor: AuthorizationActor,companyId: string,id: string,workerId: string|null = null) => withV7ActivityTransaction(db, async tx => { await lockMemoryPrivacy(tx,companyId);
       const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,companyId),eq(orchestrationPlans.id,id))).for("update");
       if (plan) await reconcileOrchestrationAttempts(tx,plan);

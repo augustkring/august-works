@@ -5,11 +5,22 @@ import type {
   PackagePreview,
   PackageInstallInput,
   PackageUpdateDraftInput,
+  SpecialistEvaluationInput,
+  SpecialistEvaluationReport,
 } from "@paperclipai/shared";
 import { api } from "./client";
 const scope = (path: string, userId: string) =>
   `${path}?expectedUserId=${encodeURIComponent(userId)}`;
 export const agentPackagesApi = {
+  evaluate: (
+    companyId: string,
+    userId: string,
+    input: SpecialistEvaluationInput,
+  ) =>
+    api.post<SpecialistEvaluationReport>(
+      scope(`/companies/${companyId}/agent-package-evaluations`, userId),
+      input,
+    ),
   catalog: (userId: string) =>
     api.get<PackageCatalogView[]>(scope("/agent-packages", userId)),
   options: (companyId: string, userId: string) =>

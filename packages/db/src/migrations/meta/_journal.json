@@ -2605,6 +2605,13 @@
       "when": 1791226901791,
       "tag": "0373_safe_human_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 374,
+      "version": "7",
+      "when": 1791229140621,
+      "tag": "0374_specialist_release_qualification",
+      "breakpoints": true
     }
   ]
 }
