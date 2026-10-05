@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { supervisionPolicySchema } from "./supervision.js";
 import { READINESS_ACTIONS } from "./readiness.js";
 export const orchestrationCompletionSchema = z.object({
   objective: z.string().trim().min(10).max(4000),
@@ -20,7 +21,7 @@ export const createOrchestrationPlanSchema = z.object({
   issueId: z.string().uuid(), expectedIssueUpdatedAt: z.string().datetime({ offset: true }), riskClass: z.enum(["C0", "C1", "C2", "C3", "C4"]),
   actionClass: z.enum(READINESS_ACTIONS).default("internal_draft"),
   workload: z.enum(["semantic", "decomposable", "long_running", "deterministic"]), workflowId: z.string().uuid().nullable().default(null),
-  acceptedPlanRevisionId: z.string().uuid().nullable().default(null), completionContract: orchestrationCompletionSchema, budgets: orchestrationBudgetSchema,
+  acceptedPlanRevisionId: z.string().uuid().nullable().default(null), supervisionPolicy: supervisionPolicySchema.default(() => supervisionPolicySchema.parse({})), completionContract: orchestrationCompletionSchema, budgets: orchestrationBudgetSchema,
   workers: z.array(z.object({ key: z.string().regex(/^[a-z][a-z0-9_-]{0,79}$/), issueId: z.string().uuid(), dependsOn: z.array(z.string().min(1).max(80)).max(31).default([]), completionContract: orchestrationCompletionSchema.optional() }).strict()).min(1).max(32),
 }).strict().superRefine((value, ctx) => {
   const floor = value.actionClass === "internal_draft" ? 0 : ["external_communication", "data_mutation"].includes(value.actionClass) ? 2 : 3;

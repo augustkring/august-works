@@ -3279,3 +3279,5 @@ export type { SaasCostSnapshot } from "./saas-costs.js";
 export * from "./learning.js";
 
 export * from "./orchestration.js";
+
+export * from "./supervision.js";

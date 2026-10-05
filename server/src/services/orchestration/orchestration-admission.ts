@@ -41,12 +41,15 @@ async function admit(tx: Db, input: { companyId: string; issueId: string; actor:
   await assertV7Enabled(tx, "orchestration_v7");
   if (!plan || plan.erasedAt || plan.status !== "running" || !plan.startedAt) throw forbidden("The orchestration plan is not running");
   if (Date.now() >= plan.startedAt.getTime() + plan.budgets.maxWallClockSeconds * 1000) throw forbidden("The orchestration deadline expired");
+  if (!plan.executionPrincipal || (plan.executionPrincipal.type !== "user" && !(plan.executionPrincipal.type === "system" && plan.executionPrincipal.service === "local-board"))) throw forbidden("The plan requires its current initiating human principal");
   if (input.runId && plan.mode === "workflow_bound") throw forbidden("Deterministic plans execute through their pinned Workflow, not a semantic worker");
   if (plan.budgets.maxModelCostMinor !== null) throw forbidden("A pre-spend reservation broker has not qualified this plan cost cap");
   const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).for("share");
   const [worker] = await tx.select().from(orchestrationWorkers).where(and(eq(orchestrationWorkers.companyId, input.companyId), eq(orchestrationWorkers.id, binding.worker.id)));
   if (!task || !worker || ["done", "cancelled"].includes(task.status) || task.assigneeAgentId !== worker.agentId) throw forbidden("Worker no longer has the plan's canonical assignment");
   await assertV7Authorization(tx, input.actor, input.companyId, "issue:mutate", { type: "issue", companyId: input.companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId, status: task.status });
+  const initiatingActor: AuthorizationActor = plan.executionPrincipal.type === "user" ? { type: "board", source: "session", userId: plan.executionPrincipal.userId } : { type: "board", source: "local_implicit" };
+  await assertV7Authorization(tx, initiatingActor, input.companyId, "issue:mutate", { type: "issue", companyId: input.companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId, status: task.status });
   if (input.actor.type === "agent" && input.actor.agentId !== worker.agentId) throw forbidden("Execution cannot assume another worker's identity");
   const [root] = await tx.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, plan.issueId))).for("share");
   if (!root || (plan.mode === "planned_parallel" && (task.parentId !== root.id || task.projectId !== root.projectId)) || ["done", "cancelled"].includes(root.status) || task.requestDepth - root.requestDepth > plan.budgets.maxDelegationDepth) throw forbidden("Canonical coordinator or delegation depth changed");

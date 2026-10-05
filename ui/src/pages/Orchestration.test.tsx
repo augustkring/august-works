@@ -9,7 +9,7 @@ const fixture = vi.hoisted(() => ({ company: "11111111-1111-4111-8111-1111111111
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: fixture.company }) }));
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: fixture.breadcrumbs }) }));
 vi.mock("@/lib/router", () => ({ Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a> }));
-vi.mock("@/api/orchestration", () => ({ orchestrationApi: { list: vi.fn(async () => []), get: vi.fn(), create: vi.fn(), decide: vi.fn() } }));
+vi.mock("@/api/orchestration", () => ({ orchestrationApi: { list: vi.fn(async () => []), get: vi.fn(), supervision: vi.fn(async () => ({ sessions: [], signals: [], interventions: [] })), intervene: vi.fn(), create: vi.fn(), decide: vi.fn() } }));
 vi.mock("@/api/issues", () => ({ issuesApi: { list: vi.fn(async () => [{ id: fixture.task, title: "Prepare the launch draft", identifier: "T-1", updatedAt: "2026-10-05T00:00:00.000Z" }]), listAcceptedPlanDecompositions: vi.fn(async () => []) } }));
 vi.mock("@/api/workflows", () => ({ workflowsApi: { list: vi.fn(async () => []) } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

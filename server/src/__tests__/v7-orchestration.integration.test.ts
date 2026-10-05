@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { agentExecutionManifests, agents, companyMemberships, completionContracts, documentRevisions, documents, heartbeatRuns, issueDocuments, issueThreadInteractions, memoryBindings, memoryRecords, contextManifestMemoryRoots, issues, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, createDb } from "@paperclipai/db";
+import { agentExecutionManifests, agents, companyMemberships, completionContracts, documentRevisions, documents, heartbeatRuns, issueDocuments, issueThreadInteractions, memoryBindings, memoryRecords, contextManifestMemoryRoots, issues, orchestrationPlans, orchestrationWorkerAttempts, supervisionInterventions, supervisionSessions, toolInvocations, createDb } from "@paperclipai/db";
 import { PROVIDER_CAPABILITY_FEATURES, createOrchestrationPlanSchema, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { supervisionService } from "../services/supervision/supervision-service.js";
+import { agentIdentityService } from "../services/agent-identities.js";
 import { orchestrationRuntimeControl } from "../services/orchestration/orchestration-runtime-control.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { buildNativeExecutionInput } from "../services/native-runtime/native-execution-input.js";
@@ -175,4 +177,81 @@ const support = await getEmbeddedPostgresTestSupport();
     await expect(service.decide(f.actor, f.home, plan.id, { expectedVersion: 1, action: "start", rationale: "Require a genuine pre-spend cap for this run" })).rejects.toMatchObject({ status: 409 });
     expect(await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.companyId, f.home))).toEqual([]);
   });
+  it("observes repeated identical actual failures, fences writes and durably delivers native Stop", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true });
+    const plan = await started(), execution = await run(); await execution.prepare();
+    for (let i=0;i<3;i++) {
+      const [receipt] = await db.insert(toolInvocations).values({ companyId: f.home, issueId: task.id, runId: execution.row.id, agentId: f.presence.id, toolName: "fixture_read", argumentsHash: "a".repeat(64), status: "executing" }).returning();
+      await db.update(toolInvocations).set({ status: "failed", errorCode: "dependency_unavailable", errorMessage: "Sensitive provider content must not enter supervision" }).where(eq(toolInvocations.id,receipt!.id));
+    }
+    const supervisor = supervisionService(db), observed = await supervisor.observe(f.home,plan.id);
+    expect(observed?.decision).toMatchObject({ action: "PAUSE", reasonCode: "repeated_identical_failure" });
+    expect(observed?.intervention?.status).toBe("pending");
+    await expect(db.transaction(tx => assertAgentRunWriteAllowed(tx as unknown as typeof db,f.home,{ agentId: f.presence.id,runId: execution.row.id }))).rejects.toMatchObject({ status: 403 });
+    expect(JSON.stringify((await supervisor.get(f.actor,f.home,plan.id)).signals)).not.toContain("Sensitive provider");
+    expect(await supervisor.deliverStops(20,f.home)).toMatchObject({ applied: 1, failed: 0 });
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,execution.row.id)))[0]!.status).toBe("cancelled");
+    await supervisor.observe(f.home,plan.id); expect(await supervisor.deliverStops(20,f.home)).toMatchObject({ applied: 0 });
+  });
+  it("recovers committed human Pause without relying on the HTTP request completing", async () => {
+    const plan = await started(), execution = await run(); await execution.prepare();
+    await orchestrationService(db).decide(f.actor,f.home,plan.id,{ expectedVersion: plan.version, action: "pause", rationale: "Pause and durably reconcile this physical worker" });
+    const result = await supervisionService(db).deliverStops(20,f.home); expect(result.applied).toBe(1);
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,execution.row.id)))[0]!.status).toBe("cancelled");
+  });
+  it("stops on current authority revocation even though the initiating user cannot request Stop", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true });
+    const plan = await started(), execution = await run(); await execution.prepare();
+    await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId,f.home),eq(companyMemberships.principalId,f.userId)));
+    const supervisor = supervisionService(db); expect((await supervisor.observe(f.home,plan.id))?.decision.reasonCode).toBe("authority_revoked");
+    expect(await supervisor.deliverStops(20,f.home)).toMatchObject({ applied: 1, failed: 0 });
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,execution.row.id)))[0]!.status).toBe("cancelled");
+  });
+  it("excludes authoritative human waits from configured no-progress escalation and enforces cumulative checks", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true });
+    const plan = await started({ ...input(), supervisionPolicy: { noProgressSeconds: 30, maxSupervisorChecks: 2 } });
+    const supervisor = supervisionService(db); await supervisor.observe(f.home,plan.id);
+    await db.update(supervisionSessions).set({ lastObservedAt: null, lastProgressAt: new Date(Date.now()-60000) }).where(eq(supervisionSessions.planId,plan.id));
+    await db.insert(issueThreadInteractions).values({ companyId: f.home, issueId: task.id, kind: "request_confirmation", payload: { version: 1, prompt: "Review this retained work before proceeding?" } });
+    expect((await supervisor.observe(f.home,plan.id))?.decision).toMatchObject({ action: "REQUEST_INPUT" });
+    await db.update(supervisionSessions).set({ lastObservedAt: null }).where(eq(supervisionSessions.planId,plan.id));
+    expect((await supervisor.observe(f.home,plan.id))?.decision).toMatchObject({ action: "ESCALATE_HUMAN", reasonCode: "supervision_budget_exhausted" });
+    await expect(db.update(orchestrationPlans).set({ supervisorChecksUsed: 0 }).where(eq(orchestrationPlans.id,plan.id))).rejects.toThrow();
+  });
+  it("blocks worker self-certification and stale or foreign supervision references", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true });
+    const plan = await started(), supervisor = supervisionService(db);
+    const result = await supervisor.intervene(f.actor,f.home,plan.id,{ expectedPlanVersion: plan.version, action: "FINISH", rationale: "A narrative claim cannot certify this business contract" });
+    expect(result?.intervention).toMatchObject({ status: "blocked", decisionAction: "START_VERIFIER" });
+    await expect(supervisor.intervene(f.actor,f.home,plan.id,{ expectedPlanVersion: plan.version, action: "CONTINUE", rationale: "Review this plan using a foreign or stale signal", signalIds: [randomUUID()] })).rejects.toMatchObject({ status: 409 });
+    await expect(supervisor.intervene({ type: "agent", source: "agent_jwt", companyId: f.home,agentId: f.presence.id },f.home,plan.id,{ expectedPlanVersion: plan.version, action: "STOP", rationale: "Worker cannot manufacture human intervention authority" })).rejects.toMatchObject({ status: 403 });
+  });
+  it("requires actual approval for material tools at the orchestration dispatch boundary", async () => {
+    const plan = await started(), execution = await run(); await execution.prepare();
+    await expect(db.insert(toolInvocations).values({ companyId: f.home, issueId: task.id, runId: execution.row.id, agentId: f.presence.id, toolName: "send_email", riskLevel: "write", status: "executing" })).rejects.toThrow();
+    const [receipt] = await db.insert(toolInvocations).values({ companyId: f.home, issueId: task.id, runId: execution.row.id, agentId: f.presence.id, toolName: "send_email", riskLevel: "write", approvalState: "approved", status: "executing" }).returning(); expect(receipt).toBeDefined();
+    expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id,plan.id)))[0]!.toolActionsUsed).toBe(1);
+  });
+
+  it("reassigns only a stopped paused worker through canonical Task assignment", async () => {
+    await instanceSettingsService(db).updateExperimental({ supervision_v7: true });
+    const plan = await started(), replacement = await agentIdentityService(db).create(f.actor,{ name: "Independent replacement",homeCompanyId: f.home });
+    const worker = (await orchestrationService(db).get(f.actor,f.home,plan.id)).workers[0]!;
+    const supervisor = supervisionService(db);
+    expect((await supervisor.intervene(f.actor,f.home,plan.id,{ expectedPlanVersion: plan.version,action: "REASSIGN",workerId: worker.id,reassignToAgentId: replacement.presence.id,rationale: "Transfer work only after canonical stopped ownership" }))?.intervention?.status).toBe("blocked");
+    const paused = await orchestrationService(db).decide(f.actor,f.home,plan.id,{ expectedVersion: plan.version,action: "pause",rationale: "Pause before changing the assigned canonical worker" });
+    const result = await supervisor.intervene(f.actor,f.home,plan.id,{ expectedPlanVersion: paused.version,action: "REASSIGN",workerId: worker.id,reassignToAgentId: replacement.presence.id,rationale: "Transfer this stopped Task to the selected local agent" });
+    expect(result?.intervention).toMatchObject({ decisionAction: "REASSIGN",status: "applied" });
+    expect((await db.select().from(issues).where(eq(issues.id,task.id)))[0]!.assigneeAgentId).toBe(replacement.presence.id);
+    expect((await orchestrationService(db).get(f.actor,f.home,plan.id)).workers[0]!.agentId).toBe(replacement.presence.id);
+  });
+  it("recovers an expired Stop lease and prevents duplicate delivery by competing controllers", async () => {
+    const plan = await started(), execution = await run(); await execution.prepare();
+    await orchestrationService(db).decide(f.actor,f.home,plan.id,{ expectedVersion: plan.version,action: "pause",rationale: "Reconcile the qualified native Stop after controller loss" });
+    await db.update(supervisionInterventions).set({ status: "running",leaseOwner: "crashed-controller",leaseExpiresAt: new Date(Date.now()-1000),attempts: 1 }).where(eq(supervisionInterventions.planId,plan.id));
+    const results = await Promise.all([supervisionService(db).deliverStops(1,f.home),supervisionService(db).deliverStops(1,f.home)]);
+    expect(results.reduce((sum,result) => sum+result.applied,0)).toBe(1);
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,execution.row.id)))[0]!.status).toBe("cancelled");
+  });
+
 });

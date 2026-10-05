@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import { orchestrationWorkerAttempts, type Db } from "@paperclipai/db";
+import { orchestrationWorkerAttempts, orchestrationPlans, type Db } from "@paperclipai/db";
+import { forbidden } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, v7HumanActorId } from "../v7-authorization.js";
 import { heartbeatService } from "../heartbeat.js";
@@ -11,10 +12,21 @@ export function orchestrationRuntimeControl(db: Db) {
   const service = orchestrationService(db), heartbeat = heartbeatService(db), workflow = workflowExecutorService(db, { heartbeat });
   const workflowActor = (actor: AuthorizationActor) => ({ principal: actor.source === "local_implicit" ? { type: "system" as const, service: "local-board" } : { type: "user" as const, userId: v7HumanActorId(actor) }, responsibleUserId: actor.source === "local_implicit" ? null : v7HumanActorId(actor) });
   return {
-    dispatch: async (actor: AuthorizationActor, companyId: string, id: string) => {
+    /** Internal reconciliation only: persisted plan fencing precedes physical cancellation. */
+    stopFencedPlan: async (companyId: string, id: string, reason: string) => {
+      const [plan] = await db.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, id)));
+      if (!plan || plan.status === "running") throw forbidden("Safety cancellation requires a durably fenced plan");
+      const attempts = await db.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, id), eq(orchestrationWorkerAttempts.status, "running")));
+      for (const attempt of attempts) {
+        if (attempt.runId) await heartbeat.cancelRun(attempt.runId, reason);
+        else if (attempt.workflowRunId) await workflow.cancelRun(companyId, attempt.workflowRunId, { reason }, { principal: { type: "system", service: "orchestration_supervision" } });
+      }
+      return attempts.map(attempt => attempt.id);
+    },
+    dispatch: async (actor: AuthorizationActor, companyId: string, id: string, targetWorkerId?: string) => {
       const plan = await service.get(actor, companyId, id);
       if (plan.status !== "running") return [];
-      const ready = plan.workers.filter(worker => worker.status === "waiting" && worker.dependsOn.every(key => plan.workers.find(peer => peer.workerKey === key)?.status === "completed"));
+      const ready = plan.workers.filter(worker => worker.status === "waiting" && (!targetWorkerId || worker.id === targetWorkerId) && plan.attempts.filter(a => a.workerId === worker.id).sort((a,b) => b.attempt-a.attempt)[0]?.status !== "succeeded" && worker.dependsOn.every(key => plan.workers.find(peer => peer.workerKey === key)?.status === "completed"));
       const slots = Math.max(0, plan.budgets.maxParallelWorkers - plan.attempts.filter(attempt => attempt.status === "running").length);
       const outcomes: Array<{ workerId: string; runId: string | null; error: string | null }> = [];
       for (const worker of ready.slice(0, slots)) {
@@ -27,7 +39,7 @@ export function orchestrationRuntimeControl(db: Db) {
             await assertV7Authorization(db, actor, companyId, "agent:wake", { type: "agent", companyId, agentId: worker.agentId });
             const run = await heartbeat.wakeup(worker.agentId!, { source: "on_demand", triggerDetail: "manual", manualUserWake: true, reason: "v7_orchestration_plan", requestedByActorType: "user", requestedByActorId: v7HumanActorId(actor),
               idempotencyKey: `aw-plan:${id}:${worker.id}:${worker.attemptCount + 1}`, allowRunCoalescing: false,
-              payload: { issueId: worker.issueId, v7OrchestrationPlanId: id }, contextSnapshot: { issueId: worker.issueId, v7OrchestrationPlanId: id, responsibleUserId: actor.source === "local_implicit" ? null : v7HumanActorId(actor) },
+              payload: { issueId: worker.issueId, v7OrchestrationPlanId: id }, contextSnapshot: { failedRunId: plan.attempts.filter(a => a.workerId === worker.id && a.status === "failed").sort((a,b) => b.attempt-a.attempt)[0]?.runId ?? undefined, issueId: worker.issueId, v7OrchestrationPlanId: id, responsibleUserId: actor.source === "local_implicit" ? null : v7HumanActorId(actor) },
               issueStateGuard: { statuses: ["todo", "in_progress", "in_review", "blocked"], assigneeAgentId: worker.agentId! } });
             outcomes.push({ workerId: worker.id, runId: run?.id ?? null, error: run ? null : "Canonical queue did not dispatch this Task" });
           }

@@ -17,6 +17,7 @@ export function Orchestration() {
   const [workload, setWorkload] = useState<"semantic" | "decomposable" | "long_running" | "deterministic">("semantic"), [actionClass, setActionClass] = useState<ReadinessAction>("internal_draft"), [risk, setRisk] = useState<"C0" | "C1" | "C2" | "C3" | "C4">("C0"), [workflowId, setWorkflowId] = useState(""), [decompositionId, setDecompositionId] = useState(""), [runtimeOutcome, setRuntimeOutcome] = useState("");
   const [workers, setWorkers] = useState<Array<{ key: string; issueId: string; objective: string; output: string; dependsOn: string[] }>>([]);
   const [receiptTool, setReceiptTool] = useState(""), [receiptArgumentsHash, setReceiptArgumentsHash] = useState("");
+  const [failureLimit,setFailureLimit] = useState(3), [checkLimit,setCheckLimit] = useState(100), [noProgressLimit,setNoProgressLimit] = useState(0);
   const [parallelism, setParallelism] = useState(1);
   const [retries, setRetries] = useState(1), [seconds, setSeconds] = useState(900), [toolActions, setToolActions] = useState(100);
   useEffect(() => setBreadcrumbs([{ label: "Orchestration" }]), [setBreadcrumbs]);
@@ -26,7 +27,9 @@ export function Orchestration() {
   const decompositions = useQuery({ queryKey: ["orchestration-decompositions", companyId, taskId], queryFn: () => issuesApi.listAcceptedPlanDecompositions(taskId), enabled: Boolean(companyId && taskId && workload === "decomposable") });
   const workflows = useQuery({ queryKey: ["orchestration-workflows", companyId], queryFn: () => workflowsApi.list(companyId!), enabled: Boolean(companyId && workload === "deterministic") });
   const detail = useQuery({ queryKey: ["orchestration-plan", companyId, selected], queryFn: () => orchestrationApi.get(companyId!, selected), enabled: Boolean(companyId && selected), refetchInterval: selected ? 10000 : false });
-  const refresh = () => { void plans.refetch(); void detail.refetch(); };
+  const supervision = useQuery({ queryKey: ["orchestration-supervision",companyId,selected], queryFn: () => orchestrationApi.supervision(companyId!,selected), enabled: Boolean(companyId && selected), refetchInterval: selected ? 10000 : false });
+  const intervention = useMutation({ mutationFn: (action: "STOP" | "RETRY" | "START_VERIFIER" | "STEER") => orchestrationApi.intervene(companyId!,selected,{ expectedPlanVersion: detail.data!.version, action, rationale }), onSuccess: () => { refresh(); setRationale(""); } });
+  const refresh = () => { void plans.refetch(); void detail.refetch(); if (selected) void supervision.refetch(); };
   const create = useMutation({ mutationFn: () => {
     const task = tasks.data?.find(item => item.id === taskId); if (!task) throw new Error("Select a current canonical Task.");
     const accepted = decompositions.data?.find(row => row.id === decompositionId);
@@ -35,6 +38,7 @@ export function Orchestration() {
       issueId: task.id, expectedIssueUpdatedAt: new Date(task.updatedAt).toISOString(), riskClass: risk, actionClass, workload, workflowId: workload === "deterministic" ? workflowId : null,
       acceptedPlanRevisionId: accepted?.acceptedPlanRevisionId ?? null,
       completionContract: { objective, requiredOutputs: [{ key: output }], businessInvariants: [invariant], requiredPostconditions: actionClass === "internal_draft" ? [] : [{ kind: "tool_receipt", toolName: receiptTool, argumentsHash: receiptArgumentsHash, requireApproval: true }] },
+      supervisionPolicy: { repeatedFailureThreshold: failureLimit, maxSupervisorChecks: checkLimit, noProgressSeconds: noProgressLimit || null },
       budgets: { maxWorkerCount: workload === "decomposable" ? workers.length : 1, maxParallelWorkers: workload === "decomposable" ? parallelism : 1, maxDelegationDepth: workload === "decomposable" ? 1 : 0, maxRetries: retries, maxWallClockSeconds: seconds, maxToolActions: toolActions },
       workers: workload === "decomposable" ? workers.map(worker => ({ key: worker.key, issueId: worker.issueId, dependsOn: worker.dependsOn, completionContract: { objective: worker.objective, requiredOutputs: [{ key: worker.output }], businessInvariants: [invariant] } })) : [{ key: "worker", issueId: task.id }],
     };
@@ -44,7 +48,7 @@ export function Orchestration() {
     if (!detail.data) throw new Error("Select a plan.");
     return orchestrationApi.decide(companyId!, selected, { expectedVersion: detail.data.version, action, rationale });
   }, onSuccess: result => { setRuntimeOutcome(JSON.stringify(result.runtime, null, 2)); setRationale(""); refresh(); } });
-  const errors = [plans.error, tasks.error, decompositions.error, workflows.error, detail.error, create.error, decision.error].filter(Boolean);
+  const errors = [plans.error, tasks.error, decompositions.error, workflows.error, detail.error, create.error, decision.error, supervision.error, intervention.error].filter(Boolean);
   if (!companyId) return <p>Select a company.</p>;
   return <div className="space-y-6">
     <div><h1 className="text-xl font-semibold">Orchestration</h1><p className="text-sm text-muted-foreground">Plan bounded work on existing Tasks. Outputs, approvals and verification determine completion.</p></div>
@@ -69,6 +73,7 @@ export function Orchestration() {
         <label className="block text-sm">Simultaneous workers<Input type="number" min={1} max={Math.min(16, workers.length || 1)} value={parallelism} onChange={event => setParallelism(Number(event.target.value))} /></label>
       </div>}
       <div className="grid gap-3 sm:grid-cols-3"><label className="text-sm">Total retries<Input type="number" min={0} max={20} value={retries} onChange={event => setRetries(Number(event.target.value))} /></label><label className="text-sm">Time limit (seconds)<Input type="number" min={30} max={86400} value={seconds} onChange={event => setSeconds(Number(event.target.value))} /></label><label className="text-sm">Platform tool actions<Input type="number" min={0} max={10000} value={toolActions} onChange={event => setToolActions(Number(event.target.value))} /></label></div>
+      <div className="grid gap-3 sm:grid-cols-3"><label className="text-sm">Repeated failure threshold<Input type="number" min={2} max={20} value={failureLimit} onChange={event => setFailureLimit(Number(event.target.value))} /></label><label className="text-sm">Supervision check limit<Input type="number" min={1} max={10000} value={checkLimit} onChange={event => setCheckLimit(Number(event.target.value))} /></label><label className="text-sm">No-progress limit (seconds, 0 disables)<Input type="number" min={0} max={86400} value={noProgressLimit} onChange={event => setNoProgressLimit(Number(event.target.value))} /></label></div>
       <div className="flex items-center justify-between"><Button variant="outline" onClick={() => { setTaskId(""); setWorkers([]); setDecompositionId(""); }}>Cancel</Button><Button disabled={!taskId || create.isPending} onClick={() => create.mutate()}>Save plan</Button></div>
     </section>
     <section className="space-y-2"><h2 className="font-medium">Saved plans</h2>{plans.isPending ? <p role="status">Loading…</p> : plans.data?.length === 0 ? <p className="text-sm text-muted-foreground">No plans yet.</p> : plans.data?.map(plan => <Button key={plan.id} variant={selected === plan.id ? "secondary" : "outline"} onClick={() => { setSelected(plan.id); setRationale(""); setRuntimeOutcome(""); }}>{plan.mode} · {plan.riskClass} · {plan.status}</Button>)}</section>
@@ -77,8 +82,14 @@ export function Orchestration() {
       <p className="text-sm">Limits: {detail.data.budgets.maxParallelWorkers} simultaneous workers, {detail.data.budgets.maxRetries} total retries, {detail.data.budgets.maxWallClockSeconds} seconds from first start, {detail.data.budgets.maxToolActions} platform tool actions.</p>
       {detail.data.completionContract.businessInvariants.map((value, index) => <p key={index} className="text-sm">Invariant: {value}</p>)}
       {detail.data.workers.map(worker => <div key={worker.id} className="rounded-md border border-border p-3"><Link to={`/issues/${worker.issueId}`}>{worker.workerKey}</Link><p className="text-sm text-muted-foreground">{worker.status} · {worker.attemptCount} attempts · waits for {worker.dependsOn.join(", ") || "no dependencies"}</p>{detail.data!.attempts.filter(attempt => attempt.workerId === worker.id).map(attempt => <p key={attempt.id} className="text-xs">Attempt {attempt.attempt}: {attempt.status} · {attempt.runId ?? attempt.workflowRunId}</p>)}</div>)}
+      <div className="space-y-2"><h3 className="font-medium">Supervision</h3><p className="text-sm text-muted-foreground">Signals reference saved outputs, execution receipts and current permissions. A successful worker run still needs verification.</p>
+        {supervision.data?.sessions.map(session => <p key={session.id} className="text-sm">{session.status} · failure threshold {session.policy.repeatedFailureThreshold} · no-progress limit {session.policy.noProgressSeconds === null ? "not configured" : `${session.policy.noProgressSeconds} seconds`}</p>)}
+        {supervision.data?.signals.map(signal => <p key={signal.id} className="text-sm">{signal.signalType.replaceAll("_"," ")} · {signal.severity} · {new Date(signal.observedAt).toLocaleString()}</p>)}
+        {supervision.data?.interventions.map(row => <p key={row.id} className="text-sm">{row.recommendation} → {row.decisionAction} · {row.status} · {row.reasonCode.replaceAll("_"," ")}</p>)}
+      </div>
       <label className="block text-sm">Decision rationale<Input value={rationale} onChange={event => setRationale(event.target.value)} /></label>
       <div className="flex items-center justify-between"><div className="flex gap-2"><Button variant="outline" disabled={decision.isPending || rationale.trim().length < 20} onClick={() => decision.mutate("cancel")}>Cancel plan</Button><Button variant="outline" disabled={decision.isPending || rationale.trim().length < 20} onClick={() => decision.mutate("pause")}>Pause</Button></div><Button disabled={decision.isPending || rationale.trim().length < 20 || !["draft", "ready", "paused"].includes(detail.data.status)} onClick={() => decision.mutate("start")}>Start / resume</Button></div>
+      <div className="flex flex-wrap gap-2">{(["STOP","RETRY","START_VERIFIER","STEER"] as const).map(action => <Button key={action} variant="outline" disabled={intervention.isPending || rationale.trim().length < 20} onClick={() => intervention.mutate(action)}>{action === "STEER" ? "Pause for guidance" : action === "START_VERIFIER" ? "Request verification" : action === "RETRY" ? "Retry within limits" : "Stop workers"}</Button>)}</div>
       {runtimeOutcome && <div role="status"><p className="text-sm">Runtime dispatch / Stop result</p><pre className="overflow-auto rounded-md bg-muted p-3 text-xs">{runtimeOutcome}</pre></div>}
     </section>}
   </div>;

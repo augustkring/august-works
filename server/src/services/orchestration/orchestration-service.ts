@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { agents, completionContracts, issuePlanDecompositions, issueDocuments, documents, issueThreadInteractions, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, workflows, type Db } from "@paperclipai/db";
+import { agents, completionContracts, issuePlanDecompositions, issueDocuments, documents, issueThreadInteractions, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, supervisionInterventions, workflows, type Db } from "@paperclipai/db";
 import { createOrchestrationPlanSchema, orchestrationCompletionSchema, orchestrationDecisionSchema, selectOrchestrationShape, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { AuthorizationActor } from "../authorization.js";
@@ -10,6 +10,7 @@ import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import { writeOrchestrationContract } from "./orchestration-contracts.js";
 import { assertWorkflowOutputSchema } from "../workflows/workflow-output-schema.js";
+import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { reconcileOrchestrationAttempts } from "./orchestration-admission.js";
 
 type Plan = typeof orchestrationPlans.$inferSelect;
@@ -88,7 +89,7 @@ export function orchestrationService(db: Db) {
         }
         const contract = await writeOrchestrationContract(tx, companyId, root.id, input.completionContract, v7HumanActorId(actor));
         const [created] = await tx.insert(orchestrationPlans).values({ companyId, issueId: root.id, completionContractId: contract.id, ...selectOrchestrationShape(input), actionClass: input.actionClass,
-          riskClass: input.riskClass, workflowRevisionId, workflowId: input.workflowId, acceptedPlanRevisionId: input.acceptedPlanRevisionId, budgets: input.budgets, createdBy: v7HumanActorId(actor) }).returning();
+          riskClass: input.riskClass, workflowRevisionId, workflowId: input.workflowId, acceptedPlanRevisionId: input.acceptedPlanRevisionId, supervisionPolicy: input.supervisionPolicy, budgets: input.budgets, createdBy: v7HumanActorId(actor) }).returning();
         for (const worker of input.workers) {
           const task = tasks.find(item => item.id === worker.issueId)!;
           const workerContract = worker.issueId === root.id ? contract : await writeOrchestrationContract(tx, companyId, worker.issueId, worker.completionContract!, v7HumanActorId(actor));
@@ -106,16 +107,24 @@ export function orchestrationService(db: Db) {
         if (row.version !== input.expectedVersion) throw conflict("Plan version changed; reload before deciding");
         if (["completed", "cancelled", "failed"].includes(row.status)) throw conflict("Plan is terminal");
         if (input.action === "start") {
+          if (row.executionPrincipal && ((row.executionPrincipal.type === "user" && row.executionPrincipal.userId !== v7HumanActorId(actor)) || (row.executionPrincipal.type === "system" && actor.source !== "local_implicit"))) throw forbidden("Resume must preserve the plan's initiating human authority; cancel and review a new plan to transfer it");
           if (!["draft", "ready", "paused"].includes(row.status)) throw conflict("Plan is already started");
           if (row.budgets.maxModelCostMinor !== null) throw conflict("A plan cost cap requires a qualified pre-spend reservation broker; execution remains closed until that boundary exists");
           await reconcileOrchestrationAttempts(tx, row);
           const running = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.planId, id), eq(orchestrationWorkerAttempts.status, "running")));
+          const [unsettledStop] = await tx.select({ id: supervisionInterventions.id }).from(supervisionInterventions).where(and(eq(supervisionInterventions.companyId, companyId), eq(supervisionInterventions.planId, id), sql`${supervisionInterventions.status} in ('pending','running','failed') and ${supervisionInterventions.decisionAction} in ('PAUSE','STOP','ESCALATE_HUMAN')`)).limit(1);
+          if (unsettledStop) throw conflict("Qualified Stop must reconcile before resuming");
           if (running.length) throw conflict("Wait for existing workers to stop before resuming");
           if (row.startedAt && Date.now() >= row.startedAt.getTime() + row.budgets.maxWallClockSeconds * 1000) throw conflict("The original plan deadline has expired");
         }
         const [updated] = await tx.update(orchestrationPlans).set({ status: input.action === "start" ? "running" : input.action === "pause" ? "paused" : "cancelled", version: row.version + 1,
+          executionPrincipal: input.action === "start" ? row.executionPrincipal ?? (actor.source === "local_implicit" ? { type: "system", service: "local-board" } : { type: "user", userId: v7HumanActorId(actor) }) : row.executionPrincipal,
           startedAt: input.action === "start" ? row.startedAt ?? new Date() : row.startedAt, completedAt: input.action === "cancel" ? new Date() : null, updatedAt: new Date() }).where(eq(orchestrationPlans.id, id)).returning();
         if (input.action === "cancel") await tx.update(orchestrationWorkers).set({ status: "cancelled", updatedAt: new Date() }).where(and(eq(orchestrationWorkers.planId, id), sql`${orchestrationWorkers.status} in ('waiting','running')`));
+        if (control) {
+          const attempts = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, id), eq(orchestrationWorkerAttempts.status, "running")));
+          await enqueueSupervisionStop(tx, updated!, { actorType: "user", actorId: v7HumanActorId(actor), rationale: input.rationale, action: input.action === "pause" ? "PAUSE" : "STOP", reasonCode: `human_${input.action}`, attemptIds: attempts.map(a => a.id) });
+        }
         await audit(tx, actor, updated!, `orchestration.${input.action}_requested`, publications, { rationale: input.rationale });
         return updated!;
       });

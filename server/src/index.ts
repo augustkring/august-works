@@ -1,3 +1,4 @@
+import { supervisionService } from "./services/supervision/supervision-service.js";
 import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network-policy.js";
 /// <reference path="./types/express.d.ts" />
 // Kicks off the OTel bootstrap as early as possible (no-op unless
@@ -1203,7 +1204,9 @@ async function startServerWithDatabaseTeardown(
   const executionControlSweepsInFlight = new Set<string>();
   const workflowRecoveryExecutor = workflowExecutorService(db);
   const memoryJobs = memoryJobService(db);
+  const supervisor = supervisionService(db);
   const executionControlSweeps = [
+    ["supervision", () => supervisor.tick(20)],
     ["finalization", () => reconcileAbandonedExecutionControl(db)],
     ["replacement", () => heartbeat ? reconcileSafeNativeReplacements(db, new Date(), { verifyStoppedSession: run => verifyStoppedNativeSessionForReplacement(db, run) }) : undefined],
     ["reconciliation_delivery", () => heartbeat ? deliverReconciledExecutions(db, heartbeat.wakeup) : undefined],

@@ -2514,6 +2514,13 @@
       "when": 1791205306803,
       "tag": "0360_striped_demogoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 361,
+      "version": "7",
+      "when": 1791208018883,
+      "tag": "0361_handy_speedball",
+      "breakpoints": true
     }
   ]
 }
