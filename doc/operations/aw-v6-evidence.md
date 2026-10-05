@@ -54,6 +54,10 @@ These are source review findings and local regression evidence. Self-review is n
 
 Run provider-schema validation and mock tests in both Terraform environment roots after initializing with `-backend=false -lockfile=readonly`. These operations do not apply real infrastructure. Use `server/src/__tests__/v6-` for a bounded acceptance rerun; use the full stable runner for regression coverage. Keep raw logs outside source control and record final results in the PR.
 
+## CI fixture correction (2026-10-05)
+
+V4 verification run `37272809478`, job `111643228627` failed with PostgreSQL deadlock `40P01` during stale-queue test cleanup. Terminal run status and the per-run live-execution marker can precede finalization writes and follow-up wakes. The fixture now awaits `drainActiveRunExecutions()` before resetting dispatch hooks, adapter mocks or process state and before truncating tables. This replaces status polling, fixed delays and foreign-key retries with the existing completion barrier. The affected suite passes all 48 tests locally against freshly migrated embedded PostgreSQL. This correction changes test lifecycle synchronization; it does not change production heartbeat behavior. Final partition and current-head CI results are recorded in the PR.
+
 ## Honest release boundary
 
 No UpCloud, Paddle or Mailgun credentials were available during implementation. No infrastructure was applied, no production image was published, no customer message was sent, no billing transaction was created and no domain was changed. Provider fixtures, mocked plans and local PostgreSQL are labelled accordingly.
