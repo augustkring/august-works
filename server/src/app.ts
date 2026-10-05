@@ -67,6 +67,7 @@ import { readinessRoutes } from "./routes/readiness.js";
 import { foundationBootstrapRoutes } from "./routes/foundation-bootstrap.js";
 import { workflowRoutes } from "./routes/workflows.js";
 import { automationArtifactRoutes } from "./routes/automation-artifacts.js";
+import { derivedMemoryRoutes } from "./routes/derived-memory.js";
 import { cognitiveMemoryRoutes } from "./routes/cognitive-memory.js";
 import { memoryRoutes } from "./routes/memory.js";
 import { companySkillPolicyRoutes } from "./routes/company-skill-policy.js";
@@ -717,6 +718,7 @@ export async function createApp(
   api.use(readinessRoutes(db));
   api.use(workflowRoutes(db));
   api.use(automationArtifactRoutes(db));
+  api.use(derivedMemoryRoutes(db));
   api.use(cognitiveMemoryRoutes(db));
   api.use(memoryRoutes(db));
   api.use(companySkillPolicyRoutes(db));

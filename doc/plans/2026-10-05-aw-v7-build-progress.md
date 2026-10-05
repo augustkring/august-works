@@ -1,6 +1,6 @@
 # August Works V7 full-brief implementation ledger
 
-Date: 2026-10-05. Branch: `codex/aw-v7-wave0`. Source: user-supplied V7-v2 build brief.
+Date: 2026-10-05. Branch: `codex/aw-v7-build`. Source: user-supplied V7-v2 build brief.
 
 The user has requested implementation of the whole brief. Work continues through all twenty waves. Code, local tests, provider qualification, customer validation and production acceptance are separate evidence states. Default-off flags remain closed until the relevant evidence exists. This ledger must not label a declaration or scaffold as a completed feature.
 
@@ -11,8 +11,8 @@ The user has requested implementation of the whole brief. Work continues through
 | 2 | AI-assisted Foundation bootstrap | Implemented and locally verified; six migrated-PostgreSQL tests pass |
 | 3 | Cognitive provider contract | Implemented with stateless local/no-op providers; five integration tests plus V4 regressions pass |
 | 4 | Hindsight spike and adoption decision | DEFER decision recorded against pinned v0.10.2 source; no production provider admitted |
-| 5 | Observations and Mental Models | Pending implementation |
-| 6 | Organizational Learning | Pending implementation |
+| 5 | Observations and Mental Models | Implemented with reviewed root lineage, leased rebuilds, Context/UI and erasure guards; local verification passing |
+| 6 | Organizational Learning | Domain and evaluation-contract implementation in progress |
 | 7 | Bounded orchestration | Pending implementation |
 | 8 | Deterministic supervision | Pending implementation |
 | 9 | Semantic supervision and verification | Pending implementation |
@@ -64,3 +64,13 @@ Verification: five new migrated-PostgreSQL tests and 23 existing Memory Core tes
 ## Wave 4 decision
 
 Keep the provider interface and DEFER Hindsight adoption. The pinned release API, tenant implementation and deletion regression tests were inspected. Default authentication is absent; bank names alone are not an AW tenant authorization boundary. Upstream tests document a cross-bank document-ID collision regression and concurrent deletion/observation cleanup. Those tests were read, not executed in an AW deployment. No EU topology, credential path, independent deletion receipt, restore/exit test, cost/latency benchmark or production operator evidence exists for the selected deployment. The adoption gate stays closed. See `doc/operations/AW-V7-HINDSIGHT-QUALIFICATION.md` and the content-hashed research evidence manifest.
+
+## Wave 5 implementation
+
+AW observations retain accepted shared Memory roots and source versions. At least two independent trusted sources are required for reviewable acceptance; copied claims, repeated source IDs and wholly untrusted roots do not inflate support. Contradictions remain review findings. Agents may propose from a live owned Task attempt but cannot self-approve. Company observations cannot inherit private agent Memory or reduce source sensitivity.
+
+Mental models use an explicitly extractive local synthesis over selected current Memory and accepted observations. Models remain candidates until human review. Rebuild requests enter the existing leased Memory job worker, preserve prior content versions, recheck current administrator authority and source watermarks, and produce another candidate. No new scheduler or parallel canonical wiki was added.
+
+Context reads validate every surviving root version, purpose, scope, retention and current authorization. Derived evidence has no canonical authority domain and carries its original Memory IDs/versions. Root changes make observations need review and models need rebuild; stale prose is withheld. Erasure scrubs derived content and all retained model versions even with flags off. Context manifests retain content-free Memory-root lineage. Existing database erasure guards now cover Context consumers, late/restored writes, run events, Task outputs and compatible run-log erasure jobs; encrypted SaaS log buffers are excluded immediately while object erasure awaits its normal receipt.
+
+Verification: the Waves 1–5 migrated-PostgreSQL selection passes 57 tests; the eight final derived-memory cases also pass. Those cases cover review, poison/duplication, purpose, private/tenant/sensitivity boundaries, revocation, leased rebuild/history, restored deletion markers and late runtime writes. Existing Memory maintenance/job selection passes 21 tests before adding the Context erasure case. Server/UI types, module boundaries and token gates pass. Full final repository checks and live outcome qualification remain separate.

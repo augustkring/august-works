@@ -444,3 +444,9 @@ Migration 0351 adds versioned `readiness_requirements`, immutable `readiness_ass
 ### V7 cognitive provider storage
 
 `cognitive_memory_bindings` owns provider/scope/purpose/capability admission; `cognitive_provider_operations` retains content-free reconciliation and deletion receipts. Both use tenant composite keys. Existing Memory correction/revocation/privacy transactions write the provider invalidation contract even when V7 is off. No external provider payload is retained by the stateless baseline. Migration `0353_confused_mephistopheles.sql` adds the provider seam.
+
+### V7 derived Memory and Context lineage
+
+`memory_observations`/`memory_observation_evidence` retain root Memory versions and independent-source counts. `memory_models`/`memory_model_versions`/`memory_model_evidence` preserve model versions and flattened root dependencies. Human review remains explicit. Existing `memory_jobs` gains the `model_rebuild` operation; no second queue is created. `context_manifest_memory_roots` bridges selected original/derived Memory evidence to source erasure. Migration `0355_burly_hemingway.sql` extends the existing `aw_workflow_memory_erased` SQL function to Context consumers, preserving its workflow behavior and existing late-write guards. Migrations `0354_quick_apocalypse.sql` and `0356_colossal_wasp.sql` add derived tables and integrity checks.
+
+Erasure is the intentional privacy exception to retained synthesis history: model content versions are scrubbed while opaque IDs/version hashes and content-free source lineage remain. Runtime payloads and encrypted SaaS log buffers are excluded immediately; log-object deletion follows the existing leased erasure receipt flow.

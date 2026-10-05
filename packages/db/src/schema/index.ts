@@ -258,3 +258,5 @@ export * from "./runtime_fleet.js";
 export * from "./saas_run_logs.js";
 
 export * from "./cognitive_memory.js";
+export * from "./derived_memory.js";
+export * from "./context_memory_roots.js";

@@ -1593,6 +1593,7 @@ export function memoryService(db: Db) {
 
       const reviewed = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
       await assertSaasDomainAdmission(txDb, companyId, "memory.use");
         const record = await txDb
@@ -1724,6 +1725,7 @@ export function memoryService(db: Db) {
 
       const revoked = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         const record = await txDb
           .select()

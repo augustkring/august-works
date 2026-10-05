@@ -251,6 +251,7 @@ export interface MemoryRecordListQuery {
 }
 
 export const MEMORY_JOB_OPERATION_TYPES = [
+  "model_rebuild",
   "capture",
   "dedupe",
   "compaction",

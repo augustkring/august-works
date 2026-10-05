@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryRetentionPolicies,
-  activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
+  contextManifests, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
   workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
+import { invalidateDerivedMemory } from "./derived-privacy.js";
 
 export function memoryDeletionKey(companyId: string, kind: "record" | "operation" | "source", value: unknown) {
   return createHash("sha256").update(JSON.stringify([companyId, kind, value])).digest("hex");
@@ -103,6 +104,7 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
       sql`${memoryJobs.sourceRefJson}->'recordIds' ?| ARRAY[${sql.join([...ids].map((id) => sql`${id}`), sql`, `)}]::text[]`)));
   await purgeDerivedWorkflowMemory(db, companyId, [...ids], now);
   await invalidateCognitiveRecords(db, companyId, [...ids]);
+  await invalidateDerivedMemory(db, companyId, [...ids], true);
   return { deletedRecordIds: rows.map((row) => row.id), deletedRecordCount: rows.filter((row) => !row.deletedAt).length };
 }
 
@@ -126,7 +128,10 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
 
   const affected = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId),
     sql`${workflowStepRuns.memoryRecordIds} ?| ARRAY[${sql.join(recordIds.map((id) => sql`${id}`), sql`, `)}]::text[]`));
-  if (!affected.length) return;
+  const contextRoots = await db.select({ runId: contextManifests.runId, issueId: contextManifests.issueId }).from(contextManifestMemoryRoots)
+    .innerJoin(contextManifests, and(eq(contextManifests.companyId, contextManifestMemoryRoots.companyId), eq(contextManifests.id, contextManifestMemoryRoots.manifestId)))
+    .where(and(eq(contextManifestMemoryRoots.companyId, companyId), inArray(contextManifestMemoryRoots.memoryRecordId, recordIds)));
+  if (!affected.length && !contextRoots.length) return;
   const children = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), sql`not (${heartbeatMemoryPayloadVisible()})`));
   const childIds = children.map((child) => child.id);
   if (childIds.length) {
@@ -143,6 +148,8 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
             inArray(memoryJobs.status, ["succeeded", "failed", "cancelled"])));
       }
     }
+    await db.update(saasRunLogs).set({ erasedAt: now, pendingBytes: 0, sha256: null }).where(and(eq(saasRunLogs.companyId, companyId), inArray(saasRunLogs.id, childIds)));
+    await db.update(saasRunLogChunks).set({ ciphertext: null }).where(and(eq(saasRunLogChunks.companyId, companyId), inArray(saasRunLogChunks.runId, childIds)));
     await db.update(heartbeatRuns).set({ contextSnapshot: {}, resultJson: null, runnerProfileJson: {}, stdoutExcerpt: null,
       stderrExcerpt: null, error: null, logRef: null, logStore: null, logBytes: null, logSha256: null, updatedAt: now })
       .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.id, childIds)));
@@ -162,10 +169,10 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
     await db.update(activityLog).set({ details: { payloadDeleted: true } })
       .where(and(eq(activityLog.companyId, companyId), inArray(activityLog.runId, childIds)));
   }
-  const childWaits = await db.select({ issueId: workflowWaits.referenceId }).from(workflowWaits).where(and(
+  const childWaits = affected.length ? await db.select({ issueId: workflowWaits.referenceId }).from(workflowWaits).where(and(
     eq(workflowWaits.companyId, companyId), eq(workflowWaits.referenceType, "issue"),
-    or(...affected.map((step) => and(eq(workflowWaits.workflowRunId, step.workflowRunId), eq(workflowWaits.nodeId, step.nodeId))))));
-  const issueIds = childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []);
+    or(...affected.map((step) => and(eq(workflowWaits.workflowRunId, step.workflowRunId), eq(workflowWaits.nodeId, step.nodeId)))))) : [];
+  const issueIds = [...new Set([...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : [])])];
   if (issueIds.length) {
     await db.update(issues).set({ title: "Erased workflow task", description: null, updatedAt: now })
       .where(and(eq(issues.companyId, companyId), inArray(issues.id, issueIds)));
@@ -184,6 +191,7 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
         .where(and(eq(documentRevisions.companyId, companyId), inArray(documentRevisions.documentId, ids)));
     }
   }
+  if (!affected.length) return;
   await db.update(workflowStepRuns).set({ inputJson: null, outputJson: null, taskResultJson: null, errorMessage: null, updatedAt: now })
     .where(and(eq(workflowStepRuns.companyId, companyId), inArray(workflowStepRuns.id, affected.map((row) => row.id))));
   await db.update(workflowRuns).set({ triggerPayload: {}, updatedAt: now }).where(and(eq(workflowRuns.companyId, companyId),
@@ -262,6 +270,7 @@ export async function reapplyMemoryDeletionMarkers(db: Db, companyId: string) {
     const result = await purgeMemoryRecords(scopedDb, companyId, roots);
     await purgeDerivedWorkflowMemory(scopedDb, companyId, markers.flatMap((row) => row.recordId ? [row.recordId] : []));
     await invalidateCognitiveRecords(scopedDb, companyId, markers.flatMap((row) => row.recordId ? [row.recordId] : []));
+    await invalidateDerivedMemory(scopedDb, companyId, markers.flatMap((row) => row.recordId ? [row.recordId] : []), true);
     return result;
   });
 }

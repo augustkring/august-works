@@ -104,7 +104,7 @@ export const memoryJobs = pgTable(
     retryOfIdx: index("memory_jobs_retry_of_idx").on(table.retryOfJobId),
     operationTypeCheck: check(
       "memory_jobs_operation_type_check",
-      sql`${table.operationType} in ('capture','dedupe','compaction','reflection','index_refresh','retention')`,
+      sql`${table.operationType} in ('capture','dedupe','compaction','reflection','index_refresh','retention','model_rebuild')`,
     ),
     statusCheck: check(
       "memory_jobs_status_check",

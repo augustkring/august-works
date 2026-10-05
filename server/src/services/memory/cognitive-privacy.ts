@@ -1,9 +1,11 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { cognitiveMemoryBindings, cognitiveProviderOperations, memoryRecords, type Db } from "@paperclipai/db";
 import { localCognitiveProvider } from "./cognitive-provider.js";
+import { invalidateDerivedMemory } from "./derived-privacy.js";
 /** Privacy propagation executes in the source transaction, independent of rollout flags. */
 export async function invalidateCognitiveRecords(tx: Db, companyId: string, recordIds: string[]) {
   if (!recordIds.length) return;
+  await invalidateDerivedMemory(tx, companyId, recordIds);
   const records = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt, scopeType: memoryRecords.scopeType, scopeId: memoryRecords.scopeId })
     .from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), inArray(memoryRecords.id, recordIds)));
   const bindings = await tx.select().from(cognitiveMemoryBindings).where(eq(cognitiveMemoryBindings.companyId, companyId));

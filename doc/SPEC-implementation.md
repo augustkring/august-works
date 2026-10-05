@@ -1740,3 +1740,7 @@ With `foundation_bootstrap_v7` effectively enabled, company discovery uses an ex
 ### V7 cognitive provider seam (experimental)
 
 `cognitive_memory_v7` adds governed-only, company/binding/purpose-scoped ranking alongside V4 Memory. Provider results must identify current authorized AW Memory versions; generated provider content cannot replace canonical records. Local/no-op providers are stateless. Private projection requires explicit binding consent, verified accepted Memory and the owning agent. Provider configuration is restricted to current company administrators. Privacy invalidation is independent of feature flags and remains effective after disabling cognitive retrieval.
+
+### V7 derived observations and models (experimental)
+
+Observations cite accepted shared Memory roots; candidates need independent trusted support and human review. Mental models are derived extractive views with preserved versions and explicit purposes. They never substitute for Foundation authority. Leased rebuild jobs run through the existing Memory worker and require new review before activation. Current source versions, scopes, purpose, retention and authorization control retrieval. Correction/revocation invalidates derived influence; erasure scrubs all derived versions independent of flags and propagates through Context root lineage and existing runtime-payload guards.

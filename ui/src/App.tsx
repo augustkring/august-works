@@ -53,6 +53,7 @@ import { IssueChatLongThreadPerf } from "./pages/IssueChatLongThreadPerf";
 import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
 import { Readiness } from "./pages/Readiness";
+import { DerivedMemory } from "./pages/DerivedMemory";
 import { CognitiveMemory } from "./pages/CognitiveMemory";
 import { FoundationBootstrap } from "./pages/FoundationBootstrap";
 import { V7FeatureGate } from "./components/V7FeatureGate";
@@ -376,6 +377,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
         path="memory"
         element={<MemoryExperimentalGate><Memory /></MemoryExperimentalGate>}
       />
+      <Route path="memory/intelligence" element={<V7FeatureGate feature="memory_observations_v7"><DerivedMemory /></V7FeatureGate>} />
       <Route path="memory/cognitive" element={<V7FeatureGate feature="cognitive_memory_v7"><CognitiveMemory /></V7FeatureGate>} />
       <Route
         path="memory/:recordId"

@@ -181,6 +181,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           {v7FeatureEnabled(experimentalSettings ?? {}, "foundation_bootstrap_v7") && <SidebarNavItem to="/foundation/discovery" label="Company discovery" icon={BookOpen} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "readiness_engine_v7") && <SidebarNavItem to="/readiness" label="Readiness" icon={ShieldCheck} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "cognitive_memory_v7") && <SidebarNavItem to="/memory/cognitive" label="Cognitive providers" icon={Brain} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "memory_observations_v7") && <SidebarNavItem to="/memory/intelligence" label="Derived intelligence" icon={Brain} />}
           {showFoundation ? <SidebarNavItem to="/foundation" label="Foundation" icon={BookOpen} /> : null}
           {v5FeatureEnabled(experimentalSettings ?? {}, "playbooks_v5") && <SidebarNavItem to="/playbooks" label="Playbooks" icon={BookOpen} />}
           {v5FeatureEnabled(experimentalSettings ?? {}, "agent_identities_v5") && <SidebarNavItem to="/runtime" label="Agent runtime" icon={Network} />}
@@ -270,6 +271,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
             <div className={primarySidebarStyles.group}>
               {showMemory ? <SidebarNavItem to="/memory" label="Memory" icon={Brain} /> : null}
               {v7FeatureEnabled(experimentalSettings ?? {}, "cognitive_memory_v7") ? <SidebarNavItem to="/memory/cognitive" label="Cognitive providers" icon={Brain} /> : null}
+              {v7FeatureEnabled(experimentalSettings ?? {}, "memory_observations_v7") ? <SidebarNavItem to="/memory/intelligence" label="Derived intelligence" icon={Brain} /> : null}
               <SidebarNavItem to="/apps" label="Connections" icon={Unplug} />
               <SidebarNavItem to="/governance" label="Governance" icon={ShieldCheck} />
             </div>

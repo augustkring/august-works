@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -8,12 +8,17 @@ import {
   heartbeatRuns,
   issues,
   projects,
+  contextManifestMemoryRoots,
+  memoryRecords,
+  memoryModels,
+  memoryObservations,
 } from "@paperclipai/db";
 import type {
   ContextAuthorityDecision,
   EvidenceItem,
 } from "@paperclipai/shared";
-import { forbidden, unprocessable } from "../../errors.js";
+import { conflict, forbidden, unprocessable } from "../../errors.js";
+import { lockMemoryPrivacy, memoryPayloadVisible } from "../memory/memory-privacy.js";
 
 type JsonScalar = string | number | boolean | null;
 type CanonicalJson = JsonScalar | CanonicalJson[] | { [key: string]: CanonicalJson };
@@ -174,6 +179,7 @@ export function contextManifestService(db: Db) {
       const policySnapshotHash = hashContextPolicySnapshot(input.policySnapshot);
 
       return db.transaction(async (tx) => {
+        await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
         const [manifest] = await tx
           .insert(contextManifests)
           .values({
@@ -209,6 +215,32 @@ export function contextManifestService(db: Db) {
         const items = values.length > 0
           ? await tx.insert(contextManifestItems).values(values).returning()
           : [];
+
+        const rootIds = [...new Set(input.selected.flatMap(({ decision }) => {
+          const evidence = decision.evidence;
+          if (!["august_works_memory", "august_works_derived_memory"].includes(evidence.sourceProvider)) return [];
+          const ids = evidence.metadata.derived === true ? evidence.metadata.sourceMemoryIds : [evidence.metadata.recordId];
+          if (!Array.isArray(ids) || ids.length > 64 || ids.some((id) => typeof id !== "string" || !/^[a-f0-9-]{36}$/i.test(id))) throw unprocessable("Invalid Memory root provenance");
+          return ids as string[];
+        }))];
+        if (rootIds.length) {
+          const roots = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible()));
+          if (roots.length !== rootIds.length) throw forbidden("Context Memory roots cross a company boundary");
+          for (const { decision } of input.selected) {
+            const item = decision.evidence;
+            if (item.sourceProvider === "august_works_memory" && roots.find((root) => root.id === item.metadata.recordId)?.updatedAt.toISOString() !== item.sourceVersion) throw conflict("Context Memory changed during assembly");
+            if (item.sourceProvider === "august_works_derived_memory") {
+              const versions = item.metadata.sourceMemoryVersions;
+              if (!versions || typeof versions !== "object" || roots.some((root) => Array.isArray(item.metadata.sourceMemoryIds) && item.metadata.sourceMemoryIds.includes(root.id) && (versions as Record<string, unknown>)[root.id] !== root.updatedAt.toISOString())) throw conflict("Derived Context roots changed during assembly");
+              const ref = /^memory:\/\/(memory_model|memory_observation)\/([a-f0-9-]{36})$/i.exec(item.sourceRef);
+              if (!ref) throw unprocessable("Derived Context requires an AW observation/model reference");
+              const current = ref[1] === "memory_model" ? await tx.select().from(memoryModels).where(and(eq(memoryModels.companyId, input.companyId), eq(memoryModels.id, ref[2]!)))
+                : await tx.select().from(memoryObservations).where(and(eq(memoryObservations.companyId, input.companyId), eq(memoryObservations.id, ref[2]!)));
+              if (!current[0] || current[0].erasedAt || !["active", "accepted"].includes(current[0].status) || String(current[0].version) !== item.sourceVersion) throw conflict("Derived Context review changed during assembly");
+            }
+          }
+          await tx.insert(contextManifestMemoryRoots).values(roots.map((root) => ({ companyId: input.companyId, manifestId: manifest!.id, memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString() })));
+        }
 
         return { manifest: manifest!, items };
       });

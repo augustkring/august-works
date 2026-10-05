@@ -1,3 +1,4 @@
+import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { memoryEvidence, memoryJobs, memoryRecords, type Db } from "@paperclipai/db";
@@ -65,6 +66,7 @@ export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$i
         if (evidence.length) await db.insert(memoryEvidence).values(evidence.map(({ id: _id, memoryRecordId: _recordId, ...item }) => ({ ...item, memoryRecordId: canonical.id })));
         await db.update(memoryRecords).set({ supersededByRecordId: canonical.id, retentionState: "superseded", updatedAt: now })
           .where(and(eq(memoryRecords.companyId, job.companyId), eq(memoryRecords.id, duplicate.id), isNull(memoryRecords.supersededByRecordId)));
+        await invalidateCognitiveRecords(db, job.companyId, [duplicate.id]);
         supersededCount++;
       }
     }
