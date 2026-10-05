@@ -1,3 +1,4 @@
+import { isCompanyCapacityWait } from "./billing/capacity-admission.js";
 import { governedNativeTaskRunFields } from "./ai-governance/execution-gate.js";
 import { assertSaasExecutionAdmission } from "./saas/execution-admission.js";
 import { recordEagerSkillLoading, recordSkillExecutionCompletion, reconcileSkillExecutionCompletions } from "./skill-usage.js";
@@ -17169,7 +17170,12 @@ export function heartbeatService(
     }
   }
 
-  async function claimQueuedRun(
+  async function claimQueuedRun(run: typeof heartbeatRuns.$inferSelect, companyAgents?: AgentOrgRow[]) {
+    try { return await claimQueuedRunCore(run, companyAgents); }
+    catch (error) { if (isCompanyCapacityWait(error)) return null; throw error; }
+  }
+
+  async function claimQueuedRunCore(
     run: typeof heartbeatRuns.$inferSelect,
     companyAgents?: AgentOrgRow[],
   ) {

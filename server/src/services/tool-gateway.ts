@@ -1,4 +1,6 @@
 import { assertExecutionGovernance } from "./ai-governance/execution-gate.js";
+import { agentRunWritesRevoked } from "../agent-run-cancellation.js";
+import { assertManagedRuntimeCommercialAuthority } from "./billing/managed-runtime-admission.js";
 import { signalRunningProcess } from "@paperclipai/adapter-utils/server-utils";
 import { resolveWorkflowConnectorSession, type WorkflowGatewayContext } from "./workflows/workflow-connector-authority.js";
 import { validateWorkflowOutput, WorkflowOutputSchemaError } from "./workflows/workflow-output-schema.js";
@@ -1722,6 +1724,7 @@ export function createToolGatewayService(
         companyId: heartbeatRuns.companyId,
         agentId: heartbeatRuns.agentId,
         status: heartbeatRuns.status,
+        resultJson: heartbeatRuns.resultJson,
         contextSnapshot: heartbeatRuns.contextSnapshot,
       })
       .from(heartbeatRuns)
@@ -1742,9 +1745,11 @@ export function createToolGatewayService(
         "run_agent_mismatch",
       );
     }
-    if (!ACTIVE_GATEWAY_RUN_STATUSES.has(run.status)) {
+    if (!ACTIVE_GATEWAY_RUN_STATUSES.has(run.status) || agentRunWritesRevoked(run)) {
       throw new ToolGatewayHttpError(403, "Run is not active", "run_inactive");
     }
+    await assertExecutionGovernance(db, input.companyId, input.agentId, input.runId);
+    await assertManagedRuntimeCommercialAuthority(db, input.companyId, input.agentId);
 
     const snapshot = asRecord(run.contextSnapshot);
     const snapshotIssueId = stringValue(snapshot?.issueId);
@@ -1988,6 +1993,7 @@ export function createToolGatewayService(
         companyId: heartbeatRuns.companyId,
         agentId: heartbeatRuns.agentId,
         status: heartbeatRuns.status,
+        resultJson: heartbeatRuns.resultJson,
       })
       .from(heartbeatRuns)
       .where(eq(heartbeatRuns.id, row.runId))
@@ -1998,6 +2004,7 @@ export function createToolGatewayService(
       run.companyId !== row.companyId ||
       run.agentId !== row.agentId ||
       !ACTIVE_GATEWAY_RUN_STATUSES.has(run.status)
+      || agentRunWritesRevoked(run)
     ) {
       await writeSessionAuthFailure(row, "session_run_inactive", {
         runStatus: run?.status ?? null,
@@ -2009,6 +2016,7 @@ export function createToolGatewayService(
       );
     }
     await assertExecutionGovernance(db, row.companyId, row.agentId, row.runId);
+    await assertManagedRuntimeCommercialAuthority(db, row.companyId, row.agentId);
   }
 
   async function getActiveSession(

@@ -28,6 +28,8 @@ export interface SaasOnboarding {
 export interface SaasBillingState {
   billingAccountId: string;
   access: CommercialAccess;
+  commercialState?: "FREE" | "TRIALING" | "ACTIVE" | "PAST_DUE" | "PAUSED" | "CANCELED" | "READ_ONLY";
+  freeCore?: { active: boolean; catalogVersion: string; paymentMethodRequired: false };
   entitlements: EntitlementMap;
   catalogVersion: string;
   validUntil: string;

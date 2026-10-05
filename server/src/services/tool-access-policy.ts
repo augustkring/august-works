@@ -1,4 +1,6 @@
 import { governanceToolRestriction } from "./ai-governance/execution-gate.js";
+import { agentRunWritesRevoked } from "../agent-run-cancellation.js";
+import { assertManagedRuntimeCommercialAuthority } from "./billing/managed-runtime-admission.js";
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -861,6 +863,7 @@ export function toolAccessPolicyService(db: Db) {
 
     if (heartbeatRunId) {
       const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, heartbeatRunId));
+      if (run && agentRunWritesRevoked(run)) return { ok: false, redaction, decision: decision("deny", "deny_run_context_mismatch", "This run's execution authority was revoked.", [], [], { redactionPlan: redaction.redactionPlan }) };
       if (!run || run.companyId !== input.companyId || (input.actor.actorType === "agent" && run.agentId !== agentId)) {
         return { ok: false, redaction, decision: decision("deny", "deny_run_context_mismatch", "Supplied run context does not match the authenticated actor.", [], [], { redactionPlan: redaction.redactionPlan }) };
       }
@@ -1317,6 +1320,10 @@ export function toolAccessPolicyService(db: Db) {
     const base = await decideCore(input);
     if (!base.allowed && base.decision !== "require_approval") return base;
     const loaded = await loadContext(input); if (!loaded.ok) return loaded.decision;
+    if (loaded.ctx.agentId && (input.actor.actorType === "agent" || loaded.ctx.heartbeatRunId)) {
+      try { await assertManagedRuntimeCommercialAuthority(db, input.companyId, loaded.ctx.agentId); }
+      catch (error) { if (error && typeof error === "object" && "status" in error && error.status === 403) return decision("deny", "deny_policy_block", "Current managed runtime capacity is required.", base.effectiveProfileIds, base.matchedPolicyIds); throw error; }
+    }
     const restriction = await governanceToolRestriction(db, loaded.ctx);
     if (restriction.denyReason) return decision("deny", "deny_policy_block", restriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
     if (restriction.requireHumanApproval && base.allowed) return decision("require_approval", "requires_approval_policy", "The reviewed use case requires a human decision for this material action.", base.effectiveProfileIds, base.matchedPolicyIds);
