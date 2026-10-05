@@ -60,6 +60,9 @@ describe("isPrivateWebhookHttpRequest", () => {
 });
 
 describe("isSecretSensitiveHttpRequest", () => {
+  it("protects account password confirmation failures including scoped requests", () => {
+    expect(isSecretSensitiveHttpRequest("POST", "/api/saas/account/deletion?expectedUserId=fixture")).toBe(true);
+  });
   it("identifies credential-bearing chat setup mutations", () => {
     expect(
       isSecretSensitiveHttpRequest(

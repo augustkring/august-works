@@ -12,6 +12,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROUTES_DIR = path.resolve(__dirname, "../routes");
 
 const apiPrefixes: Record<string, string> = {
+  "saas.ts": "/api",
+  "runtime-hosts.ts": "/",
+  "saas-webhooks.ts": "/",
   "agent-identities.ts": "/api",
   "agent-provider-bindings.ts": "/api",
   "agent-runtime-fabric.ts": "/api",
@@ -146,6 +149,7 @@ function normalizeExpressPath(routePath: string) {
 }
 
 function resolveMountedPath(file: string, prefix: string, routePath: string) {
+  if ((file === "runtime-hosts.ts" || file === "saas-webhooks.ts") && routePath.startsWith("/api/")) return routePath;
   if (
     (file === "chat-channels.ts" || file === "email.ts") &&
     routePath.startsWith("/api/chat-webhooks/")

@@ -421,6 +421,14 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         .limit(100),
     );
   });
+  router.post("/saas/account/deletion", async (req, res) => {
+    const actor = await user(req);
+    await gate("company_deletion_v6");
+    res
+      .status(202)
+      .set("Cache-Control", "no-store")
+      .json(await platform.accountDeletion.request(actor.id, req.body));
+  });
   router.post(
     "/saas/internal/support/:sessionId/runtime-cells/:cellId/operations",
     async (req, res) => {
@@ -602,7 +610,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
           .orderBy(desc(deploymentRecords.deployedAt))
           .limit(10),
         db.execute<{ domain: string; status: string; count: string }>(
-          sql`select 'email' as domain,status,count(*)::text as count from email_deliveries group by status union all select 'billing_webhook',status,count(*)::text from billing_webhook_events group by status union all select 'checkout',status,count(*)::text from billing_checkout_intents group by status union all select 'runtime_operation',status,count(*)::text from runtime_operations group by status union all select 'provider_operation',status,count(*)::text from runtime_host_provider_operations group by status union all select 'deletion',status,count(*)::text from company_deletion_operations group by status`,
+          sql`select 'email' as domain,status,count(*)::text as count from email_deliveries group by status union all select 'billing_webhook',status,count(*)::text from billing_webhook_events group by status union all select 'checkout',status,count(*)::text from billing_checkout_intents group by status union all select 'runtime_operation',status,count(*)::text from runtime_operations group by status union all select 'provider_operation',status,count(*)::text from runtime_host_provider_operations group by status union all select 'deletion',status,count(*)::text from company_deletion_operations group by status union all select 'account_deletion',status,count(*)::text from account_deletion_operations group by status`,
         ),
       ]);
     res.set("Cache-Control", "no-store").json(

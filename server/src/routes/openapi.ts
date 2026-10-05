@@ -1,5 +1,6 @@
 import { experimentalApiMetadata } from "./experimental-api-metadata.js";
 import { v5ApiPaths } from "./v5-api-paths.js";
+import { v6ApiPaths } from "./v6-api-paths.js";
 import {
   experimentalApiPaths,
   experimentalApiQueries,
@@ -11695,6 +11696,34 @@ for (const operation of v5ApiPaths) {
       404: responses.notFound,
       409: responses.conflict,
       422: { description: "The requested transition is incompatible with the current governed state." },
+    },
+  });
+}
+
+for (const operation of v6ApiPaths) {
+  registry.registerPath({
+    method: operation.method,
+    path: operation.path,
+    tags: [operation.auth === "session" ? "V6 SaaS" : "V6 machine ingress"],
+    summary: `${operation.method.toUpperCase()} ${operation.path}`,
+    description: operation.auth === "session"
+      ? "SaaS profile only, behind applicable default-off V6 gates. Requires a current verified session and native company permissions before entitlement checks. Internal operator paths additionally require the named allowlist; support actions require current owner consent."
+      : operation.auth === "host"
+        ? "SaaS profile and host-agent gate only. Enrollment uses a scoped one-use machine token; enrolled hosts use RSA-PSS timestamp/nonce/epoch request signatures over exact raw bytes. Cookies and host request query strings are rejected. Board authority grants no machine access."
+        : "SaaS profile and provider gate only. Requires a verified Paddle or Mailgun signature over the provider payload. Board sessions grant no provider authority.",
+    request: {
+      params: z.object(Object.fromEntries([...operation.path.matchAll(/\{([^}]+)\}/g)].map(match => [match[1], z.string()]))),
+      ...(operation.auth === "session" ? { query: z.object({ expectedUserId: z.string().optional() }) } : {}),
+      ...(operation.body ? { body: { required: true, content: { "application/json": { schema: operation.body } } } } : {}),
+    },
+    responses: {
+      [operation.successStatus]: responses.ok(),
+      400: responses.badRequest,
+      401: { description: "Current authenticated principal or valid machine proof required." },
+      403: responses.forbidden,
+      404: responses.notFound,
+      409: responses.conflict,
+      429: { description: "Bounded request budget exceeded." },
     },
   });
 }

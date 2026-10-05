@@ -10,6 +10,7 @@ import {
   executionWorkspaces,
   authUsers,
   companyDeletionOperations,
+  accountDeletionOperations,
   issues,
   projects,
   type Db,
@@ -32,6 +33,14 @@ export function saasCommercialGuard(
         isInstanceAdmin: false,
         ignoreInstanceAdmin: true,
       });
+      if (req.actor.userId) {
+        const [deletion] = await db
+          .select({ id: accountDeletionOperations.id })
+          .from(accountDeletionOperations)
+          .where(eq(accountDeletionOperations.userId, req.actor.userId))
+          .limit(1);
+        if (deletion) throw unauthorized("Account access has been revoked");
+      }
     }
     if (/^\/admin(?:\/|$)/.test(req.path))
       throw forbidden("Use the scoped SaaS operator tools", {

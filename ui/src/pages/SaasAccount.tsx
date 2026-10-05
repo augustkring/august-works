@@ -46,9 +46,34 @@ export function SaasAccountPage() {
     mutationFn: (id: string) => saasApi.revokeSession(id, identity.userId!),
     onSuccess: () => currentScope.current === scope && sessions.refetch(),
   });
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [exportAcknowledged, setExportAcknowledged] = useState(false);
+  const deleteKey = useRef(crypto.randomUUID());
+  const deletion = useMutation({
+    mutationFn: () =>
+      saasApi.deleteAccount(identity.userId!, {
+        confirmation: "DELETE MY ACCOUNT",
+        password: deletePassword,
+        acknowledgeExport: true,
+        idempotencyKey: deleteKey.current,
+      }),
+    onSuccess: () => {
+      if (currentScope.current === scope) {
+        setDeletePassword("");
+        // Drop company and account caches after the server revokes the session.
+        window.location.assign("/auth?accountDeletion=requested");
+      }
+    },
+  });
   useEffect(() => {
     preference.reset();
     revoke.reset();
+    deletion.reset();
+    setDeleteConfirmation("");
+    setDeletePassword("");
+    setExportAcknowledged(false);
+    deleteKey.current = crypto.randomUUID();
   }, [scope]);
   return (
     <main className="saas-page">
@@ -123,6 +148,79 @@ export function SaasAccountPage() {
       <Link className="saas-link" to="/saas/reset-password">
         Reset password
       </Link>
+      {capabilities.data?.deletion && (
+        <section className="saas-section" aria-label="Delete account">
+          <h2 className="saas-subtitle">Delete your account</h2>
+          <p className="saas-muted">
+            Transfer ownership or finish deleting organizations you solely own,
+            and close or transfer your billing accounts first. Account deletion
+            removes your profile, sessions and personal credentials. Required
+            organization audit and financial records retain an anonymous actor
+            ID.
+          </p>
+          {deletion.error && (
+            <p role="alert" className="saas-error">
+              {deletion.error.message}
+            </p>
+          )}
+          <form
+            className="saas-section"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (
+                deleteConfirmation === "DELETE MY ACCOUNT" &&
+                exportAcknowledged
+              )
+                deletion.mutate();
+            }}
+          >
+            <label className="saas-label">
+              Type DELETE MY ACCOUNT
+              <input
+                className="saas-input"
+                value={deleteConfirmation}
+                onChange={(event) => setDeleteConfirmation(event.target.value)}
+                required
+                autoComplete="off"
+              />
+            </label>
+            <label className="saas-label">
+              Current password
+              <input
+                className="saas-input"
+                type="password"
+                autoComplete="current-password"
+                maxLength={128}
+                value={deletePassword}
+                onChange={(event) => setDeletePassword(event.target.value)}
+                required
+              />
+            </label>
+            <label className="saas-row">
+              <input
+                type="checkbox"
+                checked={exportAcknowledged}
+                onChange={(event) =>
+                  setExportAcknowledged(event.target.checked)
+                }
+              />
+              I have saved any exports I need.
+            </label>
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={
+                deletion.isPending ||
+                deleteConfirmation !== "DELETE MY ACCOUNT" ||
+                !deletePassword ||
+                !exportAcknowledged
+              }
+            >
+              Delete account
+            </Button>
+          </form>
+        </section>
+      )}
     </main>
   );
 }

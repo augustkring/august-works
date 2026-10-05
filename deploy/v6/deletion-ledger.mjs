@@ -29,9 +29,11 @@ export function authenticateDeletionLedger(
     !Array.isArray(ledger.companies) ||
     !Array.isArray(ledger.memory) ||
     !Array.isArray(ledger.identityHomes ?? []) ||
+    !Array.isArray(ledger.users ?? []) ||
     ledger.companies.length +
       ledger.memory.length +
-      (ledger.identityHomes?.length ?? 0) >
+      (ledger.identityHomes?.length ?? 0) +
+      (ledger.users?.length ?? 0) >
       100000
   )
     throw Error("Fresh bounded same-environment deletion ledger required");
@@ -56,5 +58,15 @@ export function authenticateDeletionLedger(
   for (const row of ledger.identityHomes ?? [])
     if (!uuid.test(row?.id ?? "") || !uuid.test(row?.home_company_id ?? ""))
       throw Error("Invalid identity home ledger");
+  for (const row of ledger.users ?? [])
+    if (
+      !uuid.test(row?.id ?? "") ||
+      typeof row.user_id !== "string" ||
+      row.user_id.length < 1 ||
+      row.user_id.length > 200 ||
+      !Number.isFinite(Date.parse(row.created_at)) ||
+      Date.parse(row.created_at) > exportedAt
+    )
+      throw Error("Invalid account deletion ledger");
   return ledger;
 }

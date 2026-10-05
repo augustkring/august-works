@@ -1,10 +1,12 @@
 import { z } from "zod";
-export const runtimeBackupPolicySchema = z.object({
-  enabled: z.boolean(),
-  allowBriefPause: z.boolean(),
-  intervalHours: z.number().int().min(24).max(168),
-  expectedVersion: z.number().int().nonnegative(),
-}).strict();
+export const runtimeBackupPolicySchema = z
+  .object({
+    enabled: z.boolean(),
+    allowBriefPause: z.boolean(),
+    intervalHours: z.number().int().min(24).max(168),
+    expectedVersion: z.number().int().nonnegative(),
+  })
+  .strict();
 import { ENTITLEMENT_KEYS } from "./billing/catalog.js";
 
 export const idempotencyKeySchema = z
@@ -133,6 +135,15 @@ export const runtimeCellBindingSchema = z
 export const companyDeletionRequestSchema = z
   .object({
     confirmation: z.string().trim().min(1).max(200),
+    acknowledgeExport: z.literal(true),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+
+export const accountDeletionRequestSchema = z
+  .object({
+    confirmation: z.literal("DELETE MY ACCOUNT"),
+    password: z.string().min(1).max(128),
     acknowledgeExport: z.literal(true),
     idempotencyKey: idempotencyKeySchema,
   })

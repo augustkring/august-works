@@ -290,3 +290,30 @@ export const authRateLimits = pgTable(
     index("auth_rate_limits_expiry_idx").on(t.lastRequest),
   ],
 );
+
+// Stable opaque attribution survives profile erasure; no email, name or password is retained.
+export const accountDeletionOperations = pgTable(
+  "account_deletion_operations",
+  {
+    userId: text("user_id").primaryKey(),
+    id: uuid("id").notNull().defaultRandom(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: text("status").notNull().default("requested"),
+    errorCode: text("error_code"),
+    notBefore: timestamp("not_before", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("account_deletion_operations_id_uq").on(t.id),
+    index("account_deletion_operations_work_idx").on(t.status, t.notBefore),
+    check(
+      "account_deletion_operations_status_ck",
+      sql`${t.status} in ('requested','processing','completed')`,
+    ),
+  ],
+);

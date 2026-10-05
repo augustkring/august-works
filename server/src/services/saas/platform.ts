@@ -1,4 +1,6 @@
 import { runtimeCatalogService } from "../runtime/catalog.js";
+import { accountDeletionService } from "./account-deletion.js";
+import { secretService } from "../secrets.js";
 import { runtimeBackupSchedule } from "../runtime/backup-schedule.js";
 import {
   runtimeBackupRetention,
@@ -82,6 +84,13 @@ export function saasPlatform(
     storageAccounting.accounting,
   );
   const onboarding = saasOnboardingService(db);
+  const accountDeletion = accountDeletionService(db, {
+    removeSecret: (id) => secretService(db).remove(id),
+    cancelRun: (id) =>
+      heartbeatService(db).cancelRun(id, "Account deletion", {
+        errorCode: "account_deletion",
+      }),
+  });
   const commercialRuntime = runtimeCommercialService(
     db,
     notifications.notifyCompany,
@@ -208,6 +217,12 @@ export function saasPlatform(
       flag: "saas_deployment_profile_v6",
       interval: 10000,
       run: () => offboarding.processOne(),
+    },
+    {
+      key: "account-offboarding",
+      flag: "saas_deployment_profile_v6",
+      interval: 10000,
+      run: () => accountDeletion.processOne(),
     },
     {
       key: "runtime-dispatch",
@@ -449,6 +464,7 @@ export function saasPlatform(
     fleet,
     support,
     offboarding,
+    accountDeletion,
     enabled,
     flags,
     notifications,

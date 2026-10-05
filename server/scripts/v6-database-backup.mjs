@@ -251,13 +251,16 @@ if (mode === "backup") {
             await tx`select company_id,key,kind,record_id,deleted_at from memory_deletion_markers limit 100001`,
           identityHomes:
             await tx`select id,home_company_id from agent_identities limit 100001`,
+          users:
+            await tx`select id,user_id,created_at from account_deletion_operations limit 100001`,
         };
       },
     );
     if (
       payload.companies.length +
         payload.memory.length +
-        payload.identityHomes.length >
+        payload.identityHomes.length +
+        payload.users.length >
       100000
     )
       throw Error(

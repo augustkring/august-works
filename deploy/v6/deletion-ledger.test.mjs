@@ -31,6 +31,30 @@ test("restore rejects forged, stale, cross-environment and invalid-date ledgers"
     { ...base, companies: [{ company_id: "other" }] },
     {
       ...base,
+      users: [{ id: "bad", user_id: "actor", created_at: base.exportedAt }],
+    },
+    {
+      ...base,
+      users: [
+        {
+          id: base.companies[0].company_id,
+          user_id: "",
+          created_at: base.exportedAt,
+        },
+      ],
+    },
+    {
+      ...base,
+      users: [
+        {
+          id: base.companies[0].company_id,
+          user_id: "actor",
+          created_at: "invalid",
+        },
+      ],
+    },
+    {
+      ...base,
       memory: [
         {
           company_id: base.companies[0].company_id,

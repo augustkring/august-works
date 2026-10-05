@@ -6,8 +6,7 @@ import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network
 // HTTP server, so trace coverage does not depend on incidental timing.
 import { instrumentationReady, shutdownInstrumentation } from "./instrumentation.js";
 import { assertSaasRolloutReady, activePublicAppOrigins } from "./aw-deployment.js";
-import { saasPlatform } from "./services/saas/platform.js";
-import { assertDatabaseRestoreAdmission } from "./services/saas/quarantine.js";
+import { assertDatabaseRestoreAdmission } from "./services/saas/database-admission.js";
 import { saasAuthDelivery } from "./services/saas/auth-delivery.js";
 import { setupPublicOriginUpgradeGuard } from "./middleware/public-origin-guard.js";
 import { sentryReady, shutdownSentry, captureException } from "./sentry.js";
@@ -672,7 +671,7 @@ async function startServerWithDatabaseTeardown(
   const publicAppOrigins = config.publicOriginConfig
     ? activePublicAppOrigins(config.publicOriginConfig, v6RolloutFlags) : undefined;
   const platform = config.deploymentProfile === "saas" && config.saasPlatform && config.publicOriginConfig
-    ? saasPlatform(db as any, config.saasPlatform, config.publicOriginConfig) : undefined;
+    ? (await import("./services/saas/platform.js")).saasPlatform(db as any, config.saasPlatform, config.publicOriginConfig) : undefined;
   platform?.configureLogs();
   if (config.deploymentProfile === "saas" && !platform && Object.entries(v6RolloutFlags).some(([key,value]) => value === true && !["saas_deployment_profile_v6", "domain_dual_origin_v6", "domain_new_primary_v6"].includes(key))) {
     throw new Error("SaaS product features require validated AW_PLATFORM_ENV configuration");
@@ -765,7 +764,9 @@ async function startServerWithDatabaseTeardown(
       },
       "Authenticated mode auth origin configuration",
     );
-    const auth = createBetterAuthInstance(db as any, config, effectiveTrustedOrigins, platform && config.publicOriginConfig ? saasAuthDelivery(db as any, platform.email, config.publicOriginConfig, v6RolloutFlags) : undefined);
+    const auth = platform && config.publicOriginConfig
+      ? createBetterAuthInstance(db as any, config, effectiveTrustedOrigins, saasAuthDelivery(db as any, platform.email, config.publicOriginConfig, v6RolloutFlags))
+      : createBetterAuthInstance(db as any, config, effectiveTrustedOrigins);
     betterAuthHandler = createBetterAuthHandler(auth);
     resolveSession = (req) => resolveBetterAuthSession(auth, req);
     resolveSessionFromHeaders = (headers) => resolveBetterAuthSessionFromHeaders(auth, headers);

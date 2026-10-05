@@ -1,11 +1,21 @@
 import { sql } from "drizzle-orm";
-import { applyPendingMigrations, type Db } from "@paperclipai/db";
+import {
+  accountDeletionOperations,
+  authUsers,
+  companySecrets,
+  applyPendingMigrations,
+  type Db,
+} from "@paperclipai/db";
+import { and, eq } from "drizzle-orm";
+import { eraseAccountAccess } from "./account-deletion.js";
 import { purgeCompanyContent } from "./company-purge.js";
 import { reapplyMemoryDeletionMarkers } from "../memory/memory-privacy.js";
+export { assertDatabaseRestoreAdmission } from "./database-admission.js";
 
 export interface RestoreDeletionLedger {
   companies: { company_id: string }[];
   identityHomes?: { id: string; home_company_id: string }[];
+  users?: { id: string; user_id: string; created_at: string }[];
   memory: {
     company_id: string;
     key: string;
@@ -13,15 +23,6 @@ export interface RestoreDeletionLedger {
     record_id: string | null;
     deleted_at: string;
   }[];
-}
-export async function assertDatabaseRestoreAdmission(db: Db) {
-  const rows = await db.execute<{ quarantine: unknown }>(
-    sql`select general->'awV6RestoreQuarantine' as quarantine from instance_settings where singleton_key='default'`,
-  );
-  if (rows.some((row) => row.quarantine != null))
-    throw Error(
-      "Restored database remains quarantined; operator recovery qualification is required before application startup",
-    );
 }
 /** The operator authenticates the archive/ledger and verifies an isolated empty restore target first. */
 export async function prepareRestoredQuarantine(
@@ -100,4 +101,38 @@ export async function prepareRestoredQuarantine(
     ledger.memory.map((marker) => marker.company_id),
   ))
     await reapplyMemoryDeletionMarkers(db, companyId);
+  for (const user of ledger.users ?? []) {
+    await db.transaction(async (tx) => {
+      const [profile] = await tx
+        .select({ email: authUsers.email })
+        .from(authUsers)
+        .where(eq(authUsers.id, user.user_id))
+        .for("update");
+      await tx
+        .insert(accountDeletionOperations)
+        .values({
+          userId: user.user_id,
+          id: user.id,
+          idempotencyKey: "quarantine:" + user.id,
+          status: "requested",
+          createdAt: new Date(user.created_at),
+        })
+        .onConflictDoNothing();
+      await eraseAccountAccess(tx, user.user_id, profile?.email);
+      await tx
+        .update(companySecrets)
+        .set({
+          status: "deleted",
+          deletedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(companySecrets.scope, "user"),
+            eq(companySecrets.ownerUserId, user.user_id),
+          ),
+        );
+      await tx.delete(authUsers).where(eq(authUsers.id, user.user_id));
+    });
+  }
 }

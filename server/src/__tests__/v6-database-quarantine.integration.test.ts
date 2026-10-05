@@ -12,6 +12,8 @@ import {
   agents,
   authSessions,
   authUsers,
+  accountDeletionOperations,
+  companyMemberships,
   companies,
   createDb,
   inspectMigrations,
@@ -180,6 +182,24 @@ const image = process.env.AW_TEST_DATABASE_DUMP_IMAGE;
         })
         .returning();
       const source = new URL(database.connectionString);
+      await db
+        .insert(authUsers)
+        .values({
+          id: "deleted-after-backup",
+          name: "Forgotten profile",
+          email: "forgotten@example.test",
+          emailVerified: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+      await db
+        .insert(companyMemberships)
+        .values({
+          companyId: retained.companyId,
+          principalType: "user",
+          principalId: "deleted-after-backup",
+          membershipRole: "member",
+        });
       await writeFile(
         join(directory, "pg.env"),
         `PGHOST=${source.hostname}\nPGPORT=${source.port}\nPGUSER=paperclip\nPGPASSWORD=paperclip\nPGDATABASE=paperclip\nPGSSLMODE=disable\n`,
@@ -214,6 +234,13 @@ const image = process.env.AW_TEST_DATABASE_DUMP_IMAGE;
         companies: [{ company_id: erased.companyId }],
         identityHomes: [
           { id: identity!.id, home_company_id: retained.companyId },
+        ],
+        users: [
+          {
+            id: randomUUID(),
+            user_id: "deleted-after-backup",
+            created_at: now.toISOString(),
+          },
         ],
         memory: [
           {
@@ -260,6 +287,21 @@ const image = process.env.AW_TEST_DATABASE_DUMP_IMAGE;
         "remains quarantined",
       );
       expect(await restored.select().from(authSessions)).toHaveLength(0);
+      expect(
+        await restored
+          .select()
+          .from(authUsers)
+          .where(eq(authUsers.id, "deleted-after-backup")),
+      ).toHaveLength(0);
+      expect(
+        await restored
+          .select()
+          .from(companyMemberships)
+          .where(eq(companyMemberships.principalId, "deleted-after-backup")),
+      ).toHaveLength(0);
+      expect(
+        (await restored.select().from(accountDeletionOperations))[0]!.userId,
+      ).toBe("deleted-after-backup");
       expect(
         await restored
           .select()

@@ -41,6 +41,7 @@ const {
   }) as never);
   const createBetterAuthInstanceMock = vi.fn(() => ({}));
   const createDbMock = vi.fn(() => ({
+    execute: vi.fn(async () => []),
     select: vi.fn(() => ({
       from: vi.fn(() => ({ where: vi.fn(async () => []) })),
     })),
@@ -444,6 +445,14 @@ describe("startServer feedback export wiring", () => {
     createBetterAuthInstanceMock.mockReturnValue({});
     deriveAuthTrustedOriginsMock.mockReturnValue([]);
     process.env.BETTER_AUTH_SECRET = "test-secret";
+  });
+
+  it("refuses a quarantined restore before auth, application or listener startup", async () => {
+    createDbMock.mockImplementationOnce(() => ({ execute: vi.fn(async () => [{ quarantine: { admission: "blocked" } }]) }) as never);
+    await expect(startServer()).rejects.toThrow("Restored database remains quarantined");
+    expect(createBetterAuthInstanceMock).not.toHaveBeenCalled();
+    expect(createAppMock).not.toHaveBeenCalled();
+    expect(fakeServer.listen).not.toHaveBeenCalled();
   });
 
   it("starts without PAPERCLIP_DECISION_SIGNING_SECRET by generating a persisted key", async () => {

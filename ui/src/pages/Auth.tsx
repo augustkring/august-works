@@ -109,6 +109,7 @@ export function AuthPage() {
               : saas.data?.emailVerification ? "Verify your email to start setting up your organization." : "Create an account for this instance. Email confirmation is not required in v1."}
           </p>
           {verificationSent && <p role="status" className="saas-muted">Check your email for a verification link, then sign in to continue.</p>}
+          {searchParams.get("accountDeletion") === "requested" && <p role="status" className="saas-muted">Your account deletion was requested and access has been revoked. Personal credential cleanup may still be in progress.</p>}
 
           <form
             className="mt-6 space-y-4"

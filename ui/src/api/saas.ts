@@ -322,6 +322,21 @@ export const saasApi = {
         "id" | "companyId" | "status" | "stage" | "createdAt" | "completedAt"
       >[]
     >(scoped("/saas/account/deletion-receipts", userId)),
+  deleteAccount: (
+    userId: string,
+    input: {
+      confirmation: "DELETE MY ACCOUNT";
+      password: string;
+      acknowledgeExport: true;
+      idempotencyKey: string;
+    },
+  ) =>
+    api.post<{
+      id: string;
+      status: string;
+      createdAt: string;
+      completedAt: string | null;
+    }>(scoped("/saas/account/deletion", userId), input),
   operations: (userId: string) =>
     api.get<SaasOperationsSnapshot>(
       scoped("/saas/internal/operations", userId),
