@@ -1722,3 +1722,9 @@ users opt in individually after the upgrade.
 ## August Works V6 SaaS foundation
 
 Deployment ownership is independent of authentication mode. The additive `saas` profile uses pooled companies, current memberships, configured HTTPS origins and the same HTTP/WebSocket ingress policy. It never selects implicit local authority or uses a Cloud-pinned primary company. Public signup remains closed until the auth/email implementation is qualified. See [the post-V5 matrix](plans/2026-10-04-aw-v6-foundation.md) and [V6 architecture decisions](adr/V6-ARCHITECTURE-DECISIONS.md).
+
+## August Works V7 configuration admission
+
+V7 booleans share `instance_settings.experimental` and the existing experimental settings GET/PATCH API. `v7-feature-flags.ts` defines default-off flags, effective predecessor dependencies and rollout metadata. Every deployment profile validates the effective settings after Cloud defaults and managed overlays before startup product construction. Invalid administrative patches return HTTP 400 with `V7_FEATURE_DEPENDENCY_INVALID` and dependency issues.
+
+Experimental updates lock the singleton and merge/validate/write within one transaction. The admin route uses that same transaction for all company audit rows, then publishes events after commit. Disable prerequisites together with dependents in one patch; retain canonical state and evidence. These flags reserve future gates and do not prove implementation, qualification or authorization. The [migration map](plans/2026-10-05-aw-v7-migration-map.md) reconciles candidate tables/APIs against V4–V6.

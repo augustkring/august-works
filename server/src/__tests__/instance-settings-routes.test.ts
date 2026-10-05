@@ -268,9 +268,28 @@ describe("instance settings routes", () => {
     expect(patchRes.status).toBe(200);
     expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({
       enableIsolatedWorkspaces: true,
-    });
+    }, { db: TX_SENTINEL });
     expect(mockLogActivity).toHaveBeenCalledTimes(2);
   }, 10_000);
+
+  it("commits experimental settings and every audit in the same transaction", async () => {
+    const app = await createApp({ type: "board", userId: "operator", source: "local_implicit", isInstanceAdmin: true });
+    const response = await request(app).patch("/api/instance/settings/experimental").send({ ai_use_cases_v7: true });
+    expect(response.status).toBe(200);
+    expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+    expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({ ai_use_cases_v7: true }, { db: TX_SENTINEL });
+    expect(mockLogActivity).toHaveBeenCalledTimes(2);
+    expect(mockLogActivity.mock.calls.every(([runner]) => runner === TX_SENTINEL)).toBe(true);
+    expect(mockPublishActivity).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects an experimental write on audit failure without publishing a success event", async () => {
+    mockLogActivity.mockRejectedValueOnce(new Error("audit unavailable"));
+    const app = await createApp({ type: "board", userId: "operator", source: "local_implicit", isInstanceAdmin: true });
+    await request(app).patch("/api/instance/settings/experimental").send({ ai_use_cases_v7: true }).expect(500);
+    expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+    expect(mockPublishActivity).not.toHaveBeenCalled();
+  });
 
   it("does not expose the retired liveness auto-recovery endpoints", async () => {
     const app = await createApp({
@@ -295,7 +314,7 @@ describe("instance settings routes", () => {
     const response = await request(app).patch("/api/instance/settings/experimental").send({ enableChatConnectors: true });
     expect(response.status).toBe(isInstanceAdmin ? 200 : 403);
     if (isInstanceAdmin) {
-      expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({ enableChatConnectors: true });
+      expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({ enableChatConnectors: true }, { db: TX_SENTINEL });
       expect(mockLogActivity).toHaveBeenCalled();
     } else {
       expect(mockInstanceSettingsService.updateExperimental).not.toHaveBeenCalled();
@@ -317,7 +336,7 @@ describe("instance settings routes", () => {
 
     expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({
       enableStreamlinedUi: false,
-    });
+    }, { db: TX_SENTINEL });
   });
 
   it("strips server-managed worktree run execution fields before updating experimental settings", async () => {
@@ -339,7 +358,7 @@ describe("instance settings routes", () => {
 
     expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({
       enableWorktreeRunExecution: true,
-    });
+    }, { db: TX_SENTINEL });
   });
 
   it("allows local board users to read and update the instance default environment", async () => {
@@ -487,7 +506,7 @@ describe("instance settings routes", () => {
 
     expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({
       enableExternalObjects: true,
-    });
+    }, { db: TX_SENTINEL });
   });
 
   it("allows local board users to update built-in agents", async () => {
@@ -505,7 +524,7 @@ describe("instance settings routes", () => {
 
     expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({
       enableBuiltInAgents: true,
-    });
+    }, { db: TX_SENTINEL });
   });
 
   it("allows local board users to update the goals sidebar link", async () => {
@@ -523,7 +542,7 @@ describe("instance settings routes", () => {
 
     expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({
       enableGoalsSidebarLink: true,
-    });
+    }, { db: TX_SENTINEL });
   });
 
   it("allows local board users to update the server info debug view", async () => {
@@ -541,7 +560,7 @@ describe("instance settings routes", () => {
 
     expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({
       enableServerInfoDebugView: true,
-    });
+    }, { db: TX_SENTINEL });
   });
 
   it("allows local board users to update environment controls", async () => {
@@ -559,7 +578,7 @@ describe("instance settings routes", () => {
 
     expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({
       enableEnvironments: true,
-    });
+    }, { db: TX_SENTINEL });
   });
 
   it("allows non-admin board users with company access to read but not update experimental settings", async () => {
@@ -872,7 +891,7 @@ describe("instance settings routes", () => {
       expect(allowed.status).toBe(200);
       expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({
         enableEnvironments: false, enableIsolatedWorkspaces: true,
-      });
+      }, { db: TX_SENTINEL });
     });
 
     it("does not let an allowlist exception bypass an explicit API restriction", async () => {
@@ -899,7 +918,7 @@ describe("instance settings routes", () => {
       expect(res.status).toBe(200);
       expect(mockInstanceSettingsService.updateExperimental).toHaveBeenCalledWith({
         enableIsolatedWorkspaces: true,
-      });
+      }, { db: TX_SENTINEL });
     });
 
     it("floors every experimental toggle when the whole Experimental page is hidden", async () => {

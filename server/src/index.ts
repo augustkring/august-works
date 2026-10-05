@@ -665,8 +665,9 @@ async function startServerWithDatabaseTeardown(
     ? null : await initializeCloudRuntimeIdentity(db as any);
   if (restoredCloudRuntimeIdentity) config = loadConfig();
 
-  const v6RolloutFlags = config.deploymentProfile === "saas"
-    ? await instanceSettingsService(db).getExperimental() : {};
+  // Every profile validates V7 dependencies before constructing product services.
+  const experimentalSettings = await instanceSettingsService(db).getExperimental();
+  const v6RolloutFlags = config.deploymentProfile === "saas" ? experimentalSettings : {};
   assertSaasRolloutReady(config.deploymentProfile, v6RolloutFlags);
   const publicAppOrigins = config.publicOriginConfig
     ? activePublicAppOrigins(config.publicOriginConfig, v6RolloutFlags) : undefined;

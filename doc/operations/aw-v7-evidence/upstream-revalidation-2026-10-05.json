@@ -1,0 +1,196 @@
+{
+  "observed_at": "2026-10-05T08:37:15.261395+00:00",
+  "providers": [
+    {
+      "repository": "NVIDIA/OpenShell",
+      "source": "https://api.github.com/repos/NVIDIA/OpenShell",
+      "default_branch": "main",
+      "archived": false,
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0",
+        "url": "https://api.github.com/licenses/apache-2.0",
+        "node_id": "MDc6TGljZW5zZTI="
+      },
+      "latest_release": {
+        "tag_name": "v0.1.2",
+        "published_at": "2026-09-28T03:58:00Z",
+        "prerelease": false,
+        "html_url": "https://github.com/NVIDIA/OpenShell/releases/tag/v0.1.2",
+        "error": null
+      },
+      "head": "71c3cd957abef062eb7f37010056717cd49f2ed3",
+      "head_date": "2026-10-03T21:22:33Z"
+    },
+    {
+      "repository": "vectorize-io/hindsight",
+      "source": "https://api.github.com/repos/vectorize-io/hindsight",
+      "default_branch": "main",
+      "archived": false,
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      },
+      "latest_release": {
+        "tag_name": "v0.10.2",
+        "published_at": "2026-09-29T10:06:40Z",
+        "prerelease": false,
+        "html_url": "https://github.com/vectorize-io/hindsight/releases/tag/v0.10.2",
+        "error": null
+      },
+      "head": "7604e1abaca3f230c0a0bf384452dd6c9af4ac1b",
+      "head_date": "2026-10-05T07:34:12Z"
+    },
+    {
+      "repository": "NVIDIA/NemoClaw",
+      "source": "https://api.github.com/repos/NVIDIA/NemoClaw",
+      "default_branch": "main",
+      "archived": false,
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0",
+        "url": "https://api.github.com/licenses/apache-2.0",
+        "node_id": "MDc6TGljZW5zZTI="
+      },
+      "latest_release": {
+        "tag_name": null,
+        "published_at": null,
+        "prerelease": null,
+        "html_url": null,
+        "error": "HTTP Error 404: Not Found"
+      },
+      "head": "daeb439dac92e3e69b03ca7495baa214500c0af9",
+      "head_date": "2026-10-05T07:40:25Z"
+    },
+    {
+      "repository": "stacklok/toolhive",
+      "source": "https://api.github.com/repos/stacklok/toolhive",
+      "default_branch": "main",
+      "archived": false,
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0",
+        "url": "https://api.github.com/licenses/apache-2.0",
+        "node_id": "MDc6TGljZW5zZTI="
+      },
+      "latest_release": {
+        "tag_name": "v0.51.4",
+        "published_at": "2026-09-27T16:20:54Z",
+        "prerelease": false,
+        "html_url": "https://github.com/stacklok/toolhive/releases/tag/v0.51.4",
+        "error": null
+      },
+      "head": "fc57a2232b10eb902f82444866737ab5471ca3ba",
+      "head_date": "2026-10-03T16:35:42Z"
+    },
+    {
+      "repository": "langfuse/langfuse",
+      "source": "https://api.github.com/repos/langfuse/langfuse",
+      "default_branch": "main",
+      "archived": false,
+      "license": {
+        "key": "other",
+        "name": "Other",
+        "spdx_id": "NOASSERTION",
+        "url": null,
+        "node_id": "MDc6TGljZW5zZTA="
+      },
+      "latest_release": {
+        "tag_name": "v4.50.0",
+        "published_at": "2026-10-02T10:13:55Z",
+        "prerelease": false,
+        "html_url": "https://github.com/langfuse/langfuse/releases/tag/v4.50.0",
+        "error": null
+      },
+      "head": "950f7ddc6f00e6de2fb8960dc23c8cc8ca38282d",
+      "head_date": "2026-10-05T08:30:59Z"
+    },
+    {
+      "repository": "thruwire/foreman",
+      "source": "https://api.github.com/repos/thruwire/foreman",
+      "default_branch": "main",
+      "archived": false,
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      },
+      "latest_release": {
+        "tag_name": "v0.4.1",
+        "published_at": "2026-09-27T23:16:06Z",
+        "prerelease": false,
+        "html_url": "https://github.com/thruwire/foreman/releases/tag/v0.4.1",
+        "error": null
+      },
+      "head": "e5d1aa45183382390e388512dcbfebd747ec89ba",
+      "head_date": "2026-09-28T23:44:20Z"
+    }
+  ],
+  "qualification_status": "unqualified_candidates",
+  "source_files": [
+    {
+      "source": "https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/LICENSE",
+      "file": "openshell-license",
+      "bytes": 11437,
+      "status": 200,
+      "sha256": "c4be3acebe12527d7de689933d98329b4065f8c50cd929d0365584eafe6c20dd"
+    },
+    {
+      "source": "https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/architecture/security-policy.md",
+      "file": "openshell-policy",
+      "bytes": 33772,
+      "status": 200,
+      "sha256": "d704b2d18fdaf3b57bd459dc98439a78a1e5ee20f97bc80f3c03d28d8be5b3e8"
+    },
+    {
+      "source": "https://raw.githubusercontent.com/NVIDIA/OpenShell/v0.1.2/README.md",
+      "file": "openshell-readme",
+      "bytes": 8069,
+      "status": 200,
+      "sha256": "02476232ed61e0145765379e8b5fed62abc8f81fa3f2e7af095e4dc1804421a4"
+    },
+    {
+      "source": "https://raw.githubusercontent.com/vectorize-io/hindsight/v0.10.2/LICENSE",
+      "file": "hindsight-license",
+      "bytes": 1075,
+      "status": 200,
+      "sha256": "01fde0bedf83bdc185065d7af524a61690efe576a67f922eaff3a1280c17b63a"
+    },
+    {
+      "source": "https://raw.githubusercontent.com/vectorize-io/hindsight/v0.10.2/README.md",
+      "file": "hindsight-readme",
+      "bytes": 25011,
+      "status": 200,
+      "sha256": "376c6b0b83bd2be65a2d1c843680c56a7cc1bc4d8553dee9f227074e59239a6f"
+    },
+    {
+      "source": "https://raw.githubusercontent.com/langfuse/langfuse/v4.50.0/LICENSE",
+      "file": "langfuse-license",
+      "bytes": 1612,
+      "status": 200,
+      "sha256": "fd09d42b5b16606ad2042cc1edf3a82da1c47743709f170c959c74758af229d6"
+    },
+    {
+      "source": "https://eur-lex.europa.eu/eli/reg/2024/1689/2026-07-27/eng",
+      "file": "ai-act-current",
+      "bytes": 0,
+      "status": 202,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "https://digst.dk/tilsyn/nis-2/faq-om-nis-2/",
+      "file": "nis2-faq",
+      "bytes": 129677,
+      "status": 200,
+      "sha256": "6a2a99d50600cf91247b54ae89a92def54b38f0a151b4e81551443e04a68c7ff"
+    }
+  ]
+}
