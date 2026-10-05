@@ -12,6 +12,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROUTES_DIR = path.resolve(__dirname, "../routes");
 
 const apiPrefixes: Record<string, string> = {
+  "agent-packages.ts": "/api",
+  "ai-governance.ts": "/api",
+  "cognitive-memory.ts": "/api",
+  "derived-memory.ts": "/api",
+  "enterprise.ts": "/api",
+  "execution-sandbox.ts": "/api",
+  "foundation-bootstrap.ts": "/api",
+  "learning.ts": "/api",
+  "orchestration.ts": "/api",
+  "readiness.ts": "/api",
+  "work-signals.ts": "/api",
   "saas.ts": "/api",
   "runtime-hosts.ts": "/",
   "saas-webhooks.ts": "/",
@@ -198,12 +209,21 @@ function loadActualRoutes() {
 
     for (const match of source.matchAll(ROUTE_LITERAL_PATTERN)) {
       const method = match[1].toUpperCase();
-      const routePath = match[2].replace(/\$\{([A-Za-z_$][\w$]*)\}/g, (placeholder, name: string) => localConstants[name] ?? placeholder);
-      const operation = `${method} ${normalizeExpressPath(resolveMountedPath(file, prefix, routePath))}`;
-      if (explicitOpenApiOperationCoverageExclusions.has(operation)) {
-        excludedRoutes.add(operation);
-      } else {
-        routes.add(operation);
+      // Expand the literal, bounded action loops used by mounted V7 handlers.
+      // Scope to the immediately enclosing loop: a file may reuse `action`.
+      const loop = source.slice(0, match.index).match(/for\s*\(const\s+(\w+)\s+of\s+\[([^\]]+)\]\s+as\s+const\)\s*$/);
+      const loopValues = loop ? [...loop[2].matchAll(/["']([^"']+)["']/g)].map(value => value[1]) : [null];
+      for (const value of loopValues) {
+        const routePath = match[2].replace(/\$\{([A-Za-z_$][\w$]*)\}/g, (placeholder, name: string) =>
+          loop && name === loop[1] && value !== null ? value : localConstants[name] ?? placeholder);
+        const normalized = normalizeExpressPath(resolveMountedPath(file, prefix, routePath));
+        if (normalized.includes("${")) throw new Error(`Unresolved mounted route in ${file}: ${normalized}`);
+        const operation = `${method} ${normalized}`;
+        if (explicitOpenApiOperationCoverageExclusions.has(operation)) {
+          excludedRoutes.add(operation);
+        } else {
+          routes.add(operation);
+        }
       }
     }
 
@@ -251,6 +271,44 @@ function loadSpecRoutes() {
 }
 
 describe("openapi routes", () => {
+  it("documents V7 human review, bounded sandbox control and signed host consumption", () => {
+    const spec = buildOpenApiSpec();
+    const review = spec.paths["/api/companies/{companyId}/orchestration/plans/{id}/verify"].post;
+    expect(review.security).toEqual([{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }]);
+    expect(review["x-paperclip-authorization"]).toMatchObject({ actor: "board", companyScoped: true, currentNativeAuthority: true });
+    const reviewBody = review.requestBody.content["application/json"].schema;
+    expect(reviewBody.additionalProperties).toBe(false);
+    expect(reviewBody.required).toEqual(expect.arrayContaining(["expectedPlanVersion", "expectedResultHash", "result", "objectiveSatisfied", "businessInvariants"]));
+    expect(reviewBody.properties.expectedResultHash.pattern).toBe("^[a-f0-9]{64}$");
+    expect(review.responses[409]).toBeDefined();
+    const sandbox = spec.paths["/api/companies/{companyId}/runtime-sandboxes/{id}/qualify"].post;
+    expect(sandbox["x-paperclip-authorization"]).toMatchObject({ actor: "board", configuredOperator: true, companyScoped: true });
+    expect(sandbox.requestBody.content["application/json"].schema).toMatchObject({ additionalProperties: false, required: ["expectedVersion"] });
+    const complete = spec.paths["/api/internal/runtime/hosts/{hostId}/sandbox-commands/{commandId}/complete"].post;
+    expect(complete.security).toEqual([{ RuntimeHostSignature: [] }]);
+    expect(complete["x-paperclip-authorization"]).toEqual({ actor: "host", signedRawBody: true, currentCredentialEpoch: true, boardAccess: false });
+    for (const name of ["x-aw-host-id", "x-aw-host-epoch", "x-aw-host-timestamp", "x-aw-host-nonce", "x-aw-host-signature"])
+      expect(complete.parameters).toContainEqual(expect.objectContaining({ name, in: "header", required: true }));
+    expect(complete.requestBody.content["application/json"].schema).toMatchObject({ additionalProperties: false, required: ["claimToken", "generation", "success", "reply", "errorCode"] });
+    expect(complete.responses[409]).toBeDefined();
+    const exportState = spec.paths["/api/companies/{companyId}/portability/v7"].get;
+    expect(exportState["x-paperclip-authorization"]).toMatchObject({ companyOwner: true });
+    expect(exportState.description).toContain("Billing and feature rollback do not restrict portability");
+  });
+
+  it("covers every V7 action in bounded route loops", () => {
+    const { routes } = loadActualRoutes();
+    for (const action of ["preview", "install"])
+      expect(routes.has(`POST /api/companies/{companyId}/agent-packages/{packageKey}/${action}`)).toBe(true);
+    for (const action of ["activate", "suspend"])
+      expect(routes.has(`POST /api/companies/{companyId}/agent-package-installations/{id}/${action}`)).toBe(true);
+    for (const action of ["accept", "reject", "revoke"])
+      expect(routes.has(`POST /api/companies/{companyId}/memory/observations/{id}/${action}`)).toBe(true);
+    for (const action of ["approve", "suspend", "retire"])
+      expect(routes.has(`POST /api/companies/{companyId}/ai-use-cases/{id}/${action}`)).toBe(true);
+    expect([...routes].some(route => route.includes("${"))).toBe(false);
+  });
+
   it("documents V4 governance identities, typed result authority and maintenance idempotency", () => {
     const { spec } = loadSpecRoutes();
     const jobs = spec.paths["/api/companies/{companyId}/memory/jobs"].post;

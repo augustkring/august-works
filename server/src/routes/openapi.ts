@@ -1,6 +1,7 @@
 import { experimentalApiMetadata } from "./experimental-api-metadata.js";
 import { v5ApiPaths } from "./v5-api-paths.js";
 import { v6ApiPaths } from "./v6-api-paths.js";
+import { v7ApiPaths } from "./v7-api-paths.js";
 import {
   experimentalApiPaths,
   experimentalApiQueries,
@@ -1700,6 +1701,10 @@ function applyOperationStatusOverride(
 function applyDocumentFixups(document: any): any {
   document.components ??= {};
   document.components.securitySchemes = {
+    RuntimeHostSignature: {
+      type: "apiKey", in: "header", name: "X-AW-Host-Signature",
+      description: "Enrolled host RSA-PSS signature over the exact request bytes, method, path, timestamp, nonce and current credential epoch. Timestamp, nonce and epoch headers are also required. Board cookies and bearer credentials grant no host access.",
+    },
     [BOARD_SESSION_AUTH_SCHEME]: {
       type: "apiKey",
       in: "cookie",
@@ -1788,6 +1793,19 @@ function applyDocumentFixups(document: any): any {
     }
   }
 
+  for (const contract of v7ApiPaths) {
+    const operation = document.paths[contract.path]?.[contract.method];
+    if (!operation) throw new Error(`Missing V7 API operation: ${contract.path}`);
+    operation.security = contract.auth === "host" ? [{ RuntimeHostSignature: [] }]
+      : contract.auth === "native" ? AUTHENTICATED_SECURITY : BOARD_SECURITY;
+    operation["x-paperclip-authorization"] = contract.auth === "host"
+      ? { actor: "host", signedRawBody: true, currentCredentialEpoch: true, boardAccess: false }
+      : { actor: contract.auth === "native" ? "board_or_agent" : "board", currentNativeAuthority: true,
+          ...(contract.path.includes("{companyId}") ? { companyScoped: true } : {}),
+          ...(contract.auth === "operator" ? { configuredOperator: true } : {}),
+          ...(contract.auth === "publisher" ? { configuredPublisher: true } : {}),
+          ...(contract.auth === "owner" ? { companyOwner: true } : {}) };
+  }
   return document;
 }
 
@@ -11729,6 +11747,28 @@ for (const operation of v6ApiPaths) {
 }
 
 // ─── Spec builder ─────────────────────────────────────────────────────────────
+
+for (const operation of v7ApiPaths) {
+  registry.registerPath({
+    method: operation.method, path: operation.path, tags: ["V7"], summary: operation.summary,
+    description: operation.description ?? (operation.auth === "host"
+      ? "Requires current enrolled-host signatures over exact raw bytes, bounded leases and matching host epoch, cell generation and image configuration. No board cookie, query credential or host report can grant workload admission. Cache-Control: no-store. A delivered command is not proof of physical isolation or Stop."
+      : "Requires current native actor and company/resource permissions before applicable default-off V7 gates and their dependencies. Packages, evidence, model assessments, profiles and manifests grant no authority. Foreign, erased and hidden resources retain the 404 boundary. Stop/revoke controls may remain available after rollout rollback; an accepted request is not physical execution proof."),
+    request: {
+      params: paramsSchemaFromPath(operation.path),
+      ...(operation.query ? { query: operation.query } : {}),
+      ...(operation.headers ? { headers: operation.headers } : {}),
+      ...(operation.body ? { body: jsonBody(operation.body) } : {}),
+    },
+    responses: {
+      [operation.successStatus]: responses.ok(),
+      400: responses.badRequest, 401: responses.unauthorized, 403: responses.forbidden,
+      404: responses.notFound, 409: responses.conflict,
+      422: { description: "Requested transition is incompatible with current governed state or qualification." },
+      ...(operation.auth === "host" ? { 429: { description: "Bounded host command capacity exceeded." } } : {}),
+    },
+  });
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildOpenApiDocument(): any {
