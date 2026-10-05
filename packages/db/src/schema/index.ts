@@ -256,3 +256,5 @@ export * from "./saas_billing.js";
 export * from "./saas_lifecycle.js";
 export * from "./runtime_fleet.js";
 export * from "./saas_run_logs.js";
+
+export * from "./cognitive_memory.js";

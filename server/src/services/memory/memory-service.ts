@@ -1,3 +1,4 @@
+import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { createHash } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
@@ -1659,6 +1660,7 @@ export function memoryService(db: Db) {
                 eq(memoryRecords.id, prior.id),
               ),
             );
+          await invalidateCognitiveRecords(txDb, companyId, [prior.id]);
           publications.push(
             await persistMemoryActivity(txDb, actor, {
               companyId,
@@ -1762,6 +1764,7 @@ export function memoryService(db: Db) {
           .returning();
         const result = updated ?? record;
         if (updated) {
+          await invalidateCognitiveRecords(txDb, companyId, [record.id]);
           publications.push(
             await persistMemoryActivity(txDb, actor, {
               companyId,

@@ -3265,6 +3265,7 @@ export * from "./v6-feature-flags.js";
 export * from "./v7-feature-flags.js";
 export * from "./readiness.js";
 export * from "./foundation-bootstrap.js";
+export * from "./cognitive-memory.js";
 export * from "./billing/catalog.js";
 export * from "./saas-contracts.js";
 export * from "./saas-types.js";

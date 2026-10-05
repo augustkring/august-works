@@ -440,3 +440,7 @@ Migration 0351 adds versioned `readiness_requirements`, immutable `readiness_ass
 ### V7 Foundation discovery storage
 
 `foundation_bootstrap_runs` binds company, human, assigned agent, canonical Task, optimistic version and discovery source metadata. `foundation_bootstrap_candidates` retains candidate versions with source hashes and draft pointers. Task deletion cascades private discovery state; published Foundation follows its existing lifecycle. Composite tenant keys prevent foreign task, agent and manifest references. Migration `0352_burly_yellowjacket.sql` adds these tables.
+
+### V7 cognitive provider storage
+
+`cognitive_memory_bindings` owns provider/scope/purpose/capability admission; `cognitive_provider_operations` retains content-free reconciliation and deletion receipts. Both use tenant composite keys. Existing Memory correction/revocation/privacy transactions write the provider invalidation contract even when V7 is off. No external provider payload is retained by the stateless baseline. Migration `0353_confused_mephistopheles.sql` adds the provider seam.

@@ -6,6 +6,7 @@ import { memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memor
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
   workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
+import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 
 export function memoryDeletionKey(companyId: string, kind: "record" | "operation" | "source", value: unknown) {
   return createHash("sha256").update(JSON.stringify([companyId, kind, value])).digest("hex");
@@ -101,6 +102,7 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
     updatedAt: now }).where(and(eq(memoryJobs.companyId, companyId), or(inArray(memoryJobs.sourceMemoryRecordId, [...ids]),
       sql`${memoryJobs.sourceRefJson}->'recordIds' ?| ARRAY[${sql.join([...ids].map((id) => sql`${id}`), sql`, `)}]::text[]`)));
   await purgeDerivedWorkflowMemory(db, companyId, [...ids], now);
+  await invalidateCognitiveRecords(db, companyId, [...ids]);
   return { deletedRecordIds: rows.map((row) => row.id), deletedRecordCount: rows.filter((row) => !row.deletedAt).length };
 }
 
@@ -259,6 +261,7 @@ export async function reapplyMemoryDeletionMarkers(db: Db, companyId: string) {
     }
     const result = await purgeMemoryRecords(scopedDb, companyId, roots);
     await purgeDerivedWorkflowMemory(scopedDb, companyId, markers.flatMap((row) => row.recordId ? [row.recordId] : []));
+    await invalidateCognitiveRecords(scopedDb, companyId, markers.flatMap((row) => row.recordId ? [row.recordId] : []));
     return result;
   });
 }

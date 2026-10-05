@@ -1736,3 +1736,7 @@ The default-off Readiness page and `/api/companies/:companyId/readiness` APIs as
 ### V7 Foundation discovery (experimental)
 
 With `foundation_bootstrap_v7` effectively enabled, company discovery uses an existing assigned Task to analyze authorized Context evidence. Bootstrap candidates remain private to the requesting human and selected worker until explicit draft/proposal creation. Every claim is source-linked; current source permissions, versions and sensitivity are checked again before publication. Discovery never approves Foundation. Human answers resume the canonical Task through normal runtime dispatch, with normal task recovery available if dispatch fails.
+
+### V7 cognitive provider seam (experimental)
+
+`cognitive_memory_v7` adds governed-only, company/binding/purpose-scoped ranking alongside V4 Memory. Provider results must identify current authorized AW Memory versions; generated provider content cannot replace canonical records. Local/no-op providers are stateless. Private projection requires explicit binding consent, verified accepted Memory and the owning agent. Provider configuration is restricted to current company administrators. Privacy invalidation is independent of feature flags and remains effective after disabling cognitive retrieval.

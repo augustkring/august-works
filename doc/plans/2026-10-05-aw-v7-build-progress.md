@@ -9,7 +9,7 @@ The user has requested implementation of the whole brief. Work continues through
 | 0 | Post-V6 audit and rollout contracts | Configuration slice committed; predecessor/provider/legal acceptance remains scoped/open |
 | 1 | Readiness and Knowledge Quality | Implemented: schema, policy, authorized source integration, scoped API and UI; eleven service/policy and three UI tests pass |
 | 2 | AI-assisted Foundation bootstrap | Implemented and locally verified; six migrated-PostgreSQL tests pass |
-| 3 | Cognitive provider contract | Pending implementation |
+| 3 | Cognitive provider contract | Implemented with stateless local/no-op providers; five integration tests plus V4 regressions pass |
 | 4 | Hindsight spike and adoption decision | Pending implementation |
 | 5 | Observations and Mental Models | Pending implementation |
 | 6 | Organizational Learning | Pending implementation |
@@ -52,3 +52,11 @@ Discovery creates an idempotent canonical Task for the selected agent. Fresh Con
 Creating proposals rechecks source authorization/version/hash, keeps narrower sources behind an explicit publication-policy gate, and uses the existing Foundation draft/proposal lifecycle. Human approval remains separate. Answers dispatch through the existing heartbeat service; dispatch failure leaves the canonical Task available for recovery. No bespoke job scheduler or second canonical knowledge store was introduced.
 
 Verification: six fresh migrated-PostgreSQL tests pass for concurrent idempotency, draft-only publication, question gating/CAS, false citations and changed sources, current worker fencing/cancellation, and untrusted-source sensitivity. Shared/server/UI types, module boundaries and token gates pass. Hindsight and production onboarding outcome acceptance are still independent gates.
+
+## Wave 3 implementation
+
+A narrow provider interface accepts governed projections, scoped recall, synthesis, deletion receipts, health and conformance. Separate cognitive bindings carry company/scope/purpose, approved sensitivity, capability hashes and no secrets. V4 Memory remains the source of truth. Local recall ranks only the currently authorized accepted-record universe and returns original AW records after another eligibility check. Private projections require an explicit private binding, the owning agent and verified accepted sources. Unqualified provider keys are rejected.
+
+The Context Engine has an optional cognitive provider alongside its existing Memory provider. Failure does not remove canonical Memory. Revocation, correction, deletion and restored deletion markers propagate through content-free provider-operation receipts independently of feature flags. Local/no-op providers are stateless, so deletion requires no remote content erasure; persistent providers remain unavailable until qualified. Reconciliation is explicitly bounded to 100 eligible sources per scope and reports that limit, not a full-bank synchronization claim.
+
+Verification: five new migrated-PostgreSQL tests and 23 existing Memory Core tests pass. The cognitive/Context test selection passes 25 tests, including existing principal, temporal and source-boundary coverage. Server/UI TypeScript, module boundaries and token gates pass.
