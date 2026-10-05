@@ -249,7 +249,7 @@ printf '%s\\n' '{"type":"result","subtype":"success","session_id":"cursor-sessio
       finalPreparedCommand = preferredCommandPath;
       const runtimeEnv = {
         ...input.env,
-        PATH: `${path.join(systemHomeDir, ".local", "bin")}${path.delimiter}${input.env.PATH}`,
+        PATH: `${path.join(systemHomeDir, ".local", "bin")}${path.delimiter}${input.env.PATH ?? process.env.PATH ?? "/usr/bin:/bin"}`,
       };
       await fs.mkdir(path.dirname(preferredCommandPath), { recursive: true });
       await fs.writeFile(preferredCommandPath, preferredAgentScript);
@@ -265,34 +265,14 @@ printf '%s\\n' '{"type":"result","subtype":"success","session_id":"cursor-sessio
       };
     });
 
-    const runnerState = {
-      commands: [] as string[],
-    };
-    const runner = {
-      execute: async (input: { command: string; args?: string[]; env?: Record<string, string> }) => {
-        runnerState.commands.push(input.command);
-        if (input.command === "sh") {
-          return {
-            exitCode: 0,
-          signal: null,
-          timedOut: false,
-          stdout: "",
-          stderr: "",
-          pid: 555,
-          startedAt: new Date().toISOString(),
-        };
-        }
-
-        return runChildProcess(`cursor-fresh-lease-${runnerState.commands.length}`, input.command, input.args ?? [], {
-          cwd: remoteWorkspace,
-          env: input.env ?? {},
-          timeoutSec: 30,
-          graceSec: 5,
-          onLog: async () => {},
-          onSpawn: async () => {},
-        });
-      },
-    };
+    // Use the same filesystem-backed runner as the fresh-lease test so
+    // bounded archive reads return real bytes and command probes keep the
+    // sandbox PATH. Its installer stays a local fake agent script.
+    const runner = createFreshLeaseSandboxRunner({
+      homeDir: systemHomeDir,
+      installCommandPath: path.join(systemHomeDir, ".local", "bin", "agent"),
+      captureDir: managedCaptureDir,
+    });
 
     const runMeta: Array<{ command?: string; [key: string]: unknown }> = [];
     const previousHome = process.env.HOME;
