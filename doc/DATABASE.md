@@ -432,3 +432,7 @@ cleanup authority; it does not prove that remote inference has stopped. Recovery
 revokes the previous boot identity with a conditional update. Its own claim also
 expires so another sweep can finish cleanup after a restart. Historical rows keep
 null ownership fields and follow the previous recovery path.
+
+## V7 readiness records
+
+Migration 0351 adds versioned `readiness_requirements`, immutable `readiness_assessments` and `knowledge_quality_findings`. Composite company references constrain agent, context manifest and finding/assessment ownership. Readiness is an evidence snapshot, never an authorization grant. Requirement publication uses a transaction advisory lock and expected version; historical versions remain available. Finding resolution uses status CAS and an explicit assessment reference. Native source deletion and full company erasure remain governed by their canonical domains.

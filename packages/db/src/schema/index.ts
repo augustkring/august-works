@@ -118,6 +118,7 @@ export { assets } from "./assets.js";
 export { issueAttachments } from "./issue_attachments.js";
 export { documents } from "./documents.js";
 export { foundationDocuments, foundationSections, foundationChangeProposals } from "./foundation.js";
+export { readinessRequirements, readinessAssessments, knowledgeQualityFindings } from "./readiness.js";
 export { documentRevisions } from "./document_revisions.js";
 export { issueDocuments } from "./issue_documents.js";
 export { summarySlots } from "./summary_slots.js";

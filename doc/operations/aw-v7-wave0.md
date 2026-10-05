@@ -65,3 +65,7 @@ The direct [EUR-Lex consolidated-text request](https://eur-lex.europa.eu/eli/reg
 | Detailed schema/API contracts | Each owning-wave domain owner | Final master reconciliation, tenant constraints, CAS/idempotency, lifecycle and rollout/rollback evidence. |
 
 The Wave 0 configuration foundation is implemented. Wave 0 as a whole remains open on the gates above. Wave 1 implementation can proceed behind default-off flags; material enablement requires the corresponding acceptance and predecessor evidence.
+
+## Follow-up environment update
+
+The whole-brief build request added a local Rust 1.97.1/rustfmt toolchain under `/workspace/aw-v7-toolchain`. Missing `cargo` is therefore a historical limitation. The active implementation and final validation state are tracked in [the full-build ledger](../plans/2026-10-05-aw-v7-build-progress.md).
