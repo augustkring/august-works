@@ -267,3 +267,4 @@ export * from "./orchestration.js";
 export * from "./supervision.js";
 export { verificationRuns } from "./verification.js";
 export { workSignalCandidates } from "./work_signals.js";
+export { runtimeSandboxBindings, sandboxQualificationRuns, runtimePolicySnapshots } from "./execution_sandbox.js";

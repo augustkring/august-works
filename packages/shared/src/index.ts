@@ -3283,3 +3283,4 @@ export * from "./orchestration.js";
 export * from "./supervision.js";
 export * from "./verification.js";
 export * from "./work-signals.js";
+export * from "./execution-sandbox.js";

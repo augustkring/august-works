@@ -12,6 +12,7 @@ vi.mock("@/hooks/useSaasCapabilities",()=>({useSaasCapabilities:()=>({data:{runt
 vi.mock("@/api/client",()=>({api:{get:async()=>[]}}));
 vi.mock("@/api/saas",()=>({saasApi:{runtimes:fixture.runtimes,runtimeOptions:fixture.options,createRuntime:fixture.create,runtimeOperation:fixture.operation,bindRuntime:fixture.bind}}));
 vi.mock("@/lib/router",()=>({Link:({children,to}:{children:React.ReactNode;to:string})=><a href={to}>{children}</a>}));
+vi.mock("@/components/SaasRuntimeExecutionPosture",()=>({SaasRuntimeExecutionPosture:()=>null}));
 vi.mock("@/components/SaasRuntimeRecovery",()=>({SaasRuntimeRecovery:()=>null}));
 vi.mock("@/components/SaasRuntimeBackupSchedule",()=>({SaasRuntimeBackupSchedule:()=>null}));
 vi.mock("@/components/SaasModelProviderForm",()=>({SaasModelProviderForm:()=>null}));

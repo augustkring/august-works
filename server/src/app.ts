@@ -1,3 +1,4 @@
+import { executionSandboxRoutes } from "./routes/execution-sandbox.js";
 import { orchestrationRoutes } from "./routes/orchestration.js";
 import { workSignalRoutes } from "./routes/work-signals.js";
 import { publicOriginGuard } from "./middleware/public-origin-guard.js";
@@ -725,6 +726,10 @@ export async function createApp(
   api.use(learningRoutes(db));
   api.use(orchestrationRoutes(db));
   api.use(workSignalRoutes(db));
+  api.use(executionSandboxRoutes(db, {
+    operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
+    nativeOperation: opts.saasPlatform ? (companyId, cellId, userId, action, idempotencyKey) => opts.saasPlatform!.runtime.request(companyId, cellId, userId, { action, idempotencyKey }) : undefined,
+  }));
   api.use(cognitiveMemoryRoutes(db));
   api.use(memoryRoutes(db));
   api.use(companySkillPolicyRoutes(db));

@@ -1,3 +1,4 @@
+import { SaasRuntimeExecutionPosture } from "@/components/SaasRuntimeExecutionPosture";
 import { SaasRuntimeRecovery } from "@/components/SaasRuntimeRecovery";
 import { SaasRuntimeBackupSchedule } from "@/components/SaasRuntimeBackupSchedule";
 import { SaasModelProviderForm } from "@/components/SaasModelProviderForm";
@@ -209,6 +210,7 @@ export function SaasRuntimesPage() {
           ?.filter((cell) => !cell.deletedAt)
           .map((cell) => (
             <div key={cell.id} className="saas-section">
+              <SaasRuntimeExecutionPosture companyId={selectedCompanyId!} cellId={cell.id} userId={identity.userId!} />
               <p>
                 {cell.capacityProfile} ·{" "}
                 {cell.isolationMode.replaceAll("_", " ")} ·{" "}

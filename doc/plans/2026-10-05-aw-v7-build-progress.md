@@ -17,7 +17,7 @@ The user has requested implementation of the whole brief. Work continues through
 | 8 | Deterministic supervision | Canonical observer, deterministic arbiter, durable Stop/retry queue and stopped-worker reassignment implemented; local verification passing |
 | 9 | Semantic supervision and verification | Evidence-bound human trajectory review and independent completion consumer verified; automated read-only semantic provider remains a qualification dependency of Waves 11–15 |
 | 10 | Work Signals and follow-up | Conservative source-bound extraction, human Roadmap drafts and durable native review cards verified locally; semantic provider and live Slack qualification remain scoped |
-| 11 | Sandbox abstraction | Pending implementation |
+| 11 | Sandbox abstraction | Backend contract, strict compiler, native cell binding, qualification harness and fail-closed admission locally verified; physical OpenShell enforcement belongs to Wave 12 |
 | 12 | OpenShell backend and qualification | Pending implementation |
 | 13 | AI purpose and assurance governance | Pending implementation |
 | 14 | Free Core and capacity | Pending implementation |
@@ -154,3 +154,14 @@ Flag-independent PostgreSQL guards scrub candidate facts and stale pending Roadm
 Verification: twelve migrated-PostgreSQL candidate/recovery tests, three interpreter tests and one UI test pass. Existing Slack access/search and V5 project controls bring the combined run to 44 passing tests. Two selected native Slack provenance/Routine tests also pass; these are local fixtures, not connected-customer evidence. Shared build, server/UI TypeScript, migration safety, module boundaries and token gates pass in this slice. Default-off gates remain closed.
 
 Qualification limits: current extraction/review uses the original owned native run; a finished or replaced source run requires fresh extraction through an accepted Task continuation. General semantic interpretation, autonomous follow-up prioritization and a connected Slack pilot are not established by these fixtures. Other candidate types enter human review instead of unqualified domain mutations.
+
+
+## Wave 11 — backend-independent execution policy (2026-10-05)
+
+Added a narrow ExecutionSandboxBackend contract, explicit capability semantics and a deterministic policy subset compiler. Policies constrain filesystem paths, exact binaries/syscalls, network host/port/method/path authority, current credential grant hashes and resource limits. Missing, expired, best-effort or locally simulated enforcement cannot earn managed assurance. C4 remains closed pending a qualified domain overlay. The structural compiler result is distinct from a physical enforcement observation.
+
+Bindings pin an existing stopped V6 runtime cell generation and immutable maximum boundary. Compilation requires an actual owned native execution manifest, current human/worker Task access, exact qualified provider configuration/profile, the cell's actual presence binding, native capacity limits and the original execution/plan deadline. Connection inventory cannot mint broker credentials. Qualification runs positive and negative probes through the registered backend; unsupported tests or observations without hashes remain inconclusive. The V6 compatibility adapter preserves canonical inspection/Stop/delete and explicitly refuses fine-grained V7 workload admission.
+
+Company-scoped operator APIs expose qualification, policy history and reconciliation. Customer runtime UI shows minimal posture, without claiming compilation or backend qualification means an enforced workload. Database guards preserve immutable boundaries, reports and policy snapshots; generation/image/credential/provider changes quarantine bindings and revoke policies independently of feature flags. Native start/upgrade/restore/migrate on a V7-bound cell is blocked until the Wave 12 applied-boundary admission path is implemented; ordinary unbound V6 cells retain their existing lifecycle. Stop remains available.
+
+Verification: 32 server tests (policy matrix, migrated PostgreSQL and existing V6 recovery) and six UI tests pass. Shared build, server/UI TypeScript, migration safety, module boundaries and token gates pass. No actual OpenShell host qualification or managed workload safety is asserted by these local fixtures. Reconciliation is operator-triggered in this slice; automatic host reconciliation, signed applied-policy evidence and durable broker revocation are Wave 12 work.
