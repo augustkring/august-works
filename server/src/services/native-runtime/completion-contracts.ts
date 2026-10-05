@@ -4,10 +4,23 @@ import type { Db } from "@paperclipai/db";
 import { completionContracts } from "@paperclipai/db";
 import type { StrictCompletionContractInput } from "../../vendor/paperclip-runner/index.js";
 
+import { retainedOrchestrationContract } from "../orchestration/orchestration-contracts.js";
 import { nativeSha256 } from "./canonical.js";
 
 export const NATIVE_COMPLETION_CONTRACT_SCHEMA = "paperclip.completion-contract.v1";
 export const NATIVE_COMPLETION_POLICY_VERSION = "phase6-v4";
+
+/** Canonical rows may retain server-only V7 acceptance data; the runner wire stays strict. */
+export function nativeCompletionContractInput(value: unknown): StrictCompletionContractInput {
+  const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  if (typeof row.revision !== "string" || typeof row.objective !== "string" || !Array.isArray(row.criteria) || !row.criteria.length) throw new Error("native_completion_contract_binding_invalid");
+  const criteria = row.criteria.map(value => {
+    const criterion = value && typeof value === "object" ? value as Record<string, unknown> : {};
+    if (typeof criterion.id !== "string" || typeof criterion.requirement !== "string") throw new Error("native_completion_contract_binding_invalid");
+    return { id: criterion.id, requirement: criterion.requirement };
+  });
+  return { revision: row.revision, objective: row.objective, criteria };
+}
 
 export function nativeCompletionRequestsForComments(
   comments: readonly {
@@ -112,6 +125,8 @@ export async function ensureNativeCompletionContract(input: {
       input.companyId,
       input.issue.id,
     ].join(":")}, 0))`);
+    const retained = await retainedOrchestrationContract(tx as unknown as Db, input.companyId, input.issue.id);
+    if (retained) return retained;
     const policy = resolveNativeCompletionPolicy(input.issue);
     const latest = await tx
       .select()

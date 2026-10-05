@@ -218,6 +218,7 @@ import {
   dispatchNativeSessionResumptions,
   detachNativeSessionsForRestart,
   ensureNativeCompletionContract,
+  nativeCompletionContractInput,
   executePaperclipNativeSession,
   finalizeNativeRun,
   findNativeSessionResumeRun,
@@ -23145,7 +23146,7 @@ export function heartbeatService(
             persistedContract && persistedNativeExecutionInput
               ? {
                   row: persistedContract,
-                  contract: persistedContract.contractJson as never,
+                  contract: nativeCompletionContractInput(persistedContract.contractJson),
                 }
               : await ensureNativeCompletionContract({
                   db,

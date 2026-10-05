@@ -92,7 +92,7 @@ export function readinessService(db: Db) {
       publish(publications);
       return row;
     },
-    assess: async (companyId: string, input: AssessReadiness, owner: ReadinessActor) => {
+    assess: async (companyId: string, input: AssessReadiness, owner: ReadinessActor, parentPublications?: ActivityPublication[]) => {
       const [agent] = await db.select({ id: agents.id }).from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, input.agentId)));
       if (!agent) throw notFound("Agent not found");
       if (owner.actor.type === "agent" && owner.actor.agentId !== input.agentId) throw forbidden("Agents can assess only their own readiness");
@@ -145,7 +145,7 @@ export function readinessService(db: Db) {
       const custom = await requirements(companyId, input.actionClass);
       const policies = [...mandatoryReadinessPolicy(input.actionClass), ...custom.map((row) => ({ key: row.requirementKey, version: row.version, criteria: row.criteria }))];
       const evaluation = evaluateReadiness({ action: input.actionClass, requirements: policies, evidence });
-      const publications: ActivityPublication[] = [];
+      const publications: ActivityPublication[] = parentPublications ?? [];
       const row = await db.transaction(async (tx) => {
         const [created] = await tx.insert(readinessAssessments).values({
           companyId, agentId: input.agentId, principalId: owner.principalId, subjectType: input.subjectType, subjectId,
@@ -173,7 +173,7 @@ export function readinessService(db: Db) {
         }, publications);
         return created!;
       });
-      publish(publications);
+      if (!parentPublications) publish(publications);
       return row;
     },
     list: (companyId: string, principalId: string) => db.select().from(readinessAssessments)

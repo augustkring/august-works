@@ -2507,6 +2507,13 @@
       "when": 1791201855735,
       "tag": "0359_modern_zodiak",
       "breakpoints": true
+    },
+    {
+      "idx": 360,
+      "version": "7",
+      "when": 1791205306803,
+      "tag": "0360_striped_demogoblin",
+      "breakpoints": true
     }
   ]
 }

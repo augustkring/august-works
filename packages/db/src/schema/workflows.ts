@@ -315,6 +315,7 @@ export const workflowRevisions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    companyWorkflowIdUq: unique("workflow_revisions_company_workflow_id_uq").on(table.companyId, table.workflowId, table.id),
     workflowRevisionUq: uniqueIndex("workflow_revisions_workflow_revision_uq").on(
       table.workflowId,
       table.revisionNumber,
