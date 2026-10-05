@@ -18,6 +18,7 @@ import type {
   EvidenceItem,
 } from "@paperclipai/shared";
 import { conflict, forbidden, unprocessable } from "../../errors.js";
+import { learningAssetRoots } from "../learning/learning-assets.js";
 import { lockMemoryPrivacy, memoryPayloadVisible } from "../memory/memory-privacy.js";
 
 type JsonScalar = string | number | boolean | null;
@@ -216,16 +217,29 @@ export function contextManifestService(db: Db) {
           ? await tx.insert(contextManifestItems).values(values).returning()
           : [];
 
-        const rootIds = [...new Set(input.selected.flatMap(({ decision }) => {
+        const learnedRoots = new Map<string, string>();
+        const purpose = input.policySnapshot && typeof input.policySnapshot === "object" && "intent" in input.policySnapshot && typeof input.policySnapshot.intent === "string" ? input.policySnapshot.intent : "general_work";
+        for (const { decision } of input.selected) {
+          const evidence = decision.evidence;
+          if (evidence.sourceProvider !== "august_works_foundation") continue;
+          const ref = /^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/\d+$/i.exec(evidence.sourceRef);
+          if (!ref || evidence.sourceVersion !== ref[1]) throw unprocessable("Foundation Context requires its pinned canonical revision");
+          for (const root of await learningAssetRoots(tx as unknown as Db, input.companyId, "document_revision", ref[1]!, purpose)) {
+            if (learnedRoots.has(root.id) && learnedRoots.get(root.id) !== root.expectedVersion) throw conflict("Learned Context roots have conflicting versions");
+            learnedRoots.set(root.id, root.expectedVersion);
+          }
+        }
+        const rootIds = [...new Set([...input.selected.flatMap(({ decision }) => {
           const evidence = decision.evidence;
           if (!["august_works_memory", "august_works_derived_memory"].includes(evidence.sourceProvider)) return [];
           const ids = evidence.metadata.derived === true ? evidence.metadata.sourceMemoryIds : [evidence.metadata.recordId];
           if (!Array.isArray(ids) || ids.length > 64 || ids.some((id) => typeof id !== "string" || !/^[a-f0-9-]{36}$/i.test(id))) throw unprocessable("Invalid Memory root provenance");
           return ids as string[];
-        }))];
+        }), ...learnedRoots.keys()])];
         if (rootIds.length) {
           const roots = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible()));
           if (roots.length !== rootIds.length) throw forbidden("Context Memory roots cross a company boundary");
+          if (roots.some(root => learnedRoots.has(root.id) && learnedRoots.get(root.id) !== root.updatedAt.toISOString())) throw conflict("Learned Context roots changed during assembly");
           for (const { decision } of input.selected) {
             const item = decision.evidence;
             if (item.sourceProvider === "august_works_memory" && roots.find((root) => root.id === item.metadata.recordId)?.updatedAt.toISOString() !== item.sourceVersion) throw conflict("Context Memory changed during assembly");

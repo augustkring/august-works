@@ -1,5 +1,7 @@
+import { learningAssetRoots } from "./learning/learning-assets.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { and, eq, sql } from "drizzle-orm";
-import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
+import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, contextManifestMemoryRoots, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
 import { agentExecutionManifestSchema, createExecutionScopeRequestSchema, v5FeatureEnabled, type AgentExecutionScope } from "@paperclipai/shared";
 import type { z } from "zod";
 import { conflict, forbidden, notFound } from "../errors.js";
@@ -132,6 +134,18 @@ export function agentRuntimeFabricService(db: Db) {
       if (inventoryTokens > 4000) throw conflict("Pinned execution inventory exceeds 4000 estimated tokens; split the task requirements");
       if (!stored) manifest.inventoryEstimatedTokens = inventoryTokens;
       const record = await withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockMemoryPrivacy(tx, input.companyId);
+        const localContext = context.refs.find(ref => ref.companyId === input.companyId);
+        const learnedPins = [
+          ...manifest.skills.map(pin => ({ type: "skill_version", id: pin.versionId })),
+          ...manifest.playbooks.map(pin => ({ type: "document_revision", id: pin.revisionId })),
+          ...(manifest.rolePack?.pins.map(pin => ({ type: "role_pack_version", id: pin.versionId })) ?? []),
+        ];
+        for (const pin of learnedPins) {
+          const roots = await learningAssetRoots(tx, input.companyId, pin.type, pin.id, "v5_runtime_execution");
+          if (roots.length && !localContext) throw conflict("Learned runtime procedures require a local Context manifest");
+          if (roots.length) await tx.insert(contextManifestMemoryRoots).values(roots.map(root => ({ companyId: input.companyId, manifestId: localContext!.contextManifestId, memoryRecordId: root.id, sourceVersion: root.expectedVersion }))).onConflictDoNothing();
+        }
         await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.id, input.runId)).for("update");
         let row = stored;
         if (!row) {

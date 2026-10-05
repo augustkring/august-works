@@ -7,7 +7,7 @@ import { proposePlaybookSchema } from "./playbooks.js";
 import { roadmapProposalSchema, roadmapPolicySchema } from "./project-control.js";
 import { createReadinessRequirementSchema } from "./readiness.js";
 
-export const LEARNING_TARGETS = ["foundation", "skill", "playbook", "project", "policy", "workflow", "role_pack"] as const;
+export const LEARNING_TARGETS = ["foundation", "skill", "playbook", "project", "policy", "workflow", "role_pack", "automation_artifact"] as const;
 export const learningCycleSchema = z.object({
   scope: memoryScopeSchema.refine((scope) => scope.type === "company" || scope.type === "project", "Learning requires an authorized shared company or project scope"),
   purpose: z.string().trim().min(1).max(240), trigger: z.string().trim().min(10).max(1000),
@@ -36,6 +36,7 @@ export const learningPolicyPayloadSchema = z.discriminatedUnion("policyType", [
   z.object({ policyType: z.literal("readiness_requirement"), requirement: createReadinessRequirementSchema }).strict(),
 ]);
 export const learningChangeSchema = z.discriminatedUnion("targetDomain", [
+  z.object({ targetDomain: z.literal("automation_artifact"), optimizerEvaluationId: z.string().uuid(), expectedArtifactVersionId: z.string().uuid(), expectedContentHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
   z.object({ targetDomain: z.literal("workflow"), draft: updateWorkflowDraftSchema }).strict(),
   z.object({ targetDomain: z.literal("role_pack"), expectedPublishedVersionId: z.string().uuid().nullable(), draft: rolePackVersionInputSchema }).strict(),
   z.object({ targetDomain: z.literal("foundation"), baseRevisionId: z.string().uuid(), proposedBody: z.string().trim().min(1).max(100000), reason: z.string().trim().min(20).max(2000) }).strict(),
@@ -57,3 +58,6 @@ export interface LearningCycleView { id: string; companyId: string; scopeType: s
 export interface LearningHypothesisView { id: string; cycleId: string; claim: string; predictedEffect: string; targetDomain: typeof LEARNING_TARGETS[number]; targetId: string; riskClass: string; status: string; version: number; evaluationContract: z.infer<typeof learningHypothesisSchema>["evaluationContract"]; }
 export interface LearningEvaluationView { id: string; hypothesisId: string; result: "passed" | "failed" | "inconclusive"; method: "manual_review"; metrics: Record<string, unknown>; limitations: string[]; reviewedBy: string; createdAt: string; }
 export interface LearningPolicyProposalView { id: string; companyId: string; targetId: string; policyType: string; version: number; proposal: LearningPolicyPayload | null; baseline?: LearningPolicyPayload | null; reason: string; status: string; reviewedBy: string | null; reviewRationale: string | null; }
+
+export const finishLearningCycleSchema = z.object({ expectedVersion: z.number().int().positive(), decision: z.enum(["complete", "cancel"]), rationale: z.string().trim().min(20).max(2000) }).strict();
+export type FinishLearningCycleInput = z.infer<typeof finishLearningCycleSchema>;

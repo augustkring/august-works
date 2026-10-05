@@ -4,7 +4,7 @@ import { memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memor
   contextManifests, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
-  workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
+  workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, workflowOptimizerObservations, automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { invalidateDerivedMemory } from "./derived-privacy.js";
@@ -114,8 +114,9 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
     sql`${workflowOptimizerEvaluations.memoryRecordIds} ?| ARRAY[${sql.join(recordIds.map((id) => sql`${id}`), sql`, `)}]::text[]`));
   if (evaluations.length) {
     const artifactIds = evaluations.map((row) => row.artifactId);
-    await db.update(workflowOptimizerEvaluations).set({ status: "retired", compilerResult: null, invariants: [], updatedAt: now })
+    await db.update(workflowOptimizerEvaluations).set({ status: "retired", compilerResult: null, replayEvaluation: null, shadowEvaluation: null, invariants: [], updatedAt: now })
       .where(and(eq(workflowOptimizerEvaluations.companyId, companyId), inArray(workflowOptimizerEvaluations.id, evaluations.map((row) => row.id))));
+    await db.update(workflowOptimizerObservations).set({ shadowResult: null }).where(and(eq(workflowOptimizerObservations.companyId, companyId), inArray(workflowOptimizerObservations.evaluationId, evaluations.map(row => row.id))));
     await db.update(automationArtifacts).set({ status: "deprecated", archivedAt: now, name: "Erased optimizer candidate", description: null, updatedAt: now })
       .where(and(eq(automationArtifacts.companyId, companyId), inArray(automationArtifacts.id, artifactIds)));
     // Content erasure is the explicit privacy exception to immutable artifact payloads.

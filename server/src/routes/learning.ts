@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { Db } from "@paperclipai/db";
-import { learningCycleSchema, learningHypothesisSchema, learningEvaluationSchema, learningChangeSchema, proposeLearningChangeSchema, reviewLearningPolicySchema } from "@paperclipai/shared";
+import { finishLearningCycleSchema, learningCycleSchema, learningHypothesisSchema, learningEvaluationSchema, learningChangeSchema, proposeLearningChangeSchema, reviewLearningPolicySchema } from "@paperclipai/shared";
 import { assertCompanyAccess } from "./authz.js";
 import { validate } from "../middleware/validate.js";
 import { learningService } from "../services/learning/learning-service.js";
@@ -18,5 +18,6 @@ export function learningRoutes(db: Db) {
   router.post("/companies/:companyId/learning/hypotheses/:id/evaluations", validate(learningEvaluationSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.evaluate(req.actor, companyId, req.params.id as string, req.body)); });
   router.post("/companies/:companyId/learning/hypotheses/:id/propose-change", validate(proposeLearningChangeSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.proposeChange(req.actor, companyId, req.params.id as string, req.body)); });
   router.post("/companies/:companyId/learning/policy-proposals/:id/review", validate(reviewLearningPolicySchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.reviewPolicy(req.actor, companyId, req.params.id as string, req.body)); });
+  router.post("/companies/:companyId/learning/cycles/:id/finish", validate(finishLearningCycleSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.finish(req.actor, companyId, req.params.id as string, req.body)); });
   return router;
 }

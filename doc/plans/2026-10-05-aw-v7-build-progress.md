@@ -12,7 +12,7 @@ The user has requested implementation of the whole brief. Work continues through
 | 3 | Cognitive provider contract | Implemented with stateless local/no-op providers; five integration tests plus V4 regressions pass |
 | 4 | Hindsight spike and adoption decision | DEFER decision recorded against pinned v0.10.2 source; no production provider admitted |
 | 5 | Observations and Mental Models | Implemented with reviewed root lineage, leased rebuilds, Context/UI and erasure guards; local verification passing |
-| 6 | Organizational Learning | Core plus native Workflow/Role Pack adapters verified; Optimizer/package integration and broader evaluation remain in progress |
+| 6 | Organizational Learning | Core and eight native target adapters verified, including evaluated Optimizer candidates; Agent Package adapter belongs to Wave 15; broader evaluation and integrated acceptance remain open |
 | 7 | Bounded orchestration | Pending implementation |
 | 8 | Deterministic supervision | Pending implementation |
 | 9 | Semantic supervision and verification | Pending implementation |
@@ -93,3 +93,14 @@ Verification: ten new migrated-PostgreSQL Learning cases pass. The final five-fi
 Learning creates a distinct native Workflow draft or Role Pack version and leaves publication separate. Required Role Pack entries cannot be removed, repinned or weakened by a Learning challenger. Native versions inherit original roots through later drafts, published pointers and Workflow execution rows. Consumers and publication enforce current source lineage independently of rollout flags. Revocation pauses affected Workflows and preserves Role Pack assignments in a blocked state until a human replaces their version. Erasure cancels active Workflow runs, clears affected version content and published Role Pack items; source-backed exceptions preserve ordinary immutable snapshot guards. Late writes cannot restore erased prose or drop execution root identities.
 
 Verification: twelve Learning integration cases plus fourteen native Workflow and four Role Pack regressions pass (30 migrated-PostgreSQL cases). Server/UI types pass. The policy review UI test also passes and checks that consent is specific to one proposal and version. Optimizer and Agent Package adapters remain open.
+
+
+### Wave 6 Optimizer, worker proposals and actual completion
+
+Learning can attach a current native Optimizer evaluation with passed hash-bound security, validation and real engine replay gates. It does not grant shadow/canary/activation. Existing qualification remains authoritative. Learning roots join the Optimizer's existing Memory lineage and cannot be dropped by later evaluation writes. Immutable artifact erasure now has a deletion-provenance-backed exception; source, schemas, compiled/replay/shadow payloads and qualification reports are cleared and restored writes scrubbed. Ordinary snapshot/gate immutability remains enforced.
+
+A live agent with an owned Task attempt can create a cycle and hypothesis, but manual evaluation, policy approval and promotion remain human-controlled. Stop revokes candidate-write authority. Cycle completion observes the native domain's actual current accepted version/effects; accepted Foundation proposals still need canonical review and approval. Pre-proposal cycles can be cancelled. UI shows observed promotion and exposes bounded cycle closure.
+
+Approved learned Foundation Context, selected Skill/Playbook versions and Role Pack runtime pins preserve source Memory lineage in the existing Context manifest. Current source versions and actual-use purpose are checked, including with Learning disabled; run/Task consumers then use the existing erasure and late-write guards.
+
+Verification: 17 Learning integration cases and 16 Context/Runtime Fabric regressions pass together (33 PostgreSQL tests). Four native Optimizer end-to-end regressions also passed during this slice. These are local engine fixtures, not customer pilot or live provider qualification. Server/UI types, module boundaries and token gates pass. Agent Package linkage will be added when Wave 15 owns that domain; other evaluation methods are not represented as manual-review causal evidence.

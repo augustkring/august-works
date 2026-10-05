@@ -1,13 +1,14 @@
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, rolePacks, rolePackItems, workflows, policyChangeProposals, memoryEvidence, issues, projects, companySkills, foundationDocuments, documents, playbookDocuments, readinessRequirements, type Db } from "@paperclipai/db";
-import { learningCycleSchema, learningHypothesisSchema, learningEvaluationSchema, proposeLearningChangeSchema, reviewLearningPolicySchema, EVIDENCE_SENSITIVITIES, roadmapPolicySchema, type MemoryScope, type LearningPolicyPayload, type ReadinessAction } from "@paperclipai/shared";
+import { learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, workflowOptimizerEvaluations, rolePacks, rolePackItems, workflows, policyChangeProposals, memoryEvidence, issues, projects, companySkills, foundationDocuments, documents, playbookDocuments, readinessRequirements, type Db } from "@paperclipai/db";
+import { finishLearningCycleSchema, learningCycleSchema, learningHypothesisSchema, learningEvaluationSchema, proposeLearningChangeSchema, reviewLearningPolicySchema, EVIDENCE_SENSITIVITIES, roadmapPolicySchema, type MemoryScope, type LearningPolicyPayload, type ReadinessAction } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
-import { assertDerivedManager, derivedRoots } from "../memory/derived-memory.js";
+import { assertDerivedManager, assertDerivedWorker, derivedRoots } from "../memory/derived-memory.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { assertOptimizerEvaluationBinding } from "../optimizer/optimizer-evaluation.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { rolePackService } from "../role-packs.js";
 import { foundationService } from "../foundation/foundation-service.js";
@@ -16,6 +17,7 @@ import { skillLifecycleService } from "../skill-lifecycle.js";
 import { projectControlService } from "../project-control.js";
 import { readinessService } from "../readiness/readiness-service.js";
 import { conflict, forbidden, notFound } from "../../errors.js";
+import { learningPromotionReceipt } from "./learning-receipts.js";
 import { evaluateLearningComparison } from "./learning-evaluation.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 type Cycle = typeof learningCycles.$inferSelect;
@@ -51,10 +53,10 @@ async function assertBaseline(db: Db, actor: AuthorizationActor, parent: Cycle, 
     await assertV7Authorization(db, actor, companyId, "foundation:read");
     const [row] = await db.select().from(playbookDocuments).where(and(eq(playbookDocuments.companyId, companyId), eq(playbookDocuments.id, id)));
     if (row) baseline = `playbook://${id}/${row.approvedRevisionId ?? "none"}`;
-  } else if (input.targetDomain === "workflow") {
+  } else if (["workflow", "automation_artifact"].includes(input.targetDomain)) {
     await assertV7Authorization(db, actor, companyId, "workflows:read");
     const [row] = await db.select().from(workflows).where(and(eq(workflows.companyId, companyId), eq(workflows.id, id)));
-    if (row?.draftRevisionId && row.status !== "archived") baseline = `workflow://${id}/${row.draftRevisionId}`;
+    if (row && row.status !== "archived") baseline = input.targetDomain === "automation_artifact" && row.publishedRevisionId ? `optimizer://${id}/${row.publishedRevisionId}` : row.draftRevisionId ? `workflow://${id}/${row.draftRevisionId}` : null;
   } else if (input.targetDomain === "role_pack") {
     const [row] = await db.select().from(rolePacks).where(and(eq(rolePacks.companyId, companyId), eq(rolePacks.id, id), eq(rolePacks.status, "active")));
     if (row) baseline = `role_pack://${id}/${row.publishedVersionId ?? "none"}`;
@@ -72,9 +74,10 @@ async function assertBaseline(db: Db, actor: AuthorizationActor, parent: Cycle, 
   if (!baseline || baseline !== input.evaluationContract.baselineRef) throw conflict("The champion baseline is not the current canonical target");
 }
 export function learningService(db: Db) {
-  async function admit(actor: AuthorizationActor, companyId: string, tx = db, manage = false) {
+  async function admit(actor: AuthorizationActor, companyId: string, tx = db, manage: boolean | "propose" = false) {
     await assertV7Enabled(tx, "learning_engine_v7"); await assertV7Authorization(tx, actor, companyId, "company_scope:read");
-    if (manage) await assertDerivedManager(tx, actor, companyId);
+    if (manage === "propose" && actor.type === "agent") await assertDerivedWorker(tx, actor, companyId);
+    else if (manage) await assertDerivedManager(tx, actor, companyId);
   }
   async function cycle(actor: AuthorizationActor, companyId: string, id: string, tx = db, lock = false) {
     await admit(actor, companyId, tx);
@@ -89,8 +92,23 @@ export function learningService(db: Db) {
     const parent = await cycle(actor, companyId, row.cycleId, tx, true);
     await learningRoots(tx, actor, parent); return { row: row as Hypothesis & { evaluationContract: NonNullable<Hypothesis["evaluationContract"]> }, parent };
   }
-  const audit = (tx: Db, actor: AuthorizationActor, companyId: string, id: string, action: string, publications: Parameters<typeof logActivity>[2], details?: Record<string, unknown>) => logActivity(tx, { companyId, actorType: "user", actorId: v7HumanActorId(actor), action, entityType: "learning_cycle", entityId: id, details }, publications);
+  const audit = (tx: Db, actor: AuthorizationActor, companyId: string, id: string, action: string, publications: Parameters<typeof logActivity>[2], details?: Record<string, unknown>) => logActivity(tx, { companyId, actorType: actor.type === "agent" ? "agent" : "user", actorId: actor.type === "agent" ? actor.agentId! : v7HumanActorId(actor), action, entityType: "learning_cycle", entityId: id, details }, publications);
   return {
+    finish: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof finishLearningCycleSchema>) => {
+      const input = finishLearningCycleSchema.parse(raw); await admit(actor, companyId, db, true);
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true); const parent = await cycle(actor, companyId, id, tx, true);
+        if (parent.version !== input.expectedVersion || ["completed", "cancelled", "failed"].includes(parent.status)) throw conflict("Learning cycle changed or closed");
+        await learningRoots(tx, actor, parent);
+        const hypotheses = await tx.select().from(learningHypotheses).where(and(eq(learningHypotheses.companyId, companyId), eq(learningHypotheses.cycleId, id)));
+        const candidates = hypotheses.length ? await tx.select().from(learningDomainCandidates).where(and(eq(learningDomainCandidates.companyId, companyId), inArray(learningDomainCandidates.hypothesisId, hypotheses.map(row => row.id)))) : [];
+        const receipts = await Promise.all(candidates.map(candidate => learningPromotionReceipt(tx, candidate)));
+        if (input.decision === "cancel" && candidates.length) throw conflict("Cancellation is only available before domain proposal creation; use the native domain review for existing candidates");
+        if (input.decision === "complete" && (!hypotheses.length || hypotheses.some(row => !["proposal_created", "not_supported", "inconclusive"].includes(row.status)) || receipts.some(receipt => receipt === null))) throw conflict("Completion requires every proposal's current native promotion receipt and no unresolved hypothesis");
+        const [closed] = await tx.update(learningCycles).set({ status: input.decision === "complete" ? "completed" : "cancelled", version: parent.version + 1, updatedAt: new Date() }).where(eq(learningCycles.id, id)).returning();
+        await audit(tx, actor, companyId, id, `learning.cycle_${closed!.status}`, publications, { rationale: input.rationale, nativeReceipts: receipts }); return closed!;
+      });
+    },
     policies: async (actor: AuthorizationActor, companyId: string) => {
       await admit(actor, companyId, db, true);
       const rows = await db.select().from(policyChangeProposals).where(and(eq(policyChangeProposals.companyId, companyId), isNull(policyChangeProposals.erasedAt))).orderBy(desc(policyChangeProposals.createdAt)).limit(100);
@@ -127,12 +145,12 @@ export function learningService(db: Db) {
       const hypotheses = await db.select().from(learningHypotheses).where(and(eq(learningHypotheses.companyId, companyId), eq(learningHypotheses.cycleId, id), isNull(learningHypotheses.erasedAt))).orderBy(desc(learningHypotheses.createdAt)).limit(20);
       const evaluations = hypotheses.length ? await db.select().from(learningEvaluations).where(and(eq(learningEvaluations.companyId, companyId), inArray(learningEvaluations.hypothesisId, hypotheses.map((item) => item.id)), isNull(learningEvaluations.erasedAt))).limit(40) : [];
       const candidates = hypotheses.length ? await db.select().from(learningDomainCandidates).where(and(eq(learningDomainCandidates.companyId, companyId), inArray(learningDomainCandidates.hypothesisId, hypotheses.map((item) => item.id)))).limit(20) : [];
-      return { ...row, hypotheses, evaluations, candidates };
+      return { ...row, hypotheses, evaluations, candidates: await Promise.all(candidates.map(async candidate => ({ ...candidate, promotionReceipt: await learningPromotionReceipt(db, candidate) }))) };
     },
     create: async (actor: AuthorizationActor, companyId: string, raw: z.input<typeof learningCycleSchema>) => {
-      const input = learningCycleSchema.parse(raw); await admit(actor, companyId, db, true); await assertSaasDomainAdmission(db, companyId, "memory.use");
+      const input = learningCycleSchema.parse(raw); await admit(actor, companyId, db, "propose"); await assertSaasDomainAdmission(db, companyId, "memory.use");
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true);
+        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, "propose");
         const roots = await derivedRoots(tx, actor, companyId, input.scope, input.purpose, input.memoryRecordIds);
         const sources = await tx.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId, companyId), inArray(memoryEvidence.memoryRecordId, input.memoryRecordIds)));
         // Reviewed prose alone is not an external outcome. Resolve actual canonical Tasks now.
@@ -140,15 +158,15 @@ export function learningService(db: Db) {
           .flatMap((item) => { const match = /^issue:\/\/([a-f0-9-]{36})$/i.exec(item.sourceRef); return match ? [match[1]!] : []; }))];
         if (!taskIds.length || roots.some((root) => !["human_verified", "system_verified", "corroborated"].includes(root.verificationState) || !sources.some((item) => item.memoryRecordId === root.id && item.sourceClass === "task" && item.trustLevel === "high" && item.supportsOrContradicts === "supports" && ["august_works_tasks", "august_works_issue"].includes(item.sourceProvider) && taskIds.some((taskId) => item.sourceRef === `issue://${taskId}`)))) throw conflict("Learning roots require verified canonical outcome evidence");
         const tasks = await outcomes(tx, actor, { scopeType: input.scope.type, scopeId: input.scope.id, companyId } as Cycle, taskIds);
-        const [row] = await tx.insert(learningCycles).values({ companyId, scopeType: input.scope.type, scopeId: input.scope.id, purpose: input.purpose, trigger: input.trigger, maxHypotheses: input.maxHypotheses, maxEvaluations: input.maxEvaluations, outcomeVersions: Object.fromEntries(tasks.map((task) => [task.id, task.updatedAt.toISOString()])), createdBy: v7HumanActorId(actor) }).returning();
+        const [row] = await tx.insert(learningCycles).values({ companyId, scopeType: input.scope.type, scopeId: input.scope.id, purpose: input.purpose, trigger: input.trigger, maxHypotheses: input.maxHypotheses, maxEvaluations: input.maxEvaluations, outcomeVersions: Object.fromEntries(tasks.map((task) => [task.id, task.updatedAt.toISOString()])), createdBy: actor.type === "agent" ? `agent:${actor.agentId}` : v7HumanActorId(actor) }).returning();
         await tx.insert(learningEvidence).values(roots.map((root) => ({ companyId, cycleId: row!.id, memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString() })));
         await audit(tx, actor, companyId, row!.id, "learning.cycle_created", publications, { roots: roots.length, outcomes: taskIds.length }); return row!;
       });
     },
     addHypothesis: async (actor: AuthorizationActor, companyId: string, cycleId: string, raw: z.infer<typeof learningHypothesisSchema>) => {
-      const input = learningHypothesisSchema.parse(raw); await admit(actor, companyId, db, true);
+      const input = learningHypothesisSchema.parse(raw); await admit(actor, companyId, db, "propose");
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true); const parent = await cycle(actor, companyId, cycleId, tx, true);
+        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, "propose"); const parent = await cycle(actor, companyId, cycleId, tx, true);
         if (parent.version !== input.expectedCycleVersion || ["cancelled", "failed", "completed"].includes(parent.status)) throw conflict("Learning cycle changed or closed");
         await learningRoots(tx, actor, parent);
         await assertBaseline(tx, actor, parent, input);
@@ -188,7 +206,7 @@ export function learningService(db: Db) {
         await outcomes(tx, actor, parent, Object.keys(evaluation.outcomeVersions), evaluation.outcomeVersions);
         const roots = await learningRoots(tx, actor, parent), sourceSensitivity = EVIDENCE_SENSITIVITIES[Math.max(...roots.map((root) => EVIDENCE_SENSITIVITIES.indexOf(root.sensitivityLabel)))]!;
         const principal = actor.source === "local_implicit" ? { type: "system" as const, service: "local-board" } : { type: "user" as const, userId: v7HumanActorId(actor) };
-        let candidateId: string;
+        let candidateId: string, artifactVersionId: string | null = null;
         if (input.change.targetDomain === "foundation") {
           await assertV7Authorization(tx, actor, companyId, "foundation:propose");
           const [target] = await tx.select({ foundation: foundationDocuments, document: documents }).from(foundationDocuments).innerJoin(documents, and(eq(documents.companyId, companyId), eq(documents.id, foundationDocuments.documentId))).where(and(eq(foundationDocuments.companyId, companyId), eq(foundationDocuments.id, row.targetId))).for("update");
@@ -208,6 +226,16 @@ export function learningService(db: Db) {
         } else if (input.change.targetDomain === "project") {
           if (parent.scopeType === "project" && parent.scopeId !== row.targetId) throw forbidden("Learning project target is outside the evidence scope");
           candidateId = (await projectControlService(tx).propose(actor, companyId, row.targetId, input.change.proposal, publications)).id;
+        } else if (input.change.targetDomain === "automation_artifact") {
+          await assertV7Authorization(tx, actor, companyId, "workflows:edit");
+          if (EVIDENCE_SENSITIVITIES.indexOf(sourceSensitivity) > EVIDENCE_SENSITIVITIES.indexOf("internal")) throw forbidden("Automation candidates cannot carry classified Learning roots");
+          const bound = await assertOptimizerEvaluationBinding(tx, companyId, input.change.optimizerEvaluationId);
+          if (bound.evaluation.workflowId !== row.targetId || bound.evaluation.status !== "testing" || bound.evaluation.replayEvaluation?.status !== "passed"
+            || bound.version.id !== input.change.expectedArtifactVersionId || bound.version.contentHash !== input.change.expectedContentHash
+            || `optimizer://${row.targetId}/${bound.evaluation.workflowRevisionId}` !== row.evaluationContract.baselineRef) throw conflict("A current passed native Optimizer replay is required");
+          // Keep native shadow, approval, canary and activation separate from the Learning comparison.
+          await tx.update(workflowOptimizerEvaluations).set({ memoryRecordIds: [...new Set([...bound.evaluation.memoryRecordIds, ...roots.map(root => root.id)])], updatedAt: new Date() }).where(eq(workflowOptimizerEvaluations.id, bound.evaluation.id));
+          candidateId = bound.evaluation.id; artifactVersionId = bound.version.id;
         } else if (input.change.targetDomain === "workflow") {
           await assertV7Authorization(tx, actor, companyId, "workflows:edit");
           if (EVIDENCE_SENSITIVITIES.indexOf(sourceSensitivity) > EVIDENCE_SENSITIVITIES.indexOf("internal")) throw forbidden("Workflow drafts cannot carry classified Learning roots");
@@ -231,6 +259,7 @@ export function learningService(db: Db) {
           const [created] = await tx.insert(policyChangeProposals).values({ companyId, targetId: row.targetId, policyType: input.change.proposal.policyType, proposal: input.change.proposal, reason: input.change.reason }).returning(); candidateId = created!.id;
         }
         const [link] = await tx.insert(learningDomainCandidates).values({ companyId, hypothesisId: id, evaluationId: evaluation.id, targetDomain: row.targetDomain, targetId: row.targetId, candidateId, candidateHash: row.evaluationContract.challengerHash }).returning();
+        if (artifactVersionId) await tx.insert(learningRetainedAssets).values({ companyId, candidateLinkId: link!.id, assetType: "automation_artifact_version", assetId: artifactVersionId });
         if (["workflow", "role_pack"].includes(row.targetDomain)) await tx.insert(learningRetainedAssets).values({ companyId, candidateLinkId: link!.id, assetType: row.targetDomain === "workflow" ? "workflow_revision" : "role_pack_version", assetId: candidateId });
         await tx.update(learningHypotheses).set({ status: "proposal_created", version: row.version + 1, updatedAt: new Date() }).where(eq(learningHypotheses.id, id));
         await tx.update(learningCycles).set({ status: "proposing", version: parent.version + 1, updatedAt: new Date() }).where(eq(learningCycles.id, parent.id));

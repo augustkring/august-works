@@ -1,3 +1,4 @@
+import { assertLearningAssetCurrent } from "./learning/learning-assets.js";
 import type { Db } from "@paperclipai/db";
 import type { AgentExecutionManifest, RolePackItem } from "@paperclipai/shared";
 import { conflict } from "../errors.js";
@@ -9,6 +10,7 @@ export function playbookResolverService(db: Db) {
   async function validate(actor: AuthorizationActor, companyId: string, pin: AgentExecutionManifest["playbooks"][number]) {
     const row = await playbookService(db).get(actor, companyId, pin.playbookId);
     if (!["approved", "in_review"].includes(row.status) || row.approvedRevisionId !== pin.revisionId || row.overdue) throw conflict("Pinned Playbook is stale, unapproved, or overdue");
+    await assertLearningAssetCurrent(db, companyId, "document_revision", pin.revisionId);
     return row;
   }
   return {

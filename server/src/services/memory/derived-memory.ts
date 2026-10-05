@@ -27,7 +27,7 @@ async function assertScope(db: Db, actor: AuthorizationActor, companyId: string,
   if (scope.type === "agent") throw forbidden("Private Memory cannot be broadened through shared derived intelligence");
   if (scope.type === "project") await assertV7Authorization(db, actor, companyId, "project:read", { type: "project", companyId, projectId: scope.id });
 }
-async function assertWorker(tx: Db, actor: AuthorizationActor, companyId: string) {
+export async function assertDerivedWorker(tx: Db, actor: AuthorizationActor, companyId: string) {
   if (actor.type !== "agent") return;
   if (!actor.runId || !actor.agentId) throw forbidden("A live worker attempt is required for derived candidates");
   await assertAgentRunWriteAllowed(tx, companyId, actor);
@@ -106,7 +106,7 @@ export function derivedMemoryService(db: Db) {
     createObservation: async (actor: AuthorizationActor, companyId: string, raw: z.input<typeof createObservationSchema>) => {
       const input = createObservationSchema.parse(raw); await assertV7Enabled(db, "memory_observations_v7"); await assertScope(db, actor, companyId, input.scope); await assertSaasDomainAdmission(db, companyId, "memory.use");
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await assertWorker(tx, actor, companyId);
+        await lockMemoryPrivacy(tx, companyId); await assertDerivedWorker(tx, actor, companyId);
         const roots = await derivedRoots(tx, actor, companyId, input.scope, input.purpose, input.evidence.map((edge) => edge.memoryRecordId));
         if (roots.some((root) => !memorySensitivityAllowed(root, input.sensitivity))) throw forbidden("Observation cannot reduce root sensitivity");
         const supporting = roots.filter((root) => input.evidence.some((edge) => edge.memoryRecordId === root.id && edge.relation === "supports"));
@@ -151,7 +151,7 @@ export function derivedMemoryService(db: Db) {
     createModel: async (actor: AuthorizationActor, companyId: string, raw: z.infer<typeof createMemoryModelSchema>) => {
       const input = createMemoryModelSchema.parse(raw); await assertV7Enabled(db, "memory_models_v7"); await assertScope(db, actor, companyId, input.scope); await assertSaasDomainAdmission(db, companyId, "memory.use");
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await assertWorker(tx, actor, companyId); const sources = await modelSources(tx, actor, companyId, input);
+        await lockMemoryPrivacy(tx, companyId); await assertDerivedWorker(tx, actor, companyId); const sources = await modelSources(tx, actor, companyId, input);
         const [row] = await tx.insert(memoryModels).values({ companyId, modelKey: input.modelKey, name: input.name, scopeType: input.scope.type, scopeId: input.scope.id, purpose: input.purpose, sourceQuery: input.sourceQuery,
           content: sources.content, confidence: Math.min(...sources.roots.map((root) => root.confidenceScore)), sensitivity: sensitivity(sources.roots), sourceWatermark: sources.sourceWatermark, lastRebuiltAt: new Date() }).onConflictDoNothing().returning();
         if (!row) throw conflict("A model with this key already exists"); await writeModelVersion(tx, row, sources);

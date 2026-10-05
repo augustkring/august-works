@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, policyChangeProposals, workflows, workflowRevisions, workflowRuns, rolePacks, rolePackVersions, rolePackItems,
+import { learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, policyChangeProposals, workflowOptimizerEvaluations, automationArtifacts, workflows, workflowRevisions, workflowRuns, rolePacks, rolePackVersions, rolePackItems,
   foundationChangeProposals, playbookChangeProposals, projectRoadmapProposals, companySkills, companySkillVersions, documentRevisions, documents, foundationSections, foundationDocuments, playbookDocuments, type Db } from "@paperclipai/db";
 
 /** Runs under the caller's company privacy lock, independently of rollout flags. */
@@ -30,6 +30,10 @@ export async function invalidateLearningMemory(tx: Db, companyId: string, record
   }
   if (!links.length) return;
   const assets = await tx.select().from(learningRetainedAssets).where(and(eq(learningRetainedAssets.companyId, companyId), inArray(learningRetainedAssets.candidateLinkId, links.map((link) => link.id))));
+  if (ids("automation_artifact").length) {
+    const candidates = await tx.update(workflowOptimizerEvaluations).set({ status: "retired", ...(erase ? { compilerResult: null, invariants: [] } : {}), updatedAt: now }).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), inArray(workflowOptimizerEvaluations.id, ids("automation_artifact")))).returning();
+    if (candidates.length) await tx.update(automationArtifacts).set({ status: "deprecated", archivedAt: now, updatedAt: now }).where(and(eq(automationArtifacts.companyId, companyId), inArray(automationArtifacts.id, candidates.map(candidate => candidate.artifactId))));
+  }
   const workflowRevisionIds = assets.filter(asset => asset.assetType === "workflow_revision").map(asset => asset.assetId);
   if (workflowRevisionIds.length) {
     const revisions = await tx.select().from(workflowRevisions).where(and(eq(workflowRevisions.companyId, companyId), inArray(workflowRevisions.id, workflowRevisionIds)));

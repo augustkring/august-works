@@ -1,7 +1,8 @@
-import type { LearningCycleView, LearningHypothesisView, LearningEvaluationView, LearningPolicyProposalView, LearningCycleInput, LearningHypothesisInput, LearningEvaluationInput, LearningChangeInput, LearningChange, ProposeLearningChange } from "@paperclipai/shared";
+import type { FinishLearningCycleInput, LearningCycleView, LearningHypothesisView, LearningEvaluationView, LearningPolicyProposalView, LearningCycleInput, LearningHypothesisInput, LearningEvaluationInput, LearningChangeInput, LearningChange, ProposeLearningChange } from "@paperclipai/shared";
 import { api } from "./client";
-type Candidate = { id: string; hypothesisId: string; targetDomain: string; targetId: string; candidateId: string; invalidatedAt: string | null; erasedAt: string | null };
+type Candidate = { id: string; hypothesisId: string; targetDomain: string; targetId: string; candidateId: string; invalidatedAt: string | null; erasedAt: string | null; promotionReceipt?: { domain: string; targetId: string; versionId: string } | null };
 export const learningApi = {
+  finish: (companyId: string, id: string, input: FinishLearningCycleInput) => api.post<LearningCycleView>(`/companies/${companyId}/learning/cycles/${id}/finish`, input),
   list: (companyId: string) => api.get<LearningCycleView[]>(`/companies/${companyId}/learning/cycles`),
   policies: (companyId: string) => api.get<LearningPolicyProposalView[]>(`/companies/${companyId}/learning/policy-proposals`),
   reviewPolicy: (companyId: string, id: string, input: { expectedVersion: number; decision: "accept" | "reject"; rationale: string; acknowledgeApprovalOrSecurityChange: boolean }) => api.post<LearningPolicyProposalView>(`/companies/${companyId}/learning/policy-proposals/${id}/review`, input),
