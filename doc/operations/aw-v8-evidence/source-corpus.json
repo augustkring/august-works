@@ -335,7 +335,12 @@
       "lines": 3400,
       "words": 14694,
       "path": "/workspace/attachments/8ea86663-0035-40e1-b902-8c451f4c618f/brand_strategy_positioning_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3400
+      },
+      "applicability": "Separate market memory, associations, identity, perceived difference and commercial outcomes. Claims require product reality and scoped proof; prestige, brand tracking and vendor correlations do not establish causal effect. Preserve stable constructs, method changes, uncertainty and external-validity boundaries. Version positioning and evidence through native owners; no new brand authority, invented research, universal allocation rule or gratuitous rebrand."
     },
     {
       "name": "digital_graphics_illustration_generative_visual_production_master_playbook_v2.1_golden_master.md",
