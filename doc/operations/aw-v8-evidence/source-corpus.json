@@ -90,7 +90,12 @@
       "lines": 3630,
       "words": 15442,
       "path": "/workspace/attachments/5a9ee8d9-c7df-4295-b3ed-4806e61a70a9/07_privacy_data_protection_engineering_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3630
+      },
+      "applicability": "Purpose-bound derived surfaces, minimized typed attributes, authorization before aggregation/export, correction/deletion and restore-safe suppression; implementation evidence remains pending."
     },
     {
       "name": "09_performance_scalability_resource_cost_engineering_v2.md",
@@ -279,7 +284,12 @@
       "lines": 6411,
       "words": 26787,
       "path": "/workspace/attachments/196bd270-5009-4db5-ba64-642b7c7c7916/master_playbook_standard_v2.0.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 6411
+      },
+      "applicability": "Risk-proportionate controls; requirements-to-tests traceability; separate evidence certainty, recommendation, implementation and real outcomes; no invented independent assurance or permission from reference documents."
     },
     {
       "name": "meta_ads_master_playbook_v2.md",
