@@ -158,7 +158,7 @@ export function agentRuntimeFabricService(db: Db) {
           if (items.length) await tx.insert(agentExecutionManifestItems).values(items.map((i) => ({ ...i, companyId: input.companyId, manifestId: row!.id })));
           await logActivity(tx, { companyId: input.companyId, actorType: "system", actorId: "runtime-fabric", action: "runtime.manifest_created", entityType: "heartbeat_run", entityId: input.runId, details: { manifestId: row!.id, hash: row!.hash } }, publications);
         }
-        await admitOrchestrationHeartbeat(tx, { ...input, executionManifestId: row!.id }, publications);
+        await admitOrchestrationHeartbeat(tx, { ...input, executionManifestId: row!.id }, publications, db);
         await tx.insert(agentExecutionAuthorizations).values({ companyId: input.companyId, manifestId: row!.id, contextManifestRefs: context.refs, authorityHash: policyHash });
         for (const pin of manifest.skills) await tx.insert(companySkillUsageEvents).values({ companyId: input.companyId, runId: input.runId, agentId: input.agentId, skillId: pin.skillId, skillVersionId: pin.versionId, selectionReason: pin.selection, stage: "selected" }).onConflictDoNothing();
         await tx.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ v5ExecutionManifestId: row!.id })}::jsonb` }).where(eq(heartbeatRuns.id, input.runId));

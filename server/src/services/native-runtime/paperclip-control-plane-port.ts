@@ -37,6 +37,8 @@ export interface PaperclipControlPlaneBinding {
   completionContractSha256: string;
   sourceInstanceId: string;
   controlPlaneSourceInstanceId: string;
+  /** A separate, server-selected event stream for the internal draft driver. */
+  internalDraftSourceInstanceId?: string;
 }
 
 function isPrpEvent(value: NativeRunEvent | PrpEvent): value is PrpEvent {
@@ -190,7 +192,9 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
     const expectedSourceInstanceId = event.sourceKind === "control_plane"
       ? this.#binding.controlPlaneSourceInstanceId
       : this.#binding.sourceInstanceId;
-    if (event.sourceInstanceId !== expectedSourceInstanceId) {
+    if (event.sourceInstanceId !== expectedSourceInstanceId &&
+        !(event.sourceKind === "control_plane" && this.#binding.internalDraftSourceInstanceId &&
+          event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId)) {
       throw new Error("native_event_source_binding_mismatch");
     }
     const persisted = await appendHeartbeatRunEvent(this.#db, {
@@ -236,7 +240,7 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
   async replayEvents(input: ReplayControlPlaneEventsInput) {
     if (
       input.runId !== this.#binding.runId
-      || ![this.#binding.sourceInstanceId, this.#binding.controlPlaneSourceInstanceId].includes(input.sourceInstanceId)
+      || ![this.#binding.sourceInstanceId, this.#binding.controlPlaneSourceInstanceId, this.#binding.internalDraftSourceInstanceId].includes(input.sourceInstanceId)
     ) {
       throw new Error("native_replay_binding_mismatch");
     }

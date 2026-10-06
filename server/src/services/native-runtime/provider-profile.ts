@@ -24,6 +24,13 @@ export type QualifiedPaperclipRunnerAcpxAgent =
 
 export type PaperclipRunnerProviderProfile =
   | {
+      provider: "aw_text_only";
+      backend: "aw_text_messages";
+      model: string;
+      workerModelProfileId: string;
+      maxOutputTokens: number;
+    }
+  | {
       provider: "codex";
       backend: "codex_app_server";
       model: string | null;
@@ -55,6 +62,12 @@ export type PaperclipRunnerProviderProfile =
     };
 
 export type PaperclipRunnerNativeProviderInput =
+  | {
+      provider: "aw_text_only";
+      model: string;
+      workerModelProfileId: string;
+      maxOutputTokens: number;
+    }
   | {
       provider: "codex";
       model: string | null;
@@ -109,7 +122,11 @@ export type PaperclipRunnerNativeProviderInput =
       provider: "acpx";
       model: string;
       acpxAgent: QualifiedPaperclipRunnerAcpxAgent;
-      acpxPermissionMode: "approve-all" | "approve-paperclip" | "approve-reads" | "deny-all";
+      acpxPermissionMode:
+        | "approve-all"
+        | "approve-paperclip"
+        | "approve-reads"
+        | "deny-all";
     };
 
 export class PaperclipRunnerProviderProfileError extends Error {
@@ -124,7 +141,7 @@ export class PaperclipRunnerProviderProfileError extends Error {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {};
 }
 
@@ -156,10 +173,10 @@ function boundedPositiveInteger(
 ): number {
   if (value === undefined || value === null || value === "") return fallback;
   if (
-    typeof value !== "number"
-    || !Number.isSafeInteger(value)
-    || value <= 0
-    || value > maximum
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value <= 0 ||
+    value > maximum
   ) {
     throw new PaperclipRunnerProviderProfileError(
       code,
@@ -177,8 +194,8 @@ function assertPermissionMode(
   if (!capability.configurable) return;
   const configured = config[capability.configKey];
   if (
-    configured !== undefined
-    && resolvePaperclipRunnerPermissionMode(provider, configured) !== configured
+    configured !== undefined &&
+    resolvePaperclipRunnerPermissionMode(provider, configured) !== configured
   ) {
     if (provider === "codex") {
       throw new PaperclipRunnerProviderProfileError(
@@ -219,18 +236,20 @@ export function assertManagedProfileRecoveryBinding(input: {
 }): void {
   const { snapshot, stored } = input;
   if (
-    snapshot.profileId !== stored.id
-    || snapshot.anthropicAgentId !== stored.anthropicAgentId
-    || snapshot.agentVersion !== stored.agentVersion
-    || snapshot.environmentId !== stored.environmentId
-    || snapshot.betaVersion !== stored.betaVersion
+    snapshot.profileId !== stored.id ||
+    snapshot.anthropicAgentId !== stored.anthropicAgentId ||
+    snapshot.agentVersion !== stored.agentVersion ||
+    snapshot.environmentId !== stored.environmentId ||
+    snapshot.betaVersion !== stored.betaVersion
   ) {
     throw new PaperclipRunnerProviderProfileError(
       "paperclip_runner_claude_managed_recovery_identity_mismatch",
       "The persisted Claude Managed identity no longer matches its qualified profile.",
     );
   }
-  const rawBinding = asRecord(asRecord(input.adapterConfig).env).ANTHROPIC_API_KEY;
+  const rawBinding = asRecord(
+    asRecord(input.adapterConfig).env,
+  ).ANTHROPIC_API_KEY;
   const boundSecretId = asRecord(rawBinding).secretId;
   if (boundSecretId !== stored.apiKeySecretId) {
     throw new PaperclipRunnerProviderProfileError(
@@ -285,8 +304,8 @@ export function assertAgentCoreProfileRecoveryBinding(input: {
     "eventExpiryDays",
   ] as const;
   if (
-    snapshot.profileId !== stored.id
-    || fields.some((field) => snapshot[field] !== configuration[field])
+    snapshot.profileId !== stored.id ||
+    fields.some((field) => snapshot[field] !== configuration[field])
   ) {
     throw new PaperclipRunnerProviderProfileError(
       "paperclip_runner_aws_agentcore_recovery_identity_mismatch",
@@ -309,12 +328,45 @@ export function resolvePaperclipRunnerProviderProfile(
   if (!isPaperclipRunnerProvider(candidate)) {
     throw new PaperclipRunnerProviderProfileError(
       "paperclip_runner_provider_unsupported",
-      "Paperclip Runner provider must be Codex, OpenCode, Claude Managed, AWS AgentCore, or ACPX.",
+      "Paperclip Runner must select a supported configured provider.",
     );
   }
 
   assertPermissionMode(candidate, config);
   const model = optionalString(config.model);
+  if (candidate === "aw_text_only") {
+    const workerModelProfileId = optionalString(config.workerModelProfileId);
+    if (
+      !workerModelProfileId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        workerModelProfileId,
+      ) ||
+      !model ||
+      !/^[a-zA-Z0-9_.:-]{1,200}$/.test(model) ||
+      (config.lifecycleMode !== undefined &&
+        config.lifecycleMode !== "per_turn") ||
+      Object.keys(asRecord(config.env)).length > 0 ||
+      config.aiConnection ||
+      config.managedAiConnection
+    )
+      throw new PaperclipRunnerProviderProfileError(
+        "aw_text_draft_profile_required",
+        "An internal draft requires its exact private worker profile, model and per-turn lifecycle.",
+      );
+    return {
+      provider: "aw_text_only",
+      backend: "aw_text_messages",
+      model,
+      workerModelProfileId,
+      maxOutputTokens: boundedPositiveInteger(
+        config.maxOutputTokens,
+        1024,
+        8192,
+        "aw_text_draft_output_limit_invalid",
+        "Draft output tokens",
+      ),
+    };
+  }
   if (candidate === "codex") {
     return {
       provider: "codex",
@@ -458,6 +510,13 @@ export function resolvePaperclipRunnerNativeProviderInput(input: {
       "Paperclip Runner provider changed after this run selected its native backend.",
     );
   }
+  if (profile.provider === "aw_text_only")
+    return {
+      provider: "aw_text_only",
+      model: profile.model,
+      workerModelProfileId: profile.workerModelProfileId,
+      maxOutputTokens: profile.maxOutputTokens,
+    };
   if (profile.provider === "opencode") {
     return {
       provider: "opencode",
@@ -482,11 +541,9 @@ export function resolvePaperclipRunnerNativeProviderInput(input: {
   if (profile.provider === "claude_managed") {
     const stored = input.managedProfile;
     if (
-      !stored
-      || (
-        profile.managedProfileId !== stored.id
-        && profile.managedProfileId !== stored.profileKey
-      )
+      !stored ||
+      (profile.managedProfileId !== stored.id &&
+        profile.managedProfileId !== stored.profileKey)
     ) {
       throw new PaperclipRunnerProviderProfileError(
         "paperclip_runner_claude_managed_profile_mismatch",
@@ -500,8 +557,8 @@ export function resolvePaperclipRunnerNativeProviderInput(input: {
       );
     }
     const model = profile.model ?? optionalString(stored.defaultModel);
-    const maxSessionListCostUsd = profile.maxSessionListCostUsd
-      ?? stored.defaultMaxListCostCents / 100;
+    const maxSessionListCostUsd =
+      profile.maxSessionListCostUsd ?? stored.defaultMaxListCostCents / 100;
     if (!model) {
       throw new PaperclipRunnerProviderProfileError(
         "paperclip_runner_claude_managed_model_invalid",
@@ -536,11 +593,9 @@ export function resolvePaperclipRunnerNativeProviderInput(input: {
   if (profile.provider === "aws_agentcore") {
     const stored = input.agentCoreProfile;
     if (
-      !stored
-      || (
-        profile.agentCoreProfileId !== stored.id
-        && profile.agentCoreProfileId !== stored.profileKey
-      )
+      !stored ||
+      (profile.agentCoreProfileId !== stored.id &&
+        profile.agentCoreProfileId !== stored.profileKey)
     ) {
       throw new PaperclipRunnerProviderProfileError(
         "paperclip_runner_aws_agentcore_profile_mismatch",
@@ -564,8 +619,9 @@ export function resolvePaperclipRunnerNativeProviderInput(input: {
         "The qualified AWS AgentCore profile must retain Memory events for exactly 90 days.",
       );
     }
-    const maxEstimatedSessionCostUsd = profile.maxEstimatedSessionCostUsd
-      ?? positiveNumberOrNull(
+    const maxEstimatedSessionCostUsd =
+      profile.maxEstimatedSessionCostUsd ??
+      positiveNumberOrNull(
         remote.defaultMaxEstimatedSessionCostUsd,
         "paperclip_runner_aws_agentcore_spend_cap_invalid",
         "The AWS AgentCore profile requires a positive estimated session spend ceiling.",

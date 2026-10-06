@@ -48,6 +48,7 @@ import { createS3StorageProvider } from "../../storage/s3-provider.js";
 import { runtimeControlService } from "../runtime/control.js";
 import { nativeSandboxHostTransport } from "../execution-sandbox/native-host-bridge.js";
 import { workerModelGateway } from "../orchestration/worker-model-gateway.js";
+import { registerNativeDraftGateway } from "../orchestration/native-draft-runtime.js";
 
 export function saasPlatform(
   db: Db,
@@ -111,6 +112,7 @@ export function saasPlatform(
     profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
     protectedEvidenceOrigin: origins.primaryAppOrigin,
   }) : undefined;
+  registerNativeDraftGateway(db, workerModels);
   const backupRetention = config.backups
     ? runtimeBackupRetention(db, runtimeBackupRetentionObjects(config))
     : undefined;

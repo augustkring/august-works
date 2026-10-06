@@ -41,7 +41,8 @@ import {
 } from "../memory/memory-privacy.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
-import { modelReservationService } from "./model-reservations.js";
+import { modelReservationService, quoteModelReservation } from "./model-reservations.js";
+import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
 import {
   anthropicReadOnlyCall,
   readOnlyModelEnvelopeBytes,
@@ -535,6 +536,44 @@ export function workerModelGateway(db: Db, options: Options) {
     });
   }
   return {
+    /** Private pre-start qualification. Editable provider configuration is a
+     * selector; only the installed operator profile supplies prices/authority. */
+    async qualifyDraft(tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) {
+      await assertV7Enabled(tx, "orchestration_v7");
+      const p = profile(input.companyId, input.agentId);
+      await assertV7Authorization(tx, { type: "board", source: "session", userId: input.responsibleUserId }, input.companyId, "company_scope:read");
+      const [presence] = await tx.select({ agent: agents, identity: agentIdentities, company: companies }).from(agents)
+        .innerJoin(agentIdentities, eq(agentIdentities.id, agents.agentIdentityId))
+        .innerJoin(companies, eq(companies.id, agents.companyId))
+        .where(and(eq(agents.companyId, input.companyId), eq(agents.id, input.agentId)));
+      if (!presence || presence.company.status !== "active" || presence.identity.status !== "active" ||
+          !["idle", "running"].includes(presence.agent.status) || presence.agent.adapterType !== "paperclip_runner" ||
+          presence.agent.runtimeConfig?.aiConnection)
+        throw forbidden("Internal drafts require their current native presence");
+      const selected = resolvePaperclipRunnerProviderProfile(presence.agent.adapterConfig);
+      if (selected.provider !== "aw_text_only" || selected.workerModelProfileId !== p.id ||
+          selected.model !== p.tariff.model || selected.maxOutputTokens > p.maxOutputTokens)
+        throw forbidden("The draft presence does not select its exact qualified transport");
+      const provider = await agentProviderBindingService(tx).assertRuntime(input.companyId, input.agentId);
+      if (provider.provider.id !== p.providerBindingId || provider.provider.capabilitySnapshotHash !== p.providerSnapshotHash ||
+          provider.runtime.conformanceSnapshotHash !== p.providerSnapshotHash ||
+          provider.runtime.qualifiedConfigurationHash !== p.qualifiedConfigurationHash ||
+          provider.runtime.providerProfileRef !== p.providerProfileRef || provider.runtime.providerProfileRef.startsWith("aw:cell:"))
+        throw forbidden("Draft provider qualification changed or requires physical workload admission");
+      const selection = await aiConnectionService(tx).select({ ...input, userId: input.responsibleUserId,
+        adapterType: "claude_local", binding: p.binding, model: p.tariff.model });
+      const secretRef = selection.grant.credentialSecretRefs.find(ref => ref.configPath === "ai.credential");
+      const [credentialVersion] = secretRef ? await tx.select({ secret: companySecrets, version: companySecretVersions }).from(companySecrets)
+        .innerJoin(companySecretVersions, and(eq(companySecretVersions.secretId, companySecrets.id), eq(companySecretVersions.version, companySecrets.latestVersion)))
+        .where(and(eq(companySecrets.companyId, input.companyId), eq(companySecrets.id, secretRef.secretId))) : [];
+      if (selection.attribution.method !== "api_key" || !credentialVersion || credentialVersion.secret.status !== "active" ||
+          credentialVersion.version.revokedAt || ["disabled", "destroyed"].includes(credentialVersion.version.status))
+        throw forbidden("Draft credential grant is no longer current");
+      const quote = quoteModelReservation({ tariff: p.tariff, sourceSha: options.sourceSha,
+        inputTokensUpperBound: p.inputTokensUpperBound, maxOutputTokens: selected.maxOutputTokens });
+      return { profileId: p.id, model: selected.model, maxOutputTokens: selected.maxOutputTokens,
+        maximumEnvelopeBytes: p.maximumEnvelopeBytes, maximumMinor: quote.maximumMinor };
+    },
     /** Private controller failure path. Safety fencing does not require the
      * original human still to have access or the capability still to be live. */
     async abandon(claims: RuntimeToolsTokenClaims) {

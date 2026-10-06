@@ -3236,6 +3236,12 @@ export function agentRoutes(
     if (type === "paperclip_runner" && provider && !isPaperclipRunnerProvider(provider)) {
       throw unprocessable("Unknown Paperclip Runner provider");
     }
+    if (type === "paperclip_runner" && provider === "aw_text_only") {
+      // The model is pinned by the presence's private qualification, not the
+      // unrelated CLI catalogue. This route has no presence/profile selector.
+      res.json([]);
+      return;
+    }
     const modelAdapterType = type === "paperclip_runner"
       ? provider === "acpx" || provider === "claude_managed" ? "claude_local"
         : provider === "opencode" ? "opencode_local"

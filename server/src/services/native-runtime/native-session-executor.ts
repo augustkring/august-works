@@ -1479,6 +1479,8 @@ function nativeSessionWorkspaceScope(execution: NativeExecutionInput) {
 
 function nativeProviderSessionScope(execution: NativeExecutionInput) {
   switch (execution.provider.kind) {
+    case "aw_text_only":
+      return { kind: "aw_text_only", profileId: execution.provider.profileId };
     case "claude_managed":
       return {
         kind: execution.provider.kind,
@@ -5290,6 +5292,8 @@ function canonicalJson(value: unknown): string {
 
 function runnerProviderStateFilename(execution: NativeExecutionInput): string {
   switch (execution.provider.kind) {
+    case "aw_text_only":
+      throw new Error("aw_text_draft_has_no_runnerd_provider_state");
     case "codex":
     case "opencode":
       return "codex-provider-state.json";
@@ -5322,6 +5326,8 @@ export function providerSessionIdentityFromDurableProviderState(input: {
     providerSessionIdentity: null,
   });
   switch (input.execution.provider.kind) {
+    case "aw_text_only":
+      return emptyIdentity();
     case "acpx": {
       const descriptor = record(state.descriptor);
       const identity = record(state.identity);
@@ -7278,9 +7284,12 @@ async function executePaperclipNativeSessionWithinScope(
     input.execution.provider.kind !== "claude_managed" &&
     input.execution.provider.kind !== "aws_agentcore" &&
     input.execution.provider.kind !== "acpx"
+    && input.execution.provider.kind !== "aw_text_only"
   ) {
     throw new Error("paperclip_runner_provider_unsupported");
   }
+  if (input.execution.provider.kind === "aw_text_only" && (!input.backend || input.useRunnerd))
+    throw new Error("aw_text_draft_requires_private_controller_backend");
   if (
     input.execution.provider.kind === "acpx" &&
     input.execution.provider.agent === "pi"
@@ -7686,6 +7695,9 @@ async function executePaperclipNativeSessionWithinScope(
       completionContractSha256: input.execution.completionContract.sha256,
       sourceInstanceId: effectiveRunnerInstanceId,
       controlPlaneSourceInstanceId: controlPlaneInstanceId,
+      ...(input.execution.provider.kind === "aw_text_only"
+        ? { internalDraftSourceInstanceId: `aw-draft:${input.execution.binding.runId}` }
+        : {}),
     },
     {
       onCommittedEvent: async (event) => {
@@ -9013,7 +9025,7 @@ async function executePaperclipNativeSessionWithinScope(
     summary: native.result.summary,
     sessionId: native.normalizedSessionId,
     sessionDisplayId: native.providerSessionId ?? native.normalizedSessionId,
-    provider: "openai",
+    provider: input.execution.provider.kind === "aw_text_only" ? "anthropic" : "openai",
     model: input.execution.provider.model,
     usage: normalizeNativeUsage(native.usage),
     costUsd: nativeUsageCostUsd(native.usage),

@@ -12,6 +12,7 @@ import { writeOrchestrationContract } from "./orchestration-contracts.js";
 import { assertWorkflowOutputSchema } from "../workflows/workflow-output-schema.js";
 import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { reconcileOrchestrationAttempts } from "./orchestration-admission.js";
+import { qualifyNativeDraftPlan } from "./native-draft-runtime.js";
 
 type Plan = typeof orchestrationPlans.$inferSelect;
 export function orchestrationService(db: Db) {
@@ -109,7 +110,10 @@ export function orchestrationService(db: Db) {
         if (input.action === "start") {
           if (row.executionPrincipal && ((row.executionPrincipal.type === "user" && row.executionPrincipal.userId !== v7HumanActorId(actor)) || (row.executionPrincipal.type === "system" && actor.source !== "local_implicit"))) throw forbidden("Resume must preserve the plan's initiating human authority; cancel and review a new plan to transfer it");
           if (!["draft", "ready", "paused"].includes(row.status)) throw conflict("Plan is already started");
-          if (row.budgets.maxModelCostMinor !== null) throw conflict("A plan cost cap requires a qualified pre-spend reservation broker; execution remains closed until that boundary exists");
+          if (row.budgets.maxModelCostMinor !== null) {
+            if (actor.source === "local_implicit") throw conflict("A model-cost cap requires its initiating authenticated human");
+            await qualifyNativeDraftPlan(db, tx, row, v7HumanActorId(actor));
+          }
           await reconcileOrchestrationAttempts(tx, row);
           const running = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.planId, id), eq(orchestrationWorkerAttempts.status, "running")));
           const [unsettledStop] = await tx.select({ id: supervisionInterventions.id }).from(supervisionInterventions).where(and(eq(supervisionInterventions.companyId, companyId), eq(supervisionInterventions.planId, id), sql`${supervisionInterventions.status} in ('pending','running','failed') and ${supervisionInterventions.decisionAction} in ('PAUSE','STOP','ESCALATE_HUMAN')`)).limit(1);

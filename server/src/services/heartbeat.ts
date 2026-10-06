@@ -172,7 +172,7 @@ import {
   toolProfiles,
   workspaceOperations,
 } from "@paperclipai/db";
-import { conflict, HttpError, notFound } from "../errors.js";
+import { conflict, forbidden, HttpError, notFound } from "../errors.js";
 import {
   getStartupTraceContext,
   getStartupTracer,
@@ -205,6 +205,7 @@ import {
 } from "./issue-queued-comment-queue.js";
 import { documentService } from "./documents.js";
 import { getTaskPlanContext } from "./task-plan-context.js";
+import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
 import {
@@ -21289,7 +21290,10 @@ export function heartbeatService(
         ["local", "ssh"].includes(
           selectedEnvironmentForConfig?.driver ?? "local",
         );
-      const aiBinding = agent.runtimeConfig?.aiConnection ? aiConnectionBindingSchema.parse(agent.runtimeConfig.aiConnection) : undefined;
+      const internalTextDraft = agent.adapterType === "paperclip_runner" && parseObject(agent.adapterConfig).provider === "aw_text_only";
+      if (internalTextDraft && agent.runtimeConfig?.aiConnection)
+        throw forbidden("Internal drafts use the installed private controller grant, not a CLI AI binding");
+      const aiBinding = !internalTextDraft && agent.runtimeConfig?.aiConnection ? aiConnectionBindingSchema.parse(agent.runtimeConfig.aiConnection) : undefined;
       const { resolvedConfig, secretKeys, secretManifest } =
         await resolveExecutionRunAdapterConfig({
           managedAiCredentials: Boolean(aiBinding),
@@ -23281,7 +23285,7 @@ export function heartbeatService(
             isNativeSessionId(taskNativeSessionId)
               ? taskSessionForRun.lastRunId
               : null;
-          const resumableTaskSessionId = taskResumeRunId
+          const resumableTaskSessionId = nativeRuntimeResolution.profile.backend === "aw_text_messages" ? null : taskResumeRunId
             ? taskNativeSessionId
             : (legacyRetrySessionId ?? null);
           const requestedNativeSessionId =
@@ -23291,7 +23295,7 @@ export function heartbeatService(
           // Rows that already acquired provider authority are progress barriers,
           // even when they do not contain a usable checkpoint.
           const previousNativeRun =
-            requestedNativeSessionId &&
+            nativeRuntimeResolution.profile.backend !== "aw_text_messages" && requestedNativeSessionId &&
             isUnusedNativeSessionBootstrap(
               run,
               nativeBootstrapHasProviderEvidence,
@@ -24200,6 +24204,7 @@ export function heartbeatService(
                 nativeDispatchAtMs,
               }),
             );
+            const nativeBackend = await selectNativeHeartbeatBackend(db, nativeExecution, options.nativeSessionBackendFactory);
             const guardedDispatch =
               await dispatchResolvedInteractionContinuationWithAtomicGate(
                 (markDispatchStarted) =>
@@ -24211,9 +24216,8 @@ export function heartbeatService(
                     runnerInstanceId: nativeRunnerInstanceId,
                     leaseOwner: runOptions.nativeLeaseOwner,
                     restartRecovery: runOptions.nativeRestartRecovery,
-                    backend:
-                      options.nativeSessionBackendFactory?.(nativeExecution),
-                    useRunnerd: agent.adapterType === "paperclip_runner",
+                    backend: nativeBackend,
+                    useRunnerd: agent.adapterType === "paperclip_runner" && nativeExecution.provider.kind !== "aw_text_only",
                     adapterType: agent.adapterType,
                     sessionGoalControl,
                     resumeSessionGoalHeartbeat:
@@ -24251,7 +24255,7 @@ export function heartbeatService(
                     // Bootstrap with executable/home discovery while keeping
                     // configured provider values and the server-selected
                     // workspace boundary authoritative.
-                    managedGitHub: !useHostGitHub && githubSelection.configured,
+                    managedGitHub: nativeExecution.provider.kind !== "aw_text_only" && !useHostGitHub && githubSelection.configured,
                     managedAiCredentialIdentity: managedAiRuntime?.identity,
                     managedAiCredentialHome: managedAiRuntime ? String((managedAiRuntime.config.env as Record<string, unknown>).CODEX_HOME) : undefined,
                     runnerEnvironment: {

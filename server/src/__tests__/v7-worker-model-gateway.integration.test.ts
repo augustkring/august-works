@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import request from "supertest";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -63,6 +64,9 @@ import { createAssignedMcpTools } from "../services/native-runtime/assigned-mcp-
 import type { ToolGatewayService } from "../services/tool-gateway.js";
 import { withOrchestrationNativeTool } from "../services/orchestration/native-tool-boundary.js";
 import { createAwTextDraftBackend } from "../services/native-runtime/aw-text-draft-backend.js";
+import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
+import { heartbeatService } from "../services/heartbeat.js";
+import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import {
   validatePrpEvent,
   validatePrpStructuredRunResult,
@@ -75,6 +79,14 @@ import {
 const sourceSha = "a".repeat(40),
   credential = "fixture-private-worker-secret-12345";
 const support = await getEmbeddedPostgresTestSupport();
+async function makeFixtureTreeWritable(target: string): Promise<void> {
+  const metadata = await lstat(target).catch(() => null);
+  if (!metadata || metadata.isSymbolicLink()) return;
+  await chmod(target, metadata.isDirectory() ? 0o700 : 0o600);
+  if (metadata.isDirectory())
+    for (const name of await readdir(target))
+      await makeFixtureTreeWritable(join(target, name));
+}
 (support.supported ? describe : describe.skip)(
   "Native bounded worker model gateway",
   () => {
@@ -109,7 +121,10 @@ const support = await getEmbeddedPostgresTestSupport();
     afterAll(async () => {
       await database?.cleanup();
       vi.unstubAllEnvs();
-      if (home) await rm(home, { recursive: true, force: true });
+      if (home) {
+        await makeFixtureTreeWritable(home);
+        await rm(home, { recursive: true, force: true });
+      }
     }, 30000);
     beforeEach(async () => {
       await instanceSettingsService(db).updateExperimental({
@@ -297,6 +312,323 @@ const support = await getEmbeddedPostgresTestSupport();
       inputTokens = 10;
       duringCall = undefined;
     });
+    afterEach(() => registerNativeDraftGateway(db, undefined));
+
+    async function qualifiedNativePresence() {
+      await db
+        .update(agents)
+        .set({
+          adapterType: "paperclip_runner",
+          adapterConfig: {
+            provider: "aw_text_only",
+            workerModelProfileId: profile.id,
+            model: profile.tariff.model,
+            maxOutputTokens: 256,
+            lifecycleMode: "per_turn",
+          },
+          runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true } },
+        })
+        .where(eq(agents.id, f.presence.id));
+      const providers = agentProviderBindingService(db);
+      // Explicit local fixture only; this is not provider/pilot qualification evidence.
+      const [presence] = await db
+        .select()
+        .from(agents)
+        .where(eq(agents.id, f.presence.id));
+      const advertised = await discoverNativeCapabilities({
+        companyId: f.home,
+        adapterType: "paperclip_runner",
+        config: presence!.adapterConfig,
+      });
+      const recorded = await providers.recordDiscovery(
+        f.home,
+        f.presence.id,
+        advertised,
+        {
+          connect: true,
+          identity: true,
+          start: true,
+          stream: true,
+          wait: true,
+          cancel: true,
+          memoryScoping: true,
+        },
+      );
+      await providers.revalidate(
+        f.actor,
+        f.home,
+        f.presence.id,
+        recorded.capabilitySnapshotHash!,
+        "Review the explicit local fixture's new draft-only contract; no live qualification claimed",
+      );
+      const qualified = await providers.assertRuntime(f.home, f.presence.id);
+      profile = {
+        ...profile,
+        providerSnapshotHash: qualified.provider.capabilitySnapshotHash!,
+        qualifiedConfigurationHash:
+          qualified.runtime.qualifiedConfigurationHash!,
+      };
+      const consumer = gateway();
+      registerNativeDraftGateway(db, consumer);
+      return consumer;
+    }
+
+    async function freshNativePlan(
+      budgets = { maxModelCostMinor: 6, maxToolActions: 2 },
+    ) {
+      await qualifiedNativePresence();
+      // Retire the separate, manually bound component fixture before exercising
+      // the real scheduler. This new plan has no manually inserted attempt.
+      await db
+        .update(heartbeatRuns)
+        .set({ status: "failed", finishedAt: new Date() })
+        .where(eq(heartbeatRuns.id, run.id));
+      [task] = (await db
+        .insert(issues)
+        .values({
+          companyId: f.home,
+          title: "Produce the scheduler's single internal draft",
+          status: "todo",
+          workMode: "standard",
+          assigneeAgentId: f.presence.id,
+          responsibleUserId: f.userId,
+        })
+        .returning()) as [typeof task];
+      plan = await orchestrationService(db).create(f.actor, f.home, {
+        issueId: task.id,
+        expectedIssueUpdatedAt: task.updatedAt.toISOString(),
+        workload: "semantic",
+        riskClass: "C0",
+        completionContract: {
+          objective: "Retain one internal draft for human review",
+          requiredOutputs: [{ key: "result" }],
+          businessInvariants: ["Human review is required"],
+        },
+        budgets,
+        workers: [{ key: "native-writer", issueId: task.id }],
+      });
+      return orchestrationService(db).decide(f.actor, f.home, plan.id, {
+        expectedVersion: plan.version,
+        action: "start",
+        rationale: "Start only the operator-qualified bounded internal draft",
+      });
+    }
+
+    it("qualifies only the explicit private Native draft selector without decrypting or spending", async () => {
+      await expect(
+        gateway().qualifyDraft(db, {
+          companyId: f.home,
+          agentId: f.presence.id,
+          responsibleUserId: f.userId,
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      const consumer = await qualifiedNativePresence();
+      await expect(
+        consumer.qualifyDraft(db, {
+          companyId: f.home,
+          agentId: f.presence.id,
+          responsibleUserId: f.userId,
+        }),
+      ).resolves.toMatchObject({
+        profileId: profile.id,
+        model: profile.tariff.model,
+        maxOutputTokens: 256,
+        maximumMinor: 3,
+      });
+      expect(calls).toBe(0);
+      expect(await ledger()).toEqual([]);
+    });
+
+    it.each(["configuration", "runtime_binding", "membership", "grant", "price"] as const)(
+      "rejects native draft qualification after current %s drift",
+      async (change) => {
+        const consumer = await qualifiedNativePresence();
+        if (change === "configuration")
+          await db
+            .update(agents)
+            .set({ adapterConfig: { provider: "codex" } })
+            .where(eq(agents.id, f.presence.id));
+        if (change === "membership")
+          await db
+            .delete(companyMemberships)
+            .where(
+              and(
+                eq(companyMemberships.companyId, f.home),
+                eq(companyMemberships.principalId, f.userId),
+              ),
+            );
+        if (change === "runtime_binding")
+          await db.update(agents).set({ runtimeConfig: { aiConnection: profile.binding } }).where(eq(agents.id, f.presence.id));
+        if (change === "grant")
+          await db
+            .update(connectionGrants)
+            .set({ status: "revoked", revokedAt: new Date() })
+            .where(eq(connectionGrants.companyId, f.home));
+        if (change === "price")
+          profile.tariff.expiresAt = new Date(Date.now() - 1).toISOString();
+        await expect(
+          consumer.qualifyDraft(db, {
+            companyId: f.home,
+            agentId: f.presence.id,
+            responsibleUserId: f.userId,
+          }),
+        ).rejects.toThrow();
+        expect(calls).toBe(0);
+        expect(await ledger()).toEqual([]);
+      },
+    );
+
+    it.each([
+      { maxModelCostMinor: 2, maxToolActions: 2 },
+      { maxModelCostMinor: 6, maxToolActions: 1 },
+    ])(
+      "refuses plan start when the actual one-call draft cannot fit remaining budgets: %j",
+      async (budgets) => {
+        await expect(freshNativePlan(budgets)).rejects.toMatchObject({
+          status: 409,
+        });
+        expect(
+          await db
+            .select()
+            .from(orchestrationWorkerAttempts)
+            .where(eq(orchestrationWorkerAttempts.planId, plan.id)),
+        ).toEqual([]);
+        expect(calls).toBe(0);
+      },
+    );
+
+    it("forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review", async () => {
+      const started = await freshNativePlan();
+      const substitution = vi.fn(() => {
+        throw new Error(
+          "An internal draft must not use the injected provider seam",
+        );
+      });
+      const heartbeat = heartbeatService(db, {
+        nativeSessionBackendFactory: substitution,
+      });
+      try {
+        await heartbeat.invoke(
+          f.presence.id,
+          "on_demand",
+          { issueId: task.id },
+          "manual",
+          { actorType: "user", actorId: f.userId },
+        );
+        await heartbeat.drainActiveRunExecutions();
+      } finally {
+        await heartbeat.drainActiveRunExecutions();
+      }
+      const attempts = await db
+        .select()
+        .from(orchestrationWorkerAttempts)
+        .where(eq(orchestrationWorkerAttempts.planId, plan.id));
+      expect(attempts).toHaveLength(1);
+      const [actualRun] = await db
+        .select()
+        .from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, attempts[0]!.runId!));
+      expect(actualRun).toMatchObject({
+        status: "succeeded",
+        runtimeMode: "native",
+        driverKind: "aw_text_messages",
+        responsibleUserId: f.userId,
+      });
+      expect(actualRun!.error).toBeNull();
+      expect(substitution).not.toHaveBeenCalled();
+      expect(calls).toBe(1);
+      expect(observedBody).toContain("assignedRuntimeContext");
+      expect(observedBody).not.toContain(credential);
+      expect(
+        (await documentService(db).getIssueDocumentByKey(task.id, "result"))
+          ?.body,
+      ).toBe("Retained bounded draft");
+      const [current] = await db
+        .select()
+        .from(orchestrationPlans)
+        .where(eq(orchestrationPlans.id, started.id));
+      expect(current).toMatchObject({
+        toolActionsUsed: 2,
+        modelCostReserved: 3,
+      });
+      const [currentTask] = await db
+        .select()
+        .from(issues)
+        .where(eq(issues.id, task.id));
+      expect(currentTask!.status).not.toBe("done");
+    }, 60000);
+
+    it("rejects actual Native admission after a private grant is revoked, before a worker attempt or model dispatch", async () => {
+      await freshNativePlan();
+      await db
+        .update(connectionGrants)
+        .set({ status: "revoked", revokedAt: new Date() })
+        .where(eq(connectionGrants.companyId, f.home));
+      const heartbeat = heartbeatService(db);
+      await heartbeat.invoke(
+        f.presence.id,
+        "on_demand",
+        { issueId: task.id },
+        "manual",
+        { actorType: "user", actorId: f.userId },
+      );
+      await heartbeat.drainActiveRunExecutions();
+      expect(
+        await db
+          .select()
+          .from(orchestrationWorkerAttempts)
+          .where(eq(orchestrationWorkerAttempts.planId, plan.id)),
+      ).toEqual([]);
+      expect(calls).toBe(0);
+      expect(await ledger()).toEqual([]);
+      expect(
+        await documentService(db).getIssueDocumentByKey(task.id, "result"),
+      ).toBeNull();
+    }, 60000);
+
+    it("withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation", async () => {
+      const started = await freshNativePlan();
+      duringCall = async () => {
+        await orchestrationService(db).decide(f.actor, f.home, started.id, {
+          expectedVersion: started.version,
+          action: "pause",
+          rationale:
+            "Pause the actual Native draft before canonical publication",
+        });
+      };
+      const heartbeat = heartbeatService(db);
+      await heartbeat.invoke(
+        f.presence.id,
+        "on_demand",
+        { issueId: task.id },
+        "manual",
+        { actorType: "user", actorId: f.userId },
+      );
+      await heartbeat.drainActiveRunExecutions();
+      expect(calls).toBe(1);
+      expect(
+        await documentService(db).getIssueDocumentByKey(task.id, "result"),
+      ).toBeNull();
+      expect((await ledger())[0]).toMatchObject({
+        status: "unknown",
+        maximumMinor: 3,
+      });
+      const [current] = await db
+        .select()
+        .from(orchestrationPlans)
+        .where(eq(orchestrationPlans.id, started.id));
+      expect(current).toMatchObject({
+        status: "paused",
+        toolActionsUsed: 1,
+        modelCostReserved: 3,
+      });
+      expect(
+        await db
+          .select()
+          .from(supervisionInterventions)
+          .where(eq(supervisionInterventions.planId, started.id)),
+      ).not.toEqual([]);
+    }, 60000);
     function issueInput() {
       return {
         companyId: f.home,

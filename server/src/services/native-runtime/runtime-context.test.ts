@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, chmod, lstat, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, chmod, lstat, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Db } from "@paperclipai/db";
@@ -29,7 +29,7 @@ vi.mock("../tool-access.js", () => ({
 }));
 
 import { createHash } from "node:crypto";
-import { buildNativeRuntimeContext, resolveNativeRuntimeMcpSnapshot } from "./runtime-context.js";
+import { buildNativeRuntimeContext, materializeAsset, readNativeRuntimeAssetText, resolveNativeRuntimeMcpSnapshot } from "./runtime-context.js";
 
 const temporaryRoots: string[] = [];
 let previousPaperclipHome: string | undefined;
@@ -87,6 +87,72 @@ afterEach(async () => {
     await makeTreeWritable(root);
     await rm(root, { recursive: true, force: true });
   }
+});
+
+describe("bounded Native draft asset projection", () => {
+  it("projects the exact pinned instruction and skill bytes and rejects a smaller envelope or arbitrary host root", async () => {
+    const bundle = await materializeAsset([
+      {
+        path: "AGENTS.md",
+        content: Buffer.from("Only use retained evidence.\n"),
+        mode: 0o444,
+      },
+      {
+        path: "references/checklist.md",
+        content: Buffer.from("Human review required.\n"),
+        mode: 0o444,
+      },
+    ]);
+    expect(await readNativeRuntimeAssetText(bundle, bundle.totalBytes)).toEqual(
+      [
+        { path: "AGENTS.md", text: "Only use retained evidence.\n" },
+        { path: "references/checklist.md", text: "Human review required.\n" },
+      ],
+    );
+    await expect(
+      readNativeRuntimeAssetText(bundle, bundle.totalBytes - 1),
+    ).rejects.toThrow("envelope");
+    await expect(
+      readNativeRuntimeAssetText({ ...bundle, rootPath: tmpdir() }, 64000),
+    ).rejects.toThrow("root_changed");
+    await expect(
+      readNativeRuntimeAssetText(
+        { ...bundle, manifestDigest: "f".repeat(64) },
+        64000,
+      ),
+    ).rejects.toThrow("manifest_changed");
+  });
+
+  it("rejects same-length byte tampering and non-UTF8 data rather than supplying unverified text", async () => {
+    const bundle = await materializeAsset([
+      { path: "AGENTS.md", content: Buffer.from("safe"), mode: 0o444 },
+    ]);
+    const target = path.join(bundle.rootPath, "AGENTS.md");
+    await chmod(target, 0o644);
+    await writeFile(target, "evil");
+    await chmod(target, 0o444);
+    await expect(readNativeRuntimeAssetText(bundle, 64000)).rejects.toThrow(
+      "digest mismatch",
+    );
+    const binary = await materializeAsset([
+      { path: "SKILL.md", content: Buffer.from([0xff]), mode: 0o444 },
+    ]);
+    await expect(readNativeRuntimeAssetText(binary, 64000)).rejects.toThrow();
+  });
+
+  it("rejects a symlink replacing a pinned instruction file before reading the target", async () => {
+    const bundle = await materializeAsset([
+      { path: "AGENTS.md", content: Buffer.from("safe"), mode: 0o444 },
+    ]);
+    const target = path.join(bundle.rootPath, "AGENTS.md");
+    await chmod(bundle.rootPath, 0o755);
+    await rm(target);
+    await symlink("/etc/passwd", target);
+    await expect(readNativeRuntimeAssetText(bundle, 64000)).rejects.toThrow(
+      "file_changed",
+    );
+    await rm(target);
+  });
 });
 
 describe("buildNativeRuntimeContext", () => {

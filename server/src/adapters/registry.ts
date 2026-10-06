@@ -371,7 +371,7 @@ const paperclipRunnerAdapter: ServerAdapterModule = {
       timedOut: false,
       errorMessage: message,
       errorCode: "paperclip_runner_coordinator_required",
-      provider: ctx.config.provider === "opencode"
+      provider: ctx.config.provider === "aw_text_only" ? "anthropic" : ctx.config.provider === "opencode"
         ? "opencode"
         : ctx.config.provider === "claude_managed"
           ? "anthropic"
@@ -404,6 +404,11 @@ const paperclipRunnerAdapter: ServerAdapterModule = {
           message: profileError.message,
         }],
       };
+    }
+    if (profile.provider === "aw_text_only") {
+      return { adapterType: "paperclip_runner", status: "warn" as const, testedAt: new Date().toISOString(),
+        checks: [{ code: "aw_text_draft_private_qualification_required", level: "warn" as const,
+          message: "Internal drafts require the installed private model profile, a current plan cost cap and the native budget controller. No CLI environment probe authorizes launch." }] };
     }
     if (profile.provider === "acpx") {
       try {
@@ -500,7 +505,7 @@ const paperclipRunnerAdapter: ServerAdapterModule = {
   supportsInstructionsBundle: true,
   instructionsPathKey: "instructionsFilePath",
   requiresMaterializedRuntimeSkills: false,
-  getRuntimeCommandSpec: (config) => config.provider === "claude_managed"
+  getRuntimeCommandSpec: (config) => config.provider === "aw_text_only" ? null : config.provider === "claude_managed"
     || config.provider === "aws_agentcore"
     || config.provider === "acpx"
     ? { command: "paperclip-runnerd", detectCommand: null, installCommand: null }

@@ -39,7 +39,7 @@ const safeRelativePath = (value: string, label: string) => {
   return normalized;
 };
 
-async function collectDirectoryFiles(sourceRoot: string): Promise<AssetFile[]> {
+async function collectDirectoryFiles(sourceRoot: string, maximumBytes = MAX_ASSET_BYTES, maximumFiles = MAX_ASSET_FILES): Promise<AssetFile[]> {
   const root = path.resolve(sourceRoot);
   const rootStat = await fs.lstat(root).catch(() => null);
   if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) throw new Error(`runtime context source is not a safe directory: ${root}`);
@@ -55,9 +55,10 @@ async function collectDirectoryFiles(sourceRoot: string): Promise<AssetFile[]> {
       if (stat.isSymbolicLink()) throw new Error(`runtime context bundles do not permit symlinks: ${relativePath}`);
       if (stat.isDirectory()) { await visit(relativePath); continue; }
       if (!stat.isFile()) throw new Error(`runtime context bundle contains an unsupported file: ${relativePath}`);
+      if (files.length + 1 > maximumFiles || totalBytes + stat.size > maximumBytes) throw new Error("runtime context bundle exceeds its bound");
       const content = await fs.readFile(absolutePath);
       totalBytes += content.byteLength;
-      if (files.length + 1 > MAX_ASSET_FILES || totalBytes > MAX_ASSET_BYTES) throw new Error("runtime context bundle exceeds its bound");
+      if (files.length + 1 > maximumFiles || totalBytes > maximumBytes) throw new Error("runtime context bundle exceeds its bound");
       files.push({ path: relativePath, content, mode: stat.mode & 0o555 });
     }
   }
@@ -76,8 +77,10 @@ async function makeDirectoriesReadOnly(directory: string): Promise<void> {
 async function verifyMaterializedAsset(
   rootPath: string,
   manifestFiles: Array<{ path: string; sha256: string; mode: number; size: number }>,
-): Promise<void> {
-  const actual = await collectDirectoryFiles(rootPath);
+  maximumBytes = MAX_ASSET_BYTES,
+  maximumFiles = MAX_ASSET_FILES,
+): Promise<AssetFile[]> {
+  const actual = await collectDirectoryFiles(rootPath, maximumBytes, maximumFiles);
   const actualByPath = new Map(actual.map((file) => [file.path, file]));
   if (actualByPath.size !== manifestFiles.length) throw new Error("runtime context asset file count mismatch");
   for (const expected of manifestFiles) {
@@ -86,6 +89,7 @@ async function verifyMaterializedAsset(
       throw new Error(`runtime context asset digest mismatch: ${expected.path}`);
     }
   }
+  return actual;
 }
 
 export async function materializeAsset(files: AssetFile[]): Promise<NativeRuntimeAssetReference> {
@@ -143,6 +147,95 @@ export async function materializeAsset(files: AssetFile[]): Promise<NativeRuntim
     throw error;
   }
   return { schema: NATIVE_RUNTIME_ASSET_SCHEMA, digest: assetDigest, manifestDigest, rootPath, fileCount: manifestFiles.length, totalBytes };
+}
+
+/** Bounded text projection of an already materialized Native bundle. The
+ * server-owned manifest and every byte are checked; an input root path alone
+ * never authorizes arbitrary host-file reads or executable skill launch. */
+export async function readNativeRuntimeAssetText(
+  reference: NativeRuntimeAssetReference,
+  maximumBytes: number,
+) {
+  if (
+    !Number.isSafeInteger(maximumBytes) ||
+    maximumBytes < 1 ||
+    maximumBytes > 256000 ||
+    reference.totalBytes > maximumBytes ||
+    reference.fileCount > 256
+  )
+    throw new Error("native_text_asset_envelope_exceeded");
+  const assetsRoot = path.join(
+    resolvePaperclipInstanceRoot(),
+    "runtime-context-assets",
+  );
+  const rootPath = path.join(assetsRoot, "bundles", reference.digest);
+  const manifestPath = path.join(
+    assetsRoot,
+    "manifests",
+    `${reference.digest}.json`,
+  );
+  if (
+    path.resolve(reference.rootPath) !== rootPath ||
+    (await fs.realpath(rootPath)) !== rootPath
+  )
+    throw new Error("native_text_asset_root_changed");
+  const stat = await fs.lstat(manifestPath);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 1048576)
+    throw new Error("native_text_asset_manifest_unavailable");
+  const manifestText = await fs.readFile(manifestPath, "utf8");
+  if (sha256(manifestText) !== reference.manifestDigest)
+    throw new Error("native_text_asset_manifest_changed");
+  const manifest = JSON.parse(manifestText) as {
+    schema: string;
+    digest: string;
+    fileCount: number;
+    totalBytes: number;
+    files: Array<{ path: string; sha256: string; mode: number; size: number }>;
+  };
+  if (
+    manifest.schema !== "paperclip.runtime-asset-manifest.v1" ||
+    manifest.digest !== reference.digest ||
+    manifest.fileCount !== reference.fileCount ||
+    manifest.totalBytes !== reference.totalBytes ||
+    !Array.isArray(manifest.files) ||
+    manifest.files.length !== reference.fileCount ||
+    sha256(JSON.stringify(manifest.files)) !== reference.digest
+  )
+    throw new Error("native_text_asset_manifest_binding_changed");
+  // Pin metadata before reading files, and check each lstat rather than following
+  // a mutable symlink. collectDirectoryFiles also rejects additional files.
+  if (
+    manifest.files.some(
+      (file) => !Number.isSafeInteger(file.size) || file.size < 0,
+    ) ||
+    manifest.files.reduce((sum, file) => sum + file.size, 0) !==
+      reference.totalBytes
+  )
+    throw new Error("native_text_asset_size_changed");
+  for (const file of manifest.files) {
+    const relativePath = safeRelativePath(file.path, "native text asset");
+    const fileStat = await fs.lstat(path.join(rootPath, relativePath));
+    if (
+      !fileStat.isFile() ||
+      fileStat.isSymbolicLink() ||
+      fileStat.size !== file.size
+    )
+      throw new Error("native_text_asset_file_changed");
+  }
+  const files = await verifyMaterializedAsset(
+    rootPath,
+    manifest.files,
+    maximumBytes,
+    256,
+  );
+  if (
+    files.reduce((sum, file) => sum + file.content.byteLength, 0) > maximumBytes
+  )
+    throw new Error("native_text_asset_envelope_exceeded");
+  return files.map((file) => ({
+    path: file.path,
+    text: new TextDecoder("utf-8", { fatal: true }).decode(file.content),
+  }));
 }
 
 async function materializeInstructionBundle(agent: RuntimeAgent) {

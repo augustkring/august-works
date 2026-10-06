@@ -33,10 +33,19 @@ charges are retained. No accepted Stop request proves physical termination.
 
 The backend is exercised against migrated PostgreSQL, the actual encrypted AI
 grant, actual financial/tool ledgers and real Task handlers. Only the provider
-transport response and qualification metadata are private fixtures. Production
-selection is not wired yet. It advertises no runtime-context capabilities and
-cannot qualify or replace the existing autonomous CLI providers. Explicit
-provider identity, bounded realization of assigned instructions/Skills/MCP,
-start/admission qualification and the actual heartbeat launch remain required
-before capped production plans can start. Physical OpenShell and credential-use
-qualification remain separate incomplete boundaries.
+transport response and qualification metadata are private fixtures. The explicit
+`aw_text_only` provider now selects this backend through the actual heartbeat.
+Its private factory checks the admitted attempt, initiating human, exact Native
+session and contract, current operator profile and bounded runtime context.
+The model receives verified instruction and assigned Skill text. These files
+are not executable tools. Assigned MCP, managed OpenShell, recoverable sessions
+and ordinary CLI providers remain outside this qualification. The heartbeat's
+ordinary injected provider seam cannot replace the draft backend.
+
+Plan start and each Native admission recheck current qualification and remaining
+model/tool ceilings before dispatch. Static capability advertisement performs no
+probe and grants no qualification. Production still requires a real retained
+provider conformance report and protected operator model qualification. The
+ordinary CLI conformance probe cannot supply this draft's report. Physical
+OpenShell admission, credential-use brokering and integrated operating evidence
+remain incomplete. See [forced Native launch](aw-v7-native-draft-launch.md).

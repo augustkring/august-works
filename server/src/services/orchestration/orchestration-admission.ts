@@ -9,6 +9,7 @@ import { readinessService } from "../readiness/readiness-service.js";
 import type { ActivityPublication } from "../activity-log.js";
 import { logActivity } from "../v7-mutations.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
+import { qualifyNativeDraftWorker } from "./native-draft-runtime.js";
 
 type Plan = typeof orchestrationPlans.$inferSelect;
 /** Called under the plan lock. Terminal provider runs release slots, never certify work. */
@@ -34,7 +35,7 @@ async function scope(tx: Db, companyId: string, issueId: string) {
 export async function hasOrchestrationPlan(db: Db, companyId: string, issueId: string | null) {
   return issueId ? Boolean(await scope(db, companyId, issueId)) : false;
 }
-async function admit(tx: Db, input: { companyId: string; issueId: string; actor: AuthorizationActor; runId?: string; workflowRunId?: string; executionManifestId?: string }, publications: ActivityPublication[]) {
+async function admit(tx: Db, input: { companyId: string; issueId: string; actor: AuthorizationActor; runId?: string; workflowRunId?: string; executionManifestId?: string }, publications: ActivityPublication[], rootDb?: Db) {
   const binding = await scope(tx, input.companyId, input.issueId);
   if (!binding) return null;
   const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.id, binding.plan.id))).for("update");
@@ -43,10 +44,16 @@ async function admit(tx: Db, input: { companyId: string; issueId: string; actor:
   if (Date.now() >= plan.startedAt.getTime() + plan.budgets.maxWallClockSeconds * 1000) throw forbidden("The orchestration deadline expired");
   if (!plan.executionPrincipal || (plan.executionPrincipal.type !== "user" && !(plan.executionPrincipal.type === "system" && plan.executionPrincipal.service === "local-board"))) throw forbidden("The plan requires its current initiating human principal");
   if (input.runId && plan.mode === "workflow_bound") throw forbidden("Deterministic plans execute through their pinned Workflow, not a semantic worker");
-  if (plan.budgets.maxModelCostMinor !== null) throw forbidden("A pre-spend reservation broker has not qualified this plan cost cap");
+  if (plan.budgets.maxModelCostMinor !== null && (!rootDb || !input.runId || !input.executionManifestId || plan.executionPrincipal.type !== "user"))
+    throw forbidden("The cost cap requires its exact native heartbeat and authenticated initiating human");
   const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).for("share");
   const [worker] = await tx.select().from(orchestrationWorkers).where(and(eq(orchestrationWorkers.companyId, input.companyId), eq(orchestrationWorkers.id, binding.worker.id)));
   if (!task || !worker || ["done", "cancelled"].includes(task.status) || task.assigneeAgentId !== worker.agentId) throw forbidden("Worker no longer has the plan's canonical assignment");
+  if (plan.budgets.maxModelCostMinor !== null) {
+    const qualified = await qualifyNativeDraftWorker(rootDb!, tx, plan, worker, (plan.executionPrincipal as { type: "user"; userId: string }).userId);
+    if (plan.modelCostReserved + qualified.maximumMinor > plan.budgets.maxModelCostMinor || plan.toolActionsUsed + 2 > plan.budgets.maxToolActions)
+      throw forbidden("The remaining budget cannot admit the declared draft");
+  }
   await assertV7Authorization(tx, input.actor, input.companyId, "issue:mutate", { type: "issue", companyId: input.companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId, status: task.status });
   const initiatingActor: AuthorizationActor = plan.executionPrincipal.type === "user" ? { type: "board", source: "session", userId: plan.executionPrincipal.userId } : { type: "board", source: "local_implicit" };
   await assertV7Authorization(tx, initiatingActor, input.companyId, "issue:mutate", { type: "issue", companyId: input.companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId, status: task.status });
@@ -91,14 +98,14 @@ async function admit(tx: Db, input: { companyId: string; issueId: string; actor:
   await logActivity(tx, { companyId: input.companyId, actorType: "system", actorId: "orchestration-admission", action: "orchestration.worker_admitted", entityType: "orchestration_plan", entityId: plan.id, details: { workerId: worker.id, attemptId: attempt!.id, runId: input.runId ?? null, workflowRunId: input.workflowRunId ?? null } }, publications);
   return attempt!;
 }
-export async function admitOrchestrationHeartbeat(tx: Db, input: { companyId: string; issueId: string | null; agentId: string; runId: string; responsibleUserId: string | null; executionManifestId: string }, publications: ActivityPublication[]) {
+export async function admitOrchestrationHeartbeat(tx: Db, input: { companyId: string; issueId: string | null; agentId: string; runId: string; responsibleUserId: string | null; executionManifestId: string }, publications: ActivityPublication[], rootDb: Db = tx) {
   if (!input.issueId) return null;
   const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId)));
   if (!await hasOrchestrationPlan(tx, input.companyId, input.issueId)) return null;
   if (!run || !["queued", "running"].includes(run.status) || agentRunWritesRevoked(run) || run.responsibleUserId !== input.responsibleUserId || (run.contextSnapshot?.issueId ?? run.contextSnapshot?.nativeIssueId) !== input.issueId) throw forbidden("Current persisted Task worker authority is required");
   const [manifest] = await tx.select({ id: agentExecutionManifests.id }).from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.id, input.executionManifestId), eq(agentExecutionManifests.agentId, input.agentId), eq(agentExecutionManifests.runId, input.runId)));
   if (!manifest) throw forbidden("The attempt requires this run's actual Runtime Fabric manifest");
-  return admit(tx, { ...input, issueId: input.issueId, actor: { type: "agent", source: "agent_jwt", companyId: input.companyId, agentId: input.agentId, runId: input.runId, onBehalfOfUserId: input.responsibleUserId } }, publications);
+  return admit(tx, { ...input, issueId: input.issueId, actor: { type: "agent", source: "agent_jwt", companyId: input.companyId, agentId: input.agentId, runId: input.runId, onBehalfOfUserId: input.responsibleUserId } }, publications, rootDb);
 }
 export async function admitOrchestrationWorkflow(tx: Db, run: typeof workflowRuns.$inferSelect, actor: AuthorizationActor, publications: ActivityPublication[]) {
   if (run.source !== "task") return null;

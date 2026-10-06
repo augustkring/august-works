@@ -36,9 +36,12 @@ are not persisted by this consumer; the ledger retains bounded financial metadat
 
 Only `internal_draft` C0/C1 plans with an explicit model cap are supported by this
 consumer. Managed OpenShell bindings and autonomous CLI/managed-session calls are
-rejected. **Capped worker admission remains closed until the actual worker runner
-is forced through this boundary.** Configuring profiles or exposing the HTTP route
-does not open admission or qualify previously unbounded transports.
+rejected. The actual heartbeat now forces the explicit `aw_text_only` provider
+through this boundary for one declared internal draft. Plan start and Native
+admission require current private qualification, remaining model/tool budgets
+and the initiating authenticated human. Configuring profiles or exposing the
+HTTP route does not qualify an ordinary CLI or managed session. See the
+[Native launch boundary](aw-v7-native-draft-launch.md).
 
 Local acceptance covers the real HTTP route, encrypted native grants, migrated
 PostgreSQL reservations, concurrent duplicate dispatch, exhausted caps, authority

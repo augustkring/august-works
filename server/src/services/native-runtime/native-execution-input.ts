@@ -64,7 +64,9 @@ export function buildNativeExecutionInput(input: {
     branchName: string | null;
   };
   normalizedSessionId: string | null;
-  provider?: "codex" | "opencode" | "claude_managed" | "aws_agentcore" | "acpx";
+  provider?: "codex" | "opencode" | "claude_managed" | "aws_agentcore" | "acpx" | "aw_text_only";
+  workerModelProfileId?: string;
+  maxOutputTokens?: number;
   acpxAgent?: NativeAcpxAgent;
   codexApprovalPolicy?: NativeCodexApprovalPolicy;
   opencodePermissionMode?: NativeOpenCodePermissionMode;
@@ -218,7 +220,7 @@ export function buildNativeExecutionInput(input: {
     },
     session: {
       normalizedSessionId: input.normalizedSessionId,
-      driverKind: input.provider === "opencode"
+      driverKind: input.provider === "aw_text_only" ? "aw_text_messages" : input.provider === "opencode"
         ? "opencode_server"
         : input.provider === "claude_managed"
           ? "claude_managed_agents_api"
@@ -230,7 +232,9 @@ export function buildNativeExecutionInput(input: {
       protocolVersion: 1,
       lifecyclePolicy: input.lifecyclePolicy ?? { mode: "per_turn", idleTimeoutMs: null },
     },
-    provider: input.provider === "claude_managed"
+    provider: input.provider === "aw_text_only"
+      ? { kind: "aw_text_only", model: input.model, profileId: input.workerModelProfileId, maxOutputTokens: input.maxOutputTokens }
+      : input.provider === "claude_managed"
       ? {
           kind: "claude_managed",
           model: input.model,
