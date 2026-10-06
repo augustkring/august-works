@@ -175,7 +175,12 @@
       "lines": 4531,
       "words": 16359,
       "path": "/workspace/attachments/1ed8babc-d329-47a8-b7f8-c4757720c065/13_api_integration_distributed_systems_engineering_v2_golden_master.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4531
+      },
+      "applicability": "Behavioral contracts include authority, time, unknown outcomes, repetition, ordering, consistency, bounded capacity, evolution and repair. Use native atomic identity and duplicate safety; timestamps are not causal versions, transport guarantees do not cover external effects. Require semantic runtime conformance, current access, controlled replay and authoritative reconciliation; provider sandbox and API descriptions do not prove deployed behavior. Source protocol-version claims have been read, not independently reverified."
     },
     {
       "name": "15_backend_services_engine_engineering_v2.md",
@@ -184,7 +189,12 @@
       "lines": 2722,
       "words": 13574,
       "path": "/workspace/attachments/3402aa33-b275-409d-851f-ec702587c6c0/15_backend_services_engine_engineering_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 2722
+      },
+      "applicability": "Keep native authoritative domain rules and transactional boundaries; stable work identity differs from execution attempts. Bound concurrency, retry, queue growth, scheduling catch-up and repair; require resource-side fencing when leases can expire. Preserve tenant authorization, resource fairness, async privacy lifecycle, mixed-version execution compatibility and crash-safe acknowledgement. Local fixtures do not establish hosted operating readiness."
     },
     {
       "name": "16_mobile_desktop_application_engineering_v2.md",
