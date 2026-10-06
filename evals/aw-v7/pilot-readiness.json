@@ -20,7 +20,7 @@
       "wave": 7,
       "status": "incomplete",
       "source": "server/src/services/orchestration/orchestration-admission.ts",
-      "verificationScope": "Native reservation, read-only consumers, worker HTTP gateway, Task tool accounting and forced aw_text_only plan-start/admission/heartbeat verified locally with private provider/conformance fixtures. One standard C0/C1 internal draft and declared output are supported. Forced pre-spend transport for managed autonomous sessions/CLIs and their physical workload admission remain incomplete and closed. Production provider qualification and the integrated pilot remain operating evidence."
+      "verificationScope": "Native reservation, read-only consumers, worker HTTP gateway, Task tool accounting and forced aw_text_only plan-start/admission/heartbeat verified locally with private provider/conformance fixtures. One standard C0/C1 internal draft and declared output are supported. Forced pre-spend transport for managed autonomous sessions/CLIs and their physical workload admission remain incomplete and closed. Production provider qualification and the integrated pilot remain operating evidence. The ordinary Native conformance runner rejects aw_text_only; a real draft-provider bootstrap runner is also required before this private transport can enter production through normal qualification."
     },
     {
       "id": "automated_read_only_semantic_consumer",
