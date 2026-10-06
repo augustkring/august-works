@@ -385,7 +385,12 @@
       "lines": 3666,
       "words": 14514,
       "path": "/workspace/attachments/ae9fd744-75e9-405f-b020-dd0bc5ed356c/marketing_measurement_attribution_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3666
+      },
+      "applicability": "Define the decision, estimand, population and counterfactual before metric selection. Preserve realized, observed, attributed, modeled and causal layers with source, scope, coverage, incidents and uncertainty; reconcile vendor claims without summing overlapping credit. Assignment-based randomized inference, SRM, contamination, stopping and external-validity gates precede conclusions. Average lift is not marginal response; incremental cost denominators must match the contrast. Forecast, scenario and allocator outputs remain conditional proposals, with compatible dated calibration and independent outcome Learning. No new identity graph, tracking provider, marketing execution or unverified platform/legal mechanics."
     },
     {
       "name": "master_playbook_standard_v2.0.md",
