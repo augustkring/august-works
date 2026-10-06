@@ -2,6 +2,8 @@ import { and, eq, sql, ne, inArray } from "drizzle-orm";
 import { learningCycles, companyAgentPackageInstallations, agentPackageUpdateProposals, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, policyChangeProposals, workflowOptimizerEvaluations, automationArtifacts, workflows, workflowRevisions, workflowRuns, rolePacks, rolePackVersions, rolePackItems,
   foundationChangeProposals, playbookChangeProposals, projectRoadmapProposals, companySkills, companySkillVersions, documentRevisions, documents, foundationSections, foundationDocuments, playbookDocuments, type Db } from "@paperclipai/db";
 
+import { eraseStrategySource } from "../strategy-execution/privacy.js";
+
 /** Runs under the caller's company privacy lock, independently of rollout flags. */
 export async function invalidateLearningMemory(tx: Db, companyId: string, recordIds: string[], erase = false) {
   if (!recordIds.length) return;
@@ -72,6 +74,7 @@ export async function invalidateLearningMemory(tx: Db, companyId: string, record
   const revisionIds = assets.filter((asset) => asset.assetType === "document_revision").map((asset) => asset.assetId);
   if (revisionIds.length) {
     if (erase) {
+      await eraseStrategySource(tx, companyId, "document_revision", revisionIds, now);
       await tx.update(documentRevisions).set({ body: "", title: "Erased learning evidence", changeSummary: null }).where(and(eq(documentRevisions.companyId, companyId), inArray(documentRevisions.id, revisionIds)));
       await tx.delete(foundationSections).where(and(eq(foundationSections.companyId, companyId), inArray(foundationSections.documentRevisionId, revisionIds)));
       await tx.update(documents).set({ latestBody: "", title: "Erased learning evidence", updatedAt: now }).where(and(eq(documents.companyId, companyId), inArray(documents.latestRevisionId, revisionIds)));

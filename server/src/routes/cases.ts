@@ -16,6 +16,8 @@ import {
   listCasesQuerySchema,
   listEventsQuerySchema,
 } from "./cases-schemas.js";
+import { lockAnalyticalCompany, suppressAnalyticalSource } from "../services/analytical-privacy.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -1160,16 +1162,21 @@ export function caseRoutes(db: Db, storage: StorageService) {
     if (!caseRow) return next();
     const key = parseDocumentKey(req.params.key as string);
     await db.transaction(async (tx) => {
+      await lockAnalyticalCompany(tx, caseRow.companyId);
+      await lockMemoryPrivacy(tx as unknown as Db, caseRow.companyId);
       await lockCaseDocumentKey(tx, { companyId: caseRow.companyId, caseId: caseRow.id, key });
       const link = await loadCaseDocumentLink(tx, { companyId: caseRow.companyId, caseId: caseRow.id, key });
       if (!link) return;
-      if (link.document.lockedAt) {
+      const [current] = await tx.select().from(documents).where(and(eq(documents.companyId, caseRow.companyId), eq(documents.id, link.document.id))).for("update");
+      if (!current) return;
+      if (current.lockedAt) {
         throw conflict("Document is locked", {
           key,
           documentId: link.document.id,
-          lockedAt: link.document.lockedAt,
+          lockedAt: current.lockedAt,
         });
       }
+      await suppressAnalyticalSource(tx, caseRow.companyId, "document", link.document.id);
       await tx.delete(caseDocuments).where(eq(caseDocuments.documentId, link.document.id));
       await tx.delete(documents).where(eq(documents.id, link.document.id));
     });

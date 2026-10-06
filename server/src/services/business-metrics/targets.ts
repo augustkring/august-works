@@ -77,6 +77,14 @@ export function businessMetricTargetService(db: Db) {
     return pin;
   }
   return {
+    /** Internal domain callers hold the analytical company transaction boundary. */
+    async inspectApprovedCommitment(companyId: string, actor: AuthorizationActor, id: string, versionId: string) {
+      await admit(db, companyId, actor);
+      const row = await target(db, companyId, actor, id);
+      const pin = await current(db, companyId, actor, row);
+      if (pin.id !== versionId) throw conflict("Target commitment changed; review the current approval");
+      return { target: row, version: pin };
+    },
     async list(companyId: string, actor: AuthorizationActor, cursor?: string) {
       await admit(db, companyId, actor);
       const rows = await db.select().from(businessMetricTargets).where(and(eq(businessMetricTargets.companyId, companyId), cursor ? sql`${businessMetricTargets.id}>${cursor}::uuid` : undefined)).orderBy(asc(businessMetricTargets.id)).limit(101);

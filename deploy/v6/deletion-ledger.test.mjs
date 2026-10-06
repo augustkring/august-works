@@ -101,6 +101,10 @@ test("analytical restore requires native object guards even when no event was pr
   assert.deepEqual(authenticateDeletionLedger(sign(valid), key, "staging", now), valid);
   const goalGuard = { ...base, analyticalSources: [{ ...marker, input_type: "goal" }] };
   assert.deepEqual(authenticateDeletionLedger(sign(goalGuard), key, "staging", now), goalGuard);
+  for (const input_type of ["document", "document_revision"]) {
+    const guard = { ...base, analyticalSources: [{ ...marker, input_type }] };
+    assert.deepEqual(authenticateDeletionLedger(sign(guard), key, "staging", now), guard);
+  }
   const { analyticalSources, ...legacy } = base;
   for (const invalid of [legacy, { ...base, analyticalSources: {} },
     { ...base, analyticalSources: [{ ...marker, input_type: "employee" }] },

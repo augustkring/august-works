@@ -1,5 +1,7 @@
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { analyticalLineageManifests, analyticalSourceSuppressions, businessMetricTargets, type Db } from "@paperclipai/db";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { eraseStrategySource, type StrategyErasureType } from "./strategy-execution/privacy.js";
 import { conflict } from "../errors.js";
 type PrivacyTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /** Preserve the existing company serialization key: native owner erasure,
@@ -9,8 +11,10 @@ export async function lockAnalyticalCompany(tx: Pick<Db, "execute">, companyId: 
 }
 /** Native privacy/verified restore callers own admission. Rollout never gates
  * this operation. A minimal guard prevents late or restored payload publication. */
-export async function suppressAnalyticalSource(tx: PrivacyTx, companyId: string, inputType: "issue" | "project" | "goal", inputRef: string, suppressedAt = new Date()) {
+export async function suppressAnalyticalSource(tx: PrivacyTx, companyId: string, inputType: StrategyErasureType, inputRef: string, suppressedAt = new Date()) {
   await lockAnalyticalCompany(tx, companyId);
+  await lockMemoryPrivacy(tx as unknown as Db, companyId);
+  await eraseStrategySource(tx as unknown as Db, companyId, inputType, [inputRef], suppressedAt);
   await tx.insert(analyticalSourceSuppressions).values({ companyId, inputType, inputRef, suppressedAt }).onConflictDoNothing();
   if (inputType === "goal" || inputType === "project") await tx.delete(businessMetricTargets).where(and(eq(businessMetricTargets.companyId, companyId),
     inputType === "goal" ? eq(businessMetricTargets.goalId, inputRef) : eq(businessMetricTargets.projectId, inputRef)));

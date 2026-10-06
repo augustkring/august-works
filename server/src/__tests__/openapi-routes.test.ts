@@ -15,6 +15,7 @@ const apiPrefixes: Record<string, string> = {
   "business-events.ts": "/api",
   "business-metrics.ts": "/api",
   "business-metric-targets.ts": "/api",
+  "strategy-execution.ts": "/api",
   "agent-packages.ts": "/api",
   "ai-governance.ts": "/api",
   "cognitive-memory.ts": "/api",

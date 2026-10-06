@@ -9,6 +9,10 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import {
+  createStrategyExecutionLinkSchema,
+  reviseStrategyExecutionLinkSchema,
+  approveStrategyExecutionLinkSchema,
+  retireStrategyExecutionLinkSchema,
   createBusinessMetricTargetSchema,
   reviseBusinessMetricTargetSchema,
   approveBusinessMetricTargetSchema,
@@ -1697,7 +1701,7 @@ function resolveOperationAuthLevel(
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
-  if (key === "POST /api/companies/{companyId}/business-events/backfill" || (path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets"))) return "board";
+  if (key === "POST /api/companies/{companyId}/business-events/backfill" || (path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links"))) return "board";
   if (
     isBoardOnlyOperation(method, path) ||
     experimentalApiMetadata[`${method.toUpperCase()} ${path}`]?.boardOnly
@@ -11805,6 +11809,12 @@ registerCurrentRoute({
 });
 
 for (const operation of [
+  { method: "get" as const, path: "/api/companies/{companyId}/strategy-execution-links", summary: "List a bounded page of current authorized native strategy links", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}", summary: "Inspect immutable strategic pins and current source drift" },
+  { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links", summary: "Propose a governed native strategy relationship", body: createStrategyExecutionLinkSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}/versions", summary: "Propose a strategy revision without replacing approval", body: reviseStrategyExecutionLinkSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}/approve", summary: "Human approval of current pinned strategy and native source authority", body: approveStrategyExecutionLinkSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}/retire", summary: "Withdraw a strategy link without cancelling native work", body: retireStrategyExecutionLinkSchema },
   { method: "get" as const, path: "/api/companies/{companyId}/business-metric-targets", summary: "List native company commitments under current human authority", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
   { method: "get" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}", summary: "Inspect target versions and current review status" },
   { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets", summary: "Create a commitment draft without approval or an observation", body: createBusinessMetricTargetSchema },

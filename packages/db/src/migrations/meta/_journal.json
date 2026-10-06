@@ -2710,6 +2710,20 @@
       "when": 1791325229266,
       "tag": "0388_keen_randall",
       "breakpoints": true
+    },
+    {
+      "idx": 389,
+      "version": "7",
+      "when": 1791328715235,
+      "tag": "0389_high_bug",
+      "breakpoints": true
+    },
+    {
+      "idx": 390,
+      "version": "7",
+      "when": 1791329226575,
+      "tag": "0390_nebulous_doomsday",
+      "breakpoints": true
     }
   ]
 }

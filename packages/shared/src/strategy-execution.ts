@@ -53,4 +53,18 @@ export interface StrategyExecutionLinkView {
 export interface StrategyExecutionLinkVersionView {
   id: string; companyId: string; linkId: string; revision: number;
   definition: StrategyExecutionLinkDefinition; contentHash: string; createdAt: string;
+  nextReviewAt: string; expiresAt: string;
+}
+
+export interface StrategyExecutionLinkDetail {
+  link: StrategyExecutionLinkView;
+  effectiveVersion: StrategyExecutionLinkVersionView;
+  versions: StrategyExecutionLinkVersionView[];
+  hasMoreVersions: boolean;
+  reviewReason: string | null;
+}
+export interface StrategyExecutionLinkList {
+  items: (StrategyExecutionLinkView & { definition: StrategyExecutionLinkDefinition; reviewReason: string | null })[];
+  nextCursor: string | null;
+  coverage: "bounded_current_authorized_page";
 }

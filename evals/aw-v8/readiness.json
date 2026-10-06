@@ -51,7 +51,8 @@
     "analytical_source_owner_suppression_and_signed_quarantine_reconciliation",
     "native_immutable_metric_commitments_and_human_approval",
     "current_observation_source_authority_before_target_comparison",
-    "native_goal_target_erasure_and_signed_restore_guards"
+    "native_goal_target_erasure_and_signed_restore_guards",
+    "native_strategy_link_API_immutable_human_approvals_current_pins_and_source_ancestry_partial"
   ],
   "unfinishedWaves": [
     "remaining_domain_owner_reconciliation",

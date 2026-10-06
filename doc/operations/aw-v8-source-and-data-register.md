@@ -3,7 +3,7 @@
 Date: 2026-10-06. Reconciliation base: master
 `d550aa7ea5ad38b5209d79135cabaa227ab3f902`.
 Status: partial native Events, governed Metrics, analytical lineage and metric
-commitments are implemented. The corresponding owner/lifecycle boundaries and
+commitments and partial native strategy links are implemented. The corresponding owner/lifecycle boundaries and
 remaining work are recorded in `doc/operations/aw-v8-business-events.md`,
 `doc/operations/aw-v8-business-metrics.md` and
 `doc/operations/aw-v8-metric-targets.md`. This register grants neither access nor
@@ -70,3 +70,13 @@ per-use workload credential/executable/secret-version enforcement and forced
 pre-spend transport for general managed sessions. Local text-only fixtures do
 not qualify those broader boundaries. All H6/H7 gates start open for V8 hosted
 promotion until current environment-specific evidence establishes otherwise.
+
+## Native strategy source slice
+
+`strategy_execution_links`, immutable versions/approval receipts and native source
+bindings preserve native ownership and current authority. Document/revision guards
+extend the existing analytical suppression ledger. Routine Foundation reindex is
+drift; native deletion and Learning revision erasure remove dependent histories.
+The exact implemented boundaries and remaining work are recorded in
+`doc/operations/aw-v8-strategy-execution.md`; no full graph completeness or release
+qualification is asserted.
