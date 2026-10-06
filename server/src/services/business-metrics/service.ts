@@ -10,6 +10,7 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { v7HumanActorId, assertV7Authorization } from "../v7-authorization.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockBusinessEventCompany } from "../business-event-privacy.js";
 import { calculateNativeMetric, NATIVE_METRIC_ENGINE_VERSION, type NativeMetricInput } from "./native-engine.js";
 import { assertAnalyticalSourcesNotErased } from "../analytical-privacy.js";
@@ -158,7 +159,7 @@ export function businessMetricService(db: Db) {
     async create(companyId: string, actor: AuthorizationActor, raw: z.infer<typeof createBusinessMetricSchema>) {
       const input = createBusinessMetricSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await admit(tx, companyId, actor, true); await lockBusinessEventCompany(tx, companyId);
+        await admit(tx, companyId, actor, true); await lockBusinessEventCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         await definitionAdmission(tx, companyId, actor, input.definition);
         if ((await tx.select({ id: businessMetrics.id }).from(businessMetrics).where(and(eq(businessMetrics.companyId, companyId), eq(businessMetrics.key, input.key)))).length) throw conflict("Metric key already exists");
         const [row] = await tx.insert(businessMetrics).values({ companyId, key: input.key, createdBy: v7HumanActorId(actor) }).returning();
@@ -170,7 +171,7 @@ export function businessMetricService(db: Db) {
     async createVersion(companyId: string, actor: AuthorizationActor, id: string, raw: z.infer<typeof createBusinessMetricVersionSchema>) {
       const input = createBusinessMetricVersionSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await admit(tx, companyId, actor, true); await lockBusinessEventCompany(tx, companyId);
+        await admit(tx, companyId, actor, true); await lockBusinessEventCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await metric(tx, companyId, id, true);
         if (row.revision !== input.expectedRevision || row.status === "revoked") throw conflict("Metric changed; refresh before editing");
         await definitionAdmission(tx, companyId, actor, input.definition);
@@ -183,7 +184,7 @@ export function businessMetricService(db: Db) {
     async publish(companyId: string, actor: AuthorizationActor, id: string, raw: z.infer<typeof publishBusinessMetricSchema>) {
       const input = publishBusinessMetricSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await admit(tx, companyId, actor, true); await lockBusinessEventCompany(tx, companyId);
+        await admit(tx, companyId, actor, true); await lockBusinessEventCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await metric(tx, companyId, id, true);
         if (row.revision !== input.expectedRevision || row.status === "revoked") throw conflict("Metric changed; refresh before publication");
         const revision = await version(tx, companyId, id, input.versionId);
@@ -198,7 +199,7 @@ export function businessMetricService(db: Db) {
       const input = transitionBusinessMetricSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
         // Revocation remains available after a rollout rollback.
-        await admit(tx, companyId, actor, true, false); await lockBusinessEventCompany(tx, companyId);
+        await admit(tx, companyId, actor, true, false); await lockBusinessEventCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await metric(tx, companyId, id, true);
         if (row.revision !== input.expectedRevision || row.status === "revoked") throw conflict("Metric changed; refresh before changing its lifecycle");
         const [updated] = await tx.update(businessMetrics).set({ status: input.status, revision: row.revision + 1, updatedAt: new Date() }).where(eq(businessMetrics.id, id)).returning();
@@ -211,7 +212,7 @@ export function businessMetricService(db: Db) {
       return withV7ActivityTransaction(db, async (tx, publications) => {
         const deadline = performance.now() + 30_000;
         await tx.execute(sql`set local statement_timeout = '5s'`);
-        await admit(tx, companyId, actor); await lockBusinessEventCompany(tx, companyId);
+        await admit(tx, companyId, actor); await lockBusinessEventCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await metric(tx, companyId, query.metricId);
         if (row.status !== "published") throw conflict("Metric is not currently published");
         const revision = await version(tx, companyId, row.id, query.versionId);

@@ -40,7 +40,7 @@ Native document deletion and revision erasure record minimal document/revision
 guards in the existing analytical suppression register and authenticated restore
 ledger. Existing Goal/Project/Task guards apply with flags off. Replay deletes
 derived histories without deleting unrelated canonical sources or permitting
-service admission from quarantine. Ten strategy PostgreSQL regressions include
+service admission from quarantine. Eleven strategy PostgreSQL regressions include
 Foundation drift, immutable human approval, foreign identity, native ownership,
 cycles/CAS, Goal erasure, revision guards, retention, native Decision target ancestry,
 Foundation/Memory concurrency and an isolated database restore. Native metric,
@@ -50,8 +50,26 @@ database; it is not an archive, object-storage or hosted disaster-recovery drill
 
 Still open: operator UI and native Goal/Project/Portfolio surfaces; completeness-
 qualified drift/orphan/unserved findings; real native Decision candidate, Planning
-proposal and V7 Learning bridges; retention scheduling; full Memory-derived Task
-and document erasure coverage; provider/hosted qualification and full V8 regression.
+proposal and V7 Learning bridges; retention scheduling; remaining full privacy and native source coverage; provider/hosted qualification and full V8 regression.
 Expired observation pins currently fail closed through the metric owner rather than
 being presented as a readable strategic finding. This source slice does not make
 the build brief complete or grant a release stage.
+
+## Memory-derived native source erasure
+
+The actual Learning/Context consumer path now suppresses derived Task and document
+sources before scrubbing their payloads. It removes strategy histories, retained
+metric lineage/observations and event projections through their existing owners,
+and retains source guards for late or restored activity. These erasure steps run
+under Memory without seeking the analytical boundary. Metric mutation/query, target
+comparison and event projection take analytical then Memory before source work.
+Native Project deletion also takes both boundaries before deleting its source row.
+No global Memory or Foundation approval implementation was replaced.
+
+An actual native Learning promotion, Foundation approval, Context assembly and
+Memory purge removes both approved Foundation and Task strategy histories with V8
+disabled. Real PostgreSQL races verify Project deletion and metric publication wait
+for Memory before source row work; the latter rejects erased inputs and persists
+no observation. A late/restored event source that did not exist at erasure is denied
+by the retained native Task guard. These local checks do not qualify hosted restore
+or all remaining V8 domains.

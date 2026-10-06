@@ -7,6 +7,9 @@ import { businessEventService } from "../services/business-events.js";
 import { issueService } from "../services/issues.js";
 import { projectService } from "../services/projects.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
+import { eraseAnalyticalSourcesUnderMemory } from "../services/analytical-source-erasure.js";
+import { eraseBusinessEventObjectUnderMemory } from "../services/business-event-payload-erasure.js";
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -238,5 +241,23 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
     expect(businessEventBackfillSchema.safeParse({ from: "2026-01-01T00:00:00Z", until: "2026-01-01T00:00:00.100Z", limit: 200 }).success).toBe(true);
     expect(businessEventBackfillSchema.safeParse({ ...window, limit: 201 }).success).toBe(false);
     expect(businessEventBackfillSchema.safeParse({ ...window, from: window.until, until: window.from }).success).toBe(false);
+  });
+  it("denies late and restored activity projections after Memory erases a retained native Task", async () => {
+    await source({ status: "done" }); await service().backfill(companyId, actor, window);
+    const [original] = await stored();
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, companyId);
+      await eraseAnalyticalSourcesUnderMemory(tx, companyId, "issue", [issueId]);
+      await eraseBusinessEventObjectUnderMemory(tx, companyId, "issue", issueId);
+      await tx.update(issues).set({ title: "Erased workflow task", description: null }).where(eq(issues.id, issueId));
+    });
+    expect(await stored()).toHaveLength(0);
+    const late = await source({ status: "done" });
+    expect((await service().backfill(companyId, actor, window)).projected).toBe(0);
+    // The late source identity had no event suppression marker at erasure.
+    // Retaining the object guard must still deny its restored payload.
+    await db.insert(businessEvents).values({ ...original, id: late.id, sourceRef: late.id });
+    await db.insert(businessEventObjects).values({ companyId, eventId: late.id, objectType: "issue", objectId: issueId, qualifier: "primary" });
+    expect((await service().list(companyId, actor, window)).items).toHaveLength(0);
   });
 });

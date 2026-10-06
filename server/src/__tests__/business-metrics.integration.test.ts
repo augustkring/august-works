@@ -8,6 +8,7 @@ import { businessMetricService } from "../services/business-metrics/service.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
+import { eraseAnalyticalSourcesUnderMemory } from "../services/analytical-source-erasure.js";
 import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { issueService } from "../services/issues.js";
 import { projectService } from "../services/projects.js";
@@ -332,4 +333,29 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
     }
   }, 30000);
 
+  it("waits for Memory source erasure before publishing a metric observation", async () => {
+    const issue = await source("done"), registered = await published();
+    let releaseMemory!: () => void, signalHeld!: () => void;
+    const held = new Promise<void>(resolve => { signalHeld = resolve; }), release = new Promise<void>(resolve => { releaseMemory = resolve; });
+    const erasure = db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, companyId); signalHeld(); await release;
+      await tx.execute(sql`set local lock_timeout='1s'`);
+      await eraseAnalyticalSourcesUnderMemory(tx, companyId, "issue", [issue.id]);
+      await tx.update(issues).set({ title: "Erased workflow task", description: null }).where(eq(issues.id, issue.id));
+    });
+    await held;
+    const result = service().query(companyId, actor, query(registered.metric.id, registered.version.id));
+    // Attach the rejection handler immediately while coordinating both owners.
+    const outcome = result.then(value => ({ value }), error => ({ error }));
+    try {
+      let blocked = false; const deadline = performance.now()+5000;
+      while (performance.now()<deadline) {
+        const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_locks where locktype='advisory' and not granted and database=(select oid from pg_database where datname=current_database())) as waiting`);
+        if (row.waiting) { blocked = true; break; } await new Promise(resolve => setTimeout(resolve,20));
+      }
+      expect(blocked).toBe(true); releaseMemory(); await erasure;
+      expect(await outcome).toMatchObject({ error: { status: 409 } });
+      expect(await observations()).toHaveLength(0);
+    } finally { releaseMemory(); await Promise.allSettled([erasure,outcome]); }
+  });
 });

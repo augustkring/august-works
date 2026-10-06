@@ -5,6 +5,8 @@ import { memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memor
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
   workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, workflowOptimizerObservations, automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
+import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.js";
+import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
 import { conflict } from "../../errors.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { invalidateDerivedMemory } from "./derived-privacy.js";
@@ -175,6 +177,8 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
     or(...affected.map((step) => and(eq(workflowWaits.workflowRunId, step.workflowRunId), eq(workflowWaits.nodeId, step.nodeId)))))) : [];
   const issueIds = [...new Set([...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : [])])];
   if (issueIds.length) {
+    await eraseAnalyticalSourcesUnderMemory(db, companyId, "issue", issueIds, now);
+    for (const issueId of issueIds) await eraseBusinessEventObjectUnderMemory(db, companyId, "issue", issueId);
     await db.update(issues).set({ title: "Erased workflow task", description: null, updatedAt: now })
       .where(and(eq(issues.companyId, companyId), inArray(issues.id, issueIds)));
     await db.update(completionContracts).set({ contractJson: { payloadDeleted: true } }).where(and(eq(completionContracts.companyId, companyId), inArray(completionContracts.issueId, issueIds)));
@@ -186,6 +190,7 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
       eq(issueDocuments.companyId, companyId), inArray(issueDocuments.issueId, issueIds)));
     if (linkedDocs.length) {
       const ids = linkedDocs.map((doc) => doc.id);
+      await eraseAnalyticalSourcesUnderMemory(db, companyId, "document", ids, now);
       await db.update(documents).set({ title: "Erased workflow document", latestBody: "", updatedAt: now })
         .where(and(eq(documents.companyId, companyId), inArray(documents.id, ids)));
       await db.update(documentRevisions).set({ title: null, body: "", changeSummary: null })

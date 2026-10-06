@@ -9,6 +9,7 @@ import { executionProjectionsForRuns } from "./execution-projection.js";
 import type { ExecutionProjection } from "@paperclipai/shared";
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
+import { suppressAnalyticalSource } from "./analytical-privacy.js";
 import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
 import {
@@ -11370,6 +11371,7 @@ export function issueService(db: Db) {
         }
 
         if (removedIssue && issueDocumentIds.length > 0) {
+          for (const document of issueDocumentIds) await suppressAnalyticalSource(tx, removedIssue.companyId, "document", document.documentId);
           await tx.delete(documents).where(
             inArray(
               documents.id,

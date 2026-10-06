@@ -6,6 +6,7 @@ import type { AuthorizationActor } from "../authorization.js";
 import { accessService } from "../access.js";
 import { assertV7Authorization, v7HumanActorId } from "../v7-authorization.js";
 import { instanceSettingsService } from "../instance-settings.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
@@ -99,7 +100,7 @@ export function businessMetricTargetService(db: Db) {
       return db.transaction(async rawTx => {
         const tx = rawTx as unknown as Db;
         await tx.execute(sql`set local statement_timeout = '5s'`);
-        await admit(tx, companyId, actor); await lockAnalyticalCompany(tx, companyId);
+        await admit(tx, companyId, actor); await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await target(tx, companyId, actor, id);
         let reviewReason: string | null = null;
         if (row.status === "approved") {
@@ -113,7 +114,7 @@ export function businessMetricTargetService(db: Db) {
     async create(companyId: string, actor: AuthorizationActor, raw: CreateBusinessMetricTarget) {
       const input = createBusinessMetricTargetSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await admit(tx, companyId, actor, true); await lockAnalyticalCompany(tx, companyId);
+        await admit(tx, companyId, actor, true); await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         await definitionAdmission(tx, companyId, actor, input.definition);
         const [existing] = await tx.select({ id: businessMetricTargets.id }).from(businessMetricTargets).where(and(eq(businessMetricTargets.companyId, companyId), eq(businessMetricTargets.key, input.key)));
         if (existing) throw conflict("Metric target key already exists");
@@ -126,7 +127,7 @@ export function businessMetricTargetService(db: Db) {
     async revise(companyId: string, actor: AuthorizationActor, id: string, raw: ReviseBusinessMetricTarget) {
       const input = reviseBusinessMetricTargetSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await admit(tx, companyId, actor, true); await lockAnalyticalCompany(tx, companyId);
+        await admit(tx, companyId, actor, true); await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await target(tx, companyId, actor, id, true);
         if (row.revision !== input.expectedRevision || row.status === "retired") throw conflict("Target changed; refresh before revising");
         fixedIdentity(row, input.definition); await definitionAdmission(tx, companyId, actor, input.definition);
@@ -139,7 +140,7 @@ export function businessMetricTargetService(db: Db) {
     async approve(companyId: string, actor: AuthorizationActor, id: string, raw: ApproveBusinessMetricTarget) {
       const input = approveBusinessMetricTargetSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await admit(tx, companyId, actor, true); await lockAnalyticalCompany(tx, companyId);
+        await admit(tx, companyId, actor, true); await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await target(tx, companyId, actor, id, true);
         if (row.revision !== input.expectedRevision || row.status === "retired") throw conflict("Target changed; refresh before approval");
         const pin = await version(tx, companyId, id, input.versionId);
@@ -154,7 +155,7 @@ export function businessMetricTargetService(db: Db) {
     async retire(companyId: string, actor: AuthorizationActor, id: string, raw: RetireBusinessMetricTarget) {
       const input = retireBusinessMetricTargetSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await admit(tx, companyId, actor, true, false); await lockAnalyticalCompany(tx, companyId);
+        await admit(tx, companyId, actor, true, false); await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await target(tx, companyId, actor, id, true);
         if (row.revision !== input.expectedRevision || row.status === "retired") throw conflict("Target changed; refresh before retirement");
         const [updated] = await tx.update(businessMetricTargets).set({ status: "retired", revision: row.revision + 1, updatedAt: new Date() }).where(eq(businessMetricTargets.id, id)).returning();
@@ -166,7 +167,7 @@ export function businessMetricTargetService(db: Db) {
       const admitted = await db.transaction(async rawTx => {
         const tx = rawTx as unknown as Db;
         await tx.execute(sql`set local statement_timeout = '5s'`);
-        await admit(tx, companyId, actor); await lockAnalyticalCompany(tx, companyId);
+        await admit(tx, companyId, actor); await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await target(tx, companyId, actor, id);
         return { row, pin: await current(tx, companyId, actor, row) };
       });
@@ -177,7 +178,7 @@ export function businessMetricTargetService(db: Db) {
       return db.transaction(async rawTx => {
         const tx = rawTx as unknown as Db;
         await tx.execute(sql`set local statement_timeout = '5s'`);
-        await admit(tx, companyId, actor); await lockAnalyticalCompany(tx, companyId);
+        await admit(tx, companyId, actor); await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await target(tx, companyId, actor, id); await current(tx, companyId, actor, row);
         if (row.revision !== admitted.row.revision || row.approvedVersionId !== admitted.pin.id) throw conflict("Target changed while observing; refresh before comparing");
         await businessMetricService(tx).inspectCurrentObservation(companyId, actor, observation.id);

@@ -9,6 +9,7 @@ import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { goalService } from "../services/goals.js";
 import { issueService } from "../services/issues.js";
+import { projectService } from "../services/projects.js";
 import { decisionService } from "../services/decisions.js";
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
@@ -188,5 +189,26 @@ suite("native strategy links on migrated PostgreSQL", () => {
       expect(await restored.select().from(strategyExecutionLinkVersions).where(eq(strategyExecutionLinkVersions.linkId, erased.link.id))).toHaveLength(0);
       expect(await restored.select().from(strategyExecutionLinkApprovals).where(eq(strategyExecutionLinkApprovals.linkId, erased.link.id))).toHaveLength(0);
     } finally { await db.execute(sql`drop database ${sql.identifier(name)} with (force)`); }
+  });
+  it("takes Memory before deleting a Project row that a concurrent native owner updates", async () => {
+    const created = await approved({ ...definition(), from: { type: "project", id: projectId }, to: { type: "goal", id: goalId } });
+    let releaseMemory!: () => void, signalHeld!: () => void;
+    const held = new Promise<void>(resolve => { signalHeld = resolve; }), release = new Promise<void>(resolve => { releaseMemory = resolve; });
+    const mutation = db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, companyId); signalHeld(); await release;
+      await tx.execute(sql`set local lock_timeout='1s'`);
+      await projectService(tx).update(projectId, { name: "Privacy-reconciled native project" });
+    });
+    await held; const deletion = projectService(db).remove(projectId);
+    try {
+      let blocked = false; const deadline = performance.now()+5000;
+      while (performance.now()<deadline) {
+        const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_locks where locktype='advisory' and not granted and database=(select oid from pg_database where datname=current_database())) as waiting`);
+        if (row.waiting) { blocked = true; break; } await new Promise(resolve => setTimeout(resolve,20));
+      }
+      expect(blocked).toBe(true); releaseMemory(); await mutation;
+      expect(await deletion).toMatchObject({ id: projectId });
+      expect(await db.select().from(strategyExecutionLinks).where(eq(strategyExecutionLinks.id, created.link.id))).toHaveLength(0);
+    } finally { releaseMemory(); await Promise.allSettled([mutation,deletion]); }
   });
 });

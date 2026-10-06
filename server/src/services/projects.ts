@@ -1,4 +1,5 @@
 import { assertRoadmapFieldOwnership } from "./roadmap-field-ownership.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -951,7 +952,10 @@ export function projectService(db: Db) {
     remove: (id: string) =>
       db.transaction(async (tx) => {
         const [owner] = await tx.select({ companyId: projects.companyId }).from(projects).where(eq(projects.id, id));
-        if (owner) await lockBusinessEventCompany(tx, owner.companyId);
+        if (owner) {
+          await lockBusinessEventCompany(tx, owner.companyId);
+          await lockMemoryPrivacy(tx as unknown as Db, owner.companyId);
+        }
         const [row] = await tx
         .delete(projects)
         .where(eq(projects.id, id))

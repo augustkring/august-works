@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflows, workflowRevisions, workflowRuns, workflowStepRuns, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
+import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflows, workflowRevisions, workflowRuns, workflowStepRuns, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
 import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, type LearningChange } from "@paperclipai/shared";
 import { learningService } from "../services/learning/learning-service.js";
+import { strategyExecutionService } from "../services/strategy-execution/service.js";
+import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
+import { analyticalPurpose } from "./helpers/business-metric-fixture.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { memoryService } from "../services/memory/memory-service.js";
@@ -37,7 +40,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await db.insert(memoryRecords).values({ id, companyId, bindingId: binding!.id, providerKey: "local", memoryType: "outcome", scopeType: "company", content: `Actual customer outcome ${index}`, reviewState: "accepted", verificationState: "human_verified", observedAt: new Date(), createdByActorType: "system", createdByActorId: "fixture" });
       await db.insert(memoryEvidence).values({ companyId, memoryRecordId: id, sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${tasks[index]}`, sourceVersion: "1", observedAt: new Date(), excerptHash: String(index).repeat(64), citationJson: { label: "Reviewed Task" }, trustLevel: "high", supportsOrContradicts: "supports" });
     }
-    const document = await foundationService(db).createDraft(companyId, { foundationKey: "company_profile", title: "Company profile", body: "Original governed baseline", category: "company", documentType: "profile", sensitivity: "internal" }, principal);
+    const document = await foundationService(db).createDraft(companyId, { foundationKey: "company_profile", title: "Company profile", body: "Original governed baseline", category: "company", documentType: "profile", sensitivity: "internal", reviewFrequencyDays: 30 }, principal);
     targetId = document.id; revisionId = document.latestRevisionId!;
   });
   const cycleInput = () => ({ scope: { type: "company" as const, id: null }, purpose: "native_task_execution", trigger: "Repeated late review increases rework", memoryRecordIds: roots });
@@ -161,8 +164,22 @@ const support = await getEmbeddedPostgresTestSupport();
     const assembled = await contextEngineService(db).assemble({ companyId, agentId: agent!.id, runId: run!.id, issueId: task!.id, query: "evidence review", intent: "native_task_execution" });
     expect(assembled.packet.foundation).toHaveLength(1);
     expect((await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId, assembled.packet.manifest!.id))).map(root => root.memoryRecordId).sort()).toEqual([...roots].sort());
-    await instanceSettingsService(db).updateExperimental({ learning_engine_v7: false });
+    await instanceSettingsService(db).updateExperimental({ analytical_lineage_v8: true, business_metrics_v8: true, strategy_execution_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true });
+    const purpose = analyticalPurpose(); purpose.citation = "learned-strategy-purpose"; purpose.analyticalPurpose!.capabilities = ["strategy"];
+    const policy = await aiGovernanceService(db).obligation(owner, companyId, purpose);
+    const [goal] = await db.insert(goals).values({ companyId, title: "Reviewed objective" }).returning();
+    const [section] = await db.select().from(foundationSections).where(eq(foundationSections.documentRevisionId, accepted.latestRevisionId!));
+    const strategy = strategyExecutionService(db);
+    const linkDefinition = { to: { type: "goal" as const, id: goal!.id }, relationship: "supports" as const, rationale: "A reviewed hypothesis informed by retained Learning evidence", contribution: null, ownerUserId: "local-board", reviewFrequencyDays: 30, retentionDays: 30, sensitivity: "internal" as const, purpose: "management_intelligence" as const, governanceObligationRefs: [policy.id] };
+    const foundationLink = await strategy.create(companyId, owner, { definition: { ...linkDefinition, from: { type: "foundation_section", foundationDocumentId: targetId, approvedRevisionId: accepted.latestRevisionId!, sectionId: section!.id, headingPath: section!.headingPath, contentHash: section!.contentHash } } });
+    const taskLink = await strategy.create(companyId, owner, { definition: { ...linkDefinition, from: { type: "issue", id: task!.id } } });
+    for (const entry of [foundationLink,taskLink]) await strategy.approve(companyId, owner, entry.link.id, { expectedRevision: 1, versionId: entry.version.id, rationale: "Explicit review retains the approved evidence hypothesis" });
+    await instanceSettingsService(db).updateExperimental({ learning_engine_v7: false, strategy_execution_v8: false, business_metrics_v8: false });
     await db.transaction(async tx => purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]));
+    for (const entry of [foundationLink,taskLink]) {
+      expect(await db.select().from(strategyExecutionLinks).where(eq(strategyExecutionLinks.id, entry.link.id))).toHaveLength(0);
+      expect(await db.select().from(strategyExecutionLinkVersions).where(eq(strategyExecutionLinkVersions.linkId, entry.link.id))).toHaveLength(0);
+    }
     expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id)))[0]).toMatchObject({ contextSnapshot: {}, resultJson: null });
     expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]!.description).toBeNull();
     await db.update(heartbeatRuns).set({ resultJson: { restored: "Late learned source prose" } }).where(eq(heartbeatRuns.id, run!.id));

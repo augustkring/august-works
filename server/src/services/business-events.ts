@@ -8,6 +8,7 @@ import type { AuthorizationActor } from "./authorization.js";
 import { logActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { lockBusinessEventSource, suppressBusinessEventSource } from "./business-event-privacy.js";
+import { assertAnalyticalSourcesNotErased } from "./analytical-privacy.js";
 
 type ActivitySource = typeof activityLog.$inferSelect;
 const ACTIONS = new Set(["issue.created", "issue.updated", "issue.checked_out", "issue.released", "project.created", "project.updated"]);
@@ -48,6 +49,12 @@ export function businessEventService(db: Db) {
   }
   async function readable(companyId: string, actor: AuthorizationActor, objects: BusinessEventObject[]) {
     if (!objects.length) return false;
+    try {
+      await assertAnalyticalSourcesNotErased(db, companyId, objects.filter(o => o.objectType === "issue").map(o => o.objectId), objects.filter(o => o.objectType === "project").map(o => o.objectId));
+    } catch (error) {
+      if (!error || typeof error !== "object" || !("status" in error) || error.status !== 409) throw error;
+      return false;
+    }
     for (const object of objects) {
       if (object.objectType === "issue") {
         const [issue] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, object.objectId)));

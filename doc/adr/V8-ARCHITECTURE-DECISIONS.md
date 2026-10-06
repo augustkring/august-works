@@ -80,3 +80,14 @@ Ordinary metrics permission does not authorize it. A separate current strategy p
 can preserve existing metric policy identities; superseding a shared policy still
 requires its pinned consumers to publish reviewed evidence. Strategy definitions declare
 owner, review period, sensitivity, retention and current obligation references.
+
+## V8-009 — Memory-derived sources share the analytical erasure boundary
+
+Analytical writers, metric queries and commitment comparison acquire company then
+Memory privacy before source work. Memory callbacks use payload-erasure steps that
+do not seek the company lock in reverse; no global Memory helper is changed.
+Native Project deletion follows the same order before its row deletion. Native
+Learning/Context erasure propagates through derived Tasks, documents, metrics,
+events and strategy, independent of rollout. Source guards cover late activity
+identities as well as projections already present at erasure. Real PostgreSQL
+concurrency and actual native Learning/Context tests verify this boundary.
