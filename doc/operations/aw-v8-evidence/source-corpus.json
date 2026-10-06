@@ -1,0 +1,348 @@
+{
+  "uploadedFiles": 38,
+  "uniqueFiles": 37,
+  "sources": [
+    {
+      "name": "august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
+      "sha256": "bc9602a5fd8fff088b2ba287cc49e67398ad5d709bc32ca1eae3d6e8de76c48d",
+      "bytes": 260966,
+      "lines": 10239,
+      "words": 31976,
+      "path": "/workspace/attachments/4afd3ee6-efa4-4d9e-a173-4fd190c6ebf7/august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
+      "sha256": "bc9602a5fd8fff088b2ba287cc49e67398ad5d709bc32ca1eae3d6e8de76c48d",
+      "bytes": 260966,
+      "lines": 10239,
+      "words": 31976,
+      "path": "/workspace/attachments/3de26f50-5e7d-4dd8-af3d-76793ff33ca4/august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "03_engineering_workflow_sdlc_configuration_management_v2.md",
+      "sha256": "66d7afea2dbc7b035f034e6984addd774d732ad892b7629099901d1d0441f6d1",
+      "bytes": 121918,
+      "lines": 3822,
+      "words": 15789,
+      "path": "/workspace/attachments/1cd31b57-10ef-4413-b756-8685f6910ff3/03_engineering_workflow_sdlc_configuration_management_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "01_requirements_specification_domain_engineering_master_playbook_v2.2.md",
+      "sha256": "ed1a535e40a62e0e3bf7f55ad0eb4a3275090a91727c2b775c8e3063136b6a54",
+      "bytes": 158850,
+      "lines": 4769,
+      "words": 20093,
+      "path": "/workspace/attachments/2058f039-87fa-4165-bfc5-dbba7ee7dff9/01_requirements_specification_domain_engineering_master_playbook_v2.2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "02_software_architecture_system_design_v2.1_research_audited_golden_master.md",
+      "sha256": "42b8612fa4942ffde2efa90254f3d3d45c879c8e2ae70a7764d8287fa41eaa0f",
+      "bytes": 163435,
+      "lines": 6070,
+      "words": 20593,
+      "path": "/workspace/attachments/c9b3426b-77f7-43f8-93c5-89e7f1d0ac55/02_software_architecture_system_design_v2.1_research_audited_golden_master.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "04_software_construction_code_quality_v2.md",
+      "sha256": "c185f38376976b7e80f289fb039188e503d450cd7af9d159b079475d850733f5",
+      "bytes": 100560,
+      "lines": 2783,
+      "words": 13915,
+      "path": "/workspace/attachments/a9f75c2c-da51-4177-be60-56fd9c35cd12/04_software_construction_code_quality_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "06_security_engineering_v2_golden_master.md",
+      "sha256": "6ee0530424263b86e33ded1f09132f3e7adaed90711903fa4fc401f58bd7873e",
+      "bytes": 279064,
+      "lines": 6992,
+      "words": 35785,
+      "path": "/workspace/attachments/1f6a132f-c49e-4217-997f-35d4a0d095a4/06_security_engineering_v2_golden_master.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "05_verification_validation_testing_quality_engineering_v2.md",
+      "sha256": "ce9f27bbb8fb89ede84075f411d4861099618dfa5c36d6829ed05b53bd058236",
+      "bytes": 132218,
+      "lines": 3842,
+      "words": 16954,
+      "path": "/workspace/attachments/8d90df45-db8a-4197-bd51-ea0b71b92bf9/05_verification_validation_testing_quality_engineering_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "08_reliability_resilience_observability_sre_v2_golden_master.md",
+      "sha256": "1a6e338476890b2b3f2ff9fc8cb0cb29681260eba6f89645ea42c2445760575e",
+      "bytes": 159077,
+      "lines": 5438,
+      "words": 20995,
+      "path": "/workspace/attachments/518f2b72-61b5-40fc-a7f5-10e1d847bd6e/08_reliability_resilience_observability_sre_v2_golden_master.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "07_privacy_data_protection_engineering_v2.md",
+      "sha256": "73eec8b3584696f0dec1f706781d007d80c92479aa2d6ca7fa667588674bc264",
+      "bytes": 119003,
+      "lines": 3630,
+      "words": 15442,
+      "path": "/workspace/attachments/5a9ee8d9-c7df-4295-b3ed-4806e61a70a9/07_privacy_data_protection_engineering_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "09_performance_scalability_resource_cost_engineering_v2.md",
+      "sha256": "628f15dcf3499da24c2f8941f0cde630622f13fb68147fb91c5f18bc9bc5d58f",
+      "bytes": 116313,
+      "lines": 3288,
+      "words": 14746,
+      "path": "/workspace/attachments/ae732a52-5bb6-40c2-b719-4705252aaf23/09_performance_scalability_resource_cost_engineering_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "10_devops_cicd_release_platform_supply_chain_v2.md",
+      "sha256": "4a9ef5835b8cc4948a8f6547b351ed5a563c6cacc3270743f341f8928d5c283c",
+      "bytes": 141225,
+      "lines": 3990,
+      "words": 18062,
+      "path": "/workspace/attachments/c47c5fac-2745-4432-b484-32a868c80ba9/10_devops_cicd_release_platform_supply_chain_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "12_data_database_storage_engineering_v2_golden_master.md",
+      "sha256": "2e45000659a24de43a6187be8808f3a17807936571bc9248abf44a1697c6a711",
+      "bytes": 150942,
+      "lines": 3608,
+      "words": 18888,
+      "path": "/workspace/attachments/1d03759d-fd89-4b9e-b1e1-a802b867d512/12_data_database_storage_engineering_v2_golden_master.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "11_maintenance_evolution_migration_technical_debt_v2.md",
+      "sha256": "d1da27c2ddde4c6d8b8638257e3d3a0ca82fb7af2f19e191f9bf548d5e14e5f9",
+      "bytes": 109030,
+      "lines": 3666,
+      "words": 14059,
+      "path": "/workspace/attachments/c38827a6-45bb-46cc-9377-ea75551319e5/11_maintenance_evolution_migration_technical_debt_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "13_api_integration_distributed_systems_engineering_v2_golden_master.md",
+      "sha256": "bfa0e4a9deae39ed3302ea6aa1a915d8c0d771967ae4dfad2c55129e3a5c79da",
+      "bytes": 124805,
+      "lines": 4531,
+      "words": 16359,
+      "path": "/workspace/attachments/1ed8babc-d329-47a8-b7f8-c4757720c065/13_api_integration_distributed_systems_engineering_v2_golden_master.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "15_backend_services_engine_engineering_v2.md",
+      "sha256": "e22a3bc783a3007e186c87da9d5cf69b728cc4e06d722dac971054d4ae71249f",
+      "bytes": 105634,
+      "lines": 2722,
+      "words": 13574,
+      "path": "/workspace/attachments/3402aa33-b275-409d-851f-ec702587c6c0/15_backend_services_engine_engineering_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "16_mobile_desktop_application_engineering_v2.md",
+      "sha256": "61ac6979672db4c8fc078a9010f5a042ce9832f4471db2b01328bae2eb4559b9",
+      "bytes": 100826,
+      "lines": 2286,
+      "words": 13129,
+      "path": "/workspace/attachments/ac6e6787-b7dd-4272-afca-3982160e7206/16_mobile_desktop_application_engineering_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "17_cloud_infrastructure_networking_iac_v2.md",
+      "sha256": "31c10af587bb34ac41a38e1102010ebdb4906961a77f178d39037fb2154dab21",
+      "bytes": 106303,
+      "lines": 3328,
+      "words": 13601,
+      "path": "/workspace/attachments/9a3cd7a4-c8cf-46fc-a622-d6c640a48d58/17_cloud_infrastructure_networking_iac_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "18_ai_ml_llm_systems_engineering_master_playbook_v2.md",
+      "sha256": "7b1a948da1cc874c1aec68f30a427ccd10e4136c0a527659af54067a79f0f398",
+      "bytes": 145898,
+      "lines": 3377,
+      "words": 18559,
+      "path": "/workspace/attachments/81f7b25a-5871-4e3a-a584-038fa2f0c49b/18_ai_ml_llm_systems_engineering_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "20_blockchain_smart_contract_engineering_v2.md",
+      "sha256": "66a13d5d4bd7e16e041f4e62f17a16e2feb46742eb2515229ff279f8d87e69f9",
+      "bytes": 101780,
+      "lines": 3137,
+      "words": 12724,
+      "path": "/workspace/attachments/6d9df428-be4f-4b24-8322-e64e3f1b2e84/20_blockchain_smart_contract_engineering_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "19_agentic_ai_engineering_v2_golden_master.md",
+      "sha256": "6273cbb23263df0383094bd1aa7b303c46b75b8d8c1f699b4b1bb049dc2f3162",
+      "bytes": 190147,
+      "lines": 5048,
+      "words": 24035,
+      "path": "/workspace/attachments/6f195255-14ae-44b4-94a8-ed5f1d162387/19_agentic_ai_engineering_v2_golden_master.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "21_systems_embedded_real_time_engineering_v2.md",
+      "sha256": "1af242f1d68ea672d98ac8d9d51554f8b430409a97960c24a9d51a44bd35779d",
+      "bytes": 161648,
+      "lines": 4629,
+      "words": 20612,
+      "path": "/workspace/attachments/5eafb022-2dec-41dd-a97b-43de0316dc58/21_systems_embedded_real_time_engineering_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "22_language_runtime_engineering_standards_v2.md",
+      "sha256": "16a78607ebb0cfe75b5bc199b5bacc962a74b8a3384c75cad77f9a676061e51d",
+      "bytes": 95138,
+      "lines": 1662,
+      "words": 12321,
+      "path": "/workspace/attachments/44da58bd-a3ad-4575-a486-8a66a858c891/22_language_runtime_engineering_standards_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "concept_business_design_master_playbook_v2.md",
+      "sha256": "4a13b027673013d9ab92bc0c71d93239231c0bc3b5f9ffeaafed08b86bb8c794",
+      "bytes": 111559,
+      "lines": 2724,
+      "words": 15080,
+      "path": "/workspace/attachments/5aca0b85-642b-4f9a-8812-c638e7f32e1f/concept_business_design_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "brand_strategy_positioning_master_playbook_v2.md",
+      "sha256": "2bcbff7f36d6bdd433e18b608e48100cd4ae1ce7793a392fa474b28384365471",
+      "bytes": 115466,
+      "lines": 3400,
+      "words": 14694,
+      "path": "/workspace/attachments/8ea86663-0035-40e1-b902-8c451f4c618f/brand_strategy_positioning_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "digital_graphics_illustration_generative_visual_production_master_playbook_v2.1_golden_master.md",
+      "sha256": "4646aba5823f7765dd517a4ab3333ab4c93306ba4f9870e7f455a61b48a6200c",
+      "bytes": 171520,
+      "lines": 4174,
+      "words": 22485,
+      "path": "/workspace/attachments/0dbd84e1-1fa0-48b4-9c5a-eb0bc8fd16ca/digital_graphics_illustration_generative_visual_production_master_playbook_v2.1_golden_master.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "digital_visual_design_art_direction_master_playbook_v2.1_golden_master.md",
+      "sha256": "7e5cd92f82fcc82f91d8eb54121433d7dbd542bacdfdbdc8ff93c70d6695b1d2",
+      "bytes": 189008,
+      "lines": 5358,
+      "words": 25685,
+      "path": "/workspace/attachments/e75d393f-fe83-4e14-aa29-6e5255031211/digital_visual_design_art_direction_master_playbook_v2.1_golden_master.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "google_ads_master_playbook_v2.md",
+      "sha256": "fe9b3fc3221921072ca5244e9c1ebd2233a3fc6c84c7b65f709a97bf589a775f",
+      "bytes": 127430,
+      "lines": 3387,
+      "words": 16369,
+      "path": "/workspace/attachments/40870f99-b48b-4b60-8713-926db34b02a2/google_ads_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "market_validation_pretotyping_master_playbook_v2.md",
+      "sha256": "36b1941aead8b74a55999a3f29952bbb9a26a2ac54593e05796b1fc8e19d4a46",
+      "bytes": 147041,
+      "lines": 3936,
+      "words": 19545,
+      "path": "/workspace/attachments/b283fd92-c92c-4401-8f54-8cdbf1911065/market_validation_pretotyping_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "marketing_measurement_attribution_master_playbook_v2.md",
+      "sha256": "4dd41d59a12676830843cef734d300bed1f5dcd89106408a3181b1fc9429bd14",
+      "bytes": 118078,
+      "lines": 3666,
+      "words": 14514,
+      "path": "/workspace/attachments/ae9fd744-75e9-405f-b020-dd0bc5ed356c/marketing_measurement_attribution_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "master_playbook_standard_v2.0.md",
+      "sha256": "3d5aa0b87d87ca345402f18dedde7893a67b1af21b23100b8117a082f55ff890",
+      "bytes": 214638,
+      "lines": 6411,
+      "words": 26787,
+      "path": "/workspace/attachments/196bd270-5009-4db5-ba64-642b7c7c7916/master_playbook_standard_v2.0.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "meta_ads_master_playbook_v2.md",
+      "sha256": "df73a733fab4058af29355584aa84b7d10d36642461f0fb5a759146e03c8ac16",
+      "bytes": 121142,
+      "lines": 3542,
+      "words": 15804,
+      "path": "/workspace/attachments/c0836760-6a8a-4f04-857e-b9a1b7975309/meta_ads_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "ui_master_playbook_v2.md",
+      "sha256": "863c87a97de488d60eb5cb687da2b85d177095cd59545742c048bb402a1ce656",
+      "bytes": 170427,
+      "lines": 5506,
+      "words": 22737,
+      "path": "/workspace/attachments/cc9f93e7-3066-462d-bf89-b83cf8561915/ui_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "organic_discoverability_master_playbook_v2.md",
+      "sha256": "ab4d130d89613f302a53aa83896cd1351483dc5d635dc1fc9ac97bd3a479a1fd",
+      "bytes": 172349,
+      "lines": 4979,
+      "words": 22831,
+      "path": "/workspace/attachments/699894fd-abf9-423f-9ef6-b871012c1679/organic_discoverability_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "universal_design_principles_master_playbook_v2.md",
+      "sha256": "e1311908de3f296f17d99d5cbaa514b3488cf1cb39e71b6396a3627037aa687f",
+      "bytes": 144109,
+      "lines": 4003,
+      "words": 19270,
+      "path": "/workspace/attachments/82066224-9f22-4b34-8b13-887b7a7e6204/universal_design_principles_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "universal_software_ai_engineering_master_playbook_v2.md",
+      "sha256": "df11fe0389acc15df5afe87f873eb726d06b6131d282d20f26472b05e47792e5",
+      "bytes": 201414,
+      "lines": 4324,
+      "words": 25471,
+      "path": "/workspace/attachments/f009c9be-7952-4380-a2d1-266832a25a76/universal_software_ai_engineering_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "ux_master_playbook_v2_double_validated_2026-09-21.md",
+      "sha256": "47978d13e56cd7d3dc0e69985f03759161a79e2e4fe3f610ff42b8d2fc86ba49",
+      "bytes": 165540,
+      "lines": 4665,
+      "words": 21580,
+      "path": "/workspace/attachments/c2846df2-ff4b-4915-87cc-ce71649fc767/ux_master_playbook_v2_double_validated_2026-09-21.md",
+      "reviewStatus": "pending"
+    },
+    {
+      "name": "web_frontend_engineering_master_playbook_v2.md",
+      "sha256": "e8b60779a7174ff54b2e95595b9de85f5363b5b61123ff7023dee89383ed8ac3",
+      "bytes": 113728,
+      "lines": 3638,
+      "words": 14673,
+      "path": "/workspace/attachments/ae6b7c49-a8d8-48ee-892e-1a57702cd2df/web_frontend_engineering_master_playbook_v2.md",
+      "reviewStatus": "pending"
+    }
+  ]
+}
