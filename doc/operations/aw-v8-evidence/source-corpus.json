@@ -332,7 +332,12 @@
       "lines": 5506,
       "words": 22737,
       "path": "/workspace/attachments/cc9f93e7-3066-462d-bf89-b83cf8561915/ui_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 5506
+      },
+      "applicability": "Coherent appearance, semantics, state and behavior; native controls and existing tokens; explicit scope, loading, empty, permission, failure and recovery states. Preserve keyboard focus and responsive task capability; distinguish proposals, execution and evidence; truthful progress and risk-proportionate oversight. Automated checks alone do not establish accessibility or task usability."
     },
     {
       "name": "organic_discoverability_master_playbook_v2.md",
@@ -350,7 +355,12 @@
       "lines": 4003,
       "words": 19270,
       "path": "/workspace/attachments/82066224-9f22-4b34-8b13-887b7a7e6204/universal_design_principles_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4003
+      },
+      "applicability": "Task-driven hierarchy, grouping, legibility, semantic tokens and controlled density; accessible contrast and non-color meaning. Honest quantitative encodings and axes; no decorative charts, universal aesthetic recipes or invented trust cues. Preference, attention, brand association and causal product outcomes remain distinct."
     },
     {
       "name": "universal_software_ai_engineering_master_playbook_v2.md",
@@ -373,7 +383,12 @@
       "lines": 4665,
       "words": 21580,
       "path": "/workspace/attachments/c2846df2-ff4b-4915-87cc-ce71649fc767/ux_master_playbook_v2_double_validated_2026-09-21.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4665
+      },
+      "applicability": "Prioritize the user outcome and whole journey, preserve existing mental models and valid work under failure. Explicit scope, evidence, recoverability, permission and partial completion; accessible native flows and responsive task parity. Assignment and telemetry integrity precede experiment conclusions; subjective preference and explanations do not establish objective usability or correctness."
     },
     {
       "name": "web_frontend_engineering_master_playbook_v2.md",
