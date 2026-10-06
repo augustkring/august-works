@@ -3,6 +3,9 @@
 Date: 2026-10-06. Baseline: `4686ec66ce2cc62dd752a316d7074780577b2e91`.
 Branch: `fix/aw-v2-release-foundation`.
 
+Follow-up: [continued security fixes and native verification](2026-10-06-aw-v2-release-foundation-follow-up.md)
+supersede the dependency counts and local-toolchain blockers recorded below.
+
 ## Scope and decision
 
 Implement the dependency/security/CI foundation from v2 A01–A03 before changing
