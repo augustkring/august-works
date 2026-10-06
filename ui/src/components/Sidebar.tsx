@@ -226,6 +226,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           <SidebarNavItem to="/issues" label="Tasks" icon={CircleCheck} />
           <SidebarNavItem to="/routines" label="Routines" icon={Repeat} />
           {v7FeatureEnabled(experimentalSettings ?? {}, "orchestration_v7") && <SidebarNavItem to="/orchestration" label="Orchestration" icon={Network} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "strategy_execution_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/strategy-execution" label="Strategy and execution" icon={Network} />}
           {v8FeatureEnabled(experimentalSettings ?? {}, "business_metrics_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/business-metrics" label="Business metrics" icon={Target} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "ai_use_cases_v7") && <SidebarNavItem to="/ai-governance" label="AI Governance" icon={BookOpen} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "enterprise_identity_v7") && <SidebarNavItem to="/company/settings/enterprise" label="Enterprise" icon={BookOpen} />}

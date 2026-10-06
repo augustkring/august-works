@@ -52,7 +52,8 @@
     "native_immutable_metric_commitments_and_human_approval",
     "current_observation_source_authority_before_target_comparison",
     "native_goal_target_erasure_and_signed_restore_guards",
-    "native_strategy_link_API_immutable_human_approvals_current_pins_and_source_ancestry_partial"
+    "native_strategy_link_API_immutable_human_approvals_current_pins_and_source_ancestry_partial",
+    "native_strategy_operator_ui_with_separate_human_approval_and_bounded_native_source_selection"
   ],
   "unfinishedWaves": [
     "remaining_domain_owner_reconciliation",
@@ -92,7 +93,11 @@
     "tests/storybook-visual/business-metrics.spec.ts",
     "packages/shared/src/business-metric-targets.test.ts",
     "server/src/__tests__/business-metric-targets.integration.test.ts",
-    "server/src/__tests__/business-metric-target-comparison.test.ts"
+    "server/src/__tests__/business-metric-target-comparison.test.ts",
+    "packages/shared/src/strategy-execution.test.ts",
+    "server/src/__tests__/strategy-execution.integration.test.ts",
+    "ui/src/pages/StrategyExecution.test.tsx",
+    "tests/storybook-visual/strategy-execution.spec.ts"
   ],
   "limitations": [
     "Feature configuration does not prove implementation or authorization.",
