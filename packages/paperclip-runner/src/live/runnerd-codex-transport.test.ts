@@ -4255,7 +4255,7 @@ it("steers the active provider turn through the durable PRP command path", async
   }
 }, 30_000);
 
-it.each(["held-ack", "lost-ack", "rejected-attach"] as const)(
+it.each(["held-ack", "lost-ack", "late-observer", "rejected-attach"] as const)(
   "preserves old warm-attach authority and event ownership across %s",
   async (mode) => {
     const stateDirectory = await mkdtemp(join(tmpdir(), "runnerd-warm-ack-"));
@@ -4393,13 +4393,15 @@ it.each(["held-ack", "lost-ack", "rejected-attach"] as const)(
       const runnerPid = bundle.evidence().runnerPid;
       providerPid = bundle.evidence().codexPid;
       const rotations: (typeof core.store.state)[] = [];
-      const rotate = core.rotateRunIdentity.bind(core);
-      vi.spyOn(core, "rotateRunIdentity").mockImplementation(
-        (identity, template) => {
+      const commit = core.store.commit.bind(core.store);
+      vi.spyOn(core.store, "commit").mockImplementation((candidate) => {
+        // The authenticated peer can activate before attachRun's observer
+        // calls rotateRunIdentity. Inspect the actual durable owner boundary.
+        if (candidate.identity.runId !== core.store.state.identity.runId) {
           rotations.push(structuredClone(core.store.state));
-          return rotate(identity, template);
-        },
-      );
+        }
+        return commit(candidate);
+      });
       if (mode === "rejected-attach") {
         const queue = core.queueCommand.bind(core);
         vi.spyOn(core, "queueCommand").mockImplementation(
@@ -4419,6 +4421,19 @@ it.each(["held-ack", "lost-ack", "rejected-attach"] as const)(
               immediate,
             ),
         );
+      }
+      if (mode === "late-observer") {
+        const get = core.getCommand.bind(core);
+        vi.spyOn(core, "getCommand").mockImplementation((id) => {
+          const command = get(id);
+          // Model a command observer whose next poll runs after the new peer
+          // has authenticated. The protocol permits that activation first.
+          if (command?.type === "run.attach" && command.status === "completed" &&
+              core.store.state.identity.runId === oldIdentity.runId) {
+            return { ...command, status: "pending" };
+          }
+          return command;
+        });
       }
       armed = true;
       const attachment = bundle.transport.attachRun!({

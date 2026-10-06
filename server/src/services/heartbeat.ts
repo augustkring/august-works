@@ -24204,7 +24204,12 @@ export function heartbeatService(
                 nativeDispatchAtMs,
               }),
             );
-            const nativeBackend = await selectNativeHeartbeatBackend(db, nativeExecution, options.nativeSessionBackendFactory);
+            // Draft projection is asynchronous and has no provider effects.
+            // Ordinary provider factories must stay inside the atomic dispatch
+            // gate, after cancellation and chat admission have been rechecked.
+            const nativeDraftBackend = nativeExecution.provider.kind === "aw_text_only"
+              ? await selectNativeHeartbeatBackend(db, nativeExecution)
+              : undefined;
             const guardedDispatch =
               await dispatchResolvedInteractionContinuationWithAtomicGate(
                 (markDispatchStarted) =>
@@ -24216,7 +24221,9 @@ export function heartbeatService(
                     runnerInstanceId: nativeRunnerInstanceId,
                     leaseOwner: runOptions.nativeLeaseOwner,
                     restartRecovery: runOptions.nativeRestartRecovery,
-                    backend: nativeBackend,
+                    backend: nativeExecution.provider.kind === "aw_text_only"
+                      ? nativeDraftBackend
+                      : options.nativeSessionBackendFactory?.(nativeExecution),
                     useRunnerd: agent.adapterType === "paperclip_runner" && nativeExecution.provider.kind !== "aw_text_only",
                     adapterType: agent.adapterType,
                     sessionGoalControl,
