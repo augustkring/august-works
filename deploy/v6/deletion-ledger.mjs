@@ -29,11 +29,13 @@ export function authenticateDeletionLedger(
     !Array.isArray(ledger.companies) ||
     !Array.isArray(ledger.memory) ||
     !Array.isArray(ledger.businessEvents) ||
+    !Array.isArray(ledger.analyticalSources) ||
     !Array.isArray(ledger.identityHomes ?? []) ||
     !Array.isArray(ledger.users ?? []) ||
     ledger.companies.length +
       ledger.memory.length +
       ledger.businessEvents.length +
+      ledger.analyticalSources.length +
       (ledger.identityHomes?.length ?? 0) +
       (ledger.users?.length ?? 0) >
       100000
@@ -64,6 +66,12 @@ export function authenticateDeletionLedger(
     if (!uuid.test(row?.company_id ?? "") || !uuid.test(row?.source_ref ?? "") ||
       !Number.isFinite(Date.parse(row.suppressed_at)) || Date.parse(row.suppressed_at) > exportedAt)
       throw Error("Invalid Business Events suppression marker");
+  }
+  for (const row of ledger.analyticalSources) {
+    if (!uuid.test(row?.company_id ?? "") || !uuid.test(row?.input_ref ?? "") ||
+      !["issue", "project"].includes(row?.input_type) ||
+      !Number.isFinite(Date.parse(row.suppressed_at)) || Date.parse(row.suppressed_at) > exportedAt)
+      throw Error("Invalid analytical source suppression marker");
   }
   for (const row of ledger.users ?? [])
     if (

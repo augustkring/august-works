@@ -9,7 +9,7 @@ const base = {
   exportedAt: new Date(now).toISOString(),
   companies: [{ company_id: "00000000-0000-4000-8000-000000000001" }],
   memory: [],
-  businessEvents: [],
+  businessEvents: [], analyticalSources: [],
 };
 function sign(value) {
   const payload = JSON.stringify(value);
@@ -92,5 +92,20 @@ test("V8 restore requires a bounded, authenticated suppression section with exac
     { ...base, businessEvents: [{ ...marker, suppressed_at: "invalid" }] },
     { ...base, businessEvents: [{ ...marker, suppressed_at: new Date(now + 1).toISOString() }] },
     { ...base, businessEvents: Array(100001).fill(marker) },
+  ]) assert.throws(() => authenticateDeletionLedger(sign(invalid), key, "staging", now));
+});
+
+test("analytical restore requires native object guards even when no event was projected", () => {
+  const marker = { company_id: base.companies[0].company_id, input_type: "issue", input_ref: "00000000-0000-4000-8000-000000000002", suppressed_at: base.exportedAt };
+  const valid = { ...base, analyticalSources: [marker] };
+  assert.deepEqual(authenticateDeletionLedger(sign(valid), key, "staging", now), valid);
+  const { analyticalSources, ...legacy } = base;
+  for (const invalid of [legacy, { ...base, analyticalSources: {} },
+    { ...base, analyticalSources: [{ ...marker, input_type: "employee" }] },
+    { ...base, analyticalSources: [{ ...marker, input_ref: "invalid" }] },
+    { ...base, analyticalSources: [{ ...marker, company_id: "other" }] },
+    { ...base, analyticalSources: [{ ...marker, suppressed_at: "invalid" }] },
+    { ...base, analyticalSources: [{ ...marker, suppressed_at: new Date(now + 1).toISOString() }] },
+    { ...base, analyticalSources: Array(100001).fill(marker) },
   ]) assert.throws(() => authenticateDeletionLedger(sign(invalid), key, "staging", now));
 });

@@ -47,7 +47,8 @@
     "native_issue_project_deletion_business_event_suppression",
     "native_governed_metric_owner_and_bounded_queries",
     "native_analytical_lineage_and_issue_project_invalidation",
-    "native_metric_operator_ui_and_analytical_purpose_editor"
+    "native_metric_operator_ui_and_analytical_purpose_editor",
+    "analytical_source_owner_suppression_and_signed_quarantine_reconciliation"
   ],
   "unfinishedWaves": [
     "remaining_domain_owner_reconciliation",

@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
-import { analyticalLineageEdges, analyticalLineageManifests, businessMetricObservations, businessMetricVersions, companies, createDb, governanceObligations, issues, projects } from "@paperclipai/db";
+import { eq, sql } from "drizzle-orm";
+import { analyticalLineageEdges, analyticalLineageManifests, analyticalSourceSuppressions, businessMetricObservations, businessMetricVersions, businessMetricPublications, businessMetrics, applyPendingMigrations, companies, createDb, governanceObligations, issues, projects } from "@paperclipai/db";
 import { businessMetricDefinitionSchema, queryBusinessMetricSchema } from "@paperclipai/shared";
 import { businessMetricService } from "../services/business-metrics/service.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
 import { issueService } from "../services/issues.js";
 import { projectService } from "../services/projects.js";
 import { analyticalPurpose, metricDefinition } from "./helpers/business-metric-fixture.js";
@@ -185,5 +186,91 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
     await expect(service().query(companyId, actor, query(registered.metric.id, registered.version.id))).rejects.toMatchObject({ status: 403 });
     expect(await observations()).toHaveLength(0);
   });
+
+  it("retains a content-free source guard and rejects late or restored analytical input after native erasure without an activity source", async () => {
+    const issue = await source("done"); const registered = await published();
+    const result = await service().query(companyId, actor, query(registered.metric.id, registered.version.id));
+    const [manifest] = await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id, result.lineageManifestId));
+    const edges = await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId, manifest.id));
+    await issueService(db).remove(issue.id);
+    const guards = await db.select().from(analyticalSourceSuppressions).where(eq(analyticalSourceSuppressions.companyId, companyId));
+    expect(guards).toHaveLength(1); expect(guards[0]).toMatchObject({ inputType: "issue", inputRef: issue.id });
+    expect(Object.keys(guards[0]).sort()).toEqual(["companyId", "inputRef", "inputType", "suppressedAt"]);
+    // Simulate pre-deletion source/manifest payload arriving after its retained guard.
+    await db.insert(issues).values(issue);
+    await db.insert(analyticalLineageManifests).values(manifest);
+    await expect(db.insert(analyticalLineageEdges).values(edges.find(edge => edge.inputType === "issue")!)).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(service().query(companyId, actor, query(registered.metric.id, registered.version.id))).rejects.toMatchObject({ status: 409 });
+    expect(await observations()).toHaveLength(0);
+  });
+
+  it("rejects altered evidence snapshots and an observation associated with an inconsistent lineage manifest", async () => {
+    await source("done"); const registered = await published();
+    const result = await service().query(companyId, actor, query(registered.metric.id, registered.version.id));
+    await expect(db.update(analyticalLineageManifests).set({ sourceCount: 99 }).where(eq(analyticalLineageManifests.id, result.lineageManifestId))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.update(businessMetricObservations).set({ inputHash: "c".repeat(64) }).where(eq(businessMetricObservations.id, result.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    const [observation] = await observations();
+    await expect(db.insert(businessMetricObservations).values({ ...observation, id: randomUUID() })).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+
+  it("reapplies post-backup analytical deletion in isolated native quarantine with flags off and preserves unrelated observations", async () => {
+    const erased = await source("done"); await source("todo");
+    const registered = await published();
+    const erasedResult = await service().query(companyId, actor, query(registered.metric.id, registered.version.id));
+    const retainedDefinition = businessMetricDefinitionSchema.parse({ ...metricDefinition(policyId), valueType: "count", unit: "objects", calculation: { kind: "native_count", population: { entity: "issue", statuses: ["todo"], projectId: null } } });
+    const retained = await published(retainedDefinition);
+    const retainedResult = await service().query(companyId, actor, query(retained.metric.id, retained.version.id));
+    const backup = {
+      companies: await db.select().from(companies).where(sql`${companies.id} in (${companyId}::uuid, ${otherCompanyId}::uuid)`),
+      projects: await db.select().from(projects).where(eq(projects.companyId, companyId)),
+      issues: await db.select().from(issues).where(eq(issues.companyId, companyId)),
+      policies: await db.select().from(governanceObligations).where(eq(governanceObligations.companyId, companyId)),
+      metrics: await db.select().from(businessMetrics).where(eq(businessMetrics.companyId, companyId)),
+      versions: await db.select().from(businessMetricVersions).where(eq(businessMetricVersions.companyId, companyId)),
+      publications: await db.select().from(businessMetricPublications).where(eq(businessMetricPublications.companyId, companyId)),
+      manifests: await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId, companyId)),
+      edges: await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.companyId, companyId)),
+      observations: await observations(),
+    };
+    await issueService(db).remove(erased.id);
+    const guard = (await db.select().from(analyticalSourceSuppressions).where(eq(analyticalSourceSuppressions.companyId, companyId)))[0];
+    const name = `aw_restore_${randomUUID().replaceAll("-", "")}`;
+    const target = new URL(database.connectionString); target.pathname = `/${name}`;
+    await db.execute(sql`create database ${sql.identifier(name)}`);
+    const restored = createDb(target.toString());
+    try {
+      await applyPendingMigrations(target.toString());
+      await restored.insert(companies).values(backup.companies);
+      await restored.insert(projects).values(backup.projects);
+      await restored.insert(issues).values(backup.issues);
+      await restored.insert(governanceObligations).values(backup.policies);
+      // Break only the insert-order cycle; restore the canonical pointers after versions.
+      await restored.insert(businessMetrics).values(backup.metrics.map(row => ({ ...row, publishedVersionId: null, status: "draft" as const })));
+      await restored.insert(businessMetricVersions).values(backup.versions);
+      for (const row of backup.metrics) await restored.update(businessMetrics).set({ status: row.status, publishedVersionId: row.publishedVersionId }).where(eq(businessMetrics.id, row.id));
+      await restored.insert(businessMetricPublications).values(backup.publications);
+      await restored.insert(analyticalLineageManifests).values(backup.manifests);
+      await restored.insert(analyticalLineageEdges).values(backup.edges);
+      await restored.insert(businessMetricObservations).values(backup.observations);
+      const marker = { company_id: guard.companyId, input_type: guard.inputType, input_ref: guard.inputRef, suppressed_at: guard.suppressedAt.toISOString() };
+      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], analyticalSources: [marker, marker,
+        { ...marker, company_id: otherCompanyId }, { ...marker, company_id: randomUUID() }] });
+      await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
+      expect((await instanceSettingsService(restored).getExperimental()).business_metrics_v8).toBe(false);
+      const kept = await restored.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId, companyId));
+      expect(kept.map(row => row.id)).toEqual([retainedResult.id]);
+      expect(await restored.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id, erasedResult.lineageManifestId))).toHaveLength(0);
+      expect(await restored.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId, erasedResult.lineageManifestId))).toHaveLength(0);
+      expect(await restored.select().from(analyticalSourceSuppressions).where(eq(analyticalSourceSuppressions.companyId, companyId))).toHaveLength(1);
+      // Direct service exercise cannot clear the application's independent quarantine gate.
+      await instanceSettingsService(restored, { runtimeEnv: {} }).updateExperimental(flags);
+      await expect(businessMetricService(restored).query(companyId, actor, query(registered.metric.id, registered.version.id))).rejects.toMatchObject({ status: 409 });
+      expect((await businessMetricService(restored).query(companyId, actor, query(retained.metric.id, retained.version.id))).value).toBe(1);
+      await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
+    } finally {
+      await restored.$client.end({ timeout: 1 });
+      await db.execute(sql`drop database ${sql.identifier(name)}`);
+    }
+  }, 30000);
 
 });

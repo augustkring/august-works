@@ -10,11 +10,13 @@ import { and, eq } from "drizzle-orm";
 import { eraseAccountAccess } from "./account-deletion.js";
 import { purgeCompanyContent } from "./company-purge.js";
 import { reapplyMemoryDeletionMarkers } from "../memory/memory-privacy.js";
+import { suppressAnalyticalSource } from "../analytical-privacy.js";
 import { suppressBusinessEventSource } from "../business-event-privacy.js";
 export { assertDatabaseRestoreAdmission } from "./database-admission.js";
 
 export interface RestoreDeletionLedger {
   companies: { company_id: string }[];
+  analyticalSources: { company_id: string; input_type: "issue" | "project"; input_ref: string; suppressed_at: string }[];
   businessEvents: { company_id: string; source_ref: string; suppressed_at: string }[];
   identityHomes?: { id: string; home_company_id: string }[];
   users?: { id: string; user_id: string; created_at: string }[];
@@ -34,8 +36,8 @@ export async function prepareRestoredQuarantine(
 ) {
   // A freshly exported V8-aware ledger is required even when the backup predates
   // V8. Absence cannot establish that no post-backup projection was suppressed.
-  if (!Array.isArray(ledger.businessEvents))
-    throw Error("V8-aware Business Events deletion ledger required");
+  if (!Array.isArray(ledger.businessEvents) || !Array.isArray(ledger.analyticalSources))
+    throw Error("V8-aware event and analytical-source deletion ledger required");
   const target = new URL(connectionString);
   if (
     !["127.0.0.1", "localhost", "[::1]"].includes(target.hostname) ||
@@ -104,6 +106,12 @@ export async function prepareRestoredQuarantine(
       const company = await tx.execute<{ present: boolean }>(sql`select exists(select 1 from companies where id=${marker.company_id}::uuid) as present`);
       if (company[0]?.present)
         await suppressBusinessEventSource(tx, marker.company_id, marker.source_ref, new Date(marker.suppressed_at));
+    });
+  }
+  for (const marker of ledger.analyticalSources) {
+    await db.transaction(async (tx) => {
+      const company = await tx.execute<{ present: boolean }>(sql`select exists(select 1 from companies where id=${marker.company_id}::uuid) as present`);
+      if (company[0]?.present) await suppressAnalyticalSource(tx, marker.company_id, marker.input_type, marker.input_ref, new Date(marker.suppressed_at));
     });
   }
   for (const marker of ledger.memory)

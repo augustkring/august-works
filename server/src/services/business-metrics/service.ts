@@ -12,9 +12,13 @@ import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { lockBusinessEventCompany } from "../business-event-privacy.js";
 import { calculateNativeMetric, NATIVE_METRIC_ENGINE_VERSION, type NativeMetricInput } from "./native-engine.js";
+import { assertAnalyticalSourcesNotErased } from "../analytical-privacy.js";
 import { currentMetricPurpose } from "./purpose.js";
 
 export function businessMetricService(db: Db) {
+  function queryTimeBudget(deadline: number) {
+    if (performance.now() > deadline) throw unprocessable("Metric query time budget exceeded; select a smaller population", { code: "metric_query_time_budget_exceeded" });
+  }
   async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, checkFlags = true) {
     v7HumanActorId(actor);
     await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
@@ -56,26 +60,43 @@ export function businessMetricService(db: Db) {
       type: "issue", companyId, issueId: id, projectId: issue.projectId, parentIssueId: issue.parentId, assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId, status: issue.status, originKind: issue.originKind, originId: issue.originId,
     } })).allowed;
   }
-  async function inputs(tx: Db, companyId: string, actor: AuthorizationActor, definition: BusinessMetricDefinition, query: BusinessMetricQuery) {
+  async function inputs(tx: Db, companyId: string, actor: AuthorizationActor, definition: BusinessMetricDefinition, query: BusinessMetricQuery, deadline: number) {
     const calculation = definition.calculation;
     if (calculation.kind === "external_metric") throw unprocessable("This metric requires its pinned, qualified external authority", { code: "external_metric_provider_unqualified" });
     const population = calculation.kind === "native_count" ? calculation.population : calculation.denominator;
     if (population.entity === "issue" && population.projectId && !await permitted(tx, companyId, actor, "project", population.projectId)) throw forbidden("Metric population is outside the current authorization boundary");
     const table = population.entity === "issue" ? issues : projects;
-    const rows = await tx.select({ id: table.id, status: table.status, createdAt: table.createdAt, updatedAt: table.updatedAt,
-      projectId: population.entity === "issue" ? issues.projectId : sql<string | null>`null`,
-    }).from(table).where(and(eq(table.companyId, companyId), inArray(table.status, population.statuses),
-      sql`${table.createdAt} >= ${query.from}::timestamptz`, sql`${table.createdAt} < ${query.until}::timestamptz`,
-      population.entity === "issue" && population.projectId ? eq(issues.projectId, population.projectId) : undefined,
-    )).orderBy(asc(table.id)).limit(query.maxRows + 1).for("share");
+    // One bounded PostgreSQL statement supplies both its snapshot inputs and
+    // read time, including the empty population. Commit time is not source time.
+    const selected = await tx.execute<{ observed_at: Date; sources: NativeMetricInput[] }>(sql`
+      with candidates as (
+        select ${table.id} as id, ${table.status} as status, ${table.createdAt} as created_at, ${table.updatedAt} as updated_at,
+          ${population.entity === "issue" ? issues.projectId : sql`null::uuid`} as project_id
+        from ${table} where ${and(eq(table.companyId, companyId), inArray(table.status, population.statuses),
+          sql`${table.createdAt} >= ${query.from}::timestamptz`, sql`${table.createdAt} < ${query.until}::timestamptz`,
+          population.entity === "issue" && population.projectId ? eq(issues.projectId, population.projectId) : undefined)}
+        order by ${table.id} limit ${query.maxRows + 1} for share
+      )
+      select statement_timestamp() as observed_at,
+        coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'entity', ${population.entity}::text, 'status', c.status, 'projectId', c.project_id,
+          'createdAt', to_char(c.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+          'updatedAt', to_char(c.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')) order by c.id), '[]'::jsonb) as sources
+      from candidates c
+    `);
+    const rows = selected[0].sources;
     // Never aggregate an actor-filtered subset while calling it the defined
     // population. Every contributing object's current authority is required.
     for (const row of rows) {
+      queryTimeBudget(deadline);
       if (!await permitted(tx, companyId, actor, population.entity, row.id)
         || (row.projectId && !await permitted(tx, companyId, actor, "project", row.projectId))) throw forbidden("Metric population is outside the current authorization boundary");
     }
+    queryTimeBudget(deadline);
+    await assertAnalyticalSourcesNotErased(tx, companyId,
+      population.entity === "issue" ? rows.map(row => row.id) : [],
+      population.entity === "project" ? rows.map(row => row.id) : [...rows.map(row => row.projectId).filter((id): id is string => id !== null), ...(population.projectId ? [population.projectId] : [])]);
     if (rows.length > query.maxRows) throw unprocessable("Metric population exceeds the bounded query budget", { code: "metric_population_budget_exceeded" });
-    return rows.map(row => ({ ...row, entity: population.entity, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() })) satisfies NativeMetricInput[];
+    return { sources: rows, observedAt: new Date(selected[0].observed_at) };
   }
   return {
     async list(companyId: string, actor: AuthorizationActor, cursor?: string) {
@@ -142,6 +163,8 @@ export function businessMetricService(db: Db) {
     async query(companyId: string, actor: AuthorizationActor, raw: BusinessMetricQuery) {
       const query = queryBusinessMetricSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {
+        const deadline = performance.now() + 30_000;
+        await tx.execute(sql`set local statement_timeout = '5s'`);
         await admit(tx, companyId, actor); await lockBusinessEventCompany(tx, companyId);
         const row = await metric(tx, companyId, query.metricId);
         if (row.status !== "published") throw conflict("Metric is not currently published");
@@ -150,9 +173,9 @@ export function businessMetricService(db: Db) {
         if (!published.length) throw conflict("Requested definition version has never been published");
         if (query.dimensions.some(d => !revision.definition.dimensions.includes(d))) throw badRequest("Query dimensions must be declared by the metric");
         const policies = await definitionAdmission(tx, companyId, actor, revision.definition);
-        const sources = await inputs(tx, companyId, actor, revision.definition, query);
+        const { sources, observedAt: now } = await inputs(tx, companyId, actor, revision.definition, query, deadline);
         const calculated = calculateNativeMetric(revision.definition, query, sources);
-        const now = new Date(); const id = randomUUID(); const manifestId = randomUUID();
+        const id = randomUUID(); const manifestId = randomUUID();
         const expiresAt = new Date(Math.min(now.getTime() + revision.definition.freshnessSeconds * 1000,
           revision.createdAt.getTime() + revision.definition.reviewFrequencyDays * 86_400_000,
           ...policies.map(p => Math.min(p.nextReviewAt.getTime(), Date.parse(p.obligation.nextReviewAt), p.obligation.effectiveUntil ? Date.parse(p.obligation.effectiveUntil) : Infinity))));
@@ -168,8 +191,12 @@ export function businessMetricService(db: Db) {
           { companyId, manifestId, inputType: "metric_version" as const, inputRef: revision.id, inputHash: revision.contentHash, relationship: "definition" as const },
           ...policies.map(policy => ({ companyId, manifestId, inputType: "governance_obligation" as const, inputRef: policy.id, inputHash: policy.obligationHash, relationship: "policy" as const })),
         ];
-        for (let start = 0; start < edges.length; start += 500) await tx.insert(analyticalLineageEdges).values(edges.slice(start, start + 500));
+        for (let start = 0; start < edges.length; start += 500) {
+          queryTimeBudget(deadline);
+          await tx.insert(analyticalLineageEdges).values(edges.slice(start, start + 500));
+        }
         await admit(tx, companyId, actor); await definitionAdmission(tx, companyId, actor, revision.definition);
+        queryTimeBudget(deadline);
         await tx.insert(businessMetricObservations).values({ id, companyId, metricId: row.id, versionId: revision.id, result, definitionHash: calculated.definitionHash, inputHash: calculated.inputHash, lineageManifestId: manifestId, requestedBy: v7HumanActorId(actor), observedAt: now, expiresAt });
         await audit(tx, publications, companyId, actor, "business_metric.observed", row.id, { observationId: id, versionId: revision.id, lineageManifestId: manifestId, inputHash: calculated.inputHash });
         return result;

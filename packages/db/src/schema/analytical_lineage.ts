@@ -35,3 +35,15 @@ export const analyticalLineageEdges = pgTable("analytical_lineage_edges", {
   typeCheck: check("analytical_lineage_edges_type_check", sql`${t.inputType} in ('issue','project','metric_version','governance_obligation') and ${t.relationship} in ('source','definition','policy')`),
   hashCheck: check("analytical_lineage_edges_hash_check", sql`${t.inputHash} ~ '^[0-9a-f]{64}$'`),
 }));
+
+/** Minimal native-owner erasure guards survive backup replay. No source payload
+ * or analytical result is retained here. Company erasure owns their lifecycle. */
+export const analyticalSourceSuppressions = pgTable("analytical_source_suppressions", {
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  inputType: text("input_type").$type<"issue" | "project">().notNull(),
+  inputRef: uuid("input_ref").notNull(),
+  suppressedAt: timestamp("suppressed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  sourceUq: unique("analytical_source_suppressions_source_uq").on(t.companyId, t.inputType, t.inputRef),
+  typeCheck: check("analytical_source_suppressions_type_check", sql`${t.inputType} in ('issue','project')`),
+}));

@@ -135,7 +135,7 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       // The old backup has projections, but no post-backup suppression register.
       const suppressedAt = new Date().toISOString();
       const marker = { company_id: companyId, source_ref: erased.id, suppressed_at: suppressedAt };
-      const ledger = { companies: [], memory: [], businessEvents: [marker, marker,
+      const ledger = { companies: [], memory: [], analyticalSources: [], businessEvents: [marker, marker,
         { ...marker, company_id: otherCompanyId, source_ref: retained.id },
         { ...marker, company_id: randomUUID() }] };
       await prepareRestoredQuarantine(restored, target.toString(), ledger);

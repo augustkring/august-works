@@ -30,6 +30,7 @@ import {
   v7HumanActorId,
 } from "../v7-authorization.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { conflict, notFound } from "../../errors.js";
@@ -306,6 +307,7 @@ export function aiGovernanceService(db: Db) {
       await assertV7Enabled(db, "governance_evidence_v7");
       return withV7ActivityTransaction(db, async (tx, publications) => {
         await access(tx, actor, companyId, true);
+        await lockAnalyticalCompany(tx, companyId);
         const [row] = await tx
           .insert(governanceObligations)
           .values({

@@ -61,7 +61,8 @@ the new mounted routes. Two standalone deletion-ledger authentication tests pass
 The existing V6 independently signed deletion-ledger export now includes minimal
 Business Events suppression identities in its repeatable-read snapshot and total
 100,000-record bound. Authentication requires that section and validates company,
-source UUID and suppression time. A legacy ledger without it is rejected: operators
+source UUID and suppression time. The ledger also requires analytical source-owner suppression identities from the
+current V8 exporter. A legacy ledger missing either section is rejected: operators
 must export a fresh V8-aware ledger before restoring, including older archives.
 Native restore quarantine reapplies authenticated markers and physically deletes
 each complete projection chain and its object links independently of rollout flags.

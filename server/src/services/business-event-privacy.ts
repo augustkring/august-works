@@ -1,13 +1,10 @@
 import { and, eq, sql } from "drizzle-orm";
-import { analyticalLineageManifests, businessEvents, businessEventSuppressions, type Db } from "@paperclipai/db";
+import { businessEvents, businessEventSuppressions, type Db } from "@paperclipai/db";
 
 export type BusinessEventPrivacyTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
-/** Acquire before source or native object row locks. Bounded projection batches
- * release this lock after each source; erasure remains atomic with its owner. */
-export async function lockBusinessEventCompany(tx: Pick<Db, "execute">, companyId: string) {
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`business-events:${companyId}`}, 0))`);
-}
+import { lockAnalyticalCompany as lockBusinessEventCompany, suppressAnalyticalSource } from "./analytical-privacy.js";
+export { lockAnalyticalCompany as lockBusinessEventCompany } from "./analytical-privacy.js";
 
 /** Projection writers and privacy operations serialize on the same source,
  * including sources no longer present in the authoritative activity log. */
@@ -42,15 +39,7 @@ export async function suppressBusinessEventsForObject(
     eq(businessEvents.companyId, companyId),
     sql`exists (select 1 from business_event_suppressions s where s.company_id = ${businessEvents.companyId} and s.source_ref = ${businessEvents.sourceRef})`,
   ));
-  // Analytical payloads are derived consumers of the same native owner.
-  // Their observations cascade with the manifest even when rollout is off.
-  await tx.delete(analyticalLineageManifests).where(and(
-    eq(analyticalLineageManifests.companyId, companyId),
-    sql`exists (select 1 from analytical_lineage_edges e
-      where e.company_id = ${analyticalLineageManifests.companyId}
-      and e.manifest_id = ${analyticalLineageManifests.id}
-      and e.input_type = ${objectType} and e.input_ref = ${objectId}::uuid)`,
-  ));
+  await suppressAnalyticalSource(tx, companyId, objectType, objectId);
 }
 
 /** Internal privacy owner path. Deliberately independent of rollout flags and

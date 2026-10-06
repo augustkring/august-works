@@ -47,7 +47,12 @@ and hashes, selected projects (including empty project populations), metric vers
 and policy evidence, without copying task titles, descriptions or actor identities
 from source rows. Requested-by metadata remains native accountable audit attribution.
 Source selection and publication run in one transaction with source/policy share locks
-and the company privacy serialization lock. Native task/project deletion erases
+and the company privacy serialization lock. A single bounded PostgreSQL statement
+provides both population inputs and observation time, including empty populations;
+commit time is not substituted for source read time. Canonical Governance obligation
+registration shares the same lock so purpose supersession cannot race publication.
+Native query work checks a thirty-second monotonic budget and each SQL statement
+has a five-second timeout. These bounds are not production throughput qualification. Native task/project deletion erases
 manifests, edges and observations through the same owner transaction with flags off.
 
 ## Verified and still open
@@ -71,9 +76,24 @@ journey, assistive-technology audit, screenshot-baseline certification or hosted
 Targets, bindings, external semantic provider execution,
 strategy links, query receipts, generic lineage API, retention scheduling, complete
 source-owner adapters and independent operational/performance evidence remain open.
-Analytical object suppression and independently signed restore reconciliation are
-still required before claiming no-resurrection for metric payloads after an older
-backup. Direct/raw DB deletion bypasses native service hooks. Current native source
-watermarks use the timestamp precision exposed by the PostgreSQL JS client; they do
+Native owner deletion now persists content-free company/object/type suppression
+identities even when no event was ever projected. Queries reject restored suppressed
+objects instead of silently removing them from a denominator. PostgreSQL rejects
+late/foreign/absent-source lineage edges, mutated manifests/edges/observations/
+publication records, and observations with inconsistent definition/manifest identity.
+The existing independently signed deletion-ledger export/authentication now requires
+a bounded `analyticalSources` section as well as Business Events. Quarantine reapplies
+markers with flags off, erases dependent analytical payloads, preserves unrelated
+observations and stays blocked for operator qualification. Older ledger formats are
+rejected; a fresh current exporter is required even for older backups.
+
+Seventeen metric, thirteen Business Events and eleven native Governance tests pass,
+including copied pre-deletion records in a separate migrated quarantine database.
+Three independent HMAC-ledger parser tests, schema drift and migration safety checks
+and server types pass. This local record-copy test does not execute an actual archive
+dump/restore, object-storage drill or protected hosting recovery. Native source rows
+from the old backup can still require canonical owner reconciliation; the analytical
+guard blocks their use without claiming all native backup content was erased. Direct/raw DB deletion bypasses native service hooks. Current native source
+watermarks use explicit millisecond timestamp projections in the native query; they do
 not assert a historical event stream's coverage or completeness. Full monorepo,
 browser, exact hosted environment and release checks have not yet been qualified.
