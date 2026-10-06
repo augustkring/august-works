@@ -9,7 +9,12 @@
       "lines": 10239,
       "words": 31976,
       "path": "/workspace/attachments/4afd3ee6-efa4-4d9e-a173-4fd190c6ebf7/august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 10239
+      },
+      "applicability": "Complete V8 V2 brief read with contiguous untruncated coverage; duplicate upload is byte-identical. Preserve native V4-V7 authority, immutable governed analytical identities, current authorization before aggregation, process readiness, forecasting baselines/backtests, scenario assumptions, experiment trust gates, causal abstention, proposal-only planning and cited management reviews. Source completion and exact-environment hosted qualification remain separate. Current upload includes 36 playbooks including standalone Security, unlike the brief historical 35-file corpus; external legal/provider/version statements require independent current validation before reliance."
     },
     {
       "name": "august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
@@ -18,7 +23,12 @@
       "lines": 10239,
       "words": 31976,
       "path": "/workspace/attachments/3de26f50-5e7d-4dd8-af3d-76793ff33ca4/august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 10239
+      },
+      "applicability": "Complete V8 V2 brief read with contiguous untruncated coverage; duplicate upload is byte-identical. Preserve native V4-V7 authority, immutable governed analytical identities, current authorization before aggregation, process readiness, forecasting baselines/backtests, scenario assumptions, experiment trust gates, causal abstention, proposal-only planning and cited management reviews. Source completion and exact-environment hosted qualification remain separate. Current upload includes 36 playbooks including standalone Security, unlike the brief historical 35-file corpus; external legal/provider/version statements require independent current validation before reliance."
     },
     {
       "name": "03_engineering_workflow_sdlc_configuration_management_v2.md",
