@@ -275,3 +275,5 @@ export * from "./enterprise_identity.js";
 
 export * from "./security_event_exports.js";
 export * from "./business_events.js";
+export * from "./business_metrics.js";
+export * from "./analytical_lineage.js";

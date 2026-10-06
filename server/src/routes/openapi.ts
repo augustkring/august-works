@@ -9,6 +9,11 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import {
+  createBusinessMetricSchema,
+  createBusinessMetricVersionSchema,
+  publishBusinessMetricSchema,
+  transitionBusinessMetricSchema,
+  queryBusinessMetricSchema,
   businessEventBackfillSchema,
   businessEventCursorSchema,
   businessEventListSchema,
@@ -1688,7 +1693,7 @@ function resolveOperationAuthLevel(
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
-  if (key === "POST /api/companies/{companyId}/business-events/backfill") return "board";
+  if (key === "POST /api/companies/{companyId}/business-events/backfill" || path.startsWith("/api/companies/{companyId}/business-metrics")) return "board";
   if (
     isBoardOnlyOperation(method, path) ||
     experimentalApiMetadata[`${method.toUpperCase()} ${path}`]?.boardOnly
@@ -11794,6 +11799,16 @@ registerCurrentRoute({
   method: "delete", path: "/api/companies/{companyId}/business-events/sources/{sourceRef}", tags: ["V8"],
   summary: "Suppress a native source projection under instance administration and board audit authority",
 });
+
+for (const operation of [
+  { method: "get" as const, path: "/api/companies/{companyId}/business-metrics", summary: "List company metric definitions with current human authority", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}", summary: "Inspect a metric and its immutable definition history" },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metrics", summary: "Register an explicitly governed metric draft", body: createBusinessMetricSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}/versions", summary: "Append an immutable definition with expected revision", body: createBusinessMetricVersionSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}/publish", summary: "Publish a pinned definition under current governance and native permission authority", body: publishBusinessMetricSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}/lifecycle", summary: "Deprecate or revoke a metric under native authority, including after rollout rollback", body: transitionBusinessMetricSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metrics/query", summary: "Observe a complete authorized bounded metric population with source lineage", body: queryBusinessMetricSchema },
+]) registerCurrentRoute({ ...operation, tags: ["V8"], query: operation.query?.extend({ expectedUserId: z.string().optional() }) ?? z.object({ expectedUserId: z.string().optional() }) });
 
 for (const operation of v7ApiPaths) {
   registry.registerPath({

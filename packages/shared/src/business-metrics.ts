@@ -80,18 +80,26 @@ export const createBusinessMetricVersionSchema = z.object({
 export const publishBusinessMetricSchema = z.object({
   expectedRevision: z.number().int().positive(), versionId: z.string().uuid(),
 }).strict();
+export const transitionBusinessMetricSchema = z.object({
+  expectedRevision: z.number().int().positive(), status: z.enum(["deprecated", "revoked"]), reason: text,
+}).strict();
 export const queryBusinessMetricSchema = z.object({
   metricId: z.string().uuid(), versionId: z.string().uuid(),
   from: z.iso.datetime(), until: z.iso.datetime(),
   dimensions: z.array(z.enum(["status", "project"])).max(2).default([]),
   maxRows: z.number().int().min(1).max(10_000).default(5000),
 }).strict().refine(value => Date.parse(value.from) < Date.parse(value.until), "Metric window must be nonempty")
+  .refine(value => [value.from, value.until].every(time => !/\.\d{4,}Z$/.test(time)), "Metric window precision is milliseconds")
   .refine(value => Date.parse(value.until) - Date.parse(value.from) <= 366 * 86_400_000, "Metric window exceeds native query budget")
   .refine(value => new Set(value.dimensions).size === value.dimensions.length, "Duplicate query dimensions");
 
 export type BusinessMetricDefinition = z.infer<typeof businessMetricDefinitionSchema>;
 export type NativeMetricPopulation = z.infer<typeof nativeMetricPopulationSchema>;
 export type BusinessMetricQuery = z.infer<typeof queryBusinessMetricSchema>;
+export type CreateBusinessMetric = z.infer<typeof createBusinessMetricSchema>;
+export type CreateBusinessMetricVersion = z.infer<typeof createBusinessMetricVersionSchema>;
+export type PublishBusinessMetric = z.infer<typeof publishBusinessMetricSchema>;
+export type TransitionBusinessMetric = z.infer<typeof transitionBusinessMetricSchema>;
 export interface BusinessMetricView {
   id: string; companyId: string; key: string; revision: number;
   status: "draft" | "published" | "deprecated" | "revoked";

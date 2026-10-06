@@ -120,6 +120,7 @@ import { smokeLabRoutes } from "./routes/smoke-lab.js";
 import { costRoutes } from "./routes/costs.js";
 import { activityRoutes } from "./routes/activity.js";
 import { businessEventRoutes } from "./routes/business-events.js";
+import { businessMetricRoutes } from "./routes/business-metrics.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { attentionRoutes } from "./routes/attention.js";
 import { decisionTrainingRoutes } from "./routes/decision-training.js";
@@ -878,6 +879,7 @@ export async function createApp(
   api.use(costRoutes(db, { pluginWorkerManager: workerManager }));
   api.use(activityRoutes(db));
   api.use(businessEventRoutes(db));
+  api.use(businessMetricRoutes(db));
   api.use(dashboardRoutes(db));
   api.use(attentionRoutes(db));
   api.use(decisionTrainingRoutes(db));
