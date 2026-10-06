@@ -376,3 +376,45 @@ The complete main PR workflow and AW V6 workflow passed on commit `509d724297fba
 The next implementation closes account isolation in six V7 pages and their evidence, policy-review and verification components. It binds requests to the resolved board principal, partitions query/GET coalescing keys by account and remounts private forms on account/company changes. Native callers and local trusted mode remain supported. Details and verification limits are retained in [the dated account isolation record](2026-10-06-aw-v7-account-isolation.md).
 
 The affected API/UI/middleware selection passes 93 tests; seven migrated PostgreSQL domain files pass 83 tests; the authenticated Chromium journey passes with two real members of the same company and an actual cookie/account transition in the same document. The complete UI suite passes all 6,823 tests across 665 files. Server and UI typecheck and the complete repository build pass. All three pilot-checker negative cases, module boundaries and UI token gates pass. Current-commit CI remains required after submission. The native host bridge, per-use credential enforcement, broader managed inference and actual draft-provider qualification bootstrap remain incomplete code, and the 35 protected pilot evidence items remain missing.
+
+## 2026-10-06 — Stateless draft conformance bootstrap
+
+The normal operator provider-conformance endpoint now selects a dedicated,
+instance-registered driver for `aw_text_only`. It uses actual encrypted installed
+grants, separate presence profiles, source-bound price/token ceilings and the
+existing native model reservation ledger before provider dispatch. It can
+bootstrap an unqualified binding; no fixture conformance report must be inserted
+first. Ordinary CLI conformance retains its rejection of this provider.
+
+Migration 0382 adds the explicit `provider_conformance` purpose and a SQL guard
+for hidden synthetic Tasks, paused C0 plans, original authenticated principals,
+zero tools/workers and a finite cost/deadline envelope. This purpose debits the
+same financial counter without consuming semantic-verifier calls. The combined
+four-probe ceiling covers both explicit presences. Current permission, config,
+grant and source are rechecked before/during/after transport. Synthetic harnesses
+close as cancelled; no Task output, worker completion or customer outcome is
+invented. Unexpected provider prose is represented by native hashes rather than
+ordinary run logs.
+
+The retained accounting basis is a pre-spend maximum liability, not a known
+invoice. In-flight cancellation fences local publication and leaves the entire
+unknown charge reserved. It never claims physical provider compute termination.
+The actual conformance record is consumed by normal draft qualification.
+
+The six affected regression files pass 113 tests, including ten new migrated
+PostgreSQL cases. The final SQL locking boundary also passes those ten cases.
+Full recursive typecheck and complete repository build pass with the changes
+present in the working tree. That build stamps the preceding committed
+`68b16776f`; current published-revision CI remains a separate check. The provider
+responses and price/token evidence in acceptance are explicit private fixtures,
+not live qualification. See `doc/operations/aw-v7-native-draft-conformance.md`.
+
+This removes the missing draft bootstrap code path within the wider model
+transport blocker. Native physical OpenShell prepare/apply/start, workload
+credential enforcement and forced managed autonomous CLI/session transport
+remain incomplete. The three broader implementation blocker groups and all
+35 protected pilot evidence items remain open. Read-only cloud environment
+inspection exposes no configured operating credentials or qualified staging
+target. The exact pinned OpenShell source still confirms name-only public
+Stop/Delete/Start APIs; host UUID prechecks do not supply an atomic instance-ID
+precondition. No physical boundary or pilot evidence is promoted from fixtures.

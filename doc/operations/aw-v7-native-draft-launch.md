@@ -19,11 +19,13 @@ expired/source-changed tariff, stale native conformance, changed provider config
 revoked encrypted grant, inactive presence or lost initiating-human access denies
 qualification before model spend. Static Native discovery advertises the fixed
 contract without probing or manufacturing a report. Normal CLI conformance
-rejects this provider. The ordinary Native conformance runner rejects this transport. The local
-acceptance harness supplies explicit fixture reports through the internal
-recording service. A real draft-provider bootstrap runner is still a code gap;
-production also requires protected model qualification for this exact
-source/profile. A manual snapshot or fixture report is not that qualification.
+rejects this provider. The dedicated [stateless bootstrap driver](aw-v7-native-draft-conformance.md)
+now uses the normal operator conformance endpoint, encrypted installed grants
+and native pre-spend reservations. Its local acceptance uses private provider
+responses and pricing metadata; production still requires protected model
+qualification for this exact source/profile. A manual snapshot or fixture
+report is not that operating qualification. Cancellation fences local output
+and retains unknown provider liability; it does not prove provider compute stop.
 
 Plan start holds the original plan lock and checks every remaining worker, its
 canonical assignment/topology, current contract and initiating human. Each worker

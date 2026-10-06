@@ -84,6 +84,7 @@ const requestSchema = z
       "worker_model",
       "read_only_verification",
       "read_only_trajectory",
+      "provider_conformance",
     ]),
     workerId: z.string().uuid().nullable().default(null),
     workerAttemptId: z.string().uuid().nullable().default(null),
@@ -179,7 +180,12 @@ export function modelReservationService(
       .from(issues)
       .where(and(eq(issues.companyId, companyId), eq(issues.id, plan.issueId)))
       .for("share");
-    if (!task || task.hiddenAt || ["done", "cancelled"].includes(task.status))
+    const conformance = purpose === "provider_conformance";
+    if (conformance && (!task?.hiddenAt || task.harnessKind !== "provider_conformance" ||
+        plan.status !== "paused" || plan.actionClass !== "internal_draft" || plan.riskClass !== "C0" ||
+        !plan.startedAt || plan.budgets.maxToolActions !== 0 || plan.executionPrincipal?.type !== "user"))
+      throw forbidden("Provider probes require their private paused tool-free harness");
+    if (!task || (task.hiddenAt && !conformance) || ["done", "cancelled"].includes(task.status))
       throw forbidden("Current canonical Task required for model spend");
     await assertV7Authorization(tx, actor, companyId, "issue:mutate", {
       type: "issue",
@@ -269,7 +275,7 @@ export function modelReservationService(
           plan.modelCostReserved + quote.maximumMinor > plan.budgets.maxModelCostMinor
         )
           throw forbidden("Cumulative model reservation budget exhausted");
-        if (input.purpose !== "worker_model" &&
+        if (["read_only_verification", "read_only_trajectory"].includes(input.purpose) &&
           (plan.verifierCallsUsed >= plan.supervisionPolicy.maxVerifierCalls || plan.supervisionPolicy.maxVerificationDepth < 1))
           throw forbidden("The cumulative read-only model call budget is exhausted");
         const expiresAt = new Date(

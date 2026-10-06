@@ -20,7 +20,7 @@
       "wave": 7,
       "status": "incomplete",
       "source": "server/src/services/orchestration/orchestration-admission.ts",
-      "verificationScope": "Native reservation, read-only consumers, worker HTTP gateway, Task tool accounting and forced aw_text_only plan-start/admission/heartbeat verified locally with private provider/conformance fixtures. One standard C0/C1 internal draft and declared output are supported. Forced pre-spend transport for managed autonomous sessions/CLIs and their physical workload admission remain incomplete and closed. Production provider qualification and the integrated pilot remain operating evidence. The ordinary Native conformance runner rejects aw_text_only; a real draft-provider bootstrap runner is also required before this private transport can enter production through normal qualification."
+      "verificationScope": "Native reservation, read-only consumers, worker HTTP gateway, Task tool accounting and forced aw_text_only plan-start/admission/heartbeat verified locally. The dedicated stateless provider bootstrap now uses the actual operator endpoint, encrypted grants and the native reservation ledger before qualification; current-source pricing and provider replies in local acceptance remain explicit private fixtures. One standard C0/C1 internal draft and declared output are supported. Forced pre-spend transport for managed autonomous sessions/CLIs and their physical workload admission remain incomplete and closed. Protected production provider qualification and the integrated pilot remain operating evidence. Cancellation confirms local publication fencing and retains unknown provider liability, not physical provider compute stop or a known invoice."
     },
     {
       "id": "automated_read_only_semantic_consumer",
@@ -91,6 +91,7 @@
     "tests/e2e/aw-v7-authenticated.spec.ts",
     "server/src/middleware/expected-actor.test.ts",
     "ui/src/api/account-client.test.ts",
-    "ui/src/context/V7AccountScope.test.tsx"
+    "ui/src/context/V7AccountScope.test.tsx",
+    "server/src/__tests__/v7-native-draft-conformance.integration.test.ts"
   ]
 }

@@ -186,7 +186,7 @@ export function agentProviderBindingService(db: Db) {
     },
     // Internal entry point for adapter-owned deterministic discovery/conformance.
     // No HTTP route accepts snapshots or evidence supplied by an agent/model.
-    recordDiscovery: async (companyId: string, agentId: string, snapshotInput: Omit<ProviderCapabilitySnapshot, "hash">, evidence: Record<string, boolean>, expected?: { configurationHash: string; runtimeId: string; profileRef: string; bindingId: string; accountingComplete?: boolean; isolationPeer?: IsolationPeerProof }) => {
+    recordDiscovery: async (companyId: string, agentId: string, snapshotInput: Omit<ProviderCapabilitySnapshot, "hash">, evidence: Record<string, boolean>, expected?: { configurationHash: string; runtimeId: string; profileRef: string; bindingId: string; accountingComplete?: boolean; isolationPeer?: IsolationPeerProof; accountingBasis?: "native_pre_spend_liability_ceiling"; reservationIds?: string[] }) => {
       await assertV5Enabled(db, "agent_provider_bindings_v5");
       const snapshot = makeProviderCapabilitySnapshot(snapshotInput);
       const result = await withV5ActivityTransaction(db, async (tx, publications) => {
@@ -210,7 +210,7 @@ export function agentProviderBindingService(db: Db) {
           status: status === "active" ? "active" : "degraded", updatedAt: new Date(),
           qualifiedConfigurationHash: qualified ? hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) : null,
           conformanceSnapshotHash: qualified ? snapshot.hash : null,
-          conformanceReport: { adapterContractVersion: PROVIDER_CONFORMANCE_CONTRACT_VERSION, ...(expected ? { accountingComplete: expected.accountingComplete === true } : {}), providerVersion: snapshot.version, testedAt: new Date().toISOString(), profileRef: runtime.providerProfileRef, checks: evidence, ...(expected?.isolationPeer ? { isolationPeer: expected.isolationPeer } : {}) },
+          conformanceReport: { adapterContractVersion: PROVIDER_CONFORMANCE_CONTRACT_VERSION, ...(expected ? { accountingComplete: expected.accountingComplete === true } : {}), providerVersion: snapshot.version, testedAt: new Date().toISOString(), profileRef: runtime.providerProfileRef, checks: evidence, ...(expected?.isolationPeer ? { isolationPeer: expected.isolationPeer } : {}), ...(expected?.accountingBasis ? { accountingBasis: expected.accountingBasis, reservationIds: expected.reservationIds ?? [] } : {}) },
         }).where(eq(agentPresenceRuntimeBindings.id, runtime.id));
         await logActivity(tx, { companyId, actorType: "system", actorId: "provider-discovery", action: drift.changed ? "provider_binding.capability_drift_detected" : "provider_binding.capabilities_discovered", entityType: "agent_provider_binding", entityId: binding.id, details: { hash: snapshot.hash, status, lostFeatures: drift.lostFeatures, versionChanged: drift.versionChanged } }, publications);
         return updated!;

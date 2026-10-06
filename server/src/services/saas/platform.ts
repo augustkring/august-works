@@ -49,6 +49,7 @@ import { runtimeControlService } from "../runtime/control.js";
 import { nativeSandboxHostTransport } from "../execution-sandbox/native-host-bridge.js";
 import { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { registerNativeDraftGateway } from "../orchestration/native-draft-runtime.js";
+import { nativeDraftConformanceService, registerNativeDraftConformance } from "../native-draft-conformance.js";
 
 export function saasPlatform(
   db: Db,
@@ -113,6 +114,10 @@ export function saasPlatform(
     protectedEvidenceOrigin: origins.primaryAppOrigin,
   }) : undefined;
   registerNativeDraftGateway(db, workerModels);
+  registerNativeDraftConformance(db, config.workerModelProfiles?.length ? nativeDraftConformanceService(db, {
+    profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
+    protectedEvidenceOrigin: origins.primaryAppOrigin,
+  }) : undefined);
   const backupRetention = config.backups
     ? runtimeBackupRetention(db, runtimeBackupRetentionObjects(config))
     : undefined;
