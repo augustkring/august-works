@@ -29,10 +29,10 @@ function readTrustedPrWorkflow() {
   const caller = readFileSync(prCallerWorkflow, "utf8");
   assert.match(
     caller,
-    /^\s+uses: paperclipai\/paperclip\/\.github\/workflows\/pr-trusted\.yml@master\s*$/m,
-    "pr.yml must call the trusted workflow from CODEOWNERS-protected master",
+    /^\s+uses: \.\/\.github\/workflows\/pr-trusted\.yml\s*$/m,
+    "pr.yml must call the workflow from the same repository and commit",
   );
-  // Validate proposed workflow changes locally; CI executes the merged master version.
+  // Local checks and PR CI validate the same workflow source.
   return readFileSync(trustedPrWorkflow, "utf8");
 }
 
@@ -166,7 +166,7 @@ test("shard arguments are validated", () => {
   }
 });
 
-test("pr.yml calls the trusted PR workflow from master", () => {
+test("pr.yml calls the trusted PR workflow from the same source commit", () => {
   assert.ok(readTrustedPrWorkflow().length > 0);
 });
 
@@ -310,41 +310,12 @@ test("the trusted PR workflow passes the shard's spec filter to Playwright witho
   );
 });
 
-test("the trusted PR workflow regenerates stale stacked lockfiles", () => {
-  // Validate the proposed workflow here. The caller executes the merged master
-  // workflow; edits to this workflow take effect after code-owner review and merge.
+test("all trusted PR lanes reject stale lockfiles independently", () => {
   const workflow = readFileSync(trustedPrWorkflow, "utf8");
-  assert.match(
-    workflow,
-    /policy:\n    needs: \[gate\][\s\S]{0,160}timeout-minutes: 10/,
-    "the unconditional resolution step needs the same timeout headroom as the lockfile refresh workflow",
-  );
   const policy = workflow.split("  policy:\n")[1].split("  typecheck_release_registry:\n")[0];
-  assert.doesNotMatch(
-    policy,
-    /cache: pnpm|uses: actions\/cache/,
-    "resolution-only policy must not restore or save a dependency store",
-  );
-  assert.match(
-    policy,
-    /pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile/,
-    "the policy job must resolve the complete merge tree without rewriting platform metadata",
-  );
-
-  // Test lanes no longer wait on a policy-job artifact: each install step
-  // resolves a stale lockfile inline, so a manifest-changing or stacked PR
-  // still installs while the policy job validates resolution in parallel.
-  const fallbackInstalls = workflow.match(
-    /if ! pnpm install --frozen-lockfile; then\n[\s\S]{0,240}?pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile\n\s+pnpm install --frozen-lockfile\n\s+fi/g,
-  ) ?? [];
-  assert.equal(
-    fallbackInstalls.length,
-    7,
-    "every downstream install job must resolve a stale lockfile inline",
-  );
-  assert.doesNotMatch(
-    workflow,
-    /Restore regenerated PR lockfile|lockfile_regenerated|name: pr-lockfile/,
-    "the policy lockfile artifact chain must stay removed; it put the policy job on every lane's critical path",
-  );
+  assert.doesNotMatch(policy, /cache: pnpm|uses: actions\/cache/);
+  assert.match(policy, /pnpm install --frozen-lockfile --ignore-scripts/);
+  assert.equal((workflow.match(/pnpm install --frozen-lockfile/g) ?? []).length, 8);
+  assert.doesNotMatch(workflow, /--no-frozen-lockfile|--resolution-only/);
+  assert.doesNotMatch(workflow, /Restore regenerated PR lockfile|lockfile_regenerated|name: pr-lockfile/);
 });

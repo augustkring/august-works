@@ -4,7 +4,7 @@
  * Orchestrates all quality gates. Fetches PR data once, runs all gates,
  * posts or updates one consolidated comment under the selected bot identity.
  *
- * Env: GH_TOKEN, GH_REPO, PR_NUMBER, PR_AUTHOR, PR_BRANCH, COMMENT_AUTHOR
+ * Env: GH_TOKEN, GH_REPO, PR_NUMBER, PR_AUTHOR, COMMENT_AUTHOR
  * Exit: 0 if all quality gates pass, 1 if any fail.
  */
 import { fileURLToPath } from 'node:url';
@@ -14,7 +14,6 @@ import { checkTemplate } from './check-pr-template.mjs';
 import { checkLinkedIssue } from './check-pr-linked-issue.mjs';
 import { checkDedupSearch } from './check-pr-dedup-search.mjs';
 import { checkTestCoverage } from './check-pr-test-coverage.mjs';
-import { checkLockfile } from './check-pr-lockfile.mjs';
 import { checkDependencies } from './check-pr-dependencies.mjs';
 import { checkReleaseBootstrap } from './check-pr-release-bootstrap.mjs';
 import { checkCoauthors, fetchAllPullRequestCommits } from './check-pr-coauthors.mjs';
@@ -95,7 +94,7 @@ async function upsertComment(token, repo, prNumber, body, existing) {
 }
 
 async function main() {
-  const { GH_TOKEN, GH_REPO, PR_NUMBER, PR_AUTHOR, PR_BRANCH, COMMENT_AUTHOR = 'commitperclip[bot]' } = process.env;
+  const { GH_TOKEN, GH_REPO, PR_NUMBER, PR_AUTHOR, COMMENT_AUTHOR = 'commitperclip[bot]' } = process.env;
   commentIdentity(COMMENT_AUTHOR);
 
   if (!GH_TOKEN || !GH_REPO || !PR_NUMBER) {
@@ -133,17 +132,15 @@ async function main() {
 
   const prBody = pr.body ?? '';
   const author = PR_AUTHOR ?? pr.user.login;
-  const branch = PR_BRANCH ?? pr.head.ref;
 
   // Run all quality gates (pure functions run sync, deps check is async)
   const prTitle = pr.title ?? '';
-  const [templateResult, issueResult, dedupResult, testResult, lockfileResult, depsResult, bootstrapResult] =
+  const [templateResult, issueResult, dedupResult, testResult, depsResult, bootstrapResult] =
     await Promise.all([
       Promise.resolve(checkTemplate(prBody)),
       Promise.resolve(checkLinkedIssue(prBody, prTitle)),
       Promise.resolve(checkDedupSearch(prBody, prTitle)),
       Promise.resolve(checkTestCoverage(files, prTitle)),
-      Promise.resolve(checkLockfile(files, author, branch)),
       checkDependencies(files, GH_TOKEN, GH_REPO, prNumber, pr.base?.ref),
       checkReleaseBootstrap(files, GH_TOKEN, GH_REPO, prNumber, pr.base?.ref),
     ]);
@@ -154,7 +151,6 @@ async function main() {
     ...issueResult.failures,
     ...dedupResult.failures,
     ...testResult.failures,
-    ...lockfileResult.failures,
   ];
   const informational = [
     ...(depsResult.informational ?? []),

@@ -32,14 +32,12 @@ jobs:
           version: 9.15.4
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: pnpm
-      - name: Install the CI-owned dependency graph
+      - name: Install the source-controlled dependency graph
         run: |
-          if ! pnpm install --frozen-lockfile; then
-            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
-            pnpm install --frozen-lockfile
-          fi
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
           sha256sum pnpm-lock.yaml > v6-dependency-graph.sha256
       - name: Compile runtime dependencies
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && pnpm --filter @paperclipai/server prepare:runner-vendor
@@ -110,7 +108,9 @@ jobs:
         with:
           name: v6-resolved-dependency-graph
       - name: Verify the dependency graph admitted by contracts
-        run: sha256sum -c v6-dependency-graph.sha256
+        run: |
+          sha256sum -c v6-dependency-graph.sha256
+          git diff --exit-code -- pnpm-lock.yaml
       - name: Require immutable image inputs
         run: |
           node -e 'for (const key of ["AW_NODE_IMAGE","AW_HOST_BASE_IMAGE"]) if (!/^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/.test(process.env[key] ?? "")) throw Error("Digest-pinned image required: " + key)'

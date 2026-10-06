@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 const workflow = readFileSync(new URL("../../workflows/pr-trusted.yml", import.meta.url), "utf8");
 const jobs = [...workflow.matchAll(/^  ([a-z_][a-z_0-9]*):\n([\s\S]*?)(?=^  [a-z_][a-z_0-9]*:\n|$(?![\s\S]))/gm)];
-const installers = jobs.filter(([, , body]) => body.includes("pnpm install --frozen-lockfile"));
+const installers = jobs.filter(([, name, body]) => name !== "policy" && body.includes("pnpm install --frozen-lockfile"));
 
 test("PR workflows restore dependency stores without creating branch copies", () => {
   assert.equal(installers.length, 7);
@@ -20,7 +20,7 @@ test("PR workflows restore dependency stores without creating branch copies", ()
 });
 
 for (const [, job, body] of installers) {
-  test(`${job}: reuse master keys before installing with an inline stale-lockfile fallback`, () => {
+  test(`${job}: reuse master keys before a frozen install`, () => {
     const locate = body.indexOf("      - name: Locate pnpm store");
     const restore = body.indexOf("      - name: Restore pnpm store (read only)");
     const install = body.indexOf("      - name: Install dependencies");
@@ -31,11 +31,11 @@ for (const [, job, body] of installers) {
     assert.match(cache, /uses: actions\/cache\/restore@[a-f0-9]{40}/);
     assert.ok(cache.includes("key: node-cache-${{ runner.os }}-${{ steps.pnpm_store.outputs.arch }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}"));
     assert.ok(cache.includes("restore-keys: node-cache-${{ runner.os }}-${{ steps.pnpm_store.outputs.arch }}-pnpm-"));
-    // Lanes must not wait on the policy job for a regenerated lockfile; each
-    // install resolves a stale one inline and then re-validates frozen.
+    // A cache hit never permits a different graph than the reviewed source.
     const installStep = body.slice(install).split("      - name:")[1] ?? body.slice(install);
-    assert.match(installStep, /if ! pnpm install --frozen-lockfile; then/);
-    assert.match(installStep, /pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile/);
+    assert.match(installStep, /pnpm install --frozen-lockfile/);
+    assert.match(installStep, /git diff --exit-code -- pnpm-lock.yaml/);
+    assert.doesNotMatch(installStep, /--no-frozen-lockfile|--resolution-only/);
     assert.doesNotMatch(installStep, /needs\.policy/);
   });
 }
