@@ -339,3 +339,5 @@ A follow-up qualification audit confirms that ordinary Native conformance reject
 The separate local host regression selection passes 16 tests. The physical firewall acceptance test fails its root prerequisite on this UID-1000 host and is not reported as a pass.
 
 The host advertises 6.0.2. The native sandbox lane requires that version, so a pre-pinning 6.0.1 host cannot accept new commands. The server test selection covers both 6.0.0 and 6.0.1 rejection; verification of this additional server case follows the unchanged full-checkpoint run.
+
+The isolated migrated-PostgreSQL host bridge selection passes all 10 tests on the instance-pinning branch, including rejection of both older host versions. The original full repository checkpoint remained unchanged during this selection. The 16 local host tests and the three pilot-checker negative cases also pass on that branch. The physical firewall root prerequisite and complete managed admission remain open.
