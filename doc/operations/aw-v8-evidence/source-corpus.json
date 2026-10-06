@@ -27,7 +27,12 @@
       "lines": 3822,
       "words": 15789,
       "path": "/workspace/attachments/1cd31b57-10ef-4413-b756-8685f6910ff3/03_engineering_workflow_sdlc_configuration_management_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3822
+      },
+      "applicability": "Explicit intent, risk-proportionate assurance and canonical configuration authority; small coherent commits with immutable revision identity. Source tests and CI remain evidence rather than release authorization. Bind artifact, configuration and schema before promotion; state-compatible recovery, independent review and actual operating verification remain separate."
     },
     {
       "name": "01_requirements_specification_domain_engineering_master_playbook_v2.2.md",
@@ -92,7 +97,12 @@
       "lines": 3842,
       "words": 16954,
       "path": "/workspace/attachments/8d90df45-db8a-4197-bd51-ea0b71b92bf9/05_verification_validation_testing_quality_engineering_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3842
+      },
+      "applicability": "Claim-driven, risk-proportionate assurance with explicit independent oracles and real boundary semantics. Negative, concurrent, partial-failure, migration and restore reconciliation evidence where material. Tests, coverage, scanners and local fixtures do not certify release, accessibility, provider or hosted behavior; bind evidence to source, configuration and artifact identity."
     },
     {
       "name": "08_reliability_resilience_observability_sre_v2_golden_master.md",
