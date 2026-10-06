@@ -1,0 +1,684 @@
+import { randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import express from "express";
+import request from "supertest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { and, eq } from "drizzle-orm";
+import {
+  agents,
+  agentIdentities,
+  companies,
+  companyMemberships,
+  connectionGrants,
+  createDb,
+  heartbeatRuns,
+  issues,
+  agentExecutionManifests,
+  contextManifestMemoryRoots,
+  memoryBindings,
+  memoryRecords,
+  orchestrationPlans,
+  orchestrationWorkers,
+  orchestrationWorkerAttempts,
+  orchestrationModelReservations,
+  supervisionInterventions,
+} from "@paperclipai/db";
+import {
+  PROVIDER_CAPABILITY_FEATURES,
+  type WorkerModelBinding,
+} from "@paperclipai/shared";
+import { instanceSettingsService } from "../services/instance-settings.js";
+import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
+import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { aiConnectionService } from "../services/ai-connections.js";
+import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
+import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
+import {
+  createRuntimeToolsToken,
+  verifyRuntimeToolsToken,
+  type RuntimeToolsTokenClaims,
+} from "../runtime-tools-token.js";
+import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
+import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
+import { runtimeConnectionIntentRoutes } from "../routes/connection-intents.js";
+import { errorHandler } from "../middleware/index.js";
+import { purgeMemoryRecords } from "../services/memory/memory-privacy.js";
+import {
+  getEmbeddedPostgresTestSupport,
+  startEmbeddedPostgresTestDatabase,
+} from "./helpers/embedded-postgres.js";
+const sourceSha = "a".repeat(40),
+  credential = "fixture-private-worker-secret-12345";
+const support = await getEmbeddedPostgresTestSupport();
+(support.supported ? describe : describe.skip)(
+  "Native bounded worker model gateway",
+  () => {
+    let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,
+      db: ReturnType<typeof createDb>,
+      home: string;
+    let f: Awaited<ReturnType<typeof seedV5Presences>>,
+      plan: typeof orchestrationPlans.$inferSelect,
+      task: typeof issues.$inferSelect,
+      run: typeof heartbeatRuns.$inferSelect,
+      binding: WorkerModelBinding,
+      profile: WorkerModelProfile,
+      claims: RuntimeToolsTokenClaims;
+    let calls: number,
+      observedKey: string,
+      observedBody: string,
+      inputTokens: number,
+      duringCall: (() => Promise<void>) | undefined;
+    beforeAll(async () => {
+      home = await mkdtemp(join(tmpdir(), "aw-v7-worker-model-fixture-"));
+      vi.stubEnv("PAPERCLIP_HOME", home);
+      vi.stubEnv("PAPERCLIP_INSTANCE_ID", "worker-model-fixture");
+      vi.stubEnv(
+        "PAPERCLIP_AGENT_JWT_SECRET",
+        "private-fixture-signing-master-123456789",
+      );
+      database = await startEmbeddedPostgresTestDatabase("aw-v7-worker-model-");
+      db = createDb(database.connectionString);
+      await instanceSettingsService(db).getExperimental();
+      await enableV5ForTest(db);
+    }, 60000);
+    afterAll(async () => {
+      await database?.cleanup();
+      vi.unstubAllEnvs();
+      if (home) await rm(home, { recursive: true, force: true });
+    }, 30000);
+    beforeEach(async () => {
+      await instanceSettingsService(db).updateExperimental({
+        enableWorkflowsV1: true,
+        role_packs_v5: false,
+        skill_resolver_v5: false,
+        readiness_engine_v7: true,
+        orchestration_v7: true,
+      });
+      f = await seedV5Presences(db);
+      await db
+        .update(agents)
+        .set({ adapterType: "claude_local" })
+        .where(eq(agents.id, f.presence.id));
+      const providers = agentProviderBindingService(db),
+        pb = await providers.create(f.actor, f.home, f.presence.id, {
+          providerType: "paperclip_native",
+          providerAgentRef: f.presence.id,
+          isolationMode: "isolated_per_presence",
+          providerEndpointRef: null,
+        });
+      await providers.attach(f.actor, f.home, f.presence.id, {
+        providerBindingId: pb.id,
+        providerProfileRef: f.presence.id,
+      });
+      await providers.recordDiscovery(
+        f.home,
+        f.presence.id,
+        {
+          provider: "paperclip_native",
+          version: "worker-model-fixture-only",
+          features: Object.fromEntries(
+            PROVIDER_CAPABILITY_FEATURES.map((key) => [key, false]),
+          ) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>,
+          skills: [],
+          tools: [],
+          discoveredAt: new Date().toISOString(),
+        },
+        {
+          connect: true,
+          identity: true,
+          start: true,
+          stream: true,
+          wait: true,
+          cancel: true,
+          memoryScoping: true,
+        },
+      );
+      const provider = await providers.assertRuntime(f.home, f.presence.id);
+      [task] = (await db
+        .insert(issues)
+        .values({
+          companyId: f.home,
+          title: "Save the bounded private fixture draft",
+          status: "todo",
+          assigneeAgentId: f.presence.id,
+        })
+        .returning()) as [typeof task];
+      [run] = (await db
+        .insert(heartbeatRuns)
+        .values({
+          companyId: f.home,
+          agentId: f.presence.id,
+          responsibleUserId: f.userId,
+          status: "running",
+          runtimeMode: "native",
+          nativeIssueId: task.id,
+          contextSnapshot: { issueId: task.id },
+        })
+        .returning()) as [typeof run];
+      const prepared = await agentRuntimeFabricService(db).prepare({
+        companyId: f.home,
+        agentId: f.presence.id,
+        runId: run.id,
+        responsibleUserId: f.userId,
+        issueId: task.id,
+        query: task.title,
+      });
+      plan = await orchestrationService(db).create(f.actor, f.home, {
+        issueId: task.id,
+        expectedIssueUpdatedAt: task.updatedAt.toISOString(),
+        workload: "semantic",
+        riskClass: "C0",
+        completionContract: {
+          objective: "Save the internal draft",
+          requiredOutputs: [{ key: "result" }],
+          businessInvariants: ["Use authorized sources only"],
+        },
+        budgets: { maxModelCostMinor: 6 },
+        workers: [{ key: "writer", issueId: task.id }],
+      });
+      // Private Native fixture setup only. Production launch remains closed for
+      // capped CLIs/sessions; this does not fabricate forced dispatch or a pilot.
+      await db
+        .update(orchestrationPlans)
+        .set({
+          status: "running",
+          startedAt: new Date(),
+          executionPrincipal: { type: "user", userId: f.userId },
+        })
+        .where(eq(orchestrationPlans.id, plan.id));
+      const [worker] = await db
+        .update(orchestrationWorkers)
+        .set({ status: "running", attemptCount: 1 })
+        .where(eq(orchestrationWorkers.planId, plan.id))
+        .returning();
+      const [attempt] = await db
+        .insert(orchestrationWorkerAttempts)
+        .values({
+          companyId: f.home,
+          planId: plan.id,
+          workerId: worker!.id,
+          agentId: f.presence.id,
+          runId: run.id,
+          executionManifestId: prepared!.record.id,
+          attempt: 1,
+        })
+        .returning();
+      await db
+        .update(issues)
+        .set({ executionRunId: run.id })
+        .where(eq(issues.id, task.id));
+      binding = {
+        planId: plan.id,
+        workerId: worker!.id,
+        workerAttemptId: attempt!.id,
+        executionManifestId: prepared!.record.id,
+        expectedPlanVersion: plan.version,
+      };
+      const connection = await aiConnectionService(db).save(
+        f.home,
+        f.userId,
+        {
+          provider: "anthropic",
+          method: "api_key",
+          ownership: "shared",
+          name: "Encrypted private worker fixture",
+          apiKey: "fixture",
+          allAgents: false,
+          agentIds: [f.presence.id],
+        },
+        credential,
+      );
+      profile = {
+        id: randomUUID(),
+        companyId: f.home,
+        workerAgentId: f.presence.id,
+        providerBindingId: provider.provider.id,
+        providerSnapshotHash: provider.provider.capabilitySnapshotHash!,
+        providerProfileRef: provider.runtime.providerProfileRef,
+        qualifiedConfigurationHash:
+          provider.runtime.qualifiedConfigurationHash!,
+        binding: {
+          provider: "anthropic",
+          method: "api_key",
+          mode: "shared",
+          ...connection,
+        },
+        transport: "server-text-only-v1",
+        contract: "anthropic-text-messages-2023-06-01",
+        maximumEnvelopeBytes: 64000,
+        inputTokensUpperBound: 100000,
+        maxOutputTokens: 1024,
+        tariff: {
+          provider: "anthropic",
+          model: "fixture-worker-model-20261005",
+          currency: "USD",
+          inputMinorPerMillion: 0,
+          outputMinorPerMillion: 0,
+          fixedMinor: 3,
+          qualificationHash: "b".repeat(64),
+          sourceSha,
+          testedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 120000).toISOString(),
+        },
+        qualificationEvidenceRef:
+          "https://protected.test.invalid/qualification/worker-fixture-only.json",
+        qualificationArtifactSha256: "c".repeat(64),
+      };
+      const minted = await gateway().issue(issueInput());
+      claims = verifyRuntimeToolsToken(minted.token, "worker_model")!;
+      calls = 0;
+      observedKey = "";
+      observedBody = "";
+      inputTokens = 10;
+      duringCall = undefined;
+    });
+    function issueInput() {
+      return {
+        companyId: f.home,
+        agentId: f.presence.id,
+        runId: run.id,
+        responsibleUserId: f.userId,
+        binding,
+      };
+    }
+    const input = () => ({
+      callId: "draft-1",
+      system: "Write only from supplied evidence",
+      prompt: "Authorized source for a fixture draft",
+      maxOutputTokens: 256,
+    });
+    const ledger = () =>
+      db
+        .select()
+        .from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, plan.id));
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      calls++;
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      observedBody = String(init.body);
+      observedKey = new Headers(init.headers).get("x-api-key")!;
+      const rows = await ledger();
+      expect(rows.at(-1)).toMatchObject({
+        status: "dispatched",
+        maximumMinor: 3,
+      });
+      await duringCall?.();
+      return new Response(
+        JSON.stringify({
+          type: "message",
+          role: "assistant",
+          model: profile.tariff.model,
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: "Retained bounded draft" }],
+          usage: { input_tokens: inputTokens, output_tokens: 20 },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    function gateway() {
+      return workerModelGateway(db, {
+        profiles: [profile],
+        sourceSha,
+        protectedEvidenceOrigin: "https://protected.test.invalid",
+        fetch,
+      });
+    }
+    it("reserves before actual transport, keeps the encrypted key private and leaves completion to Native verification", async () => {
+      const result = await gateway().call(claims, input());
+      expect(result).toMatchObject({
+        text: "Retained bounded draft",
+        usage: { inputTokens: 10, outputTokens: 20 },
+      });
+      expect(observedKey).toBe(credential);
+      expect(observedBody).not.toContain(credential);
+      expect(JSON.stringify(result)).not.toContain(credential);
+      expect((await ledger())[0]).toMatchObject({
+        status: "completed",
+        purpose: "worker_model",
+        workerAttemptId: binding.workerAttemptId,
+      });
+      expect(
+        (await db.select().from(issues).where(eq(issues.id, task.id)))[0]
+          ?.status,
+      ).toBe("todo");
+      await expect(gateway().call(claims, input())).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(calls).toBe(1);
+    });
+    it("permits one durable dispatch winner under concurrent duplicate calls", async () => {
+      const results = await Promise.allSettled([
+        gateway().call(claims, input()),
+        gateway().call(claims, input()),
+      ]);
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(calls).toBe(1);
+      expect(await ledger()).toHaveLength(1);
+    });
+    it("refuses cost overrun before any further model request", async () => {
+      await gateway().call(claims, input());
+      await gateway().call(claims, { ...input(), callId: "draft-2" });
+      await expect(
+        gateway().call(claims, { ...input(), callId: "draft-3" }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(calls).toBe(2);
+      expect(await ledger()).toHaveLength(2);
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0]?.modelCostReserved,
+      ).toBe(6);
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0]?.status,
+      ).toBe("paused");
+    });
+    it.each([
+      "membership",
+      "grant",
+      "assignment",
+      "Stop",
+      "flag",
+      "plan version",
+      "identity",
+      "company",
+    ])("blocks %s changes before spend", async (kind) => {
+      await change(kind);
+      await expect(gateway().call(claims, input())).rejects.toThrow();
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+    });
+    async function change(kind: string) {
+      if (kind === "membership")
+        await db
+          .update(companyMemberships)
+          .set({ status: "suspended" })
+          .where(
+            and(
+              eq(companyMemberships.companyId, f.home),
+              eq(companyMemberships.principalId, f.userId),
+            ),
+          );
+      if (kind === "grant" && profile.binding.mode !== "responsible_user")
+        await db
+          .update(connectionGrants)
+          .set({ status: "revoked" })
+          .where(eq(connectionGrants.id, profile.binding.grantId));
+      if (kind === "assignment")
+        await db
+          .update(issues)
+          .set({ assigneeAgentId: null })
+          .where(eq(issues.id, task.id));
+      if (kind === "Stop")
+        await db
+          .update(heartbeatRuns)
+          .set({
+            resultJson: { executionCancellation: { state: "requested" } },
+          })
+          .where(eq(heartbeatRuns.id, run.id));
+      if (kind === "flag")
+        await instanceSettingsService(db).updateExperimental({
+          orchestration_v7: false,
+        });
+      if (kind === "plan version")
+        await db
+          .update(orchestrationPlans)
+          .set({ version: plan.version + 1 })
+          .where(eq(orchestrationPlans.id, plan.id));
+      if (kind === "identity")
+        await db
+          .update(agentIdentities)
+          .set({ status: "paused" })
+          .where(eq(agentIdentities.id, f.identity.id));
+      if (kind === "company")
+        await db
+          .update(companies)
+          .set({ status: "paused" })
+          .where(eq(companies.id, f.home));
+      if (kind === "Task source")
+        await db
+          .update(issues)
+          .set({ description: "The original request changed during inference" })
+          .where(eq(issues.id, task.id));
+    }
+    it.each([
+      "membership",
+      "grant",
+      "assignment",
+      "Stop",
+      "flag",
+      "identity",
+      "company",
+      "Task source",
+    ])(
+      "retains unknown debit and requests Native Stop on %s during inference",
+      async (kind) => {
+        duringCall = () => change(kind);
+        await expect(gateway().call(claims, input())).rejects.toMatchObject({
+          status: 409,
+        });
+        expect(calls).toBe(1);
+        expect((await ledger())[0]).toMatchObject({
+          status: "unknown",
+          maximumMinor: 3,
+        });
+        expect(
+          (
+            await db
+              .select()
+              .from(orchestrationPlans)
+              .where(eq(orchestrationPlans.id, plan.id))
+          )[0]?.status,
+        ).toBe("paused");
+        const stop = await db
+          .select()
+          .from(supervisionInterventions)
+          .where(eq(supervisionInterventions.planId, plan.id));
+        expect(stop[0]).toMatchObject({
+          decisionAction: "ESCALATE_HUMAN",
+          reasonCode: "worker_model_unsettled",
+        });
+        await expect(gateway().call(claims, input())).rejects.toThrow();
+        expect(calls).toBe(1);
+      },
+    );
+    it("rejects qualified token overflow and keeps the full conservative charge", async () => {
+      inputTokens = profile.inputTokensUpperBound + 1;
+      await expect(gateway().call(claims, input())).rejects.toMatchObject({
+        status: 409,
+      });
+      expect((await ledger())[0]).toMatchObject({
+        status: "unknown",
+        maximumMinor: 3,
+      });
+    });
+    it("binds company, run, attempt, manifest and current source instead of accepting caller prices or destinations", async () => {
+      for (const altered of [
+        { ...claims, company_id: f.guest },
+        { ...claims, sub: f.guestPresence.id },
+        { ...claims, run_id: randomUUID() },
+        {
+          ...claims,
+          worker_model: { ...binding, workerAttemptId: randomUUID() },
+        },
+        {
+          ...claims,
+          worker_model: { ...binding, executionManifestId: randomUUID() },
+        },
+        { ...claims, exp: Math.floor(Date.now() / 1000) - 1 },
+      ])
+        await expect(gateway().call(altered, input())).rejects.toThrow();
+      await expect(
+        gateway().call(claims, { ...input(), maxOutputTokens: 2048 }),
+      ).rejects.toThrow();
+      await expect(
+        gateway().call(claims, { ...input(), prompt: "x".repeat(65000) }),
+      ).rejects.toThrow();
+      await expect(
+        gateway().call(claims, {
+          ...input(),
+          providerUrl: "https://attacker.invalid",
+        } as ReturnType<typeof input>),
+      ).rejects.toThrow();
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+    });
+    it("uses a distinct five-minute capability and cannot widen another runtime scope", async () => {
+      const minted = await gateway().issue(issueInput());
+      expect(verifyRuntimeToolsToken(minted.token)).toBeNull();
+      expect(
+        verifyRuntimeToolsToken(minted.token, "github_credentials"),
+      ).toBeNull();
+      expect(claims.exp - claims.iat).toBe(300);
+      const other = createRuntimeToolsToken({
+        ...issueInput(),
+        scope: "connection_intents",
+      });
+      expect(verifyRuntimeToolsToken(other!.token, "worker_model")).toBeNull();
+      expect(
+        createRuntimeToolsToken({ ...issueInput(), scope: "worker_model" }),
+      ).toBeNull();
+    });
+    it("scrubs admitted source material during dispatch without releasing its financial debit or replaying the model call", async () => {
+      const [mb] = await db
+        .insert(memoryBindings)
+        .values({
+          companyId: f.home,
+          key: "worker-gateway-privacy",
+          name: "Private source",
+          providerKey: "local",
+        })
+        .returning();
+      const [record] = await db
+        .insert(memoryRecords)
+        .values({
+          companyId: f.home,
+          bindingId: mb!.id,
+          providerKey: "local",
+          memoryType: "fact",
+          scopeType: "company",
+          content: "Fixture source to erase",
+          observedAt: new Date(),
+          createdByActorType: "system",
+          createdByActorId: "fixture",
+        })
+        .returning();
+      const [manifest] = await db
+        .select()
+        .from(agentExecutionManifests)
+        .where(eq(agentExecutionManifests.id, binding.executionManifestId));
+      await db
+        .insert(contextManifestMemoryRoots)
+        .values({
+          companyId: f.home,
+          manifestId: manifest!.contextManifestId,
+          memoryRecordId: record!.id,
+          sourceVersion: record!.updatedAt.toISOString(),
+        });
+      duringCall = () =>
+        db.transaction((tx) =>
+          purgeMemoryRecords(tx as unknown as typeof db, f.home, [record!.id]),
+        );
+      await expect(gateway().call(claims, input())).rejects.toMatchObject({
+        status: 409,
+      });
+      expect((await ledger())[0]).toMatchObject({
+        status: "unknown",
+        maximumMinor: 3,
+      });
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0],
+      ).toMatchObject({
+        status: "failed",
+        erasedAt: expect.any(Date),
+        modelCostReserved: 3,
+      });
+      await expect(gateway().call(claims, input())).rejects.toThrow();
+      expect(calls).toBe(1);
+    });
+    it("mounts only the scoped runtime transport, rejects browser and ordinary credentials, and returns no provider key", async () => {
+      const app = express();
+      app.use(express.json());
+      app.use(runtimeConnectionIntentRoutes(db, gateway()));
+      app.use(errorHandler);
+      const minted = await gateway().issue(issueInput());
+      const post = () => request(app).post("/runtime-tools/model/messages");
+      for (const [header, value] of [
+        ["Origin", "https://board.test.invalid"],
+        ["Cookie", "session=fixture"],
+        ["Sec-Fetch-Site", "same-origin"],
+      ])
+        expect(
+          (
+            await post()
+              .set("Authorization", `Bearer ${minted.token}`)
+              .set(header!, value!)
+              .send(input())
+          ).status,
+        ).toBe(403);
+      for (const token of [
+        "ordinary-board-or-agent-key",
+        createRuntimeToolsToken({
+          ...issueInput(),
+          scope: "connection_intents",
+        })!.token,
+        createRuntimeToolsToken({
+          ...issueInput(),
+          scope: "github_credentials",
+        })!.token,
+      ])
+        expect(
+          (await post().set("Authorization", `Bearer ${token}`).send(input()))
+            .status,
+        ).toBe(401);
+      const malformed = await post()
+        .set("Authorization", `Bearer ${minted.token}`)
+        .send({ ...input(), workerId: randomUUID() });
+      expect(malformed.status).toBe(400);
+      expect(calls).toBe(0);
+      const result = await post()
+        .set("Authorization", `Bearer ${minted.token}`)
+        .send(input());
+      expect(result.status).toBe(200);
+      expect(result.headers["cache-control"]).toBe("no-store");
+      expect(result.body.text).toBe("Retained bounded draft");
+      expect(JSON.stringify(result.body)).not.toContain(credential);
+      const unconfigured = express();
+      unconfigured.use(express.json());
+      unconfigured.use(runtimeConnectionIntentRoutes(db));
+      unconfigured.use(errorHandler);
+      expect(
+        (
+          await request(unconfigured)
+            .post("/runtime-tools/model/messages")
+            .set("Authorization", `Bearer ${minted.token}`)
+            .send({ ...input(), callId: "offline" })
+        ).status,
+      ).toBe(403);
+      expect(calls).toBe(1);
+    });
+  },
+);

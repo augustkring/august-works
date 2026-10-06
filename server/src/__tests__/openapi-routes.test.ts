@@ -899,6 +899,11 @@ describe("openapi routes", () => {
 
   it("documents auth and reviewed response-code invariants", () => {
     const { spec } = loadSpecRoutes();
+    const workerModel = spec.paths["/runtime-tools/model/messages"].post;
+    expect(workerModel.security).toEqual([{ WorkerModelBearerAuth: [] }]);
+    expect(workerModel["x-paperclip-authorization"]).toMatchObject({ actor: "worker_model", heartbeatBound: true, attemptBound: true, executionManifestBound: true });
+    expect(workerModel.requestBody.content["application/json"].schema.additionalProperties).toBe(false);
+    expect(workerModel.responses["409"]).toBeDefined();
 
     expect(spec.paths["/api/openapi.json"].get.security).toEqual([]);
     expect(

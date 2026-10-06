@@ -9,6 +9,8 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import {
+  workerModelCallSchema,
+  workerModelResultSchema,
   createAiConnectionSchema,
   aiConnectionLoginIntentSchema,
   localAiConnectionSchema,
@@ -1273,6 +1275,7 @@ function registerCurrentRoute(input: {
 
 type OpenApiAuthLevel =
   | "public"
+  | "worker_model"
   | "agent_run"
   | "runtime_tools"
   | "authenticated"
@@ -1284,6 +1287,7 @@ const BOARD_API_KEY_AUTH_SCHEME = "BoardApiKeyAuth";
 const AGENT_BEARER_AUTH_SCHEME = "AgentBearerAuth";
 const AGENT_RUN_AUTH_SCHEME = "AgentRunAuth";
 const RUNTIME_TOOLS_BEARER_AUTH_SCHEME = "RuntimeToolsBearerAuth";
+const WORKER_MODEL_BEARER_AUTH_SCHEME = "WorkerModelBearerAuth";
 
 function securityRequirement(name: string): Record<string, string[]> {
   return { [name]: [] };
@@ -1674,6 +1678,7 @@ function resolveOperationAuthLevel(
 ): OpenApiAuthLevel {
   const key = operationKey(method, path);
   if (PUBLIC_OPERATIONS.has(key)) return "public";
+  if (key === "POST /runtime-tools/model/messages") return "worker_model";
   if (key === "POST /api/mcp/project-tools" || key === "POST /api/companies/{companyId}/slack/tasks/{issueId}/tools" ||
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/task-result" ||
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
@@ -1704,6 +1709,10 @@ function applyDocumentFixups(document: any): any {
     RuntimeHostSignature: {
       type: "apiKey", in: "header", name: "X-AW-Host-Signature",
       description: "Enrolled host RSA-PSS signature over the exact request bytes, method, path, timestamp, nonce and current credential epoch. Timestamp, nonce and epoch headers are also required. Board cookies and bearer credentials grant no host access.",
+    },
+    [WORKER_MODEL_BEARER_AUTH_SCHEME]: {
+      type: "http", scheme: "bearer", bearerFormat: "Native worker model capability",
+      description: "Distinct worker_model scope, at most five minutes, pinned to a current Native company, worker presence, initiating human, run, attempt, plan version and execution manifest. Ordinary agent keys, board sessions and connection/GitHub tokens are rejected. One bounded server text call; provider keys are retained on the server.",
     },
     [BOARD_SESSION_AUTH_SCHEME]: {
       type: "apiKey",
@@ -1749,6 +1758,8 @@ function applyDocumentFixups(document: any): any {
       const authLevel = resolveOperationAuthLevel(method, path);
       if (authLevel === "public") {
         operation.security = [];
+      } else if (authLevel === "worker_model") {
+        operation.security = [securityRequirement(WORKER_MODEL_BEARER_AUTH_SCHEME)];
       } else if (authLevel === "agent_run") {
         operation.security = [securityRequirement(AGENT_RUN_AUTH_SCHEME)];
       } else if (authLevel === "runtime_tools") {
@@ -1768,6 +1779,8 @@ function applyDocumentFixups(document: any): any {
               ? { actor: "agent", heartbeatBound: true,
                   taskBound: !path.endsWith("/direct-result"),
                   ...(path.includes("/workflow-runs/") ? { workflowBound: true } : {}) }
+            : authLevel === "worker_model"
+              ? { actor: "worker_model", heartbeatBound: true, taskBound: true, attemptBound: true, executionManifestBound: true }
             : authLevel === "runtime_tools"
               ? { actor: "runtime_tools", heartbeatBound: true }
               : authLevel === "authenticated"
@@ -10487,6 +10500,18 @@ registerCurrentRoute({
   tags: ["connection-intents"],
   summary: "Search connections available to the active heartbeat run",
   body: connectionsSearchInputSchema,
+});
+
+registerCurrentRoute({
+  method: "post", path: "/runtime-tools/model/messages", tags: ["orchestration"],
+  summary: "Dispatch one reserved text inference for an authorized Native worker",
+  body: workerModelCallSchema,
+  responses: {
+    200: { description: "Bounded worker result; no Task completion certification", content: {
+      "application/json": { schema: workerModelResultSchema },
+    } },
+    400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 409: r.conflict, 422: r.unprocessable,
+  },
 });
 
 registerCurrentRoute({

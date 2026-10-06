@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { loadReadOnlyModelProfiles, type ReadOnlyModelProfile } from "./services/orchestration/read-only-model-profiles.js";
+import { loadWorkerModelProfiles, type WorkerModelProfile } from "./services/orchestration/worker-model-profiles.js";
 
 const required = z.string().trim().min(1);
 const secret = z.string().min(32);
@@ -106,10 +107,13 @@ const schema = z.object({
   AW_RUNTIME_OPENSHELL_PROVER_SHA256: key.optional(),
   AW_READ_ONLY_MODEL_PROFILES_PATH: required.refine(v => v.startsWith("/")).optional(),
   AW_READ_ONLY_MODEL_PROFILES_SHA256: key.optional(),
+  AW_WORKER_MODEL_PROFILES_PATH: required.refine(v => v.startsWith("/")).optional(),
+  AW_WORKER_MODEL_PROFILES_SHA256: key.optional(),
 });
 
 export type SaasPlatformConfig = {
   readOnlyModelProfiles?: ReadOnlyModelProfile[];
+  workerModelProfiles?: WorkerModelProfile[];
   environment: "staging" | "production";
   databaseUrl: string;
   runLogs?: {
@@ -329,6 +333,9 @@ export function loadSaasPlatformConfig(
       backupRetentionDays: v.RUNTIME_CONTROL_BACKUP_RETENTION_DAYS,
     },
     operatorUserIds: operators,
+    ...(v.AW_WORKER_MODEL_PROFILES_PATH || v.AW_WORKER_MODEL_PROFILES_SHA256 ? {
+      workerModelProfiles: loadWorkerModelProfiles(v.AW_WORKER_MODEL_PROFILES_PATH, v.AW_WORKER_MODEL_PROFILES_SHA256?.toLowerCase()),
+    } : {}),
     ...(v.AW_READ_ONLY_MODEL_PROFILES_PATH || v.AW_READ_ONLY_MODEL_PROFILES_SHA256 ? {
       readOnlyModelProfiles: loadReadOnlyModelProfiles(v.AW_READ_ONLY_MODEL_PROFILES_PATH, v.AW_READ_ONLY_MODEL_PROFILES_SHA256?.toLowerCase()),
     } : {}),

@@ -47,6 +47,7 @@ import { saasRunLogStore } from "./run-logs.js";
 import { createS3StorageProvider } from "../../storage/s3-provider.js";
 import { runtimeControlService } from "../runtime/control.js";
 import { nativeSandboxHostTransport } from "../execution-sandbox/native-host-bridge.js";
+import { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 
 export function saasPlatform(
   db: Db,
@@ -106,6 +107,10 @@ export function saasPlatform(
     notifications.notifyCompany,
   );
   const sandboxHosts = nativeSandboxHostTransport(db, { suspectSeconds: config.runtime.suspectSeconds });
+  const workerModels = config.workerModelProfiles?.length ? workerModelGateway(db, {
+    profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
+    protectedEvidenceOrigin: origins.primaryAppOrigin,
+  }) : undefined;
   const backupRetention = config.backups
     ? runtimeBackupRetention(db, runtimeBackupRetentionObjects(config))
     : undefined;
@@ -452,6 +457,7 @@ export function saasPlatform(
   }
   return {
     sandboxHosts,
+    workerModels,
     backupSchedule,
     config,
     origins,

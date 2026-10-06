@@ -609,7 +609,7 @@ export async function createApp(
   // Connection-intent tools carry their own short-lived, run-bound bearer and
   // must be reachable by remote adapters that intentionally do not receive an
   // agent API key. Every request revalidates the active heartbeat row.
-  app.use(runtimeConnectionIntentRoutes(db));
+  app.use(runtimeConnectionIntentRoutes(db, opts.saasPlatform?.workerModels));
   app.use(
     actorMiddleware(db, {
       deploymentMode: opts.deploymentMode,
