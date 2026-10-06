@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { eq, sql } from "drizzle-orm";
 import { analyticalLineageEdges, analyticalLineageManifests, analyticalSourceSuppressions, businessMetricObservations, businessMetricVersions, businessMetricPublications, businessMetrics, applyPendingMigrations, companies, createDb, governanceObligations, issues, projects } from "@paperclipai/db";
 import { businessMetricDefinitionSchema, queryBusinessMetricSchema } from "@paperclipai/shared";
+import { currentAnalyticalPurpose } from "../services/analytical-purpose.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -42,6 +43,19 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
     return queryBusinessMetricSchema.parse({ metricId, versionId, from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", ...overrides });
   }
   const observations = () => db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId, companyId));
+
+  it("requires an explicitly approved strategy capability without inheriting ordinary metric permission", async () => {
+    await expect(currentAnalyticalPurpose(db, companyId, metricDefinition(policyId), "strategy")).rejects.toMatchObject({ status: 409 });
+    const profile = analyticalPurpose(); profile.citation = "Independent strategy-link processing policy";
+    profile.analyticalPurpose!.capabilities = ["strategy"];
+    const policy = await aiGovernanceService(db).obligation(actor, companyId, profile);
+    const declared = { ...metricDefinition(policy.id), governanceObligationRefs: [policy.id] };
+    expect((await currentAnalyticalPurpose(db, companyId, declared, "strategy")).map(row => row.id)).toEqual([policy.id]);
+    await expect(currentAnalyticalPurpose(db, companyId, declared, "metrics")).rejects.toMatchObject({ status: 409 });
+    profile.analyticalPurpose!.status = "suspended";
+    await aiGovernanceService(db).obligation(actor, companyId, profile);
+    await expect(currentAnalyticalPurpose(db, companyId, declared, "strategy")).rejects.toMatchObject({ status: 409 });
+  });
 
   it("uses a complete half-open native population, current status and exact definition/source lineage without copying prose", async () => {
     await source("done"); await source("todo"); await source("todo");

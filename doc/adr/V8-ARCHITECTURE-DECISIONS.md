@@ -62,3 +62,21 @@ conformance before use. OR-Tools, EconML and organizational simulation remain
 demand/evidence-triggered. Public PM4Py AGPL code is not embedded. Python workers
 receive bounded immutable input, no ambient database credential, no arbitrary
 network and explicit resource/cancellation policy.
+
+## V8-008 — Strategy shares native source privacy boundaries
+
+Strategy publication/read transactions take the existing analytical company lock,
+then the existing Memory privacy lock, before locking native source or link rows.
+This order lets current Foundation/Learning mutations retain their existing Memory
+boundary. Erasure cascades must not acquire the analytical lock from inside an
+already-held Memory-only boundary; dependent payloads use native foreign-key deletion
+and current source reauthorization. Native Issue deletion now takes these two locks
+before deleting its source row; a real PostgreSQL concurrency regression verifies it.
+No global Memory lock or Foundation approval owner is replaced. Source erasure,
+restore guards and graph concurrency still need implementation/qualification.
+
+Strategy purpose is an explicit capability in the existing V7 company-policy profile.
+Ordinary metrics permission does not authorize it. A separate current strategy profile
+can preserve existing metric policy identities; superseding a shared policy still
+requires its pinned consumers to publish reviewed evidence. Strategy definitions declare
+owner, review period, sensitivity, retention and current obligation references.

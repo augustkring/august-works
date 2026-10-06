@@ -25,6 +25,12 @@ export const strategyExecutionLinkDefinitionSchema = z.object({
   from: strategyExecutionReferenceSchema, to: strategyExecutionReferenceSchema,
   relationship: strategyExecutionRelationshipSchema,
   rationale: z.string().trim().min(10).max(2000),
+  ownerUserId: z.string().trim().min(1).max(300),
+  reviewFrequencyDays: z.number().int().min(1).max(365),
+  retentionDays: z.number().int().min(1).max(3650),
+  sensitivity: z.enum(["internal", "confidential"]),
+  purpose: z.literal("management_intelligence"),
+  governanceObligationRefs: z.array(z.string().uuid()).min(1).max(32),
   contribution: strategyExecutionContributionSchema.nullable().default(null),
 }).strict().refine(value => identity(value.from) !== identity(value.to), "A strategic link requires distinct native endpoints")
   .refine(value => value.relationship !== "measures" || ["metric", "metric_target", "metric_observation"].includes(value.from.type) && ["goal", "project", "milestone", "issue"].includes(value.to.type), "Measurement links connect a pinned measurement to a native execution context")
