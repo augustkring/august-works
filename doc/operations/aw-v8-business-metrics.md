@@ -58,7 +58,17 @@ unknown, native erasure, external abstention and rollback-safe revocation. The p
 engine has order-independent known-answer tests. OpenAPI route parity is verified.
 Shared/server type checks and generated migration safety checks pass at this checkpoint.
 
-There is no operator page yet. Targets, bindings, external semantic provider execution,
+The default-off operator page now supports native definition/revision/publication,
+windowed observations, explicit unknown/freshness, source inspection and lifecycle
+controls. It preserves account/company boundaries for reads and late mutations.
+The existing Governance editor exposes typed analytical purpose reviews. Four UI
+regression tests, UI types/token gates, the full Storybook build and sixteen local
+Chromium checks (four observation states, two themes, two viewport widths) pass.
+Those browser checks cover semantic states, native keyboard source inspection and
+document overflow; screenshots were manually inspected. They are not a full app
+journey, assistive-technology audit, screenshot-baseline certification or hosted proof.
+
+Targets, bindings, external semantic provider execution,
 strategy links, query receipts, generic lineage API, retention scheduling, complete
 source-owner adapters and independent operational/performance evidence remain open.
 Analytical object suppression and independently signed restore reconciliation are

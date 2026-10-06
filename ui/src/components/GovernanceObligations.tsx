@@ -71,6 +71,7 @@ export function GovernanceObligations({
           {row.obligation.authority} · {row.obligation.citation} ·{" "}
           {row.obligation.applicabilityState.replaceAll("_", " ")} · review{" "}
           {row.nextReviewAt.slice(0, 10)}
+          {row.obligation.analyticalPurpose && <> · analytical purpose {row.obligation.analyticalPurpose.status} · {row.obligation.analyticalPurpose.capabilities.join(", ")}</>}
         </p>
       ))}
       <label className="block space-y-2">
@@ -175,6 +176,20 @@ export function GovernanceObligations({
           />
         </label>
       ))}
+      {draft.framework === "company_policy" && <fieldset className="space-y-4">
+        <legend className="font-medium">Analytical purpose</legend>
+        <p className="text-muted-foreground">Record the approved use of business objects for advisory analysis. Employee ranking and automated people decisions are outside this profile. Approval requires the accountable human review recorded here.</p>
+        {!draft.analyticalPurpose ? <Button variant="outline" onClick={() => set("analyticalPurpose", { status: "suspended", purpose: "management_intelligence", capabilities: ["metrics"], populationUnits: "business_objects", peopleImpact: "none", decisionBoundary: "advisory_only", maxRetentionDays: 30, permittedSensitivity: ["internal"], prohibitedUses: [], approvalRationale: "" })}>Add analytical purpose</Button> : <>
+          <label className="block space-y-2">Purpose status<select className="block rounded-md border bg-background p-2" value={draft.analyticalPurpose.status} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, status: event.target.value as "approved" | "suspended" })}><option value="suspended">Suspended</option><option value="approved">Approved after human review</option></select></label>
+          <label className="block space-y-2">Intended analytical purpose<select className="block rounded-md border bg-background p-2" value={draft.analyticalPurpose.purpose} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, purpose: event.target.value as "management_intelligence" | "process_intelligence" })}><option value="management_intelligence">Management intelligence</option><option value="process_intelligence">Process intelligence</option></select></label>
+          <fieldset className="space-y-2"><legend>Permitted capabilities</legend><div className="flex flex-wrap gap-4">{(["metrics", "process", "forecast", "scenario", "experiment", "causal", "planning", "reviews"] as const).map(capability => <label key={capability} className="flex items-center gap-2"><input type="checkbox" checked={draft.analyticalPurpose!.capabilities.includes(capability)} onChange={() => { const current = draft.analyticalPurpose!; set("analyticalPurpose", { ...current, capabilities: current.capabilities.includes(capability) ? current.capabilities.filter(c => c !== capability) : [...current.capabilities, capability] }); }} />{capability}</label>)}</div></fieldset>
+          <fieldset className="space-y-2"><legend>Permitted sensitivity</legend><div className="flex flex-wrap gap-4">{(["internal", "confidential"] as const).map(level => <label key={level} className="flex items-center gap-2"><input type="checkbox" checked={draft.analyticalPurpose!.permittedSensitivity.includes(level)} onChange={() => { const current = draft.analyticalPurpose!; set("analyticalPurpose", { ...current, permittedSensitivity: current.permittedSensitivity.includes(level) ? current.permittedSensitivity.filter(c => c !== level) : [...current.permittedSensitivity, level] }); }} />{level}</label>)}</div></fieldset>
+          <label className="block space-y-2">Maximum analytical retention (days)<Input type="number" min={1} max={3650} value={draft.analyticalPurpose.maxRetentionDays} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, maxRetentionDays: Number(event.target.value) })} /></label>
+          <label className="block space-y-2">Approval rationale<Textarea value={draft.analyticalPurpose.approvalRationale} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, approvalRationale: event.target.value })} /></label>
+          <label className="block space-y-2">Prohibited uses (one per line)<Textarea value={draft.analyticalPurpose.prohibitedUses.join("\n")} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, prohibitedUses: event.target.value.split("\n").map(value => value.trim()).filter(Boolean) })} /></label>
+          <Button variant="ghost" onClick={() => set("analyticalPurpose", undefined)}>Remove analytical purpose from this review</Button>
+        </>}
+      </fieldset>}
       <div className="flex items-center justify-between gap-2">
         <Button variant="outline" onClick={() => setDraft(blank())}>
           Cancel

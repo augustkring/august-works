@@ -56,6 +56,8 @@ import { IssueChatLongThreadPerf } from "./pages/IssueChatLongThreadPerf";
 import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
 import { Readiness } from "./pages/Readiness";
+import { BusinessMetrics } from "./pages/BusinessMetrics";
+import { V8FeatureGate } from "./components/V8FeatureGate";
 import { DerivedMemory } from "./pages/DerivedMemory";
 import { Orchestration } from "./pages/Orchestration";
 import { AIGovernance } from "./pages/AIGovernance";
@@ -373,6 +375,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       ) : null}
       <Route path="foundation/discovery" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
       <Route path="foundation/discovery/:bootstrapRunId" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
+      <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessMetrics /></V7FeatureGate></V8FeatureGate>} />
       <Route path="readiness" element={<V7FeatureGate feature="readiness_engine_v7"><Readiness /></V7FeatureGate>} />
       <Route
         path="foundation"
@@ -888,7 +891,8 @@ export function App() {
           <Route path="routines" element={<UnprefixedBoardRedirect />} />
           <Route path="routines/:routineId" element={<UnprefixedBoardRedirect />} />
           <Route path="review-queue" element={<UnprefixedBoardRedirect />} />
-          <Route path="readiness" element={<UnprefixedBoardRedirect />} />
+          <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessMetrics /></V7FeatureGate></V8FeatureGate>} />
+      <Route path="readiness" element={<UnprefixedBoardRedirect />} />
           <Route path="orchestration" element={<UnprefixedBoardRedirect />} />
           <Route path="work-signals" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/packages" element={<UnprefixedBoardRedirect />} />
