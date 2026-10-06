@@ -7,6 +7,7 @@ import { businessMetricService } from "../services/business-metrics/service.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { issueService } from "../services/issues.js";
 import { projectService } from "../services/projects.js";
 import { analyticalPurpose, metricDefinition } from "./helpers/business-metric-fixture.js";
@@ -225,6 +226,36 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
     await expect(service().inspectCurrentObservation(companyId, actor, result.id)).rejects.toMatchObject({ status: 409 });
     await issueService(db).remove(issue.id);
     await expect(service().inspectCurrentObservation(companyId, actor, result.id)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("takes privacy locks before native issue row deletion when Memory owns a concurrent source update", async () => {
+    const issue = await source("done");
+    let releaseMemory!: () => void; let signalLocked!: () => void;
+    const held = new Promise<void>(resolve => { signalLocked = resolve; });
+    const release = new Promise<void>(resolve => { releaseMemory = resolve; });
+    const memory = db.transaction(async tx => {
+      await lockMemoryPrivacy(tx as unknown as typeof db, companyId);
+      signalLocked(); await release;
+      await tx.execute(sql`set local lock_timeout = '1s'`);
+      await tx.update(issues).set({ description: "Privacy-reconciled native source" }).where(eq(issues.id, issue.id));
+    });
+    await held;
+    const deletion = issueService(db).remove(issue.id);
+    try {
+      const deadline = performance.now() + 5000; let blocked = false;
+      while (performance.now() < deadline) {
+        const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_locks
+          where locktype='advisory' and not granted and database=(select oid from pg_database where datname=current_database())) as waiting`);
+        if (row.waiting) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(blocked).toBe(true);
+      releaseMemory();
+      await expect(memory).resolves.toBeUndefined();
+      expect(await deletion).toMatchObject({ id: issue.id });
+    } finally {
+      releaseMemory(); await Promise.allSettled([memory, deletion]);
+    }
   });
 
   it("reapplies post-backup analytical deletion in isolated native quarantine with flags off and preserves unrelated observations", async () => {

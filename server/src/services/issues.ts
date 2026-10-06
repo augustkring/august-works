@@ -9,7 +9,7 @@ import { executionProjectionsForRuns } from "./execution-projection.js";
 import type { ExecutionProjection } from "@paperclipai/shared";
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
-import { forgetMemoryForDeletedIssue } from "./memory/memory-privacy.js";
+import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
 import {
   and,
@@ -11320,7 +11320,13 @@ export function issueService(db: Db) {
     remove: (id: string) =>
       db.transaction(async (tx) => {
         const [owner] = await tx.select({ companyId: issues.companyId }).from(issues).where(eq(issues.id, id));
-        if (owner) await lockBusinessEventCompany(tx, owner.companyId);
+        if (owner) {
+          await lockBusinessEventCompany(tx, owner.companyId);
+          // Memory erasure can update native source payloads. Acquire both
+          // privacy boundaries before deleting the source row, so a holder of
+          // the Memory lock never waits on a row whose deleter waits on Memory.
+          await lockMemoryPrivacy(tx as unknown as Db, owner.companyId);
+        }
         const attachmentAssetIds = await tx
           .select({ assetId: issueAttachments.assetId })
           .from(issueAttachments)
