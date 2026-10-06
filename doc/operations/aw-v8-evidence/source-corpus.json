@@ -407,7 +407,12 @@
       "lines": 3638,
       "words": 14673,
       "path": "/workspace/attachments/ae6b7c49-a8d8-48ee-892e-1a57702cd2df/web_frontend_engineering_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3638
+      },
+      "applicability": "Use existing native web semantics and component contracts, with trusted server authorization, explicit state/cache ownership and stale-response protection. Preserve URL/history/focus and user input; no sensitive URL or browser persistence. Browser runtime, keyboard, zoom and assistive evidence remain separate from TypeScript/build/token checks."
     }
   ]
 }
