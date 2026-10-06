@@ -438,6 +438,8 @@ export interface CompanyPortabilityImportResult {
 }
 
 export interface CompanyPortabilityExportRequest {
+  includeV7State?: boolean;
+  expectedUserId?: string;
   include?: Partial<CompanyPortabilityInclude>;
   agents?: string[];
   skills?: string[];

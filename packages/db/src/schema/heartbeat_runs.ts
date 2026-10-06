@@ -142,6 +142,7 @@ export const heartbeatRuns = pgTable(
       table.status,
       table.lastOutputAt,
     ),
+    companyRunningCapacityIdx: index("heartbeat_runs_company_running_capacity_idx").on(table.companyId, table.id).where(sql`${table.status}='running'`),
     companyStatusProcessStartedIdx: index("heartbeat_runs_company_status_process_started_idx").on(
       table.companyId,
       table.status,

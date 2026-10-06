@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "brief": "August Works V7-v2",
+  "sourceLedger": "doc/plans/2026-10-05-aw-v7-build-progress.md",
+  "implementationBlockers": [
+    {
+      "id": "native_openshell_host_bridge",
+      "wave": 12,
+      "status": "incomplete",
+      "source": "server/src/services/execution-sandbox/native-host-bridge.ts"
+    },
+    {
+      "id": "credential_use_broker_and_revocation",
+      "wave": 12,
+      "status": "incomplete",
+      "source": "server/src/services/execution-sandbox/openshell-policy.ts",
+      "verificationScope": "Native scoped ToolGateway HTTP requests recheck original execution, connection/catalog pins, grant identity and audience before each request and publication. Vercel token metadata cannot reactivate a concurrently revoked grant. Local acceptance uses migrated PostgreSQL and private transport fixtures. Physical per-use workload credential brokering, executable identity, secret-version revocation and OpenShell enforcement remain incomplete and closed."
+    },
+    {
+      "id": "pre_spend_model_reservation",
+      "wave": 7,
+      "status": "incomplete",
+      "source": "server/src/services/orchestration/orchestration-admission.ts",
+      "verificationScope": "Native reservation, read-only consumers, worker HTTP gateway, Task tool accounting and forced aw_text_only plan-start/admission/heartbeat verified locally. The dedicated stateless provider bootstrap now uses the actual operator endpoint, encrypted grants and the native reservation ledger before qualification; current-source pricing and provider replies in local acceptance remain explicit private fixtures. One standard C0/C1 internal draft and declared output are supported. Forced pre-spend transport for managed autonomous sessions/CLIs and their physical workload admission remain incomplete and closed. Protected production provider qualification and the integrated pilot remain operating evidence. Cancellation confirms local publication fencing and retains unknown provider liability, not physical provider compute stop or a known invoice."
+    },
+    {
+      "id": "automated_read_only_semantic_consumer",
+      "wave": 9,
+      "status": "implemented_and_verified",
+      "source": "server/src/services/supervision/read-only-model-verifier.ts",
+      "verificationScope": "Native PostgreSQL, actual encrypted grants and private transport fixtures; live calibration and provider qualification remain operating evidence"
+    }
+  ],
+  "journey": [
+    "free_signup",
+    "foundation_bootstrap",
+    "readiness",
+    "package_or_custom_agent",
+    "managed_openshell_runtime",
+    "real_chat_work",
+    "supervision",
+    "human_approval",
+    "outcome",
+    "memory_observation",
+    "learning_proposal",
+    "governance_export",
+    "paid_capacity_change",
+    "downgrade_to_free"
+  ],
+  "faults": [
+    "model_outage",
+    "cognitive_provider_outage",
+    "sandbox_denial",
+    "runtime_host_loss",
+    "permission_revocation",
+    "stale_foundation",
+    "poisoned_external_content",
+    "billing_outage",
+    "human_non_response"
+  ],
+  "compoundCases": [
+    "poisoned_memory_unauthorized_tool_apparent_progress_exfiltration_escalation",
+    "work_state_extraction_rejects_sensitive_personal_inference",
+    "package_model_foundation_change_holds_rollout"
+  ],
+  "operatingEvidence": [
+    "openshell_host_kernel_image_controls",
+    "credential_no_raw_read_destination_revocation",
+    "model_budget_pre_spend_restart_replay",
+    "semantic_provider_independence_depth_budget",
+    "backup_restore_upgrade_host_loss",
+    "free_core_measured_cost_envelope",
+    "customer_specialist_outcomes_demand",
+    "enterprise_identity_receiver_exit",
+    "enterprise_contract_region_supplier_support"
+  ],
+  "localSuites": [
+    "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+    "server/src/__tests__/v7-sandbox.integration.test.ts",
+    "server/src/__tests__/v7-orchestration.integration.test.ts",
+    "server/src/__tests__/v7-agent-packages.integration.test.ts",
+    "server/src/__tests__/v7-free-core.integration.test.ts",
+    "server/src/__tests__/v7-work-signals.integration.test.ts",
+    "server/src/__tests__/v7-learning.integration.test.ts",
+    "server/src/__tests__/v7-portability.integration.test.ts",
+    "server/src/__tests__/v7-read-only-model-verifier.integration.test.ts",
+    "server/src/__tests__/v7-read-only-model-transport.test.ts",
+    "server/src/__tests__/v7-model-reservations.integration.test.ts",
+    "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+    "server/src/__tests__/v7-worker-model-profiles.test.ts",
+    "packages/shared/src/governance-reference-validation.test.ts",
+    "tests/e2e/aw-v7-authenticated.spec.ts",
+    "server/src/middleware/expected-actor.test.ts",
+    "ui/src/api/account-client.test.ts",
+    "ui/src/context/V7AccountScope.test.tsx",
+    "server/src/__tests__/v7-native-draft-conformance.integration.test.ts"
+  ]
+}

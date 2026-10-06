@@ -1,4 +1,7 @@
-import { formatInfrastructureUsage, formatStorageBytes } from "@/lib/infrastructureUsage";
+import {
+  formatInfrastructureUsage,
+  formatStorageBytes,
+} from "@/lib/infrastructureUsage";
 import { useEffect, useRef, useState } from "react";
 import { useAccountIdentity } from "@/api/companies-query";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -104,7 +107,7 @@ export function SaasBillingPage() {
       <h1 className="saas-title">Billing and usage</h1>
       <p className="saas-muted">
         Your model provider bills your API usage separately. August Works
-        charges cover the platform and managed infrastructure.
+        charges cover capacity and managed infrastructure.
       </p>
       {error && (
         <p role="alert" className="saas-error">
@@ -118,6 +121,28 @@ export function SaasBillingPage() {
             <h2 className="saas-subtitle">
               Access: {billing.data.access.replace("_", " ")}
             </h2>
+            {billing.data.freeCore?.active && (
+              <p>
+                Free Core remains available without a payment card. Foundation,
+                Memory, Workflows, governance, audit, privacy controls and
+                export are included. Your model provider and runtime provider
+                bill BYOK/BYO usage separately.
+              </p>
+            )}
+            {billing.data.commercialState === "FREE" && (
+              <p>
+                Commercial state: Free Core. Paid managed infrastructure
+                requires separate capacity.
+              </p>
+            )}
+            {billing.data.freeCore?.active && (
+              <p>
+                Concurrent runs:{" "}
+                {String(billing.data.entitlements["execution.concurrent.max"])}.
+                Work above this limit stays queued; existing data is preserved
+                when paid capacity ends.
+              </p>
+            )}
             {billing.data.access === "grace" && (
               <p>
                 Resolve the payment issue to keep work running. New managed
@@ -149,7 +174,11 @@ export function SaasBillingPage() {
           <section className="saas-section" aria-label="Plans and add-ons">
             <h2 className="saas-subtitle">Plans and add-ons</h2>
             {billing.data.prices.length === 0 && (
-              <p>No plans are available yet. Contact support.</p>
+              <p>
+                {billing.data.freeCore?.active
+                  ? "Free Core is active. Optional paid capacity is not available in this deployment yet."
+                  : "No plans are available yet. Contact support."}
+              </p>
             )}
             {billing.data.prices.map((price) => (
               <div key={price.priceKey} className="saas-row">
@@ -213,10 +242,10 @@ export function SaasBillingPage() {
         <h2 className="saas-subtitle">This month’s infrastructure usage</h2>
         {usage.data?.storage && (
           <p>
-            Account storage: {formatStorageBytes(usage.data.storage.usedBytes)} of{" "}
-            {formatStorageBytes(usage.data.storage.includedBytes)}. Internal logs and safety
-            backups are excluded. You can read and remove existing files when
-            your allowance is exceeded.
+            Account storage: {formatStorageBytes(usage.data.storage.usedBytes)}{" "}
+            of {formatStorageBytes(usage.data.storage.includedBytes)}. Internal
+            logs and safety backups are excluded. You can read and remove
+            existing files when your allowance is exceeded.
           </p>
         )}
         {usage.data?.meters.length === 0 && (

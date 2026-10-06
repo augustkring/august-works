@@ -233,6 +233,7 @@ export function CodexLocalConfigFields({
             <option value="claude_managed">Claude Managed</option>
             <option value="aws_agentcore">AWS AgentCore</option>
             <option value="acpx">ACPX Claude</option>
+            {runnerProvider === "aw_text_only" && <option value="aw_text_only">Internal draft for review</option>}
           </select>
         </Field>
       )}

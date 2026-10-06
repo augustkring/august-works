@@ -172,6 +172,14 @@ export const authApi = {
     return nested;
   },
 
+  signInSso: async (email: string, nextPath: string, providerId?: string) => {
+    if (!/^\/(?!\/)/.test(nextPath) || /[\\\r\n]/.test(nextPath)) throw new Error("Invalid sign-in destination");
+    const payload = await authPost("/sign-in/sso", {email:email.trim(),...(providerId ? {providerId} : {}),callbackURL:new URL(nextPath,window.location.origin).href}) as {url?:unknown};
+    if (typeof payload?.url!=="string") throw new Error("Identity provider redirect unavailable");
+    const target=new URL(payload.url);
+    if(target.protocol!=="https:" || target.username || target.password) throw new Error("Invalid identity provider redirect");
+    return target.href;
+  },
   signInEmail: async (input: { email: string; password: string }) => {
     await authPost("/sign-in/email", input);
   },

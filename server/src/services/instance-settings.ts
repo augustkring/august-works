@@ -1,4 +1,5 @@
-import { v5FeatureFlagsSchema, v6FeatureFlagsSchema } from "@paperclipai/shared";
+import { assertV7FeatureDependencies, v5FeatureFlagsSchema, v6FeatureFlagsSchema, v7FeatureFlagsSchema, V7FeatureDependencyError } from "@paperclipai/shared";
+import { badRequest } from "../errors.js";
 import type { Db } from "@paperclipai/db";
 import { companies, instanceSettings } from "@paperclipai/db";
 
@@ -257,6 +258,7 @@ export function normalizeExperimentalSettings(raw: unknown): InstanceExperimenta
       enableSimplifiedEnglishInteractions: parsed.data.enableSimplifiedEnglishInteractions ?? false,
       ...v5FeatureFlagsSchema.parse(parsed.data),
       ...v6FeatureFlagsSchema.parse(parsed.data),
+      ...v7FeatureFlagsSchema.parse(parsed.data),
       enableFoundationV1: parsed.data.enableFoundationV1 ?? false,
       enableContextEngineV1: parsed.data.enableContextEngineV1 ?? false,
       enableWorkflowsV1: parsed.data.enableWorkflowsV1 ?? false,
@@ -323,6 +325,7 @@ export function normalizeExperimentalSettings(raw: unknown): InstanceExperimenta
     enableSimplifiedEnglishInteractions: false,
     ...v5FeatureFlagsSchema.parse({}),
     ...v6FeatureFlagsSchema.parse({}),
+    ...v7FeatureFlagsSchema.parse({}),
     enableFoundationV1: false,
     enableContextEngineV1: false,
     enableWorkflowsV1: false,
@@ -479,6 +482,7 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       applyCloudCatalogDefaults(normalizeExperimentalSettings(raw), raw, managedConfig),
       managedConfig,
     );
+    assertV7FeatureDependencies(experimental);
     // Self-hosted responses stay byte-identical: no managedKeys field at all.
     return managedConfig ? { ...experimental, managedKeys } : experimental;
   }
@@ -593,26 +597,46 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       return toInstanceSettings(updated ?? current);
     },
 
-    updateExperimental: async (patch: PatchInstanceExperimentalSettings): Promise<InstanceSettings> => {
-      const current = await getOrCreateRow();
-      // Guarded Cloud flags stay absent from the row unless chosen, so the
-      // read-time catalog default keeps applying (see stripCloudCatalogDefaultEchoes).
-      const nextExperimental = stripCloudCatalogDefaultEchoes(
-        current.experimental,
-        patch,
-        applyExperimentalSettingsPatch(current.experimental, patch, options),
-        managedConfig,
-      );
-      const now = new Date();
-      const [updated] = await db
-        .update(instanceSettings)
-        .set({
-          experimental: { ...nextExperimental },
-          updatedAt: now,
-        })
-        .where(eq(instanceSettings.id, current.id))
-        .returning();
-      return toInstanceSettings(updated ?? current);
+    updateExperimental: async (
+      patch: PatchInstanceExperimentalSettings,
+      writeOptions?: { db?: InstanceSettingsWriteDb },
+    ): Promise<InstanceSettings> => {
+      const write = async (tx: InstanceSettingsWriteDb) => {
+        const row = await getOrCreateRow(tx);
+        // Serialize the complete read/validate/write. Concurrent patches cannot
+        // enable a dependent against prerequisites that another writer removes.
+        const [current] = await tx.select().from(instanceSettings)
+          .where(eq(instanceSettings.id, row.id)).for("update");
+        if (!current) throw new Error("Instance settings disappeared during update");
+        // Guarded Cloud flags stay absent from the row unless chosen, so the
+        // read-time catalog default keeps applying (see stripCloudCatalogDefaultEchoes).
+        const nextExperimental = stripCloudCatalogDefaultEchoes(
+          current.experimental,
+          patch,
+          applyExperimentalSettingsPatch(current.experimental, patch, options),
+          managedConfig,
+        );
+        try {
+          // The effective managed overlay must also satisfy the dependency graph.
+          toExperimentalView(nextExperimental);
+        } catch (error) {
+          if (error instanceof V7FeatureDependencyError) {
+            throw badRequest(error.message, { code: "V7_FEATURE_DEPENDENCY_INVALID", issues: error.issues });
+          }
+          throw error;
+        }
+        const now = new Date();
+        const [updated] = await tx
+          .update(instanceSettings)
+          .set({
+            experimental: { ...nextExperimental },
+            updatedAt: now,
+          })
+          .where(eq(instanceSettings.id, current.id))
+          .returning();
+        return toInstanceSettings(updated ?? current);
+      };
+      return writeOptions?.db ? write(writeOptions.db) : db.transaction(write);
     },
 
     listCompanyIds: async (): Promise<string[]> =>

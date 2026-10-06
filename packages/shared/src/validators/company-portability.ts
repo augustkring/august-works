@@ -298,6 +298,8 @@ export const portabilityAgentSelectionSchema = z.union([
 export const portabilityCollisionStrategySchema = z.enum(["rename", "skip", "replace"]);
 
 export const companyPortabilityExportSchema = z.object({
+  includeV7State: z.boolean().optional(),
+  expectedUserId: z.string().min(1).max(200).optional(),
   include: portabilityIncludeSchema.optional(),
   agents: z.array(z.string().min(1)).optional(),
   skills: z.array(z.string().min(1)).optional(),

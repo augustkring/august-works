@@ -227,6 +227,9 @@ jobs:
           - journey: V5 authenticated company boundaries
             config: tests/e2e/aw-v5-authenticated.config.ts
             spec: tests/e2e/aw-v5-authenticated.spec.ts
+          - journey: V7 authenticated discovery and governance
+            config: tests/e2e/aw-v7-authenticated.config.ts
+            spec: tests/e2e/aw-v7-authenticated.spec.ts
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -269,6 +272,7 @@ jobs:
             tests/e2e/test-results
             tests/e2e/playwright-report
             test-results/v5-authenticated
+            test-results/v7-authenticated
           if-no-files-found: ignore
 
   pilot-readiness:

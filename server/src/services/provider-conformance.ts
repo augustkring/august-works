@@ -19,6 +19,7 @@ import { budgetService } from "./budgets.js";
 import { costService } from "./costs.js";
 import { withV5ActivityTransaction } from "./v5-mutations.js";
 import { logActivity } from "./activity-log.js";
+import { installedNativeDraftConformance } from "./native-draft-conformance.js";
 
 export { providerConformanceInputSchema } from "@paperclipai/shared";
 
@@ -29,6 +30,10 @@ export function providerConformanceService(db: Db) {
       await assertV5Enabled(db, "agent_provider_bindings_v5");
       const input = providerConformanceInputSchema.parse(raw), userId = v5HumanActorId(actor), bindings = agentProviderBindingService(db);
       await assertV5Authorization(db, actor, companyId, "agents:configure", { type: "agent", companyId, agentId });
+      const [draftCandidate] = await db.select({ adapterType: agents.adapterType, adapterConfig: agents.adapterConfig }).from(agents)
+        .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).limit(1);
+      if (draftCandidate?.adapterType === "paperclip_runner" && draftCandidate.adapterConfig.provider === "aw_text_only")
+        return installedNativeDraftConformance(db).test(actor, companyId, agentId, input);
       async function target(cid: string, aid: string) {
         await assertV5Authorization(db, actor, cid, "agents:configure", { type: "agent", companyId: cid, agentId: aid });
         await assertV5Authorization(db, actor, cid, "agent:wake", { type: "agent", companyId: cid, agentId: aid });

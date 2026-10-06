@@ -48,6 +48,9 @@ export function createNativeSessionBackend(
   input: NativeExecutionInput,
   options: NativeBackendFactoryOptions = {},
 ): NativeSessionBackend {
+  if (input.provider.kind === "aw_text_only") {
+    throw new Error("aw_text_only requires the private budget-bound controller backend; no CLI or managed-session fallback is permitted");
+  }
   if (options.codexTransportFactory) {
     return createRunnerdNativeSessionBackend(input, {
       completionFeedback: options.completionFeedback,

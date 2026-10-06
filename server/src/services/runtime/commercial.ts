@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   activityLog,
   agents,
+  agentPresenceRuntimeBindings,
+  heartbeatRuns,
   billingAccountCompanies,
   billingAccounts,
   companies,
@@ -162,17 +164,15 @@ export function runtimeCommercialService(
             )
             .returning({ id: agents.id });
           for (const agent of paused)
-            await tx
-              .insert(activityLog)
-              .values({
-                companyId: association.companyId,
-                actorType: "system",
-                actorId: "commercial-reconciler",
-                action: "agent.commercial_paused",
-                entityType: "agent",
-                entityId: agent.id,
-                details: { reason: "commercial_access_expired" },
-              });
+            await tx.insert(activityLog).values({
+              companyId: association.companyId,
+              actorType: "system",
+              actorId: "commercial-reconciler",
+              action: "agent.commercial_paused",
+              entityType: "agent",
+              entityId: agent.id,
+              details: { reason: "commercial_access_expired" },
+            });
         }
         const cells = await tx
           .select()
@@ -188,22 +188,92 @@ export function runtimeCommercialService(
         for (const cell of cells) {
           const reason = await runtimeCommercialReason(tx, cell, now);
           if (!reason) continue; // Payment recovery never automatically starts a cell or unpauses a budget-stopped agent.
+          // Free Core preserves BYO execution. Only the presence bound to this
+          // actual managed cell/generation loses expensive runtime capacity.
+          if (cell.providerBindingId) {
+            const presences = await tx
+              .select({ id: agentPresenceRuntimeBindings.agentId })
+              .from(agentPresenceRuntimeBindings)
+              .where(
+                and(
+                  eq(agentPresenceRuntimeBindings.companyId, cell.companyId),
+                  eq(
+                    agentPresenceRuntimeBindings.providerBindingId,
+                    cell.providerBindingId,
+                  ),
+                  eq(
+                    agentPresenceRuntimeBindings.providerProfileRef,
+                    `aw:cell:${cell.id}:generation:${cell.generation}`,
+                  ),
+                ),
+              );
+            const ids = presences.map((presence) => presence.id);
+            cancelledAgentIds.push(...ids);
+            if (ids.length) {
+              // Fence authority before waiting for remote cancellation. A
+              // transient controller failure cannot keep old sessions writable.
+              await tx
+                .update(heartbeatRuns)
+                .set({
+                  resultJson: sql`coalesce(${heartbeatRuns.resultJson},'{}'::jsonb)||jsonb_build_object('executionCancellation',jsonb_build_object('state','requested','reason','commercial_runtime_capacity_expired','runtimeCellId',${cell.id}::text,'generation',${cell.generation.toString()}::text,'requestedAt',now()))`,
+                  updatedAt: now,
+                })
+                .where(
+                  and(
+                    eq(heartbeatRuns.companyId, cell.companyId),
+                    inArray(heartbeatRuns.agentId, ids),
+                    inArray(heartbeatRuns.status, ["running", "queued"]),
+                    sql`coalesce(${heartbeatRuns.resultJson}->'executionCancellation'->>'state','')<>'requested'`,
+                  ),
+                );
+              const paused = await tx
+                .update(agents)
+                .set({
+                  status: "paused",
+                  pauseReason: "commercial_runtime_capacity_expired",
+                  pausedAt: now,
+                  updatedAt: now,
+                })
+                .where(
+                  and(
+                    eq(agents.companyId, cell.companyId),
+                    inArray(agents.id, ids),
+                    inArray(agents.status, ["idle", "running", "error"]),
+                  ),
+                )
+                .returning({ id: agents.id });
+              for (const agent of paused)
+                await tx
+                  .insert(activityLog)
+                  .values({
+                    companyId: cell.companyId,
+                    actorType: "system",
+                    actorId: "commercial-reconciler",
+                    action: "agent.commercial_runtime_paused",
+                    entityType: "agent",
+                    entityId: agent.id,
+                    details: {
+                      runtimeCellId: cell.id,
+                      generation: cell.generation.toString(),
+                      reason,
+                    },
+                  });
+            }
+          }
           if (cell.suspendedReason !== reason) {
             await tx
               .update(runtimeCells)
               .set({ suspendedReason: reason, updatedAt: now })
               .where(eq(runtimeCells.id, cell.id));
-            await tx
-              .insert(activityLog)
-              .values({
-                companyId: cell.companyId,
-                actorType: "system",
-                actorId: "commercial-reconciler",
-                action: "runtime.commercial_suspended",
-                entityType: "runtime_cell",
-                entityId: cell.id,
-                details: { reason, generation: cell.generation.toString() },
-              });
+            await tx.insert(activityLog).values({
+              companyId: cell.companyId,
+              actorType: "system",
+              actorId: "commercial-reconciler",
+              action: "runtime.commercial_suspended",
+              entityType: "runtime_cell",
+              entityId: cell.id,
+              details: { reason, generation: cell.generation.toString() },
+            });
             if (notify)
               await notify(
                 cell.companyId,
@@ -233,26 +303,24 @@ export function runtimeCommercialService(
             continue;
           const idempotencyKey = "commercial-stop:" + randomUUID();
           const input = { cellId: cell.id, action: "stop", idempotencyKey };
-          await tx
-            .insert(runtimeOperations)
-            .values({
-              companyId: cell.companyId,
-              runtimeCellId: cell.id,
-              operationType: "stop",
-              requestedByType: "system",
-              requestedById: "commercial-reconciler",
-              idempotencyKey,
-              requestHash: sha256(JSON.stringify(input)),
-              deadlineAt: new Date(now.getTime() + 900000),
-            });
+          await tx.insert(runtimeOperations).values({
+            companyId: cell.companyId,
+            runtimeCellId: cell.id,
+            operationType: "stop",
+            requestedByType: "system",
+            requestedById: "commercial-reconciler",
+            idempotencyKey,
+            requestHash: sha256(JSON.stringify(input)),
+            deadlineAt: new Date(now.getTime() + 900000),
+          });
         }
-        return cancelledAgentIds;
+        return [...new Set(cancelledAgentIds)];
       });
       // Remote cancellation follows commit. A failure is retried from paused agents on the next occurrence.
       if (cancelledAgentIds.length && cancelInvocations)
         await cancelInvocations(
           cancelledAgentIds,
-          "Cancelled because commercial access expired",
+          "Cancelled because commercial execution capacity expired",
         );
     }
     return associations.length;

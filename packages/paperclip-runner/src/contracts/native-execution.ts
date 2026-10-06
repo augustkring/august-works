@@ -96,6 +96,7 @@ export interface NativeAcpxProfileSnapshot {
 }
 
 export type NativeProviderConfig =
+  | { kind: "aw_text_only"; model: string; profileId: string; maxOutputTokens: number }
   | { kind: "codex"; model: string | null; approvalPolicy?: NativeCodexApprovalPolicy }
   | { kind: "opencode"; model: string; permissionMode?: NativeOpenCodePermissionMode }
   | {
@@ -128,7 +129,7 @@ export type NativeProviderConfig =
 export type NativeProviderConfigV4 =
   | { kind: "codex"; model: string | null; approvalPolicy: NativeCodexApprovalPolicy }
   | { kind: "opencode"; model: string; permissionMode: NativeOpenCodePermissionMode }
-  | Extract<NativeProviderConfig, { kind: "claude_managed" | "aws_agentcore" }>
+  | Extract<NativeProviderConfig, { kind: "claude_managed" | "aws_agentcore" | "aw_text_only" }>
   | {
       kind: "acpx";
       agent: NativeAcpxAgent;
@@ -162,7 +163,7 @@ export interface NativeExecutionInputV1 {
   };
   session: {
     normalizedSessionId: string | null;
-    driverKind: "codex_app_server" | "opencode_server" | "claude_managed_agents_api" | "aws_agentcore_harness_api" | "acpx_runtime";
+    driverKind: "codex_app_server" | "opencode_server" | "claude_managed_agents_api" | "aws_agentcore_harness_api" | "acpx_runtime" | "aw_text_messages";
     protocolVersion: 1;
     lifecyclePolicy: NativeSessionLifecyclePolicy;
   };
@@ -360,6 +361,7 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
       && session.driverKind !== "claude_managed_agents_api"
       && session.driverKind !== "aws_agentcore_harness_api"
       && session.driverKind !== "acpx_runtime"
+      && session.driverKind !== "aw_text_messages"
     )
     || session.protocolVersion !== 1
   ) {
@@ -399,12 +401,15 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
     && provider.kind !== "claude_managed"
     && provider.kind !== "aws_agentcore"
     && provider.kind !== "acpx"
+    && provider.kind !== "aw_text_only"
   ) {
     throw new NativeExecutionInputError("input.provider.kind must be codex, opencode, claude_managed, aws_agentcore, or acpx");
   }
   exactKeys(
     provider,
-    provider.kind === "claude_managed"
+    provider.kind === "aw_text_only"
+      ? ["kind", "model", "profileId", "maxOutputTokens"]
+      : provider.kind === "claude_managed"
       ? ["kind", "model", "managedProfile", "maxSessionListCostUsd"]
       : provider.kind === "aws_agentcore"
         ? ["kind", "model", "agentCoreProfile", "maxEstimatedSessionCostUsd", "invocationLimits"]
@@ -423,6 +428,7 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
     || (provider.kind === "claude_managed" && session.driverKind !== "claude_managed_agents_api")
     || (provider.kind === "aws_agentcore" && session.driverKind !== "aws_agentcore_harness_api")
     || (provider.kind === "acpx" && session.driverKind !== "acpx_runtime")
+    || (provider.kind === "aw_text_only" && session.driverKind !== "aw_text_messages")
   ) {
     throw new NativeExecutionInputError("input.provider.kind does not match input.session.driverKind");
   }
@@ -433,7 +439,18 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
     throw new NativeExecutionInputError("input.provider.model is required for opencode in provider/model form");
   }
   let parsedProvider: NativeProviderConfig;
-  if (provider.kind === "claude_managed") {
+  if (provider.kind === "aw_text_only") {
+    if (!isV4 || executionMode !== "default" || task.workMode !== "standard" ||
+        lifecyclePolicy.mode !== "per_turn" || input.continuationPrompt ||
+        !Array.isArray(input.credentialBindings) || input.credentialBindings.length ||
+        !providerModel || !/^[a-zA-Z0-9_.:-]{1,200}$/.test(providerModel) ||
+        !Number.isSafeInteger(provider.maxOutputTokens) || Number(provider.maxOutputTokens) < 1 || Number(provider.maxOutputTokens) > 8192)
+      throw new NativeExecutionInputError("aw_text_only requires one fresh v4 standard draft without credentials or session continuation");
+    const profileId = text(provider.profileId, "input.provider.profileId");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profileId))
+      throw new NativeExecutionInputError("aw_text_only requires an exact private profile UUID");
+    parsedProvider = { kind: "aw_text_only", model: providerModel, profileId, maxOutputTokens: Number(provider.maxOutputTokens) };
+  } else if (provider.kind === "claude_managed") {
     if (providerModel === null) {
       throw new NativeExecutionInputError("input.provider.model is required for claude_managed");
     }

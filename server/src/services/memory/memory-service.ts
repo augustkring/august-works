@@ -1,3 +1,4 @@
+import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { createHash } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
@@ -638,6 +639,7 @@ export function memoryService(db: Db) {
       return db.transaction(async (tx) => {
         const scopedDb = tx as unknown as Db;
         await assertActorCompanyScope(scopedDb, companyId, actor);
+        await lockMemoryPrivacy(scopedDb, companyId);
         const records = await scopedDb.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), memoryPayloadVisible(),
           actor.principal.type === "agent" ? and(eq(memoryRecords.scopeType, "agent"), eq(memoryRecords.ownerAgentId, actor.principal.agentId)) : ne(memoryRecords.scopeType, "agent")));
         const evidence = records.length ? await scopedDb.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId, companyId),
@@ -1592,6 +1594,7 @@ export function memoryService(db: Db) {
 
       const reviewed = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
       await assertSaasDomainAdmission(txDb, companyId, "memory.use");
         const record = await txDb
@@ -1659,6 +1662,7 @@ export function memoryService(db: Db) {
                 eq(memoryRecords.id, prior.id),
               ),
             );
+          await invalidateCognitiveRecords(txDb, companyId, [prior.id]);
           publications.push(
             await persistMemoryActivity(txDb, actor, {
               companyId,
@@ -1722,6 +1726,7 @@ export function memoryService(db: Db) {
 
       const revoked = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         const record = await txDb
           .select()
@@ -1762,6 +1767,7 @@ export function memoryService(db: Db) {
           .returning();
         const result = updated ?? record;
         if (updated) {
+          await invalidateCognitiveRecords(txDb, companyId, [record.id]);
           publications.push(
             await persistMemoryActivity(txDb, actor, {
               companyId,

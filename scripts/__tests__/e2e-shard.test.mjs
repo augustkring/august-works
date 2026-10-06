@@ -112,6 +112,15 @@ test("the ignored spec list matches playwright.config.ts testIgnore", () => {
   assert.deepEqual([...configured].sort(), [...IGNORED_SPECS].sort());
 });
 
+test("the V7 authenticated suite is covered by its dedicated product-browser lane", () => {
+  assert.ok(IGNORED_SPECS.includes("aw-v7-authenticated.spec.ts"));
+  const config = readFileSync(path.join(repoRoot, "tests/e2e/aw-v7-authenticated.config.ts"), "utf8");
+  assert.match(config, /import authenticated from "\.\/aw-v5-authenticated\.config\.js"/);
+  assert.match(config, /testMatch: "aw-v7-authenticated\.spec\.ts"/);
+  const workflow = readFileSync(path.join(repoRoot, ".github/workflows/aw-v4-verification.yml"), "utf8");
+  assert.match(workflow, /journey: V7 authenticated discovery and governance\s+config: tests\/e2e\/aw-v7-authenticated\.config\.ts\s+spec: tests\/e2e\/aw-v7-authenticated\.spec\.ts/);
+});
+
 test("the duration manifest only names specs that still exist", () => {
   const durations = loadShardDurations(durationsManifest);
   assert.ok(Object.keys(durations).length > 0, "expected a populated duration manifest");

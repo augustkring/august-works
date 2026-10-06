@@ -217,6 +217,12 @@ function managedExecution(
 }
 
 describe("native backend factory", () => {
+  it("never substitutes a CLI or injected Codex transport for the controller-owned internal draft", () => {
+    let fallback = 0;
+    const draft = execution({ kind: "aw_text_only", model: "qualified-model-20261006", profileId: "10000000-0000-4000-8000-000000000001", maxOutputTokens: 1024 });
+    expect(() => createNativeSessionBackend(draft, { codexTransportFactory: () => { fallback++; throw new Error("CLI fallback invoked"); } })).toThrow("private budget-bound controller backend");
+    expect(fallback).toBe(0);
+  });
   it("constructs the Codex backend without starting its transport", async () => {
     const backend = createNativeSessionBackend(execution(), {
       codexTransportFactory: () => {

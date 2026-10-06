@@ -1,3 +1,5 @@
+import { isCompanyCapacityWait } from "./billing/capacity-admission.js";
+import { governedNativeTaskRunFields } from "./ai-governance/execution-gate.js";
 import { assertSaasExecutionAdmission } from "./saas/execution-admission.js";
 import { recordEagerSkillLoading, recordSkillExecutionCompletion, reconcileSkillExecutionCompletions } from "./skill-usage.js";
 import { agentRuntimeFabricService } from "./agent-runtime-fabric.js";
@@ -170,7 +172,7 @@ import {
   toolProfiles,
   workspaceOperations,
 } from "@paperclipai/db";
-import { conflict, HttpError, notFound } from "../errors.js";
+import { conflict, forbidden, HttpError, notFound } from "../errors.js";
 import {
   getStartupTraceContext,
   getStartupTracer,
@@ -203,6 +205,7 @@ import {
 } from "./issue-queued-comment-queue.js";
 import { documentService } from "./documents.js";
 import { getTaskPlanContext } from "./task-plan-context.js";
+import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
 import {
@@ -218,6 +221,7 @@ import {
   dispatchNativeSessionResumptions,
   detachNativeSessionsForRestart,
   ensureNativeCompletionContract,
+  nativeCompletionContractInput,
   executePaperclipNativeSession,
   finalizeNativeRun,
   findNativeSessionResumeRun,
@@ -14072,6 +14076,7 @@ export function heartbeatService(
       const queuedRun = await tx
         .insert(heartbeatRuns)
         .values({
+          ...(await governedNativeTaskRunFields(tx as unknown as Db, run.companyId, run.agentId, issue.id)),
           companyId: run.companyId,
           agentId: run.agentId,
           invocationSource: "automation",
@@ -15835,6 +15840,7 @@ export function heartbeatService(
         const scheduledRun = await tx
           .insert(heartbeatRuns)
           .values({
+            ...(await governedNativeTaskRunFields(tx as unknown as Db, run.companyId, run.agentId, run.nativeIssueId ?? readNonEmptyString(retryContextSnapshot.issueId))),
             companyId: run.companyId,
             agentId: run.agentId,
             invocationSource: "automation",
@@ -17165,7 +17171,12 @@ export function heartbeatService(
     }
   }
 
-  async function claimQueuedRun(
+  async function claimQueuedRun(run: typeof heartbeatRuns.$inferSelect, companyAgents?: AgentOrgRow[]) {
+    try { return await claimQueuedRunCore(run, companyAgents); }
+    catch (error) { if (isCompanyCapacityWait(error)) return null; throw error; }
+  }
+
+  async function claimQueuedRunCore(
     run: typeof heartbeatRuns.$inferSelect,
     companyAgents?: AgentOrgRow[],
   ) {
@@ -21279,7 +21290,10 @@ export function heartbeatService(
         ["local", "ssh"].includes(
           selectedEnvironmentForConfig?.driver ?? "local",
         );
-      const aiBinding = agent.runtimeConfig?.aiConnection ? aiConnectionBindingSchema.parse(agent.runtimeConfig.aiConnection) : undefined;
+      const internalTextDraft = agent.adapterType === "paperclip_runner" && parseObject(agent.adapterConfig).provider === "aw_text_only";
+      if (internalTextDraft && agent.runtimeConfig?.aiConnection)
+        throw forbidden("Internal drafts use the installed private controller grant, not a CLI AI binding");
+      const aiBinding = !internalTextDraft && agent.runtimeConfig?.aiConnection ? aiConnectionBindingSchema.parse(agent.runtimeConfig.aiConnection) : undefined;
       const { resolvedConfig, secretKeys, secretManifest } =
         await resolveExecutionRunAdapterConfig({
           managedAiCredentials: Boolean(aiBinding),
@@ -23145,7 +23159,7 @@ export function heartbeatService(
             persistedContract && persistedNativeExecutionInput
               ? {
                   row: persistedContract,
-                  contract: persistedContract.contractJson as never,
+                  contract: nativeCompletionContractInput(persistedContract.contractJson),
                 }
               : await ensureNativeCompletionContract({
                   db,
@@ -23271,7 +23285,7 @@ export function heartbeatService(
             isNativeSessionId(taskNativeSessionId)
               ? taskSessionForRun.lastRunId
               : null;
-          const resumableTaskSessionId = taskResumeRunId
+          const resumableTaskSessionId = nativeRuntimeResolution.profile.backend === "aw_text_messages" ? null : taskResumeRunId
             ? taskNativeSessionId
             : (legacyRetrySessionId ?? null);
           const requestedNativeSessionId =
@@ -23281,7 +23295,7 @@ export function heartbeatService(
           // Rows that already acquired provider authority are progress barriers,
           // even when they do not contain a usable checkpoint.
           const previousNativeRun =
-            requestedNativeSessionId &&
+            nativeRuntimeResolution.profile.backend !== "aw_text_messages" && requestedNativeSessionId &&
             isUnusedNativeSessionBootstrap(
               run,
               nativeBootstrapHasProviderEvidence,
@@ -24190,6 +24204,12 @@ export function heartbeatService(
                 nativeDispatchAtMs,
               }),
             );
+            // Draft projection is asynchronous and has no provider effects.
+            // Ordinary provider factories must stay inside the atomic dispatch
+            // gate, after cancellation and chat admission have been rechecked.
+            const nativeDraftBackend = nativeExecution.provider.kind === "aw_text_only"
+              ? await selectNativeHeartbeatBackend(db, nativeExecution)
+              : undefined;
             const guardedDispatch =
               await dispatchResolvedInteractionContinuationWithAtomicGate(
                 (markDispatchStarted) =>
@@ -24201,9 +24221,10 @@ export function heartbeatService(
                     runnerInstanceId: nativeRunnerInstanceId,
                     leaseOwner: runOptions.nativeLeaseOwner,
                     restartRecovery: runOptions.nativeRestartRecovery,
-                    backend:
-                      options.nativeSessionBackendFactory?.(nativeExecution),
-                    useRunnerd: agent.adapterType === "paperclip_runner",
+                    backend: nativeExecution.provider.kind === "aw_text_only"
+                      ? nativeDraftBackend
+                      : options.nativeSessionBackendFactory?.(nativeExecution),
+                    useRunnerd: agent.adapterType === "paperclip_runner" && nativeExecution.provider.kind !== "aw_text_only",
                     adapterType: agent.adapterType,
                     sessionGoalControl,
                     resumeSessionGoalHeartbeat:
@@ -24241,7 +24262,7 @@ export function heartbeatService(
                     // Bootstrap with executable/home discovery while keeping
                     // configured provider values and the server-selected
                     // workspace boundary authoritative.
-                    managedGitHub: !useHostGitHub && githubSelection.configured,
+                    managedGitHub: nativeExecution.provider.kind !== "aw_text_only" && !useHostGitHub && githubSelection.configured,
                     managedAiCredentialIdentity: managedAiRuntime?.identity,
                     managedAiCredentialHome: managedAiRuntime ? String((managedAiRuntime.config.env as Record<string, unknown>).CODEX_HOME) : undefined,
                     runnerEnvironment: {
@@ -28093,6 +28114,7 @@ export function heartbeatService(
           const newRun = await tx
             .insert(heartbeatRuns)
             .values({
+              ...(await governedNativeTaskRunFields(tx as unknown as Db, agent.companyId, agentId, issue.id)),
               ...(explicitContinuation ? { id: explicitContinuationRunId } : {}),
               companyId: agent.companyId,
               agentId,

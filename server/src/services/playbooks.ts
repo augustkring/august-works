@@ -1,3 +1,4 @@
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { companySkillService } from "./company-skills.js";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { agents, companyMemberships, documents, documentRevisions, playbookDocuments, playbookChangeProposals, playbookSkillLinks, companySkills, companySkillVersions, type Db } from "@paperclipai/db";
@@ -96,6 +97,7 @@ export function playbookService(db: Db) {
     draft: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof playbookDraftSchema>, parentPublications?: ActivityPublication[]) => {
       await authorize(actor, companyId, "foundation:edit"); const input = playbookDraftSchema.parse(raw), userId = v5HumanActorId(actor);
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockMemoryPrivacy(tx, companyId);
         const row = await get(tx, actor, companyId, id, true);
         if (row.status === "archived" || row.document.latestRevisionId !== input.expectedRevisionId) throw conflict("Playbook draft changed or is archived; refresh before saving");
         const next = await appendRevision(tx, row, userId, input.title, input.markdown, input.changeSummary);
@@ -108,6 +110,7 @@ export function playbookService(db: Db) {
     review: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof reviewPlaybookSchema>) => {
       await authorize(actor, companyId, "foundation:approve"); const input = reviewPlaybookSchema.parse(raw), userId = v5HumanActorId(actor);
       const result = await withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockMemoryPrivacy(tx, companyId);
         const row = await get(tx, actor, companyId, id, true);
         if (row.document.latestRevisionId !== input.expectedRevisionId || row.status === "archived") throw conflict("The Playbook changed; repeat review");
         await revision(tx, companyId, row.documentId, input.expectedRevisionId);
@@ -148,21 +151,23 @@ export function playbookService(db: Db) {
       if (input.decision !== "request_changes") await skillLifecycleService(db).invalidateDependency(companyId, "playbook_revision", id, input.decision === "approve" ? input.expectedRevisionId : null);
       return result;
     },
-    propose: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof proposePlaybookSchema>) => {
+    propose: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof proposePlaybookSchema>, parentPublications?: ActivityPublication[]) => {
       await authorize(actor, companyId, "foundation:propose"); const input = proposePlaybookSchema.parse(raw);
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockMemoryPrivacy(tx, companyId);
         const row = await get(tx, actor, companyId, id, true);
         if (row.approvedRevisionId !== input.baseApprovedRevisionId || row.status === "archived") throw conflict("The canonical Playbook changed; refresh the proposal");
         if (input.sourceSkillId && !(await companySkillService(tx).canReadSkill(companyId, input.sourceSkillId, actor))) throw notFound("Feedback Skill not found");
         if (input.sourceSkillId && !(await tx.select().from(companySkillVersions).where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, input.sourceSkillId), eq(companySkillVersions.id, input.sourceSkillVersionId!))).limit(1))[0]) throw notFound("Local feedback Skill version not found");
         const [proposal] = await tx.insert(playbookChangeProposals).values({ ...input, companyId, playbookId: id, baseDraftRevisionId: row.document.latestRevisionId!, createdByAgentId: actor.type === "agent" ? actor.agentId : null, createdByUserId: actor.type === "board" ? v5HumanActorId(actor) : null }).returning();
         await logActivity(tx, { companyId, actorType: actor.type === "agent" ? "agent" : "user", actorId: actor.agentId ?? v5HumanActorId(actor), action: "playbook.change_proposed", entityType: "playbook", entityId: id, details: { proposalId: proposal!.id } }, publications); return proposal!;
-      });
+      }, parentPublications);
     },
     reviewProposal: async (actor: AuthorizationActor, companyId: string, id: string, proposalId: string, accept: boolean, rationale: string) => {
       await authorize(actor, companyId, "foundation:approve"); const userId = v5HumanActorId(actor);
       if (rationale.trim().length < 10 || rationale.length > 4000) throw unprocessable("Review rationale must contain 10–4000 characters");
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockMemoryPrivacy(tx, companyId);
         const row = await get(tx, actor, companyId, id, true), [proposal] = await tx.select().from(playbookChangeProposals).where(and(eq(playbookChangeProposals.companyId, companyId), eq(playbookChangeProposals.playbookId, id), eq(playbookChangeProposals.id, proposalId))).limit(1).for("update");
         if (!proposal || proposal.status !== "pending") throw conflict("A pending Playbook proposal is required");
         const stale = proposal.baseApprovedRevisionId !== row.approvedRevisionId || row.document.latestRevisionId !== proposal.baseDraftRevisionId;

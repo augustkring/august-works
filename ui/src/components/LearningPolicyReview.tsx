@@ -1,0 +1,33 @@
+import { useV7AccountScope } from "@/context/V7AccountScope";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import type { LearningPolicyProposalView, LearningPolicyPayload } from "@paperclipai/shared";
+function ReadinessPolicySummary({ requirement }: { requirement: Extract<LearningPolicyPayload, { policyType: "readiness_requirement" }>["requirement"] }) {
+  return <div className="space-y-2"><h4 className="font-medium">{requirement.name}</h4><p>Applies to {requirement.actionClass.replaceAll("_", " ")}</p>{requirement.criteria.map((criterion) => <div key={criterion.key} className="space-y-1"><p>{criterion.domain.replaceAll("_", " ")} · {criterion.mandatory ? "Mandatory" : "Advisory"} · {criterion.failureBehavior.replaceAll("_", " ")}</p><p className="text-sm text-muted-foreground">Sources: {criterion.sourceClasses.map((value) => value.replaceAll("_", " ")).join(", ")} · {criterion.requireVerification ? "Verified sources required" : "Verification optional"} · {criterion.requireSupportingEvidence ? "Supporting evidence required" : "Supporting evidence optional"} · {criterion.noOpenConflict ? "Open conflicts blocked" : "Open conflicts allowed"}</p><p className="text-sm text-muted-foreground">Freshness: {criterion.maxAgeSeconds === null ? "No additional age limit" : `${criterion.maxAgeSeconds} seconds`} · Confidence floor: {criterion.minConfidence === null ? "None" : `${Math.round(criterion.minConfidence * 100)}%`} · Sensitivity ceiling: {criterion.sensitivityCeiling} · Purposes: {criterion.allowedPurposes.map((value) => value.replaceAll("_", " ")).join(", ")} · {criterion.requirePurposeEvidence ? "Explicit purpose evidence required" : "Purpose evidence optional"}</p></div>)}</div>;
+}
+export function LearningPolicyReview({ companyId }: { companyId: string }) {
+  const { principalId, learningApi } = useV7AccountScope();
+  const rows = useQuery({ queryKey: ["learning-policies", companyId, principalId], queryFn: () => learningApi.policies(companyId) });
+  if (rows.isPending) return <p role="status">Loading governance proposals…</p>;
+  return <section className="space-y-4"><h2 className="font-medium">Governance proposals</h2><p className="text-muted-foreground">Review how each change affects approvals, security and committed work before accepting it.</p>
+    {rows.data?.map((row) => <section key={row.id} className="space-y-2 rounded-md border border-border p-4"><Badge variant="outline">{row.status}</Badge><p>{row.reason || "Source evidence changed; refresh the proposal."}</p>
+      {row.proposal?.policyType === "project_roadmap" ? <dl className="space-y-2"><div><dt>Agent forecasts: current → proposed</dt><dd>{row.baseline?.policyType === "project_roadmap" ? row.baseline.policy.allowAgentForecast ? "Allowed" : "Disabled" : "Unavailable"} → {row.proposal.policy.allowAgentForecast ? "Allowed" : "Disabled"}</dd></div><div><dt>Automatic low risk schedule updates: current → proposed</dt><dd>{row.baseline?.policyType === "project_roadmap" ? row.baseline.policy.allowLowRiskAgentScheduleUpdates ? "Allowed" : "Human review required" : "Unavailable"} → {row.proposal.policy.allowLowRiskAgentScheduleUpdates ? "Allowed within the proposal policy" : "Human review required"}</dd></div><div><dt>Schedule tolerance: current → proposed</dt><dd>{row.baseline?.policyType === "project_roadmap" ? row.baseline.policy.scheduleToleranceDays : "Unavailable"} → {row.proposal.policy.scheduleToleranceDays} days</dd></div><div><dt>Field ownership: current</dt><dd>{row.baseline?.policyType === "project_roadmap" ? Object.entries(row.baseline.policy.fieldOwnership).map(([field, owner]) => `${field}: ${owner.replaceAll("_", " ")}`).join("; ") : "Unavailable"}</dd></div><div><dt>Field ownership: proposed</dt><dd>{Object.entries(row.proposal.policy.fieldOwnership).map(([field, owner]) => `${field}: ${owner.replaceAll("_", " ")}`).join("; ")}</dd></div><div><dt>Authoritative external source: current → proposed</dt><dd>{row.baseline?.policyType === "project_roadmap" ? row.baseline.policy.externalSourceRef ?? "None" : "Unavailable"} → {row.proposal.policy.externalSourceRef ?? "None"}</dd></div></dl> : row.proposal?.policyType === "readiness_requirement" ? <><h3 className="font-medium">Current requirement</h3>{row.baseline?.policyType === "readiness_requirement" ? <ReadinessPolicySummary requirement={row.baseline.requirement} /> : <p>New company requirement. System requirements remain mandatory.</p>}<h3 className="font-medium">Proposed requirement</h3><ReadinessPolicySummary requirement={row.proposal.requirement} /></> : null}
+      {row.status === "pending" && row.proposal ? <PolicyDecision key={`${companyId}:${row.id}:${row.version}`} companyId={companyId} row={row} onSuccess={() => { void rows.refetch(); }} /> : null}</section>)}
+    {[rows].filter((state) => state.isError).map((state, index) => <p role="alert" key={index}>{state.error instanceof Error ? state.error.message : "Policy operation failed"}</p>)}
+  </section>;
+}
+
+function PolicyDecision({ companyId, row, onSuccess }: { companyId: string; row: LearningPolicyProposalView; onSuccess: () => void }) {
+  const { learningApi } = useV7AccountScope();
+  const [rationale, setRationale] = useState(""), [acknowledge, setAcknowledge] = useState(false);
+  const review = useMutation({ mutationFn: (decision: "accept" | "reject") => learningApi.reviewPolicy(companyId, row.id, { expectedVersion: row.version, decision, rationale, acknowledgeApprovalOrSecurityChange: acknowledge }), onSuccess });
+  return <div className="space-y-3">
+    <label className="block space-y-2">Review rationale<Input value={rationale} onChange={(event) => setRationale(event.target.value)} minLength={20} maxLength={4000} /></label>
+    <label className="flex gap-2"><input type="checkbox" checked={acknowledge} onChange={(event) => setAcknowledge(event.target.checked)} />I reviewed the effects on approvals, security and human oversight.</label>
+    <div className="flex items-center justify-between"><Button variant="outline" disabled={rationale.trim().length < 20 || review.isPending} onClick={() => review.mutate("reject")}>Reject</Button><Button disabled={rationale.trim().length < 20 || !acknowledge || review.isPending} onClick={() => review.mutate("accept")}>Accept policy change</Button></div>
+    {review.isError ? <p role="alert">{review.error instanceof Error ? review.error.message : "Policy operation failed"}</p> : null}
+  </div>;
+}

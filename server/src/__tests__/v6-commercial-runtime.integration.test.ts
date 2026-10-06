@@ -37,7 +37,7 @@ const support = await getEmbeddedPostgresTestSupport();
   () => {
     let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
     let db: ReturnType<typeof createDb>;
-    const now = new Date("2026-10-04T12:00:00Z");
+    const now = new Date();
     let companyId: string, accountId: string, firstId: string, secondId: string;
     beforeAll(async () => {
       vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY", "a".repeat(64));

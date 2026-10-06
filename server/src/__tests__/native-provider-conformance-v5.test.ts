@@ -63,3 +63,14 @@ it("rejects a changed static native contract before opening a provider session",
   const ctx = await context(); ctx.providerRuntime!.capabilitySnapshotHash = "former-native-contract";
   await expect(executeNativeProviderConformance(ctx)).rejects.toThrow("capability contract changed"); expect(mocked.factory).not.toHaveBeenCalled();
 });
+
+it("advertises the draft's actual fresh contract without qualifying it or falling back to ordinary provider probes", async () => {
+  const ctx = await context();
+  ctx.config = { provider: "aw_text_only", model: "fixture-worker-model", workerModelProfileId: "10000000-0000-4000-8000-000000000001", maxOutputTokens: 256 };
+  const advertised = await discoverNativeCapabilities({ companyId: "company", adapterType: "paperclip_runner", config: ctx.config });
+  expect(advertised).toMatchObject({ provider: "paperclip_native", features: { sessions: false, cancellation: true, memoryScoping: true } });
+  expect(advertised.version).toContain("aw-text-draft-v1:aw_text_messages");
+  ctx.providerRuntime!.capabilitySnapshotHash = makeProviderCapabilitySnapshot(advertised).hash;
+  await expect(executeNativeProviderConformance(ctx)).rejects.toThrow("Unsupported native conformance backend");
+  expect(mocked.factory).not.toHaveBeenCalled();
+});

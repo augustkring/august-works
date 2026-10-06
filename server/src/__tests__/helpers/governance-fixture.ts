@@ -1,0 +1,65 @@
+import type {
+  UseCasePurpose,
+  OversightProfile,
+  UseCaseAssessment,
+} from "@paperclipai/shared";
+export const purpose = (): UseCasePurpose => ({
+  name: "Campaign analysis",
+  description: "Analyze company campaign artifacts",
+  intendedPurpose: "Prepare and analyze company marketing campaigns",
+  prohibitedUses: ["Employee scoring"],
+  affectedPersonCategories: ["Business contacts"],
+  dataCategories: ["Campaign aggregates"],
+  specialCategoryDataExpected: false,
+  peopleDomain: "none",
+  customerFacing: false,
+  externalCommunication: false,
+  makesRecommendationsAboutPeople: false,
+  makesDecisionsAboutPeople: false,
+  materialLegalOrSimilarEffect: false,
+  foreseeableMisuse: ["Switching purpose to employee ranking"],
+  providerInstructionsRefs: [],
+  providerRoleFacts: {
+    madeAvailableBy: "Company",
+    trademarkOwner: "Company",
+    purposeDefinedBy: "Company",
+    integratedBy: "Company",
+    rebranded: false,
+    substantiallyModified: false,
+    contractualCooperationRefs: [],
+  },
+  criticality: "medium",
+  riskClass: "C2",
+  oversightProfileId: "11111111-1111-4111-8111-111111111111",
+  retentionPurpose: "Campaign coordination",
+  retentionDays: 30,
+  nextReviewAt: "2027-01-01T00:00:00Z",
+});
+export const oversight: OversightProfile = {
+  name: "Human review",
+  riskClass: "C3",
+  mode: "continuous_supervision",
+  requiredReviewActions: ["Approve material actions"],
+  escalationRoles: ["owner"],
+  responseDeadlineSeconds: 3600,
+  overrideAllowed: false,
+  stopAuthority: ["owner"],
+};
+export const reviews = (): UseCaseAssessment[] =>
+  ["eu_ai_act", "gdpr", "company_policy"].map(
+    (framework) =>
+      ({
+        framework,
+        expectedVersion: 1,
+        frameworkVersionOrDate: "2026-10-05",
+        classification: "reviewed",
+        applicableRequirements: ["Documented purpose"],
+        facts: "Reviewed actual deployment facts",
+        evidenceRefs: ["https://example.com/evidence"],
+        assessmentMethod: "Human review of current deployment",
+        reviewRequired: false,
+        reviewerAttestation: "Accountable human reviewed the actual facts",
+        friaApplicability: "review_required",
+        friaApplicabilityReason: "Applicability needs independent legal review",
+      }) as UseCaseAssessment,
+  );

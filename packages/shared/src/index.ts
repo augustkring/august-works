@@ -1,4 +1,5 @@
 export { agentAdapterTypeSchema, optionalAgentAdapterTypeSchema } from "./adapter-type.js";
+export { workerModelBindingSchema, workerModelCallSchema, workerModelResultSchema, type WorkerModelBinding, type WorkerModelCall, type WorkerModelResult } from "./worker-model-gateway.js";
 export {
   RUNNER_GOAL_MAX_OBJECTIVE_CHARS,
   runnerGoalAvailabilitySchema,
@@ -3262,6 +3263,11 @@ export * from "./portfolio.js";
 
 export * from "./aw-deployment.js";
 export * from "./v6-feature-flags.js";
+export * from "./v7-feature-flags.js";
+export * from "./readiness.js";
+export * from "./foundation-bootstrap.js";
+export * from "./cognitive-memory.js";
+export * from "./derived-memory.js";
 export * from "./billing/catalog.js";
 export * from "./saas-contracts.js";
 export * from "./saas-types.js";
@@ -3271,3 +3277,22 @@ export * from "./runtime-relay-contracts.js";
 export type { SaasOperationsSnapshot, SaasSupportStatus, SaasProviderInventory } from "./saas-operations.js";
 export { saasCostReportSchema } from "./saas-costs.js";
 export type { SaasCostSnapshot } from "./saas-costs.js";
+export * from "./learning.js";
+
+export * from "./orchestration.js";
+
+export * from "./supervision.js";
+export * from "./verification.js";
+export * from "./work-signals.js";
+export * from "./execution-sandbox.js";
+
+export * from "./ai-governance.js";
+export * from "./agent-packages.js";
+export * from "./agent-package-candidates.js";
+export * from "./specialist-packages.js";
+export * from "./core-stewards.js";
+export * from "./enterprise.js";
+
+export * from "./security-events.js";
+export * from "./sandbox-host-contracts.js";
+export * from "./model-broker.js";

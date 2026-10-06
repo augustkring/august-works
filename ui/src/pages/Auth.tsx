@@ -46,6 +46,7 @@ export function AuthPage() {
     }
   }, [session, navigate, nextPath]);
 
+  const ssoMutation = useMutation({mutationFn:()=>authApi.signInSso(email,nextPath,searchParams.get("ssoProvider")??undefined),onSuccess:(url)=>window.location.assign(url),onError:(failure)=>setError(failure instanceof Error ? failure.message : "Company sign-in failed")});
   const mutation = useMutation({
     mutationFn: async () => {
       if (mode === "sign_in") {
@@ -194,6 +195,7 @@ export function AuthPage() {
                   : "Create Account"}
             </Button>
           </form>
+          {mode === "sign_in" && saas.data?.enterpriseSso ? <Button className="w-full mt-3" variant="outline" disabled={!email.trim() || ssoMutation.isPending || mutation.isPending} onClick={() => ssoMutation.mutate()}>Sign in with company SSO</Button> : null}
 
           {(!saas.data || saas.data.signup || mode === "sign_up") && <div className="mt-5 text-sm text-muted-foreground">
             {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}

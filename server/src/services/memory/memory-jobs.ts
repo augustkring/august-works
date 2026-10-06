@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { getRunLogStore, type RunLogStore } from "../run-log-store.js";
 import { isDeepStrictEqual } from "node:util";
 import { executeMemoryMaintenance, memoryMaintenanceInputSchema, memoryMaintenanceSources } from "./memory-maintenance.js";
+import { executeModelRebuild } from "./derived-memory.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
 import { conflict, unprocessable } from "../../errors.js";
 import { publishActivity } from "../activity-log.js";
@@ -426,7 +427,7 @@ export function memoryJobService(
     const now = new Date();
     try {
       if(job.operationType!=="retention")await assertSaasDomainAdmission(db,job.companyId,"memory.use");
-      if (["dedupe", "compaction", "reflection", "index_refresh"].includes(job.operationType)) {
+      if (["dedupe", "compaction", "reflection", "index_refresh", "model_rebuild"].includes(job.operationType)) {
         if (!(await settings.getExperimental()).enableCollectiveMemoryV1) throw conflict("Memory maintenance is disabled");
         const publication = await db.transaction(async (tx) => {
           await lockMemoryPrivacy(tx as unknown as Db, job.companyId);
@@ -434,7 +435,7 @@ export function memoryJobService(
             eq(memoryJobs.status, "running"), eq(memoryJobs.executionOwnerId, ownerId))).for("update");
           if (!owned?.leaseExpiresAt || owned.leaseExpiresAt <= new Date()) throw conflict("Memory job lease was lost");
           await tx.execute(sql`set local statement_timeout = '5000'`);
-          const output = await executeMemoryMaintenance(tx as unknown as Db, owned);
+          const output = owned.operationType === "model_rebuild" ? await executeModelRebuild(tx as unknown as Db, owned) : await executeMemoryMaintenance(tx as unknown as Db, owned);
           if (owned.leaseExpiresAt <= new Date()) throw conflict("Memory job lease expired during maintenance");
           await settle(owned, { status: "succeeded", resultSummary: "Native Memory maintenance completed.", resultJson: output.result }, tx as unknown as Db);
           return output.publication;

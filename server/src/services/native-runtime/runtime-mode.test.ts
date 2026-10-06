@@ -21,6 +21,29 @@ const eligible = {
 } as const;
 
 describe("resolveNativeRuntimeMode", () => {
+  it("persists a distinct internal-draft provider and rejects incomplete or warm profile configuration", () => {
+    const config = {
+      provider: "aw_text_only",
+      model: "qualified-model-20261006",
+      workerModelProfileId: "10000000-0000-4000-8000-000000000001",
+      maxOutputTokens: 1024,
+    };
+    expect(
+      resolveNativeRuntimeMode({ ...eligible, adapterConfig: config }),
+    ).toMatchObject({
+      kind: "native",
+      profile: { backend: "aw_text_messages" },
+    });
+    for (const changed of [
+      { ...config, workerModelProfileId: "other" },
+      { ...config, model: null },
+      { ...config, lifecycleMode: "warm" },
+      { ...config, maxOutputTokens: 8193 },
+    ])
+      expect(() =>
+        resolveNativeRuntimeMode({ ...eligible, adapterConfig: changed }),
+      ).toThrow();
+  });
   it("keeps every direct built-in adapter outside native arbitration", () => {
     for (const adapterType of BUILTIN_ADAPTER_TYPES) {
       if (adapterType === "paperclip_runner") continue;

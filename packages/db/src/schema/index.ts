@@ -118,6 +118,8 @@ export { assets } from "./assets.js";
 export { issueAttachments } from "./issue_attachments.js";
 export { documents } from "./documents.js";
 export { foundationDocuments, foundationSections, foundationChangeProposals } from "./foundation.js";
+export { readinessRequirements, readinessAssessments, knowledgeQualityFindings } from "./readiness.js";
+export { foundationBootstrapRuns, foundationBootstrapCandidates } from "./foundation_bootstrap.js";
 export { documentRevisions } from "./document_revisions.js";
 export { issueDocuments } from "./issue_documents.js";
 export { summarySlots } from "./summary_slots.js";
@@ -254,3 +256,21 @@ export * from "./saas_billing.js";
 export * from "./saas_lifecycle.js";
 export * from "./runtime_fleet.js";
 export * from "./saas_run_logs.js";
+
+export * from "./cognitive_memory.js";
+export * from "./derived_memory.js";
+export * from "./context_memory_roots.js";
+export * from "./learning.js";
+
+export * from "./orchestration.js";
+
+export * from "./supervision.js";
+export { verificationRuns } from "./verification.js";
+export { workSignalCandidates } from "./work_signals.js";
+export { runtimeSandboxBindings, sandboxQualificationRuns, runtimePolicySnapshots } from "./execution_sandbox.js";
+
+export * from "./ai_governance.js";
+export * from "./agent_packages.js";
+export * from "./enterprise_identity.js";
+
+export * from "./security_event_exports.js";

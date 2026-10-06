@@ -39,6 +39,7 @@ describe("Paperclip Runner permission defaults", () => {
   });
 
   it("recognizes only exact provider identifiers", () => {
+    expect(isPaperclipRunnerProvider("aw_text_only")).toBe(true);
     expect(isPaperclipRunnerProvider("codex")).toBe(true);
     expect(isPaperclipRunnerProvider("opencode")).toBe(true);
     expect(isPaperclipRunnerProvider("claude_managed")).toBe(true);
@@ -53,6 +54,9 @@ describe("Paperclip Runner permission defaults", () => {
       .toBe("provider-managed");
     expect(resolvePaperclipRunnerPermissionMode("aws_agentcore", "approve-all"))
       .toBe("provider-managed");
+  });
+  it("keeps internal drafts under the controller instead of accepting a tool permission override", () => {
+    expect(resolvePaperclipRunnerPermissionMode("aw_text_only", "approve-all")).toBe("controller-managed");
   });
 
   it("uses the Codex default for missing or blank models", () => {

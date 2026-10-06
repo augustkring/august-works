@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-10-05T16:46:29.372468+00:00",
+  "evidenceKind": "local_development_measurement",
+  "openshell": {
+    "version": "0.1.2",
+    "sourceCommit": "6648bd0c290efbc41ba131ee9831ee45cd431f94",
+    "proverExecutableSha256": "3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1",
+    "formalDomains": [
+      "filesystem",
+      "network_l4",
+      "network_rest",
+      "process",
+      "landlock"
+    ],
+    "formalEvidenceIsPhysicalEvidence": false
+  },
+  "runtime": {
+    "kernel": "6.18.44",
+    "probeSourceSha256": "6206dfcd025c974fc439d61902242480a1e007ebeb4e115b09af52e275285355",
+    "probeExecutableSha256": "9f5108253d93d6596ba811fd7c49bf4588db059280f8557c1fadf8d5fed544d1",
+    "probeImageId": "sha256:9e5cfb841c2066b5b3b24df1c0e2838074d98536aa9683cf555a36b12645f8c4",
+    "defaultSeccomp": {
+      "landlockAbi": -1,
+      "errno": 38,
+      "physicalBoundaryQualified": false
+    },
+    "unconfinedSeccompTrustedAbiProbe": {
+      "landlockAbi": -1,
+      "errno": 38,
+      "physicalBoundaryQualified": false
+    }
+  },
+  "decision": "NOT_QUALIFIED",
+  "exceptions": [
+    "Landlock ABI returns ENOSYS in this execution environment.",
+    "No production host, OpenClaw/Hermes runtime or credential broker was qualified.",
+    "Resource, network, backup/restore, upgrade and host-loss qualification remain open."
+  ]
+}

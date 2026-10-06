@@ -1,5 +1,9 @@
+import { assertPackageExecution } from "./services/agent-packages/execution-gate.js";
+import { assertExecutionGovernance } from "./services/ai-governance/execution-gate.js";
+import { assertManagedRuntimeCommercialAuthority } from "./services/billing/managed-runtime-admission.js";
+import { v7FeatureEnabled } from "@paperclipai/shared";
 import { and, eq } from "drizzle-orm";
-import { heartbeatRuns, type Db } from "@paperclipai/db";
+import { heartbeatRuns, instanceSettings, orchestrationPlans, orchestrationWorkerAttempts, type Db } from "@paperclipai/db";
 import { forbidden } from "./errors.js";
 
 /** Stop revokes write authority before waiting for the executor to settle. */
@@ -18,13 +22,24 @@ export async function assertAgentRunWriteAllowed(tx: Db, companyId: string, acto
   runId?: string | null;
   stopId?: string | null;
 }) {
-  if (!actor.agentId || !actor.runId) return;
+  if (!actor.agentId) return;
+  if (!actor.runId) { await assertManagedRuntimeCommercialAuthority(tx, companyId, actor.agentId); await assertPackageExecution(tx, companyId, actor.agentId); return; }
   const [run] = await tx.select({ status: heartbeatRuns.status, resultJson: heartbeatRuns.resultJson })
     .from(heartbeatRuns).where(and(eq(heartbeatRuns.id, actor.runId),
       eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, actor.agentId)))
     .for("share");
   const stoppedForThisMutation = run?.status === "cancelled" && actor.stopId &&
     run.resultJson?.issueMutationStopId === actor.stopId;
+  if (!stoppedForThisMutation) await assertManagedRuntimeCommercialAuthority(tx, companyId, actor.agentId);
+  if (!stoppedForThisMutation) await assertPackageExecution(tx, companyId, actor.agentId, actor.runId);
+  if (!stoppedForThisMutation) await assertExecutionGovernance(tx, companyId, actor.agentId, actor.runId);
+  const [orchestration] = await tx.select({ status: orchestrationPlans.status, startedAt: orchestrationPlans.startedAt, budgets: orchestrationPlans.budgets }).from(orchestrationWorkerAttempts)
+    .innerJoin(orchestrationPlans, and(eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId), eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId)))
+    .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, actor.runId))).for("share", { of: orchestrationPlans });
+  const [settings] = orchestration ? await tx.select({ flags: instanceSettings.experimental }).from(instanceSettings).where(eq(instanceSettings.singletonKey, "default")) : [];
+  if (orchestration && (!v7FeatureEnabled(settings?.flags ?? {}, "orchestration_v7") || orchestration.status !== "running" || !orchestration.startedAt || Date.now() >= orchestration.startedAt.getTime() + orchestration.budgets.maxWallClockSeconds * 1000) && !stoppedForThisMutation) {
+    throw forbidden("This orchestration attempt no longer has write authority", { code: "orchestration_attempt_stopped" });
+  }
   if (agentRunWritesRevoked(run) && !stoppedForThisMutation) {
     throw forbidden("This run was cancelled", { code: "agent_run_cancelled" });
   }

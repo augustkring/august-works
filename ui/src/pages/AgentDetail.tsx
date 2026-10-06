@@ -961,6 +961,12 @@ export function AgentDetail() {
 
   useEffect(() => {
     if (!agent) return;
+    // The UUID and canonical reference name the same response in this exact
+    // company. Keep the run view mounted while the alias refetches, including
+    // any retry denial that arrived during canonicalization.
+    if (routeAgentRef !== canonicalAgentRef && lookupCompanyId === agent.companyId) {
+      queryClient.setQueryData([...queryKeys.agents.detail(canonicalAgentRef), lookupCompanyId], agent);
+    }
     if (!urlRunId && urlTab === "channels") {
       if (!chatConnectorsLoaded) return;
       if (!chatConnectorsEnabled) {
@@ -980,7 +986,7 @@ export function AgentDetail() {
       navigate(agentDetailHref(canonicalAgentRef, canonicalTab), { replace: true });
       return;
     }
-  }, [agent, routeAgentRef, canonicalAgentRef, urlRunId, urlTab, activeView, legacyAuditSection, navigate, chatConnectorsEnabled, chatConnectorsLoaded]);
+  }, [agent, routeAgentRef, canonicalAgentRef, lookupCompanyId, queryClient, urlRunId, urlTab, activeView, legacyAuditSection, navigate, chatConnectorsEnabled, chatConnectorsLoaded]);
 
   useEffect(() => {
     if (!agent?.companyId || agent.companyId === selectedCompanyId) return;

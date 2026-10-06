@@ -30,7 +30,7 @@ import type {
   AgentApiKeyScope,
 } from "@paperclipai/shared";
 import { isUuidLike, normalizeAgentUrlKey } from "@paperclipai/shared";
-import { ApiError, api } from "./client";
+import { ApiError, api as defaultApi } from "./client";
 
 export interface AgentKey {
   id: string;
@@ -102,7 +102,7 @@ function agentPath(id: string, companyId?: string, suffix = "") {
   return withCompanyScope(`/agents/${encodeURIComponent(id)}${suffix}`, companyId);
 }
 
-export const agentsApi = {
+export const createAgentsApi = (api: typeof defaultApi = defaultApi) => ({
   list: (companyId: string) => api.get<Agent[]>(`/companies/${companyId}/agents`),
   org: (companyId: string) => api.get<OrgNode[]>(`/companies/${companyId}/org`),
   listConfigurations: (companyId: string) =>
@@ -366,7 +366,9 @@ export const agentsApi = {
     ),
   availableSkills: () =>
     api.get<{ skills: AvailableSkill[] }>("/skills/available"),
-};
+});
+
+export const agentsApi = createAgentsApi();
 
 export interface AvailableSkill {
   name: string;

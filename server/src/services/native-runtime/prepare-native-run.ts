@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { completionContracts, heartbeatRuns } from "@paperclipai/db";
 
-import { ensureNativeCompletionContract } from "./completion-contracts.js";
+import { ensureNativeCompletionContract, nativeCompletionContractInput } from "./completion-contracts.js";
 import { NATIVE_RUNTIME_RESOLVER_VERSION } from "./runtime-mode.js";
 import { CHAT_CONTROL_RECOVERY_ADMISSION_KEY } from "../chat-control-recovery-stop.js";
 
@@ -87,7 +87,7 @@ export async function prepareNativeHeartbeatRun(input: {
       .then((rows) => rows[0] ?? null)
     : null;
   const completion = persistedContract
-    ? { row: persistedContract, contract: persistedContract.contractJson }
+    ? { row: persistedContract, contract: nativeCompletionContractInput(persistedContract.contractJson) }
     : await ensureNativeCompletionContract({
       db: input.db,
       companyId: input.run.companyId,

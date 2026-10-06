@@ -1,3 +1,4 @@
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
@@ -469,6 +470,7 @@ export function foundationService(db: Db) {
 
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
         if (!lockedRow) throw notFound("Foundation document not found");
@@ -650,6 +652,7 @@ export function foundationService(db: Db) {
     ) =>
       db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         if (actor.principal.type === "agent") {
           throw forbidden("Agents cannot approve canonical Foundation changes");
@@ -836,6 +839,7 @@ export function foundationService(db: Db) {
     ) => {
       const outcome = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         if (actor.principal.type === "agent") {
           throw forbidden("Agents cannot make Foundation proposal decisions");

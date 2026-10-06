@@ -1,3 +1,9 @@
+import { securityEventExportService } from "./services/enterprise/security-events.js";
+import { reconcileSandboxSafety } from "./services/execution-sandbox/sandbox-guardian.js";
+import { reconcileAgentPackages, deliverAgentPackageStops } from "./services/agent-packages/package-jobs.js";
+import { maintainFoundationFindings, maintainPackageUpdates } from "./services/stewards/core-stewards.js";
+import { reconcileGovernanceDeployments, deliverGovernanceStops } from "./services/ai-governance/governance-jobs.js";
+import { supervisionService } from "./services/supervision/supervision-service.js";
 import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network-policy.js";
 /// <reference path="./types/express.d.ts" />
 // Kicks off the OTel bootstrap as early as possible (no-op unless
@@ -665,8 +671,9 @@ async function startServerWithDatabaseTeardown(
     ? null : await initializeCloudRuntimeIdentity(db as any);
   if (restoredCloudRuntimeIdentity) config = loadConfig();
 
-  const v6RolloutFlags = config.deploymentProfile === "saas"
-    ? await instanceSettingsService(db).getExperimental() : {};
+  // Every profile validates V7 dependencies before constructing product services.
+  const experimentalSettings = await instanceSettingsService(db).getExperimental();
+  const v6RolloutFlags = config.deploymentProfile === "saas" ? experimentalSettings : {};
   assertSaasRolloutReady(config.deploymentProfile, v6RolloutFlags);
   const publicAppOrigins = config.publicOriginConfig
     ? activePublicAppOrigins(config.publicOriginConfig, v6RolloutFlags) : undefined;
@@ -1202,7 +1209,30 @@ async function startServerWithDatabaseTeardown(
   const executionControlSweepsInFlight = new Set<string>();
   const workflowRecoveryExecutor = workflowExecutorService(db);
   const memoryJobs = memoryJobService(db);
+  const semanticVerifier = platform?.config.readOnlyModelProfiles?.length
+    ? (await import("./services/supervision/read-only-model-verifier.js")).readOnlyModelVerifier(db, {
+      profiles: platform.config.readOnlyModelProfiles, sourceSha: platform.config.deployment.sourceSha,
+      protectedEvidenceOrigin: platform.config.objects.endpoint,
+    }) : undefined;
+  const supervisor = supervisionService(db, { semanticVerifier });
+  const { expireModelReservations } = await import("./services/orchestration/model-reservations.js");
+  const { workSignalService } = await import("./services/work-signals/work-signal-service.js");
   const executionControlSweeps = [
+    ["model_reservations", () => expireModelReservations(db)],
+    ["sandbox_safety", () => reconcileSandboxSafety(db, {
+      hostMaxAgeSeconds: platform?.config.runtime.suspectSeconds,
+      requestStop: platform ? input => platform.runtime.request(input.companyId, input.cellId, "sandbox-guardian", { action: "stop", idempotencyKey: input.idempotencyKey }, new Date(), "sandbox-guardian", input.generation) : undefined,
+    }, 20)],
+    ["agent_package_authority", () => reconcileAgentPackages(db, 20)],
+    ["steward_foundation", () => maintainFoundationFindings(db, 20)],
+    ["steward_package_updates", () => maintainPackageUpdates(db, 20)],
+    ["agent_package_stops", () => heartbeat ? deliverAgentPackageStops(db, (runId, reason) => heartbeat!.cancelRun(runId, reason), 20) : undefined],
+    ["governance_authority", () => reconcileGovernanceDeployments(db, 20)],
+    ["governance_stops", () => heartbeat ? deliverGovernanceStops(db, (runId, reason) => heartbeat!.cancelRun(runId, reason), 20) : undefined],
+    ["supervision", () => supervisor.tick(20)],
+    ["security_event_export", () => securityEventExportService(db).tick(10)],
+    ["work_signal_retention", () => workSignalService(db).expire(20)],
+    ["work_signal_followups", () => workSignalService(db).deliverFollowups(20)],
     ["finalization", () => reconcileAbandonedExecutionControl(db)],
     ["replacement", () => heartbeat ? reconcileSafeNativeReplacements(db, new Date(), { verifyStoppedSession: run => verifyStoppedNativeSessionForReplacement(db, run) }) : undefined],
     ["reconciliation_delivery", () => heartbeat ? deliverReconciledExecutions(db, heartbeat.wakeup) : undefined],

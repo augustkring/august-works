@@ -432,3 +432,31 @@ cleanup authority; it does not prove that remote inference has stopped. Recovery
 revokes the previous boot identity with a conditional update. Its own claim also
 expires so another sweep can finish cleanup after a restart. Historical rows keep
 null ownership fields and follow the previous recovery path.
+
+## V7 readiness records
+
+Migration 0351 adds versioned `readiness_requirements`, immutable `readiness_assessments` and `knowledge_quality_findings`. Composite company references constrain agent, context manifest and finding/assessment ownership. Readiness is an evidence snapshot, never an authorization grant. Requirement publication uses a transaction advisory lock and expected version; historical versions remain available. Finding resolution uses status CAS and an explicit assessment reference. Native source deletion and full company erasure remain governed by their canonical domains.
+
+### V7 Foundation discovery storage
+
+`foundation_bootstrap_runs` binds company, human, assigned agent, canonical Task, optimistic version and discovery source metadata. `foundation_bootstrap_candidates` retains candidate versions with source hashes and draft pointers. Task deletion cascades private discovery state; published Foundation follows its existing lifecycle. Composite tenant keys prevent foreign task, agent and manifest references. Migration `0352_burly_yellowjacket.sql` adds these tables.
+
+### V7 cognitive provider storage
+
+`cognitive_memory_bindings` owns provider/scope/purpose/capability admission; `cognitive_provider_operations` retains content-free reconciliation and deletion receipts. Both use tenant composite keys. Existing Memory correction/revocation/privacy transactions write the provider invalidation contract even when V7 is off. No external provider payload is retained by the stateless baseline. Migration `0353_confused_mephistopheles.sql` adds the provider seam.
+
+### V7 derived Memory and Context lineage
+
+`memory_observations`/`memory_observation_evidence` retain root Memory versions and independent-source counts. `memory_models`/`memory_model_versions`/`memory_model_evidence` preserve model versions and flattened root dependencies. Human review remains explicit. Existing `memory_jobs` gains the `model_rebuild` operation; no second queue is created. `context_manifest_memory_roots` bridges selected original/derived Memory evidence to source erasure. Migration `0355_burly_hemingway.sql` extends the existing `aw_workflow_memory_erased` SQL function to Context consumers, preserving its workflow behavior and existing late-write guards. Migrations `0354_quick_apocalypse.sql` and `0356_colossal_wasp.sql` add derived tables and integrity checks.
+
+Erasure is the intentional privacy exception to retained synthesis history: model content versions are scrubbed while opaque IDs/version hashes and content-free source lineage remain. Runtime payloads and encrypted SaaS log buffers are excluded immediately; log-object deletion follows the existing leased erasure receipt flow.
+
+### V7 Learning domain lineage
+
+Migration `0357_chemical_korvac.sql` adds tenant-keyed `learning_cycles`, `learning_evidence`, `learning_hypotheses`, `learning_evaluations`, `learning_domain_candidates`, `learning_retained_assets` and minimal typed `policy_change_proposals`. Cycles serialize budgets and optimistic versions under row/Memory privacy locks. Evaluations retain attributable human comparisons and canonical outcome versions; they do not supersede native Skill/Workflow evaluation stores.
+
+SQL guards validate source eligibility, deletion markers, versions and retained completed outcome evidence at domain acceptance/publication. Date comparisons use the millisecond precision exposed by the existing PostgreSQL client. Document/Skill descendants retain root lineage; erasure clears retained prose and prevents late/restored payload writes independently of feature flags. Accepted canonical control changes require normal domain authority; Learning creates candidates rather than a separate canonical truth store.
+
+V7 Learning retained assets also cover native Workflow revisions and Role Pack versions. Migration 0358 carries lineage into descendants/executions and permits content erasure only when original Memory deletion provenance exists; normal published snapshot immutability remains enforced.
+
+Migration 0359 adds retained Learning links to native Optimizer artifact versions, durable execution root lineage and deletion-backed immutable artifact erasure. Empty source is permitted only by its privacy trigger for an actually erased source; ordinary creation and version/gate mutation retain their existing restrictions. Learned native runtime pins also bind to `context_manifest_memory_roots`, enabling existing consumer deletion guards.

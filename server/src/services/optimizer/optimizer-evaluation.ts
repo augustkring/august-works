@@ -1,3 +1,4 @@
+import { assertLearningAssetCurrent } from "../learning/learning-assets.js";
 import { performance } from "node:perf_hooks";
 import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -71,6 +72,7 @@ export async function assertOptimizerEvaluationBinding(db: Db, companyId: string
     !isDeepStrictEqual(candidate.artifact.inputSchema, version.inputSchema) || !isDeepStrictEqual(candidate.artifact.outputSchema, version.outputSchema)) {
     throw conflict("Optimizer candidate content or qualification gates changed", { code: "optimizer_evaluation_gates_changed" });
   }
+  await assertLearningAssetCurrent(db, companyId, "automation_artifact_version", version.id);
   await assertMemoryRecordsRetained(db, companyId, evaluation.memoryRecordIds);
   return { evaluation, artifact, version };
 }

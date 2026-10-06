@@ -1,3 +1,5 @@
+import { enterpriseAuthPlugins, ENTERPRISE_DISABLED_AUTH_PATHS } from "./enterprise-auth-plugins.js";
+import { enterpriseIdentityPolicies, enterpriseSubjectBindings, ssoProvider, scimConnectionBinding, scimIdentityTombstone, scimSubject, scimUser, scimProjectionGrant, scimGroup, scimGroupMember, companyMemberships, principalPermissionGrants, activityLog } from "@paperclipai/db";
 import type { Request, RequestHandler } from "express";
 import type { IncomingHttpHeaders } from "node:http";
 import { betterAuth, type Auth } from "better-auth";
@@ -277,18 +279,21 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     publicUrl,
   });
 
+  const enterprisePlugins = config.deploymentProfile === "saas" && config.saasPlatform && config.publicOriginConfig ? enterpriseAuthPlugins(db, config.saasPlatform.deployment.sourceSha) : [];
   const authConfig = {
     baseURL: baseUrl,
     secret,
     trustedOrigins,
     database: drizzleAdapter(db, {
       provider: "pg",
+      transaction: enterprisePlugins.length > 0,
       schema: {
         user: authUsers,
         session: authSessions,
         account: authAccounts,
         verification: authVerifications,
         ...(config.deploymentProfile === "saas" ? {rateLimit:authRateLimits} : {}),
+        ...(enterprisePlugins.length ? { ssoProvider,scimConnectionBinding,scimIdentityTombstone,scimSubject,scimUser,scimProjectionGrant,scimGroup,scimGroupMember,awEnterprisePolicy:enterpriseIdentityPolicies,awEnterpriseBinding:enterpriseSubjectBindings,awCompanyMembership:companyMemberships,awPermissionGrant:principalPermissionGrants,awActivity:activityLog } : {}),
       },
     }),
     emailAndPassword: {
@@ -318,28 +323,10 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       override: config.deploymentProfile === "saas" ? "true" : process.env.PAPERCLIP_AUTH_RATE_LIMIT_ENABLED,
     }), ...(config.deploymentProfile === "saas" ? { storage: "database" as const } : {}) },
     advanced: buildBetterAuthAdvancedOptions({ disableSecureCookies, saas: config.deploymentProfile === "saas" }),
-    // Registered only for a managed workspace instance: the plugin is what makes
-    // `Open workspace` password-independent, and a control-plane instance that
-    // was never handed a workspace key must not expose the exchange at all.
-    ...(resolveWorkspaceHandoffIdentity(config)
-      ? {
-          plugins: [
-            workspaceLoginHandoffPlugin({
-              db,
-              // Re-resolved per exchange so a hot restart cannot keep validating
-              // against an origin the control plane has since republished.
-              resolveExpectedIdentity: () =>
-                resolveWorkspaceHandoffIdentity(config) ?? {
-                  key: null,
-                  instanceId: null,
-                  executionWorkspaceId: null,
-                  companyId: null,
-                  origin: null,
-                },
-            }),
-          ],
-        }
-      : {}),
+    ...(enterprisePlugins.length ? { disabledPaths: ENTERPRISE_DISABLED_AUTH_PATHS } : {}),
+    plugins: [ ...enterprisePlugins, ...(resolveWorkspaceHandoffIdentity(config) ? [workspaceLoginHandoffPlugin({ db,
+      resolveExpectedIdentity: () => resolveWorkspaceHandoffIdentity(config) ?? {key:null,instanceId:null,executionWorkspaceId:null,companyId:null,origin:null},
+    })] : []) ],
   };
 
   if (!baseUrl) {

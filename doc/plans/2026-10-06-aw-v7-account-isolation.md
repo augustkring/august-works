@@ -1,0 +1,26 @@
+# V7 account isolation — 2026-10-06
+
+## Problem and implementation
+
+The V7 discovery, cognitive/derived Memory, Learning, Work Signals and Orchestration pages used company-only query keys. Discovery runs and linked-source results can be private to their originating user even when another user belongs to the same company. A retained QueryClient must not answer the new account with the previous account's cached result. A late API request must also not execute its original intent under a newly installed session cookie.
+
+These six pages now resolve a board principal before mounting private views. Queries, supporting evidence, policy decisions and independent verification include that principal in their cache keys. Their existing native API clients are constructed with an immutable request binding. Server middleware checks that binding against the resolved actor after Cloud actor replacement and before ordinary API domain routes. A mismatch returns `409 ACCOUNT_CHANGED` before domain reads or effects. The binding provides no authority; company access, resource permissions, CSRF, version checks and canonical ownership still apply. Unbound native API callers keep their existing behavior.
+
+The transport binding is removed from `req.url` after validation, before strict domain query validation; `originalUrl` remains intact. Original query parameters and mutation bodies remain supported. GET coalescing is partitioned by principal as well as path. Recursive Task reads retain the same bound client.
+
+Account and company changes remount forms and mutation observers. Late results remain in their originating scope. During session revalidation, React Activity hides the view and suspends its effects, retaining an unsaved draft if the same account returns. A successful null session permits local board only after public health confirms `local_trusted`; authenticated signed-out or failed session lookups do not acquire local authority. The server independently requires actual local implicit authority for the `local-board` binding.
+
+## Verification
+
+- Eleven focused API, middleware and UI files pass all **93 tests**. These cover distinct in-flight GETs across accounts, a late mutation result, private discovery/Memory cache isolation, form reset, session revalidation, CSRF, Cloud/session callers and local/native compatibility. All **16** new client/account fixture cases also pass after strict TypeScript fixture validation.
+- Seven existing V7 domain suites pass **83 tests** on freshly migrated PostgreSQL: discovery, cognitive/derived Memory, Learning, Work Signals, Orchestration and Readiness.
+- The authenticated Chromium journey passes against fresh PostgreSQL (**1 test, 50.2 seconds including server startup**). A real second member can read the shared Task but receives 404 for its starter's discovery run. Switching the actual session cookie in the same document rejects both an old-account GET and POST with 409, renders the second account's 404 and withholds the private candidate. Restoring the owner proves that the rejected write changed neither the pinned version nor the human answer. The test retains the document and QueryClient and uses only a paused fixture presence and explicitly synthetic candidate; it makes no model calls and approves no Foundation document.
+- UI typecheck passes. Server typecheck passes with a 6 GiB Node heap limit. Two initial concurrent server typechecks were killed by the execution environment; the successful retry follows removal of six completed, process-free browser fixture databases from tmpfs. Their logs and browser artifacts remain available.
+- Module boundaries, UI token gates and all three pilot-checker negative cases pass.
+- The complete UI suite passes **6,823 tests across 665 files**, including the default native API regressions. The complete repository build passes, including actual Rust release/golden checks, server, UI and CLI. Its build stamp reports the preceding committed SHA `509d724297fba029e0a3a9171eaa075da5658bfe`; the tested account changes were present in the working tree. Current-commit CI must independently verify the committed revision.
+
+Local logs are retained outside the repository under `/workspace/aw-v7-account-*` and `/workspace/aw-v7-browser-account-scope-verified.log`. CI runs the committed tests. The `509d724297fba029e0a3a9171eaa075da5658bfe` checkpoint passed the complete main PR workflow and AW V6 workflow; that is separate from acceptance of these new account changes. Its AW V4 product-browser workflow was still queued when inspected.
+
+## Whole-brief status
+
+This closes the identified account boundary in these V7 views. It does not complete the whole V7 brief or qualify production runtime admission. Native OpenShell prepare/apply/start and outer host composition, per-use workload credential enforcement/revocation, broader managed inference transport and a real draft-provider conformance bootstrap runner remain incomplete code. The local kernel previously returned Landlock `ENOSYS`; no qualified staging target has been supplied. The 35 protected journey/fault/compound/operating evidence items remain missing. The local suite manifest records these account regressions without changing any pilot qualification.

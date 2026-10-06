@@ -1,3 +1,11 @@
+import { enterpriseRoutes } from "./routes/enterprise.js";
+import { agentPackageRoutes } from "./routes/agent-packages.js";
+import { aiGovernanceRoutes } from "./routes/ai-governance.js";
+import { executionSandboxRoutes } from "./routes/execution-sandbox.js";
+import { openShellBackend } from "./services/execution-sandbox/openshell-backend.js";
+import { orchestrationRoutes } from "./routes/orchestration.js";
+import { workSignalRoutes } from "./routes/work-signals.js";
+import { expectedActorGuard } from "./middleware/expected-actor.js";
 import { publicOriginGuard } from "./middleware/public-origin-guard.js";
 import { saasCommercialGuard } from "./middleware/saas-commercial-guard.js";
 import { saasRoutes } from "./routes/saas.js";
@@ -63,8 +71,13 @@ import { cloudRoutes } from "./routes/cloud.js";
 import { companyRoutes } from "./routes/companies.js";
 import { companySkillRoutes } from "./routes/company-skills.js";
 import { foundationRoutes } from "./routes/foundation.js";
+import { readinessRoutes } from "./routes/readiness.js";
+import { foundationBootstrapRoutes } from "./routes/foundation-bootstrap.js";
 import { workflowRoutes } from "./routes/workflows.js";
 import { automationArtifactRoutes } from "./routes/automation-artifacts.js";
+import { derivedMemoryRoutes } from "./routes/derived-memory.js";
+import { learningRoutes } from "./routes/learning.js";
+import { cognitiveMemoryRoutes } from "./routes/cognitive-memory.js";
 import { memoryRoutes } from "./routes/memory.js";
 import { companySkillPolicyRoutes } from "./routes/company-skill-policy.js";
 import { inboxAgentPolicyRoutes } from "./routes/inbox-agent-policy.js";
@@ -597,7 +610,7 @@ export async function createApp(
   // Connection-intent tools carry their own short-lived, run-bound bearer and
   // must be reachable by remote adapters that intentionally do not receive an
   // agent API key. Every request revalidates the active heartbeat row.
-  app.use(runtimeConnectionIntentRoutes(db));
+  app.use(runtimeConnectionIntentRoutes(db, opts.saasPlatform?.workerModels));
   app.use(
     actorMiddleware(db, {
       deploymentMode: opts.deploymentMode,
@@ -608,6 +621,7 @@ export async function createApp(
   // REPLACES whatever actor the request otherwise resolved to, and only on
   // the one endpoint it authorizes (see the middleware for the contract).
   if (opts.deploymentProfile !== "saas") app.use(cloudControlMiddleware());
+  app.use("/api", expectedActorGuard());
   app.use("/api/auth", authRoutes(db));
   if (opts.betterAuthHandler) {
     app.all("/api/auth/{*authPath}", opts.betterAuthHandler);
@@ -709,9 +723,27 @@ export async function createApp(
   api.use(agentProviderBindingRoutes(db));
   api.use(crossCompanyContextRoutes(db));
   api.use(organizationRoutes(db));
+  api.use(foundationBootstrapRoutes(db));
   api.use(foundationRoutes(db));
+  api.use(readinessRoutes(db));
   api.use(workflowRoutes(db));
   api.use(automationArtifactRoutes(db));
+  api.use(derivedMemoryRoutes(db));
+  api.use(learningRoutes(db));
+  api.use(orchestrationRoutes(db));
+  api.use(workSignalRoutes(db));
+  api.use(aiGovernanceRoutes(db));
+  api.use(enterpriseRoutes(db, opts.saasPlatform ? { operatorUserIds: opts.saasPlatform.config.operatorUserIds, sourceSha: opts.saasPlatform.config.deployment.sourceSha, protectedEvidenceOrigin: opts.saasPlatform.config.objects.endpoint, appOrigin: opts.saasPlatform.origins.primaryAppOrigin } : undefined));
+  api.use(agentPackageRoutes(db, { operatorUserIds: opts.saasPlatform?.config.operatorUserIds, protectedEvidenceOrigin: opts.saasPlatform?.config.objects.endpoint, sourceSha: opts.saasPlatform?.config.deployment.sourceSha }));
+  api.use(executionSandboxRoutes(db, {
+    operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
+    backendFor: opts.saasPlatform?.config.runtime.openshellProver ? (binding, actor) => binding.backend === "openshell" ? openShellBackend({
+      identity: { companyId: binding.companyId, bindingId: binding.id, cellId: binding.runtimeCellId, cellGeneration: binding.cellGeneration, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` },
+      boundary: binding.boundaryPolicy, bridge: opts.saasPlatform!.sandboxHosts.bridge(actor), evidenceKind: "protected_host_report", prover: opts.saasPlatform!.config.runtime.openshellProver!,
+    }) : undefined : undefined,
+    nativeOperation: opts.saasPlatform ? (companyId, cellId, userId, action, idempotencyKey) => opts.saasPlatform!.runtime.request(companyId, cellId, userId, { action, idempotencyKey }) : undefined,
+  }));
+  api.use(cognitiveMemoryRoutes(db));
   api.use(memoryRoutes(db));
   api.use(companySkillPolicyRoutes(db));
   api.use(inboxAgentPolicyRoutes(db));

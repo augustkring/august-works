@@ -1,0 +1,7 @@
+ALTER TABLE "memory_model_evidence" ADD CONSTRAINT "model_evidence_relation_check" CHECK ("memory_model_evidence"."relationship" in ('supports','contradicts','context','derived_from'));--> statement-breakpoint
+ALTER TABLE "memory_model_versions" ADD CONSTRAINT "model_versions_version_check" CHECK ("memory_model_versions"."version" > 0);--> statement-breakpoint
+ALTER TABLE "memory_models" ADD CONSTRAINT "models_version_check" CHECK ("memory_models"."version" > 0);--> statement-breakpoint
+ALTER TABLE "memory_models" ADD CONSTRAINT "models_sensitivity_check" CHECK ("memory_models"."sensitivity" in ('public','internal','confidential','restricted'));--> statement-breakpoint
+ALTER TABLE "memory_observations" ADD CONSTRAINT "observations_version_check" CHECK ("memory_observations"."version" > 0);--> statement-breakpoint
+ALTER TABLE "memory_observations" ADD CONSTRAINT "observations_counts_check" CHECK ("memory_observations"."support_count" >= 0 and "memory_observations"."contradiction_count" >= 0 and "memory_observations"."independent_source_count" >= 0);--> statement-breakpoint
+ALTER TABLE "memory_observations" ADD CONSTRAINT "observations_sensitivity_check" CHECK ("memory_observations"."sensitivity" in ('public','internal','confidential','restricted'));

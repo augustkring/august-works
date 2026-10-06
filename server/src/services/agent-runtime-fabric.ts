@@ -1,5 +1,9 @@
+import { admitOrchestrationHeartbeat, hasOrchestrationPlan } from "./orchestration/orchestration-admission.js";
+import { assertV7Enabled } from "./v7-authorization.js";
+import { learningAssetRoots } from "./learning/learning-assets.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { and, eq, sql } from "drizzle-orm";
-import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
+import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, contextManifestMemoryRoots, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
 import { agentExecutionManifestSchema, createExecutionScopeRequestSchema, v5FeatureEnabled, type AgentExecutionScope } from "@paperclipai/shared";
 import type { z } from "zod";
 import { conflict, forbidden, notFound } from "../errors.js";
@@ -69,6 +73,7 @@ export function agentRuntimeFabricService(db: Db) {
     prepare: async (input: { companyId: string; agentId: string; runId: string; responsibleUserId: string | null; issueId: string | null; query: string; scopeRequestId?: string | null }) => {
       const flags = await instanceSettingsService(db).getExperimental();
       const [stored] = await db.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.runId, input.runId))).limit(1);
+      if (await hasOrchestrationPlan(db, input.companyId, input.issueId)) await assertV7Enabled(db, "orchestration_v7");
       if (!stored && !v5FeatureEnabled(flags, "agent_runtime_fabric_v5")) return null;
       const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: input.companyId, agentId: input.agentId, runId: input.runId, onBehalfOfUserId: input.responsibleUserId };
       const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.id, input.runId))).limit(1);
@@ -83,6 +88,7 @@ export function agentRuntimeFabricService(db: Db) {
         if (!claimed) throw conflict("Execution scope was already claimed");
         scope = request.scope; query = request.query;
       }
+      if (scope.delegatedScopes.length && await hasOrchestrationPlan(db, input.companyId, input.issueId)) throw forbidden("Bounded plans require local execution until delegated side-effect and budget receipts are qualified");
       const scoped = scope.delegatedScopes.length ? await crossCompanyContextService(db).resolve(actor, scope) : null;
       const provider = await agentProviderBindingService(db).assertRuntime(input.companyId, input.agentId);
       const providers = [{ companyId: input.companyId, agentId: input.agentId, providerBindingId: provider.provider.id, profileRef: provider.runtime.providerProfileRef, snapshotHash: provider.provider.capabilitySnapshot!.hash, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime" }, ...(scoped?.scopes.filter((s) => s.companyId !== input.companyId).map((s) => ({ companyId: s.companyId, agentId: s.presence.id, providerBindingId: s.provider.provider.id, profileRef: s.provider.runtime.providerProfileRef, snapshotHash: s.provider.provider.capabilitySnapshot!.hash, isolationMode: s.provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime" })) ?? [])];
@@ -132,6 +138,18 @@ export function agentRuntimeFabricService(db: Db) {
       if (inventoryTokens > 4000) throw conflict("Pinned execution inventory exceeds 4000 estimated tokens; split the task requirements");
       if (!stored) manifest.inventoryEstimatedTokens = inventoryTokens;
       const record = await withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockMemoryPrivacy(tx, input.companyId);
+        const localContext = context.refs.find(ref => ref.companyId === input.companyId);
+        const learnedPins = [
+          ...manifest.skills.map(pin => ({ type: "skill_version", id: pin.versionId })),
+          ...manifest.playbooks.map(pin => ({ type: "document_revision", id: pin.revisionId })),
+          ...(manifest.rolePack?.pins.map(pin => ({ type: "role_pack_version", id: pin.versionId })) ?? []),
+        ];
+        for (const pin of learnedPins) {
+          const roots = await learningAssetRoots(tx, input.companyId, pin.type, pin.id, "v5_runtime_execution");
+          if (roots.length && !localContext) throw conflict("Learned runtime procedures require a local Context manifest");
+          if (roots.length) await tx.insert(contextManifestMemoryRoots).values(roots.map(root => ({ companyId: input.companyId, manifestId: localContext!.contextManifestId, memoryRecordId: root.id, sourceVersion: root.expectedVersion }))).onConflictDoNothing();
+        }
         await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.id, input.runId)).for("update");
         let row = stored;
         if (!row) {
@@ -140,6 +158,7 @@ export function agentRuntimeFabricService(db: Db) {
           if (items.length) await tx.insert(agentExecutionManifestItems).values(items.map((i) => ({ ...i, companyId: input.companyId, manifestId: row!.id })));
           await logActivity(tx, { companyId: input.companyId, actorType: "system", actorId: "runtime-fabric", action: "runtime.manifest_created", entityType: "heartbeat_run", entityId: input.runId, details: { manifestId: row!.id, hash: row!.hash } }, publications);
         }
+        await admitOrchestrationHeartbeat(tx, { ...input, executionManifestId: row!.id }, publications, db);
         await tx.insert(agentExecutionAuthorizations).values({ companyId: input.companyId, manifestId: row!.id, contextManifestRefs: context.refs, authorityHash: policyHash });
         for (const pin of manifest.skills) await tx.insert(companySkillUsageEvents).values({ companyId: input.companyId, runId: input.runId, agentId: input.agentId, skillId: pin.skillId, skillVersionId: pin.versionId, selectionReason: pin.selection, stage: "selected" }).onConflictDoNothing();
         await tx.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ v5ExecutionManifestId: row!.id })}::jsonb` }).where(eq(heartbeatRuns.id, input.runId));

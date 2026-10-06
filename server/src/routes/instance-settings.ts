@@ -297,12 +297,13 @@ export function instanceSettingsRoutes(
         (field) =>
           hidden.has("instance.experimental") || hidden.has(`instance.experimental.${field}`),
       );
-      const updated = await svc.updateExperimental(req.body);
       const actor = getActorInfo(req);
       const companyIds = await svc.listCompanyIds();
-      await Promise.all(
-        companyIds.map((companyId) =>
-          logActivity(db, {
+      const publications: ActivityPublication[] = [];
+      const updated = await db.transaction(async (tx) => {
+        const settings = await svc.updateExperimental(req.body, { db: tx });
+        await Promise.all(companyIds.map((companyId) =>
+          logActivity(tx as unknown as Db, {
             companyId,
             actorType: actor.actorType,
             actorId: actor.actorId,
@@ -311,14 +312,16 @@ export function instanceSettingsRoutes(
             agentApiKeyId: actor.agentApiKeyId,
             action: "instance.settings.experimental_updated",
             entityType: "instance_settings",
-            entityId: updated.id,
+            entityId: settings.id,
             details: {
-              experimental: updated.experimental,
+              experimental: settings.experimental,
               changedKeys: Object.keys(req.body).sort(),
             },
-          }),
-        ),
-      );
+          }, publications),
+        ));
+        return settings;
+      });
+      publishActivitiesBestEffort(publications, "instance.settings.experimental_updated");
       res.json(updated.experimental);
     },
   );

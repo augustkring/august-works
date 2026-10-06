@@ -619,3 +619,7 @@ Agents cannot
 read or change these preferences. The legacy instance general setting is retained
 for API compatibility but no longer controls shortcut behavior in the app;
 users opt in individually after the upgrade.
+
+## August Works V7 rollout foundation
+
+V7 extends the existing Foundation, Context, Memory, Tasks/Workflows, runtime, billing and identity domains. The first implementation slice reserves 20 instance-wide feature flags, all off by default. It adds configuration admission and evidence planning; it does not enable V7 product behavior. See the [Wave 0 scope and evidence](operations/aw-v7-wave0.md).

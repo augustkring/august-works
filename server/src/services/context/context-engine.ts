@@ -36,6 +36,8 @@ import {
 } from "../knowledge/github-synced-connected-knowledge.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { retrieveEligibleMemory } from "../memory/memory-retrieval.js";
+import { cognitiveContextProvider } from "../memory/cognitive-context.js";
+import { derivedMemoryContextProvider } from "../memory/derived-context.js";
 
 export const DEFAULT_CONTEXT_TOTAL_DEADLINE_MS = 1_500;
 export const DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS = 900;
@@ -703,6 +705,8 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         ...(input.issueId ? [taskProvider(db)] : []),
         ...(input.includeFoundation === false ? [] : [foundationProvider(db)]),
         memoryContextProvider(db),
+        cognitiveContextProvider(db),
+        derivedMemoryContextProvider(db),
         ...defaultConnectedKnowledgeContextProviders(db, input),
       ];
       const providerResult = await runContextProviders(providers, input, deadlineAt);

@@ -1622,3 +1622,13 @@ Run log views retain their existing HTTP polling fallback.
 ## August Works V6 foundation
 
 The additive SaaS ownership profile and public origin contract are documented in [the V6 foundation runbook](operations/aw-v6-foundation.md). Existing local and legacy Cloud deployment behavior remains supported. All V6 rollout flags default off.
+
+## August Works V7 Wave 0
+
+All 20 V7 flags default off. Use the existing experimental settings API and the shared dependency graph in `packages/shared/src/v7-feature-flags.ts`; brief `AW_V7_*` labels map to persisted `*_v7` names, not new environment variables. Admission checks effective V4/V5/V6 prerequisites, including managed overlays. A flag is neither implementation evidence nor authorization.
+
+Roll back dependents and prerequisites together in one PATCH. Repair managed values at their configuration source. Existing state and evidence remain retained; OpenShell-required workloads must stop when their assurance is lost, never fall back to unsandboxed execution. See the [Wave 0 runbook](operations/aw-v7-wave0.md), [migration map](plans/2026-10-05-aw-v7-migration-map.md) and [V7 ADRs](adr/V7-ARCHITECTURE-DECISIONS.md).
+
+### V7 readiness checks
+
+Target policy and migrated-PostgreSQL tests are in `server/src/services/readiness/readiness-policy.test.ts` and `server/src/__tests__/v7-readiness.integration.test.ts`. The default-off UI is `/readiness`. Full-wave progress and external acceptance gates are tracked in [the V7 implementation ledger](plans/2026-10-05-aw-v7-build-progress.md).

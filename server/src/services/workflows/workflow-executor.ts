@@ -1,3 +1,5 @@
+import { admitOrchestrationWorkflow } from "../orchestration/orchestration-admission.js";
+import type { AuthorizationActor } from "../authorization.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { WorkflowCheckpointError } from "./workflow-errors.js";
 import { assertWorkflowTaskAssignmentAuthorized } from "./workflow-task-authority.js";
@@ -426,7 +428,14 @@ export async function enqueueWorkflowRunInTransaction(
       },
     },
   );
-  return { run, created: true, publications: [publication] };
+  const publications = [publication];
+  const authority: AuthorizationActor = input.actor.principal.type === "agent"
+    ? { type: "agent", source: "agent_jwt", companyId: input.companyId, agentId: input.actor.principal.agentId, runId: input.actor.runId ?? null, onBehalfOfUserId: input.responsibleUserId }
+    : input.actor.principal.type === "system" && input.actor.principal.service === "local-board"
+      ? { type: "board", source: "local_implicit" }
+      : { type: "board", source: "session", userId: input.actor.principal.type === "user" ? input.actor.principal.userId : input.responsibleUserId };
+  await admitOrchestrationWorkflow(executor, run, authority, publications);
+  return { run, created: true, publications };
 }
 
 async function createQueuedRun(

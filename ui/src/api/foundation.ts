@@ -6,7 +6,7 @@ import type {
   FoundationSearchResult,
   UpdateFoundationDraft,
 } from "@paperclipai/shared";
-import { api } from "./client";
+import { api as defaultApi } from "./client";
 
 export interface FoundationRevision {
   id: string;
@@ -25,7 +25,7 @@ export interface FoundationProposalDecisionResult {
   foundation: FoundationDocument;
 }
 
-export const foundationApi = {
+export const createFoundationApi = (api: typeof defaultApi = defaultApi) => ({
   capabilities: (companyId: string) =>
     api.get<FoundationCapabilities>(`/companies/${companyId}/foundation/capabilities`),
 
@@ -144,4 +144,6 @@ export const foundationApi = {
       `/companies/${companyId}/foundation/${foundationDocumentId}/proposals/${proposalId}/reject`,
       {},
     ),
-};
+});
+
+export const foundationApi = createFoundationApi();

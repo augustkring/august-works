@@ -55,6 +55,40 @@ const input: NativeExecutionInputV1 = {
 };
 
 describe("NativeExecutionInputV1", () => {
+  function awDraft() {
+    const digest = "0".repeat(64);
+    const context = {
+      prompt: { revision: PAPERCLIP_EXECUTION_PROMPT_REVISION, text: PAPERCLIP_EXECUTION_PROMPT, digest: nativeRuntimePromptDigest() },
+      instructions: { entryPath: "AGENTS.md", bundle: { schema: NATIVE_RUNTIME_ASSET_SCHEMA, digest, manifestDigest: digest, rootPath: "/runtime/instructions", fileCount: 1, totalBytes: 42 } },
+      skills: [], mcp: { assignmentSetId: "none", digest, bindingId: null },
+    };
+    return { ...input, schema: "paperclip.native-execution-input.v4", executionMode: "default", planningContext: null,
+      provider: { kind: "aw_text_only", model: "qualified-model-20261006", profileId: "10000000-0000-4000-8000-000000000001", maxOutputTokens: 1024 },
+      session: { ...input.session, driverKind: "aw_text_messages" }, credentialBindings: [],
+      runtimeContext: { ...context, aggregateDigest: canonicalNativeRuntimeContextDigest(context) } };
+  }
+  it("retains the exact fresh internal-draft provider identity without a CLI permission or credential channel", () => {
+    const draft = awDraft(), parsed = parseNativeExecutionInput(draft);
+    expect(parsed.provider).toEqual(draft.provider);
+    expect(parsed.session.driverKind).toBe("aw_text_messages");
+    expect(parsed.credentialBindings).toEqual([]);
+    expect(JSON.stringify(buildNativeModelEnvelope(parsed))).not.toContain(draft.provider.profileId);
+  });
+  it("closes internal draft recovery, old protocols, credentials and unbounded or mismatched provider input", () => {
+    const draft = awDraft();
+    for (const altered of [
+      { ...draft, schema: "paperclip.native-execution-input.v3" },
+      { ...draft, continuationPrompt: "Resume the earlier provider turn" },
+      { ...draft, session: { ...draft.session, driverKind: "codex_app_server" } },
+      { ...draft, session: { ...draft.session, lifecyclePolicy: { mode: "warm", idleTimeoutMs: 300000 } } },
+      { ...draft, credentialBindings: input.credentialBindings },
+      { ...draft, provider: { ...draft.provider, maxOutputTokens: 8193 } },
+      { ...draft, provider: { ...draft.provider, profileId: "invented-profile" } },
+      { ...draft, provider: { ...draft.provider, apiKey: "not-a-worker-field" } },
+      { ...draft, provider: { ...draft.provider, endpoint: "https://untrusted.invalid" } },
+      { ...draft, task: { ...draft.task, workMode: "ask" } },
+    ]) expect(() => parseNativeExecutionInput(altered)).toThrow();
+  });
   it("parses v3 immutable runtime context without changing the model task envelope", () => {
     const digest = "0".repeat(64);
     const context = {

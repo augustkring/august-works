@@ -1,0 +1,49 @@
+{
+  "observed_at": "2026-10-05T10:12:01.779625+00:00",
+  "release": "v0.10.2",
+  "release_tree_sha": "5fc4ce20917b916240cef27c212c387a177f115b",
+  "decision": "DEFER",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/vectorize-io/hindsight/v0.10.2/hindsight-docs/static/openapi.json",
+      "path": "hindsight-docs/static/openapi.json",
+      "sha256": "815112185239a60101dd56879ac3de285cb7da466477dad417e56cdd8c563ba7",
+      "bytes": 605624
+    },
+    {
+      "url": "https://raw.githubusercontent.com/vectorize-io/hindsight/v0.10.2/hindsight-api-slim/hindsight_api/extensions/builtin/tenant.py",
+      "path": "hindsight-api-slim/hindsight_api/extensions/builtin/tenant.py",
+      "sha256": "54b341d9c9a681bc8a0141d5747135d34d79266454c4fdf3b95c4e0a965d89a8",
+      "bytes": 4016
+    },
+    {
+      "url": "https://raw.githubusercontent.com/vectorize-io/hindsight/v0.10.2/hindsight-api-slim/tests/test_delete_document_concurrency.py",
+      "path": "hindsight-api-slim/tests/test_delete_document_concurrency.py",
+      "sha256": "82cacfd3c251d9aea634c289db05270c43b7174c4030fcd085a2499a4f3bdc72",
+      "bytes": 19744
+    },
+    {
+      "url": "https://raw.githubusercontent.com/vectorize-io/hindsight/v0.10.2/hindsight-system-tests/tests/test_13_delete_document.py",
+      "path": "hindsight-system-tests/tests/test_13_delete_document.py",
+      "sha256": "a1a438a2dfc8376741b7465a1bc9a990e5f39d6f4380937e4ced45602745b9fc",
+      "bytes": 4466
+    },
+    {
+      "url": "https://raw.githubusercontent.com/vectorize-io/hindsight/v0.10.2/docker/docker-compose/alloydb/docker-compose.yaml",
+      "path": "docker/docker-compose/alloydb/docker-compose.yaml",
+      "sha256": "7b08df44a3a233121912f6db70ff15f61c73224d9028d74c2fb808e9553bfa8e",
+      "bytes": 3464
+    },
+    {
+      "url": "https://raw.githubusercontent.com/vectorize-io/hindsight/v0.10.2/docker/docker-compose/claude-code/docker-compose.yaml",
+      "path": "docker/docker-compose/claude-code/docker-compose.yaml",
+      "sha256": "43fd16341c12074e7ca91c4358f808a831dbf75c877eace523d31a19a3204de2",
+      "bytes": 2259
+    }
+  ],
+  "license": {
+    "url": "https://raw.githubusercontent.com/vectorize-io/hindsight/v0.10.2/LICENSE",
+    "sha256": "01fde0bedf83bdc185065d7af524a61690efe576a67f922eaff3a1280c17b63a",
+    "observed_license": "MIT"
+  }
+}

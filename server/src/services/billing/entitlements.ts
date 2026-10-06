@@ -12,12 +12,16 @@ import {
   commercialAccess,
   composeEntitlements,
   EMPTY_ENTITLEMENTS,
+  FREE_CORE_ENTITLEMENTS,
+  FREE_CORE_CATALOG_VERSION,
+  v7FeatureEnabled,
   ENTITLEMENT_KEYS,
   type EntitlementKey,
   type EntitlementMap,
 } from "@paperclipai/shared";
 import { forbidden, notFound } from "../../errors.js";
 import { sha256 } from "../saas/crypto.js";
+import { instanceSettingsService } from "../instance-settings.js";
 
 export function subscriptionAccess(
   subscription: Pick<
@@ -65,6 +69,14 @@ export function entitlementService(db: Db) {
     const usable = subscriptions.filter(
       (s) => subscriptionAccess(s, now) !== "read_only",
     );
+    const freeCore =
+      v7FeatureEnabled(
+        await instanceSettingsService(db).getExperimental(),
+        "free_core_commercial_v7",
+      ) && account.status === "active";
+    const catalogVersion = freeCore
+      ? FREE_CORE_CATALOG_VERSION
+      : BILLING_CATALOG_VERSION;
     let access: "active" | "grace" | "read_only" = usable.some(
       (s) => subscriptionAccess(s, now) === "active",
     )
@@ -74,7 +86,10 @@ export function entitlementService(db: Db) {
         : "read_only";
     let entitlements: EntitlementMap =
       account.status === "active"
-        ? composeEntitlements(usable.flatMap((s) => s.productKeys))
+        ? composeEntitlements(
+            usable.flatMap((s) => s.productKeys),
+            freeCore ? FREE_CORE_ENTITLEMENTS : EMPTY_ENTITLEMENTS,
+          )
         : { ...EMPTY_ENTITLEMENTS };
     const overrides = await db
       .select()
@@ -128,7 +143,8 @@ export function entitlementService(db: Db) {
     );
     const sourceHash = sha256(
       JSON.stringify({
-        catalog: BILLING_CATALOG_VERSION,
+        catalog: catalogVersion,
+        freeCore,
         accountVersion: account.version,
         status: account.status,
         subscriptions: subscriptions.map((s) => [
@@ -146,7 +162,7 @@ export function entitlementService(db: Db) {
       .values({
         companyId,
         billingAccountId: account.id,
-        catalogVersion: BILLING_CATALOG_VERSION,
+        catalogVersion,
         sourceHash,
         entitlements,
         computedAt: now,
@@ -155,7 +171,7 @@ export function entitlementService(db: Db) {
       .onConflictDoUpdate({
         target: entitlementSnapshots.companyId,
         set: {
-          catalogVersion: BILLING_CATALOG_VERSION,
+          catalogVersion,
           sourceHash,
           entitlements,
           computedAt: now,
@@ -166,7 +182,24 @@ export function entitlementService(db: Db) {
       billingAccountId: account.id,
       access,
       entitlements,
-      catalogVersion: BILLING_CATALOG_VERSION,
+      catalogVersion,
+      commercialState:
+        account.status !== "active"
+          ? ("READ_ONLY" as const)
+          : freeCore && usable.length === 0
+            ? ("FREE" as const)
+            : usable.some((s) => s.status === "active")
+              ? ("ACTIVE" as const)
+              : usable.some((s) => s.status === "trialing")
+                ? ("TRIALING" as const)
+                : usable.some((s) => s.status === "past_due")
+                  ? ("PAST_DUE" as const)
+                  : ("READ_ONLY" as const),
+      freeCore: {
+        active: freeCore,
+        catalogVersion: FREE_CORE_CATALOG_VERSION,
+        paymentMethodRequired: false as const,
+      },
       validUntil,
       subscriptions: subscriptions.map((s) => ({
         id: s.id,

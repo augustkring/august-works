@@ -46,6 +46,10 @@ import { configureRunLogStore } from "../run-log-store.js";
 import { saasRunLogStore } from "./run-logs.js";
 import { createS3StorageProvider } from "../../storage/s3-provider.js";
 import { runtimeControlService } from "../runtime/control.js";
+import { nativeSandboxHostTransport } from "../execution-sandbox/native-host-bridge.js";
+import { workerModelGateway } from "../orchestration/worker-model-gateway.js";
+import { registerNativeDraftGateway } from "../orchestration/native-draft-runtime.js";
+import { nativeDraftConformanceService, registerNativeDraftConformance } from "../native-draft-conformance.js";
 
 export function saasPlatform(
   db: Db,
@@ -104,6 +108,16 @@ export function saasPlatform(
     config,
     notifications.notifyCompany,
   );
+  const sandboxHosts = nativeSandboxHostTransport(db, { suspectSeconds: config.runtime.suspectSeconds });
+  const workerModels = config.workerModelProfiles?.length ? workerModelGateway(db, {
+    profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
+    protectedEvidenceOrigin: origins.primaryAppOrigin,
+  }) : undefined;
+  registerNativeDraftGateway(db, workerModels);
+  registerNativeDraftConformance(db, config.workerModelProfiles?.length ? nativeDraftConformanceService(db, {
+    profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
+    protectedEvidenceOrigin: origins.primaryAppOrigin,
+  }) : undefined);
   const backupRetention = config.backups
     ? runtimeBackupRetention(db, runtimeBackupRetentionObjects(config))
     : undefined;
@@ -237,6 +251,7 @@ export function saasPlatform(
       interval: 10000,
       run: () => runtime.reconcileCommands(),
     },
+    { key: "sandbox-host-command-reconciliation", flag: "saas_deployment_profile_v6", interval: 5000, run: () => sandboxHosts.reconcile() },
     {
       key: "runtime-backup-verification",
       flag: "runtime_host_agent_v6",
@@ -448,6 +463,8 @@ export function saasPlatform(
     await runtime.relay.stop();
   }
   return {
+    sandboxHosts,
+    workerModels,
     backupSchedule,
     config,
     origins,

@@ -23,9 +23,9 @@ import type {
   WorkflowRunDetail,
   WorkflowRevision,
 } from "@paperclipai/shared";
-import { api } from "./client";
+import { api as defaultApi } from "./client";
 
-export const workflowsApi = {
+export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
   optimizerEvaluations: (companyId: string, workflowId: string) => api.get<WorkflowOptimizerEvaluationSummary[]>(`/companies/${companyId}/workflows/${workflowId}/optimizer-evaluations`),
   proposeOptimizerCandidate: (companyId: string, workflowId: string, suggestionId: string) =>
     api.post<WorkflowOptimizerCandidateRequest>(`/companies/${companyId}/workflows/${workflowId}/optimizer-suggestions/${suggestionId}/propose`, {}),
@@ -167,4 +167,6 @@ export const workflowsApi = {
       `/companies/${companyId}/workflows/capability-search${query ? `?${query}` : ""}`,
     );
   },
-};
+});
+
+export const workflowsApi = createWorkflowsApi();

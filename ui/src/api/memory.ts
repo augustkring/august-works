@@ -9,9 +9,9 @@ import type {
   MemoryRecordListQuery,
   MemoryRevokeInput,
 } from "@paperclipai/shared";
-import { api } from "./client";
+import { api as defaultApi } from "./client";
 
-export const memoryApi = {
+export const createMemoryApi = (api: typeof defaultApi = defaultApi) => ({
   jobs: (companyId: string) => api.get<MemoryMaintenanceJobSummary[]>(`/companies/${companyId}/memory/jobs`),
   enqueueMaintenance: (companyId: string, input: { operationType: "dedupe" | "compaction" | "reflection" | "index_refresh"; recordIds: string[]; proposedLesson?: { title: string; content: string } }, key: string) =>
     api.post<{ id: string; status: string }>(`/companies/${companyId}/memory/jobs`, input, { headers: { "Idempotency-Key": key } }),
@@ -78,4 +78,6 @@ export const memoryApi = {
       `/companies/${companyId}/memory/bindings/${bindingId}/targets`,
       input,
     ),
-};
+});
+
+export const memoryApi = createMemoryApi();

@@ -17,9 +17,12 @@ const record = (value: unknown): Record<string, unknown> => value && typeof valu
 /** Static contract for the included local backend. Only retained probes qualify it. */
 export const discoverNativeCapabilities: NonNullable<ServerAdapterModule["discoverCapabilities"]> = async (ctx) => {
   const profile = resolvePaperclipRunnerProviderProfile(ctx.config);
-  if (ctx.adapterType !== "paperclip_runner" || !["codex", "opencode", "acpx"].includes(profile.provider)) throw new Error("This native provider needs its own conformance transport");
+  if (ctx.adapterType !== "paperclip_runner" || !["codex", "opencode", "acpx", "aw_text_only"].includes(profile.provider)) throw new Error("This native provider needs its own conformance transport");
   const features = Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>;
-  features.sessions = true; features.cancellation = true; features.memoryScoping = true;
+  features.sessions = profile.provider !== "aw_text_only"; features.cancellation = true; features.memoryScoping = true;
+  // Advertising this fixed contract never runs a probe or fabricates retained
+  // conformance. Internal drafts have no persistent provider-session transport.
+  if (profile.provider === "aw_text_only") return { provider: "paperclip_native", version: `aw-text-draft-v1:${profile.backend}:${nativeToolContractFingerprintForTarget("local")}`, features, skills: [], tools: [], discoveredAt: new Date().toISOString() };
   return { provider: "paperclip_native", version: `local-v1:${profile.backend}:${nativeToolContractFingerprintForTarget("local")}`, features, skills: [], tools: [], discoveredAt: new Date().toISOString() };
 };
 

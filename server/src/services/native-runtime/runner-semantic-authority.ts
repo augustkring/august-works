@@ -1,4 +1,5 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { withOrchestrationNativeTool } from "../orchestration/native-tool-boundary.js";
 
 import type { Db } from "@paperclipai/db";
 import {
@@ -96,7 +97,9 @@ export class PaperclipRunnerSemanticAuthority {
   dispatch(
     call: Omit<PaperclipSemanticToolCall, "runId">,
   ): Promise<PaperclipSemanticToolResult> {
-    return this.#dispatcher.dispatch({ ...call, runId: this.#binding.runId });
+    return withOrchestrationNativeTool(this.#db, this.#binding,
+      { tool: call.operationId, callId: call.callId, arguments: call.input },
+      () => this.#dispatcher.dispatch({ ...call, runId: this.#binding.runId }));
   }
 
   authorizationRecords(): readonly PaperclipSemanticAuthorizationRecord[] {

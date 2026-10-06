@@ -7,6 +7,16 @@ import {
 } from "./company-routes";
 
 describe("company routes", () => {
+  it.each(["readiness", "orchestration", "ai-governance", "work-signals"])(
+    "keeps V7 %s navigation and redirects attached to the active company",
+    (root) => {
+      expect(isBoardPathWithoutPrefix(`/${root}`)).toBe(true);
+      expect(extractCompanyPrefixFromPath(`/${root}`)).toBeNull();
+      expect(applyCompanyPrefix(`/${root}?review=current#details`, "AW")).toBe(`/AW/${root}?review=current#details`);
+      expect(applyCompanyPrefix(`/OTHER/${root}`, "AW")).toBe(`/OTHER/${root}`);
+      expect(toCompanyRelativePath(`/AW/${root}`)).toBe(`/${root}`);
+    },
+  );
   it("treats the V4 product IA aliases as company-scoped routes", () => {
     for (const root of ["overview", "work", "connections", "governance"]) {
       expect(isBoardPathWithoutPrefix(`/${root}`)).toBe(true);

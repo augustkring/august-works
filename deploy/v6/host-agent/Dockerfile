@@ -4,5 +4,6 @@ FROM ${AW_HOST_BASE_IMAGE}
 WORKDIR /opt/august-works
 COPY deploy/v6/host-agent/index.mjs deploy/v6/host-agent/engine.mjs deploy/v6/host-agent/backup.mjs deploy/v6/host-agent/journal.mjs deploy/v6/host-agent/relay.mjs deploy/v6/host-agent/
 COPY packages/shared/src/runtime-signing.ts packages/shared/src/runtime-signing.ts
+COPY deploy/v6/host-agent/openshell.mjs deploy/v6/host-agent/
 ENV AW_HOST_CONFIG_FILE=/etc/aw-runtime/host.json
 ENTRYPOINT ["node", "deploy/v6/host-agent/index.mjs"]

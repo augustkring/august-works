@@ -50,7 +50,8 @@ export type NativeRuntimeResolution =
           | "opencode_server"
           | "claude_managed_agents_api"
           | "aws_agentcore_harness_api"
-          | "acpx_runtime";
+          | "acpx_runtime"
+          | "aw_text_messages";
         protocolVersion: 1;
       };
       authorityDecision: NativeStatusDecision;
@@ -236,7 +237,7 @@ export function resolveHeartbeatRuntimeMode(input: {
     kind: "native",
     resolverVersion: NATIVE_RUNTIME_RESOLVER_VERSION,
     reason: "explicit_paperclip_runner",
-    provider: resolution.profile.backend === "opencode_server"
+    provider: resolution.profile.backend === "aw_text_messages" ? "aw_text_only" : resolution.profile.backend === "opencode_server"
       ? "opencode"
       : resolution.profile.backend === "claude_managed_agents_api"
         ? "claude_managed"
@@ -286,7 +287,7 @@ export function resolveHeartbeatNativeRuntimeMode(input: {
         );
       }
       const driverKind = input.persisted.driverKind;
-      const backend = driverKind === "opencode_server"
+      const backend = driverKind === "aw_text_messages" ? "aw_text_messages" : driverKind === "opencode_server"
         ? "opencode_server"
         : driverKind === "claude_managed_agents_api"
           ? "claude_managed_agents_api"

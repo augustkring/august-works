@@ -1722,3 +1722,35 @@ users opt in individually after the upgrade.
 ## August Works V6 SaaS foundation
 
 Deployment ownership is independent of authentication mode. The additive `saas` profile uses pooled companies, current memberships, configured HTTPS origins and the same HTTP/WebSocket ingress policy. It never selects implicit local authority or uses a Cloud-pinned primary company. Public signup remains closed until the auth/email implementation is qualified. See [the post-V5 matrix](plans/2026-10-04-aw-v6-foundation.md) and [V6 architecture decisions](adr/V6-ARCHITECTURE-DECISIONS.md).
+
+## August Works V7 configuration admission
+
+V7 booleans share `instance_settings.experimental` and the existing experimental settings GET/PATCH API. `v7-feature-flags.ts` defines default-off flags, effective predecessor dependencies and rollout metadata. Every deployment profile validates the effective settings after Cloud defaults and managed overlays before startup product construction. Invalid administrative patches return HTTP 400 with `V7_FEATURE_DEPENDENCY_INVALID` and dependency issues.
+
+Experimental updates lock the singleton and merge/validate/write within one transaction. The admin route uses that same transaction for all company audit rows, then publishes events after commit. Disable prerequisites together with dependents in one patch; retain canonical state and evidence. These flags reserve future gates and do not prove implementation, qualification or authorization. The [migration map](plans/2026-10-05-aw-v7-migration-map.md) reconciles candidate tables/APIs against V4–V6.
+
+### V7 Readiness and Knowledge Quality
+
+The default-off Readiness page and `/api/companies/:companyId/readiness` APIs assess a specific agent, subject and action. Internal drafts may carry advisory knowledge gaps; external/material actions require current approved Foundation and governance evidence. Purpose-sensitive actions require explicit purpose evidence. Thirteen dimensions remain separate; no aggregate score grants permission. Assessments are immutable snapshots, scoped to their requesting principal, and expire. Findings can be resolved only against a current successful assessment of the same subject/action. System criteria remain mandatory when company criteria are added.
+
+### V7 Foundation discovery (experimental)
+
+With `foundation_bootstrap_v7` effectively enabled, company discovery uses an existing assigned Task to analyze authorized Context evidence. Bootstrap candidates remain private to the requesting human and selected worker until explicit draft/proposal creation. Every claim is source-linked; current source permissions, versions and sensitivity are checked again before publication. Discovery never approves Foundation. Human answers resume the canonical Task through normal runtime dispatch, with normal task recovery available if dispatch fails.
+
+### V7 cognitive provider seam (experimental)
+
+`cognitive_memory_v7` adds governed-only, company/binding/purpose-scoped ranking alongside V4 Memory. Provider results must identify current authorized AW Memory versions; generated provider content cannot replace canonical records. Local/no-op providers are stateless. Private projection requires explicit binding consent, verified accepted Memory and the owning agent. Provider configuration is restricted to current company administrators. Privacy invalidation is independent of feature flags and remains effective after disabling cognitive retrieval.
+
+### V7 derived observations and models (experimental)
+
+Observations cite accepted shared Memory roots; candidates need independent trusted support and human review. Mental models are derived extractive views with preserved versions and explicit purposes. They never substitute for Foundation authority. Leased rebuild jobs run through the existing Memory worker and require new review before activation. Current source versions, scopes, purpose, retention and authorization control retrieval. Correction/revocation invalidates derived influence; erasure scrubs all derived versions independent of flags and propagates through Context root lineage and existing runtime-payload guards.
+
+### V7 Organizational Learning core (experimental)
+
+Learning cycles pin shared Memory and completed canonical Task outcome versions. Each bounded cycle contains explicit hypotheses, a current domain baseline, a content-hashed challenger, protected invariants, minimum evidence, quality floors and rollback paths. The initial comparison method is attributable human review over distinct paired Task outcomes; it records association and limitations, never causal or automatic production-success claims. Correctness, safety, policy, business quality and reliability precede latency and cost.
+
+Passing comparisons can create existing Foundation proposals, Skill challengers, Playbook proposals and Roadmap proposals. Native domain approval/evaluation remains required. Minimal typed policy proposals cover Project Roadmap and company Readiness rules; accepting them requires current native authority and explicit acknowledgement of governance effects. Company/system rules remain governed by their normal owners. Workflow/Optimizer, Role Pack and package adapters are subsequent integration slices, not implied by this core.
+
+Every domain candidate retains Learning root lineage. Native document acceptance/publication, Skill promotion and planning acceptance reject stale evidence through database guards. Derived document/Skill descendants inherit lineage. Current human authorization and company/project boundaries apply to reads and writes. Memory correction, revocation and deletion invalidate candidates independently of flags; erasure scrubs Learning prose, evaluations, domain proposal bodies and accepted derived document/Skill versions. Late restored writes into Learning payloads, proposals, document caches and Foundation sections are scrubbed. The `/memory/learning` interface supports company cycles and a guided Foundation hypothesis/comparison/proposal path.
+
+V7 Learning can route supported changes into native Workflow drafts, Role Pack versions and already replayed Optimizer candidates. Live owned Task workers may propose hypotheses; human evaluation and native qualification remain required. Cycle closure observes native current promotion receipts and does not trust model-declared success. Learned Foundation and runtime procedure consumption retains original Memory roots for erasure and reauthorization.

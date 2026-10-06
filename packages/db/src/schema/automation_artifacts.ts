@@ -214,7 +214,7 @@ export const automationArtifactVersions = pgTable(
     ),
     check(
       "automation_artifact_versions_source_size_check",
-      sql`char_length(${table.sourceCode}) between 1 and 1000000`,
+      sql`char_length(${table.sourceCode}) between 0 and 1000000`,
     ),
     check(
       "automation_artifact_versions_creator_check",

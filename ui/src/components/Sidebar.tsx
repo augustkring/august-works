@@ -1,4 +1,4 @@
-import { v5FeatureEnabled } from "@paperclipai/shared";
+import { v5FeatureEnabled, v7FeatureEnabled } from "@paperclipai/shared";
 import {
   Inbox,
   ListChecks,
@@ -178,6 +178,11 @@ export function Sidebar({ children }: { children?: ReactNode }) {
             icon={LayoutDashboard}
             liveCount={liveRunCount}
           />
+          {v7FeatureEnabled(experimentalSettings ?? {}, "foundation_bootstrap_v7") && <SidebarNavItem to="/foundation/discovery" label="Company discovery" icon={BookOpen} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "readiness_engine_v7") && <SidebarNavItem to="/readiness" label="Readiness" icon={ShieldCheck} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "cognitive_memory_v7") && <SidebarNavItem to="/memory/cognitive" label="Cognitive providers" icon={Brain} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "memory_observations_v7") && <SidebarNavItem to="/memory/intelligence" label="Derived intelligence" icon={Brain} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "learning_engine_v7") && <SidebarNavItem to="/memory/learning" label="Organizational Learning" icon={Brain} />}
           {showFoundation ? <SidebarNavItem to="/foundation" label="Foundation" icon={BookOpen} /> : null}
           {v5FeatureEnabled(experimentalSettings ?? {}, "playbooks_v5") && <SidebarNavItem to="/playbooks" label="Playbooks" icon={BookOpen} />}
           {v5FeatureEnabled(experimentalSettings ?? {}, "agent_identities_v5") && <SidebarNavItem to="/runtime" label="Agent runtime" icon={Network} />}
@@ -220,6 +225,11 @@ export function Sidebar({ children }: { children?: ReactNode }) {
         <SidebarSection label="Work" collapsible={{ open: workOpen, onOpenChange: setWorkOpen }}>
           <SidebarNavItem to="/issues" label="Tasks" icon={CircleCheck} />
           <SidebarNavItem to="/routines" label="Routines" icon={Repeat} />
+          {v7FeatureEnabled(experimentalSettings ?? {}, "orchestration_v7") && <SidebarNavItem to="/orchestration" label="Orchestration" icon={Network} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "ai_use_cases_v7") && <SidebarNavItem to="/ai-governance" label="AI Governance" icon={BookOpen} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "enterprise_identity_v7") && <SidebarNavItem to="/company/settings/enterprise" label="Enterprise" icon={BookOpen} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "security_event_export_v7") && <SidebarNavItem to="/company/settings/security-events" label="Security event export" icon={BookOpen} />}
+          {v7FeatureEnabled(experimentalSettings ?? {}, "work_signals_v7") && <SidebarNavItem to="/work-signals" label="Work Signals" icon={Network} />}
           {showWorkflows ? <SidebarNavItem to="/workflows" label="Workflows" icon={GitBranch} /> : null}
           {experimentalSettings?.enableAutomationArtifactsV1 === true ? <SidebarNavItem to="/automation-artifacts" label="Automation Artifacts" icon={GitBranch} /> : null}
           {showPipelines ? (
@@ -266,6 +276,9 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           <>
             <div className={primarySidebarStyles.group}>
               {showMemory ? <SidebarNavItem to="/memory" label="Memory" icon={Brain} /> : null}
+              {v7FeatureEnabled(experimentalSettings ?? {}, "cognitive_memory_v7") ? <SidebarNavItem to="/memory/cognitive" label="Cognitive providers" icon={Brain} /> : null}
+              {v7FeatureEnabled(experimentalSettings ?? {}, "memory_observations_v7") ? <SidebarNavItem to="/memory/intelligence" label="Derived intelligence" icon={Brain} /> : null}
+              {v7FeatureEnabled(experimentalSettings ?? {}, "learning_engine_v7") ? <SidebarNavItem to="/memory/learning" label="Organizational Learning" icon={Brain} /> : null}
               <SidebarNavItem to="/apps" label="Connections" icon={Unplug} />
               <SidebarNavItem to="/governance" label="Governance" icon={ShieldCheck} />
             </div>

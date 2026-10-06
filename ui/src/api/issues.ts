@@ -35,7 +35,7 @@ import type {
   UpsertIssueWatchdog,
   UpsertIssueDocument,
 } from "@paperclipai/shared";
-import { api, ApiError, type RequestOptions } from "./client";
+import { api as defaultApi, ApiError, type RequestOptions } from "./client";
 import { CommentSubmissionUnknownError } from "../lib/comment-submit-result";
 
 function hasCommentReceipt(value: unknown): boolean {
@@ -158,7 +158,8 @@ function issueListSearchParams(filters?: IssueListFilters) {
   return params;
 }
 
-export const issuesApi = {
+export function createIssuesApi(api: typeof defaultApi = defaultApi) {
+  const issuesApi = {
   /** Fetch every page for bounded task-detail relations, not just the default first page. */
   listAll: async (companyId: string, filters: Omit<IssueListFilters, "limit" | "offset" | "sortField" | "sortDir" | "afterId" | "attention">, options?: RequestOptions): Promise<Issue[]> => {
     const pageSize = 500;
@@ -607,3 +608,7 @@ export const issuesApi = {
   deleteWorkProduct: (id: string) =>
     api.delete<IssueWorkProduct>(`/work-products/${id}`),
 };
+  return issuesApi;
+}
+
+export const issuesApi = createIssuesApi();

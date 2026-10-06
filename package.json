@@ -95,7 +95,9 @@
     "migrate:aw-v4:reconcile": "pnpm run preflight:workspace-links && tsx scripts/reconcile-aw-v4-migrations.ts",
     "check:aw-v4-pilot-readiness": "node scripts/check-aw-v4-pilot-readiness.mjs",
     "verify:aw-v4-pilot-readiness": "node scripts/check-aw-v4-pilot-readiness.mjs --require-evidence",
-    "test:aw-v4-pilot-readiness": "node --test scripts/check-aw-v4-pilot-readiness.test.mjs"
+    "test:aw-v4-pilot-readiness": "node --test scripts/check-aw-v4-pilot-readiness.test.mjs",
+    "check:aw-v7-pilot-readiness": "node scripts/check-aw-v7-pilot-readiness.mjs",
+    "test:aw-v7-pilot-readiness": "node --test scripts/check-aw-v7-pilot-readiness.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -123,7 +125,8 @@
       "@chat-adapter/discord@4.39.0": "patches/@chat-adapter__discord@4.39.0.patch",
       "@chat-adapter/github@4.39.0": "patches/@chat-adapter__github@4.39.0.patch",
       "@discordjs/ws@1.2.3": "patches/@discordjs__ws@1.2.3.patch",
-      "postgres@3.4.9": "patches/postgres@3.4.9.patch"
+      "postgres@3.4.9": "patches/postgres@3.4.9.patch",
+      "@better-auth/scim@1.7.2": "patches/@better-auth__scim@1.7.2.patch"
     },
     "overrides": {
       "@agentclientprotocol/codex-acp@1.6.2>@openai/codex": "0.156.0",

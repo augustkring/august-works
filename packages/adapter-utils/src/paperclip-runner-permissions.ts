@@ -1,5 +1,5 @@
 export type PaperclipRunnerProvider =
-  "codex" | "opencode" | "claude_managed" | "aws_agentcore" | "acpx";
+  "codex" | "opencode" | "claude_managed" | "aws_agentcore" | "acpx" | "aw_text_only";
 
 export type CodexPermissionMode = "never" | "on-request" | "untrusted";
 export type OpenCodePermissionMode = "allow" | "ask" | "deny";
@@ -35,7 +35,7 @@ export type PaperclipRunnerPermissionCapability =
     }
   | {
       configurable: false;
-      defaultMode: "provider-managed";
+      defaultMode: "provider-managed" | "controller-managed";
       options: readonly [];
       description: string;
     };
@@ -46,6 +46,12 @@ export type PaperclipRunnerPermissionCapability =
  * boundary; this catalog must remain browser-safe.
  */
 export const PAPERCLIP_RUNNER_PERMISSION_CAPABILITIES = {
+  aw_text_only: {
+    configurable: false,
+    defaultMode: "controller-managed",
+    options: [],
+    description: "Produces one internal draft for review under current company permissions and the plan's model and tool budgets.",
+  },
   codex: {
     configurable: true,
     configKey: "codexPermissionMode",
@@ -147,14 +153,15 @@ export function isPaperclipRunnerProvider(
     value === "opencode" ||
     value === "claude_managed" ||
     value === "aws_agentcore" ||
-    value === "acpx"
+    value === "acpx" ||
+    value === "aw_text_only"
   );
 }
 
 export function resolvePaperclipRunnerPermissionMode(
   provider: PaperclipRunnerProvider,
   value: unknown,
-): PaperclipRunnerPermissionMode | "provider-managed" {
+): PaperclipRunnerPermissionMode | "provider-managed" | "controller-managed" {
   const capability = PAPERCLIP_RUNNER_PERMISSION_CAPABILITIES[provider];
   if (!capability.configurable) return capability.defaultMode;
   return capability.options.some((option) => option.value === value)

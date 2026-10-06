@@ -1,3 +1,6 @@
+import { SecurityEvents } from "./pages/SecurityEvents";
+import { Enterprise } from "./pages/Enterprise";
+import { AgentPackages } from "./pages/AgentPackages";
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
 import { Playbooks } from "./pages/Playbooks";
@@ -52,6 +55,15 @@ import { AgentChat } from "./pages/AgentChat";
 import { IssueChatLongThreadPerf } from "./pages/IssueChatLongThreadPerf";
 import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
+import { Readiness } from "./pages/Readiness";
+import { DerivedMemory } from "./pages/DerivedMemory";
+import { Orchestration } from "./pages/Orchestration";
+import { AIGovernance } from "./pages/AIGovernance";
+import { WorkSignals } from "./pages/WorkSignals";
+import { OrganizationalLearning } from "./pages/OrganizationalLearning";
+import { CognitiveMemory } from "./pages/CognitiveMemory";
+import { FoundationBootstrap } from "./pages/FoundationBootstrap";
+import { V7FeatureGate } from "./components/V7FeatureGate";
 import { Memory } from "./pages/Memory";
 import { Governance } from "./pages/Governance";
 import { Workflows } from "./pages/Workflows";
@@ -188,6 +200,8 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="onboarding" element={<OnboardingRoutePage />} />
       <Route path="companies" element={<Companies />} />
       <Route path="company/settings" element={<CompanySettings />} />
+      <Route path="company/settings/enterprise" element={<V7FeatureGate feature="enterprise_identity_v7"><Enterprise /></V7FeatureGate>} />
+      <Route path="company/settings/security-events" element={<V7FeatureGate feature="security_event_export_v7"><SecurityEvents /></V7FeatureGate>} />
       <Route path="company/settings/billing" element={<SaasBillingPage />} />
       <Route path="company/settings/runtime" element={<SaasRuntimesPage />} />
       <Route path="company/settings/support" element={<SaasSupportPage />} />
@@ -357,6 +371,9 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       {import.meta.env.DEV ? (
         <Route path="tests/perf/long-thread" element={<IssueChatLongThreadPerf />} />
       ) : null}
+      <Route path="foundation/discovery" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
+      <Route path="foundation/discovery/:bootstrapRunId" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
+      <Route path="readiness" element={<V7FeatureGate feature="readiness_engine_v7"><Readiness /></V7FeatureGate>} />
       <Route
         path="foundation"
         element={<FoundationExperimentalGate><Foundation /></FoundationExperimentalGate>}
@@ -369,6 +386,13 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
         path="memory"
         element={<MemoryExperimentalGate><Memory /></MemoryExperimentalGate>}
       />
+      <Route path="memory/intelligence" element={<V7FeatureGate feature="memory_observations_v7"><DerivedMemory /></V7FeatureGate>} />
+      <Route path="orchestration" element={<V7FeatureGate feature="orchestration_v7"><Orchestration /></V7FeatureGate>} />
+      <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><AgentPackages /></V7FeatureGate>} />
+      <Route path="ai-governance" element={<V7FeatureGate feature="ai_use_cases_v7"><AIGovernance /></V7FeatureGate>} />
+      <Route path="work-signals" element={<V7FeatureGate feature="work_signals_v7"><WorkSignals /></V7FeatureGate>} />
+      <Route path="memory/learning" element={<V7FeatureGate feature="learning_engine_v7"><OrganizationalLearning /></V7FeatureGate>} />
+      <Route path="memory/cognitive" element={<V7FeatureGate feature="cognitive_memory_v7"><CognitiveMemory /></V7FeatureGate>} />
       <Route
         path="memory/:recordId"
         element={<MemoryExperimentalGate><Memory /></MemoryExperimentalGate>}
@@ -851,6 +875,8 @@ export function App() {
           <Route path="instance" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings/*" element={<LegacySettingsRedirect />} />
+          <Route path="company/settings/enterprise" element={<UnprefixedBoardRedirect />} />
+          <Route path="company/settings/security-events" element={<UnprefixedBoardRedirect />} />
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
           <Route path="overview" element={<UnprefixedBoardRedirect />} />
           <Route path="work" element={<UnprefixedBoardRedirect />} />
@@ -862,6 +888,11 @@ export function App() {
           <Route path="routines" element={<UnprefixedBoardRedirect />} />
           <Route path="routines/:routineId" element={<UnprefixedBoardRedirect />} />
           <Route path="review-queue" element={<UnprefixedBoardRedirect />} />
+          <Route path="readiness" element={<UnprefixedBoardRedirect />} />
+          <Route path="orchestration" element={<UnprefixedBoardRedirect />} />
+          <Route path="work-signals" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/packages" element={<UnprefixedBoardRedirect />} />
+          <Route path="ai-governance" element={<UnprefixedBoardRedirect />} />
           <Route path="learnings" element={<UnprefixedBoardRedirect />} />
           <Route path="cases" element={<UnprefixedBoardRedirect />} />
           <Route path="cases/:caseIdentifier" element={<UnprefixedBoardRedirect />} />

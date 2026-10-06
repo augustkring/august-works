@@ -42,7 +42,7 @@ export interface InstanceGeneralSettings {
   executionMode?: InstanceExecutionMode;
 }
 
-export interface InstanceExperimentalSettings extends V5FeatureFlags, Partial<import("../v6-feature-flags.js").V6FeatureFlags> {
+export interface InstanceExperimentalSettings extends V5FeatureFlags, Partial<import("../v6-feature-flags.js").V6FeatureFlags>, Partial<import("../v7-feature-flags.js").V7FeatureFlags> {
   enableEnvironments: boolean;
   /**
    * Exposes the experimental Paperclip Runner adapter for new selections.

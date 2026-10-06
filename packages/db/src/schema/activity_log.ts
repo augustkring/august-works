@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, index, unique } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
@@ -20,6 +20,7 @@ export const activityLog = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    companyIdUnique: unique("activity_log_company_id_uq").on(table.companyId, table.id),
     companyCreatedIdx: index("activity_log_company_created_idx").on(table.companyId, table.createdAt),
     companyAgentCreatedIdx: index("activity_log_company_agent_created_idx").on(
       table.companyId,

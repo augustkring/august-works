@@ -636,6 +636,8 @@ export function CompanyExport() {
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
   });
+  const exportScope = useRef({companyId:selectedCompanyId,userId:session?.user.id});
+  exportScope.current = {companyId:selectedCompanyId,userId:session?.user.id};
   const { data: agents = [] } = useQuery({
     queryKey: queryKeys.agents.list(selectedCompanyId!),
     queryFn: () => agentsApi.list(selectedCompanyId!),
@@ -652,6 +654,7 @@ export function CompanyExport() {
     enabled: !!selectedCompanyId,
   });
 
+  const [includeV7State, setIncludeV7State] = useState(false);
   const [exportData, setExportData] = useState<CompanyPortabilityExportPreviewResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
@@ -799,13 +802,19 @@ export function CompanyExport() {
   }
 
   const downloadMutation = useMutation({
-    mutationFn: () =>
-      companiesApi.exportBundle(selectedCompanyId!, {
+    mutationFn: async () => {
+      const captured={...exportScope.current};
+      const result=await companiesApi.exportBundle(selectedCompanyId!, {
         include: { company: true, agents: true, projects: true, issues: includeIssues, skills: categories.skills },
+        includeV7State,
+        ...(includeV7State ? {expectedUserId:captured.userId} : {}),
         selectedFiles: Array.from(checkedFiles).sort(),
         sidebarOrder,
-      }),
-    onSuccess: (result) => {
+      });
+      return {captured,result};
+    },
+    onSuccess: ({captured,result}) => {
+      if(captured.companyId!==exportScope.current.companyId || captured.userId!==exportScope.current.userId) return;
       const resultCheckedFiles = new Set(Object.keys(result.files));
       downloadZip(result, resultCheckedFiles, result.files);
       pushToast({
@@ -828,6 +837,7 @@ export function CompanyExport() {
     if (previewCompanyIdRef.current !== selectedCompanyId) {
       previewCompanyIdRef.current = selectedCompanyId;
       setExportData(null);
+      setIncludeV7State(false);
       setSelectedFile(null);
     }
     startPreviewRequest();
@@ -1142,6 +1152,10 @@ export function CompanyExport() {
         </div>
       )}
 
+      <label className="flex items-center gap-2 px-5 py-3 text-sm">
+        <input type="checkbox" disabled={!session?.user.id} checked={includeV7State} onChange={(e) => setIncludeV7State(e.target.checked)} />
+        Include company V7 state: Foundation, shared Memory, eligible observations and models, Playbooks, Role Packs, package deployments, Workflows and governance. Requires current company ownership; private agent Memory and credentials are excluded.
+      </label>
       {/* Two-column layout */}
       <div className="grid gap-4 xl:h-(--sz-calc-30) xl:grid-cols-(--gtc-25) xl:gap-0">
         <aside className="flex max-h-(--sz-24rem) flex-col overflow-hidden border-b border-border xl:max-h-none xl:border-b-0 xl:border-r">

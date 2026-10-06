@@ -17,6 +17,8 @@ import { accessService } from "../services/access.js";
 import type { heartbeatService } from "../services/heartbeat.js";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
 import { resolveGitHubOperationCredentials } from "../services/github-operation-credentials.js";
+import { workerModelCallSchema } from "@paperclipai/shared";
+import type { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 
 function bearer(req: Request) {
   const value = req.header("authorization") ?? "";
@@ -40,9 +42,28 @@ export { RUNTIME_CONNECTION_TOOL_DEFINITIONS } from "../services/connection-tool
 import { RUNTIME_CONNECTION_TOOL_DEFINITIONS } from "../services/connection-tool-definitions.js";
 
 /** Public, token-authenticated routes mounted before the general actor middleware. */
-export function runtimeConnectionIntentRoutes(db: Db) {
+export function runtimeConnectionIntentRoutes(db: Db, workerModels?: ReturnType<typeof workerModelGateway>) {
   const router = Router();
   const service = connectionIntentService(db);
+
+  router.post("/runtime-tools/model/messages", async (req, res) => {
+    if (req.headers.origin || req.headers.cookie || req.headers["sec-fetch-site"])
+      throw forbidden("Worker model calls require runtime authentication");
+    const claims = verifyRuntimeToolsToken(bearer(req), "worker_model");
+    if (!claims) throw unauthorized("Invalid worker model capability");
+    if (!workerModels) throw forbidden("Worker model transport is not configured");
+    const controller = new AbortController();
+    const cancel = () => { if (!res.writableEnded) controller.abort(); };
+    req.on("aborted", cancel);
+    res.on("close", cancel);
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      res.json(await workerModels.call(claims, workerModelCallSchema.parse(req.body), controller.signal));
+    } finally {
+      req.off("aborted", cancel);
+      res.off("close", cancel);
+    }
+  });
 
   router.post("/runtime-tools/github/credentials", async (req, res) => {
     // This capability is never accepted as board/session authentication.

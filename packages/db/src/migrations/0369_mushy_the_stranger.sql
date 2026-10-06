@@ -1,0 +1,1 @@
+CREATE INDEX "ai_deployment_task_history_idx" ON "ai_use_case_deployments" USING btree ("company_id","issue_id");
