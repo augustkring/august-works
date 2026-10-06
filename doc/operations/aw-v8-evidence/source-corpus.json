@@ -265,7 +265,12 @@
       "lines": 3137,
       "words": 12724,
       "path": "/workspace/attachments/6d9df428-be4f-4b24-8322-e64e3f1b2e84/20_blockchain_smart_contract_engineering_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3137
+      },
+      "applicability": "No blockchain, tokens or smart contracts are required by V8; do not introduce them. Transfer only applicable principles: exact intent and authorization binding, replay domains, key lifecycle and recovery authority, precision/rounding, explicit state invariants, independent state reconciliation and source/build/runtime identity. Signatures and hashes do not prove trust or anonymity; audit, formal scope and operating evidence are distinct. Irreversible effects require literal compensation/recovery rather than fictional rollback."
     },
     {
       "name": "19_agentic_ai_engineering_v2_golden_master.md",
@@ -274,7 +279,12 @@
       "lines": 5048,
       "words": 24035,
       "path": "/workspace/attachments/6f195255-14ae-44b4-94a8-ed5f1d162387/19_agentic_ai_engineering_v2_golden_master.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 5048
+      },
+      "applicability": "Preserve initiator, represented principal, agent and execution identity through native controls. Model output, memory, documents, tool metadata and peer messages do not grant authority. Scope current authorization, approvals to exact actions, aggregate budgets and pre-spend controls; no implicit delegation or self-granted privilege. Durable operation identity, unknown-outcome reconciliation, bounded retries, kill/revocation and privacy-safe evidence remain required. Use existing native workflows and the smallest adequate autonomy; sandbox and hosted qualification require actual boundary evidence. Cross-check with Playbook 18 and distinguish protocol/version source claims from independently verified implementation."
     },
     {
       "name": "21_systems_embedded_real_time_engineering_v2.md",
