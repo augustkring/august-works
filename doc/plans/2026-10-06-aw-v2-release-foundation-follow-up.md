@@ -12,6 +12,9 @@ it does not supersede its product, deployment or release-approval boundaries.
   and fast-copy 4.1.2. Range-scoped overrides cover the transitive copies.
 - Update Svix from 1.76.1 to 1.99.1, removing its UUID 10 dependency without
   forcing a different UUID major into the old parent.
+- Raise the MCP TypeScript SDK from 1.30.0 to 1.31.0 after the new high-severity
+  OAuth credential-routing advisory surfaced in PR CI. The compatible 1.x
+  security floor is reflected in the committed lock.
 - Update Sharp to 0.35.5 and its platform binaries. A fresh audit surfaced
   [GHSA-wq5f-xc86-pv6w](https://github.com/advisories/GHSA-wq5f-xc86-pv6w),
   added to the advisory database after the earlier audit. The installed Linux
@@ -39,6 +42,16 @@ it does not supersede its product, deployment or release-approval boundaries.
 The new production source-lock audit reports **0 critical, 0 high, 2 moderate
 and 2 low** findings, versus the previous 18 moderate and 5 low. No finding
 is suppressed. This is not a built-image scan or evidence of zero vulnerabilities.
+PR CI then found [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h)
+in MCP SDK 1.30.0. After the 1.31.0 update, the local production audit again
+reports 0 critical/high and 2 moderate/2 low. Existing persisted OAuth client
+credentials still require issuer binding or a fresh sign-in before an untrusted
+remote MCP server is admitted; a package update alone does not repair them.
+The updated lock passed a frozen install. MCP-server typecheck, Google Sheets
+MCP tests (27/27), and KV demo MCP tests (12/12) passed. The standalone
+MCP-server suite had 13/14 passing; its create-issue assertion expects no
+`allowDuplicate` field, while the existing implementation sends `false`.
+That test and implementation are outside this change and need reconciliation.
 
 | Residual | Evidence and disposition |
 | --- | --- |

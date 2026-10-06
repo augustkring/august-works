@@ -22,6 +22,7 @@ overrides:
   undici@>=8.0.0 <8.10.2: 8.10.2
   qs@>=6.0.0 <6.16.0: 6.16.0
   body-parser@>=2.0.0 <2.3.0: 2.3.0
+  '@modelcontextprotocol/sdk@>=1.12.0 <1.31.0': 1.31.0
   hono@>=4.0.0 <4.13.13: 4.13.13
   ip-address@>=10.0.0 <10.7.3: 10.7.3
   dompurify@>=3.0.0 <3.4.16: 3.4.16
@@ -194,7 +195,7 @@ importers:
     dependencies:
       '@agentclientprotocol/claude-agent-acp':
         specifier: ^0.73.0
-        version: 0.73.0(patch_hash=riqgguivxjxydoydnzpedjy5au)(@anthropic-ai/sdk@0.121.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))
+        version: 0.73.0(patch_hash=riqgguivxjxydoydnzpedjy5au)(@anthropic-ai/sdk@0.121.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.31.0(zod@4.4.3))
       '@anthropic-ai/sdk':
         specifier: 0.121.0
         version: 0.121.0(zod@4.4.3)
@@ -446,8 +447,8 @@ importers:
   packages/google-sheets-mcp-server:
     dependencies:
       '@modelcontextprotocol/sdk':
-        specifier: ^1.30.0
-        version: 1.30.0(zod@4.4.3)
+        specifier: 1.31.0
+        version: 1.31.0(zod@4.4.3)
       googleapis:
         specifier: ^176.0.0
         version: 176.0.0
@@ -468,8 +469,8 @@ importers:
   packages/kv-demo-mcp-server:
     dependencies:
       '@modelcontextprotocol/sdk':
-        specifier: ^1.30.0
-        version: 1.30.0(zod@4.4.3)
+        specifier: 1.31.0
+        version: 1.31.0(zod@4.4.3)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -487,8 +488,8 @@ importers:
   packages/mcp-server:
     dependencies:
       '@modelcontextprotocol/sdk':
-        specifier: ^1.30.0
-        version: 1.30.0(zod@4.4.3)
+        specifier: 1.31.0
+        version: 1.31.0(zod@4.4.3)
       '@paperclipai/shared':
         specifier: workspace:*
         version: link:../shared
@@ -519,7 +520,7 @@ importers:
     dependencies:
       '@agentclientprotocol/claude-agent-acp':
         specifier: 0.73.0
-        version: 0.73.0(patch_hash=riqgguivxjxydoydnzpedjy5au)(@anthropic-ai/sdk@0.121.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))
+        version: 0.73.0(patch_hash=riqgguivxjxydoydnzpedjy5au)(@anthropic-ai/sdk@0.121.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.31.0(zod@4.4.3))
       '@agentclientprotocol/codex-acp':
         specifier: 1.6.2
         version: 1.6.2(patch_hash=rt7c5otjh4is5hljadvoq7qcem)
@@ -1380,7 +1381,7 @@ packages:
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.93.0'
-      '@modelcontextprotocol/sdk': ^1.29.0
+      '@modelcontextprotocol/sdk': 1.31.0
       zod: ^4.0.0
 
   '@anthropic-ai/sdk@0.121.0':
@@ -3125,8 +3126,8 @@ packages:
     resolution: {integrity: sha512-tEdVCj76gEdgvxoYkBH3li+mr8Tfe94pp1cSOUMQNwOnsuKYvretKMZfAnt9adJCgGzGH2MYZeDDtgwmOBufGQ==}
     engines: {node: '>=20'}
 
-  '@modelcontextprotocol/sdk@1.30.0':
-    resolution: {integrity: sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==}
+  '@modelcontextprotocol/sdk@1.31.0':
+    resolution: {integrity: sha512-UvTMgnNlnIBO/22ob2RcVGDlcvOslQs8T59+FTGdA0L27a39fdGF/EDETNtDVK4DZGpwomlsYpRdA8UXcVL/pw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
@@ -7050,9 +7051,6 @@ packages:
   jose@6.2.10:
     resolution: {integrity: sha512-iiW7J9qRFlGxvCOIBDBDxFePQSn7ZMAnrYGhrrOo6siO/MIqwfyilLR27pkfDgUk+raLuzADS8A3S/KLBisc0g==}
 
-  jose@6.2.8:
-    resolution: {integrity: sha512-Bsdjwm3Qsd/P0jR+BHDe3LytDfY7WBq2HmCCLIwuVRHMuEC9ae7/R474GIUdF1NgCyZjzVo/A9DOiOBtXq8ZoQ==}
-
   joycon@3.1.1:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
     engines: {node: '>=10'}
@@ -9133,10 +9131,10 @@ snapshots:
 
   '@adobe/css-tools@4.5.0': {}
 
-  '@agentclientprotocol/claude-agent-acp@0.73.0(patch_hash=riqgguivxjxydoydnzpedjy5au)(@anthropic-ai/sdk@0.121.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))':
+  '@agentclientprotocol/claude-agent-acp@0.73.0(patch_hash=riqgguivxjxydoydnzpedjy5au)(@anthropic-ai/sdk@0.121.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.31.0(zod@4.4.3))':
     dependencies:
       '@agentclientprotocol/sdk': 1.4.0(zod@4.4.3)
-      '@anthropic-ai/claude-agent-sdk': 0.3.280(@anthropic-ai/sdk@0.121.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
+      '@anthropic-ai/claude-agent-sdk': 0.3.280(@anthropic-ai/sdk@0.121.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.31.0(zod@4.4.3))(zod@4.4.3)
       zod: 4.4.3
     transitivePeerDependencies:
       - '@anthropic-ai/sdk'
@@ -9188,10 +9186,10 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.280':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.280(@anthropic-ai/sdk@0.121.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)':
+  '@anthropic-ai/claude-agent-sdk@0.3.280(@anthropic-ai/sdk@0.121.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.31.0(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.121.0(zod@4.4.3)
-      '@modelcontextprotocol/sdk': 1.30.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.31.0(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
       '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.280
@@ -11173,7 +11171,7 @@ snapshots:
       - debug
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.30.0(zod@4.4.3)':
+  '@modelcontextprotocol/sdk@1.31.0(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 2.1.0(hono@4.13.13)
       ajv: 8.20.0
@@ -11186,7 +11184,7 @@ snapshots:
       express: 5.2.1
       express-rate-limit: 8.6.2(express@5.2.1)
       hono: 4.13.13
-      jose: 6.2.8
+      jose: 6.2.10
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
@@ -14953,8 +14951,6 @@ snapshots:
   jose@5.10.0: {}
 
   jose@6.2.10: {}
-
-  jose@6.2.8: {}
 
   joycon@3.1.1: {}
 
