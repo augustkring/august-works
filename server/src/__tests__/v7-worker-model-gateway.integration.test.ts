@@ -32,6 +32,9 @@ import {
   orchestrationWorkerAttempts,
   orchestrationModelReservations,
   supervisionInterventions,
+  toolInvocations,
+  issueDocuments,
+  documents,
 } from "@paperclipai/db";
 import {
   PROVIDER_CAPABILITY_FEATURES,
@@ -54,6 +57,11 @@ import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { runtimeConnectionIntentRoutes } from "../routes/connection-intents.js";
 import { errorHandler } from "../middleware/index.js";
 import { purgeMemoryRecords } from "../services/memory/memory-privacy.js";
+import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
+import { PaperclipRunnerSemanticAuthority } from "../services/native-runtime/runner-semantic-authority.js";
+import { createAssignedMcpTools } from "../services/native-runtime/assigned-mcp-tools.js";
+import type { ToolGatewayService } from "../services/tool-gateway.js";
+import { withOrchestrationNativeTool } from "../services/orchestration/native-tool-boundary.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -184,7 +192,7 @@ const support = await getEmbeddedPostgresTestSupport();
           requiredOutputs: [{ key: "result" }],
           businessInvariants: ["Use authorized sources only"],
         },
-        budgets: { maxModelCostMinor: 6 },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 2 },
         workers: [{ key: "writer", issueId: task.id }],
       });
       // Private Native fixture setup only. Production launch remains closed for
@@ -334,6 +342,454 @@ const support = await getEmbeddedPostgresTestSupport();
         fetch,
       });
     }
+    function nativeBinding() {
+      return {
+        companyId: f.home,
+        issueId: task.id,
+        agentId: f.presence.id,
+        runId: run.id,
+      };
+    }
+    function nativeTools() {
+      return new PaperclipRunnerToolAuthority(db, nativeBinding());
+    }
+    it("charges assigned-tool catalog search and keeps actual MCP invocation charging at its existing gateway", async () => {
+      let effects = 0;
+      // Private gateway fixture uses the actual Native SQL invocation guard.
+      // It does not establish a live connected-tool or credential qualification.
+      const assigned = await createAssignedMcpTools({
+        gateway: {
+          listToolsForNamedGateway: async () => [
+            {
+              name: "fixture.read",
+              displayName: "Read",
+              description: "Private native charge fixture",
+              risk: "read",
+              parametersSchema: { type: "object", properties: {} },
+            },
+          ],
+          executeTool: async () => {
+            const [receipt] = await db
+              .insert(toolInvocations)
+              .values({
+                companyId: f.home,
+                agentId: f.presence.id,
+                issueId: task.id,
+                runId: run.id,
+                toolName: "fixture.read",
+                riskLevel: "read",
+                status: "executing",
+              })
+              .returning();
+            effects++;
+            await db
+              .update(toolInvocations)
+              .set({ status: "succeeded", completedAt: new Date() })
+              .where(eq(toolInvocations.id, receipt!.id));
+            return { status: "completed", result: { fixture: true } };
+          },
+        } as unknown as ToolGatewayService,
+        gatewayPublicId: "private-budget-fixture",
+        bearerToken: "private-fixture-token",
+      });
+      const authority = new PaperclipRunnerToolAuthority(db, {
+        ...nativeBinding(),
+        assignedMcpTools: assigned,
+      });
+      const catalog = (await authority.execute({
+        tool: "paperclip_search_assigned_tools",
+        callId: "catalog-native-budget",
+        arguments: { query: "" },
+      })) as { tools: Array<{ name: string }> };
+      expect(catalog.tools).toHaveLength(1);
+      await authority.execute({
+        tool: catalog.tools[0]!.name,
+        callId: "mcp-native-budget",
+        arguments: {},
+      });
+      expect(effects).toBe(1);
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0],
+      ).toMatchObject({ toolActionsUsed: 2, status: "running" });
+      expect(
+        await db
+          .select()
+          .from(toolInvocations)
+          .where(eq(toolInvocations.runId, run.id)),
+      ).toHaveLength(2);
+      await expect(
+        authority.execute({
+          tool: catalog.tools[0]!.name,
+          callId: "mcp-native-exhausted",
+          arguments: {},
+        }),
+      ).rejects.toThrow();
+      expect(effects).toBe(1);
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0],
+      ).toMatchObject({ toolActionsUsed: 2, status: "paused" });
+    });
+    it("shares one tool ceiling across both Native protocol authority paths", async () => {
+      await db
+        .update(issues)
+        .set({ status: "in_progress" })
+        .where(eq(issues.id, task.id));
+      await nativeTools().execute({
+        tool: "get_task_context",
+        callId: "main-native-path",
+        arguments: {},
+      });
+      const semantic = new PaperclipRunnerSemanticAuthority(
+        db,
+        nativeBinding(),
+      );
+      expect(
+        await semantic.dispatch({
+          operationId: "get_task_history",
+          callId: "coordinator-native-path",
+          input: {},
+          correlation: {
+            runId: run.id,
+            normalizedSessionId: `session_${run.id}`,
+            turnId: "turn-budget",
+            itemId: "item-budget",
+          },
+        }),
+      ).toMatchObject({ ok: true });
+      await expect(
+        semantic.dispatch({
+          operationId: "list_documents",
+          callId: "coordinator-exhausted",
+          input: {},
+          correlation: {
+            runId: run.id,
+            normalizedSessionId: `session_${run.id}`,
+            turnId: "turn-budget",
+            itemId: "item-budget",
+          },
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0],
+      ).toMatchObject({ toolActionsUsed: 2, status: "paused" });
+      expect(
+        await db
+          .select()
+          .from(toolInvocations)
+          .where(eq(toolInvocations.runId, run.id)),
+      ).toHaveLength(2);
+    });
+    it("charges actual Native Task read/write dispatch before effect and stops at the shared tool ceiling", async () => {
+      const authority = nativeTools();
+      expect(
+        await authority.execute({
+          tool: "get_task_context",
+          callId: "native-context",
+          arguments: {},
+        }),
+      ).toMatchObject({ activeTask: { id: task.id } });
+      await authority.execute({
+        tool: "write_document",
+        callId: "native-draft",
+        arguments: {
+          key: "result",
+          title: "Bounded draft",
+          body: "Authorized unverified draft",
+          baseRevisionId: null,
+          idempotencyKey: "native-draft-write",
+        },
+      });
+      const [saved] = await db
+        .select({ document: documents })
+        .from(issueDocuments)
+        .innerJoin(documents, eq(documents.id, issueDocuments.documentId))
+        .where(
+          and(
+            eq(issueDocuments.companyId, f.home),
+            eq(issueDocuments.issueId, task.id),
+            eq(issueDocuments.key, "result"),
+          ),
+        );
+      expect(saved?.document.latestBody).toBe("Authorized unverified draft");
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0],
+      ).toMatchObject({ toolActionsUsed: 2, status: "running" });
+      await expect(
+        authority.execute({
+          tool: "get_task_history",
+          callId: "native-exhausted",
+          arguments: {},
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0],
+      ).toMatchObject({ toolActionsUsed: 2, status: "paused" });
+      expect(
+        await db
+          .select()
+          .from(supervisionInterventions)
+          .where(eq(supervisionInterventions.planId, plan.id)),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reasonCode: "native_tool_budget_exhausted",
+          }),
+        ]),
+      );
+      const receipts = await db
+        .select()
+        .from(toolInvocations)
+        .where(eq(toolInvocations.runId, run.id));
+      expect(receipts).toHaveLength(2);
+      expect(receipts.every((r) => r.status === "succeeded")).toBe(true);
+      expect(JSON.stringify(receipts)).not.toContain(
+        "Authorized unverified draft",
+      );
+      expect(
+        (await db.select().from(issues).where(eq(issues.id, task.id)))[0]
+          ?.status,
+      ).toBe("todo");
+    });
+    it("deduplicates concurrent Native protocol calls and refuses changed or completed dispatch identities", async () => {
+      const call = {
+        tool: "get_task_context",
+        callId: "native-duplicate",
+        arguments: {},
+      };
+      const outcomes = await Promise.allSettled([
+        nativeTools().execute(call),
+        nativeTools().execute(call),
+      ]);
+      expect(outcomes.filter((o) => o.status === "fulfilled")).toHaveLength(1);
+      expect(outcomes.filter((o) => o.status === "rejected")).toHaveLength(1);
+      await expect(nativeTools().execute(call)).rejects.toMatchObject({
+        status: 409,
+      });
+      await expect(
+        nativeTools().execute({ ...call, arguments: { changed: true } }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0],
+      ).toMatchObject({ toolActionsUsed: 1, status: "running" });
+    });
+    it("keeps unknown/material Native API paths and undeclared document keys outside the draft qualification", async () => {
+      for (const tool of [
+        "call_api",
+        "hire_agent",
+        "reassign_task",
+        "create_project",
+        "create_skill",
+        "connections_search",
+      ]) {
+        await expect(
+          nativeTools().execute({ tool, callId: tool, arguments: {} }),
+        ).rejects.toMatchObject({ status: 403 });
+      }
+      await expect(
+        nativeTools().execute({
+          tool: "write_document",
+          callId: "undeclared-output",
+          arguments: { key: "plan", body: "Do not rewrite accepted authority" },
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(
+        await db
+          .select()
+          .from(toolInvocations)
+          .where(eq(toolInvocations.runId, run.id)),
+      ).toHaveLength(0);
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0]?.toolActionsUsed,
+      ).toBe(0);
+    });
+    it.each([
+      "pause",
+      "membership",
+      "stop",
+      "flag",
+      "identity",
+      "company",
+      "attempt",
+    ])(
+      "fences Native Task tools before dispatch after %s changes",
+      async (reason) => {
+        if (reason === "pause")
+          await db
+            .update(orchestrationPlans)
+            .set({ status: "paused" })
+            .where(eq(orchestrationPlans.id, plan.id));
+        if (reason === "membership")
+          await db
+            .delete(companyMemberships)
+            .where(
+              and(
+                eq(companyMemberships.companyId, f.home),
+                eq(companyMemberships.principalId, f.userId),
+              ),
+            );
+        if (reason === "stop")
+          await db
+            .update(heartbeatRuns)
+            .set({
+              resultJson: { executionCancellation: { state: "requested" } },
+            })
+            .where(eq(heartbeatRuns.id, run.id));
+        if (reason === "flag")
+          await instanceSettingsService(db).updateExperimental({
+            orchestration_v7: false,
+          });
+        if (reason === "identity")
+          await db
+            .update(agentIdentities)
+            .set({ status: "paused" })
+            .where(eq(agentIdentities.id, f.identity.id));
+        if (reason === "company")
+          await db
+            .update(companies)
+            .set({ status: "paused" })
+            .where(eq(companies.id, f.home));
+        if (reason === "attempt")
+          await db
+            .update(orchestrationWorkerAttempts)
+            .set({ status: "cancelled", finishedAt: new Date() })
+            .where(eq(orchestrationWorkerAttempts.id, binding.workerAttemptId));
+        await expect(
+          nativeTools().execute({
+            tool: "get_task_context",
+            callId: "revoked-native-context",
+            arguments: {},
+          }),
+        ).rejects.toMatchObject({ status: reason === "flag" ? 404 : 403 });
+        expect(
+          await db
+            .select()
+            .from(toolInvocations)
+            .where(eq(toolInvocations.runId, run.id)),
+        ).toHaveLength(0);
+      },
+    );
+    it("retains a Native tool debit and does not resend an ambiguous side effect", async () => {
+      let effects = 0;
+      const call = {
+        tool: "report_progress",
+        callId: "ambiguous-native-effect",
+        arguments: {
+          body: "Private unretained fixture",
+          idempotencyKey: "private-effect",
+        },
+      };
+      await expect(
+        withOrchestrationNativeTool(db, nativeBinding(), call, async () => {
+          effects++;
+          throw new Error("private fixture transport failure");
+        }),
+      ).rejects.toThrow("private fixture transport failure");
+      expect(effects).toBe(1);
+      const [receipt] = await db
+        .select()
+        .from(toolInvocations)
+        .where(eq(toolInvocations.runId, run.id));
+      expect(receipt).toMatchObject({
+        status: "failed",
+        errorCode: "native_tool_result_unsettled",
+        errorMessage: null,
+      });
+      expect(JSON.stringify(receipt)).not.toContain(
+        "Private unretained fixture",
+      );
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0],
+      ).toMatchObject({ toolActionsUsed: 1, status: "paused" });
+      await expect(
+        withOrchestrationNativeTool(db, nativeBinding(), call, async () => {
+          effects++;
+          return {};
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(effects).toBe(1);
+    });
+    it("withholds Native read output after membership changes during dispatch without retaining source bodies", async () => {
+      await expect(
+        withOrchestrationNativeTool(
+          db,
+          nativeBinding(),
+          {
+            tool: "get_task_context",
+            callId: "native-revoked-during-read",
+            arguments: {},
+          },
+          async () => {
+            await db
+              .delete(companyMemberships)
+              .where(
+                and(
+                  eq(companyMemberships.companyId, f.home),
+                  eq(companyMemberships.principalId, f.userId),
+                ),
+              );
+            return { privateSource: "Never return this revoked fixture body" };
+          },
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+      const [receipt] = await db
+        .select()
+        .from(toolInvocations)
+        .where(eq(toolInvocations.runId, run.id));
+      expect(receipt).toMatchObject({
+        status: "failed",
+        resultHash: null,
+        errorMessage: null,
+      });
+      expect(JSON.stringify(receipt)).not.toContain("Never return");
+      expect(
+        (
+          await db
+            .select()
+            .from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, plan.id))
+        )[0],
+      ).toMatchObject({ status: "paused", toolActionsUsed: 1 });
+    });
     it("reserves before actual transport, keeps the encrypted key private and leaves completion to Native verification", async () => {
       const result = await gateway().call(claims, input());
       expect(result).toMatchObject({
@@ -585,14 +1041,12 @@ const support = await getEmbeddedPostgresTestSupport();
         .select()
         .from(agentExecutionManifests)
         .where(eq(agentExecutionManifests.id, binding.executionManifestId));
-      await db
-        .insert(contextManifestMemoryRoots)
-        .values({
-          companyId: f.home,
-          manifestId: manifest!.contextManifestId,
-          memoryRecordId: record!.id,
-          sourceVersion: record!.updatedAt.toISOString(),
-        });
+      await db.insert(contextManifestMemoryRoots).values({
+        companyId: f.home,
+        manifestId: manifest!.contextManifestId,
+        memoryRecordId: record!.id,
+        sourceVersion: record!.updatedAt.toISOString(),
+      });
       duringCall = () =>
         db.transaction((tx) =>
           purgeMemoryRecords(tx as unknown as typeof db, f.home, [record!.id]),

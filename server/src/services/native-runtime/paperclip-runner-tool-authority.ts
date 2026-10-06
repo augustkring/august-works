@@ -1,4 +1,5 @@
 import { publicChatTaskUrl } from "../chat-task-url.js";
+import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent } from "../orchestration/native-tool-boundary.js";
 import type { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
 import { authorizationService } from "../authorization.js";
@@ -237,6 +238,12 @@ export class PaperclipRunnerToolAuthority {
     callId: string;
     arguments: unknown;
   }): Promise<unknown> {
+    return withOrchestrationNativeTool(this.db, this.binding, call,
+      () => this.#executeAdmitted(call),
+      call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false));
+  }
+
+  async #executeAdmitted(call: { tool: string; callId: string; arguments: unknown }): Promise<unknown> {
     if (this.binding.nativeReview) {
       if (call.tool === "resolve_review") return this.#resolveReview(call.arguments);
       if (!NATIVE_REVIEW_READ_TOOLS.has(call.tool)) {
@@ -1498,6 +1505,9 @@ export class PaperclipRunnerToolAuthority {
     issue: typeof issues.$inferSelect;
     actor: typeof agents.$inferSelect;
   }> {
+    // Bounded plans use the same order as reservation, supervision and Stop.
+    // Ordinary native runs retain their existing Task/run mutation behavior.
+    const bounded = await lockNativeToolPlan(tx, this.binding);
     // Match identity activation and queue mutations before locking the run.
     await tx.select({ id: issues.id }).from(issues).where(and(
       eq(issues.id, this.binding.issueId), eq(issues.companyId, this.binding.companyId),
@@ -1539,6 +1549,7 @@ export class PaperclipRunnerToolAuthority {
     ) {
       throw new Error("paperclip_runner_tool_binding_not_authorized");
     }
+    if (bounded) await assertNativeToolPlanCurrent(tx, this.binding, true);
     return context;
   }
 

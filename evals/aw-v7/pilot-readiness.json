@@ -19,7 +19,8 @@
       "id": "pre_spend_model_reservation",
       "wave": 7,
       "status": "incomplete",
-      "source": "server/src/services/orchestration/orchestration-admission.ts"
+      "source": "server/src/services/orchestration/orchestration-admission.ts",
+      "verificationScope": "Native reservation primitive, read-only consumers, private worker HTTP gateway and Native Task tool accounting verified locally; capped worker launch remains closed until every model request is forced through the qualified transport"
     },
     {
       "id": "automated_read_only_semantic_consumer",
@@ -83,6 +84,8 @@
     "server/src/__tests__/v7-portability.integration.test.ts",
     "server/src/__tests__/v7-read-only-model-verifier.integration.test.ts",
     "server/src/__tests__/v7-read-only-model-transport.test.ts",
-    "server/src/__tests__/v7-model-reservations.integration.test.ts"
+    "server/src/__tests__/v7-model-reservations.integration.test.ts",
+    "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+    "server/src/__tests__/v7-worker-model-profiles.test.ts"
   ]
 }
