@@ -153,7 +153,12 @@
       "lines": 3990,
       "words": 18062,
       "path": "/workspace/attachments/c47c5fac-2745-4432-b484-32a868c80ba9/10_devops_cicd_release_platform_supply_chain_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3990
+      },
+      "applicability": "Preserve immutable source, artifact, workflow, configuration and evidence identity through release lineage. Distinguish tests, provenance, signatures, SBOM, vulnerability context and authorized consumer policy; model unavailable gates explicitly. Keep credentials outside untrusted build inputs, use state-compatible migration/recovery and verify actual runtime. Optional provider images require pinned independent supply-chain qualification; local CI and AI self-review do not authorize hosted promotion."
     },
     {
       "name": "12_data_database_storage_engineering_v2_golden_master.md",
@@ -176,7 +181,12 @@
       "lines": 3666,
       "words": 14059,
       "path": "/workspace/attachments/c38827a6-45bb-46cc-9377-ea75551319e5/11_maintenance_evolution_migration_technical_debt_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3666
+      },
+      "applicability": "Preserve protected behavior and one fact authority through every intermediate migration state. Compatibility covers supported producer, consumer, persisted state, replay, authorization and temporal semantics; successful backfill execution needs independent reconciliation. Use bounded resumable migrations with explicit late-write handling, state-dependent recovery and eventual transitional cleanup. Resolve privacy retention/deletion and resource/identity closure; modernization labels, green tests and universal debt scores do not establish correct outcomes."
     },
     {
       "name": "13_api_integration_distributed_systems_engineering_v2_golden_master.md",
