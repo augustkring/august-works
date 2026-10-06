@@ -10,12 +10,74 @@
   "sourceLedger": "doc/plans/2026-10-06-aw-v8-build.md",
   "dataSurfaceRegister": "doc/operations/aw-v8-source-and-data-register.md",
   "sourceCorpus": "doc/operations/aw-v8-evidence/source-corpus.json",
-  "predecessorRegisters": ["doc/operations/aw-v6-evidence.md", "evals/aw-v7/pilot-readiness.json"],
-  "predecessorGateIds": ["H6-01", "H6-02", "H6-03", "H6-04", "H6-05", "H6-06", "H6-07", "H6-08", "H6-09", "H6-10", "H6-11", "H6-12", "H6-13", "H6-14", "H6-15", "H6-16", "H6-17", "H6-18", "H7-01", "H7-02", "H7-03"],
+  "predecessorRegisters": [
+    "doc/operations/aw-v6-evidence.md",
+    "evals/aw-v7/pilot-readiness.json"
+  ],
+  "predecessorGateIds": [
+    "H6-01",
+    "H6-02",
+    "H6-03",
+    "H6-04",
+    "H6-05",
+    "H6-06",
+    "H6-07",
+    "H6-08",
+    "H6-09",
+    "H6-10",
+    "H6-11",
+    "H6-12",
+    "H6-13",
+    "H6-14",
+    "H6-15",
+    "H6-16",
+    "H6-17",
+    "H6-18",
+    "H7-01",
+    "H7-02",
+    "H7-03"
+  ],
   "predecessorStatus": "open",
   "evidence": [],
-  "implementedSlices": ["default_off_feature_admission", "shared_assurance_contracts"],
-  "unfinishedWaves": ["source_reading_and_reconciliation", "business_events", "metrics", "lineage_and_interchange", "strategy", "process_readiness", "process_analysis", "decision_context", "decision_reviews", "forecasts", "provider_qualification", "scenarios", "experiments", "causal_claims", "adaptive_planning", "management_reviews", "learning_bridges", "privacy_and_security", "ui_and_browser", "full_regression", "hosted_qualification"],
-  "localTests": ["packages/shared/src/v8-feature-flags.test.ts", "packages/shared/src/v8-assurance.test.ts", "server/src/__tests__/v7-feature-admission.integration.test.ts"],
-  "limitations": ["Feature configuration does not prove implementation or authorization.", "The shared assurance helper evaluates supplied claims; it does not certify manifest completeness.", "No live hosting or optional analytical provider is qualified.", "Most supplied playbook readings remain pending."]
+  "implementedSlices": [
+    "default_off_feature_admission",
+    "shared_assurance_contracts",
+    "initial_native_activity_business_event_projection"
+  ],
+  "unfinishedWaves": [
+    "source_reading_and_reconciliation",
+    "business_events",
+    "metrics",
+    "lineage_and_interchange",
+    "strategy",
+    "process_readiness",
+    "process_analysis",
+    "decision_context",
+    "decision_reviews",
+    "forecasts",
+    "provider_qualification",
+    "scenarios",
+    "experiments",
+    "causal_claims",
+    "adaptive_planning",
+    "management_reviews",
+    "learning_bridges",
+    "privacy_and_security",
+    "ui_and_browser",
+    "full_regression",
+    "hosted_qualification"
+  ],
+  "localTests": [
+    "packages/shared/src/v8-feature-flags.test.ts",
+    "packages/shared/src/v8-assurance.test.ts",
+    "server/src/__tests__/v7-feature-admission.integration.test.ts",
+    "server/src/__tests__/business-events.integration.test.ts"
+  ],
+  "limitations": [
+    "Feature configuration does not prove implementation or authorization.",
+    "The shared assurance helper evaluates supplied claims; it does not certify manifest completeness.",
+    "No live hosting or optional analytical provider is qualified.",
+    "Most supplied playbook readings remain pending.",
+    "Native Business Events are partial: other producers, lifecycle/governance hooks, exports, incremental projection, process readiness and operator UI are unfinished. Restore exclusion assumes the current suppression register is retained; hosted recovery remains unqualified."
+  ]
 }

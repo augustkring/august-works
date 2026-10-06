@@ -274,3 +274,4 @@ export * from "./agent_packages.js";
 export * from "./enterprise_identity.js";
 
 export * from "./security_event_exports.js";
+export * from "./business_events.js";

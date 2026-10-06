@@ -2,8 +2,11 @@
 
 Date: 2026-10-06. Reconciliation base: master
 `d550aa7ea5ad38b5209d79135cabaa227ab3f902`.
-Status: initial design register; analytical storage and lifecycle controls are
-not implemented yet. This register grants neither access nor processing authority.
+Status: initial register with a partial native Business Events implementation.
+Other analytical storage and lifecycle controls remain pending. This register
+grants neither access nor processing authority. Implemented event boundaries
+and remaining privacy/governance work are recorded in
+`doc/operations/aw-v8-business-events.md`.
 
 ## Canonical owners
 

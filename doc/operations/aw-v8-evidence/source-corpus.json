@@ -54,7 +54,12 @@
       "lines": 2783,
       "words": 13915,
       "path": "/workspace/attachments/a9f75c2c-da51-4177-be60-56fd9c35cd12/04_software_construction_code_quality_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 2783
+      },
+      "applicability": "Coherent native implementations, explicit state and mutation authority, runtime boundary validation and failure semantics, justified dependencies, and risk-relevant verification; no arbitrary size thresholds or claims of independent review from author tests."
     },
     {
       "name": "06_security_engineering_v2_golden_master.md",
@@ -63,7 +68,11 @@
       "lines": 6992,
       "words": 35785,
       "path": "/workspace/attachments/1f6a132f-c49e-4217-997f-35d4a0d095a4/06_security_engineering_v2_golden_master.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "in_progress",
+      "reviewedLines": {
+        "from": 1,
+        "through": 1930
+      }
     },
     {
       "name": "05_verification_validation_testing_quality_engineering_v2.md",
@@ -122,7 +131,12 @@
       "lines": 3608,
       "words": 18888,
       "path": "/workspace/attachments/1d03759d-fd89-4b9e-b1e1-a802b867d512/12_data_database_storage_engineering_v2_golden_master.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3608
+      },
+      "applicability": "PostgreSQL authority and tenant-aware keys/constraints, bounded transactions and concurrency evidence, stable resumable backfills, derived-store freshness and reconciliation, mixed-version migrations, and executed restore/deletion evidence. New engine or storage remains unjustified until measured need."
     },
     {
       "name": "11_maintenance_evolution_migration_technical_debt_v2.md",
