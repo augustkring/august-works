@@ -96,4 +96,39 @@ describe("parseTrustProxyEnv", () => {
       /not-a-cidr/,
     );
   });
+
+  it.each([
+    "999.1.1.1", "127.00.0.1", ":::1", "1:2:3", "gggg::1", "fe80::1%eth0",
+    "10.0.0.0/33", "::1/129", "::1/01", "::1/64/1", "::1/", "9007199254740992",
+  ])("rejects malformed trust configuration: %s", (value) => {
+    expect(() => parseTrustProxyEnv(value)).toThrow(/TRUST_PROXY/);
+  });
+
+  it("does not trust IPv4 peers through a short IPv6 prefix (GHSA-jqcg-44mw-7w3h)", () => {
+    for (const value of ["::/1", "::ffff:10.0.0.0/8"]) {
+      const trust = appWithEnv(value).get("trust proxy fn");
+      expect(trust("203.0.113.10", 0)).toBe(false);
+      expect(trust("10.1.2.3", 0)).toBe(false);
+    }
+    const trust = appWithEnv("::ffff:10.0.0.0/104").get("trust proxy fn");
+    expect(trust("10.1.2.3", 0)).toBe(true);
+    expect(trust("203.0.113.10", 0)).toBe(false);
+  });
+
+  it("ignores spoofed forwarding headers from an untrusted peer", () => {
+    const app = appWithEnv("10.0.0.0/8");
+    const req = Object.create(app.request);
+    req.app = app;
+    req.socket = { remoteAddress: "203.0.113.10" };
+    req.headers = { "x-forwarded-for": "127.0.0.1", "x-forwarded-proto": "https" };
+    expect(req.ip).toBe("203.0.113.10");
+    expect(req.ips).toEqual([]);
+    expect(req.protocol).toBe("http");
+
+    req.socket.remoteAddress = "10.1.2.3";
+    req.headers["x-forwarded-for"] = "127.0.0.1, 203.0.113.10";
+    expect(req.ip).toBe("203.0.113.10");
+    expect(req.ips).toEqual(["203.0.113.10"]);
+    expect(req.protocol).toBe("https");
+  });
 });

@@ -48,3 +48,12 @@ overrides:
   # Parsers and highlighters must share NodeProp IDs from one Lezer instance.
   # Mixed copies can interpret unrelated node metadata as highlighting tags.
   "@lezer/common": "^1.5.2"
+
+  # Security floors for affected transitive versions; keep in sync with package.json.
+  "proxy-addr@>=2.0.0 <2.0.8": "2.0.8"
+  "path-to-regexp@>=8.0.0 <8.4.0": "8.4.0"
+  "js-yaml@>=4.0.0 <4.3.2": "4.3.2"
+  "fast-uri@>=3.0.0 <3.1.8": "3.1.8"
+  "brace-expansion@>=2.0.0 <2.1.7": "2.1.7"
+  "source-map-js@>=1.0.0 <1.2.2": "1.2.2"
+  "undici@>=8.0.0 <8.10.2": "8.10.2"
