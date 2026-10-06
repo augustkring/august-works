@@ -105,11 +105,11 @@ describe("parseTrustProxyEnv", () => {
   });
 
   it("does not trust IPv4 peers through a short IPv6 prefix (GHSA-jqcg-44mw-7w3h)", () => {
-    for (const value of ["::/1", "::ffff:10.0.0.0/8"]) {
-      const trust = appWithEnv(value).get("trust proxy fn");
-      expect(trust("203.0.113.10", 0)).toBe(false);
-      expect(trust("10.1.2.3", 0)).toBe(false);
-    }
+    expect(() => parseTrustProxyEnv("::ffff:10.0.0.0/8")).toThrow(/TRUST_PROXY/);
+    expect(() => parseTrustProxyEnv("::FFFF:10.0.0.0/95")).toThrow(/TRUST_PROXY/);
+    const broadIpv6Trust = appWithEnv("::/1").get("trust proxy fn");
+    expect(broadIpv6Trust("203.0.113.10", 0)).toBe(false);
+    expect(broadIpv6Trust("10.1.2.3", 0)).toBe(false);
     const trust = appWithEnv("::ffff:10.0.0.0/104").get("trust proxy fn");
     expect(trust("10.1.2.3", 0)).toBe(true);
     expect(trust("203.0.113.10", 0)).toBe(false);

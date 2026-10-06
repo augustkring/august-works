@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 const workflow = readFileSync(new URL("../../workflows/pr-trusted.yml", import.meta.url), "utf8");
 const jobs = [...workflow.matchAll(/^  ([a-z_][a-z_0-9]*):\n([\s\S]*?)(?=^  [a-z_][a-z_0-9]*:\n|$(?![\s\S]))/gm)];
-const installers = jobs.filter(([, name, body]) => name !== "policy" && body.includes("pnpm install --frozen-lockfile"));
+const installers = jobs.filter(([, name, body]) => name !== "policy" && body.includes("pnpm install"));
 
 test("PR workflows restore dependency stores without creating branch copies", () => {
   assert.equal(installers.length, 7);

@@ -36,6 +36,7 @@ function isValidSubnetToken(token: string): boolean {
   const family = isIP(address);
   if (!family || address.includes("%") || extra !== undefined) return false;
   if (prefix === undefined) return true;
+  if (family === 6 && address.toLowerCase().startsWith("::ffff:") && Number(prefix) < 96) return false;
   return /^(0|[1-9]\d*)$/.test(prefix) && Number(prefix) <= (family === 4 ? 32 : 128);
 }
 
