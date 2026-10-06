@@ -171,6 +171,7 @@ export function isForbiddenConfigEnvKey(key: string): boolean {
 }
 const PAPERCLIP_SKILL_ROOT_RELATIVE_CANDIDATES = [
   "../../skills",
+  "../../../skills",
   "../../../../../skills",
 ];
 const MATERIALIZED_SKILL_SENTINEL = ".paperclip-materialized-skill.json";

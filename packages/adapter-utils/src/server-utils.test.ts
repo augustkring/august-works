@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { CONNECTION_INTENT_AGENT_GUIDANCE } from "@paperclipai/shared";
 import {
   readPaperclipRuntimeSkillEntries,
+  resolvePaperclipSkillsDir,
   applyPaperclipWorkspaceEnv,
   appendWithByteCap,
   buildPersistentSkillSnapshot,
@@ -3846,6 +3847,23 @@ describe("buildPaperclipEnv", () => {
 
 
 describe("runtime skill assignment boundaries", () => {
+  it("prefers the server repository's skills over an unrelated enclosing workspace", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-nested-skills-"));
+    try {
+      const repo = path.join(root, "projects", "app");
+      const bundled = path.join(repo, "skills");
+      await fs.mkdir(path.join(root, "skills", "unrelated"), { recursive: true });
+      await fs.mkdir(path.join(bundled, "agentmail"), { recursive: true });
+      for (const tree of ["src", "dist"]) {
+        const moduleDir = path.join(repo, "server", tree, "services");
+        await fs.mkdir(moduleDir, { recursive: true });
+        expect(await resolvePaperclipSkillsDir(moduleDir, [bundled])).toBe(bundled);
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("preserves an explicitly empty assignment instead of discovering bundled connector skills", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-skills-empty-"));
     try {
