@@ -36,11 +36,12 @@
       "lines": 4769,
       "words": 20093,
       "path": "/workspace/attachments/2058f039-87fa-4165-bfc5-dbba7ee7dff9/01_requirements_specification_domain_engineering_master_playbook_v2.2.md",
-      "reviewStatus": "in_progress",
+      "reviewStatus": "read_complete",
       "reviewedLines": {
         "from": 1,
-        "through": 2240
-      }
+        "through": 4769
+      },
+      "applicability": "Separate intended outcomes, requirements, constraints, assumptions and acceptance evidence. Preserve all requested invariants and native authority; specify bounded failure, privacy, time and concurrency behavior. Risk-proportionate traceability, four distinct verification/validation questions, and no invented completeness or causal qualification."
     },
     {
       "name": "02_software_architecture_system_design_v2.1_research_audited_golden_master.md",
@@ -49,7 +50,12 @@
       "lines": 6070,
       "words": 20593,
       "path": "/workspace/attachments/c9b3426b-77f7-43f8-93c5-89e7f1d0ac55/02_software_architecture_system_design_v2.1_research_audited_golden_master.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 6070
+      },
+      "applicability": "Prefer native modular boundaries and PostgreSQL authority; explicit write owners, derived-state reconciliation, tenancy and privacy lifecycle; invariant-driven consistency, bounded retries/queues and observable recovery. Architecture descriptions and reference patterns do not establish implementation or operating qualification."
     },
     {
       "name": "04_software_construction_code_quality_v2.md",
