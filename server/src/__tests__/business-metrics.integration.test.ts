@@ -213,6 +213,20 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
     await expect(db.insert(businessMetricObservations).values({ ...observation, id: randomUUID() })).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 
+  it("rechecks stored observations against current authority, lineage completeness and native erasure", async () => {
+    const issue = await source("done"); const registered = await published();
+    const result = await service().query(companyId, actor, query(registered.metric.id, registered.version.id));
+    expect(await service().inspectCurrentObservation(companyId, actor, result.id)).toMatchObject({ id: result.id, value: 1 });
+    const [foreign] = await db.insert(projects).values({ companyId: otherCompanyId, name: "Now private in another company" }).returning();
+    await db.update(issues).set({ projectId: foreign.id }).where(eq(issues.id, issue.id));
+    await expect(service().inspectCurrentObservation(companyId, actor, result.id)).rejects.toMatchObject({ status: 403 });
+    await db.update(issues).set({ projectId }).where(eq(issues.id, issue.id));
+    await db.delete(analyticalLineageEdges).where(sql`${analyticalLineageEdges.manifestId}=${result.lineageManifestId} and ${analyticalLineageEdges.inputType}='issue'`);
+    await expect(service().inspectCurrentObservation(companyId, actor, result.id)).rejects.toMatchObject({ status: 409 });
+    await issueService(db).remove(issue.id);
+    await expect(service().inspectCurrentObservation(companyId, actor, result.id)).rejects.toMatchObject({ status: 409 });
+  });
+
   it("reapplies post-backup analytical deletion in isolated native quarantine with flags off and preserves unrelated observations", async () => {
     const erased = await source("done"); await source("todo");
     const registered = await published();

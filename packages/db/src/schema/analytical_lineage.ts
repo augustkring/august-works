@@ -40,10 +40,10 @@ export const analyticalLineageEdges = pgTable("analytical_lineage_edges", {
  * or analytical result is retained here. Company erasure owns their lifecycle. */
 export const analyticalSourceSuppressions = pgTable("analytical_source_suppressions", {
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
-  inputType: text("input_type").$type<"issue" | "project">().notNull(),
+  inputType: text("input_type").$type<"issue" | "project" | "goal">().notNull(),
   inputRef: uuid("input_ref").notNull(),
   suppressedAt: timestamp("suppressed_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   sourceUq: unique("analytical_source_suppressions_source_uq").on(t.companyId, t.inputType, t.inputRef),
-  typeCheck: check("analytical_source_suppressions_type_check", sql`${t.inputType} in ('issue','project')`),
+  typeCheck: check("analytical_source_suppressions_type_check", sql`${t.inputType} in ('issue','project','goal')`),
 }));

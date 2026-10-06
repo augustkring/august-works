@@ -16,7 +16,7 @@ export { assertDatabaseRestoreAdmission } from "./database-admission.js";
 
 export interface RestoreDeletionLedger {
   companies: { company_id: string }[];
-  analyticalSources: { company_id: string; input_type: "issue" | "project"; input_ref: string; suppressed_at: string }[];
+  analyticalSources: { company_id: string; input_type: "issue" | "project" | "goal"; input_ref: string; suppressed_at: string }[];
   businessEvents: { company_id: string; source_ref: string; suppressed_at: string }[];
   identityHomes?: { id: string; home_company_id: string }[];
   users?: { id: string; user_id: string; created_at: string }[];

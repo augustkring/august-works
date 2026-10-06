@@ -1,5 +1,5 @@
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { analyticalLineageManifests, analyticalSourceSuppressions, type Db } from "@paperclipai/db";
+import { analyticalLineageManifests, analyticalSourceSuppressions, businessMetricTargets, type Db } from "@paperclipai/db";
 import { conflict } from "../errors.js";
 type PrivacyTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /** Preserve the existing company serialization key: native owner erasure,
@@ -9,9 +9,11 @@ export async function lockAnalyticalCompany(tx: Pick<Db, "execute">, companyId: 
 }
 /** Native privacy/verified restore callers own admission. Rollout never gates
  * this operation. A minimal guard prevents late or restored payload publication. */
-export async function suppressAnalyticalSource(tx: PrivacyTx, companyId: string, inputType: "issue" | "project", inputRef: string, suppressedAt = new Date()) {
+export async function suppressAnalyticalSource(tx: PrivacyTx, companyId: string, inputType: "issue" | "project" | "goal", inputRef: string, suppressedAt = new Date()) {
   await lockAnalyticalCompany(tx, companyId);
   await tx.insert(analyticalSourceSuppressions).values({ companyId, inputType, inputRef, suppressedAt }).onConflictDoNothing();
+  if (inputType === "goal" || inputType === "project") await tx.delete(businessMetricTargets).where(and(eq(businessMetricTargets.companyId, companyId),
+    inputType === "goal" ? eq(businessMetricTargets.goalId, inputRef) : eq(businessMetricTargets.projectId, inputRef)));
   await tx.delete(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId, companyId),
     sql`exists (select 1 from analytical_lineage_edges e where e.company_id = ${analyticalLineageManifests.companyId}
       and e.manifest_id = ${analyticalLineageManifests.id} and e.input_type = ${inputType} and e.input_ref = ${inputRef}::uuid)`));

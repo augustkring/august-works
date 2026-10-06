@@ -2,11 +2,13 @@
 
 Date: 2026-10-06. Reconciliation base: master
 `d550aa7ea5ad38b5209d79135cabaa227ab3f902`.
-Status: initial register with a partial native Business Events implementation.
-Other analytical storage and lifecycle controls remain pending. This register
-grants neither access nor processing authority. Implemented event boundaries
-and remaining privacy/governance work are recorded in
-`doc/operations/aw-v8-business-events.md`.
+Status: partial native Events, governed Metrics, analytical lineage and metric
+commitments are implemented. The corresponding owner/lifecycle boundaries and
+remaining work are recorded in `doc/operations/aw-v8-business-events.md`,
+`doc/operations/aw-v8-business-metrics.md` and
+`doc/operations/aw-v8-metric-targets.md`. This register grants neither access nor
+processing authority. Other V8 analytical domains and full lifecycle/release
+qualification remain open.
 
 ## Canonical owners
 
@@ -56,8 +58,8 @@ applicability. Material processing is registered through existing V7 governance.
 
 The supplied Privacy playbook has been read in full. It treats secondary use,
 derived data, exports, telemetry, backups and restore as separate lifecycle
-surfaces. Other playbook readings remain tracked individually in the corpus
-inventory.
+surfaces. All 36 supplied playbooks and the full build brief have been read; individual
+source hashes and reading completion are retained in the corpus inventory.
 
 ## Predecessor limits
 

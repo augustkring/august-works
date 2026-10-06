@@ -69,7 +69,7 @@ export function authenticateDeletionLedger(
   }
   for (const row of ledger.analyticalSources) {
     if (!uuid.test(row?.company_id ?? "") || !uuid.test(row?.input_ref ?? "") ||
-      !["issue", "project"].includes(row?.input_type) ||
+      !["issue", "project", "goal"].includes(row?.input_type) ||
       !Number.isFinite(Date.parse(row.suppressed_at)) || Date.parse(row.suppressed_at) > exportedAt)
       throw Error("Invalid analytical source suppression marker");
   }

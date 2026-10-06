@@ -9,6 +9,10 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import {
+  createBusinessMetricTargetSchema,
+  reviseBusinessMetricTargetSchema,
+  approveBusinessMetricTargetSchema,
+  retireBusinessMetricTargetSchema,
   createBusinessMetricSchema,
   createBusinessMetricVersionSchema,
   publishBusinessMetricSchema,
@@ -1693,7 +1697,7 @@ function resolveOperationAuthLevel(
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
-  if (key === "POST /api/companies/{companyId}/business-events/backfill" || path.startsWith("/api/companies/{companyId}/business-metrics")) return "board";
+  if (key === "POST /api/companies/{companyId}/business-events/backfill" || (path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets"))) return "board";
   if (
     isBoardOnlyOperation(method, path) ||
     experimentalApiMetadata[`${method.toUpperCase()} ${path}`]?.boardOnly
@@ -11801,6 +11805,13 @@ registerCurrentRoute({
 });
 
 for (const operation of [
+  { method: "get" as const, path: "/api/companies/{companyId}/business-metric-targets", summary: "List native company commitments under current human authority", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}", summary: "Inspect target versions and current review status" },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets", summary: "Create a commitment draft without approval or an observation", body: createBusinessMetricTargetSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}/versions", summary: "Revise a target with native expected-revision control", body: reviseBusinessMetricTargetSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}/approve", summary: "Approve a pinned metric commitment under current purpose authority", body: approveBusinessMetricTargetSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}/retire", summary: "Retire a commitment including after rollout rollback", body: retireBusinessMetricTargetSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}/compare", summary: "Observe the pinned population and compare a closed period; open periods remain provisional", body: z.object({}).strict() },
   { method: "get" as const, path: "/api/companies/{companyId}/business-metrics", summary: "List company metric definitions with current human authority", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
   { method: "get" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}", summary: "Inspect a metric and its immutable definition history" },
   { method: "post" as const, path: "/api/companies/{companyId}/business-metrics", summary: "Register an explicitly governed metric draft", body: createBusinessMetricSchema },

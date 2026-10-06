@@ -48,7 +48,10 @@
     "native_governed_metric_owner_and_bounded_queries",
     "native_analytical_lineage_and_issue_project_invalidation",
     "native_metric_operator_ui_and_analytical_purpose_editor",
-    "analytical_source_owner_suppression_and_signed_quarantine_reconciliation"
+    "analytical_source_owner_suppression_and_signed_quarantine_reconciliation",
+    "native_immutable_metric_commitments_and_human_approval",
+    "current_observation_source_authority_before_target_comparison",
+    "native_goal_target_erasure_and_signed_restore_guards"
   ],
   "unfinishedWaves": [
     "remaining_domain_owner_reconciliation",
@@ -85,7 +88,10 @@
     "server/src/__tests__/business-metric-engine.test.ts",
     "server/src/__tests__/business-metrics.integration.test.ts",
     "ui/src/pages/BusinessMetrics.test.tsx",
-    "tests/storybook-visual/business-metrics.spec.ts"
+    "tests/storybook-visual/business-metrics.spec.ts",
+    "packages/shared/src/business-metric-targets.test.ts",
+    "server/src/__tests__/business-metric-targets.integration.test.ts",
+    "server/src/__tests__/business-metric-target-comparison.test.ts"
   ],
   "limitations": [
     "Feature configuration does not prove implementation or authorization.",

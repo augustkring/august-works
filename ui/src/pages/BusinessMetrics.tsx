@@ -6,6 +6,7 @@ import { aiGovernanceApi } from "@/api/ai-governance";
 import { useAccountIdentity } from "@/api/companies-query";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
+import { BusinessMetricTargets } from "@/components/BusinessMetricTargets";
 import { BusinessMetricObservation } from "@/components/BusinessMetricObservation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +72,7 @@ function MetricWorkspace({ companyId, userId }: { companyId: string; userId: str
       {metric.status !== "revoked" && <details className="space-y-4"><summary className="cursor-pointer">Change metric lifecycle</summary><label className="block space-y-2">Reason<Textarea value={reason} onChange={event => setReason(event.target.value)} maxLength={2000} /></label><div className="flex flex-wrap items-center gap-2"><Button variant="outline" disabled={busy || !reason.trim()} onClick={() => stop.mutate("deprecated")}>Deprecate metric</Button><Button variant="destructive" disabled={busy || !reason.trim()} onClick={() => stop.mutate("revoked")}>Revoke metric</Button></div></details>}
     </section>}
     {showForm && <MetricDefinitionForm key={version?.id ?? "new"} companyId={companyId} userId={userId} initial={metric ? version?.definition : undefined} metricKey={metric?.key} busy={busy} onSave={input => save.mutate(input)} onCancel={() => setShowForm(false)} />}
+    {metric && version && <BusinessMetricTargets key={`${metric.id}:${version.id}`} companyId={companyId} userId={userId} metric={metric} metricVersion={version} />}
     {result && <BusinessMetricObservation result={result.result} definition={result.definition} />}
     {!list.isPending && !list.data?.pages.some(page => page.items.length) && !showForm && <p>No metrics are registered. Record an approved analytical purpose in <Link to="/ai-governance">AI Governance</Link>, then define a business metric.</p>}
   </div>;
