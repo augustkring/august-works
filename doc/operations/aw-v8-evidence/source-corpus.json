@@ -367,7 +367,12 @@
       "lines": 3387,
       "words": 16369,
       "path": "/workspace/attachments/40870f99-b48b-4b60-8713-926db34b02a2/google_ads_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3387
+      },
+      "applicability": "Treat platform diagnostics, vendor recommendations, causal evidence and internal business outcomes as separate layers. Privacy-thresholded reports and missing or delayed observations are not zero activity. Preserve explicit exploration budgets, current authority, trustworthy units/value signals, measurement-incident abstention and bounded marginal proposals. Experiment primary outcomes come from compatible raw business evidence rather than overlapping attribution credit. Measurement playbook qualifies the simplified incremental-spend formulas and modern attribution methods. No new paid-media execution, automatic budget changes or reliance on unverified 2026 vendor feature claims."
     },
     {
       "name": "market_validation_pretotyping_master_playbook_v2.md",
