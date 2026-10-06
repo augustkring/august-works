@@ -517,3 +517,22 @@ At this checkpoint, the canonical local `pnpm test:run` server phase passes
 This run started during implementation work and continues through the remaining
 workspace and serialized phases; this checkpoint is not a complete unchanged
 final-revision pass. The draft PR retains current published-revision CI status.
+
+## 2026-10-06 — Codex inactivity fixture startup precondition
+
+The canonical local repository command passes the general server, all 6,823 UI
+cases, all 502 CLI cases, shared, skills, DB, adapter utilities and Claude adapter
+phases, then fails one Codex adapter integration case. Its 250ms inactivity
+window could terminate the real child before the expected first JSONL event.
+The failed command is retained as a failure, not a full repository pass.
+
+A deterministic 750ms startup reproduces the missing event against the old
+fixture. The test now begins this post-output inactivity window on the real
+first stdout event. Its actual subprocess startup remains bounded by the native
+process helper, and its 250ms deadline, real termination signal, non-timeout
+outcome and one parsed event assertions remain. A new lower-bound assertion
+checks the elapsed inactivity window. No production watchdog or deadline changes.
+Three complete monitor files pass 23 cases, the final delayed-start case passes
+and the Codex adapter typecheck passes. Remaining canonical workspace and
+serialized phases are resumed separately; they are not an unchanged complete
+`pnpm test:run` invocation. Current published-revision CI is still required.

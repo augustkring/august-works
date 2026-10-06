@@ -8,11 +8,14 @@ import {
 import { createCodexProcessActivityMonitor } from "./process-activity-monitor.js";
 
 const FAKE_CODEX_SCRIPT = `
-process.stdout.write(JSON.stringify({ type: "thread.started", thread_id: "abc" }) + "\\n");
-// Simulate a wedged codex: read stdin forever, never write again.
-process.stdin.resume();
-process.stdin.on("data", () => {});
-setInterval(() => {}, 60_000);
+// Deterministic slow startup before the event that defines this test's silence.
+setTimeout(() => {
+  process.stdout.write(JSON.stringify({ type: "thread.started", thread_id: "abc" }) + "\\n");
+  // Simulate a wedged codex: read stdin forever, never write again.
+  process.stdin.resume();
+  process.stdin.on("data", () => {});
+  setInterval(() => {}, 60_000);
+}, 750);
 `;
 
 describe("codex inactivity monitor (integration: real subprocess)", () => {
@@ -106,7 +109,10 @@ describe("codex inactivity monitor (integration: real subprocess)", () => {
         return false;
       };
 
-      const monitor = createCodexOutputInactivityMonitor({
+      const monitor: { current: ReturnType<typeof createCodexOutputInactivityMonitor> | null } = { current: null };
+      // This case measures inactivity after actual output. Process startup is
+      // separately bounded by runChildProcess, rather than this 250ms window.
+      const startMonitor = () => createCodexOutputInactivityMonitor({
         timeoutMs,
         onFire: (state) => {
           monitorFired = true;
@@ -130,12 +136,13 @@ describe("codex inactivity monitor (integration: real subprocess)", () => {
               pid: meta.pid,
               processGroupId: meta.processGroupId,
               intervalMs: 25,
-              onActivity: () => monitor.noteProcessActivity(),
+              onActivity: () => monitor.current?.noteProcessActivity(),
             });
           },
           onLog: async (stream, chunk) => {
             logs.push({ stream, chunk });
-            monitor.noteOutputChunk(stream, chunk);
+            if (!monitor.current && stream === "stdout" && chunk.length > 0) monitor.current = startMonitor();
+            monitor.current?.noteOutputChunk(stream, chunk);
           },
         });
 
@@ -150,10 +157,12 @@ describe("codex inactivity monitor (integration: real subprocess)", () => {
           /^monitor: no codex activity \(output or process\) for \d+m \d+s$/,
         );
         // We should have observed exactly one parsed JSONL event before silence.
-        expect(monitor.state().parsedEventCount).toBe(1);
+        expect(monitor.current).not.toBeNull();
+        expect(monitor.current!.state().parsedEventCount).toBe(1);
+        expect(elapsedMs).toBeGreaterThanOrEqual(timeoutMs);
       } finally {
         processActivityMonitor.current?.stop();
-        monitor.stop();
+        monitor.current?.stop();
         if (sigkillTimer) clearTimeout(sigkillTimer);
       }
     },
