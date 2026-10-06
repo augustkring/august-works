@@ -23,7 +23,19 @@ describe("V7 policy subset proofs, distinct from physical boundary qualification
     ["C4", (p: SandboxPolicy) => { p.riskClass = "C4"; }, "domain_overlay_not_qualified"],
   ] as const)("rejects %s expansion", (_name, mutate, reason) => { const p = policyFixture(); mutate(p); expect(compile(p).failedBoundaries).toContain(reason); });
   it.each(["/work/../secret", "/work//secret", "/work/", "/work/*"])("rejects noncanonical filesystem path %s", path => { const p = policyFixture(); p.filesystem.readPaths = [path]; expect(sandboxPolicySchema.safeParse(p).success).toBe(false); });
-  it.each(["/v1/%2e%2e", "/v1?override=true", "/v1#fragment"])("rejects ambiguous destination path %s", path => { const p = policyFixture(); p.network.destinations[0]!.pathPrefixes = [path]; expect(sandboxPolicySchema.safeParse(p).success).toBe(false); });
+  it.each(["/v1/%2e%2e", "/v1?override=true", "/v1#fragment", "/v1/[a-z]", "/v1/[!a]", "/v1/[[]", "/v1/unclosed["])("rejects ambiguous destination path %s", path => { const p = policyFixture(); p.network.destinations[0]!.pathPrefixes = [path]; expect(sandboxPolicySchema.safeParse(p).success).toBe(false); });
+  it.each(["/v1/[a-z]", "/v1/[!a]", "/v1/[[]"])("rejects OpenShell glob syntax in a credential destination %s", path => {
+    const p = policyFixture();
+    p.credentials = { mode: "brokered", bindings: [{ connectionId: "11111111-1111-4111-8111-111111111111", grantVersionHash: "b".repeat(64),
+      hostname: "api.example.com", port: 443, methods: ["GET"], pathPrefixes: [path], binary: "/usr/bin/node", ttlSeconds: 30 }] };
+    expect(sandboxPolicySchema.safeParse(p).success).toBe(false);
+  });
+  it("preserves literal filesystem bracket names and segment-boundary REST prefixes", () => {
+    const p = policyFixture(); p.filesystem.readPaths = ["/work/data[1]"];
+    expect(sandboxPolicySchema.safeParse(p).success).toBe(true);
+    p.network.destinations[0]!.pathPrefixes = ["/v1/items"];
+    expect(compile(p).proverResult).toBe("pass");
+  });
   it("requires actual fresh capability evidence and hard filesystem enforcement", () => { expect(compile(undefined, null).proverResult).toBe("unsupported"); const c = caps(); c.expiresAt = now.toISOString(); expect(compile(undefined, c).unsupportedFeatures).toContain("capability_snapshot_stale"); c.expiresAt = "2026-10-06T12:00:00Z"; c.filesystemEnforcementMode = "best_effort"; expect(compile(undefined, c).unsupportedFeatures).toContain("filesystem_hard_enforcement_missing"); });
   it("does not promote local fixtures into managed assurance", () => { const p = policyFixture(); p.profile = "standard_managed"; expect(compile(p).unsupportedFeatures).toContain("production_boundary_evidence_missing"); });
   it("requires L7 enforcement even for DELETE-only destinations", () => { const p = policyFixture(); p.network.destinations[0]!.methods = ["DELETE"]; const c = caps(); c.networkLayer7Policy = false; expect(compile(p, c, p).unsupportedFeatures).toContain("networkLayer7Policy"); });

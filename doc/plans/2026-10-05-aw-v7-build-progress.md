@@ -418,3 +418,19 @@ inspection exposes no configured operating credentials or qualified staging
 target. The exact pinned OpenShell source still confirms name-only public
 Stop/Delete/Start APIs; host UUID prechecks do not supply an atomic instance-ID
 precondition. No physical boundary or pilot evidence is promoted from fixtures.
+
+## 2026-10-06 — Literal REST policy paths
+
+An audit of the exact pinned OpenShell 0.1.2 runtime matcher found that its REST
+paths use `glob::Pattern`, including positive and negated character classes.
+AW's authoritative network and credential path prefixes claimed literal-path
+semantics but previously accepted square brackets. Shared validation now rejects
+those characters before policy compilation/projection; only the controller's
+existing segment-boundary descendant wildcard is generated. Literal bracket
+names in filesystem paths remain valid Landlock paths.
+
+Four sandbox/compiler/backend/prover suites pass 60 tests, including actual
+pinned standalone-prover cases and positive/negated/escaped/unclosed REST pattern
+denial. The complete shared suite passes 850 tests and its build passes. This
+fix prevents a future physical adapter from widening an authored literal path;
+it does not qualify OpenShell workload admission or credential brokering.

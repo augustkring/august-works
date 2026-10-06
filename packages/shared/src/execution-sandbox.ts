@@ -13,7 +13,11 @@ export const sandboxCapabilitySnapshotSchema = controlSchema.extend({
   testedAt: z.iso.datetime(), expiresAt: z.iso.datetime(), qualificationHash: hash, evidenceKind: z.enum(["local_fixture", "protected_host_report"]),
 }).strict();
 const absolutePath = z.string().min(1).max(1000).refine(path => path.startsWith("/") && !path.includes("\u0000") && !path.includes("\\") && !path.split("/").some(part => part === "." || part === "..") && !/[\r\n*?]/.test(path) && !path.includes("//") && (path === "/" || !path.endsWith("/")), "Use a normalized absolute path without traversal or wildcard syntax");
-const requestPath = absolutePath.refine(path => !/[%?#]/.test(path), "Use a literal request path without encoded or query syntax");
+// OpenShell 0.1.2 REST matchers use glob::Pattern, including character classes.
+// Authoritative AW prefixes are literal paths; only the private projection
+// may append its controlled descendant wildcard. Filesystem paths remain
+// literal Landlock paths and may legitimately contain brackets.
+const requestPath = absolutePath.refine(path => !/[%?#\[\]]/.test(path), "Use a literal request path without encoded, query or wildcard syntax");
 const hostname = z.string().max(253).regex(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/).refine(value => !value.endsWith(".localhost") && !value.endsWith(".local") && !value.endsWith(".internal"), "An explicit public DNS hostname is required");
 const destinationSchema = z.object({ hostname, port: z.number().int().min(1).max(65535), methods: z.array(z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])).min(1).max(7), pathPrefixes: z.array(requestPath).min(1).max(16) }).strict();
 const credentialBindingSchema = z.object({ connectionId: z.string().uuid(), grantVersionHash: hash, hostname, port: z.number().int().min(1).max(65535), methods: z.array(z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])).min(1).max(7), pathPrefixes: z.array(requestPath).min(1).max(16), binary: absolutePath.nullable(), ttlSeconds: z.number().int().min(1).max(900) }).strict();
