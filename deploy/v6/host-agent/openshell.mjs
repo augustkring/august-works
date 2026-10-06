@@ -27,7 +27,7 @@ export function openShellHostEngine({
   run = runFile,
 }) {
   const journalFile = path.join(root, "openshell-journal.json");
-  let journal = { version: 1, scopes: {}, commands: {} },
+  let journal = { version: 2, scopes: {}, commands: {} },
     queue = Promise.resolve();
   function serial(work) {
     const next = queue.then(work);
@@ -110,6 +110,8 @@ export function openShellHostEngine({
       "aw.generation": scope.cellGeneration,
     };
     if (
+      typeof detail.id !== "string" ||
+      !uuid.test(detail.id) ||
       detail.name !== scope.sandboxRef ||
       detail.workspace !== config.workspace ||
       Object.entries(labels).some(
@@ -117,6 +119,20 @@ export function openShellHostEngine({
       )
     )
       throw new Error("sandbox_scope_changed");
+    const pinned = journal.scopes[scope.bindingId];
+    if (pinned) {
+      if (
+        Object.keys(scope).some((key) => pinned.scope[key] !== scope[key]) ||
+        pinned.sandboxId !== detail.id
+      ) throw new Error("sandbox_scope_changed");
+    } else {
+      if (Object.keys(journal.scopes).length >= 256)
+        throw new Error("sandbox_host_unavailable");
+      // The gateway's immutable sandbox ID is distinct from a reusable name.
+      // Persist it before the first effect, so restart cannot adopt a replacement.
+      journal.scopes[scope.bindingId] = { scope, sandboxId: detail.id };
+      await atomicJson(journalFile, journal);
+    }
     return detail;
   }
   async function executeAction(request, deadlineAt) {
@@ -132,8 +148,6 @@ export function openShellHostEngine({
     if (version.trim() !== "openshell 0.1.2")
       throw new Error("sandbox_host_unavailable");
     const detail = await observed(scope, deadlineAt);
-    journal.scopes[scope.bindingId] = scope;
-    await atomicJson(journalFile, journal);
     if (request.action === "inspect")
       return {
         action: "inspect",
@@ -159,6 +173,7 @@ export function openShellHostEngine({
         !policy.policy
       )
         throw new Error("sandbox_observation_unavailable");
+      await observed(scope, deadlineAt);
       return { action: "effective_policy", document: policy.policy };
     }
     if (request.action === "stop") {
@@ -184,8 +199,11 @@ export function openShellHostEngine({
       );
       if (
         !Array.isArray(remaining.sandboxes) ||
+        remaining.sandboxes.length > 10 ||
         remaining.next_page_token !== "" ||
-        remaining.sandboxes.some((value) => value.name === scope.sandboxRef)
+        remaining.sandboxes.some((value) =>
+          value.name === scope.sandboxRef || value.id === detail.id,
+        )
       )
         throw new Error("sandbox_observation_unavailable");
       delete journal.scopes[scope.bindingId];
@@ -213,6 +231,7 @@ export function openShellHostEngine({
       )
         throw new Error("sandbox_operation_unsupported");
       for (const provider of providers.providers) {
+        await observed(scope, deadlineAt);
         if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(provider.name))
           throw new Error("sandbox_observation_unavailable");
         await cli(
@@ -250,6 +269,7 @@ export function openShellHostEngine({
         after.next_page_token !== ""
       )
         throw new Error("sandbox_observation_unavailable");
+      await observed(scope, deadlineAt);
       return { action: "revoke_providers", revoked: true };
     }
     // CLI sandbox detail does not expose an observed immutable image digest.
@@ -264,11 +284,28 @@ export function openShellHostEngine({
         if (error.code !== "ENOENT")
           throw new Error("sandbox_host_unavailable");
       }
+      if (journal.version === 1 && journal.scopes && !Array.isArray(journal.scopes)) {
+        // Old observations never recorded an immutable gateway ID. Keep them
+        // fenced instead of silently adopting whichever instance now owns a name.
+        journal = {
+          ...journal,
+          version: 2,
+          scopes: Object.fromEntries(Object.entries(journal.scopes).map(
+            ([id, scope]) => [id, { scope, sandboxId: null }],
+          )),
+        };
+      }
       if (
-        journal.version !== 1 ||
+        journal.version !== 2 ||
         !journal.scopes ||
         !journal.commands ||
-        Object.values(journal.scopes).some((v) => !validScope(v)) ||
+        Array.isArray(journal.scopes) ||
+        Array.isArray(journal.commands) ||
+        Object.keys(journal.scopes).length > 256 ||
+        Object.entries(journal.scopes).some(([id, v]) =>
+          !v || !validScope(v.scope) || id !== v.scope.bindingId ||
+          (v.sandboxId !== null && !uuid.test(v.sandboxId ?? "")),
+        ) ||
         Object.keys(journal.commands).length > 10256
       )
         throw new Error("sandbox_host_unavailable");
@@ -357,7 +394,7 @@ export function openShellHostEngine({
     fenceAll() {
       return serial(async () => {
         let incomplete = false;
-        for (const scope of Object.values(journal.scopes)) {
+        for (const { scope } of Object.values(journal.scopes)) {
           try {
             const deadlineAt = new Date(Date.now() + 15000).toISOString();
             await observed(scope, deadlineAt);

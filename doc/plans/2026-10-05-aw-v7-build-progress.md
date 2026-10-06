@@ -326,3 +326,10 @@ The final six-suite server acceptance passes all 154 tests: Native worker gatewa
 This completes forced launch for the bounded standard C0/C1 internal-draft scope. It does not implement forced pre-spend transport for managed autonomous CLIs/sessions, physical OpenShell admission or per-use workload credentials. Those broader managed-runtime implementation blockers and the live integrated pilot remain incomplete. See `doc/operations/aw-v7-native-draft-launch.md`.
 
 The earlier broad repository test command finished with 15,141 passing tests and 14 failures across four files. It ran across changing sources and used earlier built runner modules while newer test cases were loaded; focused acceptance with current built modules passes those affected boundaries. That command is not a final-revision acceptance pass. A new unchanged-revision full verification is required before a PR-ready claim.
+
+
+## 2026-10-06 — OpenShell immutable instance pinning
+
+The native host controller now persists the actual OpenShell gateway sandbox UUID before its first effect and checks it against the immutable AW company/binding/cell/generation scope on subsequent observations. Provider detach rechecks that identity before each effect and after completion. Stop observation and host-loss fencing retain the same pin across restart. Legacy journal observations with no UUID remain fenced; name/labels cannot silently adopt a replacement instance. Scope storage is bounded at 256 host bindings. Destruction requires a complete bounded absence observation of both the original UUID and name.
+
+The pinned OpenShell 0.1.2 source confirms the CLI JSON identity field and name-scoped lifecycle API. This change catches replacement drift; that API still offers no instance-ID precondition for an atomic lifecycle effect, so it does not qualify physical admission. All nine host CLI cases pass, including restart with identical labels on a new instance, missing identity and legacy journal migration. The physical prepare/apply/start, credential-use transport and broader autonomous model-spend paths remain incomplete. No mock or configured label is promoted into physical evidence.

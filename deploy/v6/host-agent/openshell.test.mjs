@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, mkdir, writeFile, chmod } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile, chmod, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -39,7 +39,8 @@ async function fixture(work) {
       workspace: "fixture-company",
     };
     const calls = [];
-    let phase = "Ready",
+    let sandboxId = randomUUID(),
+      phase = "Ready",
       wrongScope = false,
       attached = [{ name: "fixture-provider" }];
     const run = async (_file, args, options) => {
@@ -53,6 +54,7 @@ async function fixture(work) {
       if (command[0] === "sandbox" && command[1] === "get")
         return {
           stdout: JSON.stringify({
+            id: sandboxId,
             name: scope.sandboxRef,
             workspace: config.workspace,
             phase,
@@ -86,6 +88,8 @@ async function fixture(work) {
       calls,
       root,
       run,
+      replaceSandbox: () => { sandboxId = randomUUID(); },
+      clearSandboxIdentity: () => { sandboxId = undefined; },
       swapScope: () => {
         wrongScope = true;
       },
@@ -223,4 +227,42 @@ test("provider revocation uses exact private names and unreachable fencing reche
     );
     swapScope();
     await assert.rejects(engine.fenceAll(), /sandbox_host_unavailable/);
+  }));
+
+test("reused names and identical labels cannot replace a pinned instance after restart", async () =>
+  fixture(async ({ engine, config, root, run, calls, replaceSandbox }) => {
+    assert.equal((await engine.execute(randomUUID(), input("inspect"), deadline())).success, true);
+    const pinned = JSON.parse(await readFile(path.join(root, "openshell-journal.json"), "utf8"));
+    assert.equal(pinned.version, 2);
+    assert.ok(pinned.scopes[scope.bindingId].sandboxId);
+    replaceSandbox();
+    const restarted = openShellHostEngine({ config, epoch: 1, root, run });
+    await restarted.initialize();
+    for (const action of ["stop", "destroy", "revoke_providers"]) {
+      assert.equal((await restarted.execute(randomUUID(), input(action), deadline())).errorCode,
+        "sandbox_scope_changed");
+    }
+    await assert.rejects(restarted.fenceAll(), /sandbox_host_unavailable/);
+    assert.ok(calls.every(({ args }) => !args.includes("stop") && !args.includes("delete") && !args.includes("detach")));
+    assert.deepEqual(JSON.parse(await readFile(path.join(root, "openshell-journal.json"), "utf8")).scopes,
+      pinned.scopes);
+  }));
+test("absent gateway identity cannot be learned from labels", async () =>
+  fixture(async ({ engine, calls, clearSandboxIdentity }) => {
+    clearSandboxIdentity();
+    assert.equal((await engine.execute(randomUUID(), input("stop"), deadline())).errorCode,
+      "sandbox_scope_changed");
+    assert.ok(calls.every(({ args }) => !args.includes("stop")));
+  }));
+test("legacy unpinned observations stay fenced during journal migration", async () =>
+  fixture(async ({ config, root, run, calls }) => {
+    await writeFile(path.join(root, "openshell-journal.json"), JSON.stringify({
+      version: 1, scopes: { [scope.bindingId]: scope }, commands: {},
+    }));
+    const restarted = openShellHostEngine({ config, epoch: 1, root, run });
+    await restarted.initialize();
+    assert.equal((await restarted.execute(randomUUID(), input("stop"), deadline())).errorCode,
+      "sandbox_scope_changed");
+    await assert.rejects(restarted.fenceAll(), /sandbox_host_unavailable/);
+    assert.ok(calls.every(({ args }) => !args.includes("stop")));
   }));
