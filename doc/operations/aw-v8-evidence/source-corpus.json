@@ -381,7 +381,12 @@
       "lines": 3936,
       "words": 19545,
       "path": "/workspace/attachments/b283fd92-c92c-4401-8f54-8cdbf1911065/market_validation_pretotyping_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3936
+      },
+      "applicability": "Separate discovery, behavioral validation and comparative causal inference. Predeclare population, units, primary metric, raw denominator, material threshold, stopping and guardrails; verify assignment, SRM, missingness and interference before analysis. INVALID is not FAIL; uncertainty, decision loss, reversibility and transportability constrain conclusions and investment proposals. Evidence quality is multidimensional and a critical gap cannot be averaged away. Initial interest does not prove repeat usage, willingness to pay or realized economics; synthetic participants and diagnostic scores do not supply market evidence. Apply through native Decisions, Experiments, Scenarios and Learning without unsolicited paid campaigns, outreach, fake availability or a parallel validation store."
     },
     {
       "name": "marketing_measurement_attribution_master_playbook_v2.md",
