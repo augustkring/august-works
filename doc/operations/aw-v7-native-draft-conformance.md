@@ -59,7 +59,11 @@ HTTP call remains non-streaming and no provider-streaming feature is advertised.
 
 All required checks and current-source authority must pass before the existing
 binding owner records qualification for this exact local configuration. The
-peer configuration remains pinned by the native isolation proof. Normal draft
+peer configuration remains pinned by the native isolation proof. Report retention
+checks local runtime revocation under the existing row lock. A late successful
+or failed probe cannot reactivate that runtime or overwrite its retained proof.
+Failed dispatched probes still close their synthetic harness and retain unknown
+provider liability before the revoked report is rejected. Normal draft
 plan-start/admission subsequently rechecks the installed model profile and
 the actual conformance record. Live price/token qualification, protected host
 evidence and the integrated customer pilot remain separate operating evidence.

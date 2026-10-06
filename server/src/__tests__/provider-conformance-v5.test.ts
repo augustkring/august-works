@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
-import { agents, heartbeatRuns, costEvents, issues, createDb } from "@paperclipai/db";
+import { agents, agentPresenceRuntimeBindings, heartbeatRuns, costEvents, issues, createDb } from "@paperclipai/db";
 import type { ServerAdapterModule } from "@paperclipai/adapter-utils";
 import { PROVIDER_CAPABILITY_FEATURES } from "@paperclipai/shared";
 import { registerServerAdapter, unregisterServerAdapter } from "../adapters/registry.js";
@@ -60,6 +60,24 @@ describe.skipIf(!support.supported)("operator conformance accounting and authori
     expect(runs.every((run) => run.companyId === f.home && run.responsibleUserId === f.userId && run.status === "succeeded" && run.contextSnapshot?.platformToolsGranted === false)).toBe(true);
     const costs = await db.select().from(costEvents).where(and(eq(costEvents.companyId, f.home), inArray(costEvents.heartbeatRunId, result.runIds))); expect(costs).toHaveLength(2);
     await expect(agentProviderBindingService(db).assertRuntime(f.home, f.presence.id)).resolves.toBeDefined();
+  });
+  it("refuses a late report for a revoked local runtime without changing its retained proof", async () => {
+    const f = await fixture();
+    const result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
+    const bindings = agentProviderBindingService(db);
+    const before = await bindings.getForPresence(f.actor, f.home, f.presence.id);
+    await db.update(agentPresenceRuntimeBindings).set({ status: "revoked" })
+      .where(eq(agentPresenceRuntimeBindings.id, before!.runtime.id));
+    const { hash: _hash, ...snapshot } = result.binding.capabilitySnapshot!;
+    await expect(bindings.recordDiscovery(f.home, f.presence.id, snapshot,
+      { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true }))
+      .rejects.toMatchObject({ status: 404 });
+    const [retained] = await db.select().from(agentPresenceRuntimeBindings)
+      .where(eq(agentPresenceRuntimeBindings.id, before!.runtime.id));
+    expect(retained).toMatchObject({ status: "revoked", conformanceReport: before!.runtime.conformanceReport,
+      qualifiedConfigurationHash: before!.runtime.qualifiedConfigurationHash,
+      conformanceSnapshotHash: before!.runtime.conformanceSnapshotHash });
+    await expect(bindings.assertRuntime(f.home, f.presence.id)).rejects.toMatchObject({ status: 409 });
   });
   it("invalidates native proof when the included backend contract changes", async () => {
     const f = await seedV5Presences(db), bindings = agentProviderBindingService(db);

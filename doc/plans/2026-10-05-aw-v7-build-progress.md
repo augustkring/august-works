@@ -486,3 +486,23 @@ fresh PostgreSQL. UI typecheck, module boundaries and token gates pass.
 
 These local checks do not replace CI on the final published source or the
 integrated operating pilot. No rollout flag or physical admission is enabled.
+
+## 2026-10-06 — Late conformance cannot revive a revoked runtime
+
+The existing bindings owner's `recordDiscovery` checked provider revocation but
+not the current local runtime's revocation. A report retained after a dispatched
+draft probe could therefore change that runtime from `revoked` to `degraded`
+and overwrite its retained proof. Report retention now rejects the revoked
+local runtime under its existing PostgreSQL row lock. That orders retention
+against a concurrent revocation without adding a new authority or reattachment
+path. The change also protects ordinary predecessor conformance.
+
+The new dispatched-probe case fails against the preceding code with the actual
+`revoked` → `degraded` transition and changed report. After the fix, three full
+provider/conformance files pass all 29 cases. The two new cases cover the native
+report owner with an existing passing proof and the actual V7 operator path
+with an in-flight private provider reply. Server typecheck also passes with
+a bounded local heap after the overlapping unbounded run was killed by the
+system. The latter probe retains unknown financial
+liability, closes its synthetic harness and withholds output. No live model,
+physical admission or qualification promotion is involved.

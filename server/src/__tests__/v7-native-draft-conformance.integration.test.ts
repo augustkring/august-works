@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import {
-  agents, activityLog, companyMemberships, connectionGrants, createDb, heartbeatRuns, issues,
+  agents, agentPresenceRuntimeBindings, activityLog, companyMemberships, connectionGrants, createDb, heartbeatRuns, issues,
   orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationModelReservations,
 } from "@paperclipai/db";
 import { nativeDraftConformanceService, registerNativeDraftConformance } from "../services/native-draft-conformance.js";
@@ -120,6 +120,30 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(await db.select().from(orchestrationWorkers).where(eq(orchestrationWorkers.planId, plans[0]!.id))).toHaveLength(0);
     expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, plans[0]!.id))).toHaveLength(0);
     expect((await db.select().from(issues).where(eq(issues.id, plans[0]!.issueId)))[0]).toMatchObject({ harnessKind: "provider_conformance", status: "cancelled" });
+  });
+  it("preserves runtime revocation while settling a dispatched probe", async () => {
+    const before = await agentProviderBindingService(db).getForPresence(f.actor, f.home, f.presence.id);
+    duringCall = async () => {
+      duringCall = undefined;
+      await db.update(agentPresenceRuntimeBindings).set({ status: "revoked" })
+        .where(eq(agentPresenceRuntimeBindings.id, before!.runtime.id));
+    };
+    const error = await test().then(() => null, failure => failure);
+    expect(calls).toBe(1);
+    const [retained] = await db.select().from(agentPresenceRuntimeBindings)
+      .where(eq(agentPresenceRuntimeBindings.id, before!.runtime.id));
+    expect(retained).toMatchObject({ status: "revoked", conformanceReport: before!.runtime.conformanceReport });
+    expect(error).toMatchObject({ status: 404 });
+    const [run] = await db.select().from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.agentId, f.presence.id)));
+    expect(run!.resultJson).toMatchObject({ output: "", providerChargeKnown: false });
+    const [reservation] = await db.select().from(orchestrationModelReservations)
+      .where(eq(orchestrationModelReservations.id, String(run!.resultJson?.reservationId)));
+    expect(reservation).toMatchObject({ status: "unknown", maximumMinor: 3 });
+    const [plan] = await db.select().from(orchestrationPlans)
+      .where(eq(orchestrationPlans.id, String(run!.contextSnapshot?.providerConformancePlanId)));
+    expect(plan).toMatchObject({ status: "cancelled", modelCostReserved: 3 });
+    await expect(agentProviderBindingService(db).assertRuntime(f.home, f.presence.id)).rejects.toThrow();
   });
   it("blocks the next dispatch before exceeding the combined two-company ceiling", async () => {
     const result = await test(8);

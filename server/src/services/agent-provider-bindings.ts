@@ -193,7 +193,9 @@ export function agentProviderBindingService(db: Db) {
         const presence = await localPresence(tx, companyId, agentId);
         await lockIdentity(tx, presence.agentIdentityId);
         const [runtime] = await tx.select().from(agentPresenceRuntimeBindings).where(and(eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, agentId))).limit(1).for("update");
-        if (!runtime) throw notFound("Provider runtime binding not found");
+        // A late conformance result cannot reattach a revoked local runtime.
+        // The existing row lock orders report retention against revocation.
+        if (!runtime || runtime.status === "revoked") throw notFound("Provider runtime binding not found");
         if (expected && (runtime.id !== expected.runtimeId || runtime.providerProfileRef !== expected.profileRef || runtime.providerBindingId !== expected.bindingId || hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) !== expected.configurationHash)) throw conflict("Provider configuration/profile changed during conformance; repeat the tests");
         const [binding] = await tx.select().from(agentProviderBindings).where(eq(agentProviderBindings.id, runtime.providerBindingId)).limit(1).for("update");
         if (!binding || binding.status === "revoked") throw conflict("Provider binding is revoked");
