@@ -223,7 +223,12 @@
       "lines": 2286,
       "words": 13129,
       "path": "/workspace/attachments/ac6e6787-b7dd-4272-afca-3982160e7206/16_mobile_desktop_application_engineering_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 2286
+      },
+      "applicability": "The current V8 web product does not justify adding native client platforms. Apply interruption-safe durable intent, versioned state and backend authority, current authorization after reconnection, deletion/no-resurrection and accessible input/recovery. If a native client is later required, platform lifecycle, permissions, signing, updates and real-device evidence need separate qualification; a wrapper, sandbox or signature alone is insufficient."
     },
     {
       "name": "17_cloud_infrastructure_networking_iac_v2.md",
@@ -246,7 +251,12 @@
       "lines": 3377,
       "words": 18559,
       "path": "/workspace/attachments/81f7b25a-5871-4e3a-a584-038fa2f0c49b/18_ai_ml_llm_systems_engineering_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3377
+      },
+      "applicability": "System-level and representative evidence, task-specific acceptance, non-AI baselines and explicit abstention; forecasts, causal claims, recommendations and observed outcomes have different oracles. Hard access, tenant, privacy, spending and commit authority remain deterministic outside the model. Version sources, prompts, models, retrievers, providers and evidence; prevent temporal or evaluation leakage, untrusted-content authority, synthetic-label promotion and self-certification. Bounded execution and cost, governed derived-data deletion, fallback qualification and field monitoring remain necessary; benchmark or local fixture success does not establish production fitness."
     },
     {
       "name": "20_blockchain_smart_contract_engineering_v2.md",
