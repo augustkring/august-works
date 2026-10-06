@@ -88,6 +88,9 @@
     "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
     "server/src/__tests__/v7-worker-model-profiles.test.ts",
     "packages/shared/src/governance-reference-validation.test.ts",
-    "tests/e2e/aw-v7-authenticated.spec.ts"
+    "tests/e2e/aw-v7-authenticated.spec.ts",
+    "server/src/middleware/expected-actor.test.ts",
+    "ui/src/api/account-client.test.ts",
+    "ui/src/context/V7AccountScope.test.tsx"
   ]
 }

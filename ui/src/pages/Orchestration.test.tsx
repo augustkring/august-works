@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => ({ userId: "fixture-user", settled: true, failed: false }) }));
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -9,16 +10,16 @@ const fixture = vi.hoisted(() => ({ company: "11111111-1111-4111-8111-1111111111
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: fixture.company }) }));
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: fixture.breadcrumbs }) }));
 vi.mock("@/lib/router", () => ({ Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a> }));
-vi.mock("@/api/orchestration", () => ({ orchestrationApi: { list: vi.fn(async () => []), get: vi.fn(), supervision: vi.fn(async () => ({ sessions: [], signals: [], interventions: [] })), intervene: vi.fn(), create: vi.fn(), decide: vi.fn() } }));
-vi.mock("@/api/issues", () => ({ issuesApi: { list: vi.fn(async () => [{ id: fixture.task, title: "Prepare the launch draft", identifier: "T-1", updatedAt: "2026-10-05T00:00:00.000Z" }]), listAcceptedPlanDecompositions: vi.fn(async () => []) } }));
-vi.mock("@/api/workflows", () => ({ workflowsApi: { list: vi.fn(async () => []) } }));
+vi.mock("@/api/orchestration", () => { const orchestrationApi = { list: vi.fn(async () => []), get: vi.fn(), supervision: vi.fn(async () => ({ sessions: [], signals: [], interventions: [] })), intervene: vi.fn(), create: vi.fn(), decide: vi.fn() }; return { orchestrationApi, createOrchestrationApi: () => orchestrationApi }; });
+vi.mock("@/api/issues", () => { const issuesApi = { list: vi.fn(async () => [{ id: fixture.task, title: "Prepare the launch draft", identifier: "T-1", updatedAt: "2026-10-05T00:00:00.000Z" }]), listAcceptedPlanDecompositions: vi.fn(async () => []) }; return { issuesApi, createIssuesApi: () => issuesApi }; });
+vi.mock("@/api/workflows", () => { const workflowsApi = { list: vi.fn(async () => []) }; return { workflowsApi, createWorkflowsApi: () => workflowsApi }; });
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root | undefined, container: HTMLDivElement | undefined;
 afterEach(async () => { await act(async () => root?.unmount()); container?.remove(); vi.clearAllMocks(); });
 async function render() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  client.setQueryData(["orchestration-plans", fixture.company], []);
-  client.setQueryData(["orchestration-tasks", fixture.company], [{ id: fixture.task, title: "Prepare the launch draft", identifier: "T-1", updatedAt: "2026-10-05T00:00:00.000Z" }]);
+  client.setQueryData(["orchestration-plans", fixture.company, "user:fixture-user"], []);
+  client.setQueryData(["orchestration-tasks", fixture.company, "user:fixture-user"], [{ id: fixture.task, title: "Prepare the launch draft", identifier: "T-1", updatedAt: "2026-10-05T00:00:00.000Z" }]);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   await act(async () => root!.render(<QueryClientProvider client={client}><Orchestration /></QueryClientProvider>));
 }

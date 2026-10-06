@@ -1,16 +1,16 @@
+import { withV7AccountScope, useV7AccountScope } from "@/context/V7AccountScope";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
-import { agentsApi } from "@/api/agents";
-import { foundationBootstrapApi } from "@/api/foundationBootstrap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { MarkdownBody } from "@/components/MarkdownBody";
 import { Link, useParams } from "@/lib/router";
 
-export function FoundationBootstrap() {
+function FoundationBootstrapContent() {
+  const { principalId, agentsApi, foundationBootstrapApi } = useV7AccountScope();
   const { selectedCompanyId: companyId } = useCompany();
   const { bootstrapRunId } = useParams<{ bootstrapRunId?: string }>();
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -18,9 +18,9 @@ export function FoundationBootstrap() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   useEffect(() => { setBreadcrumbs([{ label: "Foundation", href: "/foundation" }, { label: "Company discovery" }]); }, [setBreadcrumbs]);
   useEffect(() => { setAgentId(""); setRunId(bootstrapRunId ?? ""); setAnswers({}); }, [companyId, bootstrapRunId]);
-  const agents = useQuery({ queryKey: ["bootstrap-agents", companyId], queryFn: () => agentsApi.list(companyId!), enabled: Boolean(companyId) });
+  const agents = useQuery({ queryKey: ["bootstrap-agents", companyId, principalId], queryFn: () => agentsApi.list(companyId!), enabled: Boolean(companyId) });
   const start = useMutation({ mutationFn: () => foundationBootstrapApi.start(companyId!, { agentId, query, idempotencyKey: crypto.randomUUID() }), onSuccess: (run) => { if (run.companyId === companyId) setRunId(run.id); } });
-  const run = useQuery({ queryKey: ["foundation-bootstrap", companyId, runId], queryFn: () => foundationBootstrapApi.get(companyId!, runId), enabled: Boolean(companyId && runId),
+  const run = useQuery({ queryKey: ["foundation-bootstrap", companyId, principalId, runId], queryFn: () => foundationBootstrapApi.get(companyId!, runId), enabled: Boolean(companyId && runId),
     refetchInterval: (current) => ["awaiting_candidates", "needs_answers"].includes(current.state.data?.status ?? "") ? 30000 : false, refetchIntervalInBackground: false });
   const answer = useMutation({ mutationFn: ({ key, value }: { key: string; value: string }) => foundationBootstrapApi.answer(companyId!, runId, run.data!.version, key, value), onSuccess: () => void run.refetch() });
   const propose = useMutation({ mutationFn: () => foundationBootstrapApi.proposals(companyId!, runId, run.data!.version), onSuccess: () => void run.refetch() });
@@ -39,3 +39,5 @@ export function FoundationBootstrap() {
     {[agents, start, run, answer, propose].filter((state) => state.isError).map((state, index) => <p role="alert" key={index}>{state.error instanceof Error ? state.error.message : "This operation failed. Try again."}</p>)}
   </div>;
 }
+
+export const FoundationBootstrap = withV7AccountScope(FoundationBootstrapContent);

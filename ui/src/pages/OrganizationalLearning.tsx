@@ -1,10 +1,7 @@
+import { withV7AccountScope, useV7AccountScope } from "@/context/V7AccountScope";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { LearningEvaluationInput, LearningChange } from "@paperclipai/shared";
-import { learningApi } from "@/api/learning";
-import { memoryApi } from "@/api/memory";
-import { foundationApi } from "@/api/foundation";
-import { issuesApi } from "@/api/issues";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { CognitivePurposeSelector } from "@/components/CognitivePurposeSelector";
@@ -16,18 +13,19 @@ import { Link } from "@/lib/router";
 type Case = LearningEvaluationInput["cases"][number];
 const unreviewed = () => ({ correctness: false, safety: false, policy: false, businessOutcome: 0, reliability: 0, latencyMs: null, costCents: null });
 const emptyCase = (): Case => ({ baselineTaskId: "", challengerTaskId: "", baseline: unreviewed(), challenger: unreviewed(), invariantResults: [false], rationale: "" });
-export function OrganizationalLearning() {
+function OrganizationalLearningContent() {
+  const { principalId, learningApi, memoryApi, foundationApi, issuesApi } = useV7AccountScope();
   const { selectedCompanyId: companyId } = useCompany(), { setBreadcrumbs } = useBreadcrumbs();
   const [cycleId, setCycleId] = useState(""), [selected, setSelected] = useState<string[]>([]), [purpose, setPurpose] = useState("native_task_execution"), [trigger, setTrigger] = useState("");
   const [targetId, setTargetId] = useState(""), [body, setBody] = useState(""), [claim, setClaim] = useState(""), [effect, setEffect] = useState(""), [invariant, setInvariant] = useState(""), [rollback, setRollback] = useState(""), [reason, setReason] = useState("");
   const [hypothesisId, setHypothesisId] = useState(""), [prepared, setPrepared] = useState<LearningChange | null>(null), [cases, setCases] = useState<Case[]>([emptyCase(), emptyCase()]), [limitations, setLimitations] = useState(""), [closeRationale, setCloseRationale] = useState("");
   useEffect(() => setBreadcrumbs([{ label: "Memory", href: "/memory" }, { label: "Organizational Learning" }]), [setBreadcrumbs]);
   useEffect(() => { setCycleId(""); setSelected([]); setTargetId(""); setBody(""); setClaim(""); setEffect(""); setReason(""); setInvariant(""); setRollback(""); setTrigger(""); setPrepared(null); setHypothesisId(""); setCases([emptyCase(), emptyCase()]); setLimitations(""); setCloseRationale(""); }, [companyId]);
-  const cycles = useQuery({ queryKey: ["learning-cycles", companyId], queryFn: () => learningApi.list(companyId!), enabled: Boolean(companyId) });
-  const detail = useQuery({ queryKey: ["learning-cycle", companyId, cycleId], queryFn: () => learningApi.get(companyId!, cycleId), enabled: Boolean(companyId && cycleId) });
-  const sources = useQuery({ queryKey: ["learning-roots", companyId], queryFn: () => memoryApi.listRecords(companyId!, { reviewState: "accepted", limit: 100 }), enabled: Boolean(companyId) });
-  const foundation = useQuery({ queryKey: ["learning-foundation", companyId], queryFn: () => foundationApi.list(companyId!), enabled: Boolean(companyId) });
-  const tasks = useQuery({ queryKey: ["learning-outcomes", companyId], queryFn: () => issuesApi.list(companyId!, { status: "done" }), enabled: Boolean(companyId) });
+  const cycles = useQuery({ queryKey: ["learning-cycles", companyId, principalId], queryFn: () => learningApi.list(companyId!), enabled: Boolean(companyId) });
+  const detail = useQuery({ queryKey: ["learning-cycle", companyId, principalId, cycleId], queryFn: () => learningApi.get(companyId!, cycleId), enabled: Boolean(companyId && cycleId) });
+  const sources = useQuery({ queryKey: ["learning-roots", companyId, principalId], queryFn: () => memoryApi.listRecords(companyId!, { reviewState: "accepted", limit: 100 }), enabled: Boolean(companyId) });
+  const foundation = useQuery({ queryKey: ["learning-foundation", companyId, principalId], queryFn: () => foundationApi.list(companyId!), enabled: Boolean(companyId) });
+  const tasks = useQuery({ queryKey: ["learning-outcomes", companyId, principalId], queryFn: () => issuesApi.list(companyId!, { status: "done" }), enabled: Boolean(companyId) });
   const refresh = () => { void cycles.refetch(); void detail.refetch(); };
   const create = useMutation({ mutationFn: () => learningApi.create(companyId!, { scope: { type: "company", id: null }, purpose, trigger, memoryRecordIds: selected }), onSuccess: (row) => { setCycleId(row.id); refresh(); } });
   const hypothesis = useMutation({ mutationFn: async () => {
@@ -80,3 +78,5 @@ export function OrganizationalLearning() {
       </> : null}<LearningPolicyReview key={companyId} companyId={companyId} /></>}{errors.map((state, index) => <p role="alert" key={index}>{state.error instanceof Error ? state.error.message : "Learning operation failed"}</p>)}
   </div>;
 }
+
+export const OrganizationalLearning = withV7AccountScope(OrganizationalLearningContent);

@@ -1,6 +1,6 @@
+import { useV7AccountScope } from "@/context/V7AccountScope";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { learningApi } from "@/api/learning";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,8 @@ function ReadinessPolicySummary({ requirement }: { requirement: Extract<Learning
   return <div className="space-y-2"><h4 className="font-medium">{requirement.name}</h4><p>Applies to {requirement.actionClass.replaceAll("_", " ")}</p>{requirement.criteria.map((criterion) => <div key={criterion.key} className="space-y-1"><p>{criterion.domain.replaceAll("_", " ")} · {criterion.mandatory ? "Mandatory" : "Advisory"} · {criterion.failureBehavior.replaceAll("_", " ")}</p><p className="text-sm text-muted-foreground">Sources: {criterion.sourceClasses.map((value) => value.replaceAll("_", " ")).join(", ")} · {criterion.requireVerification ? "Verified sources required" : "Verification optional"} · {criterion.requireSupportingEvidence ? "Supporting evidence required" : "Supporting evidence optional"} · {criterion.noOpenConflict ? "Open conflicts blocked" : "Open conflicts allowed"}</p><p className="text-sm text-muted-foreground">Freshness: {criterion.maxAgeSeconds === null ? "No additional age limit" : `${criterion.maxAgeSeconds} seconds`} · Confidence floor: {criterion.minConfidence === null ? "None" : `${Math.round(criterion.minConfidence * 100)}%`} · Sensitivity ceiling: {criterion.sensitivityCeiling} · Purposes: {criterion.allowedPurposes.map((value) => value.replaceAll("_", " ")).join(", ")} · {criterion.requirePurposeEvidence ? "Explicit purpose evidence required" : "Purpose evidence optional"}</p></div>)}</div>;
 }
 export function LearningPolicyReview({ companyId }: { companyId: string }) {
-  const rows = useQuery({ queryKey: ["learning-policies", companyId], queryFn: () => learningApi.policies(companyId) });
+  const { principalId, learningApi } = useV7AccountScope();
+  const rows = useQuery({ queryKey: ["learning-policies", companyId, principalId], queryFn: () => learningApi.policies(companyId) });
   if (rows.isPending) return <p role="status">Loading governance proposals…</p>;
   return <section className="space-y-4"><h2 className="font-medium">Governance proposals</h2><p className="text-muted-foreground">Review how each change affects approvals, security and committed work before accepting it.</p>
     {rows.data?.map((row) => <section key={row.id} className="space-y-2 rounded-md border border-border p-4"><Badge variant="outline">{row.status}</Badge><p>{row.reason || "Source evidence changed; refresh the proposal."}</p>
@@ -20,6 +21,7 @@ export function LearningPolicyReview({ companyId }: { companyId: string }) {
 }
 
 function PolicyDecision({ companyId, row, onSuccess }: { companyId: string; row: LearningPolicyProposalView; onSuccess: () => void }) {
+  const { learningApi } = useV7AccountScope();
   const [rationale, setRationale] = useState(""), [acknowledge, setAcknowledge] = useState(false);
   const review = useMutation({ mutationFn: (decision: "accept" | "reject") => learningApi.reviewPolicy(companyId, row.id, { expectedVersion: row.version, decision, rationale, acknowledgeApprovalOrSecurityChange: acknowledge }), onSuccess });
   return <div className="space-y-3">

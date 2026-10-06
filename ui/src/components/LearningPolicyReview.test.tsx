@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { withV7AccountScope } from "@/context/V7AccountScope";
+vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => ({ userId: "fixture-user", settled: true, failed: false }) }));
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -6,7 +8,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import { roadmapPolicySchema } from "@paperclipai/shared";
 import { LearningPolicyReview } from "./LearningPolicyReview";
 import { learningApi } from "@/api/learning";
-vi.mock("@/api/learning", () => ({ learningApi: { policies: vi.fn(), reviewPolicy: vi.fn() } }));
+vi.mock("@/api/learning", () => { const learningApi = { policies: vi.fn(), reviewPolicy: vi.fn() }; return { learningApi, createLearningApi: () => learningApi }; });
+vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "company" }) }));
 let root: Root | undefined, container: HTMLDivElement | undefined;
 afterEach(async () => { await act(async () => root?.unmount()); container?.remove(); vi.clearAllMocks(); });
 it("requires a separate rationale and acknowledgment for each policy and resets consent on a version change", async () => {
@@ -15,9 +18,10 @@ it("requires a separate rationale and acknowledgment for each policy and resets 
   const rows = ["one", "two"].map(id => ({ id, companyId: "company", targetId: "project", version: 1, status: "pending", policyType: proposal.policyType, proposal, baseline: { ...proposal, policy }, reason: "Allow bounded forecasting", reviewedBy: null, reviewRationale: null }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   vi.mocked(learningApi.policies).mockResolvedValue(rows);
-  client.setQueryData(["learning-policies", "company"], rows);
+  client.setQueryData(["learning-policies", "company", "user:fixture-user"], rows);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
-  await act(async () => root!.render(<QueryClientProvider client={client}><LearningPolicyReview companyId="company" /></QueryClientProvider>));
+  const Scoped = withV7AccountScope(() => <LearningPolicyReview companyId="company" />);
+  await act(async () => root!.render(<QueryClientProvider client={client}><Scoped /></QueryClientProvider>));
   const buttons = () => Array.from(container!.querySelectorAll("button")).filter(button => button.textContent === "Accept policy change");
   expect(container.textContent).toContain("Disabled → Allowed");
   expect(buttons().every(button => button.disabled)).toBe(true);
@@ -32,7 +36,7 @@ it("requires a separate rationale and acknowledgment for each policy and resets 
   vi.mocked(learningApi.reviewPolicy).mockResolvedValue(rows[0]!);
   await act(async () => buttons()[0]!.click());
   expect(learningApi.reviewPolicy).toHaveBeenCalledWith("company", "one", expect.objectContaining({ expectedVersion: 1, acknowledgeApprovalOrSecurityChange: true, decision: "accept" }));
-  await act(async () => { await client.cancelQueries({ queryKey: ["learning-policies", "company"] }); client.setQueryData(["learning-policies", "company"], [{ ...rows[0], version: 2 }, rows[1]]); await new Promise(resolve => setTimeout(resolve, 10)); });
+  await act(async () => { await client.cancelQueries({ queryKey: ["learning-policies", "company", "user:fixture-user"] }); client.setQueryData(["learning-policies", "company", "user:fixture-user"], [{ ...rows[0], version: 2 }, rows[1]]); await new Promise(resolve => setTimeout(resolve, 10)); });
   expect(buttons()[0]!.disabled).toBe(true);
   expect((container.querySelector("input[type=checkbox]") as HTMLInputElement).checked).toBe(false);
 });

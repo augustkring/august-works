@@ -5,6 +5,7 @@ import { executionSandboxRoutes } from "./routes/execution-sandbox.js";
 import { openShellBackend } from "./services/execution-sandbox/openshell-backend.js";
 import { orchestrationRoutes } from "./routes/orchestration.js";
 import { workSignalRoutes } from "./routes/work-signals.js";
+import { expectedActorGuard } from "./middleware/expected-actor.js";
 import { publicOriginGuard } from "./middleware/public-origin-guard.js";
 import { saasCommercialGuard } from "./middleware/saas-commercial-guard.js";
 import { saasRoutes } from "./routes/saas.js";
@@ -620,6 +621,7 @@ export async function createApp(
   // REPLACES whatever actor the request otherwise resolved to, and only on
   // the one endpoint it authorizes (see the middleware for the contract).
   if (opts.deploymentProfile !== "saas") app.use(cloudControlMiddleware());
+  app.use("/api", expectedActorGuard());
   app.use("/api/auth", authRoutes(db));
   if (opts.betterAuthHandler) {
     app.all("/api/auth/{*authPath}", opts.betterAuthHandler);

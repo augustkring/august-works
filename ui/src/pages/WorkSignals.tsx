@@ -1,23 +1,23 @@
+import { withV7AccountScope, useV7AccountScope } from "@/context/V7AccountScope";
 import { useEffect, useState } from "react";
 import { Link } from "@/lib/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { WorkSignalView } from "@paperclipai/shared";
-import { workSignalsApi } from "@/api/work-signals";
-import { issuesApi } from "@/api/issues";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
-export function WorkSignals() {
+function WorkSignalsContent() {
+  const { principalId, workSignalsApi, issuesApi } = useV7AccountScope();
   const { selectedCompanyId: companyId } = useCompany(), { setBreadcrumbs } = useBreadcrumbs(), cache = useQueryClient();
   const [rationale, setRationale] = useState(""), [targetIssueId, setTargetIssueId] = useState("");
   useEffect(() => { setBreadcrumbs([{ label: "Work Signals" }]); }, [setBreadcrumbs]);
   useEffect(() => { setRationale(""); setTargetIssueId(""); }, [companyId]);
-  const tasks = useQuery({ queryKey: ["work-signal-targets", companyId], queryFn: () => issuesApi.list(companyId!), enabled: !!companyId });
-  const signals = useQuery({ queryKey: ["work-signals", companyId], queryFn: () => workSignalsApi.list(companyId!), enabled: !!companyId });
-  const decision = useMutation({ mutationFn: ({ row, action, requestedCompany }: { row: WorkSignalView; action: "apply" | "ignore" | "review"; requestedCompany: string }) => workSignalsApi.decide(requestedCompany, row.id, action, { expectedVersion: row.version, rationale, ...(action === "apply" && targetIssueId ? { targetIssueId } : {}) }), onSuccess: (row) => cache.invalidateQueries({ queryKey: ["work-signals", row.companyId] }) });
+  const tasks = useQuery({ queryKey: ["work-signal-targets", companyId, principalId], queryFn: () => issuesApi.list(companyId!), enabled: !!companyId });
+  const signals = useQuery({ queryKey: ["work-signals", companyId, principalId], queryFn: () => workSignalsApi.list(companyId!), enabled: !!companyId });
+  const decision = useMutation({ mutationFn: ({ row, action, requestedCompany }: { row: WorkSignalView; action: "apply" | "ignore" | "review"; requestedCompany: string }) => workSignalsApi.decide(requestedCompany, row.id, action, { expectedVersion: row.version, rationale, ...(action === "apply" && targetIssueId ? { targetIssueId } : {}) }), onSuccess: (row) => cache.invalidateQueries({ queryKey: ["work-signals", row.companyId, principalId] }) });
   return <div className="space-y-6"><h1 className="text-xl font-semibold">Work Signals</h1><p className="text-muted-foreground">Review coordination claims from your linked Slack identity. A candidate does not change a deadline, owner or completion. Reopen the original Task if a fresh source read is needed.</p>
     {!companyId ? <p>Select a company.</p> : <><label className="block space-y-2">Reason for your decision<Input value={rationale} onChange={e => setRationale(e.target.value)} minLength={20} maxLength={2000} /></label><label className="block space-y-2">Task for a date proposal<select className="w-full rounded-md border border-input bg-background p-2" value={targetIssueId} onChange={e => setTargetIssueId(e.target.value)}><option value="">Choose an existing project Task</option>{tasks.data?.filter(t => t.projectId && !["done", "cancelled"].includes(t.status)).map(t => <option key={t.id} value={t.id}>{t.identifier} · {t.title}</option>)}</select></label>
       {signals.isLoading ? <p>Loading candidates…</p> : null}{signals.isError ? <p role="alert">Candidates could not be loaded. <Button variant="ghost" onClick={() => void signals.refetch()}>Try again</Button></p> : null}
@@ -27,3 +27,5 @@ export function WorkSignals() {
       {decision.isError ? <p role="alert">{decision.error instanceof Error ? decision.error.message : "Decision could not be saved."}</p> : null}</>}
   </div>;
 }
+
+export const WorkSignals = withV7AccountScope(WorkSignalsContent);

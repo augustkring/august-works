@@ -1,11 +1,9 @@
+import { withV7AccountScope, useV7AccountScope } from "@/context/V7AccountScope";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { EVIDENCE_SENSITIVITIES, v7FeatureEnabled } from "@paperclipai/shared";
 import { CognitivePurposeSelector } from "@/components/CognitivePurposeSelector";
 import { DerivedMemoryEvidence } from "@/components/DerivedMemoryEvidence";
-import { derivedMemoryApi } from "@/api/derivedMemory";
-import { memoryApi } from "@/api/memory";
-import { instanceSettingsApi } from "@/api/instanceSettings";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { Button } from "@/components/ui/button";
@@ -13,17 +11,18 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { MarkdownBody } from "@/components/MarkdownBody";
 import { Link } from "@/lib/router";
-export function DerivedMemory() {
+function DerivedMemoryContent() {
+  const { principalId, derivedMemoryApi, memoryApi, instanceSettingsApi } = useV7AccountScope();
   const { selectedCompanyId: companyId } = useCompany(), { setBreadcrumbs } = useBreadcrumbs();
   const [kind, setKind] = useState<"observations" | "models">("observations"), [selected, setSelected] = useState<string[]>([]);
   const [purpose, setPurpose] = useState("native_task_execution"), [content, setContent] = useState(""), [name, setName] = useState(""), [query, setQuery] = useState(""), [sensitivity, setSensitivity] = useState("internal"), [reason, setReason] = useState("");
   useEffect(() => setBreadcrumbs([{ label: "Memory", href: "/memory" }, { label: "Derived intelligence" }]), [setBreadcrumbs]);
   useEffect(() => { setSelected([]); setContent(""); setName(""); setQuery(""); setReason(""); }, [companyId]);
-  const flags = useQuery({ queryKey: ["derived-flags"], queryFn: () => instanceSettingsApi.getExperimental() });
+  const flags = useQuery({ queryKey: ["derived-flags", principalId], queryFn: () => instanceSettingsApi.getExperimental() });
   const modelsEnabled = v7FeatureEnabled(flags.data ?? {}, "memory_models_v7");
-  const sources = useQuery({ queryKey: ["derived-source-memory", companyId], queryFn: () => memoryApi.listRecords(companyId!, { reviewState: "accepted", limit: 100 }), enabled: Boolean(companyId) });
-  const observations = useQuery({ queryKey: ["derived-observations", companyId], queryFn: () => derivedMemoryApi.observations(companyId!), enabled: Boolean(companyId) });
-  const models = useQuery({ queryKey: ["derived-models", companyId], queryFn: () => derivedMemoryApi.models(companyId!), enabled: Boolean(companyId && modelsEnabled) });
+  const sources = useQuery({ queryKey: ["derived-source-memory", companyId, principalId], queryFn: () => memoryApi.listRecords(companyId!, { reviewState: "accepted", limit: 100 }), enabled: Boolean(companyId) });
+  const observations = useQuery({ queryKey: ["derived-observations", companyId, principalId], queryFn: () => derivedMemoryApi.observations(companyId!), enabled: Boolean(companyId) });
+  const models = useQuery({ queryKey: ["derived-models", companyId, principalId], queryFn: () => derivedMemoryApi.models(companyId!), enabled: Boolean(companyId && modelsEnabled) });
   const refresh = () => { void observations.refetch(); if (modelsEnabled) void models.refetch(); };
   const create = useMutation({ mutationFn: async () => kind === "observations" ? derivedMemoryApi.createObservation(companyId!, { content, purpose, sensitivity, recordIds: selected }) : derivedMemoryApi.createModel(companyId!, { name, purpose, query, recordIds: selected }), onSuccess: () => { setContent(""); setName(""); refresh(); } });
   const review = useMutation({ mutationFn: (input: { kind: "observations" | "models"; id: string; decision: "accept" | "reject" | "revoke"; version: number }) => derivedMemoryApi.review(companyId!, input.kind, input.id, input.decision, input.version, reason), onSuccess: refresh });
@@ -42,3 +41,5 @@ export function DerivedMemory() {
     {[flags, sources, observations, models, create, review, rebuild].filter((state) => state.isError).map((state, index) => <p role="alert" key={index}>{state.error instanceof Error ? state.error.message : "Operation failed"}</p>)}
   </div>;
 }
+
+export const DerivedMemory = withV7AccountScope(DerivedMemoryContent);

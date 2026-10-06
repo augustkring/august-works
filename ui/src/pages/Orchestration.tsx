@@ -1,9 +1,7 @@
+import { withV7AccountScope, useV7AccountScope } from "@/context/V7AccountScope";
 import { OrchestrationVerification } from "@/components/OrchestrationVerification";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { orchestrationApi } from "@/api/orchestration";
-import { workflowsApi } from "@/api/workflows";
-import { issuesApi } from "@/api/issues";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { Button } from "@/components/ui/button";
@@ -12,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Link } from "@/lib/router";
 import { READINESS_ACTIONS, type ReadinessAction, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 
-export function Orchestration() {
+function OrchestrationContent() {
+  const { principalId, orchestrationApi, workflowsApi, issuesApi } = useV7AccountScope();
   const { selectedCompanyId: companyId } = useCompany(), { setBreadcrumbs } = useBreadcrumbs();
   const [selected, setSelected] = useState(""), [taskId, setTaskId] = useState(""), [objective, setObjective] = useState(""), [output, setOutput] = useState("result"), [invariant, setInvariant] = useState(""), [rationale, setRationale] = useState("");
   const [workload, setWorkload] = useState<"semantic" | "decomposable" | "long_running" | "deterministic">("semantic"), [actionClass, setActionClass] = useState<ReadinessAction>("internal_draft"), [risk, setRisk] = useState<"C0" | "C1" | "C2" | "C3" | "C4">("C0"), [workflowId, setWorkflowId] = useState(""), [decompositionId, setDecompositionId] = useState(""), [runtimeOutcome, setRuntimeOutcome] = useState("");
@@ -24,12 +23,12 @@ export function Orchestration() {
   const [retries, setRetries] = useState(1), [seconds, setSeconds] = useState(900), [toolActions, setToolActions] = useState(100);
   useEffect(() => setBreadcrumbs([{ label: "Orchestration" }]), [setBreadcrumbs]);
   useEffect(() => { setSelected(""); setTaskId(""); setObjective(""); setInvariant(""); setRationale(""); setRuntimeOutcome(""); setWorkers([]); setDecompositionId(""); setWorkflowId(""); setWorkload("semantic"); setActionClass("internal_draft"); setRisk("C0"); setReceiptTool(""); setReceiptArgumentsHash(""); }, [companyId]);
-  const plans = useQuery({ queryKey: ["orchestration-plans", companyId], queryFn: () => orchestrationApi.list(companyId!), enabled: Boolean(companyId) });
-  const tasks = useQuery({ queryKey: ["orchestration-tasks", companyId], queryFn: () => issuesApi.list(companyId!, { status: "todo,in_progress,in_review,blocked" }), enabled: Boolean(companyId) });
-  const decompositions = useQuery({ queryKey: ["orchestration-decompositions", companyId, taskId], queryFn: () => issuesApi.listAcceptedPlanDecompositions(taskId), enabled: Boolean(companyId && taskId && workload === "decomposable") });
-  const workflows = useQuery({ queryKey: ["orchestration-workflows", companyId], queryFn: () => workflowsApi.list(companyId!), enabled: Boolean(companyId && workload === "deterministic") });
-  const detail = useQuery({ queryKey: ["orchestration-plan", companyId, selected], queryFn: () => orchestrationApi.get(companyId!, selected), enabled: Boolean(companyId && selected), refetchInterval: selected ? 10000 : false });
-  const supervision = useQuery({ queryKey: ["orchestration-supervision",companyId,selected], queryFn: () => orchestrationApi.supervision(companyId!,selected), enabled: Boolean(companyId && selected), refetchInterval: selected ? 10000 : false });
+  const plans = useQuery({ queryKey: ["orchestration-plans", companyId, principalId], queryFn: () => orchestrationApi.list(companyId!), enabled: Boolean(companyId) });
+  const tasks = useQuery({ queryKey: ["orchestration-tasks", companyId, principalId], queryFn: () => issuesApi.list(companyId!, { status: "todo,in_progress,in_review,blocked" }), enabled: Boolean(companyId) });
+  const decompositions = useQuery({ queryKey: ["orchestration-decompositions", companyId, principalId, taskId], queryFn: () => issuesApi.listAcceptedPlanDecompositions(taskId), enabled: Boolean(companyId && taskId && workload === "decomposable") });
+  const workflows = useQuery({ queryKey: ["orchestration-workflows", companyId, principalId], queryFn: () => workflowsApi.list(companyId!), enabled: Boolean(companyId && workload === "deterministic") });
+  const detail = useQuery({ queryKey: ["orchestration-plan", companyId, principalId, selected], queryFn: () => orchestrationApi.get(companyId!, selected), enabled: Boolean(companyId && selected), refetchInterval: selected ? 10000 : false });
+  const supervision = useQuery({ queryKey: ["orchestration-supervision", companyId, principalId,selected], queryFn: () => orchestrationApi.supervision(companyId!,selected), enabled: Boolean(companyId && selected), refetchInterval: selected ? 10000 : false });
   const intervention = useMutation({ mutationFn: (action: "STOP" | "RETRY" | "START_VERIFIER" | "STEER") => orchestrationApi.intervene(companyId!,selected,{ expectedPlanVersion: detail.data!.version, action, rationale }), onSuccess: () => { refresh(); setRationale(""); } });
   const refresh = () => { void plans.refetch(); void detail.refetch(); if (selected) void supervision.refetch(); };
   const create = useMutation({ mutationFn: () => {
@@ -98,3 +97,5 @@ export function Orchestration() {
     </section>}
   </div>;
 }
+
+export const Orchestration = withV7AccountScope(OrchestrationContent);

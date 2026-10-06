@@ -1,15 +1,16 @@
+import { useV7AccountScope } from "@/context/V7AccountScope";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { OrchestrationPlanDetail, VerificationReviewInput } from "@paperclipai/shared";
-import { orchestrationApi } from "@/api/orchestration";
 import { Link } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 export function OrchestrationVerification({ companyId,plan,onReviewed }: { companyId: string;plan: OrchestrationPlanDetail;onReviewed: () => void }) {
+  const { principalId, orchestrationApi } = useV7AccountScope();
   const [workerId,setWorkerId] = useState<string|null>(null), [objective,setObjective] = useState(false), [approval,setApproval] = useState(false), [rationale,setRationale] = useState(""), [uncertainty,setUncertainty] = useState(""), [verdict,setVerdict] = useState<VerificationReviewInput["result"]>("needs_human");
   const [judgements,setJudgements] = useState<Record<string,{ satisfied: boolean;ref: string }>>({});
-  const packet = useQuery({ queryKey: ["verification-packet",companyId,plan.id,plan.version,workerId],queryFn: () => orchestrationApi.verificationPacket(companyId,plan.id,workerId) });
-  const history = useQuery({ queryKey: ["verification-history",companyId,plan.id,plan.version],queryFn: () => orchestrationApi.verifications(companyId,plan.id) });
+  const packet = useQuery({ queryKey: ["verification-packet", companyId, principalId,plan.id,plan.version,workerId],queryFn: () => orchestrationApi.verificationPacket(companyId,plan.id,workerId) });
+  const history = useQuery({ queryKey: ["verification-history", companyId, principalId,plan.id,plan.version],queryFn: () => orchestrationApi.verifications(companyId,plan.id) });
   const review = useMutation({ mutationFn: () => {
     const current = packet.data!;
     const collect = (prefix: string,values: string[]) => values.map((_,index) => ({ index,satisfied: judgements[`${prefix}:${index}`]?.satisfied ?? false,evidenceRefs: judgements[`${prefix}:${index}`]?.ref ? [judgements[`${prefix}:${index}`]!.ref] : [] }));
