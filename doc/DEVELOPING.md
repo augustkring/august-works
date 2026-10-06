@@ -12,8 +12,17 @@ Current implementation status:
 
 ## Prerequisites
 
-- Node.js 24.11+
-- pnpm 9+
+- Use the Node.js version in `.nvmrc` and pnpm 9.15.4 from `packageManager` for verification.
+- Full Runner checks need Rust from `packages/paperclip-runner/rust-toolchain.toml`
+  (including `rustfmt`), not an arbitrary system Cargo version.
+- Linux builds need a C compiler and Node.js headers for the Tailscale peer-credential
+  addon. Rust native dependencies also require the normal C build tools.
+
+On memory-constrained hosts, run recursive checks with `--workspace-concurrency=1`
+and Rust with `CARGO_BUILD_JOBS=1`. These limits do not replace any checks.
+If `/tmp` is quota-limited tmpfs, use `TMPDIR=/var/tmp PAPERCLIP_TEST_TMPDIR=/var/tmp`
+for tests. Keep the chosen directory short and writable: Unix socket fixtures
+have platform path-length limits. Each test invocation still gets an isolated root.
 
 ## Dependency Lockfile Policy
 
