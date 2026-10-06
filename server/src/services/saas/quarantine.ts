@@ -10,10 +10,12 @@ import { and, eq } from "drizzle-orm";
 import { eraseAccountAccess } from "./account-deletion.js";
 import { purgeCompanyContent } from "./company-purge.js";
 import { reapplyMemoryDeletionMarkers } from "../memory/memory-privacy.js";
+import { suppressBusinessEventSource } from "../business-event-privacy.js";
 export { assertDatabaseRestoreAdmission } from "./database-admission.js";
 
 export interface RestoreDeletionLedger {
   companies: { company_id: string }[];
+  businessEvents: { company_id: string; source_ref: string; suppressed_at: string }[];
   identityHomes?: { id: string; home_company_id: string }[];
   users?: { id: string; user_id: string; created_at: string }[];
   memory: {
@@ -30,6 +32,10 @@ export async function prepareRestoredQuarantine(
   connectionString: string,
   ledger: RestoreDeletionLedger,
 ) {
+  // A freshly exported V8-aware ledger is required even when the backup predates
+  // V8. Absence cannot establish that no post-backup projection was suppressed.
+  if (!Array.isArray(ledger.businessEvents))
+    throw Error("V8-aware Business Events deletion ledger required");
   const target = new URL(connectionString);
   if (
     !["127.0.0.1", "localhost", "[::1]"].includes(target.hostname) ||
@@ -93,6 +99,13 @@ export async function prepareRestoredQuarantine(
     await purgeCompanyContent(db, company.company_id, {
       restoreQuarantine: true,
     });
+  for (const marker of ledger.businessEvents) {
+    await db.transaction(async (tx) => {
+      const company = await tx.execute<{ present: boolean }>(sql`select exists(select 1 from companies where id=${marker.company_id}::uuid) as present`);
+      if (company[0]?.present)
+        await suppressBusinessEventSource(tx, marker.company_id, marker.source_ref, new Date(marker.suppressed_at));
+    });
+  }
   for (const marker of ledger.memory)
     await db.execute(
       sql`insert into memory_deletion_markers(company_id,key,kind,record_id,deleted_at) select ${marker.company_id}::uuid,${marker.key},${marker.kind},${marker.record_id}::uuid,${marker.deleted_at}::timestamptz where exists(select 1 from companies where id=${marker.company_id}::uuid) on conflict do nothing`,

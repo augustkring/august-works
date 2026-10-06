@@ -47,18 +47,30 @@ late-arriving rows. Revisit windows explicitly to capture late data.
 
 ## Evidence and open work
 
-Nine migrated-PostgreSQL tests cover concurrent replay, payload minimization,
+Ten migrated-PostgreSQL tests cover concurrent replay, payload minimization,
 correction lineage, return-to-earlier-value corrections, suppression/replay races,
-retained-register restore exclusion, tenant boundaries, composite foreign keys,
+retained-register restore exclusion, native quarantine replay, tenant boundaries, composite foreign keys,
 microsecond pagination, persisted checkpoints, source deletion visibility, disabled
 admission and invalid bounds. Server and UI typechecks and UI token gates pass.
-Together with existing admission checks, 76 targeted tests pass.
+The preceding admission checkpoint passed 76 targeted tests. The current event
+selection passes ten tests; the OpenAPI selection passes fifteen and includes
+the new mounted routes. Two standalone deletion-ledger authentication tests pass.
 
-The restore test retains the suppression register while reintroducing backed-up
-projection rows. Real recovery must retain/reapply a current suppression register
-before reopening readers or writers. A backup that predates deletion can lose
-that register; independent recovery preservation and executed restore reconciliation
-are still required. This local test is not a hosted recovery drill.
+The existing V6 independently signed deletion-ledger export now includes minimal
+Business Events suppression identities in its repeatable-read snapshot and total
+100,000-record bound. Authentication requires that section and validates company,
+source UUID and suppression time. A legacy ledger without it is rejected: operators
+must export a fresh V8-aware ledger before restoring, including older archives.
+Native restore quarantine reapplies authenticated markers and physically deletes
+each complete projection chain and its object links independently of rollout flags.
+Existing startup quarantine remains closed pending operator recovery qualification.
+
+The local PostgreSQL test copies pre-suppression records into a separate migrated
+quarantine database without the newer suppression register, invokes the actual
+quarantine path, and verifies erasure, duplicate replay, company isolation and
+later replay denial. It does not execute pg_dump/pg_restore, independent remote
+storage or hosted recovery. The real dump/restore suite remains opt-in through
+its pinned PostgreSQL client image. Protected operating evidence is still required.
 
 Still unfinished: automatic source-owner erasure and retention hooks, governance
 purpose/retention admission, other source adapters, incremental dispatch,

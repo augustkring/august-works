@@ -28,10 +28,12 @@ export function authenticateDeletionLedger(
     exportedAt > now + 60000 ||
     !Array.isArray(ledger.companies) ||
     !Array.isArray(ledger.memory) ||
+    !Array.isArray(ledger.businessEvents) ||
     !Array.isArray(ledger.identityHomes ?? []) ||
     !Array.isArray(ledger.users ?? []) ||
     ledger.companies.length +
       ledger.memory.length +
+      ledger.businessEvents.length +
       (ledger.identityHomes?.length ?? 0) +
       (ledger.users?.length ?? 0) >
       100000
@@ -58,6 +60,11 @@ export function authenticateDeletionLedger(
   for (const row of ledger.identityHomes ?? [])
     if (!uuid.test(row?.id ?? "") || !uuid.test(row?.home_company_id ?? ""))
       throw Error("Invalid identity home ledger");
+  for (const row of ledger.businessEvents) {
+    if (!uuid.test(row?.company_id ?? "") || !uuid.test(row?.source_ref ?? "") ||
+      !Number.isFinite(Date.parse(row.suppressed_at)) || Date.parse(row.suppressed_at) > exportedAt)
+      throw Error("Invalid Business Events suppression marker");
+  }
   for (const row of ledger.users ?? [])
     if (
       !uuid.test(row?.id ?? "") ||

@@ -232,6 +232,7 @@ const image = process.env.AW_TEST_DATABASE_DUMP_IMAGE;
         environment: "staging",
         exportedAt: new Date().toISOString(),
         companies: [{ company_id: erased.companyId }],
+        businessEvents: [],
         identityHomes: [
           { id: identity!.id, home_company_id: retained.companyId },
         ],

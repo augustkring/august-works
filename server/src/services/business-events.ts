@@ -7,6 +7,7 @@ import { accessService } from "./access.js";
 import type { AuthorizationActor } from "./authorization.js";
 import { logActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
 import { instanceSettingsService } from "./instance-settings.js";
+import { lockBusinessEventSource, suppressBusinessEventSource } from "./business-event-privacy.js";
 
 type ActivitySource = typeof activityLog.$inferSelect;
 const ACTIONS = new Set(["issue.created", "issue.updated", "issue.checked_out", "issue.released", "project.created", "project.updated"]);
@@ -61,11 +62,6 @@ export function businessEventService(db: Db) {
     }
     return true;
   }
-  async function lockSource(tx: Parameters<Parameters<Db["transaction"]>[0]>[0], companyId: string, sourceRef: string) {
-    // Projection and suppression share one lock even when the source has already
-    // disappeared. Hash collisions can only serialize unrelated work.
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${sourceRef}`}, 0))`);
-  }
   function auditActor(actor: AuthorizationActor) {
     return actor.type === "agent" ? { actorType: "agent" as const, actorId: actor.agentId!, agentId: actor.agentId }
       : { actorType: "user" as const, actorId: actor.userId ?? "local-board" };
@@ -88,7 +84,7 @@ export function businessEventService(db: Db) {
       for (const row of rows) {
         const publications: ActivityPublication[] = [];
         const result = await db.transaction(async (tx) => {
-          await lockSource(tx, companyId, row.id);
+          await lockBusinessEventSource(tx, companyId, row.id);
           const [suppressed] = await tx.select().from(businessEventSuppressions).where(and(eq(businessEventSuppressions.companyId, companyId), eq(businessEventSuppressions.sourceRef, row.id)));
           if (suppressed) return "ignored";
           const [source] = await tx.select().from(activityLog).where(and(eq(activityLog.companyId, companyId), eq(activityLog.id, row.id))).for("share");
@@ -159,9 +155,7 @@ export function businessEventService(db: Db) {
       await admit(companyId, actor, true);
       const publications: ActivityPublication[] = [];
       await db.transaction(async (tx) => {
-        await lockSource(tx, companyId, sourceRef);
-        await tx.insert(businessEventSuppressions).values({ companyId, sourceRef }).onConflictDoNothing();
-        await tx.delete(businessEvents).where(and(eq(businessEvents.companyId, companyId), eq(businessEvents.sourceRef, sourceRef)));
+        await suppressBusinessEventSource(tx, companyId, sourceRef);
         await logActivity(tx as unknown as Db, { companyId, ...auditActor(actor), action: "business_event.source_suppressed", entityType: "business_event_source", entityId: sourceRef, details: { projector: BUSINESS_EVENT_PROJECTOR_VERSION } }, publications);
       });
       publications.forEach(publishActivity);

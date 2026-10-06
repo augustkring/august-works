@@ -9,6 +9,9 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import {
+  businessEventBackfillSchema,
+  businessEventCursorSchema,
+  businessEventListSchema,
   workerModelCallSchema,
   workerModelResultSchema,
   createAiConnectionSchema,
@@ -1580,6 +1583,7 @@ const BOARD_ONLY_OPERATIONS = new Set([
 ]);
 
 const INSTANCE_ADMIN_OPERATIONS = new Set([
+  "DELETE /api/companies/{companyId}/business-events/sources/{sourceRef}",
   "POST /api/companies",
   "POST /api/plugins/install",
   "POST /api/instance/database-backups",
@@ -1684,6 +1688,7 @@ function resolveOperationAuthLevel(
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
+  if (key === "POST /api/companies/{companyId}/business-events/backfill") return "board";
   if (
     isBoardOnlyOperation(method, path) ||
     experimentalApiMetadata[`${method.toUpperCase()} ${path}`]?.boardOnly
@@ -11772,6 +11777,23 @@ for (const operation of v6ApiPaths) {
 }
 
 // ─── Spec builder ─────────────────────────────────────────────────────────────
+
+registerCurrentRoute({
+  method: "get", path: "/api/companies/{companyId}/business-events", tags: ["V8"],
+  summary: "Read current authorized native Business Events within an explicit window",
+  query: z.object({ from: businessEventListSchema.shape.from, until: businessEventListSchema.shape.until,
+    limit: businessEventListSchema.shape.limit, cursorAt: businessEventCursorSchema.shape.at.optional(),
+    cursorId: businessEventCursorSchema.shape.id.optional() }).strict(),
+});
+registerCurrentRoute({
+  method: "post", path: "/api/companies/{companyId}/business-events/backfill", tags: ["V8"],
+  summary: "Project one bounded native activity batch with current board audit authority",
+  body: businessEventBackfillSchema,
+});
+registerCurrentRoute({
+  method: "delete", path: "/api/companies/{companyId}/business-events/sources/{sourceRef}", tags: ["V8"],
+  summary: "Suppress a native source projection under instance administration and board audit authority",
+});
 
 for (const operation of v7ApiPaths) {
   registry.registerPath({

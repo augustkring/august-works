@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { activityLog, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, createDb, issues, projects } from "@paperclipai/db";
+import { activityLog, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, createDb, applyPendingMigrations, issues, projects } from "@paperclipai/db";
 import { businessEventBackfillSchema } from "@paperclipai/shared";
 import { businessEventService } from "../services/business-events.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -108,6 +109,48 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
     expect((await service().list(companyId, actor, window)).items).toHaveLength(0);
     expect((await service().backfill(companyId, actor, window)).projected).toBe(0);
   });
+
+  it("reapplies post-backup suppression in native restore quarantine while flags are disabled, preserving unrelated sources", async () => {
+    const erased = await source();
+    const retained = await source({ status: "done" });
+    await service().backfill(companyId, actor, window);
+    await db.update(activityLog).set({ details: { status: "in_progress" } }).where(eq(activityLog.id, erased.id));
+    await service().backfill(companyId, actor, window);
+    const backupEvents = await stored();
+    const backupObjects = await db.select().from(businessEventObjects).where(eq(businessEventObjects.companyId, companyId));
+    const name = `aw_restore_${randomUUID().replaceAll("-", "")}`;
+    const target = new URL(database.connectionString); target.pathname = `/${name}`;
+    await db.execute(sql`create database ${sql.identifier(name)}`);
+    const restored = createDb(target.toString());
+    try {
+      await applyPendingMigrations(target.toString());
+      await restored.insert(companies).values(await db.select().from(companies).where(sql`${companies.id} in (${companyId}::uuid, ${otherCompanyId}::uuid)`));
+      await restored.insert(projects).values(await db.select().from(projects).where(eq(projects.companyId, companyId)));
+      await restored.insert(issues).values(await db.select().from(issues).where(eq(issues.companyId, companyId)));
+      await restored.insert(activityLog).values(await db.select().from(activityLog).where(eq(activityLog.companyId, companyId)));
+      for (const event of backupEvents.sort((a, b) => a.revision - b.revision)) await restored.insert(businessEvents).values(event);
+      await restored.insert(businessEventObjects).values(backupObjects);
+      // The old backup has projections, but no post-backup suppression register.
+      const suppressedAt = new Date().toISOString();
+      const marker = { company_id: companyId, source_ref: erased.id, suppressed_at: suppressedAt };
+      const ledger = { companies: [], memory: [], businessEvents: [marker, marker,
+        { ...marker, company_id: otherCompanyId, source_ref: retained.id },
+        { ...marker, company_id: randomUUID() }] };
+      await prepareRestoredQuarantine(restored, target.toString(), ledger);
+      await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
+      expect((await instanceSettingsService(restored).getExperimental()).business_events_v8).toBe(false);
+      expect(await restored.select().from(businessEvents).where(eq(businessEvents.sourceRef, erased.id))).toHaveLength(0);
+      expect(await restored.select().from(businessEventObjects).where(eq(businessEventObjects.eventId, erased.id))).toHaveLength(0);
+      expect(await restored.select().from(businessEvents).where(eq(businessEvents.sourceRef, retained.id))).toHaveLength(1);
+      expect(await restored.select().from(businessEventSuppressions).where(eq(businessEventSuppressions.companyId, companyId))).toHaveLength(1);
+      await instanceSettingsService(restored, { runtimeEnv: {} }).updateExperimental({ business_events_v8: true });
+      expect((await businessEventService(restored).backfill(companyId, actor, window)).projected).toBe(0);
+      expect((await businessEventService(restored).list(companyId, actor, window)).items.map(event => event.source.ref)).toEqual([retained.id]);
+    } finally {
+      await restored.$client.end({ timeout: 1 });
+      await db.execute(sql`drop database ${sql.identifier(name)}`);
+    }
+  }, 30000);
 
   it("uses exact source microseconds and UUID ordering for resumable bounded pages", async () => {
     const first = await source();

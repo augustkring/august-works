@@ -36,7 +36,11 @@
       "lines": 4769,
       "words": 20093,
       "path": "/workspace/attachments/2058f039-87fa-4165-bfc5-dbba7ee7dff9/01_requirements_specification_domain_engineering_master_playbook_v2.2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "in_progress",
+      "reviewedLines": {
+        "from": 1,
+        "through": 2240
+      }
     },
     {
       "name": "02_software_architecture_system_design_v2.1_research_audited_golden_master.md",
@@ -68,11 +72,12 @@
       "lines": 6992,
       "words": 35785,
       "path": "/workspace/attachments/1f6a132f-c49e-4217-997f-35d4a0d095a4/06_security_engineering_v2_golden_master.md",
-      "reviewStatus": "in_progress",
+      "reviewStatus": "read_complete",
       "reviewedLines": {
         "from": 1,
-        "through": 1930
-      }
+        "through": 6992
+      },
+      "applicability": "Reuse current native authorization at every route, source and effect; structural tenant and replay controls; distinguish authorship tests from independent assurance; bounded untrusted attributes; retain explicit recovery and governance gaps. Framework and publication-status claims require current primary-source verification before reliance."
     },
     {
       "name": "05_verification_validation_testing_quality_engineering_v2.md",
@@ -348,7 +353,12 @@
       "lines": 4324,
       "words": 25471,
       "path": "/workspace/attachments/f009c9be-7952-4380-a2d1-266832a25a76/universal_software_ai_engineering_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4324
+      },
+      "applicability": "Explicit native state, authority and invariants; bounded work and failure semantics; independent verification matched to risk; privacy and lifecycle ownership; minimal adequate complexity; local evidence is not hosted or independent acceptance."
     },
     {
       "name": "ux_master_playbook_v2_double_validated_2026-09-21.md",

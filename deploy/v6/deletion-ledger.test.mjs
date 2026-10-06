@@ -9,6 +9,7 @@ const base = {
   exportedAt: new Date(now).toISOString(),
   companies: [{ company_id: "00000000-0000-4000-8000-000000000001" }],
   memory: [],
+  businessEvents: [],
 };
 function sign(value) {
   const payload = JSON.stringify(value);
@@ -77,4 +78,19 @@ test("restore rejects forged, stale, cross-environment and invalid-date ledgers"
       now,
     ),
   );
+});
+
+test("V8 restore requires a bounded, authenticated suppression section with exact company and source identities", () => {
+  const marker = { company_id: base.companies[0].company_id, source_ref: "00000000-0000-4000-8000-000000000002", suppressed_at: base.exportedAt };
+  const valid = { ...base, businessEvents: [marker] };
+  assert.deepEqual(authenticateDeletionLedger(sign(valid), key, "staging", now), valid);
+  const { businessEvents, ...legacy } = base;
+  for (const invalid of [legacy,
+    { ...base, businessEvents: {} },
+    { ...base, businessEvents: [{ ...marker, company_id: "foreign" }] },
+    { ...base, businessEvents: [{ ...marker, source_ref: "bad" }] },
+    { ...base, businessEvents: [{ ...marker, suppressed_at: "invalid" }] },
+    { ...base, businessEvents: [{ ...marker, suppressed_at: new Date(now + 1).toISOString() }] },
+    { ...base, businessEvents: Array(100001).fill(marker) },
+  ]) assert.throws(() => authenticateDeletionLedger(sign(invalid), key, "staging", now));
 });
