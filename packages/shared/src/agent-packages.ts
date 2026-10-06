@@ -8,14 +8,13 @@ const evidence = z
       .string()
       .url()
       .refine((value) => {
-        const u = new URL(value);
-        return (
-          u.protocol === "https:" &&
-          !u.username &&
-          !u.password &&
-          !u.search &&
-          !u.hash
-        );
+        try {
+          const u = new URL(value);
+          return u.protocol === "https:" && !u.username && !u.password &&
+            !u.search && !u.hash;
+        } catch {
+          return false;
+        }
       }),
     sha256: hash,
   })

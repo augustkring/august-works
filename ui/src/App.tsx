@@ -888,10 +888,11 @@ export function App() {
           <Route path="routines" element={<UnprefixedBoardRedirect />} />
           <Route path="routines/:routineId" element={<UnprefixedBoardRedirect />} />
           <Route path="review-queue" element={<UnprefixedBoardRedirect />} />
+          <Route path="readiness" element={<UnprefixedBoardRedirect />} />
           <Route path="orchestration" element={<UnprefixedBoardRedirect />} />
           <Route path="work-signals" element={<UnprefixedBoardRedirect />} />
-          <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><AgentPackages /></V7FeatureGate>} />
-      <Route path="ai-governance" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/packages" element={<UnprefixedBoardRedirect />} />
+          <Route path="ai-governance" element={<UnprefixedBoardRedirect />} />
           <Route path="learnings" element={<UnprefixedBoardRedirect />} />
           <Route path="cases" element={<UnprefixedBoardRedirect />} />
           <Route path="cases/:caseIdentifier" element={<UnprefixedBoardRedirect />} />

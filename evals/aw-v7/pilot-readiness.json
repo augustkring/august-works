@@ -86,6 +86,8 @@
     "server/src/__tests__/v7-read-only-model-transport.test.ts",
     "server/src/__tests__/v7-model-reservations.integration.test.ts",
     "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-    "server/src/__tests__/v7-worker-model-profiles.test.ts"
+    "server/src/__tests__/v7-worker-model-profiles.test.ts",
+    "packages/shared/src/governance-reference-validation.test.ts",
+    "tests/e2e/aw-v7-authenticated.spec.ts"
   ]
 }

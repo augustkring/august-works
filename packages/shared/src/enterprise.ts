@@ -4,14 +4,13 @@ const https = z
   .url()
   .max(2000)
   .refine((value) => {
-    const u = new URL(value);
-    return (
-      u.protocol === "https:" &&
-      !u.username &&
-      !u.password &&
-      !u.search &&
-      !u.hash
-    );
+    try {
+      const u = new URL(value);
+      return u.protocol === "https:" && !u.username && !u.password &&
+        !u.search && !u.hash;
+    } catch {
+      return false;
+    }
   }, "A fixed HTTPS endpoint is required");
 const evidence = z
   .object({ uri: https, sha256: z.string().regex(/^[a-f0-9]{64}$/) })

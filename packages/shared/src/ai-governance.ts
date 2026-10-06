@@ -30,14 +30,15 @@ const sourceUrl = z
   .url()
   .max(1000)
   .refine((value) => {
-    const url = new URL(value);
-    return (
-      url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      !url.search &&
-      !url.hash
-    );
+    // Zod can run refinements after its URL check has already failed.
+    // An unfinished form must return validation issues, never throw here.
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && !url.username && !url.password &&
+        !url.search && !url.hash;
+    } catch {
+      return false;
+    }
   }, "Use a public HTTPS reference without credentials or query parameters");
 export const useCasePurposeSchema = z
   .object({

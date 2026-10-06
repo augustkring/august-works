@@ -27,15 +27,13 @@ export const securityEventExportConfigurationSchema = z
       .url()
       .max(2000)
       .refine((value) => {
-        const u = new URL(value);
-        return (
-          u.protocol === "https:" &&
-          !u.username &&
-          !u.password &&
-          !u.hash &&
-          !u.search &&
-          (!u.port || u.port === "443")
-        );
+        try {
+          const u = new URL(value);
+          return u.protocol === "https:" && !u.username && !u.password &&
+            !u.hash && !u.search && (!u.port || u.port === "443");
+        } catch {
+          return false;
+        }
       }, "A fixed public HTTPS endpoint is required"),
     signingSecretId: z.string().uuid(),
     signingSecretVersion: z.number().int().positive(),
