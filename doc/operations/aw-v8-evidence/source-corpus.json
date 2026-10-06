@@ -321,7 +321,12 @@
       "lines": 2724,
       "words": 15080,
       "path": "/workspace/attachments/5aca0b85-642b-4f9a-8812-c638e7f32e1f/concept_business_design_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 2724
+      },
+      "applicability": "Preserve observed facts, inferences, assumptions, design choices, constraints and unknowns as distinct records with provenance. Strategy and business-model representations do not establish realized outcomes or market demand. Customer, user, payer and approval authority can differ; explicitly map goals, activity dependencies, incentives and rough economic units. Compare coherent alternatives and prioritize falsifiable uncertainty before irreversible commitments. Diagnostic scores, scenarios, generated personas and forecasts are not causal or validation evidence; use native Foundation, Goals, Decisions and Learning owners rather than another business authority store."
     },
     {
       "name": "brand_strategy_positioning_master_playbook_v2.md",
