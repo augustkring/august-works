@@ -8,6 +8,16 @@ The Copenhagen control VM serves the React app, API and WebSocket transports thr
 
 Use separate staging and production provider accounts, HCP workspaces, domains, databases, buckets and keys. Terraform 1.12.2 and UpCloud provider 5.45.0 are pinned. Select the HCP organization explicitly. Remote-state credentials can disclose database and object credentials; restrict state access and audit it. The mocked Terraform tests do not establish locking, network reachability or disaster recovery.
 
+For the first cost-constrained prelaunch only, the same intended production
+foundation can be validated with synthetic data before customer admission,
+without provisioning the separate staging root. Follow the
+[single-environment prelaunch plan](../plans/2026-10-06-upcloud-staging-activation.md):
+use the production Terraform state from the start, keep customer-facing
+admission closed, isolate restore rehearsals in a separate logical database,
+discard test state and rotate prelaunch secrets before opening a pilot. After
+customer admission, destructive testing must use an isolated clone or separate
+staging environment. This exception does not weaken release evidence gates.
+
 Terraform owns the fixed network, NAT, control VM, managed database and object-store substrate. The durable runtime controller owns labelled runtime hosts and disks. Never import those dynamic resources into the fixed Terraform module or delete them from an unscoped inventory.
 
 Before a live apply, review the plan, firewall, regions, SSH source addresses and provider prices. Live state locking, concurrent-apply rejection and state recovery must pass. Confirm that PostgreSQL has no public endpoint and all managed connections use `sslmode=verify-full` with the provider CA. Confirm object-store API compatibility, version listing and deletion, lifecycle policy and backup-write restrictions. Bucket versioning and immutable retention are not proved by the current Terraform source.

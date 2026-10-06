@@ -305,7 +305,8 @@ function selectSerializedSuites(routeTests, shardIndex, shardCount) {
 function runVitest(args, label, testShard = null) {
   console.log(`\n[test:run] ${label}`);
   invocationIndex += 1;
-  const tempRootParent = process.platform === "win32" ? os.tmpdir() : "/tmp";
+  // Allow a short disk-backed root on hosts where /tmp has a small tmpfs quota.
+  const tempRootParent = process.env.PAPERCLIP_TEST_TMPDIR || (process.platform === "win32" ? os.tmpdir() : "/tmp");
   // Production workspace/security checks reject symlink aliases. In particular
   // /tmp is /private/tmp on macOS, so fixture roots must use the canonical path.
   const testRoot = realpathSync(mkdtempSync(path.join(tempRootParent, "pv-")));

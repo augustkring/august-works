@@ -1,9 +1,6 @@
 name: Refresh Lockfile
 
 on:
-  push:
-    branches:
-      - master
   workflow_dispatch:
 
 concurrency:
@@ -20,18 +17,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 9.15.4
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           # Resolution-only installs do not populate the package store. Do not
           # claim the shared cache key with an empty archive before full installs.
           package-manager-cache: false
@@ -83,16 +80,9 @@ jobs:
             pr_url="$(gh pr create \
               --head "$BRANCH" \
               --title "chore(lockfile): refresh pnpm-lock.yaml" \
-              --body "Auto-generated lockfile refresh after dependencies changed on master. This PR only updates pnpm-lock.yaml.")"
+              --body "Manually requested lockfile refresh. Review the dependency diff and require frozen CI checks before merging. This PR only updates pnpm-lock.yaml.")"
             echo "Created new PR: $pr_url"
           else
             echo "PR already exists: $pr_url"
           fi
           echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
-
-      - name: Enable auto-merge for lockfile PR
-        if: steps.upsert-pr.outputs.pr_url != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh pr merge --auto --squash --delete-branch "${{ steps.upsert-pr.outputs.pr_url }}"

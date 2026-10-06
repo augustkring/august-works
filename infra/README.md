@@ -4,6 +4,13 @@ Provider: UpCloudLtd/upcloud 5.45.0. Terraform: 1.12.x or later in the 1.x serie
 
 Production and staging have independent state, labels, SDN ranges, databases, buckets and credentials. Control and database run in Copenhagen; private Object Storage attaches through a routed Finland network. Runtime hosts use the NAT gateway and receive no public interface. Provider firewalls protect public/utility interfaces only; runtime host and container firewalls remain mandatory.
 
+For a first, cost-constrained prelaunch, the intended production foundation may be
+provisioned once via `environments/prod` and validated before admitting any
+customers; see [the single-environment prelaunch plan](../doc/plans/2026-10-06-upcloud-staging-activation.md).
+This does **not** turn the prod root into a staging workspace or make destructive
+tests on later customer data acceptable. The separate staging root remains an
+option for subsequent releases when isolated rehearsal is needed.
+
 ## State and access
 
 The environment roots explicitly select HCP Terraform managed state with locking. Set TF_CLOUD_ORGANIZATION to the operator-owned organization. Use separate aw-v6-prod and aw-v6-staging workspaces and UpCloud accounts/subaccounts. Keep credentials in the managed workspace secret variables, never tfvars or cloud-init. Use local execution mode only through the managed locking backend. Do not apply production with -backend=false.

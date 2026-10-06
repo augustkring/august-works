@@ -29,27 +29,25 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 9.15.4
           run_install: false
 
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
         shell: bash
         run: |
-          if ! pnpm install --frozen-lockfile; then
-            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
-            pnpm install --frozen-lockfile
-          fi
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
 
       - name: Verify Node policy
         run: pnpm check:node-version
@@ -102,27 +100,25 @@ jobs:
             args: --mode serialized --shard-index 3 --shard-count 4
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 9.15.4
           run_install: false
 
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
         shell: bash
         run: |
-          if ! pnpm install --frozen-lockfile; then
-            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
-            pnpm install --frozen-lockfile
-          fi
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
 
       - name: Prepare workspace build dependencies
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
@@ -136,27 +132,25 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 9.15.4
           run_install: false
 
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
         shell: bash
         run: |
-          if ! pnpm install --frozen-lockfile; then
-            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
-            pnpm install --frozen-lockfile
-          fi
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
 
       - name: Prepare workspace build dependencies
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
@@ -204,6 +198,9 @@ jobs:
             -- \
             /usr/bin/true
 
+      - name: Reject high and critical production dependency advisories
+        run: pnpm audit --prod --audit-level high
+
       - name: Verify security-eval coverage
         run: pnpm check:aw-v4-security-evals
 
@@ -232,27 +229,25 @@ jobs:
             spec: tests/e2e/aw-v7-authenticated.spec.ts
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 9.15.4
           run_install: false
 
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
         shell: bash
         run: |
-          if ! pnpm install --frozen-lockfile; then
-            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
-            pnpm install --frozen-lockfile
-          fi
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
 
       - name: Prepare workspace build dependencies
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
@@ -265,7 +260,7 @@ jobs:
 
       - name: Retain browser failure evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: product-browser-failure-${{ strategy.job-index }}
           path: |
@@ -286,27 +281,25 @@ jobs:
       - product-browser
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 9.15.4
           run_install: false
 
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
         shell: bash
         run: |
-          if ! pnpm install --frozen-lockfile; then
-            pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile
-            pnpm install --frozen-lockfile
-          fi
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
 
       - name: Verify customer-pilot readiness contract
         run: pnpm check:aw-v4-pilot-readiness

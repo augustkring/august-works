@@ -10,6 +10,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 it("runs every active nested/parameterized fixture case exactly once through the real chat shard CLI", () => {
   const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "pc-shards-")));
   try {
+    const tempRoot = path.join(root, "tmp");
+    mkdirSync(tempRoot);
     const tests = path.join(root, "server/src/__tests__");
     mkdirSync(tests, { recursive: true });
     symlinkSync(path.join(repoRoot, "node_modules"), path.join(root, "node_modules"), "junction");
@@ -23,7 +25,11 @@ it("runs every active nested/parameterized fixture case exactly once through the
     writeFileSync(fixture, `import { appendFileSync } from "node:fs";
       import { afterEach, beforeEach, describe, expect, it } from "vitest";
       let active = false;
-      beforeEach(() => { expect(active).toBe(false); active = true; });
+      beforeEach(() => {
+        expect(active).toBe(false); active = true;
+        expect(process.env.TMPDIR.startsWith(${JSON.stringify(tempRoot + path.sep)})).toBe(true);
+        expect(process.env.PAPERCLIP_HOME.startsWith(${JSON.stringify(tempRoot + path.sep)})).toBe(true);
+      });
       afterEach(() => { active = false; });
       function record(id) { expect(active).toBe(true); appendFileSync(${JSON.stringify(trace)}, JSON.stringify(id) + "\\n"); }
       it("top-level", () => record("top"));
@@ -36,7 +42,7 @@ it("runs every active nested/parameterized fixture case exactly once through the
     const run = (index: number, count: number) => spawnSync(process.execPath, [
       path.join(repoRoot, "scripts/run-vitest-stable.mjs"), "--mode", "general", "--group", "general-chat",
       "--shard-index", String(index), "--shard-count", String(count),
-    ], { cwd: root, env: { ...process.env, CI: "true" }, encoding: "utf8", timeout: 45_000, maxBuffer: 4 * 1024 * 1024 });
+    ], { cwd: root, env: { ...process.env, CI: "true", PAPERCLIP_TEST_TMPDIR: tempRoot }, encoding: "utf8", timeout: 45_000, maxBuffer: 4 * 1024 * 1024 });
     for (const index of [0, 1]) {
       const result = run(index, 2);
       expect(result.error, result.stderr).toBeUndefined();

@@ -12,8 +12,17 @@ Current implementation status:
 
 ## Prerequisites
 
-- Node.js 24.11+
-- pnpm 9+
+- Use the Node.js version in `.nvmrc` and pnpm 9.15.4 from `packageManager` for verification.
+- Full Runner checks need Rust from `packages/paperclip-runner/rust-toolchain.toml`
+  (including `rustfmt`), not an arbitrary system Cargo version.
+- Linux builds need a C compiler and Node.js headers for the Tailscale peer-credential
+  addon. Rust native dependencies also require the normal C build tools.
+
+On memory-constrained hosts, run recursive checks with `--workspace-concurrency=1`
+and Rust with `CARGO_BUILD_JOBS=1`. These limits do not replace any checks.
+If `/tmp` is quota-limited tmpfs, use `TMPDIR=/var/tmp PAPERCLIP_TEST_TMPDIR=/var/tmp`
+for tests. Keep the chosen directory short and writable: Unix socket fixtures
+have platform path-length limits. Each test invocation still gets an isolated root.
 
 ## Dependency Lockfile Policy
 
@@ -22,29 +31,32 @@ TypeScript syntax use the separately pinned `typescript-compiler-api` alias;
 the native CLI does not export the JavaScript compiler API. Keep AST-based
 security checks on that alias rather than replacing them with text matching.
 
-GitHub Actions owns `pnpm-lock.yaml`.
+`pnpm-lock.yaml` is source-controlled and must accompany dependency, override,
+patch, or workspace-manifest changes in the same PR. Use the Node version in
+`.nvmrc` and pnpm 9.15.4 from `packageManager`.
 
-- Do not commit `pnpm-lock.yaml` in pull requests.
-- Pull request CI validates dependency resolution when manifests change.
-- Pushes to `master` regenerate `pnpm-lock.yaml` with `pnpm install --lockfile-only --no-frozen-lockfile`, commit it back if needed, and then run verification with `--frozen-lockfile`.
+- Regenerate locally with `pnpm install --resolution-only --ignore-scripts --no-frozen-lockfile`.
+- Review the graph diff, then run `pnpm install --frozen-lockfile` and the relevant checks.
+- The PR, AW V4/V6 and Docker build workflows must fail on a stale lockfile;
+  they must not repair it, commit a replacement, or build a graph absent from source.
+- `Refresh Lockfile` is an optional manual maintenance workflow. Its PR still
+  needs review and verification; it no longer runs on master pushes or enables auto-merge.
+- Older upstream release/evaluation workflows are not yet all converted to this
+  policy; they are not qualified August Works SaaS release paths.
 
 ## Trusted PR Workflow
 
-The PR caller uses `paperclipai/paperclip/.github/workflows/pr-trusted.yml@master`.
-The AWS runner group `paperclip-public-pr` must allow
-`paperclipai/paperclip/.github/workflows/pr-trusted.yml@refs/heads/master`.
-New workflow versions merged into master then receive runner access without a
-separate SHA allowlist update. Dependabot leaves this first-party reference on
-master.
+The PR caller uses `./.github/workflows/pr-trusted.yml` from the same repository
+and commit. Fork PRs run with read-only permissions and without repository
+secrets. The upstream AWS runner routing remains restricted to its existing
+repository/actor allowlist; August Works uses GitHub-hosted runners.
 
-Keep the `.github/**` rule in `.github/CODEOWNERS` and the active master ruleset's
-code-owner review requirement enabled. This covers the caller, the trusted
-workflow, and CODEOWNERS itself. Existing administrator pull-request bypasses
-remain governed by the repository ruleset.
-
-When changing the workflow path or branch, authorize the new reference before
-updating the caller. Retain older authorized SHA references while queued runs or
-supported reruns still use them.
+Require review of `.github/**` and CODEOWNERS through repository branch
+protection/rulesets. Those server-side settings must be verified separately;
+workflow files alone do not enforce them. Do not execute PR code in the
+privileged `pull_request_target` quality-comment workflow. During the policy
+transition, that workflow may still report the old base-branch lockfile rule
+until this change is merged.
 
 ## Start Dev
 
