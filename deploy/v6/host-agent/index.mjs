@@ -15,7 +15,7 @@ import { hostGatewayRelay } from "./relay.mjs";
 import { runtimeEngine } from "./engine.mjs";
 import { openShellHostEngine } from "./openshell.mjs";
 
-const VERSION = "6.0.1";
+const VERSION = "6.0.2";
 const filename = process.env.AW_HOST_CONFIG_FILE ?? "/etc/aw-runtime/host.json";
 const config = JSON.parse(await readFile(filename, "utf8"));
 const origin = new URL(config.controlOrigin);

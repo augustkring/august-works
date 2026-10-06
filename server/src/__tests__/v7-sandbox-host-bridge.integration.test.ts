@@ -90,7 +90,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
             .export({ type: "spki", format: "pem" })
             .toString(),
           status: "READY",
-          hostAgentVersion: "6.0.1",
+          hostAgentVersion: "6.0.2",
           lastHeartbeatAt: new Date(),
         })
         .returning()) as [typeof host];
@@ -304,10 +304,10 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
           .stop({ ...scope, idempotencyKey: "fixture-safe-stop" }),
       ).toEqual({ operationId: claim!.id });
     });
-    it("requires the host version that actually polls this native command lane", async () => {
+    it.each(["6.0.0", "6.0.1"])("rejects host %s without immutable instance pinning", async (version) => {
       await db
         .update(runtimeHosts)
-        .set({ hostAgentVersion: "6.0.0" })
+        .set({ hostAgentVersion: version })
         .where(eq(runtimeHosts.id, host.id));
       await expect(
         nativeSandboxHostTransport(db).bridge(f.actor).capabilities(scope),

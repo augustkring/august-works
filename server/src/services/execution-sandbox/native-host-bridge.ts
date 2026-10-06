@@ -86,7 +86,7 @@ export function nativeSandboxHostTransport(
       !host ||
       host.credentialVersion !== request.hostEpoch ||
       !host.publicKeyPem ||
-      !hostVersionMeetsMinimum(host.hostAgentVersion, "6.0.1") ||
+      !hostVersionMeetsMinimum(host.hostAgentVersion, "6.0.2") ||
       host.credentialRevokedAt ||
       host.fencedAt ||
       host.retiredAt ||
