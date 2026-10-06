@@ -506,3 +506,14 @@ a bounded local heap after the overlapping unbounded run was killed by the
 system. The latter probe retains unknown financial
 liability, closes its synthetic harness and withholds output. No live model,
 physical admission or qualification promotion is involved.
+
+## 2026-10-06 — Runbook alignment and broad verification checkpoint
+
+The reservation and read-only consumer runbooks now describe the implemented
+private Native draft controller and retain the separate managed CLI/session
+transport gap. They do not promote local fixtures to production qualification.
+At this checkpoint, the canonical local `pnpm test:run` server phase passes
+15,230 cases across 810 passing files, with 50 tests in five skipped files.
+This run started during implementation work and continues through the remaining
+workspace and serialized phases; this checkpoint is not a complete unchanged
+final-revision pass. The draft PR retains current published-revision CI status.
