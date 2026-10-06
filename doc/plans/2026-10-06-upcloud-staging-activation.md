@@ -86,6 +86,21 @@ releases; if that stops being credible, add a separate temporary staging
 environment then. This saves recurring spend now but makes release rehearsal
 and rollback discipline more important.
 
+## All-features dry run on source (2026-10-06)
+
+The local V5/V6/V7 all-true feature dependency test and migrated-PostgreSQL
+admission test passed: 11/11 tests across two suites. This shows a
+dependency-complete flag configuration can be admitted; it does **not** exercise
+all enabled feature behavior or a deployed UpCloud instance. The read-only V7
+readiness checker (`--require-ready`) exited 1, reporting three incomplete
+implementation blockers (native OpenShell host bridge, physical credential-use
+broker/revocation, and pre-spend enforcement for managed autonomous sessions)
+and 35 required evidence items absent because no live pilot report exists.
+Keep this distinction explicit when doing the later all-on deployment exercise:
+test everything in the closed prelaunch installation, record failures, then
+decide which features are complete enough to admit. Do not equate all flags
+being true with release readiness.
+
 ## Boundary
 
 No live Terraform plan was run: UpCloud/HCP credentials and Terraform CLI were
