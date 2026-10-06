@@ -293,7 +293,12 @@
       "lines": 4629,
       "words": 20612,
       "path": "/workspace/attachments/5eafb022-2dec-41dd-a97b-43de0316dc58/21_systems_embedded_real_time_engineering_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4629
+      },
+      "applicability": "V8 does not require hardware, firmware or hard real-time components. Apply explicit concurrent ownership and lock ordering, finite resources and retries, precise clock and deadline semantics, staged readiness and recoverable persistent state. Functional determinism, measured latency and justified worst-case bounds are separate claims. Exact target/runtime/configuration and recovery evidence cannot be inferred from local models. Do not import safety certification processes, hardware mechanisms or universal allocation and scheduling dogma into the web product."
     },
     {
       "name": "22_language_runtime_engineering_standards_v2.md",
