@@ -349,7 +349,12 @@
       "lines": 4174,
       "words": 22485,
       "path": "/workspace/attachments/0dbd84e1-1fa0-48b4-9c5a-eb0bc8fd16ca/digital_graphics_illustration_generative_visual_production_master_playbook_v2.1_golden_master.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4174
+      },
+      "applicability": "Choose the least complex medium that preserves meaning; render factual charts, diagrams, UI, labels and source relationships deterministically from structured data. Provide accessible structured equivalents, responsive transformations and non-color cues. Distinguish provenance from truth and retain exact accepted artifacts; sanitize untrusted SVG and sensitive captures. No decorative GPU runtime or generated product proof; volatile provider/specification and legal claims are not independently verified by source reading."
     },
     {
       "name": "digital_visual_design_art_direction_master_playbook_v2.1_golden_master.md",
@@ -358,7 +363,12 @@
       "lines": 5358,
       "words": 25685,
       "path": "/workspace/attachments/e75d393f-fe83-4e14-aa29-6e5255031211/digital_visual_design_art_direction_master_playbook_v2.1_golden_master.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 5358
+      },
+      "applicability": "Preserve the established product visual grammar and native tokens; calibrate hierarchy, comparison density, numerals, accessible contrast and complete states. Adapt layouts rather than shrinking; review real rendering, fallback fonts, zoom and responsive pressure. A visual regression baseline is change evidence rather than visual acceptance; no gratuitous rebrand or new token system. Reviewed document status and vendor research do not establish independent field validation."
     },
     {
       "name": "google_ads_master_playbook_v2.md",
