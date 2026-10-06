@@ -413,7 +413,12 @@
       "lines": 3542,
       "words": 15804,
       "path": "/workspace/attachments/c0836760-6a8a-4f04-857e-b9a1b7975309/meta_ads_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3542
+      },
+      "applicability": "Use value-relevant outcomes, commercial reconciliation and typed signal quality before performance interpretation. Exploration, adaptive delivery and semantic clustering generate hypotheses; causal confirmation needs a valid predeclared design and contextual outcome evidence. Preserve no-op decisions, mature observation windows, bounded proposals and Learning scope/expiry. Measurement playbook refines incremental denominators when control spend is nonzero; do not copy the simplified total-spend formula outside its contrast. Native V8 contains no automatic paid-media spend, audience tracking or invented testimonials, claims, uplift benchmarks or platform authority."
     },
     {
       "name": "ui_master_playbook_v2.md",
