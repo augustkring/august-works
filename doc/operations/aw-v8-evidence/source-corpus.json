@@ -451,7 +451,12 @@
       "lines": 4979,
       "words": 22831,
       "path": "/workspace/attachments/699894fd-abf9-423f-9ef6-b871012c1679/organic_discoverability_master_playbook_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4979
+      },
+      "applicability": "Retrieval eligibility, source selection, citation support, synthesized representation and downstream outcome are distinct. Evidence passages need explicit entity, claim, scope, period, units and supporting source; preserve freshness and factual corrections without fake dates or trust cues. Citation counts and sampled visibility do not establish authority, correctness or causal effect. Robots preferences and public indexing directives never replace native access control for private organizational data. Apply clear accessible information structure and source inspection to reviews and analytical UI; no extra public SEO site, crawler protocol, content factory, paid outreach or unverified provider mechanics."
     },
     {
       "name": "universal_design_principles_master_playbook_v2.md",
