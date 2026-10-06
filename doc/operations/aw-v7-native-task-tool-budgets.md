@@ -38,3 +38,33 @@ both native authority paths, concurrent duplicate calls, exhausted counters,
 undeclared outputs, unqualified API paths and authority changes. This does not
 qualify autonomous CLI model calls or physical OpenShell credential/network use;
 the forced model transport and physical admission gates remain closed.
+
+## Scoped HTTP credential dispatch
+
+Scoped connected-tool HTTP calls now repeat the existing server-owned execution
+guard after credential resolution and before every actual request. This includes
+MCP initialization, its initialized notification, tool dispatch and OAuth/token
+refresh retries. The captured native connection configuration, catalog version,
+grant identity and credential references must remain current. Grant selection
+reuses the existing audience, membership and delegation resolver; a call cannot
+switch to a fallback grant while waiting. Successful replies repeat those checks
+before publication. Railway's native SSH branch also repeats the guard immediately
+before starting its command and before releasing its result.
+
+The logical action still enters the existing ToolGateway policy, approval and
+invocation ledger once. Protocol initialization and credential refresh do not
+create extra tool actions or consume a second rate-limit slot. An already-started
+remote effect can remain unknown after revocation; these checks fence subsequent
+requests and publication, not physical remote execution.
+
+Vercel token metadata updates are conditional on the native grant still being
+active and unrevoked. Neither a successful token response nor an authorization
+error can overwrite a concurrently revoked grant with an active or reconnect
+state. An unsuccessful conditional update withholds the credential and dispatch.
+
+Local tests use migrated PostgreSQL and private token/HTTP fixtures. They cover
+actual native run cancellation, grant revocation during token acquisition,
+initialization, refresh and response handling, destination changes, ordinary
+native credential calls, successful refresh and the last native rate-limit slot.
+They do not qualify a physical workload credential broker, executable identity,
+secret-version revocation, local stdio confinement or forced managed CLI inference.

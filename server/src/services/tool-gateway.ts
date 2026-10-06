@@ -437,7 +437,7 @@ type RemoteHttpExecutionAudit = {
     mcpMethod: "tools/call";
     requestId: string;
     upstreamToolName: string;
-    dispatched: true;
+    dispatched: boolean;
   };
   response?: {
     httpStatus: number;
@@ -4324,7 +4324,7 @@ export function createToolGatewayService(
             502,
           );
         }
-        await db
+        const [updatedGrant] = await db
           .update(connectionGrants)
           .set({
             externalCredential: vercelGrantReference({
@@ -4333,8 +4333,6 @@ export function createToolGatewayService(
               subjectId: grant.externalCredential?.subjectId,
               verifiedAt: new Date(options.now?.() ?? Date.now()),
             }),
-            status: "active",
-            revokedAt: null,
             updatedAt: new Date(options.now?.() ?? Date.now()),
           })
           .where(
@@ -4342,13 +4340,18 @@ export function createToolGatewayService(
               eq(connectionGrants.id, grant.id),
               eq(connectionGrants.companyId, connection.companyId),
               eq(connectionGrants.connectionId, connection.id),
+              eq(connectionGrants.status, "active"),
+              isNull(connectionGrants.revokedAt),
             ),
-          );
+          ).returning({ id: connectionGrants.id });
+        if (!updatedGrant) throw new ToolGatewayHttpError(403,
+          "Connection authorization changed during token resolution", "credential_grant_changed");
         return {
           [connection.externalCredential.headerName]:
             `${connection.externalCredential.headerPrefix ?? ""}${token.token}`,
         };
       } catch (error) {
+        if (error instanceof ToolGatewayHttpError) throw error;
         if (
           error instanceof VercelConnectClientError &&
           error.code === "vercel_connect_authorization_required"
@@ -4363,6 +4366,8 @@ export function createToolGatewayService(
               and(
                 eq(connectionGrants.id, grant.id),
                 eq(connectionGrants.companyId, connection.companyId),
+                eq(connectionGrants.status, "active"),
+                isNull(connectionGrants.revokedAt),
               ),
             );
           const responsibleUserId =
@@ -6239,6 +6244,7 @@ export function createToolGatewayService(
     callerHeaders?: ExecuteGatewayToolInput["callerHeaders"],
     useDefaultTimeout = false,
     signal?: AbortSignal,
+    scopedContext?: ScopedToolGatewayContext,
   ): Promise<RemoteHttpExecutionResult> {
     const { entry, connection } = await resolveConnectedRemoteTool(
       session,
@@ -6251,6 +6257,53 @@ export function createToolGatewayService(
       ms = railwayCommandBudgetMs(parameters);
     }
     const grant = await resolveConnectionGrant(session, connection);
+    // Scoped authority belongs to the original native execution. Credential
+    // resolution, initialization and refresh can all await external work; an
+    // earlier check cannot authorize the request that follows those awaits.
+    const connectionPin = (row: typeof toolConnections.$inferSelect) => stableHash({
+      id: row.id, applicationId: row.applicationId, authKind: row.authKind,
+      credentialSource: row.credentialSource, credentialPolicy: row.credentialPolicy,
+      config: row.config, transportConfig: row.transportConfig,
+      credentialRefs: row.credentialRefs, credentialSecretRefs: row.credentialSecretRefs,
+      externalCredential: row.externalCredential,
+    });
+    const pinnedConnection = scopedContext ? connectionPin(connection) : null;
+    const assertScopedTransportCurrent = async () => {
+      if (!scopedContext) return;
+      try {
+        await scopedContext.assertCurrent(tool);
+      } catch (error) {
+        if (error instanceof ToolGatewayHttpError) throw error;
+        throw new ToolGatewayHttpError(403, "Scoped execution authority changed", "scoped_tool_authority_changed");
+      }
+      const live = await resolveConnectedRemoteTool(session, tool);
+      const [application] = await db.select({ status: toolApplications.status })
+        .from(toolApplications).where(and(eq(toolApplications.id, live.connection.applicationId),
+          eq(toolApplications.companyId, session.companyId)));
+      const [liveGrant] = await db.select().from(connectionGrants).where(and(
+        eq(connectionGrants.companyId, session.companyId),
+        eq(connectionGrants.connectionId, connection.id),
+        eq(connectionGrants.id, grant.id),
+      ));
+      if (!application || application.status !== "active" || connectionPin(live.connection) !== pinnedConnection ||
+          live.entry.versionHash !== entry.versionHash ||
+          live.entry.schemaHash !== entry.schemaHash ||
+          live.entry.toolName !== entry.toolName ||
+          live.entry.riskLevel !== entry.riskLevel ||
+          !liveGrant || liveGrant.status !== "active" || liveGrant.revokedAt ||
+          liveGrant.kind !== grant.kind || liveGrant.subjectUserId !== grant.subjectUserId ||
+          liveGrant.subjectAgentId !== grant.subjectAgentId ||
+          stableHash(liveGrant.credentialSecretRefs) !== stableHash(grant.credentialSecretRefs)) {
+        throw new ToolGatewayHttpError(403, "Scoped connection authority changed", "scoped_tool_connection_changed");
+      }
+      // Reuse the native audience/membership/delegation resolver, then refuse
+      // fallback to another person's or organization's grant within this call.
+      const selectedGrant = await resolveConnectionGrant(session, live.connection);
+      if (selectedGrant.id !== grant.id) {
+        throw new ToolGatewayHttpError(403, "Scoped credential selection changed", "scoped_tool_grant_changed");
+      }
+    };
+    await assertScopedTransportCurrent();
     const endpoint = await resolvedRemoteEndpoint(session, connection, grant);
     // Method-defined headers are trusted catalog configuration. Treat them as
     // managed headers so callers cannot override the scope that was reviewed
@@ -6277,7 +6330,7 @@ export function createToolGatewayService(
         mcpMethod: "tools/call",
         requestId,
         upstreamToolName: entry.toolName,
-        dispatched: true,
+        dispatched: false,
       },
     };
     const controller = new AbortController();
@@ -6287,8 +6340,11 @@ export function createToolGatewayService(
     const timer = setTimeout(() => controller.abort(), ms);
     timer.unref?.();
     try {
-      const dispatchRemote = (target: string, init: RequestInit) =>
-        options.remoteHttpRequest
+      const dispatchRemote = async (target: string, init: RequestInit) => {
+        await assertScopedTransportCurrent();
+        controller.signal.throwIfAborted();
+        execution.request.dispatched = true;
+        return options.remoteHttpRequest
           ? options.remoteHttpRequest(target, init)
           : guardedRemoteHttpFetch(target, init, {
               ...remoteHttpFetchOptions(),
@@ -6297,6 +6353,7 @@ export function createToolGatewayService(
               // letting the tighter default cut a legitimately slow tool short.
               responseTimeoutMs: ms,
             });
+      };
       if (isRailwayEndpoint(connection.config.url) && normalizeRailwayToolName(entry.toolName).startsWith(RAILWAY_TOOL_PREFIX)) {
         if (!isRailwayConnection(connection) || connection.config.railwayApiStatus !== "available") {
           throw new ToolGatewayHttpError(422, "Railway API access is not verified. Refresh actions or reconnect this Railway connection.", "railway_api_not_verified");
@@ -6310,14 +6367,19 @@ export function createToolGatewayService(
           signal: controller.signal,
           request: dispatchRemote,
           runCommand: ssh?.grantId === grant.id && ssh?.enabled === true && sshRef
-            ? async (input) => runRailwaySshCommand({
-                ...input,
-                privateKey: await resolveGrantSecretValue(session, connection, grant, sshRef),
-                knownHosts: typeof ssh.knownHosts === "string" ? ssh.knownHosts : "",
-              })
+            ? async (input) => {
+                const privateKey = await resolveGrantSecretValue(session, connection, grant, sshRef);
+                await assertScopedTransportCurrent();
+                controller.signal.throwIfAborted();
+                return runRailwaySshCommand({
+                  ...input, privateKey,
+                  knownHosts: typeof ssh.knownHosts === "string" ? ssh.knownHosts : "",
+                });
+              }
             : undefined,
         });
         const data = await client.call(entry.toolName, parameters);
+        await assertScopedTransportCurrent();
         const record = asRecord(data);
         const failedCommand = entry.toolName === `${RAILWAY_TOOL_PREFIX}run-command` && (record?.exitCode !== 0 || record?.timedOut === true || record?.truncated === true);
         return {
@@ -6369,6 +6431,7 @@ export function createToolGatewayService(
         connection.credentialSource === "paperclip_vault" &&
         isPaperclipCloudConnectorStrategy(oauth?.strategy)
       ) {
+        await assertScopedTransportCurrent();
         credentialHeaders = {
           ...projectedConnectionHeaders(connection),
           ...(await resolveCredentialHeaders(session, connection, grant, {
@@ -6409,6 +6472,7 @@ export function createToolGatewayService(
         !isPaperclipCloudConnectorStrategy(oauth?.strategy) &&
         options.oauthGrantRefresher
       ) {
+        await assertScopedTransportCurrent();
         credentialHeaders = {
           ...projectedConnectionHeaders(connection),
           ...(await resolveCredentialHeaders(session, connection, grant, {
@@ -6432,6 +6496,7 @@ export function createToolGatewayService(
         response.status === 401 &&
         connection.credentialSource === "vercel_connect"
       ) {
+        await assertScopedTransportCurrent();
         if (!connection.externalCredential || !vercelConnect) {
           throw new ToolGatewayHttpError(
             503,
@@ -6602,6 +6667,7 @@ export function createToolGatewayService(
         false,
         sourceTemplateKey,
       );
+      await assertScopedTransportCurrent();
       await markRemoteConnectionHealth(
         connection,
         "ok",
@@ -10918,6 +10984,7 @@ export function createToolGatewayService(
                 input.callerHeaders,
                 input.timeoutMs === undefined,
                 input.signal,
+                scopedContext,
               )
             : tool.providerType === "mcp_local_stdio"
               ? await executeLocalStdioTool(

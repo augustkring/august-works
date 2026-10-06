@@ -13,7 +13,8 @@
       "id": "credential_use_broker_and_revocation",
       "wave": 12,
       "status": "incomplete",
-      "source": "server/src/services/execution-sandbox/openshell-policy.ts"
+      "source": "server/src/services/execution-sandbox/openshell-policy.ts",
+      "verificationScope": "Native scoped ToolGateway HTTP requests recheck original execution, connection/catalog pins, grant identity and audience before each request and publication. Vercel token metadata cannot reactivate a concurrently revoked grant. Local acceptance uses migrated PostgreSQL and private transport fixtures. Physical per-use workload credential brokering, executable identity, secret-version revocation and OpenShell enforcement remain incomplete and closed."
     },
     {
       "id": "pre_spend_model_reservation",

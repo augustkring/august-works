@@ -33,6 +33,7 @@ import {
   toolGatewaySessions,
   toolInvocations,
   toolPolicies,
+  toolRateLimitCounters,
   workflows,
   workflowRuns,
   workflowStepRuns,
@@ -51,6 +52,7 @@ import { toolAccessService } from "../services/tool-access.js";
 import {
   createToolGatewayService,
   ToolGatewayHttpError,
+  type ScopedToolGatewayContext,
 } from "../services/tool-gateway.js";
 import { canonicalToolArguments, signToolArguments } from "../services/tool-content-guards.js";
 import {
@@ -1752,6 +1754,123 @@ describeEmbeddedPostgres("tool gateway service", () => {
       reasonCode: "tool_error",
       message: expect.stringContaining("enroll the signed-in Workspace account and this OAuth client's Google Cloud project"),
     });
+  });
+
+  it.each([
+    ["token_run_cancel", 0, 1, "scoped_fixture_run_inactive"],
+    ["initialize_grant_revoke", 1, 1, "scoped_tool_connection_changed"],
+    ["notification_run_cancel", 2, 1, "scoped_fixture_run_inactive"],
+    ["notification_destination_change", 2, 1, "scoped_tool_connection_changed"],
+    ["call_grant_revoke", 1, 1, "scoped_tool_connection_changed"],
+    ["unauthorized_refresh", 1, 1, "scoped_tool_connection_changed"],
+    ["refresh_grant_revoke", 1, 2, "credential_grant_changed"],
+    ["token_grant_revoke", 0, 1, "credential_grant_changed"],
+    ["token_grant_revoke_ordinary", 0, 1, "credential_grant_changed"],
+    ["healthy_refresh", 2, 2, null],
+    ["healthy_last_rate_slot", 1, 1, null],
+  ] as const)("fences scoped HTTP transport at native authority boundaries: %s", async (scenario, wireCount, tokenCount, reasonCode) => {
+    const { company, agent, run } = await createRunFixture(db);
+    const { connection } = await createRemoteMcpToolFixture(db, company.id);
+    const initialize = scenario.startsWith("initialize_") || scenario.startsWith("notification_");
+    await db.update(toolConnections).set({
+      credentialSource: "vercel_connect",
+      externalCredential: {
+        provider: "vercel_connect", connectorId: "scoped-fixture", connectorUid: "scoped-fixture",
+        service: "fixture", connectorType: "api-key", principalMode: "app",
+        headerName: "Authorization", headerPrefix: "Bearer ", scopes: ["*"],
+      },
+      config: { ...connection.config, mcpSessionRequired: initialize },
+    }).where(eq(toolConnections.id, connection.id));
+    await db.update(connectionGrants).set({
+      externalCredential: { provider: "vercel_connect", subjectType: "app" },
+    }).where(eq(connectionGrants.connectionId, connection.id));
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Scoped fixture reads",
+      policyType: "allow", selectors: { riskLevel: "read" } });
+    if (scenario === "healthy_last_rate_slot") await db.insert(toolPolicies).values({
+      companyId: company.id, name: "Single native slot", policyType: "rate_limit", priority: -999,
+      selectors: { connectionId: connection.id }, config: { rateLimit: { limit: 1, windowSeconds: 3600 } },
+    });
+    const revokeGrant = () => db.update(connectionGrants).set({ status: "revoked", revokedAt: new Date() })
+      .where(eq(connectionGrants.connectionId, connection.id));
+    const getToken = vi.fn<VercelConnectClient["getToken"]>(async (_request, options) => {
+      if (scenario === "token_run_cancel") {
+        await db.update(heartbeatRuns).set({ status: "cancelled" }).where(eq(heartbeatRuns.id, run.id));
+      }
+      if (scenario.startsWith("token_grant_revoke") || scenario === "refresh_grant_revoke" && options?.forceRefresh) await revokeGrant();
+      return { token: options?.forceRefresh ? "scoped-fresh-fixture-key" : "scoped-stale-fixture-key",
+        tokenId: options?.forceRefresh ? "fixture-fresh" : "fixture-stale", expiresAt: Date.now() + 60_000,
+        connector: { id: "scoped-fixture", uid: "scoped-fixture", type: "api-key" } };
+    });
+    const wireMethods: string[] = [];
+    const gateway = createTestToolGatewayService(db, {
+      vercelConnectClient: { getConnectorMetadata: vi.fn(), getToken, startAuthorization: vi.fn(),
+        revoke: vi.fn(), evict: vi.fn() },
+      remoteHttpRequest: async (_url, init) => {
+        const request = JSON.parse(String(init.body)) as { id?: string; method: string };
+        wireMethods.push(request.method);
+        if (request.method === "initialize") {
+          if (scenario === "initialize_grant_revoke") await revokeGrant();
+          return new Response(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {
+            protocolVersion: "2025-03-26", capabilities: {}, serverInfo: { name: "private-fixture", version: "1" },
+          } }), { headers: { "content-type": "application/json", "mcp-session-id": randomUUID() } });
+        }
+        if (request.method === "notifications/initialized") {
+          if (scenario === "notification_run_cancel") await db.update(heartbeatRuns)
+            .set({ status: "cancelled" }).where(eq(heartbeatRuns.id, run.id));
+          if (scenario === "notification_destination_change") await db.update(toolConnections)
+            .set({ config: { url: "https://1.1.1.1/mcp", mcpSessionRequired: true } }).where(eq(toolConnections.id, connection.id));
+          return new Response(null, { status: 202 });
+        }
+        if (scenario === "call_grant_revoke") await revokeGrant();
+        if (scenario.endsWith("refresh") || scenario === "refresh_grant_revoke") {
+          if (wireMethods.length === 1) {
+            if (scenario === "unauthorized_refresh") await revokeGrant();
+            return new Response(null, { status: 401 });
+          }
+        }
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: request.id,
+          result: { content: [{ type: "text", text: "private-scoped-fixture-output" }] },
+        }), { headers: { "content-type": "application/json" } });
+      },
+    });
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+    const context: ScopedToolGatewayContext = { session, assertCurrent: async () => {
+      const [current] = await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, run.id));
+      if (current?.status !== "running") throw new ToolGatewayHttpError(403, "Fixture execution stopped", "scoped_fixture_run_inactive");
+    } };
+    const tool = (await gateway.listScopedTools(context)).find(candidate => candidate.providerType === "mcp_remote_http")!;
+    const ordinary = scenario === "token_grant_revoke_ordinary";
+    const call = gateway.executeTool({ sessionToken: ordinary ? session.token : "", tool: tool.name, parameters: {} },
+      undefined, ordinary ? undefined : context);
+    if (reasonCode) {
+      await expect(call).rejects.toMatchObject({ reasonCode,
+        ...(scenario === "token_run_cancel" ? { details: { execution: { request: { dispatched: false } } } } : {}),
+      });
+    } else expect((await call).status).toBe("completed");
+    expect(wireMethods).toHaveLength(wireCount);
+    expect(getToken).toHaveBeenCalledTimes(tokenCount);
+    if (initialize) expect(wireMethods).not.toContain("tools/call");
+    const invocations = await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, company.id));
+    expect(invocations).toHaveLength(1);
+    expect(invocations[0]?.status).toBe(reasonCode ? "failed" : "succeeded");
+    if (scenario === "healthy_last_rate_slot") {
+      const counters = await db.select().from(toolRateLimitCounters).where(eq(toolRateLimitCounters.companyId, company.id));
+      expect(counters).toHaveLength(1);
+      expect(counters[0]?.remaining).toBe(0);
+    }
+    if (reasonCode) expect(invocations[0]?.workflowResultJson).toBeNull();
+    if (scenario.includes("grant_revoke") || scenario === "unauthorized_refresh") {
+      const [retainedGrant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, connection.id));
+      expect(retainedGrant?.status).toBe("revoked");
+      expect(retainedGrant?.revokedAt).toBeInstanceOf(Date);
+    }
+    const audits = await db.select().from(toolAccessAuditEvents).where(eq(toolAccessAuditEvents.companyId, company.id));
+    const calls = await db.select().from(toolCallEvents).where(eq(toolCallEvents.companyId, company.id));
+    const persisted = JSON.stringify({ invocations, audits, calls });
+    expect(persisted).not.toContain("scoped-stale-fixture-key");
+    expect(persisted).not.toContain("scoped-fresh-fixture-key");
+    if (reasonCode) expect(persisted).not.toContain("private-scoped-fixture-output");
   });
 
   it("injects Vercel tokens at dispatch and refreshes exactly once after an upstream 401", async () => {
