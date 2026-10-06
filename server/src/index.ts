@@ -4,6 +4,7 @@ import { reconcileAgentPackages, deliverAgentPackageStops } from "./services/age
 import { maintainFoundationFindings, maintainPackageUpdates } from "./services/stewards/core-stewards.js";
 import { reconcileGovernanceDeployments, deliverGovernanceStops } from "./services/ai-governance/governance-jobs.js";
 import { supervisionService } from "./services/supervision/supervision-service.js";
+import { strategyExecutionService } from "./services/strategy-execution/service.js";
 import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network-policy.js";
 /// <reference path="./types/express.d.ts" />
 // Kicks off the OTel bootstrap as early as possible (no-op unless
@@ -1232,6 +1233,10 @@ async function startServerWithDatabaseTeardown(
     ["supervision", () => supervisor.tick(20)],
     ["security_event_export", () => securityEventExportService(db).tick(10)],
     ["work_signal_retention", () => workSignalService(db).expire(20)],
+    ["strategy_retention", async () => {
+      const result = await strategyExecutionService(db).sweepExpired();
+      if (result.erasedLinks > 0) logger.info(result, "Strategy retention sweep removed expired histories");
+    }],
     ["work_signal_followups", () => workSignalService(db).deliverFollowups(20)],
     ["finalization", () => reconcileAbandonedExecutionControl(db)],
     ["replacement", () => heartbeat ? reconcileSafeNativeReplacements(db, new Date(), { verifyStoppedSession: run => verifyStoppedNativeSessionForReplacement(db, run) }) : undefined],

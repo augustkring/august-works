@@ -190,11 +190,25 @@ export function strategyExecutionService(db: Db) {
     /** Native retention worker; admission is owned by its scheduler, not HTTP. */
     async eraseExpired(companyId: string, now = new Date()) {
       return db.transaction(async rawTx => {
-        const tx = rawTx as unknown as Db; await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+        const tx = rawTx as unknown as Db; await tx.execute(sql`set local statement_timeout='8s'`);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const pins = await tx.select({ linkId: strategyExecutionLinkVersions.linkId }).from(strategyExecutionLinkVersions).where(and(eq(strategyExecutionLinkVersions.companyId, companyId), lte(strategyExecutionLinkVersions.expiresAt, now))).limit(100);
         if (!pins.length) return 0;
         return (await tx.delete(strategyExecutionLinks).where(and(eq(strategyExecutionLinks.companyId, companyId), inArray(strategyExecutionLinks.id, pins.map(pin => pin.linkId)))).returning({ id: strategyExecutionLinks.id })).length;
       });
+    },
+    /** Internal bounded sweep, including paused companies and disabled features.
+     * Oldest retained expiry is served first; each company erases at most 100 roots. */
+    async sweepExpired(now = new Date()) {
+      const due = await db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db; await tx.execute(sql`set local statement_timeout='8s'`);
+        return tx.select({ companyId: strategyExecutionLinkVersions.companyId }).from(strategyExecutionLinkVersions)
+          .where(lte(strategyExecutionLinkVersions.expiresAt, now)).groupBy(strategyExecutionLinkVersions.companyId)
+          .orderBy(sql`min(${strategyExecutionLinkVersions.expiresAt})`, asc(strategyExecutionLinkVersions.companyId)).limit(21);
+      });
+      let erased = 0;
+      for (const company of due.slice(0, 20)) erased += await this.eraseExpired(company.companyId, now);
+      return { checkedCompanies: Math.min(due.length, 20), erasedLinks: erased, hasMoreCompanies: due.length > 20 };
     },
   };
 }

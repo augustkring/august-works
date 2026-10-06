@@ -119,6 +119,22 @@ suite("native strategy links on migrated PostgreSQL", () => {
     expect(await service().eraseExpired(companyId, new Date(Date.now()+91*86400000))).toBe(1);
     expect(await db.select().from(strategyExecutionLinkVersions).where(eq(strategyExecutionLinkVersions.linkId, created.link.id))).toHaveLength(0);
   });
+  it("sweeps an expired historical version with flags off and its company paused, retaining unrelated current histories", async () => {
+    const expired = await approved({ ...definition(), retentionDays: 1 });
+    const replacement = await service().revise(companyId, actor, expired.link.id, { expectedRevision: 2, definition: definition() });
+    await service().approve(companyId, actor, expired.link.id, { expectedRevision: 3, versionId: replacement.id, rationale: "Human approval of a separately retained revision" });
+    const retained = await approved({ ...definition(), from: { type: "goal", id: goalId }, to: { type: "project", id: projectId } });
+    await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ strategy_execution_v8: false });
+    const now = new Date(Date.now()+2*86400000);
+    expect(await service().sweepExpired(now)).toEqual({ checkedCompanies: 1, erasedLinks: 1, hasMoreCompanies: false });
+    expect(await db.select().from(strategyExecutionLinks).where(eq(strategyExecutionLinks.id, expired.link.id))).toHaveLength(0);
+    expect(await db.select().from(strategyExecutionLinkVersions).where(eq(strategyExecutionLinkVersions.linkId, expired.link.id))).toHaveLength(0);
+    expect(await db.select().from(strategyExecutionLinkApprovals).where(eq(strategyExecutionLinkApprovals.linkId, expired.link.id))).toHaveLength(0);
+    expect(await db.select().from(strategyExecutionSourceBindings).where(eq(strategyExecutionSourceBindings.linkId, expired.link.id))).toHaveLength(0);
+    expect(await db.select().from(strategyExecutionLinks).where(eq(strategyExecutionLinks.id, retained.link.id))).toHaveLength(1);
+    expect(await service().sweepExpired(now)).toEqual({ checkedCompanies: 0, erasedLinks: 0, hasMoreCompanies: false });
+  });
   it("preserves Decision target erasure ancestry after its native target join disappears", async () => {
     const secret = process.env.PAPERCLIP_DECISION_SIGNING_SECRET;
     process.env.PAPERCLIP_DECISION_SIGNING_SECRET = "0123456789abcdef0123456789abcdef";

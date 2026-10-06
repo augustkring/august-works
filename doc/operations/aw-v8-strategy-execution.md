@@ -24,7 +24,9 @@ bounded authorized coverage. They are not proof that no orphan work or unserved
 objective exists. A detail includes its effective approved version separately from
 up to 100 historical versions. Expired payloads are not returned. The internal
 retention owner deletes entire link histories in batches of 100 when any retained
-version expires; scheduler integration remains open.
+version expires; the existing startup/periodic single-flight reconciliation queue now serves the
+oldest expiry first across at most 20 companies per sweep, including paused
+companies with V8 disabled. Statement timeouts bound individual database work.
 
 Publication and reads take analytical company, then Memory privacy locks before
 source or link row locks. Source identity is fixed per root. PostgreSQL enforces
@@ -40,7 +42,7 @@ Native document deletion and revision erasure record minimal document/revision
 guards in the existing analytical suppression register and authenticated restore
 ledger. Existing Goal/Project/Task guards apply with flags off. Replay deletes
 derived histories without deleting unrelated canonical sources or permitting
-service admission from quarantine. Eleven strategy PostgreSQL regressions include
+service admission from quarantine. Twelve strategy PostgreSQL regressions include
 Foundation drift, immutable human approval, foreign identity, native ownership,
 cycles/CAS, Goal erasure, revision guards, retention, native Decision target ancestry,
 Foundation/Memory concurrency and an isolated database restore. Native metric,
@@ -50,7 +52,7 @@ database; it is not an archive, object-storage or hosted disaster-recovery drill
 
 Still open: native Goal/Project/Portfolio surfaces; completeness-
 qualified drift/orphan/unserved findings; real native Decision candidate, Planning
-proposal and V7 Learning bridges; retention scheduling; remaining full privacy and native source coverage; provider/hosted qualification and full V8 regression.
+proposal and V7 Learning bridges; remaining full privacy and native source coverage; provider/hosted qualification and full V8 regression.
 Expired observation pins currently fail closed through the metric owner rather than
 being presented as a readable strategic finding. This source slice does not make
 the build brief complete or grant a release stage.
