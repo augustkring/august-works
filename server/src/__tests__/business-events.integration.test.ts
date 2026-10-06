@@ -4,6 +4,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { activityLog, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, createDb, applyPendingMigrations, issues, projects } from "@paperclipai/db";
 import { businessEventBackfillSchema } from "@paperclipai/shared";
 import { businessEventService } from "../services/business-events.js";
+import { issueService } from "../services/issues.js";
+import { projectService } from "../services/projects.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -151,6 +153,52 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       await db.execute(sql`drop database ${sql.identifier(name)}`);
     }
   }, 30000);
+
+  it("erases issue projections and unprojected identities through the native owner with rollout disabled", async () => {
+    const erased = await source();
+    await service().backfill(companyId, actor, window);
+    const unprojected = await source({ status: "done" });
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ business_events_v8: false });
+    try {
+      expect((await issueService(db).remove(issueId))?.id).toBe(issueId);
+      expect(await stored()).toHaveLength(0);
+      expect(await db.select().from(businessEventObjects).where(eq(businessEventObjects.companyId, companyId))).toHaveLength(0);
+      const guards = await db.select().from(businessEventSuppressions).where(eq(businessEventSuppressions.companyId, companyId));
+      expect(guards.map(row => row.sourceRef).sort()).toEqual([erased.id, unprojected.id].sort());
+    } finally {
+      await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ business_events_v8: true });
+    }
+    // Recreate a pre-deletion source object as a restore might; retained guards
+    // prevent analytical resurrection even though the source history remains.
+    await db.insert(issues).values({ id: issueId, companyId, projectId, title: "Restored issue" });
+    expect((await service().backfill(companyId, actor, window)).projected).toBe(0);
+  });
+
+  it("suppresses historical project relations during concurrent projection without deleting unrelated issue work", async () => {
+    const linked = await source({ projectId, status: "todo" });
+    await source({}, { entityType: "project", entityId: projectId, action: "project.updated" });
+    const retained = await source({ status: "done" });
+    await service().backfill(companyId, actor, window);
+    // Native project deletion already requires resolving operational references.
+    await db.update(issues).set({ projectId: null }).where(eq(issues.id, issueId));
+    const unprojected = await source({ projectId, status: "blocked" });
+    await Promise.all([projectService(db).remove(projectId), service().backfill(companyId, actor, window)]);
+    expect((await stored()).map(row => row.sourceRef)).toEqual([retained.id]);
+    expect(await db.select().from(issues).where(eq(issues.id, issueId))).toHaveLength(1);
+    const guards = await db.select().from(businessEventSuppressions).where(eq(businessEventSuppressions.companyId, companyId));
+    expect(guards.map(row => row.sourceRef)).toEqual(expect.arrayContaining([linked.id, unprojected.id]));
+    expect(guards.some(row => row.sourceRef === retained.id)).toBe(false);
+  });
+
+  it("rolls back native deletion and preserves projection history when a canonical reference blocks erasure", async () => {
+    await source();
+    await service().backfill(companyId, actor, window);
+    await db.insert(issues).values({ companyId, parentId: issueId, title: "Dependent issue" });
+    await expect(issueService(db).remove(issueId)).rejects.toMatchObject({ status: 409 });
+    expect(await stored()).toHaveLength(1);
+    expect(await db.select().from(businessEventSuppressions).where(eq(businessEventSuppressions.companyId, companyId))).toHaveLength(0);
+    expect(await db.select().from(issues).where(eq(issues.id, issueId))).toHaveLength(1);
+  });
 
   it("uses exact source microseconds and UUID ordering for resumable bounded pages", async () => {
     const first = await source();

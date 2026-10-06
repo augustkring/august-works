@@ -28,7 +28,9 @@ Current assignments never become invented historical relationships.
 All paths use existing company and native object authorization. Reads recheck
 the current authoritative source and object access before exposing data. Changed
 or deleted sources disappear from reads even before the next backfill. Backfill
-and suppression share a PostgreSQL advisory transaction lock per company/source.
+and suppression take a company advisory transaction lock before the source lock.
+Native issue/project erasure takes the same company lock before native row deletion.
+Projection transactions remain bounded to one source at a time.
 
 The first projection preserves the native activity UUID. Correction appends a new
 revision, links its predecessor, and tombstones that predecessor without rewriting
@@ -47,13 +49,13 @@ late-arriving rows. Revisit windows explicitly to capture late data.
 
 ## Evidence and open work
 
-Ten migrated-PostgreSQL tests cover concurrent replay, payload minimization,
+Thirteen migrated-PostgreSQL tests cover concurrent replay, payload minimization,
 correction lineage, return-to-earlier-value corrections, suppression/replay races,
 retained-register restore exclusion, native quarantine replay, tenant boundaries, composite foreign keys,
 microsecond pagination, persisted checkpoints, source deletion visibility, disabled
 admission and invalid bounds. Server and UI typechecks and UI token gates pass.
 The preceding admission checkpoint passed 76 targeted tests. The current event
-selection passes ten tests; the OpenAPI selection passes fifteen and includes
+selection passes thirteen tests; the OpenAPI selection passes fifteen and includes
 the new mounted routes. Two standalone deletion-ledger authentication tests pass.
 
 The existing V6 independently signed deletion-ledger export now includes minimal
@@ -72,7 +74,15 @@ later replay denial. It does not execute pg_dump/pg_restore, independent remote
 storage or hosted recovery. The real dump/restore suite remains opt-in through
 its pinned PostgreSQL client image. Protected operating evidence is still required.
 
-Still unfinished: automatic source-owner erasure and retention hooks, governance
+Native issue and project deletion now suppresses projected and not-yet-projected
+activity identities in the native delete transaction, including historical related
+project links. Payload and object links are erased even with rollout disabled.
+Concurrent projection cannot recreate them; restricted native references still
+roll back the entire deletion. The retained source activity log remains governed
+by its existing owner. Raw database deletion and independent source-log retention
+are not covered by these service hooks.
+
+Still unfinished: other source-owner erasure and retention hooks, governance
 purpose/retention admission, other source adapters, incremental dispatch,
 general analytical lineage/invalidation, OCEL/JSONL export, quality/readiness,
 process analysis, operator UI, independent security review and hosted evidence.

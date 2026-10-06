@@ -43,10 +43,11 @@
     "default_off_feature_admission",
     "shared_assurance_contracts",
     "initial_native_activity_business_event_projection",
-    "business_event_suppression_in_native_signed_restore_ledger"
+    "business_event_suppression_in_native_signed_restore_ledger",
+    "native_issue_project_deletion_business_event_suppression"
   ],
   "unfinishedWaves": [
-    "source_reading_and_reconciliation",
+    "remaining_domain_owner_reconciliation",
     "business_events",
     "metrics",
     "lineage_and_interchange",
@@ -74,13 +75,13 @@
     "server/src/__tests__/v7-feature-admission.integration.test.ts",
     "server/src/__tests__/business-events.integration.test.ts",
     "deploy/v6/deletion-ledger.test.mjs",
-    "server/src/__tests__/openapi-routes.test.ts"
+    "server/src/__tests__/openapi-routes.test.ts",
+    "server/src/__tests__/issue-remove-cascade.test.ts"
   ],
   "limitations": [
     "Feature configuration does not prove implementation or authorization.",
     "The shared assurance helper evaluates supplied claims; it does not certify manifest completeness.",
     "No live hosting or optional analytical provider is qualified.",
-    "Most supplied playbook readings remain pending.",
-    "Native Business Events are partial: other producers, automatic lifecycle/governance hooks, exports, incremental projection, process readiness and operator UI are unfinished. Native signed-ledger quarantine replay is locally verified on a copied database; actual archive/remote/hosted recovery remains unqualified."
+    "Native Business Events are partial: other producers, remaining lifecycle/governance hooks, exports, incremental projection, process readiness and operator UI are unfinished. Native signed-ledger quarantine replay is locally verified on a copied database; actual archive/remote/hosted recovery remains unqualified."
   ]
 }

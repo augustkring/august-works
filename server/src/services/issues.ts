@@ -10,6 +10,7 @@ import type { ExecutionProjection } from "@paperclipai/shared";
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
 import { forgetMemoryForDeletedIssue } from "./memory/memory-privacy.js";
+import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
 import {
   and,
   asc,
@@ -11318,6 +11319,8 @@ export function issueService(db: Db) {
 
     remove: (id: string) =>
       db.transaction(async (tx) => {
+        const [owner] = await tx.select({ companyId: issues.companyId }).from(issues).where(eq(issues.id, id));
+        if (owner) await lockBusinessEventCompany(tx, owner.companyId);
         const attachmentAssetIds = await tx
           .select({ assetId: issueAttachments.assetId })
           .from(issueAttachments)
@@ -11347,7 +11350,10 @@ export function issueService(db: Db) {
           throw err;
         }
 
-        if (removedIssue) await forgetMemoryForDeletedIssue(tx as unknown as Db, removedIssue.companyId, removedIssue.id);
+        if (removedIssue) {
+          await suppressBusinessEventsForObject(tx, removedIssue.companyId, "issue", removedIssue.id);
+          await forgetMemoryForDeletedIssue(tx as unknown as Db, removedIssue.companyId, removedIssue.id);
+        }
         if (removedIssue && attachmentAssetIds.length > 0) {
           await tx.delete(assets).where(
             inArray(
