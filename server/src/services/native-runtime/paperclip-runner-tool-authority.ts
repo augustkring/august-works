@@ -93,6 +93,8 @@ const NATIVE_REVIEW_READ_TOOLS = new Set([
 ]);
 
 type Binding = {
+  /** Controller-owned turn revocation. Never obtained from tool arguments. */
+  authoritySignal?: AbortSignal;
   /** Server-derived scope for one addressed native completion review. */
   nativeReview?: NativeReviewAssignmentContext;
   companyId: string;
@@ -238,6 +240,7 @@ export class PaperclipRunnerToolAuthority {
     callId: string;
     arguments: unknown;
   }): Promise<unknown> {
+    this.binding.authoritySignal?.throwIfAborted();
     return withOrchestrationNativeTool(this.db, this.binding, call,
       () => this.#executeAdmitted(call),
       call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false));
@@ -638,6 +641,7 @@ export class PaperclipRunnerToolAuthority {
   }
 
   async #boundContext() {
+    this.binding.authoritySignal?.throwIfAborted();
     const [row] = await this.db.select({ issue: issues, actor: agents, run: heartbeatRuns })
       .from(heartbeatRuns)
       .innerJoin(issues, eq(issues.id, this.binding.issueId))
@@ -677,6 +681,7 @@ export class PaperclipRunnerToolAuthority {
         throw forbidden("The assigned review is no longer available to this run.");
       }
     }
+    this.binding.authoritySignal?.throwIfAborted();
     return row;
   }
 
@@ -1480,6 +1485,7 @@ export class PaperclipRunnerToolAuthority {
             describeResult(await effect(tx as unknown as Db, context)),
           ),
         ) as unknown;
+        this.binding.authoritySignal?.throwIfAborted();
         receipts[idempotencyKey] = {
           operationId,
           input,
@@ -1505,6 +1511,7 @@ export class PaperclipRunnerToolAuthority {
     issue: typeof issues.$inferSelect;
     actor: typeof agents.$inferSelect;
   }> {
+    this.binding.authoritySignal?.throwIfAborted();
     // Bounded plans use the same order as reservation, supervision and Stop.
     // Ordinary native runs retain their existing Task/run mutation behavior.
     const bounded = await lockNativeToolPlan(tx, this.binding);
@@ -1550,6 +1557,7 @@ export class PaperclipRunnerToolAuthority {
       throw new Error("paperclip_runner_tool_binding_not_authorized");
     }
     if (bounded) await assertNativeToolPlanCurrent(tx, this.binding, true);
+    this.binding.authoritySignal?.throwIfAborted();
     return context;
   }
 

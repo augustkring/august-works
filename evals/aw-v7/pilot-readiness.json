@@ -20,7 +20,7 @@
       "wave": 7,
       "status": "incomplete",
       "source": "server/src/services/orchestration/orchestration-admission.ts",
-      "verificationScope": "Native reservation primitive, read-only consumers, private worker HTTP gateway and Native Task tool accounting verified locally; capped worker launch remains closed until every model request is forced through the qualified transport"
+      "verificationScope": "Native reservation primitive, read-only consumers, private worker HTTP gateway, Native Task tool accounting and private one-call draft session verified locally; capped production launch remains closed until explicit provider/runtime-context/start/admission/heartbeat binding forces every model request through the qualified transport"
     },
     {
       "id": "automated_read_only_semantic_consumer",

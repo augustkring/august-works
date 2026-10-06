@@ -62,6 +62,12 @@ import { PaperclipRunnerSemanticAuthority } from "../services/native-runtime/run
 import { createAssignedMcpTools } from "../services/native-runtime/assigned-mcp-tools.js";
 import type { ToolGatewayService } from "../services/tool-gateway.js";
 import { withOrchestrationNativeTool } from "../services/orchestration/native-tool-boundary.js";
+import { createAwTextDraftBackend } from "../services/native-runtime/aw-text-draft-backend.js";
+import {
+  validatePrpEvent,
+  validatePrpStructuredRunResult,
+} from "../vendor/paperclip-runner/index.js";
+import { documentService } from "../services/documents.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -317,7 +323,8 @@ const support = await getEmbeddedPostgresTestSupport();
       observedBody = String(init.body);
       observedKey = new Headers(init.headers).get("x-api-key")!;
       const rows = await ledger();
-      expect(rows.at(-1)).toMatchObject({
+      // PostgreSQL does not promise insertion order after receipt updates.
+      expect(rows.find((row) => row.status === "dispatched")).toMatchObject({
         status: "dispatched",
         maximumMinor: 3,
       });
@@ -334,12 +341,12 @@ const support = await getEmbeddedPostgresTestSupport();
         { status: 200, headers: { "content-type": "application/json" } },
       );
     };
-    function gateway() {
+    function gateway(transport: typeof guardedRemoteHttpFetch = fetch) {
       return workerModelGateway(db, {
         profiles: [profile],
         sourceSha,
         protectedEvidenceOrigin: "https://protected.test.invalid",
-        fetch,
+        fetch: transport,
       });
     }
     function nativeBinding() {
@@ -353,6 +360,330 @@ const support = await getEmbeddedPostgresTestSupport();
     function nativeTools() {
       return new PaperclipRunnerToolAuthority(db, nativeBinding());
     }
+    function draftBackend(consumer = gateway()) {
+      return createAwTextDraftBackend(db, consumer, {
+        ...issueInput(),
+        outputKey: "result",
+        maxOutputTokens: 256,
+      });
+    }
+    const sessionIdentity = () => ({
+      ...nativeBinding(),
+      sessionId: randomUUID(),
+    });
+    it("runs the real one-call Native draft backend, saves its declared Task output and proposes only review", async () => {
+      const backend = draftBackend(),
+        identity = sessionIdentity();
+      const descriptor = await backend.descriptor();
+      expect(descriptor).toMatchObject({
+        name: "aw-text-draft-v1",
+        kind: "remote",
+        capabilities: { resume: false, dynamicTools: false },
+      });
+      // No runtime-context capabilities are fabricated to open production admission.
+      expect(descriptor.runtimeContextCapabilities).toBeUndefined();
+      const session = await backend.openSession({ identity });
+      expect(calls).toBe(0);
+      await session.startTurn({
+        message: { role: "user", text: "Write the declared internal draft." },
+      });
+      const result = await session.result();
+      expect(result).toMatchObject({
+        result: {
+          reportedWorkDisposition: "needs_review",
+          completionClaim: { objectiveSatisfied: false },
+        },
+      });
+      expect(validatePrpStructuredRunResult(result!.result).ok).toBe(true);
+      expect(
+        result!.result.completionClaim.criteria.every(
+          (c) => c.status === "unknown",
+        ),
+      ).toBe(true);
+      const doc = await documentService(db).getIssueDocumentByKey(
+        task.id,
+        "result",
+      );
+      expect(doc?.body).toBe("Retained bounded draft");
+      expect(calls).toBe(1);
+      expect((await ledger())[0]).toMatchObject({
+        status: "completed",
+        purpose: "worker_model",
+        maximumMinor: 3,
+      });
+      const [current] = await db
+        .select()
+        .from(orchestrationPlans)
+        .where(eq(orchestrationPlans.id, plan.id));
+      expect(current).toMatchObject({
+        status: "running",
+        toolActionsUsed: 2,
+        modelCostReserved: 3,
+      });
+      const [currentTask] = await db
+        .select()
+        .from(issues)
+        .where(eq(issues.id, task.id));
+      expect(currentTask!.status).toBe("todo");
+      const events = [];
+      for await (const event of session.events()) {
+        expect(validatePrpEvent(event).ok).toBe(true);
+        events.push(event);
+      }
+      expect(events.map((e) => e.eventType)).toEqual([
+        "session.started",
+        "turn.started",
+        "usage.reported",
+        "run.result.proposed",
+        "turn.completed",
+        "run.terminal",
+      ]);
+      expect(events.every((e) => e.sourceKind === "control_plane")).toBe(true);
+      expect(JSON.stringify(events)).not.toContain("Retained bounded draft");
+      expect(JSON.stringify(await session.snapshot())).not.toContain(
+        "Retained bounded draft",
+      );
+      expect(JSON.stringify(await session.snapshot())).not.toContain(
+        credential,
+      );
+      expect(await session.usage!()).toMatchObject({
+        inputTokens: inputTokens,
+        outputTokens: 20,
+      });
+      await session.close({ reason: "native_finished" });
+    });
+    it("rejects changed draft session and undeclared output bindings before a tool or model dispatch", async () => {
+      for (const altered of [
+        { ...sessionIdentity(), issueId: randomUUID() },
+        { ...sessionIdentity(), companyId: f.guest },
+        { ...sessionIdentity(), agentId: f.guestPresence.id },
+        { ...sessionIdentity(), runId: randomUUID() },
+      ])
+        await expect(
+          draftBackend().openSession({ identity: altered }),
+        ).rejects.toMatchObject({ status: 403 });
+      const undeclared = createAwTextDraftBackend(db, gateway(), {
+        ...issueInput(),
+        outputKey: "plan",
+        maxOutputTokens: 256,
+      });
+      await expect(
+        undeclared.openSession({ identity: sessionIdentity() }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(toolInvocations)
+          .where(eq(toolInvocations.runId, run.id)),
+      ).toHaveLength(0);
+    });
+    it("cannot resume, replace, open another session or silently repeat a completed draft model call", async () => {
+      const backend = draftBackend(),
+        identity = sessionIdentity();
+      const session = await backend.openSession({ identity });
+      await session.startTurn({
+        message: { role: "user", text: "Write the draft." },
+      });
+      await session.result();
+      await expect(
+        session.startTurn({
+          message: { role: "user", text: "Write it again." },
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      await expect(backend.openSession({ identity })).rejects.toMatchObject({
+        status: 409,
+      });
+      const snapshot = await session.snapshot(),
+        signal = new AbortController().signal;
+      expect(await backend.recoverSession!(snapshot, { signal })).toMatchObject(
+        { recovered: false },
+      );
+      await expect(
+        backend.openReplacementSession!({ identity }, snapshot),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(calls).toBe(1);
+      expect(await ledger()).toHaveLength(1);
+      await session.close({ reason: "native_finished" });
+    });
+    it("refuses continuation and plan turns before spending for a draft", async () => {
+      const session = await draftBackend().openSession({
+        identity: sessionIdentity(),
+      });
+      await expect(
+        session.startTurn({
+          message: { role: "user", text: "Continue" },
+          continuation: true,
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      await expect(
+        session.startTurn({
+          message: { role: "user", text: "Plan" },
+          requestedCollaborationMode: "plan",
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+      await session.close({ reason: "invalid_turn" });
+      expect(await session.result()).toBeNull();
+    });
+    it("withholds draft output on ambiguous provider failure and emits only a fixed Native error", async () => {
+      const broken: typeof guardedRemoteHttpFetch = async () => {
+        calls++;
+        throw new Error(credential);
+      };
+      const session = await draftBackend(gateway(broken)).openSession({
+        identity: sessionIdentity(),
+      });
+      await session.startTurn({
+        message: { role: "user", text: "Write the draft." },
+      });
+      expect(await session.result()).toBeNull();
+      const events = [];
+      for await (const event of session.events()) events.push(event);
+      expect(
+        events.find((e) => e.eventType === "session.failed")?.payload,
+      ).toMatchObject({ code: "aw_text_draft_unsettled", recoverable: false });
+      expect(JSON.stringify(events)).not.toContain(credential);
+      expect(
+        await documentService(db).getIssueDocumentByKey(task.id, "result"),
+      ).toBeNull();
+      expect((await ledger())[0]).toMatchObject({
+        status: "unknown",
+        maximumMinor: 3,
+      });
+      const [current] = await db
+        .select()
+        .from(orchestrationPlans)
+        .where(eq(orchestrationPlans.id, plan.id));
+      expect(current).toMatchObject({
+        status: "paused",
+        modelCostReserved: 3,
+        toolActionsUsed: 1,
+      });
+      await session.close({ reason: "failed" });
+    });
+    it("fences an empty provider draft while retaining the completed financial receipt", async () => {
+      const empty: typeof guardedRemoteHttpFetch = async (
+        url,
+        init,
+        options,
+      ) => {
+        const response = await fetch(url, init, options);
+        const body = await response.json();
+        body.content = [{ type: "text", text: "" }];
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      };
+      const session = await draftBackend(gateway(empty)).openSession({
+        identity: sessionIdentity(),
+      });
+      await session.startTurn({
+        message: { role: "user", text: "Write the draft." },
+      });
+      expect(await session.result()).toBeNull();
+      expect(calls).toBe(1);
+      expect((await ledger())[0]).toMatchObject({
+        status: "completed",
+        maximumMinor: 3,
+      });
+      expect(
+        await documentService(db).getIssueDocumentByKey(task.id, "result"),
+      ).toBeNull();
+      const [current] = await db
+        .select()
+        .from(orchestrationPlans)
+        .where(eq(orchestrationPlans.id, plan.id));
+      expect(current).toMatchObject({
+        status: "paused",
+        toolActionsUsed: 1,
+        modelCostReserved: 3,
+      });
+      await session.close({ reason: "empty_output" });
+    });
+    it("revokes a pending Native draft synchronously, settles iterators and retains the ambiguous debit without writing output", async () => {
+      let dispatched!: () => void;
+      const started = new Promise<void>((resolve) => {
+        dispatched = resolve;
+      });
+      const held: typeof guardedRemoteHttpFetch = async (_url, init) => {
+        calls++;
+        dispatched();
+        const signal = init.signal!;
+        await new Promise<void>((_resolve, reject) => {
+          if (signal.aborted) reject(new Error("aborted"));
+          else
+            signal.addEventListener(
+              "abort",
+              () => reject(new Error("aborted")),
+              { once: true },
+            );
+        });
+        throw new Error("unreachable");
+      };
+      const session = await draftBackend(gateway(held)).openSession({
+        identity: sessionIdentity(),
+      });
+      const iterator = session.events()[Symbol.asyncIterator]();
+      await iterator.next();
+      await session.startTurn({
+        message: { role: "user", text: "Write the draft." },
+      });
+      await iterator.next();
+      const waiting = iterator.next();
+      await started;
+      const cancelled = session.cancel!({
+        reason: "native_stop",
+        signal: new AbortController().signal,
+      });
+      expect((await waiting).value?.eventType).toBe("turn.cancelled");
+      expect((await iterator.next()).done).toBe(true);
+      await cancelled.cleanup;
+      expect(await session.result()).toBeNull();
+      expect(
+        await documentService(db).getIssueDocumentByKey(task.id, "result"),
+      ).toBeNull();
+      expect((await ledger())[0]).toMatchObject({
+        status: "unknown",
+        maximumMinor: 3,
+      });
+      expect(calls).toBe(1);
+      await expect(
+        session.startTurn({ message: { role: "user", text: "Retry" } }),
+      ).rejects.toMatchObject({ status: 403 });
+      await session.close({ reason: "cancelled" });
+    });
+    it("retains the model debit and fences if authority changes before a canonical draft can be returned", async () => {
+      duringCall = async () => {
+        await db
+          .delete(companyMemberships)
+          .where(
+            and(
+              eq(companyMemberships.companyId, f.home),
+              eq(companyMemberships.principalId, f.userId),
+            ),
+          );
+      };
+      const session = await draftBackend().openSession({
+        identity: sessionIdentity(),
+      });
+      await session.startTurn({
+        message: { role: "user", text: "Write the draft." },
+      });
+      expect(await session.result()).toBeNull();
+      expect(
+        await documentService(db).getIssueDocumentByKey(task.id, "result"),
+      ).toBeNull();
+      expect((await ledger())[0]).toMatchObject({
+        status: "unknown",
+        maximumMinor: 3,
+      });
+      expect(calls).toBe(1);
+      await session.close({ reason: "revoked" });
+    });
     it("charges assigned-tool catalog search and keeps actual MCP invocation charging at its existing gateway", async () => {
       let effects = 0;
       // Private gateway fixture uses the actual Native SQL invocation guard.

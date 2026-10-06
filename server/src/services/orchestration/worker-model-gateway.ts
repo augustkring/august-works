@@ -535,6 +535,32 @@ export function workerModelGateway(db: Db, options: Options) {
     });
   }
   return {
+    /** Private controller failure path. Safety fencing does not require the
+     * original human still to have access or the capability still to be live. */
+    async abandon(claims: RuntimeToolsTokenClaims) {
+      const binding = claims.worker_model;
+      if (claims.scope !== "worker_model" || !binding)
+        throw forbidden("Bound worker model failure receipt required");
+      const [attempt] = await db
+        .select({ id: orchestrationWorkerAttempts.id })
+        .from(orchestrationWorkerAttempts)
+        .where(
+          and(
+            eq(orchestrationWorkerAttempts.companyId, claims.company_id),
+            eq(orchestrationWorkerAttempts.planId, binding.planId),
+            eq(orchestrationWorkerAttempts.workerId, binding.workerId),
+            eq(orchestrationWorkerAttempts.id, binding.workerAttemptId),
+            eq(
+              orchestrationWorkerAttempts.executionManifestId,
+              binding.executionManifestId,
+            ),
+            eq(orchestrationWorkerAttempts.agentId, claims.sub),
+            eq(orchestrationWorkerAttempts.runId, claims.run_id),
+          ),
+        );
+      if (!attempt) throw forbidden("Worker failure receipt binding changed");
+      await fence(claims.company_id, binding.planId);
+    },
     /** Private controller helper; there is no customer token-issuance route. */
     async issue(input: {
       companyId: string;
