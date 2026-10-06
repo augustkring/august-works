@@ -537,7 +537,9 @@ describe("Codex protocol integrity propagation", () => {
         sourceCodexHome: null,
         environment: {},
         runnerReconnectGraceMs: 900_000,
-        closeGraceMs: scenario === "early-semantic" ? 1_000 : 50,
+        // The successful protocol composition uses the production close budget;
+        // the negative fixtures deliberately keep a short containment deadline.
+        closeGraceMs: scenario === "early-semantic" ? undefined : 50,
         readRunnerState: async () => ({
           schema: "paperclip.runner.durable.state.v1",
           ...identity,
@@ -595,6 +597,12 @@ describe("Codex protocol integrity propagation", () => {
           const command = core.store.state.commands.find(
             (candidate) => candidate.type === type,
           )!;
+          if (scenario === "early-semantic" && type === "runner.drain") {
+            // A real authenticated runner can ACK after the old fixture's 1s
+            // close budget. Exercise that delay without changing product limits
+            // or accepting an unsettled checkpoint as a completed result.
+            await new Promise((resolve) => setTimeout(resolve, 1_250));
+          }
           client!.send({
             protocol: "paperclip.runner",
             version: 1,

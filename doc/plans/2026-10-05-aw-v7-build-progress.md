@@ -434,3 +434,55 @@ pinned standalone-prover cases and positive/negated/escaped/unclosed REST patter
 denial. The complete shared suite passes 850 tests and its build passes. This
 fix prevents a future physical adapter from widening an authored literal path;
 it does not qualify OpenShell workload admission or credential brokering.
+
+## 2026-10-06 — Native scoped credential dispatch
+
+Scoped ToolGateway HTTP calls repeat the original native execution guard after
+credential resolution, before every request and before releasing successful
+output. The checks retain the actual company, connection/catalog configuration,
+grant identity and current native audience/delegation selection. Initialization
+and refresh cannot inherit an earlier check or switch to a fallback grant.
+Railway's SSH branch repeats the guard before command start and publication.
+The original action policy, approval and invocation ledger remain the owners;
+protocol handshakes and refresh do not consume another action/rate-limit slot.
+
+A new revocation-during-refresh test found that Vercel token metadata previously
+reset a concurrently revoked grant to active. Its native update now requires an
+active, unrevoked grant and cannot reset revocation. Credentials are withheld
+when the conditional update fails. Reauthorization errors also preserve the
+revoked state. This applies to ordinary native calls as well as scoped calls.
+
+Both gateway suites pass all 125 cases, including eleven new migrated-PostgreSQL
+transport cases. The last available native rate slot still permits its original
+call, with one counter debit. Actual run cancellation, token/initialization/
+refresh/response-time grant revocation, destination changes and successful
+refresh are exercised with private transport fixtures. Full recursive typecheck
+passes. See `doc/operations/aw-v7-native-task-tool-budgets.md`.
+
+This does not implement physical workload credential brokering, executable
+identity or secret-version revocation. All three broader implementation blocker
+groups and 35 protected pilot evidence items remain open.
+
+## 2026-10-06 — CI close and retry feedback regressions
+
+Full inspection of the 47-job PR workflow on `62c496395` found two underlying
+failures: Codex's positive composed-protocol fixture used a one-second close
+budget, and an agent-run retry denial disappeared during URL canonicalization.
+The other two failed jobs were their aggregate gates; 43 jobs succeeded. The
+separate AW V6 verification passed; AW V4 remained queued at this inspection.
+
+The positive Codex fixture now uses the production close budget. A deliberately
+delayed authenticated drain ACK reproduces the old deadline rejection. Exact
+durable drain/suspension and completed-result assertions remain in place;
+negative fixtures retain their short containment deadlines. The three affected
+protocol/transport suites pass 203 tests with the existing local subreaper.
+
+Both agent detail surfaces seed the existing canonical query key only from the
+already-resolved agent in the exact same company. The alias refetch therefore
+keeps the selected run view and its pending retry/denial mounted. The browser
+holds the canonical GET while returning the original retry's denial and confirms
+the exact company/run request. All nine retry browser cases pass on Chromium and
+fresh PostgreSQL. UI typecheck, module boundaries and token gates pass.
+
+These local checks do not replace CI on the final published source or the
+integrated operating pilot. No rollout flag or physical admission is enabled.

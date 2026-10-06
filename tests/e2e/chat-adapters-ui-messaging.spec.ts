@@ -1354,12 +1354,22 @@ test.describe("Exact failed chat run retry", () => {
           body: Record<string, unknown>;
         }> = [];
         const destinations: string[] = [];
+        const holdCanonicalLookup = surface === "agent run" && outcome === "denied";
+        let canonicalLookupStarted = false;
+        let releaseCanonicalLookup!: () => void;
+        const canonicalLookupRelease = new Promise<void>((resolve) => { releaseCanonicalLookup = resolve; });
         page.on("framenavigated", (frame) => {
           if (frame === page.mainFrame()) destinations.push(frame.url());
         });
         await page.route("**/api/**", async (route) => {
           const url = new URL(route.request().url());
           const pathname = url.pathname;
+          if (holdCanonicalLookup && pathname === "/api/agents/maya") {
+            canonicalLookupStarted = true;
+            await canonicalLookupRelease;
+            await route.continue();
+            return;
+          }
           if (pathname === "/api/instance/settings/experimental") {
             await fulfill(route, {
               enableChatConnectors: true,
@@ -1432,73 +1442,79 @@ test.describe("Exact failed chat run retry", () => {
           await route.continue();
         });
 
-        const startPath =
-          surface === "agent run"
-            ? `/${seed.prefix}/agents/${seed.agentId}/runs/${failedRunId}`
-            : `/${seed.prefix}/inbox/all`;
-        await page.goto(startPath);
-        const retry = page
-          .getByRole("button", { name: "Retry", exact: true })
-          .filter({ visible: true });
-        await expect(retry).toHaveCount(1);
-        await retry.click();
-        await expect.poll(() => requests.length).toBe(1);
-        expect(requests[0]).toEqual({
-          companyId: seed.companyId,
-          body: {
-            source: "on_demand",
-            triggerDetail: "manual",
-            reason: "retry_failed_run",
-            failedRunId,
-          },
-        });
-        if (outcome === "denied") {
-          await expect(page.getByText(denial, { exact: true })).toBeVisible();
-          if (surface !== "agent run") {
+        try {
+          const startPath =
+            surface === "agent run"
+              ? `/${seed.prefix}/agents/${seed.agentId}/runs/${failedRunId}`
+              : `/${seed.prefix}/inbox/all`;
+          await page.goto(startPath);
+          if (holdCanonicalLookup) await expect.poll(() => canonicalLookupStarted).toBe(true);
+          const retry = page
+            .getByRole("button", { name: "Retry", exact: true })
+            .filter({ visible: true });
+          await expect(retry).toHaveCount(1);
+          await retry.click();
+          await expect.poll(() => requests.length).toBe(1);
+          expect(requests[0]).toEqual({
+            companyId: seed.companyId,
+            body: {
+              source: "on_demand",
+              triggerDetail: "manual",
+              reason: "retry_failed_run",
+              failedRunId,
+            },
+          });
+          if (outcome === "denied") {
+            await expect(page.getByText(denial, { exact: true })).toBeVisible();
+            releaseCanonicalLookup();
+            if (surface !== "agent run") {
+              await expect(
+                page.getByText("Run retry failed", { exact: true }),
+              ).toBeVisible();
+              const toast = page.getByRole("listitem").filter({
+                has: page.getByText("Run retry failed", { exact: true }),
+              });
+              // Visibility alone accepts opacity:0 during the toast entrance.
+              // The operator must actually be able to read the denial.
+              await expect(toast).toHaveCSS("opacity", "1");
+              await expect(toast).toBeInViewport();
+            }
+            // Agent routes canonicalize the UUID to its human-readable URL key.
+            // The selected failed run must remain unchanged across that redirect.
+            await expect(page).toHaveURL(
+              surface === "agent run"
+                ? new RegExp(
+                    `/${seed.prefix}/agents/(${seed.agentId}|maya)/runs/${failedRunId}$`,
+                  )
+                : new RegExp(`${startPath}$`),
+            );
+            await expect(retry).toBeEnabled();
+            await testInfo.attach(`${surface}-retry-denied`, {
+              body: await page.screenshot(),
+              contentType: "image/png",
+            });
+          } else {
+            await expect(page).toHaveURL(
+              new RegExp(
+                `/${seed.prefix}/issues/(${issue.id}|${issue.identifier})$`,
+              ),
+            );
+            await expect(
+              page.getByText(issue.title, { exact: true }).first(),
+            ).toBeVisible();
             await expect(
               page.getByText("Run retry failed", { exact: true }),
-            ).toBeVisible();
-            const toast = page.getByRole("listitem").filter({
-              has: page.getByText("Run retry failed", { exact: true }),
-            });
-            // Visibility alone accepts opacity:0 during the toast entrance.
-            // The operator must actually be able to read the denial.
-            await expect(toast).toHaveCSS("opacity", "1");
-            await expect(toast).toBeInViewport();
+            ).toHaveCount(0);
           }
-          // Agent routes canonicalize the UUID to its human-readable URL key.
-          // The selected failed run must remain unchanged across that redirect.
-          await expect(page).toHaveURL(
-            surface === "agent run"
-              ? new RegExp(
-                  `/${seed.prefix}/agents/(${seed.agentId}|maya)/runs/${failedRunId}$`,
-                )
-              : new RegExp(`${startPath}$`),
-          );
-          await expect(retry).toBeEnabled();
-          await testInfo.attach(`${surface}-retry-denied`, {
-            body: await page.screenshot(),
-            contentType: "image/png",
-          });
-        } else {
-          await expect(page).toHaveURL(
-            new RegExp(
-              `/${seed.prefix}/issues/(${issue.id}|${issue.identifier})$`,
+          expect(requests).toHaveLength(1);
+          expect(
+            destinations.some((url) =>
+              /\/runs\/(null|undefined)(?:[/?#]|$)/.test(url),
             ),
-          );
-          await expect(
-            page.getByText(issue.title, { exact: true }).first(),
-          ).toBeVisible();
-          await expect(
-            page.getByText("Run retry failed", { exact: true }),
-          ).toHaveCount(0);
+          ).toBe(false);
+        } finally {
+          releaseCanonicalLookup();
         }
-        expect(requests).toHaveLength(1);
-        expect(
-          destinations.some((url) =>
-            /\/runs\/(null|undefined)(?:[/?#]|$)/.test(url),
-          ),
-        ).toBe(false);
       });
     }
   }

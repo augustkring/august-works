@@ -957,6 +957,11 @@ export function AgentDetail() {
 
   useEffect(() => {
     if (!agent) return;
+    // Preserve this exact company/agent view while its canonical alias refetches.
+    // A loading placeholder would discard a pending retry's denial state.
+    if (routeAgentRef !== canonicalAgentRef && lookupCompanyId === agent.companyId) {
+      queryClient.setQueryData([...queryKeys.agents.detail(canonicalAgentRef), lookupCompanyId], agent);
+    }
     if (!urlRunId && urlTab === "channels" && !chatConnectorsLoaded) return;
     if (urlRunId) {
       if (routeAgentRef !== canonicalAgentRef) {
@@ -986,7 +991,7 @@ export function AgentDetail() {
       navigate(`/agents/${canonicalAgentRef}/${canonicalTab}`, { replace: true });
       return;
     }
-  }, [agent, routeAgentRef, canonicalAgentRef, urlRunId, urlTab, activeView, navigate, chatConnectorsLoaded]);
+  }, [agent, routeAgentRef, canonicalAgentRef, lookupCompanyId, queryClient, urlRunId, urlTab, activeView, navigate, chatConnectorsLoaded]);
 
   useEffect(() => {
     if (!agent?.companyId || agent.companyId === selectedCompanyId) return;
