@@ -343,6 +343,7 @@ export function foundationIndexService(db: Db) {
 
       const rows = await db
         .select({
+          sectionId: foundationSections.id,
           foundationDocumentId: foundationDocuments.id,
           foundationKey: foundationDocuments.foundationKey,
           category: foundationDocuments.category,
@@ -408,6 +409,7 @@ export function foundationIndexService(db: Db) {
         .limit(input.limit);
 
       return rows.map((row) => ({
+        sectionId: row.sectionId,
         foundationDocumentId: row.foundationDocumentId,
         foundationKey: row.foundationKey,
         category: row.category as FoundationSearchResult["category"],

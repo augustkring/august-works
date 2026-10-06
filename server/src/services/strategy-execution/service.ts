@@ -136,7 +136,7 @@ export function strategyExecutionService(db: Db) {
         const tx = rawTx as unknown as Db; await boundary(tx, companyId, actor);
         const rows = await tx.select().from(strategyExecutionLinks).where(and(eq(strategyExecutionLinks.companyId, companyId), cursor ? sql`${strategyExecutionLinks.id}>${cursor}::uuid` : undefined)).orderBy(asc(strategyExecutionLinks.id)).limit(101);
         const items = [];
-        for (const row of rows.slice(0, 100)) try { await root(tx, companyId, row.id); const detail = await inspect(tx, companyId, actor, row); items.push({ ...detail.link, definition: detail.effectiveVersion.definition, reviewReason: detail.reviewReason }); } catch (error) { if (!error || typeof error !== "object" || !("status" in error) || ![403,404,409].includes(Number(error.status))) throw error; }
+        for (const row of rows.slice(0, 100)) try { await root(tx, companyId, row.id); const detail = await inspect(tx, companyId, actor, row); items.push({ ...detail.link, definition: detail.effectiveVersion.definition, reviewReason: detail.reviewReason, nextReviewAt: detail.effectiveVersion.nextReviewAt, expiresAt: detail.effectiveVersion.expiresAt }); } catch (error) { if (!error || typeof error !== "object" || !("status" in error) || ![403,404,409].includes(Number(error.status))) throw error; }
         return { items, nextCursor: rows.length > 100 ? rows[99].id : null, coverage: "bounded_current_authorized_page" as const };
       });
     },

@@ -64,7 +64,7 @@ export interface StrategyExecutionLinkDetail {
   reviewReason: string | null;
 }
 export interface StrategyExecutionLinkList {
-  items: (StrategyExecutionLinkView & { definition: StrategyExecutionLinkDefinition; reviewReason: string | null })[];
+  items: (StrategyExecutionLinkView & { definition: StrategyExecutionLinkDefinition; reviewReason: string | null; nextReviewAt: string; expiresAt: string })[];
   nextCursor: string | null;
   coverage: "bounded_current_authorized_page";
 }

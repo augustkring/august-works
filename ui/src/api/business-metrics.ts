@@ -3,6 +3,7 @@ import { api } from "./client";
 const actorPath = (path: string, userId?: string | null) => userId ? `${path}${path.includes("?") ? "&" : "?"}expectedUserId=${encodeURIComponent(userId)}` : path;
 const base = (companyId: string) => `/companies/${encodeURIComponent(companyId)}/business-metrics`;
 export const businessMetricsApi = {
+  observations: (companyId: string, metricId: string, cursor?: string, userId?: string | null) => api.get<{ items: BusinessMetricResult[]; nextCursor: string | null; coverage: "bounded_current_authorized_page" }>(actorPath(`${base(companyId)}/${encodeURIComponent(metricId)}/observations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, userId), { cache: "no-store" }),
   list: (companyId: string, cursor?: string, userId?: string | null) => api.get<{ items: BusinessMetricView[]; nextCursor: string | null }>(actorPath(`${base(companyId)}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, userId), { cache: "no-store" }),
   detail: (companyId: string, metricId: string, userId?: string | null) => api.get<{ metric: BusinessMetricView; versions: BusinessMetricVersionView[] }>(actorPath(`${base(companyId)}/${encodeURIComponent(metricId)}`, userId), { cache: "no-store" }),
   create: (companyId: string, input: CreateBusinessMetric, userId?: string | null) => api.post<{ metric: BusinessMetricView; version: BusinessMetricVersionView }>(actorPath(base(companyId), userId), input),

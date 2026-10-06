@@ -358,4 +358,13 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
       expect(await observations()).toHaveLength(0);
     } finally { releaseMemory(); await Promise.allSettled([erasure,outcome]); }
   });
+  it("lists retained observations only under current native source authority", async () => {
+    const issue = await source("done"), registered = await published();
+    const observed = await service().query(companyId, actor, query(registered.metric.id, registered.version.id));
+    expect((await service().listCurrentObservations(companyId, actor, registered.metric.id)).items.map(r => r.id)).toEqual([observed.id]);
+    const [foreign] = await db.insert(projects).values({ companyId: otherCompanyId, name: "Current foreign scope" }).returning();
+    await db.update(issues).set({ projectId: foreign.id }).where(eq(issues.id, issue.id));
+    expect((await service().listCurrentObservations(companyId, actor, registered.metric.id)).items).toEqual([]);
+    expect(await observations()).toHaveLength(1);
+  });
 });

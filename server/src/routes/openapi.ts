@@ -11815,6 +11815,7 @@ for (const operation of [
   { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}/versions", summary: "Propose a strategy revision without replacing approval", body: reviseStrategyExecutionLinkSchema },
   { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}/approve", summary: "Human approval of current pinned strategy and native source authority", body: approveStrategyExecutionLinkSchema },
   { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}/retire", summary: "Withdraw a strategy link without cancelling native work", body: retireStrategyExecutionLinkSchema },
+  { method: "get" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}/observations", summary: "List currently fresh observations only after native source reauthorization", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
   { method: "get" as const, path: "/api/companies/{companyId}/business-metric-targets", summary: "List native company commitments under current human authority", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
   { method: "get" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}", summary: "Inspect target versions and current review status" },
   { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets", summary: "Create a commitment draft without approval or an observation", body: createBusinessMetricTargetSchema },

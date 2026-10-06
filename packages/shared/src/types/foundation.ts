@@ -147,6 +147,7 @@ export interface FoundationIndexResult {
 }
 
 export interface FoundationSearchResult {
+  sectionId: string;
   foundationDocumentId: string;
   foundationKey: string;
   category: FoundationCategory;

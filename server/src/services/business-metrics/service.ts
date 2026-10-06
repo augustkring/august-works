@@ -100,6 +100,24 @@ export function businessMetricService(db: Db) {
     return { sources: rows, observedAt: new Date(selected[0].observed_at) };
   }
   return {
+    async listCurrentObservations(companyId: string, actor: AuthorizationActor, metricId: string, cursor?: string) {
+      return db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db;
+        await admit(tx, companyId, actor); await lockBusinessEventCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+        await tx.execute(sql`set local statement_timeout='8s'`);
+        const row = await metric(tx, companyId, metricId);
+        if (!row.publishedVersionId || row.status !== "published") throw conflict("Metric is not currently published");
+        await businessMetricService(tx).inspectPublishedDefinition(companyId, actor, metricId, row.publishedVersionId);
+        const rows = await tx.select().from(businessMetricObservations).where(and(eq(businessMetricObservations.companyId, companyId), eq(businessMetricObservations.metricId, metricId), eq(businessMetricObservations.versionId, row.publishedVersionId), sql`${businessMetricObservations.expiresAt}>now()`, cursor ? sql`${businessMetricObservations.id}>${cursor}::uuid` : undefined)).orderBy(asc(businessMetricObservations.id)).limit(21);
+        const items: BusinessMetricResult[] = []; const deadline = performance.now()+30_000;
+        for (const observation of rows.slice(0,20)) {
+          queryTimeBudget(deadline);
+          try { items.push(await businessMetricService(tx).inspectCurrentObservation(companyId, actor, observation.id)); }
+          catch (error) { if (!error || typeof error !== "object" || !("status" in error) || ![403,404,409].includes(Number(error.status))) throw error; }
+        }
+        return { items, nextCursor: rows.length>20 ? rows[19].id : null, coverage: "bounded_current_authorized_page" as const };
+      });
+    },
     /** Pinned consumers recheck stored evidence against current source authority.
      * Invoke inside their company-serialized transaction before returning data. */
     async inspectCurrentObservation(companyId: string, actor: AuthorizationActor, observationId: string) {

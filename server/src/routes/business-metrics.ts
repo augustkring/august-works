@@ -27,6 +27,11 @@ export function businessMetricRoutes(db: Db) {
     const companyId = req.params.companyId as string; companyAccess(req, companyId);
     res.json(await service.detail(companyId, req.actor, id(req.params.metricId)));
   });
+  router.get("/companies/:companyId/business-metrics/:metricId/observations", async (req, res) => {
+    const companyId = id(req.params.companyId); companyAccess(req, companyId);
+    if (Object.keys(req.query).some(key => key !== "cursor" && key !== "expectedUserId")) throw badRequest("Unknown observation list filter");
+    res.json(await service.listCurrentObservations(companyId, req.actor, id(req.params.metricId), req.query.cursor === undefined ? undefined : id(req.query.cursor)));
+  });
   router.post("/companies/:companyId/business-metrics", validate(createBusinessMetricSchema), async (req, res) => {
     const companyId = req.params.companyId as string; companyAccess(req, companyId);
     res.status(201).json(await service.create(companyId, req.actor, req.body));
