@@ -232,7 +232,12 @@
       "lines": 3328,
       "words": 13601,
       "path": "/workspace/attachments/9a3cd7a4-c8cf-46fc-a622-d6c640a48d58/17_cloud_infrastructure_networking_iac_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3328
+      },
+      "applicability": "Keep desired infrastructure, provider state and observed runtime distinct. Private reachability, encryption, identity and authorization provide different controls; qualify effective IAM, networking, pinned images and scoped machine/recovery identities in the actual environment. Bound capacity, retries and cost, protect privacy and backup independence, and test recovery bootstrap, restore, failover/failback and reconciliation. No provider, orchestrator, multi-region or IaC tooling adds operating qualification by name; source version claims were read, not independently checked."
     },
     {
       "name": "18_ai_ml_llm_systems_engineering_master_playbook_v2.md",
@@ -277,7 +282,12 @@
       "lines": 1662,
       "words": 12321,
       "path": "/workspace/attachments/44da58bd-a3ad-4575-a486-8a66a858c891/22_language_runtime_engineering_standards_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 1662
+      },
+      "applicability": "Use the repository-controlled language, runtime, compiler and locked dependency contract; do not upgrade from unverified version tables. Runtime validation remains necessary beyond static types. Explicit null, time, precision, ownership, cancellation, error and ordering semantics; parameterized SQL and database constraints; bounded transaction retry and state-compatible migrations. Build scripts, native bindings and any optional analytical language introduce executable supply-chain and operational boundaries. Exact release-mode and target-runtime evidence remains separate from compiler success."
     },
     {
       "name": "concept_business_design_master_playbook_v2.md",
