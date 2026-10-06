@@ -111,7 +111,12 @@
       "lines": 5438,
       "words": 20995,
       "path": "/workspace/attachments/518f2b72-61b5-40fc-a7f5-10e1d847bd6e/08_reliability_resilience_observability_sre_v2_golden_master.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 5438
+      },
+      "applicability": "Reliability follows critical user outcomes and protected integrity, privacy and authorization invariants. Distinguish healthy from unobserved telemetry, partial or unknown outcomes, and controlled degraded states; bound overload and retry amplification. Backups, replication, copied-database tests and DR documents are different evidence from executed archive restoration and hosted critical-flow recovery. Require state-compatible recovery, actual operating ownership, meaningful stop conditions and verified incident actions; use the least complex adequate failure topology."
     },
     {
       "name": "07_privacy_data_protection_engineering_v2.md",
@@ -134,7 +139,12 @@
       "lines": 3288,
       "words": 14746,
       "path": "/workspace/attachments/ae732a52-5bb6-40c2-b719-4705252aaf23/09_performance_scalability_resource_cost_engineering_v2.md",
-      "reviewStatus": "pending"
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3288
+      },
+      "applicability": "Define workload-specific end-to-end success, latency, capacity and economic contracts; separate offered load, useful throughput, concurrency, utilization and saturation. Bound analytical work, queues and retries; preserve tenant access and privacy under load. Use representative reproducible correctness-checked measurements, explicit freshness-bearing cache semantics and governed useful-unit costs; no invented universal percentile, utilization, headroom or hosted performance claims."
     },
     {
       "name": "10_devops_cicd_release_platform_supply_chain_v2.md",
