@@ -299,7 +299,7 @@ export function projectRoutes(db: Db) {
         runId: actor.runId, issueId: runContext?.issue.id,
         action: "project.created", entityType: "project", entityId: project.id,
         details: {
-          name: project.name, description: project.description, icon: project.icon,
+          name: project.name, description: project.description, icon: project.icon, status: project.status,
           sourceIssueId: runContext?.issue.id ?? null,
           repositories: [...(repositories ?? []).map(repo => ({ id: repo.id, name: repo.fullName, url: repo.url })), ...registeredUrls.map(repo => ({ id: repo.url, name: repo.fullName, url: repo.url })),
             ...(createdWorkspace?.repoUrl ? [{ id: createdWorkspace.id, name: createdWorkspace.name, url: createdWorkspace.repoUrl }] : []),
@@ -367,6 +367,8 @@ export function projectRoutes(db: Db) {
       entityId: project.id,
       details: {
         changedKeys: Object.keys(req.body).sort(),
+        // Record the mutation's returned state, not a later current-state read.
+        ...(body.status !== undefined ? { status: project.status } : {}),
         envKeys:
           body.env && typeof body.env === "object" && !Array.isArray(body.env)
             ? Object.keys(body.env as Record<string, unknown>).sort()

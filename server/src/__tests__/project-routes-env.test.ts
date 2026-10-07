@@ -1,6 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { projectBusinessEvent } from "../services/business-events.js";
 
 const mockProjectService = vi.hoisted(() => ({
   list: vi.fn(),
@@ -204,6 +205,7 @@ describe("project env routes", () => {
       expect.objectContaining({
         details: expect.objectContaining({
           envKeys: ["API_KEY"],
+          status:"backlog",
         }),
       }),
     );
@@ -234,5 +236,19 @@ describe("project env routes", () => {
         },
       }),
     );
+  });
+
+  it("records returned project states for lifecycle projection while keeping environment-only changes status-free",async()=>{
+    const projectId="00000000-0000-4000-8000-000000000001";
+    const initial=buildProject({id:projectId,status:"planned"}),completed=buildProject({id:projectId,status:"completed"});
+    mockProjectService.create.mockResolvedValue(initial);mockProjectService.getById.mockResolvedValue(initial);mockProjectService.update.mockResolvedValue(completed);
+    const app=await createApp();
+    await request(app).post("/api/companies/company-1/projects").send({name:"Planned native flow"}).expect(201);
+    await request(app).patch(`/api/projects/${projectId}`).send({status:"completed"}).expect(200);
+    const sources=mockLogActivity.mock.calls.map(call=>call[1] as {action:string;entityType:string;entityId:string;details:Record<string,unknown>})
+      .map((source,index)=>projectBusinessEvent({...source,createdAt:new Date(`2026-01-01T12:0${index}:00Z`)}));
+    expect(sources[0]).toMatchObject({lifecycle:"created",attributes:{status:"planned"},objects:[{objectType:"project",objectId:projectId,qualifier:"primary"}]});
+    expect(sources[1]).toMatchObject({lifecycle:"updated",attributes:{status:"completed"}});
+    expect(JSON.stringify(sources)).not.toContain("Planned native flow");
   });
 });

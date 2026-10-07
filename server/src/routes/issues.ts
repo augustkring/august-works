@@ -11937,6 +11937,7 @@ export function issueRoutes(
         details: {
           title: issue.title,
           identifier: issue.identifier,
+          projectId: issue.projectId,
           ...(watchdogProductBugFollowUp
             ? {
                 watchdogDiscovery: {
@@ -13652,6 +13653,9 @@ export function issueRoutes(
             details: {
               ...updateFields,
               identifier: updated.identifier,
+              projectId: updated.projectId,
+              ...(changes.status || updateFields.status !== undefined ? { status: updated.status } : {}),
+              ...(changes.status ? { previousStatus: changes.status.from } : {}),
               authorizationReason: issueMutationAuthorizationReason,
               changes,
               ...(reviewInteractionId ? { reviewInteractionId } : {}),
@@ -14027,6 +14031,9 @@ export function issueRoutes(
           details: {
             ...updateFields,
             identifier: issue.identifier,
+            projectId: issue.projectId,
+            ...(issueChanges.status || updateFields.status !== undefined ? { status: issue.status } : {}),
+            ...(issueChanges.status ? { previousStatus: issueChanges.status.from } : {}),
             authorizationReason: issueMutationAuthorizationReason,
             changes: issueChanges,
             ...(reviewInteractionId ? { reviewInteractionId } : {}),
