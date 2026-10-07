@@ -15,7 +15,12 @@ export const businessEventCursorSchema = z.object({
   at: z.iso.datetime(),
   id: z.string().uuid(),
 }).strict();
+export const businessEventPurposeSchema = z.object({
+  governanceObligationRefs: z.array(z.string().uuid()).min(1).max(32),
+  retentionDays: z.number().int().min(1).max(3650),
+}).strict();
 export const businessEventBackfillSchema = z.object({
+  ...businessEventPurposeSchema.shape,
   from: z.iso.datetime(),
   until: z.iso.datetime(),
   cursor: businessEventCursorSchema.optional(),
@@ -63,4 +68,7 @@ export interface BusinessEvent {
   trustLevel: "observed";
   supersedesEventId: string | null;
   tombstonedAt: string | null;
+  governanceObligationRefs: string[];
+  retentionDays: number;
+  expiresAt: string;
 }

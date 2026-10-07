@@ -80,3 +80,13 @@ drift; native deletion and Learning revision erasure remove dependent histories.
 The exact implemented boundaries and remaining work are recorded in
 `doc/operations/aw-v8-strategy-execution.md`; no full graph completeness or release
 qualification is asserted.
+
+## Current native event purpose/retention slice
+
+Native event projections now pin current V7 process-purpose evidence and a bounded
+retention period. Correction cannot extend the earliest source-chain expiry.
+Expired and legacy ungoverned payloads receive whole-chain erasure and the existing
+source suppression guard, independent of company/feature rollout. Current source
+facts, object bindings and Task/current Project authority are checked under Memory
+before payload disclosure. Exact boundaries and unfinished coverage/metadata and
+interchange work remain explicit in `doc/operations/aw-v8-business-events.md`.

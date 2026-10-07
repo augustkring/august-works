@@ -25,6 +25,11 @@ export const businessEvents = pgTable("business_events", {
   trustLevel: text("trust_level").notNull(),
   supersedesEventId: uuid("supersedes_event_id"),
   tombstonedAt: timestamp("tombstoned_at", { withTimezone: true }),
+  // Historical ungoverned rows remain nullable and are denied by admission;
+  // the retention owner removes them rather than inventing retrospective approval.
+  governanceObligationRefs: jsonb("governance_obligation_refs_json").$type<string[]>(),
+  retentionDays: integer("retention_days"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
 }, (t) => ({
   companyIdUq: unique("business_events_company_id_uq").on(t.companyId, t.id),
   revisionUq: unique("business_events_source_revision_uq").on(t.companyId, t.sourceProvider, t.sourceRef, t.revision),
@@ -35,6 +40,14 @@ export const businessEvents = pgTable("business_events", {
   policyCheck: check("business_events_policy_check", sql`${t.purpose} = 'process_intelligence' and ${t.sensitivity} = 'internal' and ${t.trustLevel} = 'observed'`),
   attributesCheck: check("business_events_attributes_check", sql`jsonb_typeof(${t.attributes}) = 'object' and ${t.attributes} - ARRAY['status','previousStatus','priority']::text[] = '{}'::jsonb`),
   companyTimeIdx: index("business_events_company_time_idx").on(t.companyId, t.occurredAt, t.id),
+  expiryIdx: index("business_events_expiry_idx").on(t.expiresAt, t.companyId),
+  admissionCheck: check("business_events_admission_check", sql`(
+    (${t.governanceObligationRefs} is null and ${t.retentionDays} is null and ${t.expiresAt} is null)
+    or (${t.governanceObligationRefs} is not null and jsonb_typeof(${t.governanceObligationRefs})='array'
+      and jsonb_array_length(${t.governanceObligationRefs}) between 1 and 32
+      and ${t.retentionDays} is not null and ${t.retentionDays} between 1 and 3650
+      and ${t.expiresAt} is not null and ${t.expiresAt}>${t.observedAt})
+  )`),
 }));
 
 export const businessEventObjects = pgTable("business_event_objects", {

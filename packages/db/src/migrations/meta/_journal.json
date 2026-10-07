@@ -2724,6 +2724,13 @@
       "when": 1791329226575,
       "tag": "0390_nebulous_doomsday",
       "breakpoints": true
+    },
+    {
+      "idx": 391,
+      "version": "7",
+      "when": 1791331336912,
+      "tag": "0391_first_redwing",
+      "breakpoints": true
     }
   ]
 }

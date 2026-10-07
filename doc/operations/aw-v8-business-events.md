@@ -17,7 +17,7 @@ Current assignments never become invented historical relationships.
   returns authorized current projections. Continue with `cursorAt` and
   `cursorId` from `nextCursor`. Empty filtered pages can still have a cursor.
 - `POST /api/companies/:companyId/business-events/backfill` accepts
-  `{from, until, limit, cursor?}`. Both endpoints require explicit source windows;
+  `{from, until, limit, cursor?, governanceObligationRefs, retentionDays}`. Both endpoints require explicit source windows;
   limits are 1–200. Backfill requires board audit authority and rechecks source
   object access. Repeat the exact window while advancing its cursor.
 - `DELETE /api/companies/:companyId/business-events/sources/:sourceRef`
@@ -28,7 +28,8 @@ Current assignments never become invented historical relationships.
 All paths use existing company and native object authorization. Reads recheck
 the current authoritative source and object access before exposing data. Changed
 or deleted sources disappear from reads even before the next backfill. Backfill
-and suppression take a company advisory transaction lock before the source lock.
+and suppression take analytical company → Memory → source locks; list reads
+take company → Memory before sharing native source rows.
 Native issue/project erasure takes the same company lock before native row deletion.
 Projection transactions remain bounded to one source at a time.
 
@@ -37,8 +38,8 @@ revision, links its predecessor, and tombstones that predecessor without rewriti
 its historical attributes. Returning to an earlier source value creates another
 revision. Composite database keys keep event relationships and correction links
 inside the company. Stable keyset source pagination preserves PostgreSQL
-microseconds; the normalized event representation currently has millisecond
-precision. Occurrence and observation times are distinct. Unknown transport and
+microseconds, as do v2 normalized event hashes, stored timestamps, list output
+and event cursors. Occurrence and observation times are distinct. Unknown transport and
 source-update times remain null.
 
 Each completed batch records its projector version, fixed source window, input
@@ -83,10 +84,45 @@ roll back the entire deletion. The retained source activity log remains governed
 by its existing owner. Raw database deletion and independent source-log retention
 are not covered by these service hooks.
 
-Still unfinished: other source-owner erasure and retention hooks, governance
-purpose/retention admission, other source adapters, incremental dispatch,
+Still unfinished: remaining source-owner erasure and retention coverage, other source adapters, incremental dispatch,
 general analytical lineage/invalidation, OCEL/JSONL export, quality/readiness,
 process analysis, operator UI, independent security review and hosted evidence.
 Source references and suppression identities still require an explicit retention
 policy. No customer-data processing or production-readiness qualification is
 claimed by this checkpoint.
+
+## Current purpose, integrity and retention admission
+
+Projection requires an explicit current V7 company-policy profile approving
+`process_intelligence` with the `process` capability and requested internal-source
+retention. A metrics-only policy grants no use. Every source transaction rechecks
+current authority and every visible retained event rechecks its pinned profile.
+Suspended, superseded or expired policies hide retained projections. Legacy rows
+without purpose/retention are unreadable and queued for deletion; no retrospective
+approval is invented. Feature configuration alone grants no processing authority.
+
+Correction chains retain their original earliest expiry. Changing an observation
+or purpose cannot extend that deadline. PostgreSQL rejects mutation of stored
+facts, purpose or retention; corrections append and tombstoning is monotonic.
+The internal startup/periodic retention owner serves at most 100 expired/legacy
+source chains per sweep with company → Memory → source locks and 8-second statement
+timeouts, including paused companies and disabled features. It erases complete
+histories and object links through the existing suppression owner. Those guards
+already participate in the native authenticated restore ledger and quarantine.
+
+Current reads reauthorize hidden Tasks and both recorded and current Project
+ancestry. They verify retained attributes/object links against current source
+facts before relying on those links for authority. Exact microseconds participate
+in the v2 source hash, preventing within-millisecond edits from remaining visible.
+A real PostgreSQL Memory race verifies erasure completes before an already-started
+reader takes source rows. Explicit human suppression remains available after flag
+rollback. Routes validate company IDs, carry no-store headers and optionally bind
+requests to the current account identity.
+
+Backfill is bounded to 200 candidates and a 30-second inter-source work budget.
+Budget-limited completion retains the last processed cursor, so later candidates
+are not skipped. Individual database operations have an 8-second statement bound.
+List admission aborts instead of returning an incomplete page after its work budget.
+These bounds are implementation limits, not hosted performance or completeness
+qualification. Operational backfill counts/audit metadata and the minimal retained
+suppression register still need their complete lifecycle/retention qualification.
