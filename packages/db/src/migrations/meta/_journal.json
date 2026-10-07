@@ -2808,6 +2808,13 @@
       "when": 1791353305481,
       "tag": "0402_volatile_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 403,
+      "version": "7",
+      "when": 1791354945841,
+      "tag": "0403_bizarre_bloodaxe",
+      "breakpoints": true
     }
   ]
 }

@@ -33,6 +33,15 @@ describe("strict business experiment protocol", () => {
     const d = protocol();
     for (const value of [{ ...d, guardrailMetrics: [] }, { ...d, guardrailMetrics: [{ ...d.guardrailMetrics[0], metricId: d.primaryMetric.metricId }] }, { ...d, governanceObligationRefs: [id(40), id(40)] }, { ...d, diagnostics: { ...d.diagnostics, invariantMetricRefs: [] } }, { ...d, assignment: { ...d.assignment, treatmentProbability: 1 } }, { ...d, sampleOrDurationPlan: { ...d.sampleOrDurationPlan, until: d.sampleOrDurationPlan.from } }, { ...d, sampleOrDurationPlan: { ...d.sampleOrDurationPlan, minimumUnitsPerArm: 11 } }, { ...d, sampleOrDurationPlan: { ...d.sampleOrDurationPlan, maximumAssignedUnits: 4001 } }]) expect(businessExperimentDefinitionSchema.safeParse(value).success).toBe(false);
   });
+  it("separates pretreatment invariants and rejects unused or ambiguous governance identities", () => {
+    const d = protocol();
+    for (const value of [
+      { ...d, diagnostics: { ...d.diagnostics, invariantMetricRefs: [d.primaryMetric.metricId] } },
+      { ...d, primaryMetric: { ...d.primaryMetric, key: "invariant_1" } },
+      { ...d, ethics: { ...d.ethics, consentGovernanceObligationRef: id(41) } },
+      { ...d, ethics: { ...d.ethics, aiUseCaseId: id(42) } },
+    ]) expect(businessExperimentDefinitionSchema.safeParse(value).success).toBe(false);
+  });
   it("keeps public analysis and lifecycle commands free of pasted facts, approvals or result JSON", () => {
     const command = { expectedRevision: 1, versionId: id(50) }; expect(analyzeBusinessExperimentSchema.safeParse(command).success).toBe(true);
     for (const field of ["units", "integrity", "results", "assignmentKey", "primaryMetric", "numericallyQualified"]) expect(analyzeBusinessExperimentSchema.safeParse({ ...command, [field]: [] }).success).toBe(false);

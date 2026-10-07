@@ -250,3 +250,20 @@ binding. Historical saved bytes remain unchanged after source replacement, with
 current revalidation displayed separately. Native numerical results grant no
 choice, commitment, causal language or policy promotion authority. No alternate
 Decision/Forecast/Scenario store or scheduler is introduced.
+
+## V8-018 — Experiment preregistration preserves exact source and human review ownership
+
+Native experiment protocols retain immutable reasoned versions, exact metric
+FK pins and separate human review/readiness/cancellation receipts. CAS and deferred
+PostgreSQL completeness protect both normal mutation and restored histories.
+Amendment resets review; invariant publication changes cannot rewrite a saved pin.
+Binary individual native designs require full-status ratio denominators and exact
+unit/scope consistency, preserving all future intent-to-treat subjects.
+
+Current source authorization, sensitivity, review expiry and independent experiment
+purpose govern every retained read or renewed review. Native company→Memory
+locking and source cascades erase whole protocol prose/history. Existing advisory
+business-object purpose cannot authorize live customer exposure, consent-dependent
+intervention or material AI deployment changes. READY does not grant execution
+or exposure authority; the separate assignment/exposure receipt owner follows
+this checkpoint. Numerical validity never substitutes for those authority gates.

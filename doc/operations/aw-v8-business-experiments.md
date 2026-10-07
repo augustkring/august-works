@@ -1,10 +1,10 @@
-# Native business experiments — numerical protocol checkpoint
+# Native business experiments — protocol and registry checkpoints
 
 The source supplies strict pre-registration/command contracts, a bounded internal
-assignment label helper and conditional exact binary experiment arithmetic for
-brief section 24. Registry, native assignment/exposure/outcome ownership, ethical
-admission, public routes/UI and downstream evidence are still in progress. There
-is no live exposure or source permission granted by this numerical checkpoint.
+assignment label helper, conditional exact binary experiment arithmetic and a
+source-owned preregistration registry for brief section 24. Native assignment,
+exposure/outcome receipts, execution/analysis lifecycle, UI and downstream evidence
+remain in progress. The registry grants no live exposure or deployment authority.
 V7 Learning/Skill evaluation is unchanged; business experiments do not duplicate
 software/agent correctness infrastructure.
 
@@ -57,3 +57,55 @@ vectors independently verify assignment labels. Sources and exact log/reference
 hashes are recorded in `aw-v8-evidence/experiment-kernel-checkpoint.json`.
 Fixtures are synthetic mathematical/software evidence, not collected operational
 outcomes or hosted qualification. The entire V8 build remains in progress.
+
+The native registry reuses company authorization, governance obligations,
+company→Memory locking, analytical lineage and native metric ownership. Four
+tenant-scoped tables retain the experiment root, immutable reasoned versions,
+exact metric FK pins and separate human lifecycle receipts. CAS guards creation,
+amendment, review, readiness and cancellation; an amendment before execution
+resets review and leaves the prior version unchanged. Invariant definitions are
+resolved to their exact published version at registration, not silently repinned
+when a later version is published. Outcomes and pretreatment invariants are
+distinct, with reserved invariant receipt keys.
+
+Binary individual native protocols admit native ratios on the registered issue
+or project unit. Denominators must cover every canonical status and match the
+registered company/project scope. A filtered denominator could remove failures
+or unexposed units and therefore is rejected. Native metrics retain their actual
+`created_in_window_current_state` semantics; a registry pin neither reconstructs
+historical status nor proves that a future outcome was measured. Readiness must
+precede the registered horizon, and that horizon must end before current source
+and governance review expiry. Human power rationale remains a declaration.
+
+The existing analytical purpose authorizes advisory business objects with no
+personal impact. Live customer experiments, consent-dependent exposure and
+material AI deployment changes therefore fail closed at registry admission;
+ordinary analytical approval cannot substitute for their canonical governance
+owners. Dark patterns and hidden employment manipulation are rejected by the
+strict protocol. The receipt owner will separately admit execution: a READY
+protocol alone cannot transition to RUNNING at this checkpoint.
+
+API routes are `/companies/:companyId/experiments`, `/:experimentId`,
+`/:experimentId/versions` and `/:experimentId/transition`. Responses use no-store;
+current account checks, strict query/body contracts and human authority precede
+source access. Lists expose bounded current-authorized pages; detail returns five
+recent authorized versions and at most 100 associated lifecycle receipts.
+Source replacement retains historical protocol hashes with separate revalidation
+metadata. New review requires current metric publication. Cancellation remains
+available to an authorized human when rollout is disabled.
+
+Migration 0403 requires immutable exact metric pins, native manifests and deferred
+complete protocol/lifecycle ownership. Restore cannot omit source descendants or
+append a lifecycle receipt without advancing its canonical owner. Native source
+erasure, retention and company purge cascade through complete protocol prose and
+lifecycle history, including rollout-off and paused-company erasure. Canonical
+Decision source access and its issue/project lineage are inherited when declared.
+No parallel governance, authorization, credential store or scheduler is added.
+
+Registry qualification passes 76 native owner/kernel/OpenAPI/metric/scenario checks,
+five strict public-contract checks, server/shared type checking, migration safety
+and the native generated-schema snapshot assertion. Exact source/log hashes and
+resolved failed attempts accompany `aw-v8-evidence/experiment-registry-checkpoint.json`.
+The preceding integrated production build passes at exact commit `5927fe1`.
+These local source qualifications do not qualify live exposure or the entire V8
+release; the requested full build continues.

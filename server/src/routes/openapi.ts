@@ -23,6 +23,7 @@ import {
   publishBusinessForecastSpecSchema,
   retireBusinessForecastSpecSchema,
   createBusinessScenarioSchema,
+  createBusinessExperimentSchema, amendBusinessExperimentSchema, transitionBusinessExperimentSchema,
   reviseBusinessScenarioSchema,
   publishBusinessScenarioSchema,
   runBusinessScenarioSchema,
@@ -1631,6 +1632,8 @@ const INSTANCE_ADMIN_OPERATIONS = new Set([
 ]);
 
 const CREATED_OPERATIONS = new Set([
+  "POST /api/companies/{companyId}/experiments",
+  "POST /api/companies/{companyId}/experiments/{experimentId}/versions",
   "POST /api/adapters/install",
   "POST /api/chat-endpoints/{endpointId}/setup-secret",
   "POST /api/companies/{companyId}/agent-hires",
@@ -1727,7 +1730,7 @@ function resolveOperationAuthLevel(
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
   if(path.startsWith("/api/companies/{companyId}/decisions/{decisionId}/context")) return "board";
-  if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/business-scenarios") || path.startsWith("/api/companies/{companyId}/business-forecasts") || path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
+  if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/experiments") || path.startsWith("/api/companies/{companyId}/business-scenarios") || path.startsWith("/api/companies/{companyId}/business-forecasts") || path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
   if (
     isBoardOnlyOperation(method, path) ||
     experimentalApiMetadata[`${method.toUpperCase()} ${path}`]?.boardOnly
@@ -11988,3 +11991,11 @@ registerCurrentRoute({
   body: localAiConnectionSchema,
   responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 422: r.unprocessable },
 });
+
+// Governed native business experiment preregistration. Execution receipts are
+// admitted by their own owner; the protocol cannot grant exposure authority.
+registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "get", path: "/api/companies/{companyId}/experiments", tags: ["V8"], summary: "List current-authorized preregistered business experiments", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
+registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "post", path: "/api/companies/{companyId}/experiments", tags: ["V8"], summary: "Propose a governed native business experiment", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: createBusinessExperimentSchema });
+registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "get", path: "/api/companies/{companyId}/experiments/{experimentId}", tags: ["V8"], summary: "Inspect exact experiment protocol and lifecycle history under current source authority", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/versions", tags: ["V8"], summary: "Append an explicit reasoned amendment to an unstarted experiment", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: amendBusinessExperimentSchema });
+registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/transition", tags: ["V8"], summary: "Human review, readiness or cancellation of the exact registered protocol", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: transitionBusinessExperimentSchema });

@@ -33,11 +33,14 @@ export const businessExperimentDefinitionSchema = z.object({
   const metrics = [value.primaryMetric, ...value.secondaryMetrics, ...value.guardrailMetrics];
   if (new Set(metrics.map(item => item.key)).size !== metrics.length || new Set(metrics.map(item => item.metricId)).size !== metrics.length) reject("Experiment metric roles require distinct keys and pinned native metrics");
   if (new Set(value.governanceObligationRefs).size !== value.governanceObligationRefs.length || new Set(value.diagnostics.invariantMetricRefs).size !== value.diagnostics.invariantMetricRefs.length) reject("Governance/diagnostic pins cannot repeat");
+  if (value.diagnostics.invariantMetricRefs.some(ref => metrics.some(item => item.metricId === ref))) reject("An outcome metric cannot also be a pretreatment invariant");
+  if (metrics.some(item => /^invariant_[1-8]$/.test(item.key))) reject("Invariant receipt keys are reserved");
   const plan = value.sampleOrDurationPlan;
   if (Date.parse(plan.from) >= Date.parse(plan.until) || Date.parse(plan.until) - Date.parse(plan.from) > 365 * 86400000) reject("Fixed horizon must be ordered and at most one year");
   if (plan.minimumAssignedUnits > plan.maximumAssignedUnits || plan.minimumUnitsPerArm * 2 > plan.minimumAssignedUnits) reject("Sample policy must support both arms within the bounded plan");
   if (value.ethics.requiresConsent && !value.ethics.consentGovernanceObligationRef) reject("Required consent must bind reviewed native governance evidence");
   if (value.ethics.changesMaterialAiDecisions && !value.ethics.aiUseCaseId) reject("Material AI changes require the existing governed AI use case");
+  if (!value.ethics.requiresConsent && value.ethics.consentGovernanceObligationRef !== null || !value.ethics.changesMaterialAiDecisions && value.ethics.aiUseCaseId !== null) reject("Unused consent/AI governance pins must be null");
 });
 export type BusinessExperimentDefinition = z.infer<typeof businessExperimentDefinitionSchema>;
 export const BUSINESS_EXPERIMENT_STATES = ["draft", "in_review", "ready", "running", "paused", "completed", "analyzing", "decided", "inconclusive", "invalid", "cancelled"] as const;
@@ -51,6 +54,28 @@ export const createBusinessExperimentSchema = z.object({ key: z.string().regex(/
 export const amendBusinessExperimentSchema = z.object({ expectedRevision: z.number().int().positive(), definition: businessExperimentDefinitionSchema, reason: prose }).strict();
 export const transitionBusinessExperimentSchema = z.object({ expectedRevision: z.number().int().positive(), versionId: id, state: z.enum(BUSINESS_EXPERIMENT_STATES), rationale: prose }).strict();
 export const analyzeBusinessExperimentSchema = z.object({ expectedRevision: z.number().int().positive(), versionId: id }).strict();
+
+export interface BusinessExperimentMetricPin {
+  key: string; role: "primary" | "guardrail" | "exploratory" | "invariant";
+  metricId: string; metricVersionId: string; contentHash: string;
+}
+export interface BusinessExperimentView {
+  id: string; companyId: string; key: string; revision: number;
+  state: BusinessExperimentState; currentVersionId: string | null;
+  createdBy: string; createdAt: string; updatedAt: string;
+}
+export interface BusinessExperimentVersionView {
+  id: string; companyId: string; experimentId: string; revision: number;
+  definition: BusinessExperimentDefinition; contentHash: string;
+  metricPins: BusinessExperimentMetricPin[]; amendmentReason: string;
+  createdBy: string; createdAt: string; expiresAt: string;
+  currentQualification: "current" | "needs_revalidation";
+}
+export interface BusinessExperimentTransitionView {
+  id: string; companyId: string; experimentId: string; versionId: string;
+  revision: number; fromState: BusinessExperimentState; toState: BusinessExperimentState;
+  rationale: string; createdBy: string; createdAt: string;
+}
 
 /** INTERNAL capture only. The native owner must prove registration, source
  * authority, immutable assignment/exposure/outcome receipts and complete logs.

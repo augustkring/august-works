@@ -16,6 +16,7 @@ const apiPrefixes: Record<string, string> = {
   "business-metrics.ts": "/api",
   "business-forecasting.ts": "/api",
   "business-scenarios.ts": "/api",
+  "business-experiments.ts": "/api",
   "business-metric-targets.ts": "/api",
   "strategy-execution.ts": "/api",
   "process-data-readiness.ts": "/api",
@@ -280,6 +281,16 @@ function loadSpecRoutes() {
 }
 
 describe("openapi routes", () => {
+  it("documents exact human experiment protocol commands, account guards and no-store responses", () => {
+    const spec = buildOpenApiSpec(), base = "/api/companies/{companyId}/experiments";
+    const create = spec.paths[base].post, transition = spec.paths[`${base}/{experimentId}/transition`].post;
+    expect(create.security).toEqual([{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }]);
+    expect(create.responses[201].headers["Cache-Control"].schema.enum).toEqual(["no-store"]);
+    expect(create.requestBody.content["application/json"].schema.additionalProperties).toBe(false);
+    expect(transition.requestBody.content["application/json"].schema.required).toEqual(expect.arrayContaining(["expectedRevision", "versionId", "state", "rationale"]));
+    expect(transition.responses[409]).toBeDefined();
+    expect(transition.parameters).toContainEqual(expect.objectContaining({ name: "expectedUserId", in: "query" }));
+  });
   it("documents V7 human review, bounded sandbox control and signed host consumption", () => {
     const spec = buildOpenApiSpec();
     const review = spec.paths["/api/companies/{companyId}/orchestration/plans/{id}/verify"].post;
