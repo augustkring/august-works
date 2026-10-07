@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { providerTraceRecords, memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryRetentionPolicies,
+import { agentExecutionManifests,providerTraceRecords, memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryRetentionPolicies,
   contextManifests, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
@@ -156,6 +156,7 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
       }
     }
     // Native trace guards scrub metadata and enqueue the existing file outbox.
+    await db.update(agentExecutionManifests).set({manifest:sql`'{"payloadDeleted":true}'::jsonb`}).where(and(eq(agentExecutionManifests.companyId,companyId),inArray(agentExecutionManifests.runId,childIds)));
     await db.update(providerTraceRecords).set({reason:"source_erased",updatedAt:now}).where(and(eq(providerTraceRecords.companyId,companyId),inArray(providerTraceRecords.runId,childIds)));
     await db.update(saasRunLogs).set({ erasedAt: now, pendingBytes: 0, sha256: null }).where(and(eq(saasRunLogs.companyId, companyId), inArray(saasRunLogs.id, childIds)));
     await db.update(saasRunLogChunks).set({ ciphertext: null }).where(and(eq(saasRunLogChunks.companyId, companyId), inArray(saasRunLogChunks.runId, childIds)));
