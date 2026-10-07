@@ -1,3 +1,6 @@
+import {lockAnalyticalCompany} from "../analytical-privacy.js";
+import type {AuthorizationActor} from "../authorization.js";
+import {assertLearnedAssetAnalyticalSources,assertLearningCandidateAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -250,25 +253,26 @@ function requireMutable(row: FoundationDocument) {
 }
 
 export function foundationService(db: Db) {
-  async function get(companyId: string, foundationDocumentId: string) {
+  async function sourceAccess(view:FoundationDocument,actor?:AuthorizationActor){for(const id of new Set([view.latestRevisionId,view.approvedRevisionId].filter((id):id is string=>!!id)))await assertLearnedAssetAnalyticalSources(db,view.companyId,"document_revision",id,actor);}
+  async function get(companyId: string, foundationDocumentId: string,actor?:AuthorizationActor) {
     const row = await selectFoundation(
       db,
       companyId,
       eq(foundationDocuments.id, foundationDocumentId),
     );
-    return row ? mapFoundationRow(row) : null;
+    if(!row)return null;const view=mapFoundationRow(row);await sourceAccess(view,actor);return view;
   }
 
-  async function getByKey(companyId: string, foundationKey: string) {
+  async function getByKey(companyId: string, foundationKey: string,actor?:AuthorizationActor) {
     const row = await selectFoundation(
       db,
       companyId,
       eq(foundationDocuments.foundationKey, foundationKey),
     );
-    return row ? mapFoundationRow(row) : null;
+    if(!row)return null;const view=mapFoundationRow(row);await sourceAccess(view,actor);return view;
   }
 
-  async function listRevisions(companyId: string, foundationDocumentId: string) {
+  async function listRevisions(companyId: string, foundationDocumentId: string,actor?:AuthorizationActor) {
     const foundation = await db
       .select({ documentId: foundationDocuments.documentId })
       .from(foundationDocuments)
@@ -281,7 +285,7 @@ export function foundationService(db: Db) {
       .then((rows) => rows[0] ?? null);
     if (!foundation) return null;
 
-    return db
+    const revisions=await db
       .select({
         id: documentRevisions.id,
         revisionNumber: documentRevisions.revisionNumber,
@@ -301,6 +305,8 @@ export function foundationService(db: Db) {
         ),
       )
       .orderBy(desc(documentRevisions.revisionNumber));
+    for(const row of revisions)await assertLearnedAssetAnalyticalSources(db,companyId,"document_revision",row.id,actor);
+    return revisions;
   }
 
   async function lockProposal(
@@ -336,7 +342,7 @@ export function foundationService(db: Db) {
     getByKey,
     listRevisions,
 
-    list: async (companyId: string) => {
+    list: async (companyId: string,actor?:AuthorizationActor) => {
       const rows = await db
         .select(foundationSelect)
         .from(foundationDocuments)
@@ -351,7 +357,7 @@ export function foundationService(db: Db) {
         )
         .where(eq(foundationDocuments.companyId, companyId))
         .orderBy(asc(foundationDocuments.category), asc(foundationDocuments.foundationKey));
-      return rows.map(mapFoundationRow);
+      const views=[];for(const row of rows){const view=mapFoundationRow(row);await sourceAccess(view,actor);views.push(view);}return views;
     },
 
     createDraft: async (
@@ -470,11 +476,12 @@ export function foundationService(db: Db) {
 
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
-        await lockMemoryPrivacy(txDb, companyId);
+        await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
         if (!lockedRow) throw notFound("Foundation document not found");
         const existing = mapFoundationRow(lockedRow);
+        for(const revision of new Set([existing.latestRevisionId,existing.approvedRevisionId].filter((id):id is string=>!!id)))await assertLearnedAssetAnalyticalSources(txDb,companyId,"document_revision",revision,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         requireMutable(existing);
 
         if (existing.latestRevisionId !== patch.baseRevisionId) {
@@ -616,6 +623,7 @@ export function foundationService(db: Db) {
         const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
         if (!lockedRow) throw notFound("Foundation document not found");
         const existing = mapFoundationRow(lockedRow);
+        for(const revision of new Set([existing.latestRevisionId,existing.approvedRevisionId].filter((id):id is string=>!!id)))await assertLearnedAssetAnalyticalSources(txDb,companyId,"document_revision",revision,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
 
         if (existing.status !== "draft") {
           throw conflict("Only a draft Foundation document can be submitted for review", {
@@ -652,7 +660,7 @@ export function foundationService(db: Db) {
     ) =>
       db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
-        await lockMemoryPrivacy(txDb, companyId);
+        await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         if (actor.principal.type === "agent") {
           throw forbidden("Agents cannot approve canonical Foundation changes");
@@ -661,6 +669,7 @@ export function foundationService(db: Db) {
         const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
         if (!lockedRow) throw notFound("Foundation document not found");
         const existing = mapFoundationRow(lockedRow);
+        for(const revision of new Set([existing.latestRevisionId,existing.approvedRevisionId].filter((id):id is string=>!!id)))await assertLearnedAssetAnalyticalSources(txDb,companyId,"document_revision",revision,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
 
         if (existing.status !== "in_review") {
           throw conflict("Only an in-review Foundation document can be approved", {
@@ -730,6 +739,7 @@ export function foundationService(db: Db) {
         const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
         if (!lockedRow) throw notFound("Foundation document not found");
         const existing = mapFoundationRow(lockedRow);
+        for(const revision of new Set([existing.latestRevisionId,existing.approvedRevisionId].filter((id):id is string=>!!id)))await assertLearnedAssetAnalyticalSources(txDb,companyId,"document_revision",revision,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (existing.status !== "in_review") {
           throw conflict("Only an in-review Foundation document can be rejected", {
             code: "foundation_invalid_transition",
@@ -819,8 +829,8 @@ export function foundationService(db: Db) {
       });
     },
 
-    listProposals: async (companyId: string, foundationDocumentId: string) =>
-      db
+    listProposals: async (companyId: string, foundationDocumentId: string,actor?:AuthorizationActor) => {
+      const rows=await db
         .select()
         .from(foundationChangeProposals)
         .where(
@@ -829,7 +839,10 @@ export function foundationService(db: Db) {
             eq(foundationChangeProposals.foundationDocumentId, foundationDocumentId),
           ),
         )
-        .orderBy(asc(foundationChangeProposals.createdAt)),
+        .orderBy(asc(foundationChangeProposals.createdAt));
+      for(const row of rows)await assertLearningCandidateAnalyticalSources(db,companyId,"foundation",row.id,actor);
+      return rows;
+    },
 
     acceptProposal: async (
       companyId: string,
@@ -839,7 +852,7 @@ export function foundationService(db: Db) {
     ) => {
       const outcome = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
-        await lockMemoryPrivacy(txDb, companyId);
+        await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         if (actor.principal.type === "agent") {
           throw forbidden("Agents cannot make Foundation proposal decisions");
@@ -850,10 +863,12 @@ export function foundationService(db: Db) {
         const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
         if (!lockedRow) throw notFound("Foundation document not found");
         const existing = mapFoundationRow(lockedRow);
+        for(const revision of new Set([existing.latestRevisionId,existing.approvedRevisionId].filter((id):id is string=>!!id)))await assertLearnedAssetAnalyticalSources(txDb,companyId,"document_revision",revision,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         requireMutable(existing);
 
         const proposal = await lockProposal(tx, companyId, foundationDocumentId, proposalId);
         if (!proposal) throw notFound("Foundation proposal not found");
+        await assertLearningCandidateAnalyticalSources(txDb,companyId,"foundation",proposal.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (proposal.status !== "pending") {
           throw conflict("Foundation proposal is no longer pending", {
             code: "foundation_invalid_transition",
@@ -978,6 +993,7 @@ export function foundationService(db: Db) {
         if (!foundation) throw notFound("Foundation document not found");
         const proposal = await lockProposal(tx, companyId, foundationDocumentId, proposalId);
         if (!proposal) throw notFound("Foundation proposal not found");
+        await assertLearningCandidateAnalyticalSources(txDb,companyId,"foundation",proposal.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (proposal.status === "rejected") return proposal;
         if (proposal.status !== "pending") {
           throw conflict("Foundation proposal is no longer pending", {
@@ -1011,6 +1027,7 @@ export function foundationService(db: Db) {
         const lockedRow = await lockFoundation(tx, companyId, foundationDocumentId);
         if (!lockedRow) throw notFound("Foundation document not found");
         const existing = mapFoundationRow(lockedRow);
+        for(const revision of new Set([existing.latestRevisionId,existing.approvedRevisionId].filter((id):id is string=>!!id)))await assertLearnedAssetAnalyticalSources(txDb,companyId,"document_revision",revision,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (existing.status === "archived") return existing;
 
         await txDb

@@ -24,6 +24,8 @@ function checkTime(deadline:number) { if(performance.now()>deadline) throw unpro
  * freshness is returned separately and never upgrades new downstream reliance.
  * Reusing this capture never supplies a Decision choice or verified Task outcome. */
 export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:AuthorizationActor,definition:{sensitivity:"internal"|"confidential";retentionDays:number;evidence:Array<{key:string;source:DecisionEvidenceReference}>},deadline:number,historicalQualification=false) {
+ let sourceSensitivity:"internal"|"confidential"="internal";
+ const retainSensitivity=(value:string)=>{if(value==="confidential")sourceSensitivity="confidential";};
  const now=new Date(),edges=new Map<string,Edge>(),evidence:CapturedDecisionEvidence[]=[],manifestIds=new Set<string>(),revalidationRequiredEvidenceKeys:string[]=[];
  let expiresAt=new Date(now.getTime()+definition.retentionDays*DAY);
  function edge(value:Edge) {
@@ -43,6 +45,7 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
       if(!observation || observation.metricId!==ref.metricId || observation.versionId!==ref.metricVersionId) throw conflict("Exact metric observation pins are unavailable");
       const [metricVersion]=await tx.select().from(businessMetricVersions).where(and(eq(businessMetricVersions.companyId,companyId),eq(businessMetricVersions.metricId,ref.metricId),eq(businessMetricVersions.id,ref.metricVersionId))).for("share");
       if(!metricVersion) throw conflict("Metric evidence definition is unavailable");
+      retainSensitivity(metricVersion.definition.sensitivity);
       manifestId=observation.lineageManifestId;sourceExpiry=observation.expiresAt;sourceHash=nativeSha256(result);
       facts={value:result.value,status:result.status,unit:metricVersion.definition.unit,from:result.from,until:result.until,asOf:result.asOf};
       limitations=["Frozen measurement of the declared native population and observation window; no causal attribution.","Native population status is observed at capture, not reconstructed at a historical period boundary."];
@@ -51,11 +54,13 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
       const [run]=await tx.select().from(processAnalysisRuns).where(and(eq(processAnalysisRuns.companyId,companyId),eq(processAnalysisRuns.id,ref.runId),eq(processAnalysisRuns.definitionId,ref.definitionId))).for("share");
       const [version]=run?await tx.select().from(processAnalysisVersions).where(and(eq(processAnalysisVersions.companyId,companyId),eq(processAnalysisVersions.id,run.versionId))).for("share"):[];
       if(!run || !version) throw conflict("Native process finding pins are unavailable");
+      retainSensitivity(version.definition.sensitivity);
       manifestId=run.lineageManifestId;sourceExpiry=new Date(finding.expiresAt);sourceHash=nativeSha256({findingHash:finding.contentHash,status:finding.status,version:finding.version});
       facts={findingStatus:finding.status,findingVersion:finding.version,findingType:finding.findingType,severity:finding.severity,interpretation:finding.interpretation,summary:finding.summary,...finding.facts.observed};
       limitations=[...finding.facts.limitations,"The human interpretation and admitted facts were captured before the choice; later lifecycle changes do not rewrite them."];
     } else if(ref.type==="forecast_run") {
       const source=await inspectBusinessForecastRun(tx,companyId,actor,ref.specId,ref.versionId,ref.id,!historicalQualification),point=source.view.result.points[ref.pointIndex];
+      retainSensitivity(source.forecastDefinition.sensitivity);
       if(source.view.currentQualification!=="qualified")revalidationRequiredEvidenceKeys.push(link.key);
       if(!point || source.view.result.status!=="qualified") throw conflict("Exact qualified forecast point is unavailable");
       if(definition.sensitivity==="internal" && source.forecastDefinition.sensitivity==="confidential") throw forbidden("Confidential forecast evidence cannot be downgraded");
@@ -64,6 +69,7 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
       limitations=[...source.view.result.limitations,"A forecast estimates a future metric under its time-safe model; it is not an observed outcome or a causal effect."];
     } else if(ref.type==="scenario_run") {
       const source=await inspectBusinessScenarioRun(tx,companyId,actor,ref.scenarioId,ref.versionId,ref.id,!historicalQualification),scenarioCase=source.view.result.cases.find(item=>item.key===ref.caseKey),output=scenarioCase?.outputs.find(item=>item.key===ref.outputKey);
+      retainSensitivity(source.definition.sensitivity);
       if(source.view.currentQualification!=="current")revalidationRequiredEvidenceKeys.push(link.key);
       if(!output || source.view.result.status==="data_not_ready") throw conflict("Exact retained scenario output is unavailable");
       if(definition.sensitivity==="internal" && source.definition.sensitivity==="confidential") throw forbidden("Confidential scenario evidence cannot be downgraded");
@@ -73,7 +79,8 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
     } else if(ref.type==="causal_analysis") {
       const source=await inspectCausalClaimEvidence(tx,companyId,actor,ref,!historicalQualification,deadline);
       if(definition.sensitivity==="internal"&&source.definition.sensitivity==="confidential")throw forbidden("Confidential causal evidence cannot be downgraded");
-      sourceExpiry=source.expiresAt;sourceHash=source.sourceHash;const result=source.view.result;if(source.view.currentQualification!=="current")revalidationRequiredEvidenceKeys.push(link.key);
+      sourceExpiry=source.expiresAt;sourceHash=source.sourceHash;const result=source.view.result;retainSensitivity(source.definition.sensitivity);
+      if(source.view.currentQualification!=="current")revalidationRequiredEvidenceKeys.push(link.key);
       facts={status:result.status,evidenceGrade:result.evidenceGrade,identification:result.identification.status,executionAuthority:"advisory_only",effect:result.estimate?.effect??null,intervalLower:result.estimate?.interval.lower??null,intervalUpper:result.estimate?.interval.upper??null,unit:result.estimate?.unit??null,sensitivity:result.robustness.sensitivity,providerRefutations:result.robustness.providerRefutations};
       limitations=[...result.limitations,"A separately reviewed conditional causal interpretation remains advisory evidence, not a measured actual, verified task outcome or choice authorization."];
       for(const id of source.manifestIds)manifestIds.add(id);
@@ -83,6 +90,7 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
     } else {
       const source=await inspectBusinessExperimentEvidence(tx,companyId,actor,ref,!historicalQualification,deadline);
       if(definition.sensitivity==="internal" && source.definition.sensitivity==="confidential") throw forbidden("Confidential experiment evidence cannot be downgraded");
+      retainSensitivity(source.definition.sensitivity);
       if(source.view.currentQualification!=="current")revalidationRequiredEvidenceKeys.push(link.key);
       const result=source.view.result, primary=result.metrics.find(metric=>metric.role==="primary");
       sourceExpiry=source.expiresAt;sourceHash=source.sourceHash;
@@ -104,7 +112,7 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
   }
  const lineage=[...edges.values()].sort((a,b)=>`${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
  await inspectAnalyticalEvidenceAuthority(tx,companyId,actor,lineage,deadline);
- return {evidence,edges:lineage,manifestIds:[...manifestIds].sort(),now,expiresAt,revalidationRequiredEvidenceKeys};
+ return {sourceSensitivity:sourceSensitivity as "internal"|"confidential",evidence,edges:lineage,manifestIds:[...manifestIds].sort(),now,expiresAt,revalidationRequiredEvidenceKeys};
 }
 export async function inspectAnalyticalEvidenceAuthority(tx:Db,companyId:string,actor:AuthorizationActor,edges:Edge[],deadline:number) {
   const objects=edges.flatMap(edge=>edge.inputType==="issue" || edge.inputType==="project"?[{objectType:edge.inputType,objectId:edge.inputRef,qualifier:"related" as const}]:[]);

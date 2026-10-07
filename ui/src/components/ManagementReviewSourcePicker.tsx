@@ -7,7 +7,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 const selectStyle = "w-full min-w-0 rounded-md border border-input bg-background p-2";
 const labels: Record<StrategyExecutionReference["type"], string> = { foundation_section: "Approved Foundation section", goal: "Goal", project: "Project", milestone: "Milestone", issue: "Task", decision: "Decision", metric: "Published metric", metric_target: "Approved metric commitment", metric_observation: "Current metric observation" };
-type Props = { companyId: string; userId: string | null; name: string; value: ManagementReviewSource | null; onChange: (value: ManagementReviewSource | null) => void; onValidity: (valid: boolean) => void; onAuthorityLost: () => void };
+type Props = { companyId: string; userId: string | null; name: string; value: ManagementReviewSource | null; onChange: (value: ManagementReviewSource | null) => void; onValidity: (valid: boolean) => void; onAuthorityLost: () => void; allowedKinds?: ManagementReviewSource["kind"][] };
 function NativeRootPicker({ kind, ...props }: Props & { kind: "canonical" | "learning_cycle" | "decision_outcome" | "governance_obligation" }) {
   const initial = props.value?.kind === "canonical" ? props.value.reference : null;
   const [type, setType] = useState<StrategyExecutionReference["type"]>(initial?.type ?? "goal"), [search, setSearch] = useState(""), [parentId, setParentId] = useState(initial?.type === "milestone" ? initial.projectId : initial?.type === "metric_observation" ? initial.metricId : props.value?.kind === "decision_outcome" ? props.value.decisionId : "");
@@ -34,8 +34,8 @@ function NativeRootPicker({ kind, ...props }: Props & { kind: "canonical" | "lea
   </fieldset>;
 }
 export function ManagementReviewSourcePicker(props: Props) {
-  const [kind, setKind] = useState<ManagementReviewSource["kind"]>(props.value?.kind ?? "canonical");
-  return <fieldset className="min-w-0 space-y-3"><legend className="font-medium">{props.name}</legend><label className="block space-y-2">Source domain<select className={selectStyle} aria-label={`${props.name} domain`} value={kind} onChange={event => { setKind(event.target.value as typeof kind); props.onChange(null); props.onValidity(false); }}><option value="canonical">Canonical strategy and operational state</option><option value="analytical">Governed analytical evidence</option><option value="decision_outcome">Decision outcome review</option><option value="learning_cycle">Verified-task Learning</option><option value="governance_obligation">Governance obligation and review risk</option></select></label>
+  const [kind, setKind] = useState<ManagementReviewSource["kind"]>(props.value?.kind ?? props.allowedKinds?.[0] ?? "canonical");
+  return <fieldset className="min-w-0 space-y-3"><legend className="font-medium">{props.name}</legend><label className="block space-y-2">Source domain<select className={selectStyle} aria-label={`${props.name} domain`} value={kind} onChange={event => { setKind(event.target.value as typeof kind); props.onChange(null); props.onValidity(false); }}>{(props.allowedKinds ?? ["canonical","analytical","decision_outcome","learning_cycle","governance_obligation"]).map(value=><option key={value} value={value}>{{canonical:"Canonical strategy and operational state",analytical:"Governed analytical evidence",decision_outcome:"Decision outcome review",learning_cycle:"Verified-task Learning",governance_obligation:"Governance obligation and review risk"}[value]}</option>)}</select></label>
     {kind === "analytical" ? <DecisionEvidencePicker companyId={props.companyId} userId={props.userId} legend={`${props.name} analytical`} value={props.value?.kind === kind ? props.value.reference : null} onChange={reference => props.onChange(reference ? { kind, reference } : null)} onValidity={props.onValidity} onAuthorityLost={props.onAuthorityLost} /> : <NativeRootPicker key={kind} {...props} kind={kind} />}
   </fieldset>;
 }

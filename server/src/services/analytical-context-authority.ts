@@ -1,5 +1,5 @@
 import {and,eq,or,sql} from "drizzle-orm";
-import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifests,decisionContextVersions,decisionOutcomeReviewReceipts,issues,heartbeatRuns,type Db} from "@paperclipai/db";
+import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,type Db} from "@paperclipai/db";
 import {analyticalContextAuthorityPinSchema,type AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {z} from "zod";
 import type {AuthorizationActor} from "./authorization.js";
@@ -9,41 +9,44 @@ const pinsSchema=z.array(analyticalContextAuthorityPinSchema).min(1).max(32);
 /** Exact native source owners reauthorize retained identities. No copied fact,
  * historical requester or feature flag supplies a current reader privilege. */
 export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:AuthorizationActor,raw:AnalyticalContextAuthorityPin[],deadline=performance.now()+30000,historicalQualification=true) {
+ let sourceSensitivity:"internal"|"confidential"="internal";
+ const retainSensitivity=(value:string)=>{if(value==="confidential")sourceSensitivity="confidential";};
  const pins=pinsSchema.parse(raw),manifestIds=new Set<string>();let expiresAt=Infinity;
  for(const pin of pins){
   if(performance.now()>deadline)throw unprocessable("The complete analytical source review exceeded its time budget");
   if(pin.kind==="analytical_evidence"){
    const {captureAnalyticalEvidence}=await import("./analytical-evidence.js");
    const captured=await captureAnalyticalEvidence(tx,companyId,actor,{sensitivity:"confidential",retentionDays:3650,evidence:[{key:"retained_source",source:pin.source}]},deadline,historicalQualification);
-   captured.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,captured.expiresAt.getTime());
+   retainSensitivity(captured.sourceSensitivity);captured.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,captured.expiresAt.getTime());
   }else if(pin.kind==="process_run"){
    const {processAnalysisService}=await import("./process-analysis.js");
-   const run=await processAnalysisService(tx).getRun(companyId,actor,pin.definitionId,pin.runId);manifestIds.add(run.lineageManifestId);expiresAt=Math.min(expiresAt,Date.parse(run.expiresAt));
+   const run=await processAnalysisService(tx).getRun(companyId,actor,pin.definitionId,pin.runId);const [version]=await tx.select().from(processAnalysisVersions).where(and(eq(processAnalysisVersions.companyId,companyId),eq(processAnalysisVersions.id,run.versionId))).for("share");if(!version)throw conflict("Native Process source definition is unavailable");retainSensitivity(version.definition.sensitivity);manifestIds.add(run.lineageManifestId);expiresAt=Math.min(expiresAt,Date.parse(run.expiresAt));
   }else if(pin.kind==="decision_context"){
    const {decisionIntelligenceService}=await import("./decision-intelligence.js");
    const view=await decisionIntelligenceService(tx).detail(companyId,actor,pin.decisionId),version=view.versions.find(v=>v.id===pin.versionId);
    if(!version)throw conflict("The retained native Decision context is unavailable");
    const [stored]=await tx.select().from(decisionContextVersions).where(and(eq(decisionContextVersions.companyId,companyId),eq(decisionContextVersions.decisionId,pin.decisionId),eq(decisionContextVersions.id,pin.versionId))).for("share");
    if(!stored||stored.contentHash!==version.contentHash)throw conflict("The native Decision context changed");
-   manifestIds.add(stored.lineageManifestId);expiresAt=Math.min(expiresAt,stored.expiresAt.getTime());
+   retainSensitivity(stored.definition.sensitivity);manifestIds.add(stored.lineageManifestId);expiresAt=Math.min(expiresAt,stored.expiresAt.getTime());
   }else if(pin.kind==="outcome_review"){
    const {decisionOutcomeReviewService}=await import("./decision-outcome-reviews.js");
    const view=await decisionOutcomeReviewService(tx).detail(companyId,actor,pin.decisionId);
    if(!view||view.revision!==pin.revision)throw conflict("The retained native outcome review changed");
+   const [version]=await tx.select().from(decisionContextVersions).where(and(eq(decisionContextVersions.companyId,companyId),eq(decisionContextVersions.id,view.contextVersionId))).for("share");if(!version)throw conflict("Native outcome-review source definition is unavailable");retainSensitivity(version.definition.sensitivity);
    const receipts=await tx.select().from(decisionOutcomeReviewReceipts).where(and(eq(decisionOutcomeReviewReceipts.companyId,companyId),eq(decisionOutcomeReviewReceipts.reviewId,view.id))).limit(4);
    if(receipts.length!==view.receipts.length)throw conflict("Native outcome review provenance is unavailable");
    for(const receipt of receipts){manifestIds.add(receipt.lineageManifestId);expiresAt=Math.min(expiresAt,Date.parse(receipt.payload.expiresAt));}
   }else if(pin.kind==="metric_definition"){
-   const {inspectMetricDefinitionDisclosure}=await import("./business-metrics/definition-disclosure.js"),source=await inspectMetricDefinitionDisclosure(tx,companyId,actor,pin);manifestIds.add(source.manifestId);expiresAt=Math.min(expiresAt,source.expiresAt.getTime());
+   const {inspectMetricDefinitionDisclosure}=await import("./business-metrics/definition-disclosure.js"),source=await inspectMetricDefinitionDisclosure(tx,companyId,actor,pin);retainSensitivity(source.sourceSensitivity);manifestIds.add(source.manifestId);expiresAt=Math.min(expiresAt,source.expiresAt.getTime());
   }else{
-   const {inspectPublishedForecastDefinition}=await import("./business-forecasting/service.js"),source=await inspectPublishedForecastDefinition(tx,companyId,actor,pin.specId,pin.versionId);source.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,source.expiresAt.getTime());
+   const {inspectPublishedForecastDefinition}=await import("./business-forecasting/service.js"),source=await inspectPublishedForecastDefinition(tx,companyId,actor,pin.specId,pin.versionId);retainSensitivity(source.value.definition.sensitivity);source.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,source.expiresAt.getTime());
   }
  }
  if(performance.now()>deadline)throw unprocessable("The complete analytical source review exceeded its time budget");
  if(manifestIds.size>26200||!Number.isFinite(expiresAt)||expiresAt<=Date.now())throw conflict("Native analytical source retention is unavailable");
  const {assertMemorySourcesRetained}=await import("./memory/memory-privacy.js");
  await assertMemorySourcesRetained(tx,companyId,[...manifestIds].map(id=>({sourceProvider:"august_works_analytical",sourceRef:`manifest://${id}`})));
- return {pins,manifestIds:[...manifestIds].sort(),expiresAt:new Date(expiresAt)};
+ return {sourceSensitivity:sourceSensitivity as "internal"|"confidential",pins,manifestIds:[...manifestIds].sort(),expiresAt:new Date(expiresAt)};
 }
 
 /** Copied prose is admitted as one complete source-dependent payload. Owners

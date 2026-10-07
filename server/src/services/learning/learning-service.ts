@@ -21,14 +21,20 @@ import { conflict, forbidden, notFound } from "../../errors.js";
 import { learningPromotionReceipt } from "./learning-receipts.js";
 import { evaluateLearningComparison } from "./learning-evaluation.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
+import {learningAnalyticalDependencies} from "@paperclipai/db";
+import {lockAnalyticalCompany} from "../analytical-privacy.js";
+import {inspectAnalyticalContextPins} from "../analytical-context-authority.js";
+import {assertLearningAnalyticalSources} from "./learning-analytical-sources.js";
 type Cycle = typeof learningCycles.$inferSelect;
 type Hypothesis = typeof learningHypotheses.$inferSelect;
 const scope = (cycle: Cycle): MemoryScope => ({ type: cycle.scopeType as "company" | "project", id: cycle.scopeId });
-export async function learningRoots(db: Db, actor: AuthorizationActor, cycle: Cycle) {
+async function learningMaterial(db:Db,actor:AuthorizationActor,cycle:Cycle) {
+  const analyticalSensitivity=await assertLearningAnalyticalSources(db,actor,cycle);
   const edges = await db.select().from(learningEvidence).where(and(eq(learningEvidence.companyId, cycle.companyId), eq(learningEvidence.cycleId, cycle.id)));
   const roots = await derivedRoots(db, actor, cycle.companyId, scope(cycle), cycle.purpose, edges.map((edge) => edge.memoryRecordId), new Map(edges.map((edge) => [edge.memoryRecordId, edge.sourceVersion])));
-  await outcomes(db, actor, cycle, Object.keys(cycle.outcomeVersions), cycle.outcomeVersions); return roots;
+  await outcomes(db, actor, cycle, Object.keys(cycle.outcomeVersions), cycle.outcomeVersions); return {roots,analyticalSensitivity};
 }
+export async function learningRoots(db:Db,actor:AuthorizationActor,cycle:Cycle){return (await learningMaterial(db,actor,cycle)).roots;}
 async function outcomes(db: Db, actor: AuthorizationActor, cycle: Cycle, ids: string[], expected?: Record<string, string>) {
   if (!ids.length || ids.length > 64) throw conflict("Learning requires bounded canonical outcomes");
   const rows = await db.select().from(issues).where(and(eq(issues.companyId, cycle.companyId), inArray(issues.id, ids))).for("share");
@@ -101,7 +107,7 @@ export function learningService(db: Db) {
     finish: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof finishLearningCycleSchema>) => {
       const input = finishLearningCycleSchema.parse(raw); await admit(actor, companyId, db, true);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true); const parent = await cycle(actor, companyId, id, tx, true);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true); const parent = await cycle(actor, companyId, id, tx, true);
         if (parent.version !== input.expectedVersion || ["completed", "cancelled", "failed"].includes(parent.status)) throw conflict("Learning cycle changed or closed");
         await learningRoots(tx, actor, parent);
         const hypotheses = await tx.select().from(learningHypotheses).where(and(eq(learningHypotheses.companyId, companyId), eq(learningHypotheses.cycleId, id)));
@@ -154,7 +160,7 @@ export function learningService(db: Db) {
     create: async (actor: AuthorizationActor, companyId: string, raw: z.input<typeof learningCycleSchema>) => {
       const input = learningCycleSchema.parse(raw); await admit(actor, companyId, db, "propose"); await assertSaasDomainAdmission(db, companyId, "memory.use");
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, "propose");
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, "propose");
         const roots = await derivedRoots(tx, actor, companyId, input.scope, input.purpose, input.memoryRecordIds);
         const sources = await tx.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId, companyId), inArray(memoryEvidence.memoryRecordId, input.memoryRecordIds)));
         // Reviewed prose alone is not an external outcome. Resolve actual canonical Tasks now.
@@ -162,7 +168,9 @@ export function learningService(db: Db) {
           .flatMap((item) => { const match = /^issue:\/\/([a-f0-9-]{36})$/i.exec(item.sourceRef); return match ? [match[1]!] : []; }))];
         if (!taskIds.length || roots.some((root) => !["human_verified", "system_verified", "corroborated"].includes(root.verificationState) || !sources.some((item) => item.memoryRecordId === root.id && item.sourceClass === "task" && item.trustLevel === "high" && item.supportsOrContradicts === "supports" && ["august_works_tasks", "august_works_issue"].includes(item.sourceProvider) && taskIds.some((taskId) => item.sourceRef === `issue://${taskId}`)))) throw conflict("Learning roots require verified canonical outcome evidence");
         const tasks = await outcomes(tx, actor, { scopeType: input.scope.type, scopeId: input.scope.id, companyId } as Cycle, taskIds);
-        const [row] = await tx.insert(learningCycles).values({ companyId, scopeType: input.scope.type, scopeId: input.scope.id, purpose: input.purpose, trigger: input.trigger, maxHypotheses: input.maxHypotheses, maxEvaluations: input.maxEvaluations, outcomeVersions: Object.fromEntries(tasks.map((task) => [task.id, task.updatedAt.toISOString()])), createdBy: actor.type === "agent" ? `agent:${actor.agentId}` : v7HumanActorId(actor) }).returning();
+        const analytical = input.analyticalSources?.length ? await inspectAnalyticalContextPins(tx,companyId,actor,input.analyticalSources) : null;
+        const [row] = await tx.insert(learningCycles).values({ analyticalSourcePins: analytical?.pins ?? [], analyticalSourceCount: analytical?.manifestIds.length ?? 0, analyticalSourceExpiresAt: analytical?.expiresAt ?? null, companyId, scopeType: input.scope.type, scopeId: input.scope.id, purpose: input.purpose, trigger: input.trigger, maxHypotheses: input.maxHypotheses, maxEvaluations: input.maxEvaluations, outcomeVersions: Object.fromEntries(tasks.map((task) => [task.id, task.updatedAt.toISOString()])), createdBy: actor.type === "agent" ? `agent:${actor.agentId}` : v7HumanActorId(actor) }).returning();
+        if(analytical) for(let start=0;start<analytical.manifestIds.length;start+=500) await tx.insert(learningAnalyticalDependencies).values(analytical.manifestIds.slice(start,start+500).map(sourceManifestId=>({companyId,cycleId:row!.id,sourceManifestId})));
         await tx.insert(learningEvidence).values(roots.map((root) => ({ companyId, cycleId: row!.id, memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString() })));
         await audit(tx, actor, companyId, row!.id, "learning.cycle_created", publications, { roots: roots.length, outcomes: taskIds.length }); return row!;
       });
@@ -170,7 +178,7 @@ export function learningService(db: Db) {
     addHypothesis: async (actor: AuthorizationActor, companyId: string, cycleId: string, raw: z.infer<typeof learningHypothesisSchema>) => {
       const input = learningHypothesisSchema.parse(raw); await admit(actor, companyId, db, "propose");
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, "propose"); const parent = await cycle(actor, companyId, cycleId, tx, true);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, "propose"); const parent = await cycle(actor, companyId, cycleId, tx, true);
         if (parent.version !== input.expectedCycleVersion || ["cancelled", "failed", "completed"].includes(parent.status)) throw conflict("Learning cycle changed or closed");
         await learningRoots(tx, actor, parent);
         await assertBaseline(tx, actor, parent, input);
@@ -185,7 +193,7 @@ export function learningService(db: Db) {
     evaluate: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof learningEvaluationSchema>) => {
       const input = learningEvaluationSchema.parse(raw); await admit(actor, companyId, db, true);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true); const { row, parent } = await hypothesis(actor, companyId, id, tx);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true); const { row, parent } = await hypothesis(actor, companyId, id, tx);
         if (row.version !== input.expectedHypothesisVersion || row.status === "proposal_created" || ["cancelled", "failed", "completed"].includes(parent.status)) throw conflict("Hypothesis changed or closed");
         const hypotheses = await tx.select({ id: learningHypotheses.id }).from(learningHypotheses).where(and(eq(learningHypotheses.companyId, companyId), eq(learningHypotheses.cycleId, parent.id)));
         const previous = await tx.select({ id: learningEvaluations.id }).from(learningEvaluations).where(and(eq(learningEvaluations.companyId, companyId), inArray(learningEvaluations.hypothesisId, hypotheses.map((item) => item.id)))).limit(parent.maxEvaluations);
@@ -202,13 +210,13 @@ export function learningService(db: Db) {
     proposeChange: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof proposeLearningChangeSchema>) => {
       const input = proposeLearningChangeSchema.parse(raw); await admit(actor, companyId, db, true);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true); const { row, parent } = await hypothesis(actor, companyId, id, tx);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true); const { row, parent } = await hypothesis(actor, companyId, id, tx);
         if (row.version !== input.expectedHypothesisVersion || row.status !== "supported" || row.targetDomain !== input.change.targetDomain || ["cancelled", "failed", "completed"].includes(parent.status)) throw conflict("A current supported hypothesis is required");
         if (nativeSha256(input.change) !== row.evaluationContract.challengerHash) throw conflict("The challenger differs from the evaluated proposal");
         const [evaluation] = await tx.select().from(learningEvaluations).where(and(eq(learningEvaluations.companyId, companyId), eq(learningEvaluations.hypothesisId, id), eq(learningEvaluations.id, input.evaluationId), isNull(learningEvaluations.erasedAt)));
         if (!evaluation || evaluation.result !== "passed") throw conflict("A retained passing evaluation is required");
         await outcomes(tx, actor, parent, Object.keys(evaluation.outcomeVersions), evaluation.outcomeVersions);
-        const roots = await learningRoots(tx, actor, parent), sourceSensitivity = EVIDENCE_SENSITIVITIES[Math.max(...roots.map((root) => EVIDENCE_SENSITIVITIES.indexOf(root.sensitivityLabel)))]!;
+        const material=await learningMaterial(tx,actor,parent),roots=material.roots,sourceSensitivity=EVIDENCE_SENSITIVITIES[Math.max(material.analyticalSensitivity?EVIDENCE_SENSITIVITIES.indexOf(material.analyticalSensitivity):0,...roots.map(root=>EVIDENCE_SENSITIVITIES.indexOf(root.sensitivityLabel)))]!;
         const principal = actor.source === "local_implicit" ? { type: "system" as const, service: "local-board" } : { type: "user" as const, userId: v7HumanActorId(actor) };
         let candidateId: string, artifactVersionId: string | null = null;
         if (input.change.targetDomain === "foundation") {
@@ -279,7 +287,7 @@ export function learningService(db: Db) {
     reviewPolicy: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof reviewLearningPolicySchema>) => {
       const input = reviewLearningPolicySchema.parse(raw); await admit(actor, companyId, db, true);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true);
         const [row] = await tx.select().from(policyChangeProposals).where(and(eq(policyChangeProposals.companyId, companyId), eq(policyChangeProposals.id, id))).for("update");
         if (!row || row.erasedAt || !row.proposal) throw notFound("Policy proposal not found");
         if (row.status !== "pending" || row.version !== input.expectedVersion) throw conflict("Policy proposal changed");

@@ -7,6 +7,7 @@ import { skillCandidateInputSchema } from "./skill-lifecycle.js";
 import { proposePlaybookSchema } from "./playbooks.js";
 import { roadmapProposalSchema, roadmapPolicySchema } from "./project-control.js";
 import { createReadinessRequirementSchema } from "./readiness.js";
+import { analyticalContextAuthorityPinSchema, type AnalyticalContextAuthorityPin } from "./analytical-context.js";
 
 export const LEARNING_TARGETS = ["foundation", "skill", "playbook", "project", "policy", "workflow", "role_pack", "automation_artifact", "agent_package"] as const;
 export const learningCycleSchema = z.object({
@@ -14,6 +15,8 @@ export const learningCycleSchema = z.object({
   purpose: z.string().trim().min(1).max(240), trigger: z.string().trim().min(10).max(1000),
   memoryRecordIds: z.array(z.string().uuid()).min(1).max(32).refine((ids) => new Set(ids).size === ids.length, "Unique roots required"),
   maxHypotheses: z.number().int().min(1).max(20).default(5), maxEvaluations: z.number().int().min(1).max(40).default(10),
+  // Supplemental signals never replace the cycle's verified Task outcomes.
+  analyticalSources: z.array(analyticalContextAuthorityPinSchema).min(1).max(8).optional(),
 }).strict();
 export const learningHypothesisSchema = z.object({
   expectedCycleVersion: z.number().int().positive(), claim: z.string().trim().min(20).max(4000), predictedEffect: z.string().trim().min(20).max(4000),
@@ -56,7 +59,7 @@ export type LearningChangeInput = z.input<typeof learningChangeSchema>;
 export type LearningChange = z.infer<typeof learningChangeSchema>;
 export type ProposeLearningChange = z.infer<typeof proposeLearningChangeSchema>;
 export type LearningPolicyPayload = z.infer<typeof learningPolicyPayloadSchema>;
-export interface LearningCycleView { id: string; companyId: string; scopeType: string; scopeId: string | null; purpose: string; trigger: string; status: string; version: number; maxHypotheses: number; maxEvaluations: number; createdAt: string; }
+export interface LearningCycleView { id: string; companyId: string; scopeType: string; scopeId: string | null; purpose: string; trigger: string; status: string; version: number; maxHypotheses: number; maxEvaluations: number; createdAt: string; analyticalSourcePins?: AnalyticalContextAuthorityPin[]; analyticalSourceExpiresAt?: string | null; }
 export interface LearningHypothesisView { id: string; cycleId: string; claim: string; predictedEffect: string; targetDomain: typeof LEARNING_TARGETS[number]; targetId: string; riskClass: string; status: string; version: number; evaluationContract: z.infer<typeof learningHypothesisSchema>["evaluationContract"]; }
 export interface LearningEvaluationView { id: string; hypothesisId: string; result: "passed" | "failed" | "inconclusive"; method: "manual_review"; metrics: Record<string, unknown>; limitations: string[]; reviewedBy: string; createdAt: string; }
 export interface LearningPolicyProposalView { id: string; companyId: string; targetId: string; policyType: string; version: number; proposal: LearningPolicyPayload | null; baseline?: LearningPolicyPayload | null; reason: string; status: string; reviewedBy: string | null; reviewRationale: string | null; }

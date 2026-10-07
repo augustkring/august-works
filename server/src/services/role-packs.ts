@@ -1,3 +1,5 @@
+import {lockAnalyticalCompany} from "./analytical-privacy.js";
+import {assertLearnedAssetAnalyticalSources} from "./learning/learning-analytical-sources.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { agents, agentRolePackAssignments, orgUnitMemberships, orgUnits, rolePackItems, rolePacks, rolePackVersions, type Db } from "@paperclipai/db";
 import { assignRolePackSchema, createRolePackSchema, mergeRolePackItems, rolePackVersionInputSchema, SYSTEM_ROLE_PACKS, type RolePackItem } from "@paperclipai/shared";
@@ -25,10 +27,10 @@ export function rolePackService(db: Db) {
     if (!row || row.status !== "active") throw notFound("Role Pack not found");
     return row;
   }
-  async function version(tx: Db, companyId: string, packId: string, versionId: string) {
+  async function version(tx: Db, companyId: string, packId: string, versionId: string,actor?:AuthorizationActor) {
     const [row] = await tx.select().from(rolePackVersions).where(and(eq(rolePackVersions.companyId, companyId), eq(rolePackVersions.rolePackId, packId), eq(rolePackVersions.id, versionId))).limit(1);
     if (!row) throw notFound("Role Pack version not found");
-    await assertLearningAssetCurrent(tx, companyId, "role_pack_version", row.id);
+    await assertLearningAssetCurrent(tx, companyId, "role_pack_version", row.id,actor);
     const rows = await tx.select().from(rolePackItems).where(and(eq(rolePackItems.companyId, companyId), eq(rolePackItems.versionId, versionId))).orderBy(asc(rolePackItems.ordinal));
     return { ...row, items: rows.map((item) => item.item) };
   }
@@ -41,9 +43,10 @@ export function rolePackService(db: Db) {
     get: async (actor: AuthorizationActor, companyId: string, id: string) => {
       await readable(actor, companyId); const row = await pack(db, companyId, id);
       const versions = await db.select().from(rolePackVersions).where(and(eq(rolePackVersions.companyId, companyId), eq(rolePackVersions.rolePackId, id))).orderBy(asc(rolePackVersions.revisionNumber));
+      for(const v of versions)await assertLearnedAssetAnalyticalSources(db,companyId,"role_pack_version",v.id,actor);
       return { ...row, versions };
     },
-    getVersion: async (actor: AuthorizationActor, companyId: string, id: string, versionId: string) => { await readable(actor, companyId); await pack(db, companyId, id); return version(db, companyId, id, versionId); },
+    getVersion: async (actor: AuthorizationActor, companyId: string, id: string, versionId: string) => { await readable(actor, companyId); await pack(db, companyId, id); return version(db, companyId, id, versionId,actor); },
     create: async (actor: AuthorizationActor, companyId: string, raw: z.infer<typeof createRolePackSchema>) => {
       await configurable(actor, companyId); const input = createRolePackSchema.parse(raw);
       return withV5ActivityTransaction(db, async (tx, publications) => {
@@ -55,7 +58,7 @@ export function rolePackService(db: Db) {
     createVersion: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof rolePackVersionInputSchema>, parentPublications?: ActivityPublication[]) => {
       await configurable(actor, companyId); const input = rolePackVersionInputSchema.parse(raw);
       return withV5ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId);
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx, companyId);
         await pack(tx, companyId, id, true);
         const [next] = await tx.select({ revision: sql<number>`coalesce(max(${rolePackVersions.revisionNumber}), 0) + 1` }).from(rolePackVersions).where(and(eq(rolePackVersions.companyId, companyId), eq(rolePackVersions.rolePackId, id)));
         const [row] = await tx.insert(rolePackVersions).values({ companyId, rolePackId: id, revisionNumber: Number(next!.revision), summary: input.summary, createdByUserId: v5HumanActorId(actor) }).returning();
@@ -66,10 +69,10 @@ export function rolePackService(db: Db) {
     publish: async (actor: AuthorizationActor, companyId: string, id: string, versionId: string, expectedPublishedVersionId: string | null) => {
       await configurable(actor, companyId);
       return withV5ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId);
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx, companyId);
         const row = await pack(tx, companyId, id, true);
         if (row.publishedVersionId !== expectedPublishedVersionId) throw conflict("The published Role Pack changed; refresh before publishing");
-        const draft = await version(tx, companyId, id, versionId);
+        const draft = await version(tx, companyId, id, versionId,actor);
         if (draft.state !== "draft") throw conflict("Only a draft Role Pack can be published");
         mergeRolePackItems([draft.items]); // Detect invalid/ambiguous requirements before publication.
         await tx.update(rolePackVersions).set({ state: "published", publishedAt: new Date() }).where(eq(rolePackVersions.id, versionId));
@@ -91,7 +94,7 @@ export function rolePackService(db: Db) {
           if (!unit) throw unprocessable("Role Pack assignment requires an active local unit");
         }
         const selectedId = input.pinnedVersionId ?? row.publishedVersionId;
-        if (!selectedId || (await version(tx, companyId, row.id, selectedId)).state !== "published") throw conflict("Assignments require a published Role Pack version");
+        if (!selectedId || (await version(tx, companyId, row.id, selectedId,actor)).state !== "published") throw conflict("Assignments require a published Role Pack version");
         const [assignment] = await tx.insert(agentRolePackAssignments).values({ ...input, companyId }).onConflictDoUpdate({ target: [agentRolePackAssignments.companyId, agentRolePackAssignments.scopeType, agentRolePackAssignments.scopeId], set: { ...input, updatedAt: new Date() } }).returning();
         await audit(tx, actor, companyId, row.id, "role_pack.assigned", publications); return assignment!;
       });
@@ -128,7 +131,7 @@ export function rolePackService(db: Db) {
         const assigned = await pack(db, companyId, assignment.rolePackId);
         const versionId = assignment.pinnedVersionId ?? assigned.publishedVersionId;
         if (!versionId) throw conflict("Assigned Role Pack has no published version");
-        const selected = await version(db, companyId, assigned.id, versionId);
+        const selected = await version(db, companyId, assigned.id, versionId,actor);
         if (selected.state !== "published") throw conflict("Assigned Role Pack version is not published");
         layers.push(selected.items); pins.push({ rolePackId: assigned.id, versionId, scopeType: assignment.scopeType, scopeId: assignment.scopeId });
       }

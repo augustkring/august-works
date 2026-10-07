@@ -1,3 +1,4 @@
+import {assertLearningCandidateAnalyticalSources} from "./learning/learning-analytical-sources.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "./analytical-privacy.js";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
@@ -48,6 +49,7 @@ export function projectControlService(db: Db) {
     // Analytical proposals can inherit source authority outside the task list.
     // Their governed owner admits source prose; the V5 view cannot project it.
     const proposals = (await tx.select().from(projectRoadmapProposals).where(and(eq(projectRoadmapProposals.companyId, companyId), eq(projectRoadmapProposals.projectId, projectId), isNull(projectRoadmapProposals.planningManifestId))).orderBy(desc(projectRoadmapProposals.createdAt)).limit(100)).filter((p) => p.patch.changes.every((c) => allowedIds.has(c.issueId))).map((p) => ({ id: p.id, reason: p.reason, risk: p.risk, status: p.status, patch: p.patch, createdAt: p.createdAt.toISOString() }));
+    for(const proposal of proposals)await assertLearningCandidateAnalyticalSources(tx,companyId,"project",proposal.id,actor);
     const waitingApprovals = ids.length ? await tx.select({ issueId: issueApprovals.issueId }).from(issueApprovals)
       .innerJoin(approvals, and(eq(approvals.companyId, companyId), eq(approvals.id, issueApprovals.approvalId), eq(approvals.status, "pending")))
       .where(and(eq(issueApprovals.companyId, companyId), inArray(issueApprovals.issueId, ids))).limit(5001) : [];
@@ -136,6 +138,7 @@ export function projectControlService(db: Db) {
       return withV5ActivityTransaction(db, async (tx, publications) => {
         await lockAnalyticalCompany(tx, companyId);
         await lockMemoryPrivacy(tx, companyId);
+        await assertLearningCandidateAnalyticalSources(tx,companyId,"project",proposalId,actor);
         if (accept) {
           const { inspectCurrentProjectPlanningProposal } = await import("./adaptive-planning/project-owner.js");
           await inspectCurrentProjectPlanningProposal(tx, actor, companyId, projectId, proposalId);
