@@ -58,6 +58,7 @@ export function withV7AccountScope(Page: ComponentType) {
       retry: false,
     });
     const principalId: BoardPrincipal | null = !identity.settled || identity.failed ? null
+      : identity.localImplicit ? "local-board"
       : identity.userId ? `user:${identity.userId}`
       : health.isSuccess && health.data.deploymentMode === "local_trusted" ? "local-board" : null;
     const scope = useMemo(() => principalId ? createScope(principalId) : null, [principalId]);

@@ -196,6 +196,9 @@ export const authSessionSchema = z.object({
   session: z.object({
     id: z.string().min(1),
     userId: z.string().min(1),
+    // Server-resolved provenance; a user ID alone cannot identify local authority.
+    // Optional for browser/server version skew. Request bindings remain server-checked.
+    localImplicit: z.boolean().optional(),
   }),
   user: currentUserProfileSchema,
   // The front-end Sentry DSN for the current instance, or `null` when the

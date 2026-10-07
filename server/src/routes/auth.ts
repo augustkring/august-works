@@ -53,6 +53,7 @@ export function authRoutes(db: Db) {
       session: {
         id: `paperclip:${req.actor.source ?? "none"}:${req.actor.userId}`,
         userId: req.actor.userId,
+        localImplicit: req.actor.source === "local_implicit",
       },
       user,
       // The browser reads this value to open its own Sentry gate — see
