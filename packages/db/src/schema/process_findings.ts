@@ -21,7 +21,7 @@ export const processFindings = pgTable("process_findings", {
   runFk: foreignKey({ name: "process_findings_run_fk", columns: [t.companyId, t.analysisRunId], foreignColumns: [processAnalysisRuns.companyId, processAnalysisRuns.id] }).onDelete("cascade"),
   runIdx: index("process_findings_run_idx").on(t.companyId, t.analysisRunId, t.id),
   stateCheck: check("process_findings_state_check", sql`${t.version}>0 and ${t.status} in ('OPEN','ACKNOWLEDGED','INVESTIGATING','RESOLVED','SUPPRESSED_WITH_REASON') and (${t.status}='RESOLVED')=(${t.resolvedAt} is not null)`),
-  scopeCheck: check("process_findings_scope_check", sql`${t.findingType} in ('missing_process_data','rework','avoidable_wait','bottleneck','unusual_variant') and (${t.findingType}='missing_process_data')=(${t.objectType} is null) and (${t.objectType} is null or ${t.objectType} in ('issue','project'))`),
+  scopeCheck: check("process_findings_scope_check", sql`${t.findingType} in ('missing_process_data','rework','avoidable_wait','bottleneck','unusual_variant','conformance_deviation') and (${t.findingType}='missing_process_data')=(${t.objectType} is null) and (${t.objectType} is null or ${t.objectType} in ('issue','project'))`),
   variantCheck: check("process_findings_variant_check", sql`(${t.findingType}='unusual_variant')=(${t.variantHash} is not null) and (${t.variantHash} is null or ${t.variantHash} ~ '^[0-9a-f]{64}$')`),
   evidenceCheck: check("process_findings_evidence_check", sql`${t.contentHash} ~ '^[0-9a-f]{64}$' and ${t.definitionHash} ~ '^[0-9a-f]{64}$' and ${t.eventSetHash} ~ '^[0-9a-f]{64}$' and ${t.fingerprint} ~ '^[0-9a-f]{64}$' and ${t.expiresAt}>${t.createdAt} and ${t.severity} in ('low','medium','high') and jsonb_typeof(${t.facts})='object'`),
 }));

@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 const labels: Record<CreateProcessFinding["findingType"], string> = {
   missing_process_data: "Missing qualified data", rework: "Observed reopening",
   avoidable_wait: "Investigate avoidable wait", bottleneck: "Investigate a bottleneck", unusual_variant: "Investigate a selected variant",
+  conformance_deviation:"Investigate a published-model deviation",
 };
 function options(run: ProcessAnalysisRunView) {
   const items: { label: string; input: Pick<CreateProcessFinding, "findingType" | "objectType" | "variantHash"> }[] = [];
@@ -21,6 +22,7 @@ function options(run: ProcessAnalysisRunView) {
     const add = (findingType: CreateProcessFinding["findingType"], variantHash: string | null = null, suffix = "") =>
       items.push({ label: `${perspective} · ${labels[findingType]}${suffix}`, input: { findingType, objectType: summary.objectType, variantHash } });
     if (summary.reopenCount !== null && summary.reopenCount > 0) add("rework");
+    if(summary.conformance && summary.conformance.deviatingObjectCount>0) add("conformance_deviation");
     if (summary.knownBlockedSeconds !== null && summary.knownBlockedSeconds > 0) { add("avoidable_wait"); add("bottleneck"); }
     if (summary.variants.length > 1) summary.variants.forEach((variant, index) => add("unusual_variant", variant.hash, ` ${index + 1} (${variant.objectCount} objects)`));
   }

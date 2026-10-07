@@ -19,11 +19,11 @@ export function ProcessConformanceEditor({model,onChange}:{model:ProcessConforma
       </label>)}</div>
     </fieldset>)}
     <fieldset className="space-y-3"><legend className="font-medium">Allowed state transitions</legend>
-      <div className="flex flex-wrap items-end gap-3">{(["from","to"] as const).map(field=><label key={field} className="min-w-0 flex-1 space-y-2">{field==="from" ? "From state" : "To state"}
+      <div className="grid gap-3 sm:grid-cols-3">{(["from","to"] as const).map(field=><label key={field} className="min-w-0 space-y-2">{field==="from" ? "From state" : "To state"}
         <select aria-label={`${perspective} transition ${field}`} className="w-full rounded-md border border-input bg-background p-2" value={field==="from" ? from : to} onChange={event=>(field==="from" ? setFrom : setTo)(event.target.value as State)}>
           {states.map(status=><option key={status} value={status}>{status.replaceAll("_"," ")}</option>)}
         </select>
-      </label>)}<Button type="button" variant="outline" disabled={from===to || exists || model.allowedTransitions.length>=100} onClick={()=>onChange({...model,allowedTransitions:[...model.allowedTransitions,{from,to}]})}>Add {perspective.toLowerCase()} transition</Button></div>
+      </label>)}<Button type="button" className="self-end" variant="outline" disabled={from===to || exists || model.allowedTransitions.length>=100} onClick={()=>onChange({...model,allowedTransitions:[...model.allowedTransitions,{from,to}]})}>Add {perspective.toLowerCase()} transition</Button></div>
       <ul className="space-y-2">{model.allowedTransitions.map((edge,index)=><li key={`${edge.from}:${edge.to}`} className="flex flex-wrap items-center justify-between gap-2">
         <span>{edge.from.replaceAll("_"," ")} → {edge.to.replaceAll("_"," ")}</span><Button type="button" size="sm" variant="outline" aria-label={`Remove ${perspective} ${edge.from} to ${edge.to}`} onClick={()=>onChange({...model,allowedTransitions:model.allowedTransitions.filter((_,i)=>i!==index)})}>Remove</Button>
       </li>)}</ul>

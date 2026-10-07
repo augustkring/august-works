@@ -32,6 +32,19 @@ beforeEach(()=>{
   vi.mocked(processAnalysisApi.findingDetail).mockResolvedValue({finding,transitions:[{version:1,fromStatus:null,toStatus:"OPEN",reason:finding.interpretation,recordedAt:finding.createdAt}],hasMoreTransitions:false});
 });
 describe("human process finding evidence",()=>{
+  it("offers published-model deviation review only when qualified comparison contains observed deviations",async()=>{
+    const comparison={target:"explicit_published_process_definition" as const,targetVersionId:run.versionId,modelHash:"e".repeat(64),evaluatedObjectCount:1,conformingObjectCount:0,deviatingObjectCount:1,
+      violationCounts:{initial_state_not_expected:0,terminal_state_not_expected:0,transition_not_expected:1,required_state_missing:1},coverage:"qualified_primary_object_lifecycle_in_observed_window" as const};
+    const value={...run,result:{...run.result,objectSummaries:[{...run.result.objectSummaries[0],knownBlockedSeconds:null,conformance:comparison}]}};
+    vi.mocked(processAnalysisApi.createFinding).mockResolvedValue({...finding,findingType:"conformance_deviation"});
+    const app=await mount(value);try {
+      expect(app.container.querySelector('[aria-label="Finding observed facts"]')!.textContent).toContain("published-model deviation");
+      await write(app.container,"Finding human interpretation","Investigate the exact published model deviation with the owner");await click(app.container,"Record finding");
+      expect(processAnalysisApi.createFinding).toHaveBeenCalledWith(run.companyId,run.definitionId,run.id,expect.objectContaining({findingType:"conformance_deviation",objectType:"issue",variantHash:null}),"reviewer");
+    }finally{await app.cleanup();}
+    const matching=await mount({...value,result:{...value.result,objectSummaries:[{...value.result.objectSummaries[0],conformance:{...comparison,deviatingObjectCount:0,conformingObjectCount:1}}]}});
+    try{expect(matching.container.querySelector('form[aria-label="Record process finding"]')).toBeNull();}finally{await matching.cleanup();}
+  });
   it("requires a reason and current expected version before acknowledging; resolution cannot skip investigation",async()=>{
     vi.mocked(processAnalysisApi.transitionFinding).mockResolvedValue({...finding,status:"ACKNOWLEDGED",version:2});const app=await mount();try{
       await click(app.container,"Inspect finding");expect([...app.container.querySelectorAll("button")].some(button=>button.textContent==="Resolve finding")).toBe(false);

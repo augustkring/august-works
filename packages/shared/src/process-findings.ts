@@ -3,7 +3,7 @@ import { z } from "zod";
 export const PROCESS_FINDING_STATES = ["OPEN", "ACKNOWLEDGED", "INVESTIGATING", "RESOLVED", "SUPPRESSED_WITH_REASON"] as const;
 export type ProcessFindingState = typeof PROCESS_FINDING_STATES[number];
 export const createProcessFindingSchema = z.object({
-  findingType: z.enum(["missing_process_data", "rework", "avoidable_wait", "bottleneck", "unusual_variant"]),
+  findingType: z.enum(["missing_process_data", "rework", "avoidable_wait", "bottleneck", "unusual_variant", "conformance_deviation"]),
   objectType: z.enum(["issue", "project"]).nullable(),
   variantHash: z.string().regex(/^[0-9a-f]{64}$/).nullable().default(null),
   severity: z.enum(["low", "medium", "high"]),

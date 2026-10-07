@@ -53,6 +53,10 @@ for(const theme of ["light","dark"]) for(const width of [390,1200]) for(const st
       await expect(review.getByRole("button",{name:"Acknowledge finding"})).toBeEnabled();
       await expect(review.getByRole("button",{name:"Suppress with reason"})).toBeEnabled();
       const proposal=findings.getByRole("form",{name:"Record process finding"});await expect(proposal.getByRole("button",{name:"Record finding",exact:true})).toBeDisabled();
+      if(state==="conformance") {
+        await proposal.getByLabel("Finding observed facts",{exact:true}).selectOption({label:"Tasks · Investigate a published-model deviation"});
+        await expect(review.locator("pre")).toContainText('"required_state_missing": 1');
+      }
       await proposal.getByLabel("Finding human interpretation",{exact:true}).fill("Investigate the qualified process facts with the native owner");
       await expect(proposal.getByRole("button",{name:"Record finding",exact:true})).toBeEnabled();
     }

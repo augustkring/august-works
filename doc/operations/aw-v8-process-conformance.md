@@ -41,7 +41,11 @@ cover the human editor, model inspection, both themes, keyboard interaction,
 evidence, not a real source or rollout qualification.
 
 This slice does not qualify Workflow or Pipeline version references, external
-event providers, alignment/token replay algorithms, PM4Py, conformance-finding
-conversion, Learning resolution, official published visual baselines, hosted
+event providers, alignment/token replay algorithms, PM4Py, Learning conversion
+or resolution, official published visual baselines, hosted
 restore/rollout evidence or overall V8 completion. Those remain separate build
 requirements; this document makes no production qualification claim.
+
+The subsequent native finding slice admits positive explicit-model deviations
+as frozen human investigation records (see `aw-v8-process-findings.md`). It adds
+no automatic action, policy judgment or new source authority.

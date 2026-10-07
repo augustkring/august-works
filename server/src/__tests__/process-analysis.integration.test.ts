@@ -146,6 +146,34 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     await project();const run=await service().run(companyId,actor,created.root.id,{versionId,...period});
     expect(run.definitionHash).toBe(hash);expect(run.result.status).toBe("succeeded");
   });
+  it("freezes model-deviation finding facts, abstains without deviations and cascades receipts with source erasure",async()=>{
+    const model={kind:"explicit_definition" as const,expectations:[{objectType:"issue" as const,initialStates:["todo" as const],terminalStates:["done" as const],requiredStates:["in_review" as const],
+      allowedTransitions:[{from:"todo" as const,to:"in_review" as const},{from:"in_review" as const,to:"done" as const}]}]};
+    const created=await published({...definition(),analysisFamilies:["conformance"],conformance:model});await project();
+    const run=await service().run(companyId,actor,created.root.id,{versionId:created.version.id,...period});
+    const findings=processFindingService(db),input={findingType:"conformance_deviation" as const,objectType:"issue" as const,variantHash:null,severity:"medium" as const,
+      interpretation:"Investigate the missing reviewed state before changing the process model"};
+    const finding=await findings.create(companyId,actor,created.root.id,run.id,input);
+    expect(finding.facts.observed).toMatchObject({modelHash:nativeSha256(model.expectations[0]),targetVersionId:created.version.id,
+      evaluatedObjectCount:1,deviatingObjectCount:1,transition_not_expected:1,required_state_missing:1});
+    expect(JSON.stringify(finding)).not.toMatch(/private-person|secret body/);
+    expect((await findings.create(companyId,actor,created.root.id,run.id,input)).id).toBe(finding.id);
+    await expect(db.update(processFindings).set({facts:{...finding.facts,observed:{deviatingObjectCount:0}}}).where(eq(processFindings.id,finding.id))).rejects.toMatchObject({cause:{code:"23514"}});
+    const acknowledged=await findings.transition(companyId,actor,created.root.id,run.id,finding.id,{expectedVersion:1,status:"ACKNOWLEDGED",reason:"Human acknowledges the exact published model comparison"});
+    expect(acknowledged).toMatchObject({status:"ACKNOWLEDGED",version:2});
+    const matching=await published({...definition(),analysisFamilies:["conformance"],conformance:{kind:"explicit_definition",expectations:[{
+      objectType:"issue",initialStates:["todo"],terminalStates:["done"],requiredStates:[],allowedTransitions:[{from:"todo",to:"done"}]}]}});
+    const matchingRun=await service().run(companyId,actor,matching.root.id,{versionId:matching.version.id,...period});
+    await expect(findings.create(companyId,actor,matching.root.id,matchingRun.id,input)).rejects.toMatchObject({status:409});
+    const ordinary=await published(),ordinaryRun=await service().run(companyId,actor,ordinary.root.id,{versionId:ordinary.version.id,...period});
+    await expect(findings.create(companyId,actor,ordinary.root.id,ordinaryRun.id,input)).rejects.toMatchObject({status:409});
+    await expect(findings.create(companyId,actor,created.root.id,run.id,{...input,objectType:"project"})).rejects.toMatchObject({status:409});
+    await db.transaction(async rawTx=>{const tx=rawTx as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);
+      await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[issueId]);await eraseBusinessEventObjectUnderMemory(tx,companyId,"issue",issueId);});
+    expect(await db.select().from(processFindings).where(eq(processFindings.id,finding.id))).toHaveLength(0);
+    expect(await db.select().from(processFindingTransitions).where(eq(processFindingTransitions.findingId,finding.id))).toHaveLength(0);
+    expect(await db.select().from(issues).where(eq(issues.id,issueId))).toHaveLength(1);
+  });
   it("keeps external/arrival and incomplete lifecycle data inconclusive without weakening the published definition", async () => {
     await project();
     for (const extra of [{ requiresArrivalEvidence: true }, { requiredSourceProviders: ["activity_log", "crm"] }, { objectTypes: ["issue", "project"] as ProcessAnalysisDefinition["objectTypes"] }]) {

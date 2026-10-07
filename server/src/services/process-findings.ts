@@ -33,6 +33,15 @@ export function materialProcessFinding(run: ProcessAnalysisRunView, input: Creat
   const observed = run.result.objectSummaries.find(value => value.objectType === input.objectType);
   if (!observed) throw conflict("This run did not qualify the selected object perspective");
   facts.observed = { objectCount: observed.objectCount, eventCount: observed.eventCount };
+  if(input.findingType==="conformance_deviation") {
+    const comparison=observed.conformance;
+    if(!comparison || comparison.deviatingObjectCount<=0 || comparison.targetVersionId!==run.versionId)
+      throw conflict("No qualified published-model deviation supports this finding");
+    facts.observed={...facts.observed,modelHash:comparison.modelHash,targetVersionId:comparison.targetVersionId,
+      evaluatedObjectCount:comparison.evaluatedObjectCount,deviatingObjectCount:comparison.deviatingObjectCount,...comparison.violationCounts};
+    facts.limitations.push("A difference from the published typed expectation does not establish a policy violation, cause, avoidability or employee performance.");
+    return {summary:"Recorded primary state paths differ from the published explicit process model",facts};
+  }
   if (input.findingType === "rework") {
     if (observed.reopenCount === null || observed.reopenCount <= 0) throw conflict("No observed reopening supports this finding");
     facts.observed.reopenCount = observed.reopenCount;

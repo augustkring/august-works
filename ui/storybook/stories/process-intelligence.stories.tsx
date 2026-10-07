@@ -42,10 +42,10 @@ function Fixture({state}:{state:"published"|"draft"|"needs_review"|"inconclusive
     query.setQueryData([...key,"detail",definitionId],detail);
     query.setQueryData([...key,"runs",definitionId],{pages:[{items:state==="published" || state==="inconclusive" || state==="conformance" ? [run] :[],nextCursor:null,coverage:"bounded_current_authorized_page"}],pageParams:[undefined]});
     query.setQueryData([...key,"run",definitionId,runId],run);
-    const finding:ProcessFindingView={id:id(7),companyId,definitionId,analysisRunId:runId,findingType:state==="inconclusive" ? "missing_process_data" :"avoidable_wait",
-      objectType:state==="inconclusive" ? null :"issue",variantHash:null,severity:"medium",interpretation:state==="inconclusive" ? "Investigate missing qualified source coverage before interpreting durations" :"Investigate whether recorded blocked intervals can be reduced",
-      summary:state==="inconclusive" ? "The declared process analysis lacks qualified current data" :"Recorded object paths contain blocked intervals for human investigation",
-      facts:{observed:state==="inconclusive" ? {source_coverage:"unknown"} :{knownBlockedSeconds:15},semantics:"human_process_interpretation_of_observed_facts",
+    const finding:ProcessFindingView={id:id(7),companyId,definitionId,analysisRunId:runId,findingType:state==="inconclusive" ? "missing_process_data" :state==="conformance" ? "conformance_deviation" :"avoidable_wait",
+      objectType:state==="inconclusive" ? null :"issue",variantHash:null,severity:"medium",interpretation:state==="inconclusive" ? "Investigate missing qualified source coverage before interpreting durations" :state==="conformance" ? "Investigate the missing required review state against the published model" :"Investigate whether recorded blocked intervals can be reduced",
+      summary:state==="inconclusive" ? "The declared process analysis lacks qualified current data" :state==="conformance" ? "Recorded primary state paths differ from the published explicit process model" :"Recorded object paths contain blocked intervals for human investigation",
+      facts:{observed:state==="inconclusive" ? {source_coverage:"unknown"} :state==="conformance" ? {modelHash:"f".repeat(64),targetVersionId:versionId,deviatingObjectCount:1,transition_not_expected:2,required_state_missing:1} :{knownBlockedSeconds:15},semantics:"human_process_interpretation_of_observed_facts",
         limitations:["Human interpretation is not a causal estimate","Presentation fixture does not qualify current source authority"]},definitionHash:run.definitionHash,eventSetHash:run.eventSetHash,contentHash:"e".repeat(64),
       status:"OPEN",version:1,createdAt,expiresAt,resolvedAt:null,resolutionRef:null,authorizationCheckedAt:run.authorizationCheckedAt};
     query.setQueryData([...key,"findings",definitionId,runId],{pages:[{items:[finding],nextCursor:null}],pageParams:[undefined]});
