@@ -1,0 +1,538 @@
+{
+  "checkpoint": "Exact human-reviewed causal analysis to native prospective Decision capture",
+  "parentCommit": "e58453c9cfda34f75de30ad5874677f146982267",
+  "recordedAt": "2026-10-07T10:33:54.103432+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-causal-claims.md",
+      "sha256": "16025a5791d72285fd1b84c7d27aeefb2a51029789a827d5403bb37246ffb4a5"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-e58453c.json",
+      "sha256": "47d0b75a312ff93a61a15428e16be06ce06a74b53a5b99d6db319f9702eb06a5"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "59a59421fce9ef070d4f4f8c2f99a4d2e861f41f64ef336d1ba68656e4182ec2"
+    },
+    {
+      "path": "packages/db/src/migrations/0409_cynical_silk_fever.sql",
+      "sha256": "f68abc318de27f2453dc3dfb5a3e9ca380930461662c2b928696777b82ca7a44"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0409_snapshot.json",
+      "sha256": "abd82667b86182a0f997e1154e09c610ab1c8eb07b40042c65df98e1878e9ccc"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "78c376e13ee0a0469559421c2f8d3caf96ad967860114953077b4d598148c821"
+    },
+    {
+      "path": "packages/db/src/schema/causal_claims.ts",
+      "sha256": "de3344ad4541be23660fb2c2007cb7d8a7196f290a080d783443aa69afcdc7a9"
+    },
+    {
+      "path": "packages/db/src/schema/decision_intelligence.ts",
+      "sha256": "b7075be25ea270eb6cd1821a461d6ed15d374cf5017d38173574b962fb11c432"
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "b5551262b1f27c0305733ebfd2b50d302ddb3471dfa56aae207fd61c005d8bf1"
+    },
+    {
+      "path": "packages/shared/src/decision-intelligence.test.ts",
+      "sha256": "eac2bfc099a4d4362b03e3870ea44a621b4b5c30c3d5510f179e134c4b0bdd66"
+    },
+    {
+      "path": "packages/shared/src/decision-intelligence.ts",
+      "sha256": "42fd46941b2b3d792215c3b821e61cf94f19a003ef87662eb7a92780c254107c"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+      "sha256": "a30690c65a0b03879790fc26bdfbf5321cb44652bf3ad43e9b0ae60f42e01f61"
+    },
+    {
+      "path": "server/src/__tests__/causal-claims.integration.test.ts",
+      "sha256": "04098f4634e2e490b46576a0d3e6fcc9362ed318b44761ebd053c3594fd58504"
+    },
+    {
+      "path": "server/src/services/causal-claims/service.ts",
+      "sha256": "74fdd9906c3367298cd796540100f418ca94d13ffdb1131404072bf938f316ab"
+    },
+    {
+      "path": "server/src/services/decision-intelligence.ts",
+      "sha256": "71460e5bd59f2530567cafd3c9e520377442d571a62df5b624b49c44a1faf8a9"
+    },
+    {
+      "path": "tests/storybook-visual/decision-intelligence.spec.ts",
+      "sha256": "77da96287ef589cde9933e818418683d7a95de9a32fc739cbbb46fb9853b1e20"
+    },
+    {
+      "path": "ui/src/components/DecisionContextForm.tsx",
+      "sha256": "28d54eda77c483d8d55013c11b9333cc8881a77b1e0583d9f6bb6f5c87306cad"
+    },
+    {
+      "path": "ui/src/components/DecisionContextPanel.test.tsx",
+      "sha256": "c89f1d7b55dd8385a2a77b9d6ef644a38f80947ff2f9a47522befaa902aacbdc"
+    },
+    {
+      "path": "ui/src/components/DecisionContextPanel.tsx",
+      "sha256": "cc5c317adae3f1f2cf3b73cfd40aa7cd34c7955e658adf055e0e4bc2b8b73a34"
+    },
+    {
+      "path": "ui/src/components/DecisionEvidencePicker.test.tsx",
+      "sha256": "bce7e6ba37eb37f0351a359a90a54c002ccbea391ac87d19265d527cff44dc36"
+    },
+    {
+      "path": "ui/src/components/DecisionEvidencePicker.tsx",
+      "sha256": "3e796b74626b5e3c591b8058a9cbed5b5d61d8e565532aec493927dbbfb78f4e"
+    },
+    {
+      "path": "ui/storybook/stories/decision-intelligence.stories.tsx",
+      "sha256": "2eec87d9dfa1ee10024899776744e899aa5717f9a079f5aaa6ecd130ce7665a9"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native-complete",
+      "checks": 56,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-native-complete.log",
+      "logSha256": "72809e5c4027f4c7b7d4d1f424e6059c03945c573979b1d2b7b74614922fb7dd"
+    },
+    {
+      "name": "ui-tests",
+      "checks": 24,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-ui-tests.log",
+      "logSha256": "f3df8c00e1c74807ebc70675b39dc80945745756ab7cbcd413f5af1435a5356d"
+    },
+    {
+      "name": "shared-contracts",
+      "checks": 5,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-shared-contracts.log",
+      "logSha256": "6fb09b879c4c26b8b0d06aebc732b6783628921c86e05aaff203749545219a8b"
+    },
+    {
+      "name": "shared-types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "server-types-complete",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-server-types-complete.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-types-final",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-ui-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "snapshot",
+      "checks": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-snapshot.log",
+      "logSha256": "5e3437fa924d5fa7daeed9509d2dcd60dd04d85a298776ff22aeaaaff75ad080"
+    },
+    {
+      "name": "migration-safety",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-migration-safety.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "name": "tokens",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-tokens.log",
+      "logSha256": "ff43742bf3756e1429f51a52fc57742b36945f75a24d204f689c75f2be972533"
+    },
+    {
+      "name": "storybook",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-storybook.log",
+      "logSha256": "53d84ee3016208212be30683f2f94de1314957ffdb3b6256cae4368383dd1721"
+    },
+    {
+      "name": "browser",
+      "checks": 86,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-decision-browser.log",
+      "logSha256": "8e1ebb2dda6dce9782855be4e6c827dfa1cd76d9bebab1ccfa44d9fb96aec14b"
+    }
+  ],
+  "distinctPostgresqlTests": 40,
+  "browserEvidence": {
+    "apiAccess": "aborted; cached synthetic fixtures",
+    "officialVisualBaseline": "not_available",
+    "screenshots": [
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-01509-ins-exact-advisory-evidence/decision-calculation-scenario_run-dark-390.png",
+        "sha256": "4f9f7894c85734e44cfcb37b9697234e4eefaac1245b5e9e97a23485dec9fdd9"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-02787-ins-exact-advisory-evidence/decision-calculation-forecast_run-light-1200.png",
+        "sha256": "50bfe367e4b8545f62c1a1529a19cbe0802cd29c8f7fec8c567f4811c66d7571"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-067b6-es-prospective-human-review/decision-context-prepared-dark-1200.png",
+        "sha256": "f6d21df9f2d84a127db8dbb38ac6524d6c59716bc73d41c656d799ec0126ff50"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-147c1-es-prospective-human-review/decision-context-frozen-light-1200.png",
+        "sha256": "f018b1cc651338958e1951d9082d173919686df132afb04facbc1c7187bb6ec0"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-18e5c-es-prospective-human-review/decision-context-empty-dark-390.png",
+        "sha256": "51ab5ff9b20dc8636800fd4d589ec29517789c5a4a0530ef9452a4e375fa9f5c"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-1d27c-ins-exact-advisory-evidence/decision-calculation-scenario_run-light-1200.png",
+        "sha256": "e511b8cf43ae98a59c61d16c6a5c9814570349b495db02484cec31ad4fe184c7"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-22fb2-dgment-without-copied-facts/decision-proposal-dark-390.png",
+        "sha256": "663c623ed88ea3d8409f68ac2c8167ba3f2ccd5d82e87c92eb2f78867f6f4b0a"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-2408e-es-prospective-human-review/decision-context-frozen-dark-1200.png",
+        "sha256": "8b20bfa578f5aecbf5be3fc6440dab2b6225f9a8f242f1a1bf5bc3b9000894c9"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-2bbc1-es-prospective-human-review/decision-context-prepared-light-1200.png",
+        "sha256": "b3177f841bc6ee384c1cb9c1357d405231a1fb0fd6623bce4b320c00925a33de"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-2c890-man-advisory-interpretation/decision-experiment-dark-1200.png",
+        "sha256": "dd01655afe5613f2ad08e163deb7c8699e7495543f12c98ecfd565e5205fd658"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-389e5-es-prospective-human-review/decision-context-empty-light-390.png",
+        "sha256": "e79054b586dfb34b17fa187b515cc6e62d71dc2b5780e94fccf3c2851a0203d4"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-3f012-ozen-basis-and-revalidation/decision-historical-calculation-dark-390.png",
+        "sha256": "7522f4132fc49cdc358e26feffe2cda7b5d521ee24918e0189542e8cb722b1bc"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-40441-dgment-without-copied-facts/decision-proposal-light-1200.png",
+        "sha256": "427b61bc68d6d386d1ff4f8a788ca0273b5156dc64c077f2c64e9e948ba73665"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-4185d-odel-and-conditional-result/decision-historical-causal-light-1200.png",
+        "sha256": "cee5ad6955cbcacdd0a0a39a537c5627db201d11d8afe5db1a439ee69dcdfe9a"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-4a994-odel-and-conditional-result/decision-historical-causal-light-390.png",
+        "sha256": "35706e701dbdee108a9b1e2fd5a1985d846b9bdaeaaebf299bb9024e857b43eb"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-52aba-es-prospective-human-review/decision-context-proposal-dark-390.png",
+        "sha256": "bad53309e8ce93ebe49bca90d2c8a56c94a1d35cea3d67437acd2fedd3adf676"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-52f06-es-prospective-human-review/decision-context-expired-dark-1200.png",
+        "sha256": "927af4a303544f6ef6e156382aca07eacc20648dd4a92ac47189b05a7c769bb4"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-55a14-es-prospective-human-review/decision-context-proposal-dark-1200.png",
+        "sha256": "49c5b3ccc359846d8ffaf34e0be9da9c33d2aef9a7673760beb7a964dbf40b35"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-5e007-es-prospective-human-review/decision-context-empty-dark-1200.png",
+        "sha256": "927af4a303544f6ef6e156382aca07eacc20648dd4a92ac47189b05a7c769bb4"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-6b5fd-es-prospective-human-review/decision-context-expired-dark-390.png",
+        "sha256": "51ab5ff9b20dc8636800fd4d589ec29517789c5a4a0530ef9452a4e375fa9f5c"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-6b99c-ins-exact-advisory-evidence/decision-calculation-forecast_run-light-390.png",
+        "sha256": "a2d1e21089986443e035dac522c7490df096ee2b0ef2088c64416a8fec2050ed"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-6e08e-ozen-basis-and-revalidation/decision-historical-calculation-light-390.png",
+        "sha256": "3a2560423a5be2bb7cbce2b0d9a3f706c9dc3028c236c7291b139e39c8be6311"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-6e306-es-prospective-human-review/decision-context-prepared-light-390.png",
+        "sha256": "31ec516ca269556d2402661f318b4973b140c608341265c96f63dbde8da8c74d"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-6e845-es-prospective-human-review/decision-context-proposal-light-1200.png",
+        "sha256": "07636e0094e4639865b17aee221f86c9298c09ae76fe5de350128f11e89527d2"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-7625f-ins-exact-advisory-evidence/decision-calculation-scenario_run-light-390.png",
+        "sha256": "5b16e121664b47266ef6fc98bb433063395cf241b447b869b0bf57bb2abae437"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-79886-es-prospective-human-review/decision-context-proposal-light-390.png",
+        "sha256": "05bec4ff4a25b85ce7a0044eca436f27c3dd12eaa2185e3eb15914552a9b41c9"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-79c7f-ins-exact-advisory-evidence/decision-calculation-forecast_run-dark-1200.png",
+        "sha256": "f5d71309ee57e8cf27d2393f189cd6095bfe57dc452a9568527c365b838c105d"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-7c27c-ins-exact-advisory-evidence/decision-calculation-forecast_run-dark-390.png",
+        "sha256": "b8ff802e06366313d6dd91b56e5a143d87a17f0a3937fb6a906d778343c4f796"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-8014c-lysis-and-review-identities/decision-causal-picker-dark-1200.png",
+        "sha256": "0c91531657fbe3acd0c1ae71f52aff54dc84119763a57038b2e22ffccb1e0a77"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-810b8-es-prospective-human-review/decision-context-expired-light-390.png",
+        "sha256": "e79054b586dfb34b17fa187b515cc6e62d71dc2b5780e94fccf3c2851a0203d4"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-87f40-odel-and-conditional-result/decision-historical-causal-dark-1200.png",
+        "sha256": "f5037fd2bdcb12a996e7eb835414192d0a459d446e913bf22eea00c04081c172"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-8a46d-ozen-basis-and-revalidation/decision-historical-calculation-light-1200.png",
+        "sha256": "e2e33d30ba2f6681822c4971a6287617e3c84db56e8aa7c2b154d14e1daac737"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-8ebeb-odel-and-conditional-result/decision-captured-causal-light-1200.png",
+        "sha256": "49a5675630d93a424e73a8d1318c97bd02bca4f121f16d94e19135cbc1eedd32"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-921d9-rvals-and-every-safety-gate/decision-captured-experiment-dark-390.png",
+        "sha256": "74aa9f89a3024369525a139086572f2334857830c6faccfa1434753e96cb49d9"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-923de-odel-and-conditional-result/decision-captured-causal-light-390.png",
+        "sha256": "76961c43dd6cb205f0f1262ec3ad6ad9c3b039a191eb52f489e01290ff3508f4"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-9a5e3-rvals-and-every-safety-gate/decision-captured-experiment-light-1200.png",
+        "sha256": "db24787e4df73386c0ebca73ec92fcc234bba0816873445231f8c53433d65a47"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-9a81c-man-advisory-interpretation/decision-experiment-light-390.png",
+        "sha256": "9fda710705a2f7d7e2df478218084761043260c10e284cf1d22aadc8c5c8921f"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-9e9f6-rvals-and-every-safety-gate/decision-captured-experiment-light-390.png",
+        "sha256": "1120df0e3aa48fb55f36944e91e7e99672947c50924a91ced54b75d625a999bd"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-a2648-man-advisory-interpretation/decision-experiment-light-1200.png",
+        "sha256": "ff0ef8fa832ea29d1e27ae48316f1c1224762236632a01ba8af152f4b789f8ca"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-a6c85-man-advisory-interpretation/decision-experiment-dark-390.png",
+        "sha256": "0c6f69f988c89adcaf4c5b9a4210686e7e92c3a932a93827bbad1bd3b3b9c002"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-adfd0-lysis-and-review-identities/decision-causal-picker-light-1200.png",
+        "sha256": "3aea50f6eb86b34d7961b8eea43e21ec676cb5dd2e6fc8f5d963127201b829d6"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-b4d51-lysis-and-review-identities/decision-causal-picker-light-390.png",
+        "sha256": "b4409780289430c777a18edd2ed2a730d0687b86cd64fa17353f5bd4db5c1e6d"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-b7409-ozen-basis-and-revalidation/decision-historical-calculation-dark-1200.png",
+        "sha256": "2bf2a035e3ff57bbeebb1668ff91eff7a7d12ecc9ec3ebb95a2ae9313bcdbd83"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-b9c68-es-prospective-human-review/decision-context-expired-light-1200.png",
+        "sha256": "bca57ff369d8fd6aa97d695781672a6f0c3233a205b5e2e6564fe6d6a5927ec2"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-cba74-rvals-and-every-safety-gate/decision-captured-experiment-dark-1200.png",
+        "sha256": "2be1f86c4a90da5d6fbc74cf0f8411681d9013b7f3702259ed932f10927ad264"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-cda0c-es-prospective-human-review/decision-context-frozen-dark-390.png",
+        "sha256": "ff16e63089fb4cf51d91bd28beb8b389b1f8136436730acbd48284f29bdc9f42"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-d78a9-es-prospective-human-review/decision-context-prepared-dark-390.png",
+        "sha256": "1d44be33436a595ceb1495f3a7518897aed0848cdae27b011b65d1b6cef27afd"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-da164-odel-and-conditional-result/decision-captured-causal-dark-390.png",
+        "sha256": "717b7e98433b04c6ee7e07e03be42be0d31f3b8f08a02163dad9ec8d240fe1ec"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-e09ee-es-prospective-human-review/decision-context-frozen-light-390.png",
+        "sha256": "aa96a49ef698c3308781aa2300b1340b021585c9157238b4ab51775c07293e6a"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-e195d-dgment-without-copied-facts/decision-proposal-dark-1200.png",
+        "sha256": "695f11fc9beccb9271a4c392c3a58cd5a134cc2d0d65501acd82d60839500e3f"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-e7838-lysis-and-review-identities/decision-causal-picker-dark-390.png",
+        "sha256": "48b1a8af5ba047504bcf659931709bbf778f530b50fb1f16de487a9bfdd49365"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-edb67-dgment-without-copied-facts/decision-proposal-light-390.png",
+        "sha256": "ea84c2140999c64898e7a59f55607bbb857b18a4b29eb717f5179f233750a31f"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-edbd6-odel-and-conditional-result/decision-historical-causal-dark-390.png",
+        "sha256": "caa731d8c5a1aff0eba90f0f143b046661b7362a91b5453f42ccd7f781acb22f"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-f522e-es-prospective-human-review/decision-context-empty-light-1200.png",
+        "sha256": "bca57ff369d8fd6aa97d695781672a6f0c3233a205b5e2e6564fe6d6a5927ec2"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-f6f45-odel-and-conditional-result/decision-captured-causal-dark-1200.png",
+        "sha256": "0eff2744b0c10f8318b24cad7ef890bed63d9c8f10667a15921130728b653210"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-f877c-ins-exact-advisory-evidence/decision-calculation-scenario_run-dark-1200.png",
+        "sha256": "ee9b50eaae6a8f20c54a4901134ae00dd7719ea8f86197fa668edd4c1980664a"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-11509--separate-human-assessments/decision-outcome-scheduled-light-1200.png",
+        "sha256": "fdd2b274bee69815fa870b221a872f330cca5a0dd5b218d2dc5d8c7b32402735"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-13d13--separate-human-assessments/decision-outcome-cancelled-dark-1200.png",
+        "sha256": "6b7bfb69940f666a34c60370af3e2a03591b102c08d95ed2c7a9b5ea6ecf22bc"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-1d29c--separate-human-assessments/decision-outcome-completed-light-390.png",
+        "sha256": "25eeeaff15f890a858cf46a9777312ed153faf406110046a978a335a33fa3790"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-1e9b9--separate-human-assessments/decision-outcome-due-light-390.png",
+        "sha256": "87d4fd23516da9348aea80b385d40c86493fa4780d3533563832a36008375743"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-2b16c--separate-human-assessments/decision-outcome-due-dark-390.png",
+        "sha256": "7190bce61fadd5da60e772d0749adf447929d4d04edfc884b61b79e486aa4f44"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-37789--separate-human-assessments/decision-outcome-cancelled-light-390.png",
+        "sha256": "254abb69cf372c1aeb645ba289ad1a6f94d41a152497a78c4b7e43f6ed9ecbd7"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-52cca--separate-human-assessments/decision-outcome-cancelled-dark-390.png",
+        "sha256": "3f7243e193274db6dd06643775e202d9ef5bdc44ef7a11d044a19185ac50d50d"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-534fe--separate-human-assessments/decision-outcome-scheduled-light-390.png",
+        "sha256": "dc6c092a1c3d16482ca051e5f177bbdaea9c64ca9d400071b4969671b33139a9"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-56268--separate-human-assessments/decision-outcome-inconclusive-light-1200.png",
+        "sha256": "f8c41d480a036a57ab45591546266e02aa7c5a76e74b191be982c61c02afde78"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-57b62--separate-human-assessments/decision-outcome-completed-dark-390.png",
+        "sha256": "763f67baa4d93fa3044b34c8d34ba06499c883a2db879e3dd7ea6900f65ce612"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-70013--separate-human-assessments/decision-outcome-completed-light-1200.png",
+        "sha256": "0ca7f0251951a9e798dc6ffbe59925f24db51a95b721612c7d9cb174d70a6ee4"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-79ed1--separate-human-assessments/decision-outcome-in-progress-dark-390.png",
+        "sha256": "dc4d707cead6ba196b5307bbf1c431546ddca8aaba0200f48eb6f07baf2c409d"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-8a223--separate-human-assessments/decision-outcome-due-dark-1200.png",
+        "sha256": "893689de1612a6b79eab32a4c1ea35d4f133d7f10b788dbdcc49b5375f1a87f8"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-9757a--separate-human-assessments/decision-outcome-scheduled-dark-390.png",
+        "sha256": "b8ed7d9c702778eb547fb8a2ba1cb03fd4cb890445763a22b965ffdd37d85359"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-9f8bc--separate-human-assessments/decision-outcome-in-progress-light-1200.png",
+        "sha256": "eef4ee0e40a7004cd14ec36c02012f5204c1afbedfa3af7651ce5e18671d4781"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-a4685--separate-human-assessments/decision-outcome-in-progress-dark-1200.png",
+        "sha256": "8ede2cee553c574f53ecdb095c9faac6d3f04083184dd4829a6e99d530c9e019"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-ab4d4--separate-human-assessments/decision-outcome-cancelled-light-1200.png",
+        "sha256": "c251aa8b0b7a83365dc4b9e95604b722fa39bcd489ff0231f6fed4466e96267f"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-b3702--separate-human-assessments/decision-outcome-inconclusive-dark-390.png",
+        "sha256": "85d62bd71197f706f7c92512eae58378db9bbe6fb471cbe63481c7016f4ad5d1"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-be06b--separate-human-assessments/decision-outcome-completed-dark-1200.png",
+        "sha256": "24fd2c96fa73ec2fa4e94e6180ab9d667867af0d66b455d3f78e382062c51756"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-d77af--separate-human-assessments/decision-outcome-inconclusive-light-390.png",
+        "sha256": "57c55cabe51d3ba1c269a1b1c0b47d441678d7b6e392c82f86974173d57a3210"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-da918--separate-human-assessments/decision-outcome-inconclusive-dark-1200.png",
+        "sha256": "a17e7e80bd4175f0930fa6f280dad0aeb08dad03ab15618f11f38294d4393f67"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-f535f--separate-human-assessments/decision-outcome-due-light-1200.png",
+        "sha256": "a1dc526b2f74823f0d22fcd091dd46aa0dc5b98723ea8d7fe3738bd249845290"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-f7a85--separate-human-assessments/decision-outcome-scheduled-dark-1200.png",
+        "sha256": "73e61c017454e8e5a8f9528fac4e59dabb90fe681cc27c4ff8bc92f92e16452d"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-d-fe518--separate-human-assessments/decision-outcome-in-progress-light-390.png",
+        "sha256": "e237eac0ee17c31cf82c688f076fcea69ab81cf777469ff3370aca62ae81ae1b"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-h-790e6--inventing-numeric-evidence/decision-outcome-form-light-1200.png",
+        "sha256": "7b2e2116d9adb963ef353cd8fd26ad71c8ff0b2747ffb69299f39c7b3ece84ce"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-h-d1396--inventing-numeric-evidence/decision-outcome-form-dark-390.png",
+        "sha256": "14fa152b9861ea5eb90ce22788d024be0ab1934493cc9bd7a143869ce0511255"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-h-ef664--inventing-numeric-evidence/decision-outcome-form-dark-1200.png",
+        "sha256": "0c160669786a83574eb12c65365359a9162d73aa03b62b10ce1ac50e9856abf9"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/decision-intelligence/decision-outcome-reviews-h-ef8e8--inventing-numeric-evidence/decision-outcome-form-light-390.png",
+        "sha256": "9eadcbcd6e46a33ab4a0e37519f9e4fe8f610d4c7c15d6b839e93bc5b65728ea"
+      }
+    ],
+    "visuallyInspected": [
+      "decision-captured-causal-dark-1200.png",
+      "decision-causal-picker-light-390.png"
+    ]
+  },
+  "evidenceClass": "Native PostgreSQL/API software qualification and synthetic browser presentation; no collected trial, independent provider refutation, verified task/business impact or hosted release.",
+  "remaining": [
+    "Planning/Management/Learning consumers",
+    "Optional analytical providers",
+    "Complete V8 integration and hosted release qualification"
+  ]
+}

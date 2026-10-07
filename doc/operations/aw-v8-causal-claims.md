@@ -3,8 +3,8 @@
 This checkpoint specifies strict human causal questions, model graphs,
 assumptions, exact registered experiment references and conditional interpretation.
 The persistent native owner now admits exact signed experiment analysis and human
-interpretation receipts. The typed operator UI is qualified separately; downstream consumers and optional
-provider qualification remain open. All qualification fixtures are software evidence only.
+interpretation receipts. The typed operator UI is qualified separately; Native Decision consumption is qualified separately; Learning/Planning consumers
+and optional provider qualification remain open. All qualification fixtures are software evidence only.
 
 The declared sequence is question → human model/assumptions → identification →
 estimation or abstention → robustness → conditional interpretation. Graph edges
@@ -75,3 +75,31 @@ The affected causal/experiment/outcome-review erasure, stopping, revocation and
 purge suites were rerun: 47 PostgreSQL tests and 16 API contracts pass under the
 corrected fixtures. This supersedes earlier flags-off claims for those checks;
 the original logs remain available.
+
+Native prospective Decision evidence now accepts an exact causal run, claim
+version and human graph review. The owner replays signed model/review/run receipts
+and registered experiment source before returning an internally captured result;
+public proposals carry only identities. Dedicated tenant-bound pins, immutable
+material guards and deferred completeness bind the exact parent review and run.
+Captured graph, human assumptions, interval, evidence design and abstention remain
+separate from actual measured outcomes and the canonical choice authority.
+
+New capture also inherits every original causal source edge and current native
+experiment ancestry. Erasure removes the complete dependent Decision context
+prose and pins, preserving already chosen canonical Decisions and their effects.
+Human model amendment or revocation retains original authorized historical bytes
+with explicit revalidation, blocks new preparation/choice using that source and
+allows a reasoned replacement context. Revocation is not privacy erasure.
+
+Qualification includes actual PostgreSQL abstention and a synthetic balanced
+experiment → human interpretation → reviewed causal support → prospective
+Decision capture, copying the original registered interval. New reliance never
+turns this proxy into a verified task/business outcome or execution permission.
+UI captures expose the graph/review and reuse the native conditional result view.
+The completed source checkpoint still does not establish independent sensitivity,
+DoWhy conformance, Learning/Planning integration or a complete hosted release.
+
+A captured model owner losing current company membership also marks the original
+authorized Decision capture for revalidation and blocks new reliance. Historical
+source hashes and human prose remain unchanged; this is distinct from source
+erasure, which removes the complete dependent analytical context.

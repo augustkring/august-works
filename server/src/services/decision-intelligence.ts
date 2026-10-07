@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { analyticalLineageEdges, analyticalLineageManifests, businessMetricObservations, businessMetricVersions,
   companyMemberships, decisionContexts, decisionContextVersions, decisionContextPreparations, decisionContextBindings,
-  decisionEvidenceLinks, decisionCalculationPins, decisionExperimentPins, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes, decisions, processAnalysisRuns,
+  decisionEvidenceLinks, decisionCalculationPins, decisionExperimentPins, decisionCausalPins, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes, decisions, processAnalysisRuns,
   processAnalysisVersions, type Db } from "@paperclipai/db";
 import { decisionContextDefinitionSchema, proposeDecisionContextSchema, prepareDecisionContextSchema, withdrawPreparedDecisionContextSchema,
   v7FeatureEnabled, v8FeatureEnabled, type CapturedDecisionEvidence, type DecisionContextDefinition, type DecisionContextView,
@@ -23,6 +23,7 @@ import { inspectBusinessForecastRun } from "./business-forecasting/service.js";
 import { inspectBusinessScenarioRun } from "./business-scenarios/service.js";
 import { experimentInterpretationView } from "./business-experiments/results.js";
 import { inspectBusinessExperimentEvidence } from "./business-experiments/evidence.js";
+import { inspectCausalClaimEvidence } from "./causal-claims/service.js";
 import { logActivity, withV7ActivityTransaction } from "./v7-mutations.js";
 
 type Decision = typeof decisions.$inferSelect;
@@ -149,6 +150,15 @@ async function capture(tx:Db,row:Decision,actor:AuthorizationActor,definition:De
       manifestId=source.lineageManifestId;sourceExpiry=new Date(source.view.expiresAt);sourceHash=nativeSha256({runContentHash:source.view.contentHash,caseKey:ref.caseKey,outputKey:ref.outputKey,output});
       facts={nominal:output.nominal,differenceFromBase:output.differenceFromBase,unit:JSON.stringify(output.unit),caseKind:scenarioCase!.kind,status:source.view.result.status,constraint:output.constraint,p10:output.simulation?.p10??null,median:output.simulation?.median??null,p90:output.simulation?.p90??null,uncertaintyMethod:source.view.result.uncertainty.method,uncertaintyQualification:source.view.result.uncertainty.qualification};
       limitations=[...source.view.result.limitations,"This selected scenario output is conditional on its frozen human assumptions; it is not a measured actual, causal effect or commitment."];
+    } else if(ref.type==="causal_analysis") {
+      const source=await inspectCausalClaimEvidence(tx,row.companyId,actor,ref,true,deadline);
+      if(definition.sensitivity==="internal"&&source.definition.sensitivity==="confidential")throw forbidden("Confidential causal evidence cannot be downgraded");
+      sourceExpiry=source.expiresAt;sourceHash=source.sourceHash;const result=source.view.result;
+      facts={status:result.status,evidenceGrade:result.evidenceGrade,identification:result.identification.status,executionAuthority:"advisory_only",effect:result.estimate?.effect??null,intervalLower:result.estimate?.interval.lower??null,intervalUpper:result.estimate?.interval.upper??null,unit:result.estimate?.unit??null,sensitivity:result.robustness.sensitivity,providerRefutations:result.robustness.providerRefutations};
+      limitations=[...result.limitations,"A separately reviewed conditional causal interpretation remains advisory evidence, not a measured actual, verified task outcome or choice authorization."];
+      for(const inherited of source.edges){checkTime(deadline);edge(inherited);}
+      expiresAt=new Date(Math.min(expiresAt.getTime(),sourceExpiry.getTime()));
+      evidence.push({key:link.key,source:ref,sourceHash,capturedAt:now.toISOString(),expiresAt:sourceExpiry.toISOString(),facts,limitations,causal:{definition:source.definition,run:source.view,review:source.review}});continue;
     } else {
       const source=await inspectBusinessExperimentEvidence(tx,row.companyId,actor,ref,true,deadline);
       if(definition.sensitivity==="internal" && source.definition.sensitivity==="confidential") throw forbidden("Confidential experiment evidence cannot be downgraded");
@@ -205,6 +215,12 @@ async function inspectRetained(tx:Db,row:Decision,actor:AuthorizationActor,pin:V
       if(pin.definition.sensitivity==="internal" && source.definition.sensitivity==="confidential") throw forbidden("Confidential scenario evidence cannot be downgraded");
       if(!output || pin.evidence.find(item=>item.key===link.key)?.sourceHash!==nativeSha256({runContentHash:source.view.contentHash,caseKey:ref.caseKey,outputKey:ref.outputKey,output})) throw notFound("Exact retained scenario evidence is unavailable");
       if(source.view.currentQualification!=="current") revalidationRequiredEvidenceKeys.push(link.key);
+    } else if(link.source.type==="causal_analysis") {
+      const source=await inspectCausalClaimEvidence(tx,row.companyId,actor,link.source,false),captured=pin.evidence.find(item=>item.key===link.key);
+      if(pin.definition.sensitivity==="internal"&&source.definition.sensitivity==="confidential")throw forbidden("Confidential causal evidence cannot be downgraded");
+      const original={definition:source.definition,run:{...source.view,currentQualification:"current"},review:source.review};
+      if(captured?.sourceHash!==source.sourceHash||nativeSha256(captured.causal??null)!==nativeSha256(original))throw notFound("Exact retained causal model/review/result is unavailable");
+      if(source.view.currentQualification!=="current")revalidationRequiredEvidenceKeys.push(link.key);
     } else {
       const source=await inspectBusinessExperimentEvidence(tx,row.companyId,actor,link.source,false,performance.now()+30_000);
       if(pin.definition.sensitivity==="internal" && source.definition.sensitivity==="confidential") throw forbidden("Confidential experiment evidence cannot be downgraded");
@@ -225,6 +241,9 @@ async function inspectRetained(tx:Db,row:Decision,actor:AuthorizationActor,pin:V
   const experimentPins=await tx.select().from(decisionExperimentPins).where(and(eq(decisionExperimentPins.companyId,row.companyId),eq(decisionExperimentPins.contextVersionId,pin.id))).for("share");
   const experiments=pin.evidence.filter(item=>item.source.type==="experiment_analysis");
   if(experimentPins.length!==experiments.length || experiments.some(item=>{const ref=item.source;return ref.type!=="experiment_analysis" || !experimentPins.some(p=>p.decisionId===row.id&&p.key===item.key&&p.sourceHash===item.sourceHash&&p.analysisId===ref.id&&p.experimentId===ref.experimentId&&p.experimentVersionId===ref.versionId&&p.interpretationId===ref.interpretationId);})) throw notFound("Decision experiment source pins are unavailable");
+  const causalPins=await tx.select().from(decisionCausalPins).where(and(eq(decisionCausalPins.companyId,row.companyId),eq(decisionCausalPins.contextVersionId,pin.id))).for("share");
+  const causal=pin.evidence.filter(item=>item.source.type==="causal_analysis");
+  if(causalPins.length!==causal.length||causal.some(item=>{const ref=item.source;return ref.type!=="causal_analysis"||!causalPins.some(p=>p.decisionId===row.id&&p.key===item.key&&p.sourceHash===item.sourceHash&&p.runId===ref.id&&p.claimId===ref.claimId&&p.claimVersionId===ref.versionId&&p.reviewId===ref.reviewId);}))throw notFound("Decision causal source pins are unavailable");
   return revalidationRequiredEvidenceKeys;
   // No recomputation with today's metric values, no replacement of January's
   // process interpretation and no retrospective evidence enrichment.
@@ -285,6 +304,8 @@ export function decisionIntelligenceService(db:Db) {
         const calculationEvidence=captured.evidence.filter(item=>item.source.type==="forecast_run" || item.source.type==="scenario_run");
         if(calculationEvidence.length) await tx.insert(decisionCalculationPins).values(calculationEvidence.map(item=>({...fields,key:item.key,sourceHash:item.sourceHash,forecastRunId:item.source.type==="forecast_run"?item.source.id:null,scenarioRunId:item.source.type==="scenario_run"?item.source.id:null})));
         for(const item of captured.evidence) if(item.source.type==="experiment_analysis") await tx.insert(decisionExperimentPins).values({...fields,key:item.key,sourceHash:item.sourceHash,experimentId:item.source.experimentId,experimentVersionId:item.source.versionId,analysisId:item.source.id,interpretationId:item.source.interpretationId});
+        const causalPins=captured.evidence.flatMap(item=>item.source.type==="causal_analysis"?[{...fields,key:item.key,claimId:item.source.claimId,claimVersionId:item.source.versionId,runId:item.source.id,reviewId:item.source.reviewId,sourceHash:item.sourceHash}]:[]);
+        if(causalPins.length)await tx.insert(decisionCausalPins).values(causalPins);
         if(input.definition.assumptions.length) await tx.insert(decisionAssumptions).values(input.definition.assumptions.map(payload=>({...fields,key:payload.key,payload})));
         await tx.insert(decisionCriteria).values(input.definition.criteria.map(payload=>({...fields,key:payload.key,payload})));
         await tx.insert(decisionExpectedOutcomes).values(input.definition.expectedOutcomes.map((payload,index)=>({...fields,key:String(index),payload})));

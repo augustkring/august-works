@@ -13,6 +13,7 @@ import {businessMetricService} from "../business-metrics/service.js";
 import {authorizeStrategyReference} from "../strategy-execution/references.js";
 import {inspectDecisionSourceAuthority} from "../decision-intelligence.js";
 import {inspectBusinessExperimentEvidence} from "../business-experiments/evidence.js";
+import {causalAnalysisEvidenceReferenceSchema,type CausalAnalysisEvidenceReference} from "@paperclipai/shared";
 import {nativeSha256} from "../native-runtime/canonical.js";
 import {signDecisionSpec,verifyDecisionSpec} from "../decision-signing.js";
 import {logActivity,withV7ActivityTransaction} from "../v7-mutations.js";
@@ -37,13 +38,14 @@ function runMaterial(row:Run,reviewHash:string){const {receiptHash:_hash,signatu
 function planHash(definition:CausalClaimDefinition,sourceHash:string|null){return nativeSha256({definition,sourceHash,providerKey:"aw_native_registered_randomization",providerVersion:"1",methodKey:"registered_primary_itt",engineVersion:"aw-native-causal-registered-primary-v1"});}
 async function capture(tx:Db,companyId:string,actor:AuthorizationActor,definition:CausalClaimDefinition,requireCurrent:boolean,deadline:number){
  const policies=await currentAnalyticalPurpose(tx,companyId,definition,"causal");
- if(definition.ownerUserId!==v7HumanActorId(actor)){const [member]=await tx.select({id:companyMemberships.id}).from(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),eq(companyMemberships.principalId,definition.ownerUserId),eq(companyMemberships.status,"active"))).for("share");if(!member)throw conflict("Causal claim owner must be a current company human");}
+ let ownerCurrent=true;
+ if(definition.ownerUserId!==v7HumanActorId(actor)){const [member]=await tx.select({id:companyMemberships.id}).from(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),eq(companyMemberships.principalId,definition.ownerUserId),eq(companyMemberships.status,"active"))).for("share");ownerCurrent=!!member;if(requireCurrent&&!ownerCurrent)throw conflict("Causal claim owner must be a current company human");}
  const metric=await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,definition.outcomeMetricId,definition.outcomeMetricVersionId),metricPolicies=await currentAnalyticalPurpose(tx,companyId,metric.version.definition,"metrics");
  if(metric.version.definition.sensitivity==="confidential"&&definition.sensitivity!=="confidential")throw forbidden("Causal sensitivity cannot downgrade native outcome evidence");
  const calculation=metric.version.definition.calculation;
  if(metric.version.definition.authorityMode!=="aw_native"||calculation.kind!=="native_ratio"||metric.version.definition.grain!==definition.population.unit)throw conflict("Native causal outcomes require an exact native binary unit ratio definition");
  if(calculation.denominator.entity==="issue"&&calculation.denominator.projectId!==(definition.population.scope.type==="project"?definition.population.scope.id:null)||definition.population.unit==="project"&&definition.population.scope.type==="project")throw conflict("Causal population and native outcome metric scopes differ");
- let current=metric.metric.publishedVersionId===metric.version.id;
+ let current=ownerCurrent&&metric.metric.publishedVersionId===metric.version.id;
  let expiresAt=new Date(Math.min(Date.now()+definition.retentionDays*DAY,metric.version.createdAt.getTime()+metric.version.definition.reviewFrequencyDays*DAY,...policies.map(p=>p.nextReviewAt.getTime()),...metricPolicies.map(p=>p.nextReviewAt.getTime())));
  let edges:Edge[]=[...policies,...metricPolicies].map(p=>({inputType:"governance_obligation",inputRef:p.id,inputHash:p.obligationHash,relationship:"policy"}));edges.push({inputType:"metric_version",inputRef:metric.version.id,inputHash:metric.version.contentHash,relationship:"definition"});
  if(definition.population.scope.type==="project"){const ancestry=await authorizeStrategyReference(tx,companyId,actor,{type:"project",id:definition.population.scope.id},definition.sensitivity);edges.push(...ancestry.projectIds.map(id=>({inputType:"project" as const,inputRef:id,inputHash:nativeSha256({type:"project",id}),relationship:"source" as const})));}
@@ -80,7 +82,7 @@ async function inspectVersion(tx:Db,row:Root,actor:AuthorizationActor,id:string,
   const original=source.source?{...source.source,analysis:{...source.source.analysis,currentQualification:"current" as const,causalAuthority:source.source.analysis.result.numericallyQualified?"conditional_on_registered_randomization_and_human_attestations" as const:"withheld" as const}}:null;
   if(nativeSha256(evaluateNativeCausalClaim(value.definition,original))!==nativeSha256(run.result))throw notFound("Causal retained numerical/identification replay is unavailable");
  }
- budget(deadline);return {value,source,review:review??null,run:run??null};
+ budget(deadline);return {value,source,edges,review:review??null,run:run??null};
 }
 function runView(row:Run,current:boolean):CausalAnalysisRunView{return {id:row.id,companyId:row.companyId,claimId:row.claimId,versionId:row.versionId,providerKey:"aw_native_registered_randomization",providerVersion:"1",methodKey:"registered_primary_itt",analysisPlanHash:row.analysisPlanHash,assumptionsSnapshotHash:row.assumptionsSnapshotHash,sourceHash:row.sourceHash,result:row.result,receiptHash:row.receiptHash,startedAt:row.startedAt.toISOString(),completedAt:row.completedAt.toISOString(),currentQualification:current?"current":"needs_revalidation"};}
 async function inspect(tx:Db,row:Root,actor:AuthorizationActor,deadline:number){
@@ -89,6 +91,18 @@ async function inspect(tx:Db,row:Root,actor:AuthorizationActor,deadline:number){
  return {claim:rootView(row),versions:items,coverage:"bounded_recent_native_versions" as const};
 }
 async function audit(tx:Db,publications:Parameters<typeof logActivity>[2],companyId:string,actor:AuthorizationActor,id:string,action:string,details:Record<string,unknown>){await logActivity(tx,{companyId,actorType:"user",actorId:v7HumanActorId(actor),entityType:"causal_claim",entityId:id,action:`causal_claim.${action}`,details},publications);}
+/** Internal native consumer admission; public commands cannot supply captured
+ * graph/results, source hashes, confidence or execution authority. */
+export async function inspectCausalClaimEvidence(tx:Db,companyId:string,actor:AuthorizationActor,raw:CausalAnalysisEvidenceReference,requireCurrent:boolean,deadline=performance.now()+30000){
+ const ref=causalAnalysisEvidenceReferenceSchema.parse(raw);await admit(tx,companyId,actor);const row=await root(tx,companyId,ref.claimId);
+ if(requireCurrent&&row.status==="revoked")throw notFound("Causal claim is revoked; new downstream reliance is unavailable");
+ const pin=await inspectVersion(tx,row,actor,ref.versionId,requireCurrent,deadline);
+ if(!pin.review||!pin.run||pin.review.id!==ref.reviewId||pin.run.id!==ref.id)throw notFound("Exact signed causal analysis and human model review are unavailable");
+ const current=pin.source.current&&row.currentVersionId===ref.versionId&&row.reviewedVersionId===ref.versionId&&row.latestRunId===ref.id&&row.status===pin.run.result.status;
+ if(requireCurrent&&!current)throw conflict("Causal model or source changed; review current evidence before new reliance");
+ const review={id:pin.review.id,versionId:pin.review.versionId,rationale:pin.review.rationale,reviewedBy:pin.review.reviewedBy,reviewedAt:pin.review.reviewedAt.toISOString(),receiptHash:pin.review.receiptHash};
+ return {definition:pin.value.definition,view:runView(pin.run,current),review,sourceHash:nativeSha256({definitionHash:pin.value.contentHash,reviewHash:pin.review.receiptHash,runHash:pin.run.receiptHash}),expiresAt:pin.value.expiresAt,edges:mergeEdges([...pin.edges,...pin.source.edges])};
+}
 export function causalClaimService(db:Db){return {
  async controls(companyId:string,actor:AuthorizationActor,cursor?:string){return db.transaction(async raw=>{const tx=raw as unknown as Db;await admit(tx,companyId,actor,true,false);const rows=await tx.select({id:causalClaims.id,companyId:causalClaims.companyId,revision:causalClaims.revision,status:causalClaims.status}).from(causalClaims).where(and(eq(causalClaims.companyId,companyId),sql`${causalClaims.status}<>'revoked'`,cursor?sql`${causalClaims.id}>${cursor}::uuid`:undefined)).orderBy(asc(causalClaims.id)).limit(21);return {items:rows.slice(0,20),nextCursor:rows.length>20?rows[19].id:null,coverage:"bounded_native_revocation_metadata" as const};});},
  async create(companyId:string,actor:AuthorizationActor,raw:CreateCausalClaim){const input=createCausalClaimSchema.parse(raw);return withV7ActivityTransaction(db,async(tx,publications)=>{

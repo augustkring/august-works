@@ -5,12 +5,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { DecisionEvidencePicker } from "./DecisionEvidencePicker";
 import { businessForecastingApi } from "@/api/business-forecasting";
+import { causalClaimsApi } from "@/api/causal-claims";
+import { causalFixture } from "../../storybook/stories/causal-claim-fixtures";
 import { businessExperimentsApi } from "@/api/business-experiments";
 import { experimentFixture } from "../../storybook/stories/business-experiment-fixtures";
 import { businessScenariosApi } from "@/api/business-scenarios";
 import { forecastFixture } from "../../storybook/stories/business-forecast-fixtures";
 import { scenarioFixture } from "../../storybook/stories/business-scenario-fixtures";
 import type { DecisionEvidenceReference } from "@paperclipai/shared";
+vi.mock("@/api/causal-claims", () => ({ causalClaimsApi: { list: vi.fn(), detail: vi.fn() } }));
 vi.mock("@/api/business-forecasting", () => ({ businessForecastingApi: { list: vi.fn(), artifacts: vi.fn() } }));
 vi.mock("@/api/business-experiments", () => ({ businessExperimentsApi: { list: vi.fn(), receipts: vi.fn() } }));
 vi.mock("@/api/business-scenarios", () => ({ businessScenariosApi: { list: vi.fn(), runs: vi.fn() } }));
@@ -24,6 +27,19 @@ async function mount(value: DecisionEvidenceReference, companyId: string) {
   return { client, container, pin, onChange, cleanup: async () => { await act(async () => root.unmount()); client.clear(); container.remove(); } };
 }
 describe("Native calculation evidence selection", () => {
+  it("binds only exact current causal analysis and human graph review identities without copied confidence or effects",async()=>{
+    const f=causalFixture("supported"),ref:DecisionEvidenceReference={type:"causal_analysis",id:f.run.id,claimId:f.claim.id,versionId:f.causalVersion.id,reviewId:f.review!.id};
+    vi.mocked(causalClaimsApi.list).mockResolvedValue({items:[{claim:f.claim,version:f.causalVersion,run:f.run}],nextCursor:null,coverage:"bounded_current_authorized_page"});vi.mocked(causalClaimsApi.detail).mockResolvedValue({claim:f.claim,versions:[{version:f.causalVersion,review:f.review,run:f.run}],coverage:"bounded_recent_native_versions"});const view=await mount(ref,f.companyId);
+    try{expect(causalClaimsApi.list).toHaveBeenCalledWith(f.companyId,undefined,"current-account");expect(causalClaimsApi.detail).toHaveBeenCalledWith(f.companyId,f.claim.id,"current-account");expect([...view.pin().options].some(o=>o.value===JSON.stringify(ref)&&o.textContent?.includes("conditional advisory evidence"))).toBe(true);await act(async()=>{view.pin().value=JSON.stringify(ref);view.pin().dispatchEvent(new Event("change",{bubbles:true}));});expect(view.onChange).toHaveBeenLastCalledWith(ref);expect(view.onChange.mock.lastCall![0]).not.toHaveProperty("effect");expect(view.onChange.mock.lastCall![0]).not.toHaveProperty("confidence");}finally{await view.cleanup();}
+  });
+  it("withholds causal choices for mismatched tenant/run identities, stale qualification and revoked control state",async()=>{
+    const f=causalFixture("supported"),ref:DecisionEvidenceReference={type:"causal_analysis",id:f.run.id,claimId:f.claim.id,versionId:f.causalVersion.id,reviewId:f.review!.id};vi.mocked(causalClaimsApi.list).mockResolvedValue({items:[{claim:f.claim,version:f.causalVersion,run:f.run}],nextCursor:null,coverage:"bounded_current_authorized_page"});
+    for(const invalid of [{claim:{...f.claim,status:"revoked" as const},version:f.causalVersion,run:f.run},{claim:f.claim,version:{...f.causalVersion,currentQualification:"needs_revalidation" as const},run:f.run},{claim:f.claim,version:f.causalVersion,run:{...f.run,companyId:"another-company"}},{claim:{...f.claim,latestRunId:f.causalVersion.id},version:f.causalVersion,run:f.run}]){vi.mocked(causalClaimsApi.detail).mockResolvedValue({claim:invalid.claim,versions:[{version:invalid.version,review:f.review,run:invalid.run}],coverage:"bounded_recent_native_versions"});const view=await mount(ref,f.companyId);try{expect([...view.pin().options].some(o=>o.textContent?.includes("conditional advisory evidence"))).toBe(false);}finally{await view.cleanup();}}
+  });
+  it("withholds cached causal choices during reauthorization and after source denial",async()=>{
+    const f=causalFixture("supported"),ref:DecisionEvidenceReference={type:"causal_analysis",id:f.run.id,claimId:f.claim.id,versionId:f.causalVersion.id,reviewId:f.review!.id};vi.mocked(causalClaimsApi.list).mockResolvedValue({items:[{claim:f.claim,version:f.causalVersion,run:f.run}],nextCursor:null,coverage:"bounded_current_authorized_page"});vi.mocked(causalClaimsApi.detail).mockResolvedValue({claim:f.claim,versions:[{version:f.causalVersion,review:f.review,run:f.run}],coverage:"bounded_recent_native_versions"});const view=await mount(ref,f.companyId);try{let reject!:(e:Error)=>void;vi.mocked(causalClaimsApi.detail).mockImplementation(()=>new Promise((_resolve,deny)=>{reject=deny;}));await act(async()=>{void view.client.invalidateQueries({queryKey:["decision-evidence",f.companyId,"current-account"]});});await flush();expect([...view.pin().options].some(o=>o.textContent?.includes("conditional advisory evidence"))).toBe(false);await act(async()=>reject(new Error("Causal source authority denied")));await flush();expect([...view.pin().options].some(o=>o.textContent?.includes("conditional advisory evidence"))).toBe(false);}finally{await view.cleanup();}
+  });
+
   it("sends only the exact forecast point identity and verifies the current account without copying numbers", async () => {
     const f = forecastFixture(true), ref: DecisionEvidenceReference = { type: "forecast_run", id: f.run.id, specId: f.spec.id, versionId: f.version.id, pointIndex: 0 };
     vi.mocked(businessForecastingApi.list).mockResolvedValue({ items: [f.spec], nextCursor: null, coverage: "bounded_current_authorized_page" });

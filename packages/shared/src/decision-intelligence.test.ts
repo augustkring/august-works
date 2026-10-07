@@ -29,7 +29,7 @@ describe("Prospective native decision context contract",()=>{
     expect(decisionContextDefinitionSchema.safeParse({...input,evidence:[{...link,relationship:"supports_option"}]}).success).toBe(false);
   });
   it("admits exact calculation pins as advisory evidence without relabeling them measured baselines",()=>{
-    const sources=[{type:"forecast_run",id:uuid,specId:uuid,versionId:uuid,pointIndex:0},{type:"scenario_run",id:uuid,scenarioId:uuid,versionId:uuid,caseKey:"option",outputKey:"capacity"},{type:"experiment_analysis",id:uuid,experimentId:uuid,versionId:uuid,interpretationId:uuid}];
+    const sources=[{type:"forecast_run",id:uuid,specId:uuid,versionId:uuid,pointIndex:0},{type:"scenario_run",id:uuid,scenarioId:uuid,versionId:uuid,caseKey:"option",outputKey:"capacity"},{type:"experiment_analysis",id:uuid,experimentId:uuid,versionId:uuid,interpretationId:uuid}, {type:"causal_analysis",id:uuid,claimId:uuid,versionId:uuid,reviewId:uuid}];
     for(const source of sources) {
       const link={key:"calculation",source,relationship:"supports_option",optionId:"proceed",criterionKey:null,rationale:"Human interpretation of exact conditional evidence"};
       expect(decisionContextDefinitionSchema.safeParse({...definition(),evidence:[link]}).success).toBe(true);

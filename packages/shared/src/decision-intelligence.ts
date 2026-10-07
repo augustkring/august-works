@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { BusinessExperimentAnalysisView, BusinessExperimentDefinition } from "./business-experiments.js";
+import type { CausalAnalysisRunView, CausalClaimDefinition } from "./causal-claims.js";
 
 const prose=z.string().trim().min(10).max(2000),key=z.string().regex(/^[a-z][a-z0-9_-]{1,79}$/),id=z.string().uuid();
 const scope=z.discriminatedUnion("type",[
@@ -7,15 +8,18 @@ const scope=z.discriminatedUnion("type",[
   z.object({type:z.literal("project"),id}).strict(),z.object({type:z.literal("issue"),id}).strict(),
 ]);
 export const experimentAnalysisEvidenceReferenceSchema=z.object({type:z.literal("experiment_analysis"),id,experimentId:id,versionId:id,interpretationId:id}).strict();
+export const causalAnalysisEvidenceReferenceSchema=z.object({type:z.literal("causal_analysis"),id,claimId:id,versionId:id,reviewId:id}).strict();
+export type CausalAnalysisEvidenceReference=z.infer<typeof causalAnalysisEvidenceReferenceSchema>;
 export const decisionEvidenceReferenceSchema=z.discriminatedUnion("type",[
   z.object({type:z.literal("metric_observation"),id,metricId:id,metricVersionId:id}).strict(),
   z.object({type:z.literal("process_finding"),id,definitionId:id,runId:id}).strict(),
   z.object({type:z.literal("forecast_run"),id,specId:id,versionId:id,pointIndex:z.number().int().min(0).max(59)}).strict(),
   z.object({type:z.literal("scenario_run"),id,scenarioId:id,versionId:id,caseKey:z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),outputKey:z.string().regex(/^[a-z][a-z0-9_]{0,63}$/)}).strict(),
   experimentAnalysisEvidenceReferenceSchema,
+  causalAnalysisEvidenceReferenceSchema,
 ]);
 const evidence=z.object({key,source:decisionEvidenceReferenceSchema,
-  relationship:z.enum(["supports_option","contradicts_option","informs_criterion","establishes_constraint","metric_observation","process_finding","forecast_result","scenario_result","experiment_result","risk"]),
+  relationship:z.enum(["supports_option","contradicts_option","informs_criterion","establishes_constraint","metric_observation","process_finding","forecast_result","scenario_result","experiment_result","causal_result","risk"]),
   optionId:z.string().trim().min(1).max(120).nullable(),criterionKey:key.nullable(),rationale:prose,
 }).strict().superRefine((value,ctx)=>{
   if(["supports_option","contradicts_option"].includes(value.relationship)!==(value.optionId!==null))
@@ -70,6 +74,7 @@ export type WithdrawPreparedDecisionContext=z.infer<typeof withdrawPreparedDecis
 export interface CapturedDecisionEvidence {
   key:string;source:DecisionEvidenceReference;sourceHash:string;capturedAt:string;expiresAt:string;
   facts:Record<string,string|number|null>;limitations:string[];
+  causal?: {definition:CausalClaimDefinition;run:CausalAnalysisRunView;review:{id:string;versionId:string;rationale:string;reviewedBy:string;reviewedAt:string;receiptHash:string}};
   experiment?: {
     analysis:BusinessExperimentAnalysisView;
     registeredMetrics:Pick<BusinessExperimentDefinition,"primaryMetric"|"guardrailMetrics"|"secondaryMetrics"|"diagnostics">;
