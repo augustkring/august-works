@@ -1,8 +1,9 @@
 import {and,eq,or,sql} from "drizzle-orm";
-import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,type Db} from "@paperclipai/db";
+import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifestItems,contextManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,type Db} from "@paperclipai/db";
 import {analyticalContextAuthorityPinSchema,type AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {z} from "zod";
 import type {AuthorizationActor} from "./authorization.js";
+import type {NativeReadScope} from "./analytical-reader.js";
 import {HttpError,conflict,forbidden,unprocessable} from "../errors.js";
 
 const pinsSchema=z.array(analyticalContextAuthorityPinSchema).min(1).max(32);
@@ -53,7 +54,7 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
  * remain authoritative after an original run has finished or roles change. */
 /** Follow only persisted native child relationships. A copied Task/run ID or
  * initiating principal is never an analytical reader grant. */
-async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string}) {
+async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope) {
  const deadline=performance.now()+30000;
  const budget=()=>{if(performance.now()>deadline)throw new HttpError(403,"Complete analytical Workflow source review exceeded its budget",{code:"analytical_source_access_lost"});};
  const match="issueId" in scope?sql`exists(select 1 from workflow_waits w where w.company_id=${companyId}::uuid and w.workflow_run_id=${workflowStepRuns.workflowRunId} and w.node_id=${workflowStepRuns.nodeId} and w.reference_type='issue' and w.reference_id=${scope.issueId})`:
@@ -64,13 +65,13 @@ async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,actor:A
  if(assets.length>256)throw new HttpError(403,"Analytical Workflow source access is unavailable",{code:"analytical_source_access_lost"});
  if(!assets.length)return;
  const {assertLearnedAssetAnalyticalSources}=await import("./learning/learning-analytical-sources.js");
- for(const revisionId of new Set(assets.map(asset=>asset.revisionId))){budget();await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",revisionId,actor);}
- for(const artifactId of new Set(assets.flatMap(asset=>asset.artifactVersionId?[asset.artifactVersionId]:[]))){budget();await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",artifactId,actor);}
+ for(const revisionId of new Set(assets.map(asset=>asset.revisionId))){budget();await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",revisionId,actor,readScope);}
+ for(const artifactId of new Set(assets.flatMap(asset=>asset.artifactVersionId?[asset.artifactVersionId]:[]))){budget();await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",artifactId,actor,readScope);}
  budget();
 }
 
-export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string}) {
- await assertLearnedWorkflowPayloadAccess(db,companyId,actor,scope);
+export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope) {
+ await assertLearnedWorkflowPayloadAccess(db,companyId,actor,scope,readScope);
  const nativeConversation="runId" in scope?await db.select({id:issues.id}).from(heartbeatRuns)
   .innerJoin(issues,and(eq(issues.companyId,heartbeatRuns.companyId),eq(issues.id,heartbeatRuns.nativeIssueId)))
   .where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,scope.runId),eq(heartbeatRuns.runtimeMode,"native"),or(sql`${issues.conversationAgentId} is not null`,sql`${issues.conversationRetiredAt} is not null`))).limit(1):[];
@@ -92,6 +93,16 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
   const erased=await tx.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${conversationIssueId??null}::uuid) as erased`);
   if(erased[0]?.erased)throw forbidden("The analytical conversation source was erased or expired");
   const deadline=performance.now()+30000;
+  const foundation=await tx.selectDistinct({ref:contextManifestItems.sourceRef}).from(contextManifests)
+   .innerJoin(contextManifestItems,and(eq(contextManifestItems.companyId,contextManifests.companyId),eq(contextManifestItems.manifestId,contextManifests.id)))
+   .where(and(eq(contextManifests.companyId,companyId),condition,eq(contextManifestItems.sourceProvider,"august_works_foundation"))).limit(257);
+  if(foundation.length>256)throw forbidden("The complete learned Context exceeds its source review budget");
+  if(foundation.length){
+   const {accessService}=await import("./access.js"),access=await accessService(tx).decide({actor,enforceResponsibleUserIntersection:true,action:"foundation:read",resource:{type:"company",companyId}});
+   if(!access.allowed)throw forbidden("The learned Foundation Context is no longer authorized");
+   const {assertLearnedAssetAnalyticalSources}=await import("./learning/learning-analytical-sources.js");
+   for(const item of foundation){const ref=/^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/\d+$/i.exec(item.ref);if(!ref||performance.now()>deadline)throw forbidden("The exact learned Foundation Context is unavailable");await assertLearnedAssetAnalyticalSources(tx,companyId,"document_revision",ref[1]!,actor,readScope);}
+  }
   for(const root of roots){
    if(!root.pins.length||root.expiresAt.getTime()<=Date.now())throw forbidden("The analytical conversation requires current source review");
    const current=await inspectAnalyticalContextPins(tx,companyId,actor,root.pins,deadline);
@@ -102,7 +113,7 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
  try {
   if(actor.type==="agent"){
    const {withNativeAnalyticalReader}=await import("./analytical-reader.js");
-   return await withNativeAnalyticalReader(db,companyId,actor,inspect);
+   return await withNativeAnalyticalReader(db,companyId,actor,inspect,readScope);
   }
   return await inspect();
  }catch(error){
@@ -116,5 +127,5 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
 export async function assertNativeAnalyticalRunPayloadAccess(db:Db,companyId:string,runId:string) {
  const [run]=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,runId))).limit(1);
  if(!run)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
- await assertAnalyticalContextPayloadAccess(db,companyId,{type:"agent",source:"agent_jwt",companyId,agentId:run.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId},{runId:run.id});
+ await assertAnalyticalContextPayloadAccess(db,companyId,{type:"agent",source:"agent_jwt",companyId,agentId:run.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId},{runId:run.id},"task");
 }

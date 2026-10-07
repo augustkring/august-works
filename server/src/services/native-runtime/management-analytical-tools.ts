@@ -27,7 +27,7 @@ export function isManagementAnalyticalTool(name:string):name is ManagementChatTo
 /** Catalog availability is server-derived. Execution independently repeats the
  * persisted private conversation, responsible human and source-owner checks. */
 export async function nativeManagementToolsAvailable(db:Db,binding:{companyId:string;agentId:string;runId:string},responsibleUserId:string|null){
- try{return await withNativeAnalyticalReader(db,binding.companyId,{type:"agent",source:"agent_jwt",...binding,onBehalfOfUserId:responsibleUserId},async()=>true);}
+ try{return await withNativeAnalyticalReader(db,binding.companyId,{type:"agent",source:"agent_jwt",...binding,onBehalfOfUserId:responsibleUserId},async()=>true,"conversation");}
  catch(error){if(error instanceof HttpError&&[403,404].includes(error.status))return false;throw error;}
 }
 

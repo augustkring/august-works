@@ -1,0 +1,127 @@
+{
+  "checkpoint": "Original Source-retained Foundation Context for an actual assigned Task, with native input C7 and original retention outbox",
+  "parentCommit": "b9fab40cb1cdb9fa817ffd35a872486a9139f692",
+  "recordedAt": "2026-10-07T22:59:58.903762+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/meta/0421_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "34a49b86ce28c50dfd5079224ed8b5c7fdb998a3985c60f1b3f952e2c1f27117"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "1bafec80a6510247a4a41990e5783f9faf34116c933e715f19b97cf7adf8974e"
+    },
+    {
+      "path": "server/src/__tests__/analytical-reader.integration.test.ts",
+      "sha256": "f3e897957902734d1efb887a778448866aa3a6a463964d9b3f426eb38c869a13"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "b46149c6f56a46c0b92671f7a86a56e41991624d8359447bbdbfae42b7229d75"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "012e38c49515d9e4c87a70863cd97df05f57e78eb72d25cbdcea787315600a7a"
+    },
+    {
+      "path": "server/src/services/analytical-context-privacy.ts",
+      "sha256": "75493a91db0cbd75367795e6a71381551ce0ddc6dbc7edd98bd780309199268b"
+    },
+    {
+      "path": "server/src/services/analytical-reader.ts",
+      "sha256": "7eee3212af45b96767b205b47f2487033f50b8185e38b8d48b7175432a12d258"
+    },
+    {
+      "path": "server/src/services/context/context-engine.ts",
+      "sha256": "ff7ccd1b4a8b0d55544a6301672a99564d5d5edf0e6b0a6e48a64e1e714c855d"
+    },
+    {
+      "path": "server/src/services/context/context-manifest.ts",
+      "sha256": "137a10cced5a885833109583f8c89dee9aa06dfdf06af2bbccdeb499dc06d233"
+    },
+    {
+      "path": "server/src/services/context/context-runtime.test.ts",
+      "sha256": "00864195ad1f4e3c59218543d0b36b42bd35b189b709f311540bf9e9d608e866"
+    },
+    {
+      "path": "server/src/services/context/context-runtime.ts",
+      "sha256": "6321b84c14ba97e655860e415737f404356ca1ea94eb4d7c827fdbccd48ae275"
+    },
+    {
+      "path": "server/src/services/foundation/foundation-index.ts",
+      "sha256": "6c944cc62dc934a77164d9fe484c42983e3dc7356266aa2fff442b08a201a847"
+    },
+    {
+      "path": "server/src/services/learning/learning-analytical-sources.ts",
+      "sha256": "e7e25006a4e2cb3936904f5df6995a4abeda3977b52a39c6f92eea22d7ad04ad"
+    },
+    {
+      "path": "server/src/services/learning/learning-assets.ts",
+      "sha256": "e1912a46a0131404c30a01184ec2225f295d47082017d7f5df7a8112ee6b6ec4"
+    },
+    {
+      "path": "server/src/services/memory/memory-jobs.ts",
+      "sha256": "06e12f69d33bd57d37ee7ac09dbfd7dca3688c218ac67d64937da71b7fbbe83e"
+    },
+    {
+      "path": "server/src/services/native-runtime/management-analytical-tools.ts",
+      "sha256": "dcbc9ddaaff6694f39eeed6abc33fe59ffc3e75c32b6836ed3bcaf15ba446762"
+    },
+    {
+      "path": "packages/db/src/migrations/0426_analytical_native_task_source_retention.sql",
+      "sha256": "0692b0a2ba4b19f2a41558d64f1b18bb84f57979dd07d1974d5370767ef9136d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0426_snapshot.json",
+      "sha256": "b37905389b805d41e36896ab2f524e497657371e87e177b157dcc0c424980821"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Native PostgreSQL Learning/reader/private Context/Context Engine/purge/snapshot regressions",
+      "passedTests": 123,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-context-source-release.log",
+      "logSha256": "3ef4c4170c131467210755e3244be65bf0c426c297a8167ec088f5133224aee4"
+    },
+    {
+      "check": "Final server types",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-context-source-types-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "Final native migration safety",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-context-source-migrations-release.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    }
+  ],
+  "parentWholeNativeBuild": {
+    "sourceCommit": "7b4859f4db455c51cec50a0c6fc1b65d9b1ec384",
+    "exitCode": 0,
+    "log": "/var/tmp/aw-v8-native-build-optimizer-artifact-owner.log",
+    "logSha256": "41dd98889693cec31aa96cfcbc8ce64168b266a933cb54d8ee4b868d06149c27"
+  },
+  "qualified": [
+    "The internal Task read boundary validates the actual running run, persisted Task linkage, current assignment/checkout, actual responsible auth user, active membership and current Agent x Human permissions. Pre-selection uses the original persisted issueId/taskId; selected legacy execution is denied. Private management tool discovery/execution still requires its original conversation boundary.",
+    "Only matching active nested permits inherit Task scope. A detached callback cannot inherit a returned Task permit.",
+    "Original Foundation search and atomic Context assembly use the current requesting run actor. The original private rejected/unverified analytical retention owner keeps the complete original signal pins/manifests; independent verified Learning evidence remains separate. Wrong Task/Context linkage rolls back the entire attempted manifest and private root.",
+    "Current provider payload admission repeats both original analytical signal admission and current Foundation owner permission before copied Foundation payloads can be consumed. Known loss/restoration and explicit Human Foundation grant removal are qualified.",
+    "Native Task/project deletion extends the original analytical input C7 owner; the native content-free source ledger also fences restored lineage. Actual private Root deletion queues the existing retention sweep, which replays C7 and scrubs copied runtime payloads with flags off and company paused. Failed privacy sweeps remain retryable through the existing worker.",
+    "Actual PostgreSQL qualifies preparation/native Source-retained Foundation Context, direct Task/project/observation deletion, exact original trace cleanup after a real EISDIR failure and company purge, independent verified Memory preservation, and late runtime write fencing."
+  ],
+  "limitations": [
+    "No new Chromium, external provider invocation, trial result, immediate runner cancellation or measured hard latency is claimed. Task outcomes and historical execution are explicit software fixtures.",
+    "The 30-second review budget and bounded 256 assets/32 pins/26200 manifests reject incomplete retention; default Context deadlines still apply. No maximum-load performance qualification is claimed.",
+    "The original company marker sweep runs per erased Root. Coalescing is deferred until concurrent erasure watermark/retry semantics and throughput require and qualify it.",
+    "Populated historical migration backfill is not hosted-qualified. One intermediate migration run observed a changed migration hash while the SQL was still being edited; only the final stable 123-test passing run is counted. Earlier native fixture grant, FK, terminal-job and feature-dependency failures are corrected.",
+    "Source-retained Skill/Playbook/Role Pack/runtime Artifact copies, remaining domain/source graph closure, planning outcomes, Routine cadence, action materialization, cross-project Planning, provider conformance and hosted acceptance remain open. No whole-brief completion is claimed."
+  ]
+}

@@ -21,8 +21,22 @@ export async function withAnalyticalConversationRetention<T>(db:Db,companyId:str
   if(actor.type!=="agent"||!actor.runId||!actor.agentId)throw forbidden("A native conversation is required for analytical retention");
   const [context]=await tx.select().from(contextManifests).where(and(eq(contextManifests.companyId,companyId),eq(contextManifests.runId,actor.runId),eq(contextManifests.agentId,actor.agentId),sql`${contextManifests.issueId}=(select h.native_issue_id from ${heartbeatRuns} h where h.company_id=${companyId}::uuid and h.id=${actor.runId}::uuid)`)).orderBy(sql`${contextManifests.createdAt} desc`,sql`${contextManifests.id} desc`).limit(1).for("share");
   if(!context?.issueId)throw conflict("The native conversation Context manifest is unavailable");
+  return retainAnalyticalContextResult(tx,companyId,actor,context.id,await read(tx));
+ }),"conversation");
+}
+
+type RetainedAnalyticalResult<T>={result:T;sourceManifestIds:string[];retentionUntil:Date;authorityPins?:AnalyticalContextAuthorityPin[]};
+/** The caller holds company -> Memory and has read the actual source owners.
+ * Reuse the original private, unverified retention owner for a persisted run's
+ * Context copy; independent verified Learning evidence is never the C7 target. */
+export async function retainAnalyticalContextResult<T>(tx:Db,companyId:string,actor:AuthorizationActor,contextId:string,captured:RetainedAnalyticalResult<T>){
+ await assertAnalyticalReader(tx,companyId,actor);
+ if(actor.type!=="agent"||!actor.runId||!actor.agentId)throw forbidden("An actual run reader is required for analytical Context retention");
+ const [context]=await tx.select({id:contextManifests.id}).from(contextManifests).innerJoin(heartbeatRuns,and(eq(heartbeatRuns.companyId,contextManifests.companyId),eq(heartbeatRuns.id,contextManifests.runId)))
+  .where(and(eq(contextManifests.companyId,companyId),eq(contextManifests.id,contextId),eq(contextManifests.runId,actor.runId),eq(contextManifests.agentId,actor.agentId),sql`(${contextManifests.issueId}=${heartbeatRuns.nativeIssueId} or (${heartbeatRuns.nativeIssueId} is null and ${contextManifests.issueId}::text=coalesce(${heartbeatRuns.contextSnapshot}->>'issueId',${heartbeatRuns.contextSnapshot}->>'taskId')))`)).limit(1).for("share");
+ if(!context)throw conflict("The actual run Context manifest is unavailable");
   const deadline=performance.now()+30000;
-  const captured=await read(tx),ids=[...new Set(captured.sourceManifestIds)].sort();
+  const ids=[...new Set(captured.sourceManifestIds)].sort();
   // The native owner may return an empty authorized discovery page. An exact
   // empty array carries no source facts and must not invent a retention root.
   if(!ids.length&&captured.authorityPins?.length===0&&Array.isArray(captured.result)&&captured.result.length===0)return captured.result;
@@ -49,9 +63,8 @@ export async function withAnalyticalConversationRetention<T>(db:Db,companyId:str
    observedAt:now,expiresAt,createdByActorType:"system",createdByActorId:"native_analytical_retention"});
   await tx.insert(analyticalContextRoots).values({companyId,memoryRecordId:id,sourceCount:ids.length,authorityPins:authority.pins,contentHash,deletionKey:memoryDeletionKey(companyId,"record",id),createdAt:now,expiresAt});
   for(let start=0;start<ids.length;start+=500)await tx.insert(analyticalContextDependencies).values(ids.slice(start,start+500).map(sourceManifestId=>({companyId,memoryRecordId:id,sourceManifestId})));
-  await tx.insert(contextManifestMemoryRoots).values({companyId,manifestId:context.id,memoryRecordId:id,sourceVersion:contentHash});
+  await tx.insert(contextManifestMemoryRoots).values({companyId,manifestId:contextId,memoryRecordId:id,sourceVersion:contentHash});
   return captured.result;
- }));
 }
 
 /** Memory is already held. Marking before propagation prevents source/run
