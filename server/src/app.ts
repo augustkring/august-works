@@ -122,6 +122,7 @@ import { activityRoutes } from "./routes/activity.js";
 import { businessEventRoutes } from "./routes/business-events.js";
 import { businessForecastRoutes } from "./routes/business-forecasting.js";
 import { businessScenarioRoutes } from "./routes/business-scenarios.js";
+import { managementReviewRoutes } from "./routes/management-reviews.js";
 import { causalClaimRoutes } from "./routes/causal-claims.js";
 import { businessExperimentRoutes } from "./routes/business-experiments.js";
 import { businessMetricRoutes } from "./routes/business-metrics.js";
@@ -893,6 +894,7 @@ export async function createApp(
   api.use(businessScenarioRoutes(db));
   api.use(businessExperimentRoutes(db));
   api.use(causalClaimRoutes(db));
+  api.use(managementReviewRoutes(db));
   api.use(businessMetricTargetRoutes(db));
   api.use(strategyExecutionRoutes(db));
   api.use(processDataReadinessRoutes(db));

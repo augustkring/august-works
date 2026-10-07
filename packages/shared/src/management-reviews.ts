@@ -61,4 +61,5 @@ export interface ManagementReviewView {
   definition: ManagementReviewDefinition; sources: CapturedManagementSource[]; packet: ManagementReviewPacket;
   createdBy: string; createdAt: string; expiresAt: string; publishedBy: string | null; publishedAt: string | null;
   currentQualification: "current" | "needs_revalidation";
+  events: Array<{ id: string; itemKey: string; event: "opened" | "ignored" | "acted_on" | "false_alarm" | "correction"; rationale: string; recordedBy: string; recordedAt: string; ordinal: number; interpretation: "human_reported_event" }>;
 }

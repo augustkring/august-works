@@ -2864,6 +2864,13 @@
       "when": 1791370267331,
       "tag": "0410_rapid_stellaris",
       "breakpoints": true
+    },
+    {
+      "idx": 411,
+      "version": "7",
+      "when": 1791374444701,
+      "tag": "0411_lively_kingpin",
+      "breakpoints": true
     }
   ]
 }

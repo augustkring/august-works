@@ -43,3 +43,4 @@ export { managedAgentProfileRoutes } from "./managed-agent-profiles.js";
 export { remoteAgentProfileRoutes } from "./remote-agent-profiles.js";
 
 export {causalClaimRoutes} from "./causal-claims.js";
+export { managementReviewRoutes } from "./management-reviews.js";

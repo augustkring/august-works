@@ -2,6 +2,7 @@ import { and, eq, sql, ne, inArray } from "drizzle-orm";
 import { learningCycles, companyAgentPackageInstallations, agentPackageUpdateProposals, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, policyChangeProposals, workflowOptimizerEvaluations, automationArtifacts, workflows, workflowRevisions, workflowRuns, rolePacks, rolePackVersions, rolePackItems,
   foundationChangeProposals, playbookChangeProposals, projectRoadmapProposals, companySkills, companySkillVersions, documentRevisions, documents, foundationSections, foundationDocuments, playbookDocuments, type Db } from "@paperclipai/db";
 
+import { eraseManagementSourceUnderMemory } from "../management-reviews/privacy.js";
 import { eraseStrategySource } from "../strategy-execution/privacy.js";
 
 /** Runs under the caller's company privacy lock, independently of rollout flags. */
@@ -9,6 +10,8 @@ export async function invalidateLearningMemory(tx: Db, companyId: string, record
   if (!recordIds.length) return;
   const evidence = await tx.select({ cycleId: learningEvidence.cycleId }).from(learningEvidence).where(and(eq(learningEvidence.companyId, companyId), inArray(learningEvidence.memoryRecordId, recordIds)));
   const cycleIds = [...new Set(evidence.map((edge) => edge.cycleId))]; if (!cycleIds.length) return;
+  // A copied review cannot retain private Learning context after a root is erased.
+  if (erase) await eraseManagementSourceUnderMemory(tx, companyId, "learning_cycle", cycleIds);
   const now = new Date();
   const hypotheses = await tx.update(learningHypotheses).set(erase ? { status: "rejected", claim: "", predictedEffect: "", evaluationContract: null, erasedAt: now, updatedAt: now } : { status: "inconclusive", updatedAt: now })
     .where(and(eq(learningHypotheses.companyId, companyId), inArray(learningHypotheses.cycleId, cycleIds))).returning({ id: learningHypotheses.id });
@@ -74,6 +77,7 @@ export async function invalidateLearningMemory(tx: Db, companyId: string, record
   const revisionIds = assets.filter((asset) => asset.assetType === "document_revision").map((asset) => asset.assetId);
   if (revisionIds.length) {
     if (erase) {
+      await eraseManagementSourceUnderMemory(tx, companyId, "document_revision", revisionIds);
       await eraseStrategySource(tx, companyId, "document_revision", revisionIds, now);
       await tx.update(documentRevisions).set({ body: "", title: "Erased learning evidence", changeSummary: null }).where(and(eq(documentRevisions.companyId, companyId), inArray(documentRevisions.id, revisionIds)));
       await tx.delete(foundationSections).where(and(eq(foundationSections.companyId, companyId), inArray(foundationSections.documentRevisionId, revisionIds)));

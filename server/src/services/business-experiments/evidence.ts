@@ -49,5 +49,5 @@ export async function inspectBusinessExperimentEvidence(tx: Db, companyId: strin
   const sourceHash = nativeSha256({ analysisHash: analysis.receiptHash, interpretationHash: interpretation.receiptHash });
   experimentBudget(deadline);
   return { definition: pin.value.definition, expiresAt: pin.value.expiresAt, analysis, interpretation, view, sourceHash,
-    recordedEdges, edges: [...edges.values()].sort((a,b) => `${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`)) };
+    manifestIds, recordedEdges, edges: [...edges.values()].sort((a,b) => `${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`)) };
 }

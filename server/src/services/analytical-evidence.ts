@@ -22,7 +22,7 @@ function checkTime(deadline:number) { if(performance.now()>deadline) throw unpro
  * Native source owners admit every exact source; copied public facts are excluded.
  * Reusing this capture never supplies a Decision choice or verified Task outcome. */
 export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:AuthorizationActor,definition:{sensitivity:"internal"|"confidential";retentionDays:number;evidence:Array<{key:string;source:DecisionEvidenceReference}>},deadline:number) {
- const now=new Date(),edges=new Map<string,Edge>(),evidence:CapturedDecisionEvidence[]=[];
+ const now=new Date(),edges=new Map<string,Edge>(),evidence:CapturedDecisionEvidence[]=[],manifestIds=new Set<string>();
  let expiresAt=new Date(now.getTime()+definition.retentionDays*DAY);
  function edge(value:Edge) {
   value={inputType:value.inputType,inputRef:value.inputRef,inputHash:value.inputHash,relationship:value.relationship};
@@ -72,6 +72,7 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
       sourceExpiry=source.expiresAt;sourceHash=source.sourceHash;const result=source.view.result;
       facts={status:result.status,evidenceGrade:result.evidenceGrade,identification:result.identification.status,executionAuthority:"advisory_only",effect:result.estimate?.effect??null,intervalLower:result.estimate?.interval.lower??null,intervalUpper:result.estimate?.interval.upper??null,unit:result.estimate?.unit??null,sensitivity:result.robustness.sensitivity,providerRefutations:result.robustness.providerRefutations};
       limitations=[...result.limitations,"A separately reviewed conditional causal interpretation remains advisory evidence, not a measured actual, verified task outcome or choice authorization."];
+      for(const id of source.manifestIds)manifestIds.add(id);
       for(const inherited of source.edges){checkTime(deadline);edge(inherited);}
       expiresAt=new Date(Math.min(expiresAt.getTime(),sourceExpiry.getTime()));
       evidence.push({key:link.key,source:ref,sourceHash,capturedAt:now.toISOString(),expiresAt:sourceExpiry.toISOString(),facts,limitations,causal:{definition:source.definition,run:source.view,review:source.review}});continue;
@@ -82,11 +83,13 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
       sourceExpiry=source.expiresAt;sourceHash=source.sourceHash;
       facts={status:result.status,causalAuthority:source.view.causalAuthority,numericalQualification:result.numericallyQualified?"qualified":"withheld",humanConclusion:source.interpretation.conclusion,executionAuthority:"advisory_only",assignedUnits:result.diagnostics.assigned,reportedExposedUnits:result.diagnostics.exposed,primaryDifference:primary?.effect??null,primaryIntervalLower:primary?.interval?.lower??null,primaryIntervalUpper:primary?.interval?.upper??null,differenceUnit:"fraction_difference",analyzedAt:source.view.analyzedAt,exposureProvenance:source.view.exposureProvenance,outcomeTimeSemantics:source.view.outcomeTimeSemantics};
       limitations=[...result.limitations,"This native status proxy and human exposure/concurrent-change attestations provide conditional advisory evidence; they do not establish verified intervention, business impact or execution authority.",...result.reasons];
+      for(const id of source.manifestIds)manifestIds.add(id);
       for(const inherited of source.edges){checkTime(deadline);edge(inherited);}
       expiresAt=new Date(Math.min(expiresAt.getTime(),sourceExpiry.getTime()));
       evidence.push({key:link.key,source:ref,sourceHash,capturedAt:now.toISOString(),expiresAt:sourceExpiry.toISOString(),facts,limitations,experiment:{analysis:source.view,registeredMetrics:{primaryMetric:source.definition.primaryMetric,guardrailMetrics:source.definition.guardrailMetrics,secondaryMetrics:source.definition.secondaryMetrics,diagnostics:source.definition.diagnostics},interpretation:experimentInterpretationView(source.interpretation)}});
       continue;
     }
+    manifestIds.add(manifestId);
     const [manifest]=await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,companyId),eq(analyticalLineageManifests.id,manifestId))).for("share");
     const inherited=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),eq(analyticalLineageEdges.manifestId,manifestId))).limit(EDGE_BUDGET+1);
     if(!manifest || inherited.length>EDGE_BUDGET) throw conflict("Native evidence lineage is unavailable");
@@ -96,7 +99,7 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
   }
  const lineage=[...edges.values()].sort((a,b)=>`${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
  await inspectAnalyticalEvidenceAuthority(tx,companyId,actor,lineage,deadline);
- return {evidence,edges:lineage,now,expiresAt};
+ return {evidence,edges:lineage,manifestIds:[...manifestIds].sort(),now,expiresAt};
 }
 export async function inspectAnalyticalEvidenceAuthority(tx:Db,companyId:string,actor:AuthorizationActor,edges:Edge[],deadline:number) {
   const objects=edges.flatMap(edge=>edge.inputType==="issue" || edge.inputType==="project"?[{objectType:edge.inputType,objectId:edge.inputRef,qualifier:"related" as const}]:[]);

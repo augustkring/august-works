@@ -290,3 +290,4 @@ export * from "./business_scenarios.js";
 export * from "./business_experiments.js";
 
 export {causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns} from "./causal_claims.js";
+export { managementReviewSnapshots, managementReviewSourceLinks, managementReviewManifestDependencies, managementReviewEvents } from "./management_reviews.js";
