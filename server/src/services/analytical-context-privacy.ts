@@ -4,7 +4,7 @@ import {analyticalContextDependencies,analyticalContextRoots,analyticalLineageMa
 import type {AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {inspectAnalyticalContextPins} from "./analytical-context-authority.js";
 import type {AuthorizationActor} from "./authorization.js";
-import {assertAnalyticalReader} from "./analytical-reader.js";
+import {assertAnalyticalReader,withNativeAnalyticalReader} from "./analytical-reader.js";
 import {nativeSha256} from "./native-runtime/canonical.js";
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
 import {lockMemoryPrivacy,memoryDeletionKey,purgeMemoryRecords} from "./memory/memory-privacy.js";
@@ -15,7 +15,7 @@ import {conflict,forbidden} from "../errors.js";
  * No result crosses the tool boundary before its retention root is committed. */
 export async function withAnalyticalConversationRetention<T>(db:Db,companyId:string,actor:AuthorizationActor,
  read:(tx:Db)=>Promise<{result:T;sourceManifestIds:string[];retentionUntil:Date;authorityPins?:AnalyticalContextAuthorityPin[]}>) {
- return db.transaction(async rawTx=>{
+ return withNativeAnalyticalReader(db,companyId,actor,()=>db.transaction(async rawTx=>{
   const tx=rawTx as unknown as Db;await tx.execute(sql`set local statement_timeout='8s'`);
   await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await assertAnalyticalReader(tx,companyId,actor);
   if(actor.type!=="agent"||!actor.runId||!actor.agentId)throw forbidden("A native conversation is required for analytical retention");
@@ -48,7 +48,7 @@ export async function withAnalyticalConversationRetention<T>(db:Db,companyId:str
   for(let start=0;start<ids.length;start+=500)await tx.insert(analyticalContextDependencies).values(ids.slice(start,start+500).map(sourceManifestId=>({companyId,memoryRecordId:id,sourceManifestId})));
   await tx.insert(contextManifestMemoryRoots).values({companyId,manifestId:context.id,memoryRecordId:id,sourceVersion:contentHash});
   return captured.result;
- });
+ }));
 }
 
 /** Memory is already held. Marking before propagation prevents source/run

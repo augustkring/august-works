@@ -17,6 +17,9 @@ import {purgeCompanyContent} from "../services/saas/company-purge.js";
 import {suppressAnalyticalSource} from "../services/analytical-privacy.js";
 import {eraseExpiredAnalyticalLineage} from "../services/analytical-retention.js";
 import {analyticalPurpose,metricDefinition} from "./helpers/business-metric-fixture.js";
+import {PaperclipRunnerToolAuthority} from "../services/native-runtime/paperclip-runner-tool-authority.js";
+import {nativeManagementToolsAvailable} from "../services/native-runtime/management-analytical-tools.js";
+import type {BusinessMetricResult} from "@paperclipai/shared";
 import {getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase} from "./helpers/embedded-postgres.js";
 const support=await getEmbeddedPostgresTestSupport(),board={type:"board" as const,source:"local_implicit" as const};
 describe.skipIf(!support.supported)("Native analytical Context retention on PostgreSQL",()=>{
@@ -29,17 +32,46 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  });
  const actor=()=>({type:"agent" as const,source:"agent_jwt" as const,companyId,agentId,runId,onBehalfOfUserId:userId});
 
- async function fixture(withContext=true){
+ async function fixture(withContext=true,count=false){
   if(withContext)await contextManifestService(db).create({companyId,agentId,issueId,runId,query:"Current analytical read",policySnapshot:{fixture:true},selected:[]});
-  const policy=(await aiGovernanceService(db).obligation(board,companyId,analyticalPurpose())).id,owner=businessMetricService(db),created=await owner.create(companyId,board,{key:"native",definition:{...metricDefinition(policy),ownerUserId:userId}});await owner.publish(companyId,board,created.metric.id,{expectedRevision:1,versionId:created.version.id});
+  const policy=(await aiGovernanceService(db).obligation(board,companyId,analyticalPurpose())).id,owner=businessMetricService(db),created=await owner.create(companyId,board,{key:"native",definition:{...metricDefinition(policy),ownerUserId:userId,...(count?{valueType:"count" as const,unit:"objects",calculation:{kind:"native_count" as const,population:{entity:"issue" as const,statuses:["done" as const],projectId:null}}}:{})}});await owner.publish(companyId,board,created.metric.id,{expectedRevision:1,versionId:created.version.id});
   const sourceId=randomUUID();await db.insert(issues).values({id:sourceId,companyId,title:"Synthetic source task",status:"done",responsibleUserId:userId});
   const now=new Date(),query={metricId:created.metric.id,versionId:created.version.id,from:new Date(now.getTime()-86400000).toISOString(),until:new Date(now.getTime()+1000).toISOString(),dimensions:[],maxRows:100};
   async function capture(){return withAnalyticalConversationRetention(db,companyId,actor(),async tx=>{const result=await businessMetricService(tx).query(companyId,actor(),query);return {result,sourceManifestIds:[result.lineageManifestId],retentionUntil:new Date(result.expiresAt)};});}
-  return {sourceId,capture};
+  return {sourceId,capture,query};
  }
  async function copied(){await db.update(heartbeatRuns).set({contextSnapshot:{sensitive:"Synthetic analytical context"},resultJson:{body:"Synthetic analytical result"},stdoutExcerpt:"Synthetic analytical output"}).where(eq(heartbeatRuns.id,runId));await db.insert(issueComments).values({companyId,issueId,body:"Synthetic analytical answer"});}
  async function root(){return (await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId)))[0]!;}
  async function erased(){expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);const [run]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId));expect(run!.resultJson).toBeNull();expect(run!.contextSnapshot).toEqual({});expect((await db.select().from(issueComments).where(eq(issueComments.issueId,issueId))).every(c=>c.body==="Source payload erased")).toBe(true);}
+
+ const toolAuthority=()=>new PaperclipRunnerToolAuthority(db,{companyId,agentId,issueId,runId,managementToolsEnabled:true});
+ it("dispatches a real SDK metric tool and retains its exact native source before returning facts",async()=>{
+  const f=await fixture(),binding={companyId,agentId,runId};expect(await nativeManagementToolsAvailable(db,binding,userId)).toBe(true);
+  const tools=toolAuthority();expect(tools.definitions().some(d=>d.name==="query_business_metric")).toBe(true);
+  expect(new PaperclipRunnerToolAuthority(db,{...binding,issueId}).definitions().some(d=>d.name==="query_business_metric")).toBe(false);
+  await expect(tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:{...f.query,companyId}})).rejects.toThrow();
+  expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);
+  const payload=await tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:f.query});
+  expect(payload).toMatchObject({tool:"query_business_metric",result:{grade:"native_observation",observation:{value:1}},executionAuthority:"read_only_or_advisory"});
+  expect((await root()).authorityPins).toHaveLength(1);expect(await db.select().from(analyticalContextDependencies).where(eq(analyticalContextDependencies.companyId,companyId))).toHaveLength(1);
+  await expect(businessMetricService(db).query(companyId,actor(),f.query)).rejects.toMatchObject({status:403});
+ });
+ it.each([false,true])("reuses exact native window comparison semantics through the actual SDK (count=%s)",async(count)=>{
+  const f=await fixture(true,count),at=Date.now()-1000,day=86400000;
+  await db.update(issues).set({createdAt:new Date(at-3600000)}).where(eq(issues.id,f.sourceId));
+  const tools=toolAuthority(),query=async(from:number,until:number)=>((await tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:{...f.query,from:new Date(from).toISOString(),until:new Date(until).toISOString()}})) as {result:{observation:BusinessMetricResult}}).result.observation;
+  const before=await query(at-2*day,at-day),after=await query(at-day,at),ref=(v:BusinessMetricResult)=>({type:"metric_observation",id:v.id,metricId:v.metricId,metricVersionId:v.versionId});
+  const compared=await tools.execute({tool:"compare_business_metrics",callId:randomUUID(),arguments:{before:ref(before),after:ref(after)}});
+  expect(compared).toMatchObject({result:{claims:[{grade:"native_observation",facts:{status:count?"observed_change":"unknown",reason:count?null:"observation_unavailable",absoluteChange:count?1:null,relativeChangeFraction:null}}]}});
+  expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(3);
+ });
+ it("returns a source-retained human-review preview without creating or publishing business work",async()=>{
+  const f=await fixture(),observation=await f.capture(),tools=toolAuthority(),count=(await db.select().from(issues).where(eq(issues.companyId,companyId))).length;
+  const preview=await tools.execute({tool:"propose_management_action",callId:randomUUID(),arguments:{action:"investigate",rationale:"Investigate this exact observed native population",sources:[{type:"metric_observation",id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}]}});
+  expect(preview).toMatchObject({result:{kind:"management_action_preview",humanReviewRequired:true,executionAuthority:"advisory_only"}});
+  expect(await db.select().from(issues).where(eq(issues.companyId,companyId))).toHaveLength(count);
+  expect((await db.select().from(memoryRecords).where(eq(memoryRecords.companyId,companyId))).every(r=>r.reviewState==="rejected"&&r.verificationState==="unverified")).toBe(true);
+ });
  it("commits the full source set and conservative expiry before returning a native result",async()=>{const f=await fixture(),result=await f.capture(),r=await root(),[memory]=await db.select().from(memoryRecords).where(eq(memoryRecords.id,r.memoryRecordId));expect(result.lineageManifestId).toBeTruthy();expect(r.sourceCount).toBe(1);expect(r.expiresAt.toISOString()).toBe(result.expiresAt);expect(memory).toMatchObject({reviewState:"rejected",verificationState:"unverified",memoryType:"observation",scopeType:"agent",confidenceScore:0});expect(await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.memoryRecordId,r.memoryRecordId))).toHaveLength(1);await expect(db.update(memoryRecords).set({reviewState:"accepted",verificationState:"human_verified",memoryType:"outcome"}).where(eq(memoryRecords.id,r.memoryRecordId))).rejects.toThrow();});
  it("requires the current native Context and rolls back measurement derivation on failure",async()=>{const f=await fixture(false);await expect(f.capture()).rejects.toMatchObject({status:409});expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(0);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);});
  it("rolls back a derived measurement if the complete source set is unavailable",async()=>{await fixture();await expect(withAnalyticalConversationRetention(db,companyId,actor(),async()=>({result:{copy:"uncommitted"},sourceManifestIds:[randomUUID()],retentionUntil:new Date(Date.now()+60000)}))).rejects.toMatchObject({status:409});expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);});

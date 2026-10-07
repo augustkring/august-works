@@ -7,7 +7,7 @@ function observation(source: CapturedManagementSource) {
   if (pin?.type !== "metric_observation" || !metric || metric.observation.id !== pin.id || metric.observation.metricId !== pin.metricId || metric.observation.versionId !== pin.metricVersionId) throw new Error("Comparison requires exact original owner-captured observations");
   return metric;
 }
-function comparisons(definition: ManagementReviewDefinition, ledger: Map<string, CapturedManagementSource>, asOf: string): ManagementReviewPacket["claims"] {
+export function composeManagementComparisons(definition: Pick<ManagementReviewDefinition, "comparisons">, ledger: Map<string, CapturedManagementSource>, asOf: string): ManagementReviewPacket["claims"] {
   return (definition.comparisons ?? []).map((comparison): ManagementReviewPacket["claims"][number] => {
     const left = ledger.get(comparison.leftSourceKey)!, right = ledger.get(comparison.rightSourceKey)!, after = observation(right), base = { key: `comparison_${comparison.key}`, sourceKeys: [left.key, right.key], grade: "native_observation" as const };
     const limitations = [...new Set([...left.limitations, ...right.limitations, "A cited numerical comparison does not establish the cause of a change or verify business impact."])];
@@ -51,7 +51,7 @@ export function composeManagementReview(raw: ManagementReviewDefinition, sources
   const ordered = definition.sources.map((item) => ledger.get(item.key)!);
   const material: Omit<ManagementReviewPacket, "contentHash"> = {
     engineVersion: "aw-native-management-skeleton-v1", definitionHash: nativeSha256(definition), inputHash: nativeSha256(ordered.map((item) => ({ key: item.key, source: item.source, sourceHash: item.sourceHash }))), asOf, period: definition.period,
-    claims: [...ordered.map((source) => ({ key: `claim_${source.key}`, sourceKeys: [source.key], grade: source.grade, facts: structuredClone(source.facts), limitations: [...source.limitations] })), ...comparisons(definition, ledger, asOf)],
+    claims: [...ordered.map((source) => ({ key: `claim_${source.key}`, sourceKeys: [source.key], grade: source.grade, facts: structuredClone(source.facts), limitations: [...source.limitations] })), ...composeManagementComparisons(definition, ledger, asOf)],
     agenda: definition.agenda.map((item) => ({ ...structuredClone(item), interpretation: "human_declared_agenda", hypothesisAuthority: item.hypothesis ? "human_hypothesis" : "none" })),
     coverage: "explicit_selected_native_sources", executionAuthority: "read_only_historical_review",
     limitations: ["Explicitly selected native sources; this is not a complete company census.", "Canonical state is observed at source capture, not reconstructed at a historical period boundary.", "Forecasts, scenarios, human interpretations and causal conditions retain their separate evidence grades.", "Agenda order and recommended actions are human declarations; they grant no execution or approval authority.", "Fewer than five agenda items are retained when fewer cited items were declared; no facts are invented to fill a quota.", "Scheduled invocation belongs to existing Routines; this packet sends no notification."],

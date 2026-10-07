@@ -122,6 +122,7 @@ import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
@@ -10490,7 +10491,7 @@ async function createRunnerdBackendWithinSessionClaim(
   const pinnedSkills = new Set("runtimeContext" in input.execution ? input.execution.runtimeContext.skills.map((skill) => skill.key) : []);
   const connectorAssignments = [...pinnedSkills].some(isConnectorSkill)
     ? await resolveConnectorAssignments(input.db, input.execution.binding) : [];
-  const reviewRun = await input.db.select({ contextSnapshot: heartbeatRuns.contextSnapshot })
+  const reviewRun = await input.db.select({ contextSnapshot: heartbeatRuns.contextSnapshot, responsibleUserId: heartbeatRuns.responsibleUserId })
     .from(heartbeatRuns).where(and(
       eq(heartbeatRuns.id, input.execution.binding.runId),
       eq(heartbeatRuns.companyId, input.execution.binding.companyId),
@@ -10525,6 +10526,7 @@ async function createRunnerdBackendWithinSessionClaim(
       })
     : undefined;
   const authority = new PaperclipRunnerToolAuthority(input.db, {
+    managementToolsEnabled: !nativeReview && await nativeManagementToolsAvailable(input.db,input.execution.binding,reviewRun?.responsibleUserId??null),
     ...(nativeReview ? { nativeReview } : {}),
     connectorAssignments: connectorAssignments.filter((assignment) => pinnedSkills.has(assignment.skillKey)),
     assignedMcpTools,

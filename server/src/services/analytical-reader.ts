@@ -1,4 +1,5 @@
 import {z} from "zod";
+import {AsyncLocalStorage} from "node:async_hooks";
 import {and,eq,isNull,sql} from "drizzle-orm";
 import {agents,authUsers,chatConversations,companyMemberships,heartbeatRuns,issues,type Db} from "@paperclipai/db";
 import {v8FeatureEnabled} from "@paperclipai/shared";
@@ -10,7 +11,7 @@ import {forbidden,notFound} from "../errors.js";
 /** Read identity only: an actual running native conversation and its current
  * responsible human. Source owners still enforce agent × human authorization;
  * this never creates a board principal or admits human publication/choice. */
-export async function assertAnalyticalReader(db:Db,companyId:string,actor:AuthorizationActor) {
+async function assertNativeReaderIdentity(db:Db,companyId:string,actor:AuthorizationActor) {
  if(actor.type==="board"){v7HumanActorId(actor);return;}
  if(actor.type!=="agent"||actor.source!=="agent_jwt"||actor.companyId!==companyId||!actor.agentId||!actor.runId||!actor.onBehalfOfUserId||actor.keyId||actor.keyScope||!z.string().uuid().safeParse(actor.agentId).success||!z.string().uuid().safeParse(actor.runId).success)throw forbidden("Current native analytical conversation identity is required");
  if(!v8FeatureEnabled(await instanceSettingsService(db).getExperimental(),"management_chat_tools_v8"))throw notFound("Management chat tools are not enabled");
@@ -23,6 +24,20 @@ export async function assertAnalyticalReader(db:Db,companyId:string,actor:Author
  if(!binding||["paused","terminated","pending_approval","error"].includes(binding.agent.status)||binding.run.contextSnapshot?.externalChatQuestionResponse)throw forbidden("Native conversation analytical authority changed");
  if(!await heartbeatMemoryPayloadRetained(db,companyId,actor.runId))throw forbidden("The conversation source payload was erased");
  await assertV7Authorization(db,actor,companyId,"company_scope:read");await assertV7Authorization(db,actor,companyId,"issue:read",{type:"issue",companyId,issueId:binding.issue.id});
+}
+const nativeReads=new AsyncLocalStorage<{companyId:string;agentId:string;runId:string;userId:string}>();
+/** Server-owned in-process read admission. HTTP arguments and JWT claims alone
+ * cannot consume analytical facts without the native retention boundary. */
+export async function withNativeAnalyticalReader<T>(db:Db,companyId:string,actor:AuthorizationActor,read:()=>Promise<T>) {
+ if(actor.type!=="agent")throw forbidden("A native analytical consumer is required");
+ await assertNativeReaderIdentity(db,companyId,actor);
+ return nativeReads.run({companyId,agentId:actor.agentId!,runId:actor.runId!,userId:actor.onBehalfOfUserId!},read);
+}
+export async function assertAnalyticalReader(db:Db,companyId:string,actor:AuthorizationActor) {
+ if(actor.type==="board"){v7HumanActorId(actor);return;}
+ const permit=nativeReads.getStore();
+ if(!permit||permit.companyId!==companyId||permit.agentId!==actor.agentId||permit.runId!==actor.runId||permit.userId!==actor.onBehalfOfUserId)throw forbidden("Analytical reads require the native retained tool boundary");
+ await assertNativeReaderIdentity(db,companyId,actor);
 }
 /** Used only after current read admission, when comparing declared human owners. */
 export function analyticalPrincipalId(actor:AuthorizationActor){return actor.type==="agent"&&actor.onBehalfOfUserId?actor.onBehalfOfUserId:v7HumanActorId(actor);}

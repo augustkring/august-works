@@ -51,7 +51,7 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
  if(!hasRoots.length)return;
  if(!actor)throw forbidden("A current reader is required for source-dependent analytical payloads");
  const {lockAnalyticalCompany}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
- return db.transaction(async rawTx=>{
+ const inspect=()=>db.transaction(async rawTx=>{
   const tx=rawTx as unknown as Db;await tx.execute(sql`set local statement_timeout='8s'`);await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
   const roots=await tx.selectDistinct({id:analyticalContextRoots.memoryRecordId,sourceCount:analyticalContextRoots.sourceCount,pins:analyticalContextRoots.authorityPins,expiresAt:analyticalContextRoots.expiresAt}).from(contextManifests).innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
    .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId))).where(and(eq(contextManifests.companyId,companyId),condition)).limit(257);
@@ -65,8 +65,15 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
    const retained=await tx.select({id:analyticalContextDependencies.sourceManifestId}).from(analyticalContextDependencies).where(and(eq(analyticalContextDependencies.companyId,companyId),eq(analyticalContextDependencies.memoryRecordId,root.id))).limit(26201);
    if(retained.length!==root.sourceCount||JSON.stringify(retained.map(source=>source.id).sort())!==JSON.stringify(current.manifestIds))throw forbidden("The complete retained analytical source authority changed");
   }
- }).catch((error:unknown)=>{
+ });
+ try {
+  if(actor.type==="agent"){
+   const {withNativeAnalyticalReader}=await import("./analytical-reader.js");
+   return await withNativeAnalyticalReader(db,companyId,actor,inspect);
+  }
+  return await inspect();
+ }catch(error){
   if(error instanceof HttpError&&[403,404,409,422].includes(error.status))throw new HttpError(error.status,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
   throw error;
- });
+ }
 }
