@@ -9,6 +9,7 @@ import { canReadDecisionSource } from "../decision-queues.js";
 import { extractFoundationSections } from "../foundation/foundation-index.js";
 import { businessMetricService } from "../business-metrics/service.js";
 import { businessMetricTargetService } from "../business-metrics/targets.js";
+import {assertLearnedAssetAnalyticalSources} from "../learning/learning-analytical-sources.js";
 
 export function strategyReferenceId(ref: StrategyExecutionReference) {
   return ref.type === "foundation_section" ? ref.foundationDocumentId : ref.id;
@@ -46,6 +47,8 @@ export async function authorizeStrategyReference(tx: Db, companyId: string, acto
       if (row.sensitivity === "restricted" || row.sensitivity === "confidential" && sensitivity !== "confidential") throw forbidden("Strategy sensitivity cannot downgrade its Foundation source");
       const [revision] = await tx.select({ id: documentRevisions.id }).from(documentRevisions).where(and(eq(documentRevisions.companyId, companyId), eq(documentRevisions.documentId, row.documentId), eq(documentRevisions.id, ref.approvedRevisionId))).for("share");
       if (!revision) throw notFound("Strategy Foundation revision is unavailable");
+      const learned=await assertLearnedAssetAnalyticalSources(tx,companyId,"document_revision",revision.id,actor);
+      if(learned.sourceSensitivity==="confidential"&&sensitivity!=="confidential")throw forbidden("Strategy sensitivity cannot downgrade original analytical Learning sources");
       break;
     }
     case "goal": {

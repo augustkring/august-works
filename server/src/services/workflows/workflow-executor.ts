@@ -1,3 +1,4 @@
+import {assertLearnedAssetAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
 import { admitOrchestrationWorkflow } from "../orchestration/orchestration-admission.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
@@ -246,6 +247,7 @@ async function getRunDetail(
   db: Db,
   companyId: string,
   runId: string,
+  reader?:AuthorizationActor,
 ): Promise<WorkflowRunDetail | null> {
   const run = await db
     .select()
@@ -253,6 +255,7 @@ async function getRunDetail(
     .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)))
     .then((rows) => rows[0] ?? null);
   if (!run) return null;
+  await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",run.workflowRevisionId,reader);
   const [steps, waits] = await Promise.all([
     db
       .select()
@@ -359,6 +362,7 @@ export async function enqueueWorkflowRunInTransaction(
   created: boolean;
   publications: ActivityPublication[];
 }> {
+  await assertLearnedAssetAnalyticalSources(executor,input.companyId,"workflow_revision",input.revisionId,learningActorFromPrincipal(input.companyId,input.actor.principal,input.actor.runId));
   if (input.idempotencyKey) {
     const existing = await getIdempotentRun(
       executor,
@@ -709,6 +713,7 @@ async function completeRunningStep(
   outputJson: unknown,
   actor: WorkflowRunActor,
 ) {
+  await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,learningActorFromPrincipal(run.companyId,actor.principal,actor.runId));
   const finishedAt = new Date();
   const durationMs = Math.max(
     0,
@@ -1363,6 +1368,7 @@ async function prepareRunnableStep(
   inputJson: unknown,
   actor: WorkflowRunActor,
 ): Promise<{ checkpoint: WorkflowStepRow | null; running: WorkflowStepRow | null }> {
+  await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,learningActorFromPrincipal(run.companyId,actor.principal,actor.runId));
   const attempts = await nodeAttempts(db, run, nodeId);
   const succeeded = attempts.find((step) => step.status === "succeeded") ?? null;
   if (succeeded) return { checkpoint: succeeded, running: null };
@@ -6707,6 +6713,8 @@ async function executeClaimedRun(
       return;
     }
   }
+  try{await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,learningActorFromPrincipal(run.companyId,actor.principal,actor.runId));}
+  catch{await failRun(db,run,actor,"analytical_source_access_lost","The original Learning analytical source is unavailable");return;}
   const revision = await revisionForRun(db, run);
   if (!revision) {
     await failRun(
@@ -8107,8 +8115,8 @@ export function workflowExecutorService(
   runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ) {
   return {
-    getRun: (companyId: string, runId: string) =>
-      getRunDetail(db, companyId, runId),
+    getRun: (companyId: string, runId: string, reader?:AuthorizationActor) =>
+      getRunDetail(db, companyId, runId,reader),
 
     cancelRun: async (
       companyId: string,
@@ -8139,7 +8147,7 @@ export function workflowExecutorService(
         );
       }
 
-      const detail = await getRunDetail(db, companyId, runId);
+      const detail = await getRunDetail(db, companyId, runId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
       if (!detail) throw new Error("Workflow run disappeared during cancellation");
       return detail;
     },
@@ -8274,7 +8282,7 @@ export function workflowExecutorService(
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id);
+      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
       if (!detail) throw new Error("Workflow retry disappeared after execution");
       return detail;
     },
@@ -8283,6 +8291,7 @@ export function workflowExecutorService(
       companyId: string,
       workflowId: string,
       limit: number,
+      reader?:AuthorizationActor,
     ): Promise<WorkflowRun[]> => {
       const workflow = await db
         .select({ id: workflows.id })
@@ -8303,6 +8312,7 @@ export function workflowExecutorService(
         )
         .orderBy(desc(workflowRuns.createdAt))
         .limit(safeLimit);
+      for(const revisionId of new Set(rows.map(row=>row.workflowRevisionId)))await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",revisionId,reader);
       const references = [...new Set(rows.flatMap((row) => row.memoryRecordIds))];
       const erased = references.length ? await db.select({ recordId: memoryDeletionMarkers.recordId }).from(memoryDeletionMarkers)
         .where(and(eq(memoryDeletionMarkers.companyId, companyId), inArray(memoryDeletionMarkers.recordId, references))) : [];
@@ -8342,7 +8352,7 @@ export function workflowExecutorService(
         }
       }
 
-      const detail = await getRunDetail(db, companyId, runId);
+      const detail = await getRunDetail(db, companyId, runId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
       if (!detail) throw new Error("Workflow run disappeared after execution");
       return detail;
     },
@@ -8398,7 +8408,7 @@ export function workflowExecutorService(
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id);
+      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
       if (!detail) throw new Error("Workflow run disappeared after execution");
       return detail;
     },
@@ -8503,7 +8513,7 @@ export function workflowExecutorService(
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id);
+      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
       if (!detail) throw new Error("Workflow run disappeared after task invocation");
       return detail;
     },

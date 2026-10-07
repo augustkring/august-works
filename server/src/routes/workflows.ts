@@ -62,7 +62,7 @@ export function workflowRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     await assertWorkflowsEnabled();
     await assertPermission(req, companyId, "workflows:read");
-    if (!await svc.getDetail(companyId, req.params.workflowId as string)) throw notFound("Workflow not found");
+    if (!await svc.getDetail(companyId, req.params.workflowId as string,req.actor)) throw notFound("Workflow not found");
     res.json(await optimizerEvaluations.list(companyId, req.params.workflowId as string));
   });
   router.post("/companies/:companyId/workflows/:workflowId/optimizer-suggestions/:suggestionId/propose",
@@ -111,7 +111,7 @@ export function workflowRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     await assertWorkflowsEnabled();
     await assertPermission(req, companyId, "workflows:read");
-    if (!await executor.getRun(companyId, req.params.runId as string)) throw notFound("Workflow run not found");
+    if (!await executor.getRun(companyId, req.params.runId as string,req.actor)) throw notFound("Workflow run not found");
     res.json(await getWorkflowRunReview(db, companyId, req.params.runId as string));
   });
   router.post("/companies/:companyId/workflow-runs/:runId/review", validate(workflowRunReviewSchema), async (req, res) => {
@@ -400,6 +400,7 @@ export function workflowRoutes(db: Db) {
         companyId,
         req.params.workflowId as string,
         query.limit,
+        req.actor,
       ),
     );
   });
@@ -499,7 +500,7 @@ export function workflowRoutes(db: Db) {
       res.status(error.status).json({ error: error.message, reasonCode: error.reasonCode, ...error.details });
       return;
     }
-    res.json(await executor.getRun(companyId, runId));
+    res.json(await executor.getRun(companyId, runId,req.actor));
   };
   router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/approve", reviewToolAction("approve"));
   router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/reject", reviewToolAction("reject"));
@@ -508,7 +509,7 @@ export function workflowRoutes(db: Db) {
     await assertWorkflowsEnabled();
     const companyId = req.params.companyId as string;
     await assertPermission(req, companyId, "workflows:read");
-    const result = await executor.getRun(companyId, req.params.runId as string);
+    const result = await executor.getRun(companyId, req.params.runId as string,req.actor);
     if (!result) {
       res.status(404).json({ error: "Workflow run not found" });
       return;
@@ -564,7 +565,7 @@ export function workflowRoutes(db: Db) {
       const companyId = req.params.companyId as string;
       const workflowId = req.params.workflowId as string;
       await assertPermission(req, companyId, "workflows:read");
-      const workflow = await svc.getDetail(companyId, workflowId);
+      const workflow = await svc.getDetail(companyId, workflowId,req.actor);
       if (!workflow) {
         throw notFound("Workflow not found");
       }
@@ -595,7 +596,7 @@ export function workflowRoutes(db: Db) {
     await assertWorkflowsEnabled();
     const companyId = req.params.companyId as string;
     await assertPermission(req, companyId, "workflows:read");
-    const detail = await svc.getDetail(companyId, req.params.workflowId as string);
+    const detail = await svc.getDetail(companyId, req.params.workflowId as string,req.actor);
     if (!detail) {
       res.status(404).json({ error: "Workflow not found" });
       return;
@@ -612,6 +613,7 @@ export function workflowRoutes(db: Db) {
       const revisions = await svc.listRevisions(
         companyId,
         req.params.workflowId as string,
+        req.actor,
       );
       if (!revisions) {
         res.status(404).json({ error: "Workflow not found" });

@@ -1,0 +1,97 @@
+{
+  "checkpoint": "Native analytical Learning Workflow ownership, review inheritance and runtime erasure",
+  "parentCommit": "34542f82d57e43550bdac12ebac7bd89472d9513",
+  "recordedAt": "2026-10-07T21:11:09.607414+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0421_learning_runtime_source_erasure.sql",
+      "sha256": "676f9335f6289585a1fc74cfe40159752b5c66518c128c28d8ea391a9c68fe20"
+    },
+    {
+      "path": "server/src/__tests__/management-reviews.integration.test.ts",
+      "sha256": "2a60da797bd178d7474e475bfaee646cba48f6b0f930f96c29138ad185e0db1e"
+    },
+    {
+      "path": "server/src/__tests__/strategy-execution.integration.test.ts",
+      "sha256": "01dbb825674e3ef459b3c444cba27d7950ade3b3c8d0a34fdcd651e51c21634d"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "bd6079fd4c53efd8a94a1f190c7a46ddb7ad00d5e5f24fb758cc670bcc43d9c4"
+    },
+    {
+      "path": "server/src/routes/workflows.ts",
+      "sha256": "04cf8161fcae91e5b32744c8c195ff003b9f1639091b01c03e4875e8fa68ac25"
+    },
+    {
+      "path": "server/src/services/learning/learning-analytical-sources.ts",
+      "sha256": "ea564396f9d281b95c1cba19c5dae1c2e09f0560977427c77bf11657d1c0cbd7"
+    },
+    {
+      "path": "server/src/services/learning/learning-privacy.ts",
+      "sha256": "a806cfac16507cdffc705bef97a37fa5bfc0ba41ca24cb2392fa0e8a1b705c89"
+    },
+    {
+      "path": "server/src/services/management-reviews/capture.ts",
+      "sha256": "925120e11574ded8393d4bd5ca663df5d1e256d2cab259c1fd06e0b164482648"
+    },
+    {
+      "path": "server/src/services/management-reviews/source-options.ts",
+      "sha256": "c74e6a769d6a422c22cfbfe620c2c28741dd51bab69b3f09a2d7945b429383ba"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "6f1acfc5bd672a03b37afd6be45a8afeeef54044245a9a299ec42f152ded50a9"
+    },
+    {
+      "path": "server/src/services/strategy-execution/references.ts",
+      "sha256": "a38b9bd48f4249e18d070e7b51ad1a6fdf1f2f7557199c73c597ead640608278"
+    },
+    {
+      "path": "server/src/services/workflows/workflow-executor.ts",
+      "sha256": "3874131715e9593a461f3cef64e6503ef64348b32b1d8d804972812f770aa348"
+    },
+    {
+      "path": "server/src/services/workflows/workflow-service.ts",
+      "sha256": "d3b77772b901e7e3a13d3c5fbab4f8e4aab37f01e12d052f1eda1db600726280"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Final actual PostgreSQL, owner, purge and snapshot regressions",
+      "passedTests": 106,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-runtime-qualified.log",
+      "logSha256": "a066805f8704cbf490e4819c6995da44fca53ab51fdf17f843f90a4387dbd681"
+    },
+    {
+      "check": "Final server types",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-runtime-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "Migration safety",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-runtime-migration-safety.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    }
+  ],
+  "qualified": [
+    "Workflow detail/revision/run/list reads, native human publication and execution repeat current original Learning source admission with the actual reader.",
+    "Native Management reviews inherit the original Learning signal manifests, current source authority, sensitivity and freshness; original Metric population semantics stay with its admitted source owner.",
+    "Native Strategy Foundation references reject analytical-source classification downgrade.",
+    "The existing C7 child guards follow persisted Workflow and artifact ownership; Source deletion fences late child run/Task/trace/optimizer payload writes without deleting independent verified outcomes.",
+    "The existing Memory outbox scrubs actual historical Workflow child payloads and provider trace metadata with Learning off and company paused. This fixture uses persisted native relationships, not a provider invocation.",
+    "Migration 0421 and snapshot were generated normally and snapshots pruned with the repository command."
+  ],
+  "limitations": [
+    "Historical child erasure qualifies native metadata and the existing outbox; no external provider invocation or new physical-sidecar timing claim is made.",
+    "Current permission-loss admission on copied Workflow child Tasks/logs is the next checkpoint; source erasure alone is not that qualification.",
+    "Optimizer human promotion/current reader integration and Source-derived Context/runtime retention bridges remain open.",
+    "Planning outcomes, direct Decision outcome-review conversion, native Routine cadence, action materialization, other source closure, cross-project Planning, provider conformance and hosted gates remain open.",
+    "No Chromium case or whole-brief completion is claimed. The full build of this resulting commit is queued next."
+  ]
+}
