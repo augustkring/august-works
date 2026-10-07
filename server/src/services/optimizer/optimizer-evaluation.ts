@@ -231,7 +231,7 @@ export function optimizerEvaluationService(db: Db) {
       if (artifact.kind === "typescript" && !(await instanceSettingsService(db).getExperimental()).enableAutomationArtifactCodeExecutionV1) throw forbidden("Sandboxed code execution is disabled");
       if (!["testing", "failed"].includes(evaluation.status) || !["candidate", "testing"].includes(artifact.status)) throw conflict("Only a testing candidate can be re-evaluated");
       if (artifact.status === "candidate") await artifacts.transitionStatus(companyId, artifact.id,
-        { expectedLatestVersionId: version.id, expectedStatus: "candidate", status: "testing" }, SYSTEM);
+        { expectedLatestVersionId: version.id, expectedStatus: "candidate", status: "testing" }, {...SYSTEM,sourceActor});
       const compiler = evaluation.compilerResult!;
       const candidate = compiler.candidate!;
       const stored = version.testSpec.cases;
@@ -240,7 +240,7 @@ export function optimizerEvaluationService(db: Db) {
         const item = value as { name: string; input: unknown; expectedOutput: unknown; category: OptimizerReplayCase["category"]; sourceRunId: string | null };
         return { id: item.name, input: item.input, expectedOutput: item.expectedOutput, category: item.category, sourceRunId: item.sourceRunId };
       });
-      const gates = await automationArtifactSecurityService(db).evaluateLatestVersion(companyId, artifact.id, SYSTEM);
+      const gates = await automationArtifactSecurityService(db).evaluateLatestVersion(companyId, artifact.id, {...SYSTEM,sourceActor});
       const replay = await evaluateOptimizerHistoricalReplay({ compilerResult: compiler, cases, executionMode: "pure" }, {
         execute: async ({ replayCase }) => { const started = performance.now(); const output = await executeCompiledOptimizerCandidate(candidate, replayCase.input); return { output, durationMs: performance.now() - started, costEstimate: 0 }; },
         evaluateInvariant: async ({ invariant, replayCase, candidateOutput }) => ({ passed: evaluateCandidateInvariant(evaluation.invariants.find((item) => item.id === invariant.id)!.expression, replayCase.input, candidateOutput) }),

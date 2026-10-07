@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAutomationArtifactSchema, type AutomationArtifactStatus } from "@paperclipai/shared";
-import { automationArtifactsApi } from "@/api/automationArtifacts";
-import { workflowsApi } from "@/api/workflows";
-import { instanceSettingsApi } from "@/api/instanceSettings";
+import {withV7AccountScope,useV7AccountScope} from "@/context/V7AccountScope";
+import {ApiError,isAnalyticalSourceAccessLost} from "@/api/client";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,8 @@ import { PageSkeleton } from "@/components/PageSkeleton";
 import { queryKeys } from "@/lib/queryKeys";
 import { useLocation } from "react-router-dom";
 
-export function AutomationArtifacts() {
+function AutomationArtifactsContent() {
+  const {principalId,automationArtifactsApi,workflowsApi,instanceSettingsApi}=useV7AccountScope();
   const { selectedCompanyId: companyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const client = useQueryClient();
@@ -27,18 +27,18 @@ export function AutomationArtifacts() {
   }, null, 2));
   useEffect(() => { setSelectedId(new URLSearchParams(location.search).get("artifactId")); }, [companyId, location.search]);
   useEffect(() => { setBreadcrumbs([{ label: "Automation Artifacts", href: "/automation-artifacts" }]); }, [setBreadcrumbs]);
-  const flags = useQuery({ queryKey: queryKeys.instance.experimentalSettings, queryFn: () => instanceSettingsApi.getExperimental() });
+  const flags = useQuery({ queryKey: ["artifact-flags",principalId], queryFn: () => instanceSettingsApi.getExperimental() });
   const enabled = !!companyId && flags.data?.enableAutomationArtifactsV1 === true;
-  const capabilities = useQuery({ queryKey: queryKeys.workflows.capabilities(companyId!),
+  const capabilities = useQuery({ queryKey: [...queryKeys.workflows.capabilities(companyId!),principalId],
     queryFn: () => workflowsApi.capabilities(companyId!), enabled });
-  const list = useQuery({ queryKey: ["automation-artifacts", companyId], queryFn: () => automationArtifactsApi.list(companyId!), enabled });
-  const detail = useQuery({ queryKey: ["automation-artifact", companyId, selectedId],
-    queryFn: () => automationArtifactsApi.get(companyId!, selectedId!), enabled: enabled && !!selectedId });
+  const list = useQuery({ queryKey: ["automation-artifacts", companyId,principalId], queryFn: () => automationArtifactsApi.list(companyId!), enabled,refetchInterval:30000,retry:false });
+  const detail = useQuery({ queryKey: ["automation-artifact", companyId,principalId, selectedId],
+    queryFn: () => automationArtifactsApi.get(companyId!, selectedId!), enabled: enabled && !!selectedId,refetchInterval:30000,retry:false });
   const mutation = useMutation({
     mutationFn: async (action: "create" | "evaluate" | "archive" | AutomationArtifactStatus) => {
       if (!companyId) throw new Error("Select a company first.");
       if (action === "create") return automationArtifactsApi.create(companyId, createAutomationArtifactSchema.parse(JSON.parse(definition)));
-      const current = detail.data;
+      const current = detail.isError||detail.isFetching?undefined:detail.data;
       if (!current?.latestVersion || current.artifact.companyId !== companyId) throw new Error("Reload the artifact before continuing.");
       if (action === "evaluate") return automationArtifactsApi.evaluate(companyId, current.artifact.id);
       if (action === "archive") return automationArtifactsApi.archive(companyId, current.artifact.id, current.latestVersion.id);
@@ -46,18 +46,24 @@ export function AutomationArtifacts() {
         expectedStatus: current.artifact.status, expectedLatestVersionId: current.latestVersion.id, status: action,
       });
     },
-    onSuccess: async (result) => {
-      if (result.artifact.companyId !== companyId) return;
+    onSuccess: async (result,action) => {
+      if (result.artifact.companyId !== companyId || action!=="create"&&result.artifact.id!==selectedId) return;
       setSelectedId(result.artifact.id);
-      await Promise.all([client.invalidateQueries({ queryKey: ["automation-artifacts", companyId] }),
-        client.invalidateQueries({ queryKey: ["automation-artifact", companyId] })]);
+      await Promise.all([client.invalidateQueries({ queryKey: ["automation-artifacts", companyId,principalId] }),
+        client.invalidateQueries({ queryKey: ["automation-artifact", companyId,principalId] })]);
     },
   });
+  const closed=(error:unknown)=>isAnalyticalSourceAccessLost(error)||error instanceof ApiError&&[403,404,409].includes(error.status);
+  const sourceClosed=closed(detail.error)||closed(list.error)||closed(mutation.error);
+  useEffect(()=>{if(sourceClosed){setDefinition("");void list.refetch();}},[sourceClosed]);
+  useEffect(()=>mutation.reset(),[selectedId]);
   if (!companyId) return <p>Select a company to open Automation Artifacts.</p>;
   if (flags.isLoading || list.isLoading) return <PageSkeleton />;
   if (!enabled) return <p>Automation Artifacts are disabled. Enable them in experimental settings to review candidates.</p>;
-  const artifact = detail.data?.artifact;
-  const version = detail.data?.latestVersion;
+  const currentDetail=detail.isError||detail.isFetching||sourceClosed?undefined:detail.data;
+  const artifact = currentDetail?.artifact;
+  const version = currentDetail?.latestVersion;
+  const currentList=list.isError||list.isFetching?undefined:list.data?.filter(item=>!sourceClosed||item.id!==selectedId);
   const error = mutation.error ?? list.error ?? detail.error ?? capabilities.error;
   return <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
     <header><h1 className="text-xl font-semibold">Automation Artifacts</h1>
@@ -65,8 +71,8 @@ export function AutomationArtifacts() {
     {error ? <p role="alert" className="text-sm text-destructive">{error instanceof Error ? error.message : "Reload and try again."}</p> : null}
     <div className="grid gap-6 md:grid-cols-2">
       <section className="space-y-3" aria-label="Artifact catalogue">
-        {list.data?.length === 0 ? <p>No artifacts yet. Create a candidate with schemas and test cases.</p> : null}
-        {list.data?.map((item) => <Button key={item.id} variant={item.id === selectedId ? "secondary" : "outline"}
+        {currentList?.length === 0 ? <p>No artifacts yet. Create a candidate with schemas and test cases.</p> : null}
+        {currentList?.map((item) => <Button key={item.id} variant={item.id === selectedId ? "secondary" : "outline"}
           className="w-full justify-between" onClick={() => setSelectedId(item.id)}>
           <span>{item.name}</span><Badge variant="outline">{item.archivedAt ? "archived" : item.status}</Badge>
         </Button>)}
@@ -106,3 +112,5 @@ export function AutomationArtifacts() {
     </div>
   </div>;
 }
+
+export const AutomationArtifacts=withV7AccountScope(AutomationArtifactsContent);

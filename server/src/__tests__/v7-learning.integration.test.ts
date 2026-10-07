@@ -1,3 +1,5 @@
+import {automationArtifactService} from "../services/automation-artifacts/automation-artifact-service.js";
+import {automationArtifactRuntimeService} from "../services/automation-artifacts/automation-artifact-runtime.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
@@ -192,7 +194,11 @@ const support = await getEmbeddedPostgresTestSupport();
     const link = await domainProposal(created.id, `optimizer://${created.id}/${published.publishedRevisionId}`, { targetDomain: "automation_artifact", optimizerEvaluationId: replay.evaluationId, expectedArtifactVersionId: replay.artifactVersionId, expectedContentHash: evaluation!.contentHash },sourceKind==="artifact_signal"?[signal!.pin]:undefined);
     expect(link.candidateId).toBe(replay.evaluationId);
     expect((await db.select().from(automationArtifacts).where(eq(automationArtifacts.id, replay.artifactId)))[0]!.status).toBe("testing");
+    const artifacts=automationArtifactService(db);
+    let descendantVersionId:string|null=null;
     if(signal){
+      expect((await artifacts.getDetail(companyId,replay.artifactId,principal))!.latestVersion!.sourceCode).not.toBe("");
+      expect(await artifacts.list(companyId,principal)).toHaveLength(1);
       expect(await optimizer.list(companyId,created.id,owner)).toHaveLength(1);
       await expect(optimizer.evaluate(companyId,replay.evaluationId)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       expect((await optimizer.evaluate(companyId,replay.evaluationId,principal)).gatesPassed).toBe(true);
@@ -203,6 +209,10 @@ const support = await getEmbeddedPostgresTestSupport();
         await expect(optimizer.compile(companyId,created.id,suggestion.id,request,principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
         expect(await db.select().from(automationArtifacts).where(eq(automationArtifacts.companyId,companyId))).toHaveLength(1);
       }
+      expect(await artifacts.list(companyId,principal)).toEqual([]);
+      await expect(artifacts.getDetail(companyId,replay.artifactId,principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await expect(artifacts.transitionStatus(companyId,replay.artifactId,{expectedStatus:"testing",expectedLatestVersionId:replay.artifactVersionId,status:"candidate"},principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await expect(artifacts.archive(companyId,replay.artifactId,{expectedLatestVersionId:replay.artifactVersionId},principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       const promotion={companyId,suggestionId:suggestion.id,artifactId:replay.artifactId,expectedArtifactVersionId:replay.artifactVersionId,actor:{principal:{type:"system" as const,service:"workflow-optimizer"}},sourceActor:owner,policy:{allowLowRiskAutoPromotion:false,fallbackKind:"published_workflow" as const},evidence:{replayEvaluation:replay.replayEvaluation,shadowEvaluation:optimizerShadowSummary([]),rollbackAvailable:true,driftGuardAvailable:true,humanApproved:false,canaryPassed:false}};
       await expect(optimizerPromotionService(db).prepareCanary(promotion)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       await expect(optimizerPromotionService(db).activate(promotion)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
@@ -211,6 +221,15 @@ const support = await getEmbeddedPostgresTestSupport();
     }
     await optimizer.startShadow(companyId, replay.evaluationId, principal);
     if(signal){
+      // Current read identity is insufficient for an unqualified runtime copy.
+      await expect(automationArtifactRuntimeService(db).inspectPinnedBinding(companyId,replay.artifactId,replay.artifactVersionId,principal,false)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await artifacts.transitionStatus(companyId,replay.artifactId,{expectedStatus:"shadow",expectedLatestVersionId:replay.artifactVersionId,status:"candidate"},principal);
+      const detail=(await artifacts.getDetail(companyId,replay.artifactId,principal))!;
+      const version=detail.latestVersion!;
+      const descendant=await artifacts.appendVersion(companyId,replay.artifactId,{expectedLatestVersionId:version.id,sourceCode:'{"value":"{{input.value}}","reviewed":"true"}',inputSchema:version.inputSchema,outputSchema:version.outputSchema,dependencyManifest:version.dependencyManifest,testSpec:version.testSpec},principal);
+      descendantVersionId=descendant.latestVersion!.id;
+      expect(descendantVersionId).not.toBe(replay.artifactVersionId);
+
       await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false});
       await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
       await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,signal.observation.id));
@@ -221,6 +240,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await memoryJobService(db).tick({limit:10});
       expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[0]!)))[0]!.deletedAt).toBeNull();
     }else await db.transaction(async tx => purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]));
+    if(descendantVersionId)expect((await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id,descendantVersionId)))[0]).toMatchObject({sourceCode:"",inputSchema:{},outputSchema:{},testSpec:{},validationReport:null,securityReport:null});
     const [erased] = await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id, replay.artifactVersionId));
     expect(erased).toMatchObject({ sourceCode: "", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec: {}, validationReport: null, securityReport: null });
     expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id, replay.evaluationId)))[0]).toMatchObject({ status: "retired", compilerResult: null, replayEvaluation: null, shadowEvaluation: null });

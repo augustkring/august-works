@@ -65,7 +65,7 @@ export function automationArtifactRoutes(db: Db) {
     // The caller requests evaluation; it cannot supply or mark gate reports passed.
     if (!(await artifacts.getDetail(companyId, artifactId, actor))) throw notFound("Automation Artifact not found");
     res.json(await security.evaluateLatestVersion(companyId, artifactId,
-      { principal: { type: "system", service: "artifact-security-evaluator" } }));
+      { principal: { type: "system", service: "artifact-security-evaluator" },sourceActor:req.actor }));
   });
   router.post("/companies/:companyId/automation-artifacts/:artifactId/status", validate(transitionAutomationArtifactStatusSchema), async (req, res) => {
     const actor = await authorize(req, "workflows:publish");

@@ -1,3 +1,7 @@
+import {lockAnalyticalCompany} from "../analytical-privacy.js";
+import {lockMemoryPrivacy} from "../memory/memory-privacy.js";
+import {assertLearnedAssetAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
+import type {AuthorizationActor} from "../authorization.js";
 import { createHash } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -51,6 +55,8 @@ import {
 export interface AutomationArtifactMutationActor {
   principal: ExecutionPrincipal;
   runId?: string | null;
+  /** Actual current reader supplied by a native internal owner; never client input. */
+  sourceActor?:AuthorizationActor;
 }
 
 type ArtifactDb = Db;
@@ -335,6 +341,7 @@ async function getDetail(
   db: ArtifactDb,
   companyId: string,
   artifactId: string,
+  actor:AutomationArtifactMutationActor,
 ): Promise<AutomationArtifactDetail | null> {
   const artifact = await getArtifactRow(db, companyId, artifactId);
   if (!artifact) return null;
@@ -356,6 +363,7 @@ async function getDetail(
     });
   }
 
+  if(!erased&&latestVersion)await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",latestVersion.id,actor.sourceActor??learningActorFromPrincipal(companyId,actor.principal,actor.runId));
   return {
     artifact: erased ? { ...mapArtifact(artifact), status: "deprecated", name: "Erased optimizer candidate", description: null } : mapArtifact(artifact),
     latestVersion: latestVersion ? erased ? { ...mapVersion(latestVersion), sourceCode: "", inputSchema: {}, outputSchema: {},
@@ -367,7 +375,9 @@ async function lockArtifact(
   db: ArtifactDb,
   companyId: string,
   artifactId: string,
+  actor:AutomationArtifactMutationActor,
 ) {
+  await lockAnalyticalCompany(db,companyId);await lockMemoryPrivacy(db,companyId);
   return db
     .select()
     .from(automationArtifacts)
@@ -378,7 +388,7 @@ async function lockArtifact(
       ),
     )
     .for("update")
-    .then((rows) => rows[0] ?? null);
+    .then(async(rows) => {const row=rows[0]??null;if(row?.latestVersionId)await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",row.latestVersionId,actor.sourceActor??learningActorFromPrincipal(companyId,actor.principal,actor.runId));return row;});
 }
 
 function assertExpectedPointer(
@@ -537,7 +547,15 @@ export function automationArtifactService(db: Db) {
               sql`${workflowOptimizerEvaluations.memoryRecordIds} ? ${memoryDeletionMarkers.recordId}::text`))
             .where(eq(workflowOptimizerEvaluations.companyId, companyId));
           const erasedIds = new Set(erased.map((item) => item.artifactId));
-          return rows.map((row) => mapArtifact(erasedIds.has(row.id) ? { ...row, name: "Erased optimizer candidate", description: null, status: "deprecated" } : row));
+          const visible:AutomationArtifact[]=[];
+          for(const row of rows){
+            if(!erasedIds.has(row.id)&&row.latestVersionId){
+              try{await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",row.latestVersionId,actor.sourceActor??learningActorFromPrincipal(companyId,actor.principal,actor.runId));}
+              catch(error){if(error&&typeof error==="object"&&"status" in error&&[403,404,409].includes(Number(error.status)))continue;throw error;}
+            }
+            visible.push(mapArtifact(erasedIds.has(row.id)?{...row,name:"Erased optimizer candidate",description:null,status:"deprecated"}:row));
+          }
+          return visible;
         });
     },
 
@@ -547,7 +565,7 @@ export function automationArtifactService(db: Db) {
       actor: AutomationArtifactMutationActor,
     ): Promise<AutomationArtifactDetail | null> => {
       await assertActorCompanyScope(db, companyId, actor);
-      return getDetail(db, companyId, artifactId);
+      return getDetail(db, companyId, artifactId,actor);
     },
 
     create: async (
@@ -674,7 +692,7 @@ export function automationArtifactService(db: Db) {
       });
 
       publications.forEach(publishActivity);
-      const detail = await getDetail(db, companyId, artifactId);
+      const detail = await getDetail(db, companyId, artifactId,actor);
       if (!detail) {
         throw new Error("Automation Artifact disappeared after creation");
       }
@@ -700,7 +718,7 @@ export function automationArtifactService(db: Db) {
       await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
-        const artifact = await lockArtifact(txDb, companyId, artifactId);
+        const artifact = await lockArtifact(txDb, companyId, artifactId,actor);
         if (!artifact) throw notFound("Automation Artifact not found");
         assertExpectedPointer(artifact, input.expectedLatestVersionId);
         assertVersionAppendAllowed(artifact);
@@ -807,7 +825,7 @@ export function automationArtifactService(db: Db) {
       });
 
       publications.forEach(publishActivity);
-      const detail = await getDetail(db, companyId, artifactId);
+      const detail = await getDetail(db, companyId, artifactId,actor);
       if (!detail) {
         throw new Error("Automation Artifact disappeared after version append");
       }
@@ -846,7 +864,7 @@ export function automationArtifactService(db: Db) {
       await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
-        const artifact = await lockArtifact(txDb, companyId, artifactId);
+        const artifact = await lockArtifact(txDb, companyId, artifactId,actor);
         if (!artifact) throw notFound("Automation Artifact not found");
         if (artifact.latestVersionId !== versionId) {
           throw conflict("Automation Artifact gate target is not the latest version", {
@@ -908,7 +926,7 @@ export function automationArtifactService(db: Db) {
       });
 
       publications.forEach(publishActivity);
-      const detail = await getDetail(db, companyId, artifactId);
+      const detail = await getDetail(db, companyId, artifactId,actor);
       if (!detail) {
         throw new Error("Automation Artifact disappeared after gate evaluation");
       }
@@ -935,7 +953,7 @@ export function automationArtifactService(db: Db) {
       await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
-        const artifact = await lockArtifact(txDb, companyId, artifactId);
+        const artifact = await lockArtifact(txDb, companyId, artifactId,actor);
         if (!artifact) throw notFound("Automation Artifact not found");
         assertExpectedPointer(artifact, input.expectedLatestVersionId);
         if (artifact.status !== input.expectedStatus) {
@@ -1037,7 +1055,7 @@ export function automationArtifactService(db: Db) {
       });
 
       publications.forEach(publishActivity);
-      const detail = await getDetail(db, companyId, artifactId);
+      const detail = await getDetail(db, companyId, artifactId,actor);
       if (!detail) {
         throw new Error("Automation Artifact disappeared after status transition");
       }
@@ -1062,7 +1080,7 @@ export function automationArtifactService(db: Db) {
       await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
-        const artifact = await lockArtifact(txDb, companyId, artifactId);
+        const artifact = await lockArtifact(txDb, companyId, artifactId,actor);
         if (!artifact) throw notFound("Automation Artifact not found");
         assertExpectedPointer(
           artifact,
@@ -1106,7 +1124,7 @@ export function automationArtifactService(db: Db) {
       });
 
       publications.forEach(publishActivity);
-      const detail = await getDetail(db, companyId, artifactId);
+      const detail = await getDetail(db, companyId, artifactId,actor);
       if (!detail) {
         throw new Error("Automation Artifact disappeared after archive");
       }

@@ -1,3 +1,6 @@
+import {lockAnalyticalCompany} from "../analytical-privacy.js";
+import {lockMemoryPrivacy} from "../memory/memory-privacy.js";
+import {assertLearnedAssetAnalyticalSources} from "../learning/learning-analytical-sources.js";
 import { automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
 import { and, eq } from "drizzle-orm";
 import {
@@ -137,6 +140,7 @@ export function automationArtifactRuntimeService(db: Db) {
     if ((await settings.getExperimental()).enableAutomationArtifactsV1 !== true) {
       throw notFound("Automation Artifacts are not enabled", { code: "automation_artifacts_disabled" });
     }
+    await lockAnalyticalCompany(db,companyId);await lockMemoryPrivacy(db,companyId);
     // Lock the native root before its version, as the canonical mutation owner
     // does. A consumer transaction cannot race revocation or pointer changes.
     const [root] = await db.select().from(automationArtifacts).where(and(
@@ -157,6 +161,9 @@ export function automationArtifactRuntimeService(db: Db) {
         expectedVersionId: versionId, currentVersionId: root.latestVersionId, status: detail.artifact.status,
       });
     }
+    // Source-derived execution requires its native retention bridge. An
+    // in-process read principal alone cannot retain the resulting runtime copy.
+    await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",version.id);
     // getDetail applies the existing optimizer privacy admission. Do not expose
     // a historical unredacted binding when that owner has erased its source.
     if (root.createdByOptimizerSuggestionId && detail.latestVersion?.sourceCode === "") {
@@ -182,6 +189,7 @@ export function automationArtifactRuntimeService(db: Db) {
     if (!detail) throw notFound("Automation Artifact not found");
 
     const { artifact, latestVersion } = detail;
+    if(latestVersion)await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",latestVersion.id);
     if (
       artifact.archivedAt ||
       artifact.status !== "active" ||
