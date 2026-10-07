@@ -1,3 +1,4 @@
+import {createAutomationArtifactsApi} from "@/api/automationArtifacts";
 import { Activity, createContext, useContext, useMemo, type ComponentType } from "react";
 import { useIsFetching, useQuery } from "@tanstack/react-query";
 import { useAccountIdentity } from "@/api/companies-query";
@@ -22,6 +23,7 @@ function createScope(principalId: BoardPrincipal) {
   const client = createAccountClient(principalId);
   return {
     principalId,
+    automationArtifactsApi:createAutomationArtifactsApi(client),
     foundationBootstrapApi: createFoundationBootstrapApi(client),
     cognitiveMemoryApi: createCognitiveMemoryApi(client),
     derivedMemoryApi: createDerivedMemoryApi(client),

@@ -2962,6 +2962,13 @@
       "when": 1791410269386,
       "tag": "0424_optimizer_workflow_source_inheritance",
       "breakpoints": true
+    },
+    {
+      "idx": 425,
+      "version": "7",
+      "when": 1791410986626,
+      "tag": "0425_artifact_native_learning_inheritance",
+      "breakpoints": true
     }
   ]
 }
