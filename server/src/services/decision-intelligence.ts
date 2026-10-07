@@ -194,6 +194,18 @@ async function inspect(tx:Db,row:Decision,actor:AuthorizationActor):Promise<Deci
     binding:binding?{versionId:binding.versionId,optionId:binding.optionId,contextHash:binding.contextHash,decisionSpecHash:binding.decisionSpecHash,frozenAt:binding.frozenAt.toISOString()}:null,
     versions,hasMoreVersions:rows.length>5,authorizationCheckedAt:new Date().toISOString()};
 }
+/** Internal native review admission. The caller's transaction owns the same
+ * company → Memory → Decision locks and inspects only the exact frozen pin. */
+export async function inspectBoundDecisionContext(tx:Db,companyId:string,actor:AuthorizationActor,id:string,write=false) {
+  await locks(tx,companyId);await admission(tx,companyId,actor,write);
+  const row=await decision(tx,companyId,id);
+  const [binding]=await tx.select().from(decisionContextBindings).where(and(eq(decisionContextBindings.companyId,companyId),eq(decisionContextBindings.decisionId,id))).for("share");
+  if(!binding || row.status!=="decided" || row.chosenOptionId!==binding.optionId || !row.decidedAt || row.decidedAt.getTime()!==binding.frozenAt.getTime()) throw notFound("Outcome review requires the surviving prospective native decision binding");
+  const pin=await pinnedVersion(tx,companyId,id,binding.versionId);await inspectRetained(tx,row,actor,pin);
+  if(pin.contentHash!==binding.contextHash || pin.decisionSpecHash!==binding.decisionSpecHash || decisionContextSpecHash(row)!==binding.decisionSpecHash) throw conflict("Outcome review baseline no longer agrees with its native decision");
+  return {decision:row,binding,version:pin};
+}
+export {inspectAuthorityEdges as inspectDecisionSourceAuthority};
 export function decisionIntelligenceService(db:Db) {
   return {
     async detail(companyId:string,actor:AuthorizationActor,id:string) {

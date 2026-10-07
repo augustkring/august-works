@@ -3305,6 +3305,7 @@ export * from "./process-analysis.js";
 export * from "./process-findings.js";
 export * from "./process-conformance.js";
 export * from "./decision-intelligence.js";
+export * from "./decision-outcome-reviews.js";
 export * from "./business-metrics.js";
 export * from "./business-metric-targets.js";
 export * from "./strategy-execution.js";

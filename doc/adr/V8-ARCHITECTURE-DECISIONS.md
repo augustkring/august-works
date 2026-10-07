@@ -1,5 +1,22 @@
 # V8 architecture decisions
 
+## V8-012 — Outcome reviews preserve the prospective native baseline
+
+A review belongs to the exact surviving native Decision binding and chosen
+option. Its due date comes from the frozen expectations, with `due` derived on
+read rather than creating another scheduler. Native human transitions use CAS
+and immutable receipts; copied lineage participates in source erasure, retention
+and company purge even after flag rollback. Erasing the latest source-owned
+receipt removes the review's older prose as well.
+
+Six human assessments stay separate from computed native range/direction
+comparisons and native execution status. Current authority governs disclosure;
+historical measurements remain captured facts. Completed quantitative comparison
+requires the same definition/unit and the exact elapsed horizon. Association and
+human expected ranges confer no causal or calibrated forecast qualification.
+Routine/Learning/AI/provider bridges require their native owners; they remain
+open rather than introducing parallel scheduling, learning or approval stores.
+
 ## V8-011 — Prospective context shares the canonical Decision choice
 
 Decision Intelligence stores one immutable typed context aggregate per version.
