@@ -165,3 +165,24 @@ unqualified external provider is introduced. Null uncertainty stays explicit and
 native count/ratio domain violations abstain. Forecasts grant no authority to
 change targets, budgets, roadmaps or canonical Decisions. This is a source
 checkpoint, not evidence of hosted or external provider qualification.
+
+## V8-014 — Conditional scenarios use bounded typed arithmetic
+
+**Decision:** Native numerical scenarios use a bounded, topologically ordered
+formula program with unit inference and exact internal source pins. Human
+assumptions carry ranges, evidence, owner and controllability; interventions and
+external hypothetical conditions are distinct. Seeded Monte Carlo requires
+justified named distributions, independent-input rationale, bounded samples/work
+and per-output half-sample stability tolerances. Unstable ranges are withheld;
+unsafe draws invalidate the calculation rather than being discarded.
+
+**Reason:** Existing native transform expressions interpolate values but do not
+provide numerical scenario arithmetic. A typed finite program supports explicit
+conditional calculations without host-language evaluation, inferred calibration
+or LLM numerical simulation. Validated Automation Artifacts will use their existing
+canonical runtime gates in a subsequent owner integration.
+
+**Boundary:** This initial numerical checkpoint is internal only. Source owners
+must still authorize exact metric/forecast versions, units, purpose, retention and
+lineage. Conditional quantiles cannot become confidence intervals or causal effects;
+constraint satisfaction cannot approve execution or an organizational commitment.
