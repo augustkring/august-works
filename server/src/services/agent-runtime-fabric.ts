@@ -1,7 +1,9 @@
 import { admitOrchestrationHeartbeat, hasOrchestrationPlan } from "./orchestration/orchestration-admission.js";
 import { assertV7Enabled } from "./v7-authorization.js";
 import { learningAssetRoots } from "./learning/learning-assets.js";
-import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { lockMemoryPrivacy,heartbeatMemoryPayloadRetained } from "./memory/memory-privacy.js";
+import {assertAnalyticalContextPayloadAccess} from "./analytical-context-authority.js";
+import {lockAnalyticalCompany} from "./analytical-privacy.js";
 import { and, eq, sql } from "drizzle-orm";
 import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, contextManifestMemoryRoots, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
 import { agentExecutionManifestSchema, createExecutionScopeRequestSchema, v5FeatureEnabled, type AgentExecutionScope } from "@paperclipai/shared";
@@ -22,6 +24,10 @@ import { playbookResolverService } from "./playbook-resolver.js";
 import { logActivity } from "./activity-log.js";
 
 export function agentRuntimeFabricService(db: Db) {
+  async function currentPayload(actor:AuthorizationActor,companyId:string,runId:string,erased=false,reader:Db=db){
+    if(erased||!await heartbeatMemoryPayloadRetained(reader,companyId,runId))throw forbidden("Runtime manifest Source payload was erased",{code:"analytical_source_access_lost"});
+    await assertAnalyticalContextPayloadAccess(reader,companyId,actor,{runId},actor.type==="agent"?"task":undefined);
+  }
   async function primary(actor: AuthorizationActor, companyId: string, agentId: string) {
     await assertV5Authorization(db, actor, companyId, "company_scope:read");
     if (actor.type === "agent" && (actor.companyId !== companyId || actor.agentId !== agentId)) throw forbidden("Execution must use the authenticated local presence");
@@ -63,8 +69,10 @@ export function agentRuntimeFabricService(db: Db) {
       await assertV5Authorization(db, actor, companyId, "company_scope:read");
       const [row] = await db.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.runId, runId))).limit(1);
       if (!row) throw notFound("Execution manifest not found");
+      if(actor.type==="agent"&&actor.runId!==runId)throw forbidden("Execution manifest requires its current authenticated run");
       if (actor.type === "agent") await primary(actor, companyId, row.agentId);
       else await assertV5Authorization(db, actor, companyId, "agent_config:read", { type: "agent", companyId, agentId: row.agentId });
+      await currentPayload(actor,companyId,runId,(row.manifest as unknown as Record<string,unknown>).payloadDeleted===true);
       // Every source company's present rights are required even to inspect its
       // scope/profile metadata. Identity membership alone grants nothing.
       if (row.manifest.executionScope.delegatedScopes.length) await crossCompanyContextService(db).resolve(actor, row.manifest.executionScope);
@@ -78,6 +86,7 @@ export function agentRuntimeFabricService(db: Db) {
       const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: input.companyId, agentId: input.agentId, runId: input.runId, onBehalfOfUserId: input.responsibleUserId };
       const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.id, input.runId))).limit(1);
       if (!run || run.responsibleUserId !== input.responsibleUserId) throw forbidden("Execution authority does not match the persisted run");
+      await currentPayload(actor,input.companyId,input.runId,(stored?.manifest as unknown as Record<string,unknown>|undefined)?.payloadDeleted===true);
       const local = await primary(actor, input.companyId, input.agentId);
       let scope: AgentExecutionScope = stored?.manifest.executionScope ?? { primaryCompanyId: input.companyId, primaryAgentPresenceId: input.agentId, delegatedScopes: [] };
       let query = input.query.trim().slice(0, 500) || "Execute the assigned task";
@@ -138,7 +147,9 @@ export function agentRuntimeFabricService(db: Db) {
       if (inventoryTokens > 4000) throw conflict("Pinned execution inventory exceeds 4000 estimated tokens; split the task requirements");
       if (!stored) manifest.inventoryEstimatedTokens = inventoryTokens;
       const record = await withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx,input.companyId);
         await lockMemoryPrivacy(tx, input.companyId);
+        await currentPayload(actor,input.companyId,input.runId,false,tx);
         const localContext = context.refs.find(ref => ref.companyId === input.companyId);
         const learnedPins = [
           ...manifest.skills.map(pin => ({ type: "skill_version", id: pin.versionId })),
@@ -154,6 +165,7 @@ export function agentRuntimeFabricService(db: Db) {
         let row = stored;
         if (!row) {
           [row] = await tx.insert(agentExecutionManifests).values({ companyId: input.companyId, runId: input.runId, agentId: input.agentId, agentIdentityId: local.identity.id, contextManifestId: context.refs[0]!.contextManifestId, manifest, policySnapshotHash: policyHash, hash: hashContextPolicySnapshot(manifest) }).returning();
+          await currentPayload(actor,input.companyId,input.runId,(row!.manifest as unknown as Record<string,unknown>).payloadDeleted===true,tx);
           const items = [...manifest.skills.map((p) => ({ type: "skill", ref: p.skillId, versionRef: p.versionId })), ...manifest.playbooks.map((p) => ({ type: "playbook", ref: p.playbookId, versionRef: p.revisionId })), ...manifest.capabilities.map((c) => ({ type: "capability", ref: c.ref, versionRef: c.versionHash })), ...manifest.contextManifests.map((c) => ({ type: "company_scope", ref: c.companyId, versionRef: c.contextManifestId }))];
           if (items.length) await tx.insert(agentExecutionManifestItems).values(items.map((i) => ({ ...i, companyId: input.companyId, manifestId: row!.id })));
           await logActivity(tx, { companyId: input.companyId, actorType: "system", actorId: "runtime-fabric", action: "runtime.manifest_created", entityType: "heartbeat_run", entityId: input.runId, details: { manifestId: row!.id, hash: row!.hash } }, publications);

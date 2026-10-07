@@ -1,0 +1,72 @@
+{
+  "checkpoint": "Original immutable V5 execution inventory follows current native Context Source owner and original C7 worker",
+  "parentCommit": "1865887057f6067e0406183ad97b5e6981c55384",
+  "recordedAt": "2026-10-07T23:15:56.123787+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/meta/0422_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "a508b58a2701bbaa2dbb9c9cf14b64737d8755b89b76505f0bb83de525ae5c75"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "f9bb0926ba8c04f8948033310d61430a2af30c2083da2ad7189c99dadb17c6ac"
+    },
+    {
+      "path": "server/src/services/agent-runtime-fabric.ts",
+      "sha256": "492629ddfd10308509d2fb151560a2f781f872db0b438ba6bb8a31411a182e2d"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "782a6f56765a5dac4ee3190d70c5b95b434e860f818843e273aaec9cce87c900"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "082b73169698b534fc5101fe19a344a2e37edc84604f6dc059e3350883f5b642"
+    },
+    {
+      "path": "packages/db/src/migrations/0427_execution_manifest_source_erasure.sql",
+      "sha256": "bd30e41fa6c80b213aa01352bc5b8758e121a5d07e927a10cef1d6dff3a868d7"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0427_snapshot.json",
+      "sha256": "b2112de453441bd54184e24d7a9a646ec6d871cd2240755d66e4d48b609aeeff"
+    }
+  ],
+  "validation": {
+    "nativePostgresAndSnapshot": {
+      "tests": 100,
+      "files": 6,
+      "skipped": 0,
+      "logs": [
+        "/var/tmp/aw-v8-execution-manifest-source-tests-final.log",
+        "/var/tmp/aw-v8-execution-manifest-source-private-final.log"
+      ]
+    },
+    "serverTypes": "passed",
+    "migrationSafety": "passed",
+    "parentWholeNativeProductionBuild": {
+      "commit": "38a6093958299bcb68582ad8a28f0f01a86cd925",
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-foundation-context-retention.log"
+    }
+  },
+  "qualified": [
+    "actual assigned preparation/native Source-retained Context with immutable inventory fixture",
+    "current Agent run and actual Human Foundation Source loss/restoration",
+    "native C7 inventory JSON erasure with flags off and company paused",
+    "unchanged identity, hashes and creation timestamp; unrelated updates still rejected",
+    "late inventory insert/update and actual cross-run Context reference; late heartbeat payload rejected",
+    "independent verified outcomes preserved; native private conversation, filesystem retry and company purge regressions pass",
+    "current payload repeated under original company -> Memory locks before inventory commit"
+  ],
+  "limits": [
+    "inventory Source fixture is persisted software data, not an actual provider invocation or trial",
+    "historical populated migration backfill and maximum-volume retention sweep are not hosted-qualified",
+    "Skill/Playbook/Role Pack/runtime Artifact analytical copy admission is not yet qualified",
+    "no new Chromium, external provider, hard latency or whole-brief completion claim"
+  ]
+}

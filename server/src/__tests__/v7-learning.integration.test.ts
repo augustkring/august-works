@@ -1,3 +1,6 @@
+import {agentRuntimeFabricService} from "../services/agent-runtime-fabric.js";
+import {agentExecutionManifests} from "@paperclipai/db";
+import {agentExecutionManifestSchema} from "@paperclipai/shared";
 import {contextManifestService} from "../services/context/context-manifest.js";
 import {authUsers,analyticalContextRoots,contextManifests} from "@paperclipai/db";
 import {assertNativeAnalyticalRunPayloadAccess} from "../services/analytical-context-authority.js";
@@ -420,7 +423,8 @@ const support = await getEmbeddedPostgresTestSupport();
     const signal=await analyticalSignal("internal",userId),link=await domainProposal(targetId,`foundation://${targetId}/${revisionId}`,change(),[signal.pin]),foundation=foundationService(db);
     await foundation.acceptProposal(companyId,targetId,link.candidateId,principal);const approved=(await foundation.get(companyId,targetId,owner))!.latestRevisionId!;
     await foundation.submitForReview(companyId,targetId,approved,principal);await foundation.approve(companyId,targetId,approved,principal);
-    const [agent]=await db.insert(agents).values({companyId,name:"Actual Context consumer",status:"active",adapterType:"paperclip_runner"}).returning();
+    const [identity]=await db.insert(agentIdentities).values({name:"Actual Context consumer",homeCompanyId:companyId}).returning();
+    const [agent]=await db.insert(agents).values({companyId,agentIdentityId:identity!.id,name:"Actual Context consumer",status:"idle",adapterType:"paperclip_runner"}).returning();
     await db.insert(companyMemberships).values({companyId,principalType:"agent",principalId:agent!.id,status:"active"});
     await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"agent",principalId:agent!.id,permissionKey})));
     const [task]=await db.insert(issues).values({companyId,title:"Apply evidence review",status:"in_progress",description:"Actual assigned procedure",assigneeAgentId:agent!.id,responsibleUserId:userId}).returning();
@@ -430,9 +434,20 @@ const support = await getEmbeddedPostgresTestSupport();
     const [retention]=await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId));expect(retention!.authorityPins).toEqual([signal.pin]);
     const [privateRoot]=await db.select().from(memoryRecords).where(eq(memoryRecords.id,retention!.memoryRecordId));expect(privateRoot).toMatchObject({reviewState:"rejected",verificationState:"unverified",sensitivityLabel:"restricted"});
     expect((await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,assembled.packet.manifest!.id))).map(r=>r.memoryRecordId).sort()).toEqual([...roots,retention!.memoryRecordId].sort());
+    // Persisted native inventory fixture; no provider invocation or trial claim.
+    const manifest=agentExecutionManifestSchema.parse({schemaVersion:5,runId:run!.id,companyId,agentId:agent!.id,agentIdentityId:identity!.id,homeCompanyId:companyId,responsibleUserId:userId,
+      executionScope:{primaryCompanyId:companyId,primaryAgentPresenceId:agent!.id,delegatedScopes:[]},rolePack:null,contextManifests:[{companyId,contextManifestId:assembled.packet.manifest!.id}],skills:[],playbooks:[],capabilities:[],
+      providers:[{companyId,agentId:agent!.id,providerBindingId:randomUUID(),profileRef:"internal-software-fixture",snapshotHash:"fixture",isolationMode:"isolated_per_presence"}],
+      executionPolicy:{deterministicPreference:true,policies:["Copied learned procedure reference"],approvalRefs:[],restrictions:[],policySnapshotHash:"fixture"},inventoryEstimatedTokens:1,warnings:[]});
+    const [execution]=await db.insert(agentExecutionManifests).values({companyId,runId:run!.id,agentId:agent!.id,agentIdentityId:identity!.id,contextManifestId:assembled.packet.manifest!.id,manifest,policySnapshotHash:"fixture",hash:"fixture"}).returning();
+    const actualActor={type:"agent" as const,source:"agent_jwt" as const,companyId,agentId:agent!.id,runId:run!.id,onBehalfOfUserId:userId},fabric=agentRuntimeFabricService(db);
+    await expect(fabric.getManifest(actualActor,companyId,run!.id)).resolves.toMatchObject({id:execution!.id});
+    await expect(fabric.getManifest({...actualActor,runId:randomUUID()},companyId,run!.id)).rejects.toMatchObject({status:403});
+    await expect(db.update(agentExecutionManifests).set({manifest:{...manifest,warnings:["Unrelated rewrite"]}}).where(eq(agentExecutionManifests.id,execution!.id))).rejects.toThrow();
     await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).resolves.toBeUndefined();
     await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId,companyId),eq(principalPermissionGrants.principalType,"user"),eq(principalPermissionGrants.principalId,userId),eq(principalPermissionGrants.permissionKey,"foundation:read")));
     await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    await expect(fabric.getManifest(actualActor,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
     await db.insert(principalPermissionGrants).values({companyId,principalType:"user",principalId:userId,permissionKey:"foundation:read"});
     const [otherTask]=await db.insert(issues).values({companyId,title:"Unrelated Task"}).returning(),contexts=await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId));
     await expect(contextManifestService(db).create({...input,issueId:otherTask!.id,policySnapshot:{intent:input.intent},selected:assembled.decisions.map(decision=>({decision}))})).rejects.toMatchObject({status:409});
@@ -445,6 +460,17 @@ const support = await getEmbeddedPostgresTestSupport();
     await db.delete(issues).where(eq(issues.id,signal.sourceId));await memoryJobService(db).tick({limit:100});
     expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,retention!.memoryRecordId)))[0]!.deletedAt).not.toBeNull();
     for(const rootId of roots)expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,rootId)))[0]!.deletedAt).toBeNull();
+    const [erasedExecution]=await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.id,execution!.id));
+    expect(erasedExecution).toEqual({...execution!,manifest:{payloadDeleted:true}});
+    await db.update(agentExecutionManifests).set({manifest}).where(eq(agentExecutionManifests.id,execution!.id));
+    expect((await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.id,execution!.id)))[0]!.manifest).toEqual({payloadDeleted:true});
+    await expect(db.update(agentExecutionManifests).set({hash:"Rewrite after C7"}).where(eq(agentExecutionManifests.id,execution!.id))).rejects.toThrow();
+    await expect(fabric.prepare(input)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    const [lateRun]=await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,status:"running",responsibleUserId:userId}).returning();
+    const [lateExecution]=await db.insert(agentExecutionManifests).values({companyId,runId:lateRun!.id,agentId:agent!.id,agentIdentityId:identity!.id,contextManifestId:assembled.packet.manifest!.id,manifest:{...manifest,runId:lateRun!.id},policySnapshotHash:"fixture",hash:"fixture"}).returning();
+    expect(lateExecution!.manifest).toEqual({payloadDeleted:true});
+    await db.update(heartbeatRuns).set({resultJson:{late:"Inventory Source copy"}}).where(eq(heartbeatRuns.id,lateRun!.id));
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,lateRun!.id)))[0]!.resultJson).toBeNull();
     expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,run!.id)))[0]).toMatchObject({resultJson:null,contextSnapshot:{}});
     await db.update(heartbeatRuns).set({resultJson:{late:"Source copy"},contextSnapshot:{late:"Source copy"}}).where(eq(heartbeatRuns.id,run!.id));expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,run!.id)))[0]).toMatchObject({resultJson:null,contextSnapshot:{}});
     await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,cognitive_memory_v7:true,memory_observations_v7:true,enableCollectiveMemoryV1:true});

@@ -2976,6 +2976,13 @@
       "when": 1791413208005,
       "tag": "0426_analytical_native_task_source_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 427,
+      "version": "7",
+      "when": 1791414531578,
+      "tag": "0427_execution_manifest_source_erasure",
+      "breakpoints": true
     }
   ]
 }
