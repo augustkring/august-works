@@ -216,3 +216,20 @@ changes require revalidation without rewriting retained arithmetic. Optimizer
 artifacts remain excluded until inherited Memory erasure qualifies the new consumer.
 Unit annotations and deterministic software tests are not business calibration,
 causal evidence, Decision authority or hosted release qualification.
+
+
+## V8-016 — Native business experiment inference requires complete fixed-horizon receipts
+
+The initial native numerical design is individually randomized two-arm binary
+intention-to-treat, with exact SRM and a conservative familywise difference of
+Clopper-Pearson arm intervals. All assigned outcomes are required; safety stopping,
+missing telemetry/joins, material SRM and incomplete sample policy withhold
+confirmatory inference. A positive primary alone cannot overcome harm/uncertainty
+in guardrails. Exploratory metrics cannot replace the registered primary.
+
+Strict pre-registration pins semantics, design, thresholds, stop/ship/rollback,
+privacy/use-case references and interference. Secret HMAC assignment labels are
+stable for company/version/subject but grant no live exposure authority. The
+internal numerical capture cannot substitute for native purpose, immutable
+receipt ownership or source erasure. Native business experiment registry/owner
+and UI follow this checkpoint; V7 software/agent evaluation remains canonical.

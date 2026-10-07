@@ -3308,6 +3308,7 @@ export * from "./decision-intelligence.js";
 export * from "./decision-outcome-reviews.js";
 export * from "./business-forecasting.js";
 export * from "./business-scenarios.js";
+export * from "./business-experiments.js";
 export * from "./business-metrics.js";
 export * from "./business-metric-targets.js";
 export * from "./strategy-execution.js";
