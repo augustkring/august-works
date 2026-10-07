@@ -149,3 +149,19 @@ Versioned process definitions/runs, qualified data-quality finding lifecycle and
 process algorithms must bind their intrinsic data properties to this owner before
 claiming analysis readiness. A preview with caller-declared requirements cannot
 authorize a stronger analysis, native Decision, Planning effect or V7 autonomy.
+
+## V8-013 — Native forecast publication pins retained time-safe evidence
+
+Business forecasts reuse the native Metric owner and current analytical company
+purpose, with an independently approved `forecast` capability. Their definitions,
+backtests and runs are immutable, source-owned analytical receipts. A separate
+human publication binds an exact specification version to a currently qualified
+native rolling-origin backtest; new history/corrections invalidate current
+qualification without changing historical result bytes. PostgreSQL enforces
+revision transitions, exact native definition/observation identity, chronology,
+publication proof and owner-mediated erasure. Bounded native arithmetic executes
+inside the existing company/Memory serialization boundary; no new scheduler or
+unqualified external provider is introduced. Null uncertainty stays explicit and
+native count/ratio domain violations abstain. Forecasts grant no authority to
+change targets, budgets, roadmaps or canonical Decisions. This is a source
+checkpoint, not evidence of hosted or external provider qualification.

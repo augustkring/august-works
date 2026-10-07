@@ -14,6 +14,7 @@ const ROUTES_DIR = path.resolve(__dirname, "../routes");
 const apiPrefixes: Record<string, string> = {
   "business-events.ts": "/api",
   "business-metrics.ts": "/api",
+  "business-forecasting.ts": "/api",
   "business-metric-targets.ts": "/api",
   "strategy-execution.ts": "/api",
   "process-data-readiness.ts": "/api",

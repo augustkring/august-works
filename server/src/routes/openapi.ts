@@ -17,6 +17,11 @@ import {
   reviseBusinessMetricTargetSchema,
   approveBusinessMetricTargetSchema,
   retireBusinessMetricTargetSchema,
+  createBusinessForecastSpecSchema,
+  reviseBusinessForecastSpecSchema,
+  backtestBusinessForecastSchema,
+  publishBusinessForecastSpecSchema,
+  retireBusinessForecastSpecSchema,
   createBusinessMetricSchema,
   createBusinessMetricVersionSchema,
   publishBusinessMetricSchema,
@@ -1717,7 +1722,7 @@ function resolveOperationAuthLevel(
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
   if(path.startsWith("/api/companies/{companyId}/decisions/{decisionId}/context")) return "board";
-  if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
+  if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/business-forecasts") || path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
   if (
     isBoardOnlyOperation(method, path) ||
     experimentalApiMetadata[`${method.toUpperCase()} ${path}`]?.boardOnly
@@ -11878,6 +11883,17 @@ for (const operation of [
   { method: "post" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}/lifecycle", summary: "Deprecate or revoke a metric under native authority, including after rollout rollback", body: transitionBusinessMetricSchema },
   { method: "post" as const, path: "/api/companies/{companyId}/business-metrics/query", summary: "Observe a complete authorized bounded metric population with source lineage", body: queryBusinessMetricSchema },
 ]) registerCurrentRoute({ ...operation, tags: ["V8"], query: operation.query?.extend({ expectedUserId: z.string().optional() }) ?? z.object({ expectedUserId: z.string().optional() }) });
+
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts", tags: ["V8"], summary: "List currently authorized forecast specifications", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}", tags: ["V8"], summary: "Inspect retained forecast specification versions", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts", tags: ["V8"], summary: "Create a governed native forecast draft", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: createBusinessForecastSpecSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts/{specId}/versions", tags: ["V8"], summary: "Append a human-proposed immutable forecast version", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: reviseBusinessForecastSpecSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts/{specId}/backtests", tags: ["V8"], summary: "Capture exact native observations for a time-safe rolling-origin backtest", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: backtestBusinessForecastSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts/{specId}/publish", tags: ["V8"], summary: "Publish with a human rationale and an exact current qualified native backtest", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: publishBusinessForecastSpecSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts/{specId}/runs", tags: ["V8"], summary: "Run the current human-published forecast without changing commitments", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: backtestBusinessForecastSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts/{specId}/retire", tags: ["V8"], summary: "Retire a forecast with expected revision", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: retireBusinessForecastSpecSchema });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}/backtests/{artifactId}", tags: ["V8"], summary: "Inspect retained backtest facts after current source reauthorization", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}/runs/{artifactId}", tags: ["V8"], summary: "Inspect a retained forecast with explicit current qualification", query: z.object({ expectedUserId: z.string().optional() }).strict() });
 
 for (const operation of v7ApiPaths) {
   registry.registerPath({

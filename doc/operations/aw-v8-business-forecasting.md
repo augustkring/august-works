@@ -1,10 +1,10 @@
-# Native business forecasting — mathematical kernel in progress
+# Native business forecasting — kernel and governed owner checkpoint
 
-This first source wave is a deterministic kernel and strict shared specification,
-not a selectable API/UI capability or completed brief section 22. The native
-metric owner must assemble and authorize every captured observation before a
-future owner invokes this kernel. No caller-supplied observation values are
-accepted through an application forecast endpoint; that endpoint is not built yet.
+This source checkpoint implements the deterministic native kernel, strict shared
+specification and governed company API/storage owner. It does not complete brief
+section 22: operator UI, advanced providers, downstream evidence pins and hosted
+acceptance remain open. The native metric owner authorizes every captured
+observation; public forecast inputs cannot supply copied measurement facts.
 
 Native models are last-value, explicitly periodic seasonal naive, a fixed moving
 average and simple drift. Daily/weekly UTC series must have consecutive exact
@@ -36,8 +36,60 @@ zero denominators, complexity ties, overflow and cutoff/freshness abstention.
 Server/UI type checking passed for the initial source; verification logs are
 under `/var/tmp/aw-v8-business-forecast-*`.
 
-Still open: native specification/publication/run/backtest ownership and storage,
-source/privacy lifecycle, value-domain admission, provider seams/qualification,
-operator UI, Decision/Scenario evidence and integrated/hosted acceptance.
-StatsForecast has not been installed or qualified; no external runtime or provider
-claim is made. V5 task/project schedule forecasts retain their native authority.
+Still open: operator UI, advanced provider seams/qualification,
+Decision/Scenario evidence and integrated/hosted acceptance. StatsForecast has
+not been installed or qualified; no external runtime or provider claim is made.
+V5 task/project schedule forecasts retain their native authority.
+
+## Native owner storage and public API checkpoint
+
+The native owner now implements `business-forecasts` company routes for draft
+creation, immutable revision, inline bounded backtest, separate human publication,
+run, artifact reads and retirement. These are business metric forecasts; the V5
+schedule forecast owner remains separate. Shared inputs accept native observation
+UUIDs, an expected revision and cutoff; values, source hashes, timestamps copied
+from measurements, result JSON and claimed qualification are not caller inputs.
+
+Migration 0399 stores specifications, immutable versions, source-owned backtests,
+human publication receipts and immutable runs. PostgreSQL rejects bare publication
+pointers, version/result changes, unsupported root revisions, inconsistent native
+measurement pins and qualified artifacts outside chronology/value-domain policy.
+The service reauthorizes every retained measurement through the metric owner,
+requires publication of its exact definition before measurement capture, preserves
+source lineage and sensitivity, and uses the explicit `forecast` company-purpose
+capability. Ordinary metric permission does not approve forecasting. Predictions
+outside the native count/ratio domain abstain rather than silently clipping.
+
+A retained result preserves its historical arithmetic. New observations,
+corrections, a changed published metric definition, retirement or a superseded
+run publication expose a revalidation status. Publishing requires the current
+exact proposed version and a surviving qualified backtest; a changed series
+requires a new human-reviewed version/backtest/publication. A run does not update
+a target, budget, roadmap or Decision. No asynchronous worker or second scheduler
+has been introduced in this bounded native wave.
+
+Definition and artifact lineage inherit native source erasure and retention;
+expired or forgotten source manifests cascade through publications and published
+roots even with rollout disabled or the company paused. Company purge explicitly
+deletes the forecast aggregate through its native owner before the generic FK
+planner. Human retirement remains available after rollout rollback under current
+native permissions. Audit details retain identities, hashes, revisions and status;
+publication rationale lives in its source-owned immutable receipt.
+
+Positive PostgreSQL histories are explicitly synthetic, chronologically coherent
+fixtures for contract/ownership tests. Real native queries captured today for old
+windows abstain as late history. These tests do not qualify an operational dataset,
+external provider, hosted runtime or release. Operator UI, advanced provider
+qualification, Decision/Scenario pins and hosted acceptance remain open.
+
+Checkpoint validation: 57 integrated server checks passed across forecast ownership,
+native forecasting arithmetic, the existing Metric owner and mounted OpenAPI
+coverage; 11 forecast PostgreSQL checks passed again after final lineage/domain
+and bounded-memory changes. Three strict public-contract checks, native migration
+numbering/safety and generated-snapshot drift checks passed. Server type checking
+passed for the final checkpoint. Logs are in `/var/tmp/aw-v8-business-forecast-*`.
+Earlier test runs found an illegal async default parameter, a PL/pgSQL name
+collision and a wrong test-only erasure call; all were corrected and rerun. An
+initial server package-script invocation stopped because its inherited Rust PATH
+was missing; the final direct native compiler check passed. This checkpoint does
+not qualify the still-open UI/providers/downstream/hosted work.

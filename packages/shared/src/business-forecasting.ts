@@ -26,6 +26,16 @@ export const businessForecastDefinitionSchema=z.object({
 });
 export type NativeBusinessForecastModel=z.infer<typeof nativeBusinessForecastModelSchema>;
 export type BusinessForecastDefinition=z.infer<typeof businessForecastDefinitionSchema>;
+export const createBusinessForecastSpecSchema=z.object({key:z.string().regex(/^[a-z][a-z0-9_]{1,79}$/),definition:businessForecastDefinitionSchema}).strict();
+export const reviseBusinessForecastSpecSchema=z.object({expectedRevision:z.number().int().positive(),definition:businessForecastDefinitionSchema}).strict();
+export const backtestBusinessForecastSchema=z.object({expectedRevision:z.number().int().positive(),versionId:id,observationIds:z.array(id).min(4).max(1000).refine(ids=>new Set(ids).size===ids.length,"Unique native observation pins are required"),cutoff:z.iso.datetime()}).strict();
+export const publishBusinessForecastSpecSchema=z.object({expectedRevision:z.number().int().positive(),versionId:id,backtestId:id,rationale:prose}).strict();
+export const retireBusinessForecastSpecSchema=z.object({expectedRevision:z.number().int().positive(),rationale:prose}).strict();
+export type CreateBusinessForecastSpec=z.infer<typeof createBusinessForecastSpecSchema>;
+export type ReviseBusinessForecastSpec=z.infer<typeof reviseBusinessForecastSpecSchema>;
+export type BacktestBusinessForecast=z.infer<typeof backtestBusinessForecastSchema>;
+export type PublishBusinessForecastSpec=z.infer<typeof publishBusinessForecastSpecSchema>;
+export type RetireBusinessForecastSpec=z.infer<typeof retireBusinessForecastSpecSchema>;
 /** Internal metric-owner capture only; never a public forecast run input. */
 export interface BusinessForecastSeriesPoint {
   observationId:string;metricId:string;metricVersionId:string;sourceHash:string;
@@ -45,4 +55,17 @@ export interface NativeBusinessForecastResult {
   comparisons:{model:NativeBusinessForecastModel;loss:BusinessForecastLoss}[];selectedReason:string|null;
   points:{from:string;until:string;value:number;interval:null}[];
   uncertainty:{method:"unavailable";coverageLevel:null;reason:string};limitations:string[];
+}
+export interface BusinessForecastSpecView {
+  id:string;companyId:string;key:string;revision:number;status:"draft"|"published"|"retired";publishedVersionId:string|null;
+  createdAt:string;updatedAt:string;
+}
+export interface BusinessForecastVersionView {
+  id:string;companyId:string;specId:string;revision:number;definition:BusinessForecastDefinition;contentHash:string;
+  createdAt:string;expiresAt:string;
+}
+export interface BusinessForecastArtifactView {
+  id:string;companyId:string;specId:string;versionId:string;kind:"backtest"|"run";result:NativeBusinessForecastResult;
+  series:BusinessForecastSeriesPoint[];contentHash:string;cutoff:string;createdAt:string;expiresAt:string;
+  currentQualification:"qualified"|"needs_revalidation"|"inconclusive";reviewReason:string|null;
 }
