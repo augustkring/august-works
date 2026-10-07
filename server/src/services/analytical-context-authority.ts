@@ -1,4 +1,4 @@
-import {and,eq,sql} from "drizzle-orm";
+import {and,eq,or,sql} from "drizzle-orm";
 import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifests,decisionContextVersions,decisionOutcomeReviewReceipts,issues,heartbeatRuns,type Db} from "@paperclipai/db";
 import {analyticalContextAuthorityPinSchema,type AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {z} from "zod";
@@ -49,10 +49,14 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
 /** Copied prose is admitted as one complete source-dependent payload. Owners
  * remain authoritative after an original run has finished or roles change. */
 export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string}) {
+ const nativeConversation="runId" in scope?await db.select({id:issues.id}).from(heartbeatRuns)
+  .innerJoin(issues,and(eq(issues.companyId,heartbeatRuns.companyId),eq(issues.id,heartbeatRuns.nativeIssueId)))
+  .where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,scope.runId),eq(heartbeatRuns.runtimeMode,"native"),or(sql`${issues.conversationAgentId} is not null`,sql`${issues.conversationRetiredAt} is not null`))).limit(1):[];
+ const conversationIssueId="issueId" in scope?scope.issueId:nativeConversation[0]?.id;
  const retired = await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),sql`${issues.conversationRetiredAt} is not null`,
   "issueId" in scope?eq(issues.id,scope.issueId):sql`exists(select 1 from ${heartbeatRuns} h where h.company_id=${companyId}::uuid and h.id=${scope.runId}::uuid and h.native_issue_id=${issues.id})`)).limit(1);
  if(retired.length)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
- const condition="issueId" in scope?eq(contextManifests.issueId,scope.issueId):eq(contextManifests.runId,scope.runId);
+ const condition="issueId" in scope?eq(contextManifests.issueId,scope.issueId):or(eq(contextManifests.runId,scope.runId),conversationIssueId?eq(contextManifests.issueId,conversationIssueId):undefined);
  const hasRoots=await db.select({id:analyticalContextRoots.memoryRecordId}).from(contextManifests).innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
   .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId))).where(and(eq(contextManifests.companyId,companyId),condition)).limit(1);
  if(!hasRoots.length)return;
@@ -63,7 +67,7 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
   const roots=await tx.selectDistinct({id:analyticalContextRoots.memoryRecordId,sourceCount:analyticalContextRoots.sourceCount,pins:analyticalContextRoots.authorityPins,expiresAt:analyticalContextRoots.expiresAt}).from(contextManifests).innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
    .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId))).where(and(eq(contextManifests.companyId,companyId),condition)).limit(257);
   if(roots.length>256)throw forbidden("The complete analytical conversation exceeds its source review budget");
-  const erased=await tx.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid) as erased`);
+  const erased=await tx.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${conversationIssueId??null}::uuid) as erased`);
   if(erased[0]?.erased)throw forbidden("The analytical conversation source was erased or expired");
   const deadline=performance.now()+30000;
   for(const root of roots){
@@ -83,4 +87,12 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
   if(error instanceof HttpError&&[403,404,409,422].includes(error.status))throw new HttpError(error.status,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
   throw error;
  }
+}
+
+/** Provider inputs and outputs use the actual persisted native identity. A
+ * caller supplies only the existing company/run binding, never a human grant. */
+export async function assertNativeAnalyticalRunPayloadAccess(db:Db,companyId:string,runId:string) {
+ const [run]=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,runId))).limit(1);
+ if(!run)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
+ await assertAnalyticalContextPayloadAccess(db,companyId,{type:"agent",source:"agent_jwt",companyId,agentId:run.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId},{runId:run.id});
 }
