@@ -1,3 +1,5 @@
+import {lockAnalyticalCompany} from "./analytical-privacy.js";
+import {assertLearnedAssetAnalyticalSources,assertLearningCandidateAnalyticalSources} from "./learning/learning-analytical-sources.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { companySkillService } from "./company-skills.js";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
@@ -23,6 +25,7 @@ export function playbookService(db: Db) {
     if (["confidential", "restricted"].includes(row.sensitivity)) await assertV5Authorization(tx, actor, companyId, "users:manage_permissions");
     const [document] = await tx.select().from(documents).where(and(eq(documents.companyId, companyId), eq(documents.id, row.documentId))).limit(1);
     if (!document || !document.latestRevisionId) throw conflict("Playbook revision is unavailable");
+    for(const revisionId of new Set([document.latestRevisionId,row.approvedRevisionId].filter((id):id is string=>Boolean(id))))await assertLearnedAssetAnalyticalSources(tx,companyId,"document_revision",revisionId,actor);
     return { ...row, document, overdue: Boolean(row.nextReviewAt && row.nextReviewAt <= new Date()) };
   }
   async function revision(tx: Db, companyId: string, documentId: string, revisionId: string) {
@@ -47,11 +50,13 @@ export function playbookService(db: Db) {
       const row = await get(db, actor, companyId, id);
       const revisions = await db.select({ id: documentRevisions.id, revisionNumber: documentRevisions.revisionNumber, changeSummary: documentRevisions.changeSummary, createdAt: documentRevisions.createdAt }).from(documentRevisions).where(and(eq(documentRevisions.companyId, companyId), eq(documentRevisions.documentId, row.documentId))).orderBy(desc(documentRevisions.revisionNumber)).limit(100);
       const proposals = await db.select().from(playbookChangeProposals).where(and(eq(playbookChangeProposals.companyId, companyId), eq(playbookChangeProposals.playbookId, id))).orderBy(desc(playbookChangeProposals.createdAt)).limit(100);
+      for(const proposal of proposals)await assertLearningCandidateAnalyticalSources(db,companyId,"playbook",proposal.id,actor);
+      for(const revision of revisions)await assertLearnedAssetAnalyticalSources(db,companyId,"document_revision",revision.id,actor);
       const allLinks = await db.select().from(playbookSkillLinks).where(and(eq(playbookSkillLinks.companyId, companyId), eq(playbookSkillLinks.playbookId, id))).limit(100), links = [];
       for (const link of allLinks) if (await companySkillService(db).canReadSkill(companyId, link.skillId, actor) && await companySkillService(db).getVersion(companyId, link.skillId, link.skillVersionId, actor)) links.push(link);
       return { ...row, revisions, proposals, links: links.map((link) => ({ ...link, drifted: link.playbookRevisionId !== row.approvedRevisionId })) };
     },
-    getRevision: async (actor: AuthorizationActor, companyId: string, id: string, revisionId: string) => { const row = await get(db, actor, companyId, id); return revision(db, companyId, row.documentId, revisionId); },
+    getRevision: async (actor: AuthorizationActor, companyId: string, id: string, revisionId: string) => { const row = await get(db, actor, companyId, id); await assertLearnedAssetAnalyticalSources(db,companyId,"document_revision",revisionId,actor); return revision(db, companyId, row.documentId, revisionId); },
     create: async (actor: AuthorizationActor, companyId: string, raw: z.infer<typeof createPlaybookSchema>, parentPublications?: ActivityPublication[]) => {
       await authorize(actor, companyId, "foundation:edit"); const input = createPlaybookSchema.parse(raw), userId = v5HumanActorId(actor);
       return withV5ActivityTransaction(db, async (tx, publications) => {
@@ -97,7 +102,7 @@ export function playbookService(db: Db) {
     draft: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof playbookDraftSchema>, parentPublications?: ActivityPublication[]) => {
       await authorize(actor, companyId, "foundation:edit"); const input = playbookDraftSchema.parse(raw), userId = v5HumanActorId(actor);
       return withV5ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId);
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx, companyId);
         const row = await get(tx, actor, companyId, id, true);
         if (row.status === "archived" || row.document.latestRevisionId !== input.expectedRevisionId) throw conflict("Playbook draft changed or is archived; refresh before saving");
         const next = await appendRevision(tx, row, userId, input.title, input.markdown, input.changeSummary);
@@ -110,7 +115,7 @@ export function playbookService(db: Db) {
     review: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof reviewPlaybookSchema>) => {
       await authorize(actor, companyId, "foundation:approve"); const input = reviewPlaybookSchema.parse(raw), userId = v5HumanActorId(actor);
       const result = await withV5ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId);
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx, companyId);
         const row = await get(tx, actor, companyId, id, true);
         if (row.document.latestRevisionId !== input.expectedRevisionId || row.status === "archived") throw conflict("The Playbook changed; repeat review");
         await revision(tx, companyId, row.documentId, input.expectedRevisionId);
@@ -154,7 +159,7 @@ export function playbookService(db: Db) {
     propose: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof proposePlaybookSchema>, parentPublications?: ActivityPublication[]) => {
       await authorize(actor, companyId, "foundation:propose"); const input = proposePlaybookSchema.parse(raw);
       return withV5ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId);
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx, companyId);
         const row = await get(tx, actor, companyId, id, true);
         if (row.approvedRevisionId !== input.baseApprovedRevisionId || row.status === "archived") throw conflict("The canonical Playbook changed; refresh the proposal");
         if (input.sourceSkillId && !(await companySkillService(tx).canReadSkill(companyId, input.sourceSkillId, actor))) throw notFound("Feedback Skill not found");
@@ -167,9 +172,10 @@ export function playbookService(db: Db) {
       await authorize(actor, companyId, "foundation:approve"); const userId = v5HumanActorId(actor);
       if (rationale.trim().length < 10 || rationale.length > 4000) throw unprocessable("Review rationale must contain 10–4000 characters");
       return withV5ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId);
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx, companyId);
         const row = await get(tx, actor, companyId, id, true), [proposal] = await tx.select().from(playbookChangeProposals).where(and(eq(playbookChangeProposals.companyId, companyId), eq(playbookChangeProposals.playbookId, id), eq(playbookChangeProposals.id, proposalId))).limit(1).for("update");
         if (!proposal || proposal.status !== "pending") throw conflict("A pending Playbook proposal is required");
+        await assertLearningCandidateAnalyticalSources(tx,companyId,"playbook",proposal.id,actor);
         const stale = proposal.baseApprovedRevisionId !== row.approvedRevisionId || row.document.latestRevisionId !== proposal.baseDraftRevisionId;
         const status = stale ? "stale" : accept ? "accepted" : "rejected";
         if (status === "accepted") { await appendRevision(tx, row, userId, proposal.title, proposal.markdown, proposal.reason); await tx.update(playbookDocuments).set({ status: "in_review", updatedAt: new Date() }).where(eq(playbookDocuments.id, id)); }

@@ -13,6 +13,7 @@ import { strategyExecutionService } from "../services/strategy-execution/service
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { analyticalPurpose } from "./helpers/business-metric-fixture.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
+import {foundationIndexService} from "../services/foundation/foundation-index.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { purgeMemoryRecords, reapplyMemoryDeletionMarkers } from "../services/memory/memory-privacy.js";
@@ -27,6 +28,8 @@ import { workflowService } from "../services/workflows/workflow-service.js";
 import { rolePackService } from "../services/role-packs.js";
 import { skillLifecycleService } from "../services/skill-lifecycle.js";
 import { playbookService } from "../services/playbooks.js";
+import {companySkillService} from "../services/company-skills.js";
+import type {AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)("V7 Organizational Learning domain promotion", () => {
@@ -61,8 +64,8 @@ const support = await getEmbeddedPostgresTestSupport();
     const evaluation = await service.evaluate(owner, companyId, hypothesis.id, evaluationInput(hypothesis.version));
     return { service, cycle, hypothesis, evaluation };
   }
-  async function domainProposal(target: string, baseline: string, rawChange: LearningChange) {
-    const service = learningService(db), cycle = await service.create(owner, companyId, cycleInput()), normalized = learningChangeSchema.parse(rawChange);
+  async function domainProposal(target: string, baseline: string, rawChange: LearningChange, analyticalSources?:AnalyticalContextAuthorityPin[]) {
+    const service = learningService(db), cycle = await service.create(owner, companyId, {...cycleInput(),...(analyticalSources?{analyticalSources}:{})}), normalized = learningChangeSchema.parse(rawChange);
     const hypothesis = await service.addHypothesis(owner, companyId, cycle.id, { ...hypothesisInput(1), targetDomain: normalized.targetDomain, targetId: target,
       evaluationContract: { ...contract(), baselineRef: baseline, challengerHash: nativeSha256(normalized) } });
     const evaluation = await service.evaluate(owner, companyId, hypothesis.id, evaluationInput(1));
@@ -137,8 +140,13 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(accepted.foundation.body).toBe(change().proposedBody);
     await expect(foundationService(db).get(companyId,targetId)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
     expect((await foundationService(db).get(companyId,targetId,owner))!.body).toBe(change().proposedBody);
+    await foundationService(db).submitForReview(companyId,targetId,accepted.foundation.latestRevisionId!,principal);
+    await foundationService(db).approve(companyId,targetId,accepted.foundation.latestRevisionId!,principal);
+    expect(await foundationIndexService(db).search(companyId,{query:"evidence review",limit:12,scope:"approved"},owner)).toHaveLength(1);
+    await expect(foundationIndexService(db).search(companyId,{query:"evidence review",limit:12,scope:"approved"})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
     await expect(foundationService(db).get(companyId,targetId,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    await expect(foundationIndexService(db).search(companyId,{query:"evidence review",limit:12,scope:"approved"},owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
   });
   it("preserves original analytical sensitivity when proposing a native Learning change",async()=>{
     const signal=await analyticalSignal("confidential"),service=learningService(db),cycle=await service.create(owner,companyId,{...cycleInput(),analyticalSources:[signal.pin]});
@@ -309,6 +317,30 @@ const support = await getEmbeddedPostgresTestSupport();
     const link = await domainProposal(created.id, `playbook://${created.id}/none`, { targetDomain: "playbook", proposal: { baseApprovedRevisionId: null, title: "Procedure", markdown: "Review evidence before drafting", reason: "Real outcomes show repeated late evidence review" } });
     expect((await db.select().from(playbookChangeProposals).where(eq(playbookChangeProposals.id, link.candidateId)))[0]!.status).toBe("pending");
     expect((await playbooks.get(owner, companyId, created.id)).approvedRevisionId).toBeNull();
+  });
+  it("repeats current analytical admission at the original Playbook read and human review owner",async()=>{
+    const signal=await analyticalSignal(),playbooks=playbookService(db),created=await playbooks.create(owner,companyId,createPlaybookSchema.parse({key:"analytical-learning-procedure",title:"Procedure",markdown:"Original reviewed procedure"}));
+    const link=await domainProposal(created.id,`playbook://${created.id}/none`,{targetDomain:"playbook",proposal:{baseApprovedRevisionId:null,title:"Procedure",markdown:"Review analytical evidence before drafting",reason:"Verified work outcomes and supplemental signal suggest an earlier review"}},[signal.pin]);
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+    await expect(playbooks.get(owner,companyId,created.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    await expect(playbooks.reviewProposal(owner,companyId,created.id,link.candidateId,true,"Human review of the original governed procedure")).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
+    expect((await playbooks.reviewProposal(owner,companyId,created.id,link.candidateId,true,"Human review of the original governed procedure")).status).toBe("accepted");
+    expect((await playbooks.get(owner,companyId,created.id)).document.latestBody).toContain("Review analytical evidence");
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+    await expect(playbooks.get(owner,companyId,created.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+  });
+  it("checks analytical source admission before native Skill payload reads and promotion",async()=>{
+    const signal=await analyticalSignal(),skills=skillLifecycleService(db),created=await skills.createDraft(owner,companyId,createGovernedSkillSchema.parse({slug:"analytical-learning-procedure",name:"Procedure",markdown:"Keep human approval before changing systems"}));
+    const link=await domainProposal(created.skillId,`skill://${created.skillId}/none`,{targetDomain:"skill",candidate:{baseActiveVersionId:null,markdown:"Review evidence before drafting; keep human approval",summary:"Supplemental analytical signal informs the procedure",dependencies:[],sharing:"company_proposed"}},[signal.pin]);
+    const original=companySkillService(db);
+    expect((await original.getVersion(companyId,created.skillId,link.candidateId,owner))?.fileInventory[0]?.content).toContain("Review evidence");
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+    await expect(original.getVersion(companyId,created.skillId,link.candidateId,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    await expect(skills.promote(owner,companyId,created.skillId,{versionId:link.candidateId,expectedActiveVersionId:null,evaluationRunId:randomUUID()})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    expect((await db.select().from(companySkills).where(eq(companySkills.id,created.skillId)))[0]!.activeVersionId).toBeNull();
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
+    expect((await original.getVersion(companyId,created.skillId,link.candidateId,owner))?.fileInventory[0]?.content).toContain("Review evidence");
   });
   it("keeps roadmap dates unchanged and policy proposals behind explicit human acknowledgement", async () => {
     const [project] = await db.insert(projects).values({ companyId, name: "Evidence project" }).returning();

@@ -1,3 +1,5 @@
+import {lockAnalyticalCompany} from "./analytical-privacy.js";
+import {assertLearnedAssetAnalyticalSources,assertLearningCandidateAnalyticalSources} from "./learning/learning-analytical-sources.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { availablePortfolioPublication } from "./portfolio-source.js";
 import { skillDependencyStates } from "./skill-dependencies.js";
@@ -27,9 +29,10 @@ export function skillLifecycleService(db: Db) {
     const query = tx.select().from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, id))).limit(1);
     const [row] = await (lock ? query.for("update") : query); if (!row) throw notFound("Skill not found"); return row;
   }
-  async function version(tx: Db, companyId: string, skillId: string, id: string) {
+  async function version(tx: Db, companyId: string, skillId: string, id: string, actor:AuthorizationActor) {
     const [row] = await tx.select().from(companySkillVersions).where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, skillId), eq(companySkillVersions.id, id))).limit(1);
-    if (!row) throw notFound("Skill version not found"); return row;
+    if (!row) throw notFound("Skill version not found");
+    await assertLearningCandidateAnalyticalSources(tx,companyId,"skill",id,actor);await assertLearnedAssetAnalyticalSources(tx,companyId,"skill_version",id,actor);return row;
   }
   async function authorize(actor: AuthorizationActor, companyId: string, action: SkillPolicyAction, row?: typeof companySkills.$inferSelect, tx: Db = db) {
     await assertV5Enabled(tx, "skill_lifecycle_v5");
@@ -117,7 +120,7 @@ export function skillLifecycleService(db: Db) {
     propose: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof skillCandidateInputSchema>, provenance?: SkillProvenance, parentPublications?: ActivityPublication[]) => {
       const input = skillCandidateInputSchema.parse(raw); await authorize(actor, companyId, "skills.propose");
       return withV5ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId);
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx, companyId);
         const row = await skill(tx, companyId, id, true); await authorize(actor, companyId, "skills.propose", row, tx);
         if (["revoked", "deprecated"].includes(row.lifecycleState)) throw conflict("Revoked/deprecated Skills cannot receive candidates");
         if (row.activeVersionId !== input.baseActiveVersionId) throw conflict("The active Skill changed; refresh before proposing");
@@ -127,7 +130,7 @@ export function skillLifecycleService(db: Db) {
           const [recent] = await tx.select({ count: sql<number>`count(*)` }).from(companySkillVersions).where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.authorAgentId, actor.agentId!), sql`${companySkillVersions.createdAt} > now() - interval '24 hours'`));
           if (Number(recent!.count) >= 5) throw conflict("Autonomous proposal limit reached: five candidates per local agent per day");
         }
-        const base = row.activeVersionId ? await version(tx, companyId, id, row.activeVersionId) : null;
+        const base = row.activeVersionId ? await version(tx, companyId, id, row.activeVersionId,actor) : null;
         const sensitivity = sensitivities[Math.max(sensitivityRank(row.metadata?.sensitivity), sensitivityRank(base?.validationSummary?.sensitivity ?? "public"), sensitivityRank(provenance?.sourceSensitivity ?? "public"))]!;
         const inheritedDependencies = base ? await tx.select().from(companySkillDependencies).where(and(eq(companySkillDependencies.companyId, companyId), eq(companySkillDependencies.skillVersionId, base.id))) : [];
         const dependencies = new Map(inheritedDependencies.map((dep) => [`${dep.dependencyType}:${dep.dependencyRef}`, { dependencyType: dep.dependencyType, dependencyRef: dep.dependencyRef, dependencyVersion: dep.dependencyVersion, required: dep.required }]));
@@ -151,7 +154,7 @@ export function skillLifecycleService(db: Db) {
     submitCandidate: async (actor: AuthorizationActor, companyId: string, id: string, versionId: string) => {
       await authorize(actor, companyId, "skills.propose");
       return withV5ActivityTransaction(db, async (tx, publications) => {
-        const row = await skill(tx, companyId, id, true), candidate = await version(tx, companyId, id, versionId); await authorize(actor, companyId, "skills.propose", row, tx);
+        const row = await skill(tx, companyId, id, true), candidate = await version(tx, companyId, id, versionId,actor); await authorize(actor, companyId, "skills.propose", row, tx);
         if (candidate.state !== "candidate") throw conflict("Only candidates can be submitted");
         if (actor.type === "agent" && candidate.authorAgentId !== actor.agentId) throw forbidden("Only the author can submit a private candidate");
         await tx.update(companySkillVersions).set({ visibility: "company" }).where(eq(companySkillVersions.id, versionId));
@@ -162,7 +165,7 @@ export function skillLifecycleService(db: Db) {
     reviewOverlap: async (actor: AuthorizationActor, companyId: string, id: string, versionId: string, rationale: string) => {
       await authorize(actor, companyId, "skills.approve"); if (rationale.trim().length < 20 || rationale.length > 4000) throw unprocessable("Overlap review requires a rationale of 20–4000 characters");
       return withV5ActivityTransaction(db, async (tx, publications) => {
-        const row = await skill(tx, companyId, id, true), candidate = await version(tx, companyId, id, versionId); await authorize(actor, companyId, "skills.approve", row, tx);
+        const row = await skill(tx, companyId, id, true), candidate = await version(tx, companyId, id, versionId,actor); await authorize(actor, companyId, "skills.approve", row, tx);
         if (candidate.state !== "candidate") throw conflict("Only candidate overlap can be reviewed");
         await tx.update(companySkillVersions).set({ validationSummary: { ...candidate.validationSummary, overlapReview: { state: "accepted_separate", rationale, reviewedByUserId: v5HumanActorId(actor), reviewedAt: new Date().toISOString() } } }).where(eq(companySkillVersions.id, versionId));
         await audit(tx, actor, companyId, id, "skill.overlap_reviewed", publications, { versionId }); return { versionId, state: "accepted_separate" };
@@ -181,11 +184,11 @@ export function skillLifecycleService(db: Db) {
     promote: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof skillPromotionInputSchema>) => {
       const input = skillPromotionInputSchema.parse(raw); await authorize(actor, companyId, "skills.promote");
       return withV5ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId);
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx, companyId);
         const row = await skill(tx, companyId, id, true); await authorize(actor, companyId, "skills.promote", row, tx);
         if (row.activeVersionId !== input.expectedActiveVersionId) throw conflict("The champion changed; repeat comparison against the current active version");
         if (["revoked", "deprecated"].includes(row.lifecycleState)) throw conflict("A revoked/deprecated Skill cannot be promoted");
-        const candidate = await version(tx, companyId, id, input.versionId), policy = skillPromotionPolicySchema.parse(row.promotionPolicy);
+        const candidate = await version(tx, companyId, id, input.versionId,actor), policy = skillPromotionPolicySchema.parse(row.promotionPolicy);
         if (candidate.visibility !== "company" || candidate.state !== "validated") throw conflict("Promotion requires a shared, validated immutable candidate");
         const [evaluation] = await tx.select().from(companySkillEvalRuns).where(and(eq(companySkillEvalRuns.companyId, companyId), eq(companySkillEvalRuns.skillId, id), eq(companySkillEvalRuns.id, input.evaluationRunId))).limit(1);
         if (!evaluation || evaluation.status !== "passed" || evaluation.candidateVersionId !== candidate.id || evaluation.championVersionId !== row.activeVersionId || evaluation.trials < policy.minimumPairedTrials) throw conflict("A passing paired evaluation against the current champion is required");
