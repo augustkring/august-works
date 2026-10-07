@@ -70,7 +70,7 @@ export async function captureManagementSources(tx: Db, companyId: string, actor:
       } else if (ref.type === "metric") {
         const value = await businessMetricService(tx).inspectPublishedDefinition(companyId, actor, ref.id, ref.versionId); material = { metric: value.metric, version: value.version }; edge({ inputType: "metric_version", inputRef: value.version.id, inputHash: value.version.contentHash, relationship: "definition" }); facts = { name: value.version.definition.name, unit: value.version.definition.unit, authorityMode: value.version.definition.authorityMode, published: value.metric.publishedVersionId === ref.versionId };
       } else {
-        const captured = await captureAnalyticalEvidence(tx, companyId, actor, { sensitivity: definition.sensitivity, retentionDays: definition.retentionDays, evidence: [{ key: item.key, source: ref }] }, deadline); for (const value of captured.edges) edge(value); for (const id of captured.manifestIds) dependencies.add(id); expiresAt = new Date(Math.min(expiresAt.getTime(), captured.expiresAt.getTime())); material = captured.evidence[0]; facts = captured.evidence[0].facts; limitations.push(...captured.evidence[0].limitations);
+        const captured = await captureAnalyticalEvidence(tx, companyId, actor, { sensitivity: definition.sensitivity, retentionDays: definition.retentionDays, evidence: [{ key: item.key, source: ref }] }, deadline); for (const value of captured.edges) edge(value); for (const id of captured.manifestIds) dependencies.add(id); expiresAt = new Date(Math.min(expiresAt.getTime(), captured.expiresAt.getTime())); material = { source: captured.evidence[0].source, sourceHash: captured.evidence[0].sourceHash, facts: captured.evidence[0].facts, limitations: captured.evidence[0].limitations }; facts = captured.evidence[0].facts; limitations.push(...captured.evidence[0].limitations);
       }
     } else if (source.kind === "decision_outcome") {
       const value = await decisionOutcomeReviewService(tx).detail(companyId, actor, source.decisionId); if (!value || value.id !== source.reviewId || value.revision !== source.revision) throw conflict("Native decision outcome review identity/revision changed");
@@ -86,6 +86,23 @@ export async function captureManagementSources(tx: Db, companyId: string, actor:
       grade = "native_learning_cycle"; material = value; facts = { status: value.status, version: value.version, hypothesisCount: value.hypotheses.length, evaluationCount: value.evaluations.length, proposalCount: value.candidates.length, acceptedPromotionReceipts: value.candidates.filter(candidate => !!candidate.promotionReceipt).length }; limitations.push("Native Learning still requires surviving verified canonical Task roots and independent evaluations; analytical proxies do not substitute for those roots.");
     }
     sources.push({ key: item.key, source, sourceHash: nativeSha256(material), capturedAt: new Date().toISOString(), expiresAt: expiresAt.toISOString(), grade, facts, limitations });
+  }
+  // Capture typed original metric material only for explicitly requested pairs.
+  // This is a read of an existing observation, never a query/new measurement.
+  const comparisonKeys = new Set((definition.comparisons ?? []).flatMap(item => [item.leftSourceKey, item.rightSourceKey]));
+  for (const captured of sources.filter(source => comparisonKeys.has(source.key))) {
+    const ref = captured.source.kind === "canonical" || captured.source.kind === "analytical" ? captured.source.reference : null;
+    if (ref?.type === "metric_observation") {
+      const observation = await businessMetricService(tx).inspectCurrentObservation(companyId, actor, ref.id), published = await businessMetricService(tx).inspectPublishedDefinition(companyId, actor, ref.metricId, ref.metricVersionId);
+      if (observation.metricId !== ref.metricId || observation.versionId !== ref.metricVersionId) throw conflict("Management metric comparison pin changed");
+      captured.metric = { observation, unit: published.version.definition.unit, timeSemantics: published.version.definition.timeSemantics };
+      captured.sourceHash = nativeSha256({ originalSourceHash: captured.sourceHash, metric: captured.metric });
+    } else if (ref?.type === "metric_target") {
+      const value = await businessMetricTargetService(tx).inspectApprovedCommitment(companyId, actor, ref.id, ref.versionId);
+      captured.target = { id: ref.id, versionId: ref.versionId, definition: value.version.definition };
+      captured.sourceHash = nativeSha256({ originalSourceHash: captured.sourceHash, target: captured.target });
+    } else throw conflict("Management comparison requires native observations and commitments");
+    budget();
   }
   const lineage = [...edges.values()].sort((a, b) => `${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
   await inspectAnalyticalEvidenceAuthority(tx, companyId, actor, lineage, deadline);

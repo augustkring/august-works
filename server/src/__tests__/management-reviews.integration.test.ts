@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
-import { analyticalLineageManifests, companies, goals, issues, projects, managementReviewSnapshots, managementReviewEvents, managementReviewSourceLinks, memoryBindings, memoryRecords, memoryEvidence, type Db, createDb } from "@paperclipai/db";
+import { analyticalLineageManifests, businessMetricObservations, companies, goals, issues, projects, managementReviewSnapshots, managementReviewEvents, managementReviewSourceLinks, memoryBindings, memoryRecords, memoryEvidence, type Db, createDb } from "@paperclipai/db";
 import { managementReviewDefinitionSchema, type ManagementReviewDefinition } from "@paperclipai/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { managementReviewService } from "../services/management-reviews/service.js";
@@ -10,6 +10,7 @@ import { managementReviewRoutes } from "../routes/management-reviews.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
+import { businessMetricTargetService } from "../services/business-metrics/targets.js";
 import { analyticalPurpose, metricDefinition } from "./helpers/business-metric-fixture.js";
 import { disableV8Rollout } from "./helpers/v8-rollout.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -77,6 +78,36 @@ describe.skipIf(!support.supported)("Native historical management review owner o
     });
     await expect(managementReviewService(db).detail(companyId, actor, fakeId)).rejects.toMatchObject({ status: 404 });
     await expect(publish(fakeId, created.contentHash)).rejects.toMatchObject({ status: 404 });
+  });
+
+  async function measured() {
+    const f = await fixture(), metric = await businessMetricService(db).create(companyId, actor, { key: "comparison_metric", definition: metricDefinition(policyId) });
+    await businessMetricService(db).publish(companyId, actor, metric.metric.id, { expectedRevision: 1, versionId: metric.version.id });
+    await db.insert(issues).values([{ companyId, title: "Synthetic native completed source", status: "done", completedAt: new Date(), createdAt: new Date(Date.parse(f.definition.period.from) + 3600000), responsibleUserId: "local-board" }, { companyId, title: "Synthetic native pending source", status: "todo", createdAt: new Date(Date.parse(f.definition.period.from) + 3600000), responsibleUserId: "local-board" }]);
+    const observation = await businessMetricService(db).query(companyId, actor, { metricId: metric.metric.id, versionId: metric.version.id, from: f.definition.period.from, until: f.definition.period.until, dimensions: [], maxRows: 5000 });
+    return { ...f, metric, observation };
+  }
+  it("keeps the canonical observation alias stable across recapture and separate publication", async () => { const f = await measured(); f.definition.sources.push({ key: "alias", source: { kind: "canonical", reference: { type: "metric_observation", id: f.observation.id, metricId: f.observation.metricId, metricVersionId: f.observation.versionId } } }); const created = await managementReviewService(db).create(companyId, actor, f.definition); const first = await managementReviewService(db).detail(companyId, actor, created.id), second = await managementReviewService(db).detail(companyId, actor, created.id); expect(first.currentQualification).toBe("current"); expect(second.currentQualification).toBe("current"); expect(second.packet).toEqual(first.packet); await publish(created.id, created.contentHash); });
+  it("compares exact native actuals to an approved target without creating another observation and erases the whole comparison on source loss", async () => {
+    const f = await measured(), target = await businessMetricTargetService(db).create(companyId, actor, { key: "comparison_target", definition: { metricId: f.metric.metric.id, metricVersionId: f.metric.version.id, scope: { type: "goal", goalId: f.goal.id }, periodStart: f.observation.from, periodEnd: f.observation.until, criterion: { kind: "at_least", value: 0.75 }, rationale, assumptions: ["Native current status is not a business-impact measurement"], ownerUserId: "local-board" } });
+    await businessMetricTargetService(db).approve(companyId, actor, target.target.id, { expectedRevision: 1, versionId: target.version.id, approvalRationale: rationale });
+    f.definition.sources.push({ key: "actual", source: { kind: "analytical", reference: { type: "metric_observation", id: f.observation.id, metricId: f.observation.metricId, metricVersionId: f.observation.versionId } } }, { key: "target", source: { kind: "canonical", reference: { type: "metric_target", id: target.target.id, versionId: target.version.id } } }); f.definition.comparisons = [{ key: "commitment", kind: "target_actual", leftSourceKey: "target", rightSourceKey: "actual" }];
+    const created = await managementReviewService(db).create(companyId, actor, f.definition), detail = await managementReviewService(db).detail(companyId, actor, created.id);
+    expect(detail.currentQualification).toBe("current"); expect(detail.packet.claims.at(-1)).toMatchObject({ sourceKeys: ["target", "actual"], facts: { status: "not_met", observedValue: 0.5, unit: "ratio" } });
+    expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId, companyId))).toHaveLength(1);
+    await publish(created.id, created.contentHash); await disableV8Rollout(db);
+    await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id, f.observation.lineageManifestId));
+    expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id, created.id))).toHaveLength(0);
+  });
+  it("captures a two-window native change with both exact original source receipts", async () => {
+    const f = await measured(), from = new Date(Date.parse(f.observation.from) - 86400000).toISOString();
+    await db.insert(issues).values({ companyId, title: "Synthetic prior-cohort current status", status: "todo", createdAt: new Date(Date.parse(from) + 3600000), responsibleUserId: "local-board" });
+    const before = await businessMetricService(db).query(companyId, actor, { metricId: f.metric.metric.id, versionId: f.metric.version.id, from, until: f.observation.from, dimensions: [], maxRows: 5000 });
+    for (const [key, value] of [["before", before], ["after", f.observation]] as const) f.definition.sources.push({ key, source: { kind: "analytical", reference: { type: "metric_observation", id: value.id, metricId: value.metricId, metricVersionId: value.versionId } } });
+    f.definition.comparisons = [{ key: "change", kind: "metric_change", leftSourceKey: "before", rightSourceKey: "after" }];
+    const created = await managementReviewService(db).create(companyId, actor, f.definition), detail = await managementReviewService(db).detail(companyId, actor, created.id);
+    expect(detail.currentQualification).toBe("current"); expect(detail.packet.claims.at(-1)!.facts).toMatchObject({ status: "observed_change", beforeValue: 0, afterValue: 0.5, absoluteChange: 0.5, relativeChangeFraction: null });
+    expect(detail.packet.claims.at(-1)!.limitations.join(" ")).toContain("distinct cohorts"); await publish(created.id, created.contentHash);
   });
 
 });

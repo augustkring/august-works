@@ -15,6 +15,12 @@ function Predictive() {
   f.review.sources.push(source); f.review.packet.claims.push({ key: "claim_forecast", sourceKeys: [source.key], grade: source.grade, facts: source.facts, limitations: source.limitations });
   return <div className="mx-auto w-full max-w-3xl"><ManagementReviewResult review={f.review} /></div>;
 }
+function Comparison() {
+  const f = managementFixture(), source = { ...f.review.sources[0], key: "actual", source: { kind: "analytical" as const, reference: { type: "metric_observation" as const, id: "00000000-0000-4000-8000-000000002307", metricId: "00000000-0000-4000-8000-000000002308", metricVersionId: "00000000-0000-4000-8000-000000002309" } }, grade: "native_observation" as const, facts: { value: 0.5 }, limitations: ["Synthetic cached numerical presentation; no collected business impact."] };
+  const earlier = f.review.sources[0]; earlier.source = { kind: "analytical", reference: { type: "metric_observation", id: "00000000-0000-4000-8000-000000002310", metricId: "00000000-0000-4000-8000-000000002311", metricVersionId: "00000000-0000-4000-8000-000000002312" } }; earlier.grade = "native_observation"; earlier.facts = { value: 0.2 }; f.review.packet.claims[0] = { key: "claim_source_1", sourceKeys: ["source_1"], grade: earlier.grade, facts: earlier.facts, limitations: earlier.limitations }; f.review.definition.sources[0].source = earlier.source; f.review.definition.sources.push({ key: source.key, source: source.source }); f.review.definition.comparisons = [{ key: "native_change", kind: "metric_change", leftSourceKey: "source_1", rightSourceKey: "actual" }];
+  f.review.sources.push(source); f.review.packet.claims.push({ key: "claim_actual", sourceKeys: [source.key], grade: source.grade, facts: source.facts, limitations: source.limitations }, { key: "comparison_native_change", sourceKeys: ["source_1", "actual"], grade: "native_observation", facts: { comparison: "two_cited_native_windows", status: "unknown", absoluteChange: null, relativeChangeFraction: null, reason: "observation_definition_mismatch" }, limitations: ["Incompatible native sources cannot establish a numerical change. Synthetic cached presentation only."] });
+  return <div className="mx-auto w-full max-w-3xl"><ManagementReviewResult review={f.review} /></div>;
+}
 const meta: Meta = { title: "Business Intelligence/Management reviews", parameters: { layout: "padded" } }; export default meta; type Story = StoryObj;
 // Cached synthetic presentation; browser checks abort every API request.
 export const Current: Story = { render: () => <Workspace /> };
@@ -22,3 +28,4 @@ export const Retained: Story = { render: () => <Workspace stale /> };
 export const Published: Story = { render: () => <Workspace published /> };
 export const Disabled: Story = { render: () => <Workspace disabled /> };
 export const Prediction: Story = { render: () => <Predictive /> };
+export const CitedComparison: Story = { render: () => <Comparison /> };
