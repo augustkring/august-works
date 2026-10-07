@@ -1,8 +1,10 @@
-import { is, sql, type SQL } from "drizzle-orm";
+import { eq, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { companies, type Db } from "@paperclipai/db";
+import { businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, companies, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 
 // Minimal ownership/billing/erasure receipts survive content deletion. Never physically drop the company tombstone.
 const retained = new Set([
@@ -28,6 +30,9 @@ export async function purgeCompanyContent(
   options: { restoreQuarantine?: boolean } = {},
 ) {
   return db.transaction(async (tx) => {
+    await tx.execute(sql`set local statement_timeout='8s'`);
+    await lockAnalyticalCompany(tx,companyId);
+    await lockMemoryPrivacy(tx as unknown as Db,companyId);
     if (!options.restoreQuarantine) {
       const alive = await tx.execute<{ present: boolean }>(
         sql`select exists(select 1 from runtime_cells where company_id=${companyId}::uuid and deleted_at is null) as present`,
@@ -36,6 +41,21 @@ export async function purgeCompanyContent(
         throw conflict(
           "Physical runtime erasure must be confirmed before content purge",
         );
+    }
+    // Publish the minimal tombstone inside this same transaction. Any failed
+    // purge rolls it back; normal archival never grants evidence deletion.
+    await tx.execute(sql`update ${companies} set status='archived',pause_reason='company_deleted',content_erasure_transaction_id=pg_current_xact_id()::text,updated_at=now() where id=${companyId}::uuid`);
+    const deleted: string[] = [];
+    // Published analytical roots own immutable versions and generated source
+    // pins. Delete through those native cascade owners before the generic FK
+    // planner, which cannot unlink generated columns or mutate frozen snapshots.
+    for(const table of [strategyExecutionLinks,businessMetricTargets,processAnalysisDefinitions,businessMetrics]) {
+      const config=getTableConfig(table);
+      const [found]=await tx.execute<{present:boolean}>(sql`select exists(select 1 from ${table} where company_id=${companyId}::uuid) as present`);
+      if(!found?.present) continue;
+      if(table===businessMetrics) await tx.update(businessMetrics).set({status:"revoked",publishedVersionId:null}).where(eq(businessMetrics.companyId,companyId));
+      await tx.execute(sql`delete from ${table} where company_id=${companyId}::uuid`);
+      deleted.push(config.name);
     }
     const tables = [
       ...new Set(
@@ -136,7 +156,6 @@ export async function purgeCompanyContent(
       }
       edges.set(table, parents);
     }
-    const deleted: string[] = [];
     while (pending.size) {
       const leaves = [...pending].filter(
         (table) =>
