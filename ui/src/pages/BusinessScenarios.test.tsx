@@ -5,8 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BusinessScenarios } from "./BusinessScenarios";
 import { businessScenariosApi } from "@/api/business-scenarios";
+import { automationArtifactsApi } from "@/api/automationArtifacts";
 import { businessMetricsApi } from "@/api/business-metrics";
-import { scenarioFixture } from "../../storybook/stories/business-scenario-fixtures";
+import { scenarioFixture, scenarioArtifactFixture } from "../../storybook/stories/business-scenario-fixtures";
 const identity = vi.hoisted(() => ({ companyId: "00000000-0000-4000-8000-000000000001", userId: "reviewer", settled: true, failed: false, breadcrumbs: vi.fn() }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: identity.companyId }) }));
 vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => identity }));
@@ -14,6 +15,7 @@ vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBrea
 vi.mock("@/lib/router", () => ({ Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a> }));
 vi.mock("@/api/instanceSettings", () => ({ instanceSettingsApi: { getExperimental: vi.fn(async () => ({ analytical_lineage_v8: true, business_metrics_v8: true, scenario_planning_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true })) } }));
 vi.mock("@/api/business-scenarios", () => ({ businessScenariosApi: { list: vi.fn(), detail: vi.fn(), create: vi.fn(), revise: vi.fn(), publish: vi.fn(), run: vi.fn(), retire: vi.fn(), runs: vi.fn(), result: vi.fn() } }));
+vi.mock("@/api/automationArtifacts", () => ({ automationArtifactsApi: { list: vi.fn(), get: vi.fn() } }));
 vi.mock("@/api/business-metrics", () => ({ businessMetricsApi: { list: vi.fn(), detail: vi.fn(), observations: vi.fn() } }));
 vi.mock("@/api/ai-governance", () => ({ aiGovernanceApi: { obligations: vi.fn(async () => [scenarioFixture().policy]) } }));
 vi.mock("@/api/projects", () => ({ projectsApi: { list: vi.fn(async () => []) } }));
@@ -50,6 +52,33 @@ describe("Native conditional scenario operator boundaries", () => {
       const save = [...app.container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Save scenario proposal")!;
       expect(save.disabled).toBe(true);
       expect(businessScenariosApi.revise).not.toHaveBeenCalled();
+    } finally { await app.cleanup(); }
+  });
+  it("saves only an exact current validated artifact binding with no fallback code or copied outputs", async () => {
+    const f = scenarioArtifactFixture(); vi.mocked(businessScenariosApi.detail).mockResolvedValue({ scenario: f.scenario, versions: [f.version] });
+    vi.mocked(automationArtifactsApi.list).mockResolvedValue([f.artifact]); vi.mocked(automationArtifactsApi.get).mockResolvedValue({ artifact: f.artifact, latestVersion: f.artifactVersion });
+    vi.mocked(businessScenariosApi.revise).mockResolvedValue({ scenario: f.scenario, version: f.version });
+    const app = await mount();
+    try {
+      await select(app.container, "Scenario", f.scenario.id); await click(app.container, "Propose a scenario revision");
+      await click(app.container, "Save scenario proposal");
+      expect(businessScenariosApi.revise).toHaveBeenCalledWith(f.companyId, f.scenario.id, { expectedRevision: 1, definition: expect.objectContaining({ calculationType: "validated_automation_artifact", calculationRef: f.version.definition.calculationRef, formula: [] }) }, f.userId);
+      expect(automationArtifactsApi.get).toHaveBeenCalledWith(f.companyId, f.artifact.id, f.userId);
+      expect(JSON.stringify(vi.mocked(businessScenariosApi.revise).mock.calls[0])).not.toContain(f.artifactVersion.sourceCode);
+      expect(businessScenariosApi.publish).not.toHaveBeenCalled(); expect(businessScenariosApi.run).not.toHaveBeenCalled();
+    } finally { await app.cleanup(); }
+  });
+  it("blocks artifact proposals when the exact unit contract or validation gates are not current", async () => {
+    const f = scenarioArtifactFixture(); vi.mocked(businessScenariosApi.detail).mockResolvedValue({ scenario: f.scenario, versions: [f.version] });
+    vi.mocked(automationArtifactsApi.list).mockResolvedValue([f.artifact]); vi.mocked(automationArtifactsApi.get).mockResolvedValue({ artifact: f.artifact, latestVersion: f.artifactVersion });
+    const app = await mount();
+    try {
+      await select(app.container, "Scenario", f.scenario.id); await click(app.container, "Propose a scenario revision"); await text(app.container, "Assumption 1 reference name", "changed_without_schema_review");
+      expect([...app.container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Save scenario proposal")!.disabled).toBe(true);
+      expect(businessScenariosApi.revise).not.toHaveBeenCalled();
+      vi.mocked(automationArtifactsApi.get).mockResolvedValue({ artifact: f.artifact, latestVersion: { ...f.artifactVersion, validationReport: null } });
+      await act(async () => { await app.client.refetchQueries({ queryKey: ["scenario-definition-sources", f.companyId, f.userId, "artifact"] }); }); await flush();
+      expect(app.container.textContent).toContain("passed validation/security gates");
     } finally { await app.cleanup(); }
   });
   it("requires separate human publication of the exact current proposed version", async () => {

@@ -138,6 +138,13 @@ const describeQualifiedSandbox = qualifiedLinuxSandbox
   : describe.skip;
 
 describeQualifiedSandbox("Automation Artifact qualified TypeScript sandbox", () => {
+  it("preserves deterministic explicit numeric computation in the native sandbox", async () => {
+    expect(await executeAutomationArtifactTypeScriptSandbox({ sourceCode: "export default (input: { price: number, amount: number }) => ({ total: input.price * input.amount });", dependencyManifest: {}, value: { price: 4, amount: 3 }, deterministic: true })).toEqual({ total: 12 });
+  });
+  it.each(["Math.random()", "Math['random']()", "Date.now()", "performance.now()", "crypto.randomUUID()", "new Intl.DateTimeFormat().format()", "AbortSignal.timeout(1)"])("denies ambient randomness/clock in deterministic mode: %s", async expression => {
+    await expect(executeAutomationArtifactTypeScriptSandbox({ sourceCode: `export default () => ({ value: ${expression} });`, dependencyManifest: {}, value: {}, deterministic: true })).rejects.toBeInstanceOf(AutomationArtifactCodeRuntimeError);
+  });
+
   it(
     "starts Node under the resource limits and preserves large Unicode input/output",
     async () => {

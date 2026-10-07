@@ -3,10 +3,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { BusinessScenarioWorkspace } from "@/pages/BusinessScenarios";
 import { BusinessScenarioResult } from "@/components/BusinessScenarioResult";
-import { scenarioFixture } from "./business-scenario-fixtures";
-function Workspace({ published = false, monteCarlo = false }: { published?: boolean; monteCarlo?: boolean }) {
+import { scenarioFixture, scenarioArtifactFixture } from "./business-scenario-fixtures";
+function Workspace({ published = false, monteCarlo = false, artifactMode = false }: { published?: boolean; monteCarlo?: boolean; artifactMode?: boolean }) {
   const [client] = useState(() => {
-    const f = scenarioFixture(published, monteCarlo), query = new QueryClient({ defaultOptions: { queries: { enabled: false, retry: false, staleTime: Infinity, refetchOnMount: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }), key = ["business-scenarios", f.companyId, f.userId];
+    const f = artifactMode ? scenarioArtifactFixture(published) : scenarioFixture(published, monteCarlo);
+    const query = new QueryClient({ defaultOptions: { queries: { enabled: false, retry: false, staleTime: Infinity, refetchOnMount: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }), key = ["business-scenarios", f.companyId, f.userId];
     query.setQueryData(key, { pages: [{ items: [{ scenario: f.scenario, version: f.version }], nextCursor: null, coverage: "bounded_current_authorized_page" }], pageParams: [undefined] });
     query.setQueryData([...key, "detail", f.scenario.id], { scenario: f.scenario, versions: [f.version] });
     query.setQueryData([...key, "runs", f.scenario.id], { pages: [{ items: [f.run], nextCursor: null, coverage: "bounded_current_authorized_page" }], pageParams: [undefined] });
@@ -16,6 +17,11 @@ function Workspace({ published = false, monteCarlo = false }: { published?: bool
     query.setQueryData([...source, "metrics"], { pages: [{ items: [f.metric], nextCursor: null }], pageParams: [undefined] });
     query.setQueryData([...source, "metric", f.metric.id], { metric: f.metric, versions: [f.metricVersion] });
     query.setQueryData([...source, "observations", f.metric.id], { pages: [{ items: f.observations, nextCursor: null, coverage: "bounded_current_authorized_page" }], pageParams: [undefined] });
+    if (artifactMode) {
+      const a = scenarioArtifactFixture(published), artifactKey = ["scenario-definition-sources", f.companyId, f.userId, "artifact"];
+      query.setQueryData([...artifactKey, "list"], [a.artifact]);
+      query.setQueryData([...artifactKey, a.artifact.id], { artifact: a.artifact, latestVersion: a.artifactVersion });
+    }
     return query;
   });
   const f = scenarioFixture();
@@ -39,3 +45,6 @@ export const DataNotReady: Story = { render: () => <Result state="data_not_ready
 export const Expired: Story = { render: () => <Result state="expired" /> };
 export const Draft: Story = { render: () => <Workspace /> };
 export const Published: Story = { render: () => <Workspace published monteCarlo /> };
+
+export const ArtifactDraft: Story = { render: () => <Workspace artifactMode /> };
+export const ArtifactResult: Story = { render: () => <div className="mx-auto w-full max-w-3xl"><BusinessScenarioResult artifact={scenarioArtifactFixture(true).run} /></div> };

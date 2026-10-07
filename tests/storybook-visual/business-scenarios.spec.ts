@@ -4,7 +4,20 @@ const require = createRequire(import.meta.url), axePath = require.resolve("axe-c
 const scenarioId = "00000000-0000-4000-8000-000000000501", runId = "00000000-0000-4000-8000-000000000503";
 async function accessibility(page: Page) {
   await page.addScriptTag({ path: axePath });
-  const violations = await page.evaluate(async () => { const w = window as unknown as { axe: { run: (context: string, options: unknown) => Promise<{ violations: unknown[] }> } }; return (await w.axe.run("#storybook-root", { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations; });
+  const violations = await page.evaluate(async () => {
+    const w = window as unknown as { axe: { run: (context: string, options: unknown) => Promise<{ violations: unknown[] }> } };
+    // Storybook's native accessibility addon may already own an axe scan.
+    // Wait only for that explicit concurrency condition; real violations and
+    // other scanner errors still fail this check immediately.
+    const deadline = performance.now() + 5000;
+    while (true) {
+      try { return (await w.axe.run("#storybook-root", { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations; }
+      catch (error) {
+        if (!(error instanceof Error) || !error.message.includes("Axe is already running") || performance.now() >= deadline) throw error;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+    }
+  });
   expect(violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 }
@@ -14,7 +27,7 @@ async function story(page: Page, state: string, theme: string, width: number) {
   await page.goto(`/iframe.html?id=business-intelligence-business-scenarios--${state}&viewMode=story&globals=theme:${theme}`);
 }
 for (const theme of ["light", "dark"]) for (const width of [390, 1200]) {
-  for (const state of ["deterministic", "monte-carlo", "stale", "unstable", "data-not-ready", "expired"]) test(`scenario ${state} ${theme} ${width}px preserves conditional uncertainty`, async ({ page }, info) => {
+  for (const state of ["deterministic", "monte-carlo", "stale", "unstable", "data-not-ready", "expired", "artifact-result"]) test(`scenario ${state} ${theme} ${width}px preserves conditional uncertainty`, async ({ page }, info) => {
     await story(page, state, theme, width);
     if (state === "expired") { await expect(page.getByRole("status")).toContainText("scenario evidence has expired"); await expect(page.getByRole("table")).toHaveCount(0); }
     else {
@@ -23,6 +36,11 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1200]) {
       await expect(panel).toContainText("separate human Decision");
       if (state === "monte-carlo") { await expect(panel.getByRole("table", { name: /^Conditional empirical quantiles/ })).toHaveCount(3); await expect(panel).toContainText("not calibrated prediction or confidence intervals"); }
       else await expect(panel.getByRole("table", { name: /^Conditional empirical quantiles/ })).toHaveCount(0);
+      if (state === "artifact-result") {
+        await expect(panel).toContainText("Validated calculation artifact 00000000-0000-4000-8000-000000000509");
+        await expect(panel).toContainText("version 00000000-0000-4000-8000-000000000510");
+        await expect(panel).toContainText("business calibration has not been inferred");
+      }
       if (state === "stale") await expect(panel).toContainText("Retained arithmetic is historical");
       if (state === "unstable") { await expect(panel).toContainText("Sample ranges withheld"); await expect(panel).toContainText("half-sample difference"); }
       if (state === "data-not-ready") await expect(panel.getByRole("table")).toHaveCount(0);
@@ -52,6 +70,19 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1200]) {
     await page.getByRole("combobox", { name: "Retained scenario run", exact: true }).selectOption(runId);
     await expect(page.getByRole("region", { name: "Conditional scenario result" })).toBeVisible();
     await accessibility(page); await page.screenshot({ path: info.outputPath(`scenario-workspace-${state}-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
+  });
+  test(`scenario validated artifact ${theme} ${width}px retains exact numeric and unit contracts`, async ({ page }, info) => {
+    await story(page, "artifact-draft", theme, width);
+    await page.getByRole("combobox", { name: "Scenario", exact: true }).selectOption(scenarioId);
+    await page.getByRole("button", { name: "Propose a scenario revision" }).click();
+    const form = page.getByRole("form", { name: "Scenario definition proposal" });
+    await expect(form.getByRole("combobox", { name: "Scenario calculation type", exact: true })).toHaveValue("validated_automation_artifact");
+    await expect(form.getByRole("combobox", { name: "Validated calculation artifact", exact: true })).toHaveValue("00000000-0000-4000-8000-000000000509");
+    await expect(form.getByRole("button", { name: "Save scenario proposal" })).toBeEnabled();
+    await expect(form.getByRole("button", { name: "Add calculation step" })).toHaveCount(0);
+    await form.getByRole("textbox", { name: "Assumption 1 reference name", exact: true }).fill("changed_without_schema_review");
+    await expect(form.getByRole("button", { name: "Save scenario proposal" })).toBeDisabled();
+    await accessibility(page); await page.screenshot({ path: info.outputPath(`scenario-artifact-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
   });
   test(`scenario proposal ${theme} ${width}px requires explicit evidence and conditional limits`, async ({ page }, info) => {
     await story(page, "draft", theme, width); await page.getByRole("button", { name: "Define a scenario" }).click();

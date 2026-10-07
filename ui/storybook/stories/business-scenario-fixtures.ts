@@ -25,3 +25,15 @@ export function scenarioFixture(published = false, monteCarlo = false) {
   const run: BusinessScenarioRunView = { id: runId, companyId: f.companyId, scenarioId, versionId, result, contentHash: "d".repeat(64), createdAt: "2026-10-07T00:00:00Z", expiresAt: version.expiresAt, currentQualification: "current" };
   return { ...f, policy, scenario, version, run };
 }
+
+export function scenarioArtifactFixture(published = false) {
+  const f = scenarioFixture(published), artifactId = "00000000-0000-4000-8000-000000000509", artifactVersionId = "00000000-0000-4000-8000-000000000510", contentHash = "e".repeat(64), createdAt = new Date("2026-10-07T00:00:00Z");
+  const jsonSchema = (units: Record<string, Record<string, number>>) => ({ type: "object", additionalProperties: false, required: Object.keys(units), properties: Object.fromEntries(Object.keys(units).map(key => [key, { type: "number" }])), "x-aw-scenario-units": units });
+  const inputSchema = jsonSchema({ objects: { issue: 1 }, factor: {} }), outputSchema = jsonSchema({ capacity: { issue: 1 } });
+  const ref = { artifactId, versionId: artifactVersionId, contentHash };
+  const definition = businessScenarioDefinitionSchema.parse({ ...f.version.definition, calculationType: "validated_automation_artifact", calculationRef: ref, formula: [], outputs: f.version.definition.outputs.map(item => ({ ...item, nodeKey: item.key })) });
+  const artifact: import("@paperclipai/shared").AutomationArtifact = { id: artifactId, companyId: f.companyId, name: "Governed conditional capacity arithmetic", description: "Synthetic presentation fixture without runtime qualification", kind: "typescript", language: "typescript", inputSchema, outputSchema, riskClass: "C0", sideEffectClass: "pure", status: "active", createdByAgentId: null, createdByUserId: f.userId, createdByOptimizerSuggestionId: null, originWorkflowId: null, originNodeId: null, latestVersionId: artifactVersionId, successCount: 0, failureCount: 0, lastUsedAt: null, createdAt, updatedAt: createdAt, archivedAt: null };
+  const gate = (kind: "validation" | "security") => ({ schema: "automation_artifact_gate.v1" as const, kind, status: "passed" as const, contentHash, checkedAt: createdAt.toISOString(), checks: [] });
+  const artifactVersion: import("@paperclipai/shared").AutomationArtifactVersion = { id: artifactVersionId, companyId: f.companyId, artifactId, versionNumber: 1, sourceCode: "export default (input: { objects: number, factor: number }) => ({ capacity: input.objects * input.factor });", inputSchema, outputSchema, dependencyManifest: {}, testSpec: { cases: [{ input: { objects: 1, factor: 2 }, output: { capacity: 2 } }] }, validationReport: gate("validation"), securityReport: gate("security"), contentHash, createdByAgentId: null, createdByUserId: f.userId, createdAt };
+  return { ...f, version: { ...f.version, definition }, run: { ...f.run, result: { ...f.run.result, calculationArtifact: { ...ref, runtime: "aw-native-automation-artifact-v1" as const } } }, artifact, artifactVersion };
+}

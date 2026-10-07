@@ -62,6 +62,20 @@ export function normalizeBusinessScenarioUnit(unit: BusinessScenarioUnit): Busin
 export function sameBusinessScenarioUnit(a: BusinessScenarioUnit, b: BusinessScenarioUnit): boolean {
   return JSON.stringify(normalizeBusinessScenarioUnit(a)) === JSON.stringify(normalizeBusinessScenarioUnit(b));
 }
+/** Match an explicit immutable artifact schema unit contract, without claiming
+ * that those human-declared units prove model validity or calibration. */
+export function matchesBusinessScenarioArtifactSchema(schema: Record<string, unknown>, units: Record<string, BusinessScenarioUnit>): boolean {
+  const record = (value: unknown): Record<string, unknown> | null => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const properties = record(schema.properties), declared = record(schema["x-aw-scenario-units"]), required = schema.required, keys = Object.keys(units);
+  return schema.type === "object" && schema.additionalProperties === false && !!properties && !!declared && Array.isArray(required)
+    && required.length === keys.length && new Set(required).size === keys.length
+    && Object.keys(properties).length === keys.length && Object.keys(declared).length === keys.length
+    && keys.every(key => {
+      const unit = businessScenarioUnitSchema.safeParse(declared[key]);
+      return required.includes(key) && Object.hasOwn(properties, key) && record(properties[key])?.type === "number"
+        && Object.hasOwn(declared, key) && unit.success && sameBusinessScenarioUnit(unit.data, units[key]);
+    });
+}
 /** Unit inference is shared by proposal admission and runtime execution. Only
  * references to earlier nodes exist, so a program cannot recurse or loop. */
 export function inferBusinessScenarioFormulaUnits(
@@ -99,9 +113,10 @@ export const businessScenarioDefinitionSchema = z.object({
   name: z.string().trim().min(3).max(160), objective: prose, decisionUse: prose,
   ownerUserId: z.string().trim().min(1).max(200),
   scope: z.discriminatedUnion("type", [z.object({ type: z.literal("company"), id: z.null() }).strict(), z.object({ type: z.literal("project"), id }).strict()]),
-  calculationType: z.enum(["formula", "forecast_composition", "bounded_monte_carlo"]),
+  calculationType: z.enum(["formula", "validated_automation_artifact", "forecast_composition", "bounded_monte_carlo"]),
+  calculationRef: z.object({ artifactId: id, versionId: id, contentHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional(),
   inputs: z.array(businessScenarioSourceSchema).max(32), assumptions: z.array(businessScenarioAssumptionSchema).min(1).max(32),
-  formula: z.array(businessScenarioFormulaNodeSchema).min(1).max(96),
+  formula: z.array(businessScenarioFormulaNodeSchema).max(96),
   outputs: z.array(z.object({ key, name: z.string().trim().min(2).max(160), nodeKey: key, unit: businessScenarioUnitSchema,
     constraints: z.object({ minimum: finite.nullable(), maximum: finite.nullable(), rationale: prose }).strict().nullable(),
   }).strict()).min(1).max(16),
@@ -138,7 +153,11 @@ export const businessScenarioDefinitionSchema = z.object({
     }
   }
   for (const output of value.outputs) if (output.constraints && output.constraints.minimum !== null && output.constraints.maximum !== null && output.constraints.minimum > output.constraints.maximum) reject("Output constraint range must be ordered");
-  try {
+  const artifact = value.calculationType === "validated_automation_artifact";
+  if (artifact) {
+    if (!value.calculationRef || value.formula.length || value.outputs.some(output => output.nodeKey !== output.key)) reject("Artifact calculations require an exact binding and named artifact outputs without a fallback formula");
+  } else if (value.calculationRef || !value.formula.length) reject("Native formula calculations require a formula and cannot carry an artifact binding");
+  if (!artifact) try {
     const units = inferBusinessScenarioFormulaUnits(value.formula, Object.fromEntries([...value.inputs, ...value.assumptions].map(item => [item.key, item.unit])));
     for (const output of value.outputs) {
       const unit = units.get(output.nodeKey);
@@ -190,6 +209,7 @@ export interface BusinessScenarioCapturedInput {
 export interface NativeBusinessScenarioResult {
   engineVersion: "aw-native-business-scenario-v1"; status: "calculated" | "inconclusive" | "data_not_ready";
   definitionHash: string; inputHash: string; seed: number | null; reasons: string[];
+  calculationArtifact?: { artifactId: string; versionId: string; contentHash: string; runtime: "aw-native-automation-artifact-v1" };
   cases: Array<{ key: string; name: string; kind: "base" | "option" | "stress";
     changes: Array<{ kind: "intervention" | "hypothetical_condition"; assumptionKey: string; value: number; rationale: string }>;
     outputs: Array<{ key: string; unit: BusinessScenarioUnit; nominal: number;

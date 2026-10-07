@@ -72,6 +72,7 @@ function quantile(sorted: number[], probability: number): number {
  * source/version, purpose, retention and unit before supplying internal capture. */
 export function evaluateNativeBusinessScenario(
   raw: BusinessScenarioDefinition, captured: BusinessScenarioCapturedInput[], seed: number | null,
+  artifactOutputs?: { binding: NonNullable<BusinessScenarioDefinition["calculationRef"]>; cases: Record<string, Record<string, number>> },
 ): NativeBusinessScenarioResult {
   const definition = businessScenarioDefinitionSchema.parse(raw), monteCarlo = definition.uncertaintyPolicy.kind === "bounded_monte_carlo";
   const result: NativeBusinessScenarioResult = {
@@ -107,13 +108,25 @@ export function evaluateNativeBusinessScenario(
       || !/^[a-f0-9]{64}$/.test(capture.contentHash) || !Number.isFinite(capture.value)) return reject("scenario_input_integrity_or_unit_mismatch");
     observed.set(input.key, capture.value);
   }
+  if (definition.calculationType === "validated_automation_artifact") {
+    if (!artifactOutputs || nativeSha256(artifactOutputs.binding) !== nativeSha256(definition.calculationRef)
+      || Object.keys(artifactOutputs.cases).length !== definition.cases.length
+      || definition.cases.some(item => !Object.hasOwn(artifactOutputs.cases, item.key)
+        || Object.keys(artifactOutputs.cases[item.key]).length !== definition.outputs.length
+        || definition.outputs.some(output => !Object.hasOwn(artifactOutputs.cases[item.key], output.key) || !Number.isFinite(artifactOutputs.cases[item.key][output.key])))) {
+      return reject("scenario_validated_artifact_outputs_required");
+    }
+    result.calculationArtifact = { ...artifactOutputs.binding, runtime: "aw-native-automation-artifact-v1" };
+    result.limitations.push("Artifact units are an explicit hash-bound schema contract; their scientific validity and business calibration are not inferred.");
+  } else if (artifactOutputs) return reject("scenario_unexpected_artifact_outputs");
   try {
     const nominal = new Map([...observed, ...definition.assumptions.map(item => [item.key, item.nominal] as const)]);
-    const base = calculate(definition, nominal);
+    const artifactCase = (caseKey: string) => definition.outputs.map(output => artifactOutputs!.cases[caseKey][output.key]);
+    const base = definition.calculationType === "validated_automation_artifact" ? artifactCase(definition.cases.find(item => item.kind === "base")!.key) : calculate(definition, nominal);
     result.cases = definition.cases.map(scenarioCase => {
       const values = new Map(nominal);
       for (const change of scenarioCase.changes) values.set(change.assumptionKey, change.value);
-      const outputs = calculate(definition, values);
+      const outputs = definition.calculationType === "validated_automation_artifact" ? artifactCase(scenarioCase.key) : calculate(definition, values);
       return { key: scenarioCase.key, name: scenarioCase.name, kind: scenarioCase.kind, changes: scenarioCase.changes,
         outputs: definition.outputs.map((output, index) => ({ key: output.key, unit: normalizeBusinessScenarioUnit(output.unit), nominal: outputs[index],
           differenceFromBase: finite(outputs[index] - base[index]), constraint: !output.constraints ? "not_declared" : withinConstraint(outputs[index], output) ? "satisfied" : "violated", simulation: null })) };

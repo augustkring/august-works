@@ -5,6 +5,7 @@ import { companies } from "./companies.js";
 import { analyticalLineageManifests } from "./analytical_lineage.js";
 import { businessMetricObservations } from "./business_metrics.js";
 import { forecastRuns } from "./business_forecasting.js";
+import { automationArtifactVersions } from "./automation_artifacts.js";
 
 export const businessScenarios = pgTable("business_scenarios", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
@@ -57,4 +58,15 @@ export const businessScenarioRuns = pgTable("business_scenario_runs", {
   lineageFk: foreignKey({ name: "business_scenario_runs_lineage_fk", columns: [t.companyId, t.lineageManifestId], foreignColumns: [analyticalLineageManifests.companyId, analyticalLineageManifests.id] }).onDelete("cascade"),
   contentCheck: check("business_scenario_runs_content_check", sql`${t.definitionHash} ~ '^[0-9a-f]{64}$' and ${t.inputHash} ~ '^[0-9a-f]{64}$' and ${t.contentHash} ~ '^[0-9a-f]{64}$' and jsonb_typeof(${t.result})='object' and ${t.expiresAt}>${t.createdAt}`),
   timeIdx: index("business_scenario_runs_time_idx").on(t.companyId, t.scenarioId, t.createdAt, t.id),
+}));
+
+/** The canonical artifact version owns erasure of dependent scenario prose. */
+export const businessScenarioCalculationPins = pgTable("business_scenario_calculation_pins", {
+  companyId: uuid("company_id").notNull(), scenarioId: uuid("scenario_id").notNull(), versionId: uuid("version_id").notNull(),
+  artifactVersionId: uuid("artifact_version_id").notNull(), artifactHash: text("artifact_hash").notNull(),
+}, t => ({
+  versionUq: unique("business_scenario_calculation_pins_version_uq").on(t.companyId, t.scenarioId, t.versionId),
+  versionFk: foreignKey({ name: "business_scenario_calculation_pins_version_fk", columns: [t.companyId, t.scenarioId, t.versionId], foreignColumns: [businessScenarioVersions.companyId, businessScenarioVersions.scenarioId, businessScenarioVersions.id] }).onDelete("cascade"),
+  artifactFk: foreignKey({ name: "business_scenario_calculation_pins_artifact_fk", columns: [t.companyId, t.artifactVersionId], foreignColumns: [automationArtifactVersions.companyId, automationArtifactVersions.id] }).onDelete("cascade"),
+  hashCheck: check("business_scenario_calculation_pins_hash_check", sql`${t.artifactHash} ~ '^[0-9a-f]{64}$'`),
 }));

@@ -197,3 +197,22 @@ erased. Current corrections/publications change revalidation status without
 rewriting historical arithmetic. The source wave has bounded company APIs;
 operator UI, validated Automation Artifact integration and downstream Decision
 pins remain open.
+
+
+## V8-015 — Scenario artifacts reuse the canonical qualified execution owner
+
+Scenario definitions bind exact native artifact/version/content-hash identities.
+Only current active pure C0/C1 supported calculations with native passed
+validation/security gates and exact closed numeric/unit contracts are admitted.
+Actual execution uses the existing canonical runtime and Linux sandbox; optional
+deterministic sandbox restrictions remove ambient time/random/locale facilities.
+No formula fallback, copied code registry, caller result or new scheduler exists.
+
+A tenant-scoped immutable calculation FK and deferred completeness proof preserve
+source-owned erasure of whole scenario versions and prose. Native company purge
+uses its existing exact-current-transaction tombstone proof to erase immutable
+artifact history while preserving the company tombstone. Historical revoke/revision
+changes require revalidation without rewriting retained arithmetic. Optimizer
+artifacts remain excluded until inherited Memory erasure qualifies the new consumer.
+Unit annotations and deterministic software tests are not business calibration,
+causal evidence, Decision authority or hosted release qualification.

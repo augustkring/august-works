@@ -18,6 +18,12 @@ describe("Strict public business scenario contracts", () => {
     expect(businessScenarioDefinitionSchema.safeParse({ ...definition(), calculationType: "causal_model" }).success).toBe(false);
     expect(businessScenarioDefinitionSchema.safeParse({ ...definition(), calculationType: "validated_automation_artifact" }).success).toBe(false);
   });
+  it("requires one exact validated artifact binding without fallback formulas or copied output facts", () => {
+    const raw = { ...definition(), calculationType: "validated_automation_artifact", calculationRef: { artifactId: id, versionId: id, contentHash: "a".repeat(64) }, formula: [], outputs: [{ ...definition().outputs[0], nodeKey: "capacity" }] };
+    expect(businessScenarioDefinitionSchema.safeParse(raw).success).toBe(true);
+    for (const value of [{ ...raw, calculationRef: undefined }, { ...raw, formula: definition().formula }, { ...raw, calculationRef: { ...raw.calculationRef, validated: true } }, { ...raw, calculationType: "formula" }, { ...raw, seed: 0 }, { ...raw, outputs: [{ ...raw.outputs[0], value: 100 }] }]) expect(businessScenarioDefinitionSchema.safeParse(value).success).toBe(false);
+    expect(businessScenarioDefinitionSchema.parse(definition())).not.toHaveProperty("calculationRef");
+  });
   it("distinguishes hypothetical external conditions from controllable interventions and requires honest evidence", () => {
     const raw = businessScenarioDefinitionSchema.parse(definition());
     raw.cases.push({ key: "stress", name: "External stress", kind: "stress", changes: [{ kind: "hypothetical_condition", assumptionKey: "capacity", value: 5, rationale: "Consider a hypothetical external reduction in available capacity" }] });

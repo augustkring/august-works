@@ -44,6 +44,17 @@ describe("Conditional native business scenario arithmetic", () => {
     expect(result.uncertainty).toMatchObject({ method: "deterministic", coverageLevel: null, qualification: "not_assessed" });
     expect({ source, raw }).toEqual(before);
   });
+  it("requires complete internal artifact outputs and never falls back to native arithmetic", () => {
+    const raw = definition(); raw.calculationType = "validated_automation_artifact"; raw.formula = [];
+    raw.calculationRef = { artifactId: id(10), versionId: id(11), contentHash: "b".repeat(64) };
+    const admitted = { binding: raw.calculationRef, cases: { base: { profit: 1000 }, option: { profit: 1400 }, stress: { profit: 800 } } };
+    expect(evaluateNativeBusinessScenario(raw, capture(), null)).toMatchObject({ status: "data_not_ready", cases: [] });
+    const result = evaluateNativeBusinessScenario(raw, capture(), null, admitted);
+    expect(result).toMatchObject({ status: "calculated", calculationArtifact: { ...raw.calculationRef, runtime: "aw-native-automation-artifact-v1" } });
+    expect(result.cases.map(item => item.outputs[0].differenceFromBase)).toEqual([0, 400, -200]);
+    for (const value of [{ ...admitted, binding: { ...admitted.binding, contentHash: "c".repeat(64) } }, { ...admitted, cases: { ...admitted.cases, base: { profit: Infinity } } }, { ...admitted, cases: { ...admitted.cases, option: { profit: 1, extra: 2 } } }, { ...admitted, cases: { base: { profit: 1 } } }]) expect(evaluateNativeBusinessScenario(raw, capture(), null, value)).toMatchObject({ status: "data_not_ready", cases: [] });
+    expect(evaluateNativeBusinessScenario(definition(), capture(), null, admitted)).toMatchObject({ status: "data_not_ready", cases: [] });
+  });
   it("rejects incompatible currency/object arithmetic, output units, forward references and recursive programs", () => {
     const raw = definition();
     const wrongCurrency = structuredClone(raw); wrongCurrency.assumptions[1].unit = { currency_EUR: 1 };

@@ -708,6 +708,7 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
   dependencyManifest: Record<string, unknown>;
   value: unknown;
   timeoutMs?: number;
+  deterministic?: boolean;
 }): Promise<unknown> {
   if (process.platform !== "linux") {
     throw new AutomationArtifactCodeRuntimeError(
@@ -747,7 +748,20 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
       encoding: "utf8",
       mode: 0o400,
     });
-    await fs.writeFile(runnerPath, RUNNER_SOURCE, {
+    const importMarker = 'try {\n  const module = await import';
+    if (input.deterministic && RUNNER_SOURCE.split(importMarker).length !== 2) {
+      throw new AutomationArtifactCodeRuntimeError("automation_artifact_code_runtime_unavailable", "Deterministic artifact runner boundary is unavailable.");
+    }
+    const runnerSource = input.deterministic ? RUNNER_SOURCE.replace(
+      importMarker,
+      `for (const key of ["Date", "performance", "crypto", "Intl", "Temporal", "setTimeout", "setInterval", "setImmediate", "AbortController", "AbortSignal"]) {
+  Object.defineProperty(globalThis, key, { value: undefined, writable: false, configurable: false });
+}
+Object.defineProperty(Math, "random", { value: () => { throw new Error("ambient_random_denied"); }, writable: false, configurable: false });
+Object.freeze(Math);
+try {\n  const module = await import`,
+    ) : RUNNER_SOURCE;
+    await fs.writeFile(runnerPath, runnerSource, {
       encoding: "utf8",
       mode: 0o400,
     });

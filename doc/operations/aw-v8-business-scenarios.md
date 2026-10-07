@@ -1,9 +1,9 @@
-# Native business scenarios — numerical kernel checkpoint
+# Native business scenarios
 
 This checkpoint supplies strict shared proposal/run contracts, a pure native
 numerical kernel and a governed PostgreSQL/company API owner for brief section 23.
-It does not complete scenario planning: validated Automation Artifact
-integration and downstream Decision evidence remain open. The numerical
+The native owner also admits exact validated Automation Artifact calculations.
+Downstream Decision evidence and the whole planning lifecycle remain open. The numerical
 kernel cannot authorize a source or execute a Decision.
 
 Formula programs have at most 96 typed nodes and may reference only declared
@@ -11,9 +11,9 @@ inputs or earlier nodes. There is no JavaScript evaluation, LLM simulation,
 network, filesystem, recursive program or ambient random source. Native Workflow
 transform expressions were inspected: their runtime resolves/interpolates input
 values, but does not provide numerical arithmetic. Existing canonical JSON/hash
-utilities are reused. Future validated Automation Artifact calculations must use
-their existing active-version, validation/security and execution runtime gates;
-an unchecked artifact reference is deliberately not admitted in this checkpoint.
+utilities are reused. Validated Automation Artifact calculations use the existing active-version,
+validation/security and execution runtime gates described below; unchecked
+artifact references are rejected.
 
 Dimensional inference preserves issue/project counts, people/customers, seconds
 and distinct currencies. Addition, subtraction, minimum and maximum require
@@ -163,6 +163,75 @@ are in `aw-v8-evidence/scenario-ui-checkpoint.json`.
 
 The preceding integrated production build passes at `4b31a0c`; its log-hashed
 record is `aw-v8-evidence/native-build-4b31a0c.json`. This earlier build does not
-qualify the subsequent UI source or the whole V8 release. Validated Automation
-Artifact calculation, downstream Decision evidence, later analytical/management
-waves and actual hosted acceptance remain open.
+qualify the subsequent UI source or the whole V8 release. This subsequent artifact checkpoint is qualified below. Downstream Decision
+evidence, later analytical/management waves and actual hosted acceptance remain open.
+
+
+## Validated Automation Artifact calculation checkpoint
+
+A fourth calculation mode binds an exact native artifact ID, immutable version ID
+and recomputed content hash. It requires both scenario and workflow read authority,
+the existing native artifact rollout, current active/latest publication, passed
+hash-bound validation/security gates and a supported pure C0/C1 expression,
+transform or TypeScript artifact. Native artifact storage/runtime remain canonical;
+there is no second artifact registry, copied code or formula fallback. Existing
+formula definitions acquire no new default field or changed content hash.
+
+Input and output schemas must be closed numeric objects with exact property and
+required-name coverage. Hash-bound `x-aw-scenario-units` annotations must match
+the captured native source units and human assumption/output units. For example,
+an input schema for an issue count and dimensionless factor is:
+
+```json
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["objects", "factor"],
+  "properties": {"objects": {"type": "number"}, "factor": {"type": "number"}},
+  "x-aw-scenario-units": {"objects": {"issue": 1}, "factor": {}}
+}
+```
+
+These declarations preserve the reviewed contract; they do not establish
+scientific validity or business calibration. Calculations receive only captured
+numeric inputs and explicit human assumption numbers for each bounded case.
+Artifact mode is nominal deterministic arithmetic; Monte Carlo is not silently
+added. Native schema validation, sandbox/resource/security policy and exact finite
+output coverage still apply. Each case has at most 1.5 seconds of execution within
+the existing bounded scenario transaction. Native TypeScript execution additionally
+removes ambient time, locale, timers, crypto and random sources through an optional
+deterministic mode of the existing sandbox. A changed harness boundary, disabled
+runtime or unavailable qualified sandbox rejects execution rather than inventing
+successful output. No unrestricted executor or new scheduler is introduced.
+
+Migration 0401 adds an immutable tenant-scoped calculation pin to the native
+artifact version. Deferred complete-pin proof rejects a restored scenario version
+without its source descendant. Native artifact-version erasure cascades through
+complete dependent scenario versions, prose and runs. Revocation or replacement
+marks retained results for revalidation without changing their bytes. Current
+company/account reads use no-store and verify the expected account before source
+access. Native company purge now honors its existing exact-transaction retained
+company tombstone proof when deleting immutable artifact history; ordinary archive
+or a proof from another transaction cannot delete that history.
+
+Optimizer-derived artifacts remain unadmitted here until their inherited native
+Memory/source-erasure chain is qualified for scenario prose. The artifact owner
+already protects its own Optimizer-derived sources; a new analytical consumer
+cannot treat that as proof that its own retained descendants will be erased.
+
+The final native server selections pass 66 checks (actual PostgreSQL scenario and
+artifact ownership, numerical kernel, artifact service and real Linux TypeScript
+sandbox) plus 21 checks (account routes, mounted OpenAPI and existing company
+purge). Shared contracts pass five checks; UI passes ten. All 49 actual Chromium
+checks pass across light/dark and 390/1200 pixels, including artifact proposals,
+read-only exact-version results, keyboard scrolling, WCAG checks and unsaved draft
+retention. Server/UI type checking, native token/migration gates, Storybook and
+snapshot-drift checking pass. Synthetic source/human assumptions qualify software
+contracts, not operational calibration or the official maintainer visual baseline.
+Source/log/screenshot hashes and failed-attempt corrections are recorded in
+`aw-v8-evidence/scenario-artifact-checkpoint.json`.
+
+The integrated production build also passes at preceding commit `0e98e9e`;
+`aw-v8-evidence/native-build-0e98e9e.json` records that exact build. Subsequent
+artifact source still requires its own integrated build. Whole V8, provider and
+hosted qualification remain in progress.

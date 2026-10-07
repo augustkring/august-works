@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
-  businessScenarios, businessScenarioVersions, businessScenarioSourcePins, businessScenarioPublications, businessScenarioRuns,
+  businessScenarios, businessScenarioVersions, businessScenarioSourcePins, businessScenarioPublications, businessScenarioRuns, businessScenarioCalculationPins,
   analyticalLineageManifests, analyticalLineageEdges, businessMetricObservations, companyMemberships, type Db,
 } from "@paperclipai/db";
 import {
@@ -25,6 +25,7 @@ import { inspectBusinessForecastRun } from "../business-forecasting/service.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { evaluateNativeBusinessScenario } from "./kernel.js";
+import { inspectScenarioArtifact, executeScenarioArtifact } from "./artifacts.js";
 
 type Root = typeof businessScenarios.$inferSelect;
 type Version = typeof businessScenarioVersions.$inferSelect;
@@ -84,7 +85,8 @@ async function capture(tx: Db, companyId: string, actor: AuthorizationActor, def
     await authorizeStrategyReference(tx, companyId, actor, { type: "project", id: definition.scope.id }, definition.sensitivity);
     edges.push({ inputType: "project", inputRef: definition.scope.id, inputHash: nativeSha256({ type: "project", id: definition.scope.id }), relationship: "source" });
   }
-  const inputs: BusinessScenarioCapturedInput[] = []; let current = true;
+  const calculation = await inspectScenarioArtifact(tx, companyId, actor, definition, requireCurrent);
+  const inputs: BusinessScenarioCapturedInput[] = []; let current = calculation?.current ?? true;
   for (const input of definition.inputs) {
     budget(deadline); let value: number, contentHash: string, unit: BusinessScenarioUnit, manifestId: string, sourceExpires: Date, sourceSensitivity: "internal" | "confidential";
     if (input.kind === "metric_observation") {
@@ -124,7 +126,7 @@ async function capture(tx: Db, companyId: string, actor: AuthorizationActor, def
   if (requireCurrent && !current) throw conflict("Scenario requires current source definitions and qualified forecast pins");
   edges = mergeEdges([edges]); await inspectDecisionSourceAuthority(tx, companyId, actor, edges, deadline); budget(deadline);
   if (expiresAt <= new Date()) throw conflict("Scenario source evidence expired during admission");
-  return { inputs, edges, expiresAt, current };
+  return { inputs, edges, expiresAt, current, calculation };
 }
 async function appendManifest(tx: Db, companyId: string, id: string, type: string, actor: AuthorizationActor, definitionHash: string, inputHash: string, createdAt: Date, expiresAt: Date, edges: Edge[], parameters: Record<string, unknown>) {
   const manifestId = randomUUID();
@@ -140,6 +142,8 @@ async function appendVersion(tx: Db, row: Root, actor: AuthorizationActor, defin
     lineageManifestId, createdBy: v7HumanActorId(actor), createdAt: row.updatedAt, expiresAt: admitted.expiresAt }).returning();
   if (definition.inputs.length) await tx.insert(businessScenarioSourcePins).values(definition.inputs.map(input => ({ companyId: row.companyId, scenarioId: row.id, versionId: id, inputKey: input.key,
     metricObservationId: input.kind === "metric_observation" ? input.observationId : null, forecastRunId: input.kind === "forecast_point" ? input.runId : null })));
+  if (definition.calculationRef) await tx.insert(businessScenarioCalculationPins).values({ companyId: row.companyId, scenarioId: row.id, versionId: id,
+    artifactVersionId: definition.calculationRef.versionId, artifactHash: definition.calculationRef.contentHash });
   budget(deadline); return value;
 }
 async function version(tx: Db, row: Root, actor: AuthorizationActor, id: string, requireCurrent: boolean, deadline: number) {
@@ -150,6 +154,9 @@ async function version(tx: Db, row: Root, actor: AuthorizationActor, id: string,
     || source.manifest.definitionHash !== value.contentHash || source.manifest.inputHash !== value.inputHash || source.manifest.sourceCount !== source.edges.length
     || source.manifest.createdAt.getTime() !== value.createdAt.getTime() || source.manifest.expiresAt.getTime() !== value.expiresAt.getTime() || source.manifest.parameters.lineageHash !== nativeSha256(source.edges)
     || nativeSha256(admitted.edges) !== nativeSha256(source.edges)) throw conflict("Scenario captured source or lineage integrity is unavailable");
+  const calculations = await tx.select().from(businessScenarioCalculationPins).where(and(eq(businessScenarioCalculationPins.companyId, row.companyId), eq(businessScenarioCalculationPins.versionId, value.id))).for("share");
+  const ref = value.definition.calculationRef;
+  if (ref ? calculations.length !== 1 || calculations[0].scenarioId !== row.id || calculations[0].artifactVersionId !== ref.versionId || calculations[0].artifactHash !== ref.contentHash : calculations.length !== 0) throw notFound("Scenario artifact source ownership is unavailable");
   await inspectDecisionSourceAuthority(tx, row.companyId, actor, source.edges, deadline); budget(deadline);
   return { value, source, admitted };
 }
@@ -210,7 +217,9 @@ export function businessScenarioService(db: Db) {
         if (row.revision !== input.expectedRevision || row.status !== "published" || row.publishedVersionId !== input.versionId) throw conflict("Run requires the current human-published scenario version");
         const pin = await version(tx, row, actor, input.versionId, true, deadline), createdAt = new Date(), runId = randomUUID();
         if ((pin.value.definition.calculationType === "bounded_monte_carlo") !== (input.seed !== null)) throw conflict("Seed must match the published scenario uncertainty policy");
-        const result = evaluateNativeBusinessScenario(pin.value.definition, pin.value.inputs, input.seed); budget(deadline);
+        const outputs = pin.value.definition.calculationType === "validated_automation_artifact"
+          ? await executeScenarioArtifact(tx, companyId, actor, pin.value.definition, pin.value.inputs, deadline) : undefined;
+        const result = evaluateNativeBusinessScenario(pin.value.definition, pin.value.inputs, input.seed, outputs); budget(deadline);
         if (pin.value.expiresAt <= new Date()) throw conflict("Scenario evidence expired during calculation");
         const material = { definitionHash: pin.value.contentHash, inputHash: pin.value.inputHash, result }, contentHash = runHash(material);
         const lineageManifestId = await appendManifest(tx, companyId, runId, "scenario_run", actor, material.definitionHash, material.inputHash, createdAt, pin.value.expiresAt, pin.source.edges, { artifactHash: contentHash, kernelVersion: result.engineVersion });

@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "0e98e9e027971afa72faec87a53b8f2366e024dd",
+  "scope": "Native exact validated Automation Artifact scenario integration and synthetic presentation. Actual PostgreSQL and qualified Linux sandbox executed; no operational calibration, inherited Optimizer Memory consumer qualification, official maintainer baseline, deployment or complete V8 release qualification.",
+  "sourceFileSha256": {
+    "packages/db/src/migrations/0401_cultured_sunset_bain.sql": "bfb54a549329884a576879968a3467b150f796c0eb28d0b348f86a6d172ef6df",
+    "packages/db/src/migrations/meta/0401_snapshot.json": "ad6e68e4ffa07d23074d0b4b6c1b2787b1c266df34c316e507d73fb8f30185ca",
+    "packages/db/src/migrations/meta/_journal.json": "f63eec45d8ef47929ed3fc5b589fc0f69afd44a93d69cc39a1a3e306a0f3bf4c",
+    "packages/db/src/schema/business_scenarios.ts": "83aee6f0ba4ae50bb35cfed0d3f5069c5bf54ddbce8640140ca04251d67e2e47",
+    "packages/shared/src/business-scenarios.test.ts": "5abc1deea4a5c80616220434ab9dc5127892f5f04e4a7db54df3c8292f1a99a8",
+    "packages/shared/src/business-scenarios.ts": "a66610dfe459f3153a509c4c43838a19ada257103e8ece2b738ff8f3d20d0f21",
+    "server/src/__tests__/automation-artifact-account-routes.test.ts": "74e8b1cc10484efbae7b7e2d2cdbd1f03d49c3334463960f1f8819c47ae770a6",
+    "server/src/__tests__/business-scenario-artifacts.integration.test.ts": "cfe5abf651249478e0e3cf4292e6f6bcaa5106c9a4e6a7fc3dc15fb806b5bd69",
+    "server/src/__tests__/business-scenarios-kernel.test.ts": "5bff829be550f37d763b37c878030657a93d38502be66e08322567b7bbafc785",
+    "server/src/routes/automation-artifacts.ts": "9d5c3b88d855011a6092f0900f638c211bef1c747f156145a25f32fbb476e618",
+    "server/src/routes/openapi.ts": "2e7be9234a8b961108789eecac8916ddf743599816cfccd6eb6d0a305d8fa573",
+    "server/src/services/automation-artifacts/automation-artifact-code-runtime.test.ts": "a6ee0b4691412bd571f0ea00089c2b5a7dfb99d3d352db5c44d1dd2b71c69ed5",
+    "server/src/services/automation-artifacts/automation-artifact-code-runtime.ts": "c6d51fd25fe47c7a93a1f6140cc1344de55f1a6c46285ec092f88828607905b4",
+    "server/src/services/automation-artifacts/automation-artifact-runtime.ts": "819968bda82e023e9205e3de2bdf014b9be338ea92dd0db74f97d6c8ff92a6c0",
+    "server/src/services/business-scenarios/artifacts.ts": "3c2db3624ad0bf897934f2205d38cf418dac002702ca6c1deffbd603ddd29de6",
+    "server/src/services/business-scenarios/kernel.ts": "ecc31482767719bde3db74b0292b5601b300f38edae01b0bf9c0d5c7e467ca57",
+    "server/src/services/business-scenarios/service.ts": "1abd29206b618b26732d5bed80b32a127200ab232f3a9b19be377b8dd6e9036a",
+    "tests/storybook-visual/business-scenarios.spec.ts": "3e075dfc26cf121bc9660f84675c1a9fe998e48cc1ce3ea286c25f31c96dbf3d",
+    "ui/src/api/automationArtifacts.ts": "8f9225b9cdb5062b48bd6a17aa02419eacd14e82e827a4e008d3bcbd8b4e0b5c",
+    "ui/src/components/BusinessScenarioArtifactPicker.tsx": "e3727862b4867c9cb0784cbf9bf5db3865e828181386f9fa7568ef8655a5b421",
+    "ui/src/components/BusinessScenarioDefinitionForm.tsx": "d0858dc6b18df5747c35452fbb826095a0b451e03770f1614531b568b651437b",
+    "ui/src/components/BusinessScenarioResult.tsx": "6c08718e444cd3e5a2d452b64fdeefa122dff2aab242bd928fc3e56a31eee7c7",
+    "ui/src/pages/BusinessScenarios.test.tsx": "3f0f0820943e10b8cc974858b9729334ea98e393597ffdefdeb7d1435ca8515a",
+    "ui/storybook/stories/business-scenario-fixtures.ts": "842f9ee998cf996761f1323336a6b540b6565773e7d15e5506f77be2ba5aa84c",
+    "ui/storybook/stories/business-scenarios.stories.tsx": "038a0f751db352f241f013f13c1c8af80ff4e1a9f7290644faa8d5c17f1e3b03"
+  },
+  "checks": [
+    {
+      "name": "server-native-owner-runtime",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 66,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-tests-qualified.log",
+      "logSha256": "74793b35fe7cccca5d133cf4515543fdbc79ad997e907f4530420c58b6fe14ce"
+    },
+    {
+      "name": "native-api-erasure",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 21,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-api-erasure-tests.log",
+      "logSha256": "d9ac35d9dbcc86a9df572765c528a4b42a682288aa45bc2d40c5ce86f3e1a1b2"
+    },
+    {
+      "name": "shared-contract",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 5,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-contract-tests.log",
+      "logSha256": "116a687a25243d7ed2e7e46a118400664599056e7d1905057393eeea2b567e1c"
+    },
+    {
+      "name": "ui-components",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 10,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-ui-tests-first.log",
+      "logSha256": "189ecbfbfdce8a27c29e72cfbd097283c7703cbd0096edbb2f5a1c3d486e2559"
+    },
+    {
+      "name": "server-types",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-server-types-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-types",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-ui-types-fixtures.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "storybook",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-storybook-build.log",
+      "logSha256": "11546b358b7a20c4b979702d6756c96183e9cf0a37ccb251dedc97b50b7c0258"
+    },
+    {
+      "name": "native-token-gates",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-token-gates.log",
+      "logSha256": "80ea2214c1677ea7c081778346620ccceff4f14d59edae34bf037b308a8936f8"
+    },
+    {
+      "name": "native-migration-gates",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-migration-checks.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "name": "native-snapshot-drift-30000ms",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-snapshot-bounded.log",
+      "logSha256": "e591b92b06afdc1363b729de7c9336e3d799349022486070248a6e4a6d369efc"
+    },
+    {
+      "name": "chromium-workspace",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 45,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-browser-serialized-axe.log",
+      "logSha256": "b0eb4a7557328c2f2dbe58503bbb26ba9b3ec8f943db92384340f18736dfe9a6"
+    },
+    {
+      "name": "chromium-artifact-result",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 4,
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-result-browser.log",
+      "logSha256": "5e5df688377c59a1a3488372b8ab14e751882f5bb2481a6fa715867014745409"
+    }
+  ],
+  "visuallyInspectedScreenshots": [
+    {
+      "path": "tests/storybook-visual/test-results/business-scenarios/business-scenarios-scenari-9fef8--numeric-and-unit-contracts/scenario-artifact-light-390.png",
+      "sha256": "5b573be68d6eff2ffd4706d790f939a434ba283aafbad30d581e9bce4a454361"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/business-scenarios/business-scenarios-scenari-0db74--numeric-and-unit-contracts/scenario-artifact-dark-1200.png",
+      "sha256": "3d55717397f961a37cc684551cb9326408cf54ee2dc0c799a8874734295337f0"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/scenario-artifact-result/business-scenarios-scenari-80a54-ves-conditional-uncertainty/scenario-artifact-result-light-390.png",
+      "sha256": "fc236c0c4702a971cadb37e663da0744f35b162961523f6d62587f73fcd05af2"
+    }
+  ],
+  "failedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-owner-tests-first.log",
+      "logSha256": "682c61054ae8e39309dd7b0be559e9111900de643de0aa21880a75f845b3c73a",
+      "reason": "Actual native company purge exposed immutable artifact-version deletion under a retained company tombstone. Existing exact-transaction proof now admits its canonical purge; ordinary archival remains denied. Final owner/runtime and canonical purge selections pass."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-snapshot.log",
+      "logSha256": "e35e99450ad7aa5a9c509a6784dce99f6d00bd29d308f66f6191b93d8259a708",
+      "reason": "Default five-second test budget timed out without a snapshot mismatch result."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-snapshot-qualified.log",
+      "logSha256": "d6da0a58ef1677adada454763ca6634ba8381e51bcd96d33cea9b675cfe7d6a0",
+      "reason": "Unmodified default-budget retry timed out. Identical assertion passes with CLI --testTimeout=30000, actual test duration 5.71 seconds."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-scenario-artifact-browser-qualified.log",
+      "logSha256": "1c56bf55339c64a58379d3c9ded15791471f41c1d86f73c30cee49cbb5bdd8c4",
+      "reason": "One axe concurrency race with native Storybook addon. Bounded waiting applies only to explicit Axe is already running errors; actual violations and other errors still fail. Complete 45-case rerun passes."
+    }
+  ]
+}

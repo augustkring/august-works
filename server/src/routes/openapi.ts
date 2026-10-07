@@ -2157,20 +2157,21 @@ registry.registerPath({
 
 // V4 governance endpoints share their validation contracts with the services.
 function registerV4Operation(method: string, path: string, summary: string, params: z.ZodTypeAny,
-  options: { body?: z.ZodTypeAny; status?: number; board?: boolean; headers?: z.ZodTypeAny; description?: string } = {}) {
+  options: { body?: z.ZodTypeAny; status?: number; board?: boolean; headers?: z.ZodTypeAny; query?: z.ZodTypeAny; description?: string } = {}) {
   if (options.board) BOARD_ONLY_OPERATIONS.add(operationKey(method, path));
   registry.registerPath({ method, path, tags: [path.includes("/memory/") ? "memory" : path.includes("/automation-artifacts") ? "automation-artifacts" : "workflows"],
     summary, ...(options.description ? { description: options.description } : {}),
-    request: { params, ...(options.body ? { body: jsonBody(options.body) } : {}), ...(options.headers ? { headers: options.headers } : {}) },
+    request: { params, ...(options.body ? { body: jsonBody(options.body) } : {}), ...(options.headers ? { headers: options.headers } : {}), ...(options.query ? { query: options.query } : {}) },
     responses: { [options.status ?? 200]: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict, 422: r.unprocessable },
   });
 }
 const v4CompanyParams = z.object({ companyId: z.string().uuid() });
 const v4ArtifactParams = v4CompanyParams.extend({ artifactId: z.string().uuid() });
 const artifactBase = "/api/companies/{companyId}/automation-artifacts";
-registerV4Operation("get", artifactBase, "List governed Automation Artifacts", v4CompanyParams, { board: true });
+const artifactAccountQuery = z.object({ expectedUserId: z.string().optional() }).strict();
+registerV4Operation("get", artifactBase, "List governed Automation Artifacts", v4CompanyParams, { board: true, query: artifactAccountQuery });
 registerV4Operation("post", artifactBase, "Create an immutable versioned Automation Artifact", v4CompanyParams, { board: true, body: createAutomationArtifactSchema, status: 201 });
-registerV4Operation("get", `${artifactBase}/{artifactId}`, "Get an Automation Artifact and its versions", v4ArtifactParams, { board: true });
+registerV4Operation("get", `${artifactBase}/{artifactId}`, "Get an Automation Artifact and its versions", v4ArtifactParams, { board: true, query: artifactAccountQuery });
 registerV4Operation("post", `${artifactBase}/{artifactId}/versions`, "Append an immutable artifact version", v4ArtifactParams, { board: true, body: appendAutomationArtifactVersionSchema, status: 201 });
 registerV4Operation("post", `${artifactBase}/{artifactId}/evaluate`, "Evaluate the current artifact version security gates", v4ArtifactParams, { board: true });
 registerV4Operation("post", `${artifactBase}/{artifactId}/status`, "Transition a qualified artifact status", v4ArtifactParams, { board: true, body: transitionAutomationArtifactStatusSchema });
