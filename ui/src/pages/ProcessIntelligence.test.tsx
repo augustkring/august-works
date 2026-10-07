@@ -11,7 +11,7 @@ vi.mock("@/context/CompanyContext",()=>({useCompany:()=>({selectedCompanyId:fixt
 vi.mock("@/context/BreadcrumbContext",()=>({useBreadcrumbs:()=>({setBreadcrumbs:fixture.breadcrumbs})}));
 vi.mock("@/api/companies-query",()=>({useAccountIdentity:()=>fixture}));
 vi.mock("@/lib/router",()=>({Link:({to,children}:{to:string;children:React.ReactNode})=><a href={to}>{children}</a>}));
-vi.mock("@/api/process-analysis",()=>({processAnalysisApi:{list:vi.fn(),detail:vi.fn(),create:vi.fn(),revise:vi.fn(),publish:vi.fn(),retire:vi.fn(),run:vi.fn(),getRun:vi.fn(),listRuns:vi.fn()}}));
+vi.mock("@/api/process-analysis",()=>({processAnalysisApi:{list:vi.fn(),detail:vi.fn(),create:vi.fn(),revise:vi.fn(),publish:vi.fn(),retire:vi.fn(),run:vi.fn(),getRun:vi.fn(),listRuns:vi.fn(),listFindings:vi.fn(),findingDetail:vi.fn(),createFinding:vi.fn(),transitionFinding:vi.fn()}}));
 vi.mock("@/api/ai-governance",()=>({aiGovernanceApi:{obligations:vi.fn(async()=>[{id:"00000000-0000-4000-8000-000000000004",obligation:{framework:"company_policy",citation:"Reviewed process purpose",analyticalPurpose:{status:"approved",purpose:"process_intelligence",capabilities:["process"]}}}])}}));
 (globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
 // jsdom has no layout observer; real checkbox layout is checked in Chromium.
@@ -49,6 +49,7 @@ beforeEach(()=>{
   vi.clearAllMocks();fixture.companyId=id(1);fixture.userId="account-one";fixture.settled=true;fixture.failed=false;
   vi.mocked(processAnalysisApi.list).mockResolvedValue(page(null));vi.mocked(processAnalysisApi.detail).mockResolvedValue(detail());
   vi.mocked(processAnalysisApi.listRuns).mockResolvedValue({items:[],nextCursor:null,coverage:"bounded_current_authorized_page"});vi.mocked(processAnalysisApi.getRun).mockResolvedValue(run());
+  vi.mocked(processAnalysisApi.listFindings).mockResolvedValue({items:[],nextCursor:null});
 });
 describe("native process operator authority",()=>{
   it("saves a proposal without publication or execution, then requires a separate current human review",async()=>{

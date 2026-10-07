@@ -1,6 +1,6 @@
 import type { CreateProcessAnalysisDefinition, ProcessAnalysisDefinition, ProcessAnalysisDefinitionDetail, ProcessAnalysisDefinitionView,
   ProcessAnalysisRunView, ProcessAnalysisVersionView, PublishProcessAnalysisDefinition, RetireProcessAnalysisDefinition,
-  ReviseProcessAnalysisDefinition, RunProcessAnalysis } from "@paperclipai/shared";
+  ReviseProcessAnalysisDefinition, RunProcessAnalysis, CreateProcessFinding, ProcessFindingView, ProcessFindingTransitionView, TransitionProcessFinding } from "@paperclipai/shared";
 import { api } from "./client";
 function path(companyId: string, suffix: string, expectedUserId?: string) {
   return `/companies/${encodeURIComponent(companyId)}/process-definitions${suffix}${expectedUserId ? `?${new URLSearchParams({ expectedUserId })}` : ""}`;
@@ -23,4 +23,11 @@ export const processAnalysisApi = {
     const query=new URLSearchParams();if(cursor) query.set("cursor",cursor);if(expectedUserId) query.set("expectedUserId",expectedUserId);
     return api.get<{items:ProcessAnalysisRunView[];nextCursor:string|null;coverage:"bounded_current_authorized_page"}>(`${path(companyId,`${pin(id)}/runs`)}${query.size ? `?${query}` : ""}`,{cache:"no-store"});
   },
+  listFindings: (companyId: string, id: string, runId: string, cursor?: string, expectedUserId?: string) => {
+    const query = new URLSearchParams(); if (cursor) query.set("cursor", cursor); if (expectedUserId) query.set("expectedUserId", expectedUserId);
+    return api.get<{ items: ProcessFindingView[]; nextCursor: string | null }>(`${path(companyId, `${pin(id)}/runs/${encodeURIComponent(runId)}/findings`)}${query.size ? `?${query}` : ""}`, { cache: "no-store" });
+  },
+  createFinding: (companyId: string, id: string, runId: string, input: CreateProcessFinding, expectedUserId?: string) => api.post<ProcessFindingView>(path(companyId, `${pin(id)}/runs/${encodeURIComponent(runId)}/findings`, expectedUserId), input),
+  findingDetail: (companyId: string, id: string, runId: string, findingId: string, expectedUserId?: string) => api.get<{ finding: ProcessFindingView; transitions: ProcessFindingTransitionView[]; hasMoreTransitions: boolean }>(path(companyId, `${pin(id)}/runs/${encodeURIComponent(runId)}/findings/${encodeURIComponent(findingId)}`, expectedUserId), { cache: "no-store" }),
+  transitionFinding: (companyId: string, id: string, runId: string, findingId: string, input: TransitionProcessFinding, expectedUserId?: string) => api.post<ProcessFindingView>(path(companyId, `${pin(id)}/runs/${encodeURIComponent(runId)}/findings/${encodeURIComponent(findingId)}/transition`, expectedUserId), input),
 };

@@ -3,7 +3,7 @@ import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { activityLog,analyticalLineageManifests,businessMetrics,businessMetricVersions,businessMetricTargets,businessMetricTargetVersions,businessMetricTargetApprovals,
   companies,createDb,goals,issues,projects,processAnalysisDefinitions,processAnalysisPublications,processAnalysisRuns,processAnalysisVersions,
-  strategyExecutionLinks,strategyExecutionLinkVersions,strategyExecutionLinkApprovals,aiUseCases,aiUseCaseVersions,aiUseCaseAssessments,aiUseCaseChangeEvents,aiUseCaseDeployments,governanceStopActions,governanceObligations,agents,heartbeatRuns } from "@paperclipai/db";
+  strategyExecutionLinks,strategyExecutionLinkVersions,strategyExecutionLinkApprovals,aiUseCases,aiUseCaseVersions,aiUseCaseAssessments,aiUseCaseChangeEvents,aiUseCaseDeployments,governanceStopActions,governanceObligations,agents,heartbeatRuns,processFindings,processFindingTransitions } from "@paperclipai/db";
 import { businessMetricTargetDefinitionSchema,processAnalysisDefinitionSchema,strategyExecutionLinkDefinitionSchema } from "@paperclipai/shared";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -12,6 +12,7 @@ import { businessMetricTargetService } from "../services/business-metrics/target
 import { strategyExecutionService } from "../services/strategy-execution/service.js";
 import { businessEventService } from "../services/business-events.js";
 import { processAnalysisService } from "../services/process-analysis.js";
+import { processFindingService } from "../services/process-findings.js";
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
 import { analyticalPurpose,metricDefinition } from "./helpers/business-metric-fixture.js";
 import { purpose,oversight,reviews } from "./helpers/governance-fixture.js";
@@ -50,6 +51,10 @@ suite("V8 native analytical ownership during company content purge",()=>{
       analysisFamilies:["event_volume","cycle_time"],requiresArrivalEvidence:false,maxLateArrivalRate:0})});
     await processAnalysisService(db).publish(companyId,actor,process.root.id,{expectedRevision:1,versionId:process.version.id,rationale:"Human review of native process and approved purpose"});
     const run=await processAnalysisService(db).run(companyId,actor,process.root.id,{versionId:process.version.id,...period});expect(run.result.status).toBe("succeeded");
+    const missing=await processAnalysisService(db).create(companyId,actor,{key:"missing_arrival",definition:{...process.version.definition,requiresArrivalEvidence:true}});
+    await processAnalysisService(db).publish(companyId,actor,missing.root.id,{expectedRevision:1,versionId:missing.version.id,rationale:"Review explicit source-arrival requirement before collecting transport evidence"});
+    const missingRun=await processAnalysisService(db).run(companyId,actor,missing.root.id,{versionId:missing.version.id,...period});
+    await processFindingService(db).create(companyId,actor,missing.root.id,missingRun.id,{findingType:"missing_process_data",objectType:null,variantHash:null,severity:"medium",interpretation:"Investigate unqualified native source arrival evidence"});
     const governance=aiGovernanceService(db),profile=await governance.oversight(actor,companyId,oversight);
     const useCase=await governance.create(actor,companyId,{key:"native-advisory",purpose:{...purpose(),riskClass:"C0",oversightProfileId:profile.id}});
     await governance.assess(actor,companyId,useCase.id,{...reviews()[0]!,expectedVersion:useCase.version});
@@ -83,7 +88,7 @@ suite("V8 native analytical ownership during company content purge",()=>{
     const result=await purgeCompanyContent(db,erased.companyId);expect(result.companyTombstoneRetained).toBe(true);
     for(const table of [businessMetrics,businessMetricVersions,businessMetricTargets,businessMetricTargetVersions,businessMetricTargetApprovals,strategyExecutionLinks,strategyExecutionLinkVersions,strategyExecutionLinkApprovals,
       processAnalysisDefinitions,processAnalysisVersions,processAnalysisPublications,processAnalysisRuns,analyticalLineageManifests,
-      aiUseCases,aiUseCaseVersions,aiUseCaseAssessments,aiUseCaseChangeEvents,aiUseCaseDeployments,governanceStopActions,governanceObligations]) {
+      aiUseCases,aiUseCaseVersions,aiUseCaseAssessments,aiUseCaseChangeEvents,aiUseCaseDeployments,governanceStopActions,governanceObligations,processFindings,processFindingTransitions]) {
       expect(await db.select({companyId:table.companyId}).from(table).where(eq(table.companyId,erased.companyId))).toHaveLength(0);
       expect((await db.select({companyId:table.companyId}).from(table).where(eq(table.companyId,retained.companyId))).length).toBeGreaterThan(0);
     }

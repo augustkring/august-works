@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, analyticalLineageEdges, analyticalLineageManifests, applyPendingMigrations, businessEventObjects, businessEvents, companies, createDb, governanceObligations, issues, projects,
-  processAnalysisDefinitions, processAnalysisPublications, processAnalysisRuns, processAnalysisVersions } from "@paperclipai/db";
+  processAnalysisDefinitions, processAnalysisPublications, processAnalysisRuns, processAnalysisVersions, processFindings, processFindingTransitions } from "@paperclipai/db";
 import { processAnalysisDefinitionSchema, type ProcessAnalysisDefinition } from "@paperclipai/shared";
 import { processAnalysisService } from "../services/process-analysis.js";
+import { processFindingService } from "../services/process-findings.js";
 import { businessEventService } from "../services/business-events.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -118,6 +119,65 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
       const run = await service().run(companyId, actor, created.root.id, { versionId: created.version.id, ...period });
       expect(run.result).toMatchObject({ status: "inconclusive", errorCode: "DATA_NOT_READY", objectSummaries: [] });
     }
+  });
+  it("freezes material process findings, admits only reviewed lifecycle transitions and erases every descendant with its source", async () => {
+    const secondIssueId=randomUUID();await db.insert(issues).values({id:secondIssueId,companyId,projectId,title:"Second native path",status:"done"});
+    await db.insert(activityLog).values([
+      { companyId,actorType:"user",actorId:"private-person",entityType:"issue",entityId:issueId,action:"issue.updated",createdAt:new Date("2026-01-01T12:00:15Z"),details:{status:"blocked",projectId} },
+      { companyId,actorType:"user",actorId:"private-person",entityType:"issue",entityId:issueId,action:"issue.updated",createdAt:new Date("2026-01-01T12:01:15Z"),details:{status:"in_progress",projectId} },
+      { companyId,actorType:"user",actorId:"private-person",entityType:"issue",entityId:issueId,action:"issue.updated",createdAt:new Date("2026-01-01T12:02:00Z"),details:{status:"done",projectId} },
+      { companyId,actorType:"user",actorId:"private-person",entityType:"issue",entityId:secondIssueId,action:"issue.created",createdAt:new Date("2026-01-01T13:00:00Z"),details:{status:"todo",projectId} },
+      { companyId,actorType:"user",actorId:"private-person",entityType:"issue",entityId:secondIssueId,action:"issue.updated",createdAt:new Date("2026-01-01T13:00:30Z"),details:{status:"done",projectId} },
+    ]);
+    const created=await published({...definition(),analysisFamilies:["event_volume","directly_follows","variants","cycle_time","rework","blocked_time"]});await project();
+    const run=await service().run(companyId,actor,created.root.id,{versionId:created.version.id,...period});
+    const findings=processFindingService(db),input={findingType:"avoidable_wait" as const,objectType:"issue" as const,variantHash:null,severity:"medium" as const,
+      interpretation:"Investigate whether the recorded blocked interval could be reduced"};
+    const finding=await findings.create(companyId,actor,created.root.id,run.id,input);
+    expect(finding).toMatchObject({status:"OPEN",version:1,eventSetHash:run.eventSetHash,definitionHash:run.definitionHash,
+      facts:{observed:{knownBlockedSeconds:45},semantics:"human_process_interpretation_of_observed_facts"}});
+    expect(JSON.stringify(finding)).not.toMatch(/private-person|secret body/);
+    const [nativeFinding]=await db.select().from(processFindings).where(eq(processFindings.id,finding.id));
+    await expect(db.insert(processFindings).values({...nativeFinding,id:randomUUID(),objectType:null,fingerprint:"9".repeat(64)})).rejects.toThrow();
+    expect((await findings.create(companyId,actor,created.root.id,run.id,input)).id).toBe(finding.id);
+    await expect(findings.create(companyId,actor,created.root.id,run.id,{...input,severity:"high"})).rejects.toMatchObject({status:409});
+    const reopen=await findings.create(companyId,actor,created.root.id,run.id,{...input,findingType:"rework",interpretation:"Investigate the observed reopening with a process owner"});
+    expect(reopen.facts.observed.reopenCount).toBe(1);
+    const bottleneck=await findings.create(companyId,actor,created.root.id,run.id,{...input,findingType:"bottleneck"});
+    expect(bottleneck.facts.limitations.join(" ")).toContain("does not establish avoidability or a bottleneck");
+    const variantHash=run.result.objectSummaries[0]!.variants[0]!.hash;
+    const variant=await findings.create(companyId,actor,created.root.id,run.id,{...input,findingType:"unusual_variant",variantHash});
+    expect(variant.facts.observed.variantObjectCount).toBe(1);expect(variant.facts.limitations.join(" ")).toContain("not a statistically established anomaly");
+    await expect(findings.create(companyId,actor,created.root.id,run.id,{...input,findingType:"unusual_variant",variantHash:"f".repeat(64)})).rejects.toMatchObject({status:409});
+    await expect(findings.transition(companyId,actor,created.root.id,run.id,finding.id,{expectedVersion:1,status:"RESOLVED",reason:"Attempt to skip the accountable investigation"})).rejects.toMatchObject({status:409});
+    await expect(db.update(processFindings).set({facts:{observed:{knownBlockedSeconds:0},semantics:"human_process_interpretation_of_observed_facts",limitations:[]}}).where(eq(processFindings.id,finding.id))).rejects.toThrow();
+    // A legitimate state change without its human receipt fails at COMMIT.
+    await expect(db.update(processFindings).set({status:"ACKNOWLEDGED",version:2}).where(eq(processFindings.id,finding.id))).rejects.toThrow();
+    await expect(db.delete(processFindingTransitions).where(eq(processFindingTransitions.findingId,finding.id))).rejects.toThrow();
+    for(const [version,status] of [[1,"ACKNOWLEDGED"],[2,"INVESTIGATING"],[3,"RESOLVED"]] as const) {
+      expect((await findings.transition(companyId,actor,created.root.id,run.id,finding.id,{expectedVersion:version,status,reason:"Human review of the retained process evidence"})).version).toBe(version+1);
+    }
+    await expect(findings.transition(companyId,actor,created.root.id,run.id,finding.id,{expectedVersion:4,status:"OPEN",reason:"Attempt to silently reopen frozen resolution"})).rejects.toMatchObject({status:409});
+    const detail=await findings.detail(companyId,actor,created.root.id,run.id,finding.id);
+    expect(detail.transitions).toHaveLength(4);expect(detail.finding.resolvedAt).not.toBeNull();
+    expect((await findings.list(companyId,actor,created.root.id,run.id)).items).toHaveLength(4);
+    await db.transaction(async tx=>{await lockMemoryPrivacy(tx as unknown as typeof db,companyId);await eraseBusinessEventObjectUnderMemory(tx as unknown as typeof db,companyId,"issue",issueId);});
+    expect(await db.select().from(processFindings).where(eq(processFindings.analysisRunId,run.id))).toHaveLength(0);
+    expect(await db.select().from(processFindingTransitions).where(eq(processFindingTransitions.findingId,finding.id))).toHaveLength(0);
+    expect(await db.select().from(issues).where(eq(issues.id,secondIssueId))).toHaveLength(1);
+  });
+  it("keeps missing-data findings separate from statistics and rechecks company, agent and changed current source authority", async () => {
+    await project();const created=await published({...definition(),requiresArrivalEvidence:true});
+    const run=await service().run(companyId,actor,created.root.id,{versionId:created.version.id,...period}),findings=processFindingService(db);
+    const input={findingType:"missing_process_data" as const,objectType:null,variantHash:null,severity:"medium" as const,interpretation:"Review unknown source arrival evidence before using process statistics"};
+    const finding=await findings.create(companyId,actor,created.root.id,run.id,input);
+    expect(finding.facts.observed.late_arrival_rate).toBe("unknown");
+    await expect(findings.create(companyId,actor,created.root.id,run.id,{...input,findingType:"rework",objectType:"issue"})).rejects.toMatchObject({status:409});
+    await expect(findings.detail(otherCompanyId,actor,created.root.id,run.id,finding.id)).rejects.toMatchObject({status:404});
+    const agent={type:"agent" as const,source:"agent_key" as const,companyId,agentId:randomUUID()};
+    await expect(findings.detail(companyId,agent,created.root.id,run.id,finding.id)).rejects.toMatchObject({status:403});
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,issueId));
+    await expect(findings.detail(companyId,actor,created.root.id,run.id,finding.id)).rejects.toMatchObject({status:409});
   });
   it("does not reuse an old analytical purpose after the current policy is superseded", async () => {
     const created=await published();await project();

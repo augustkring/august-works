@@ -38,6 +38,19 @@ for(const theme of ["light","dark"]) for(const width of [390,1200]) for(const st
         const edges=result.getByText("Directly follows (2)",{exact:true});await edges.focus();await page.keyboard.press("Space");
         await expect(result.getByRole("table")).toContainText("Task updated / blocked");
       } else {await expect(result).toContainText("No process statistics are published");await expect(result).toContainText("source coverage");await expect(result.getByRole("heading",{name:"Task perspective"})).toHaveCount(0);}
+      const findings=page.getByRole("region",{name:"Process findings",exact:true});await expect(findings).toBeVisible();
+      await findings.getByRole("button",{name:"Inspect finding",exact:true}).click();
+      const review=findings.getByRole("region",{name:"Inspect process finding",exact:true});
+      await expect(review.getByRole("button",{name:"Acknowledge finding"})).toBeDisabled();
+      await expect(review.getByRole("button",{name:"Resolve finding"})).toHaveCount(0);
+      const facts=review.getByText("Inspect finding facts and limitations",{exact:true});await facts.focus();await page.keyboard.press("Space");
+      await expect(review.locator("pre")).toContainText("human_process_interpretation_of_observed_facts");
+      await review.getByLabel("Finding review reason",{exact:true}).fill("Human acknowledges the retained process evidence");
+      await expect(review.getByRole("button",{name:"Acknowledge finding"})).toBeEnabled();
+      await expect(review.getByRole("button",{name:"Suppress with reason"})).toBeEnabled();
+      const proposal=findings.getByRole("form",{name:"Record process finding"});await expect(proposal.getByRole("button",{name:"Record finding",exact:true})).toBeDisabled();
+      await proposal.getByLabel("Finding human interpretation",{exact:true}).fill("Investigate the qualified process facts with the native owner");
+      await expect(proposal.getByRole("button",{name:"Record finding",exact:true})).toBeEnabled();
     }
     if(state==="draft" || state==="needs-review") await expect(panel.getByRole("form",{name:"Run published process"})).toHaveCount(0);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await accessibility(page);

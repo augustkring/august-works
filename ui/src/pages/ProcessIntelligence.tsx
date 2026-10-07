@@ -7,6 +7,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { ProcessDefinitionForm, processFamilyLabel } from "@/components/ProcessDefinitionForm";
 import { ProcessAnalysisResult } from "@/components/ProcessAnalysisResult";
+import { ProcessFindings } from "@/components/ProcessFindings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -88,7 +89,7 @@ export function ProcessIntelligenceWorkspace({ companyId, userId }: { companyId:
       {!history.isError && !history.isFetching && <div className="space-y-3"><label className="block space-y-2">Retained run<select aria-label="Retained process run" className="w-full rounded-md border border-input bg-background p-2" value={runId} onChange={event => setRunId(event.target.value)}><option value="">Choose currently authorized evidence</option>{runs.filter(value => isRetained(value.expiresAt)).map(value => <option key={value.id} value={value.id}>{new Date(value.createdAt).toLocaleString()} · {value.result.status} · {value.from.slice(0, 10)} – {value.until.slice(0, 10)}</option>)}</select></label>{history.hasNextPage && <Button variant="outline" disabled={history.isFetchingNextPage} onClick={() => void history.fetchNextPage()}>Load more retained runs</Button>}<p className="text-sm text-muted-foreground">This is a bounded page of evidence currently admitted by its native source owner.</p></div>}
       {selectedRun.isFetching && runId && <p role="status">Checking current source and lineage access…</p>}
       {run && !isRetained(run.expiresAt) && <p role="status">This run's retention expired. Refresh current evidence.</p>}
-      {run && runPin && isRetained(run.expiresAt) && isRetained(runPin.expiresAt) && <ProcessAnalysisResult run={run} definition={runPin.definition} />}
+      {run && runPin && isRetained(run.expiresAt) && isRetained(runPin.expiresAt) && <><ProcessAnalysisResult run={run} definition={runPin.definition} /><ProcessFindings key={run.id} run={run} userId={userId} /></>}
       {run && !runPin && <p role="status">This run's definition is outside the bounded version history. Inspect a retained version before interpreting its statistics.</p>}
     </section>}
     {editing && !list.isError && !list.isFetching && !detail.isError && (!root || (pin && isRetained(pin.expiresAt))) && <ProcessDefinitionForm key={`${root?.id ?? "new"}:${pin?.id ?? "new"}`} companyId={companyId} userId={userId} initial={root ? pin?.definition : undefined} busy={busy} onSave={definition => save.mutate(definition)} onCancel={() => setEditing(false)} />}

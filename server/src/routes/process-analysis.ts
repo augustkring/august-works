@@ -2,11 +2,12 @@ import { Router, type Request } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
 import { createProcessAnalysisDefinitionSchema, publishProcessAnalysisDefinitionSchema, retireProcessAnalysisDefinitionSchema,
-  reviseProcessAnalysisDefinitionSchema, runProcessAnalysisSchema } from "@paperclipai/shared";
+  reviseProcessAnalysisDefinitionSchema, runProcessAnalysisSchema, createProcessFindingSchema, transitionProcessFindingSchema } from "@paperclipai/shared";
 import { badRequest, conflict } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import { assertCompanyAccess } from "./authz.js";
 import { processAnalysisService } from "../services/process-analysis.js";
+import { processFindingService } from "../services/process-findings.js";
 
 function id(value: unknown) {
   const parsed = z.string().uuid().safeParse(value);
@@ -47,6 +48,20 @@ export function processAnalysisRoutes(db: Db) {
   });
   router.get("/companies/:companyId/process-definitions/:definitionId/runs/:runId", async (req, res) => {
     res.json(await service.getRun(company(req), req.actor, id(req.params.definitionId), id(req.params.runId)));
+  });
+  const findings = processFindingService(db);
+  const findingPath = "/companies/:companyId/process-definitions/:definitionId/runs/:runId/findings";
+  router.get(findingPath, async (req, res) => {
+    res.json(await findings.list(company(req, true), req.actor, id(req.params.definitionId), id(req.params.runId), req.query.cursor === undefined ? undefined : id(req.query.cursor)));
+  });
+  router.post(findingPath, validate(createProcessFindingSchema), async (req, res) => {
+    res.status(201).json(await findings.create(company(req), req.actor, id(req.params.definitionId), id(req.params.runId), req.body));
+  });
+  router.get(`${findingPath}/:findingId`, async (req, res) => {
+    res.json(await findings.detail(company(req), req.actor, id(req.params.definitionId), id(req.params.runId), id(req.params.findingId)));
+  });
+  router.post(`${findingPath}/:findingId/transition`, validate(transitionProcessFindingSchema), async (req, res) => {
+    res.json(await findings.transition(company(req), req.actor, id(req.params.definitionId), id(req.params.runId), id(req.params.findingId), req.body));
   });
   return router;
 }

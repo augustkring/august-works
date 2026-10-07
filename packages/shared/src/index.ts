@@ -3302,6 +3302,7 @@ export * from "./v8-assurance.js";
 export * from "./business-events.js";
 export * from "./process-data-readiness.js";
 export * from "./process-analysis.js";
+export * from "./process-findings.js";
 export * from "./business-metrics.js";
 export * from "./business-metric-targets.js";
 export * from "./strategy-execution.js";

@@ -2752,6 +2752,13 @@
       "when": 1791335844818,
       "tag": "0394_demonic_dexter_bennett",
       "breakpoints": true
+    },
+    {
+      "idx": 395,
+      "version": "7",
+      "when": 1791336873131,
+      "tag": "0395_melted_tarantula",
+      "breakpoints": true
     }
   ]
 }
