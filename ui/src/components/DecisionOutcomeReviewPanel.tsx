@@ -5,7 +5,7 @@ import {decisionOutcomeReviewsApi} from "@/api/decision-outcome-reviews";
 import {Button} from "@/components/ui/button";
 import {Textarea} from "@/components/ui/textarea";
 import {DecisionOutcomeReviewForm} from "./DecisionOutcomeReviewForm";
-function ReviewDetails({review}:{review:DecisionOutcomeReviewView}) {
+export function DecisionOutcomeReviewDetails({review}:{review:Omit<DecisionOutcomeReviewView,"authorizationCheckedAt">}) {
   const receipt=review.receipts[0],assessment=receipt?.assessment;
   const labels={decisionProcessQuality:"Decision process quality",assumptionAccuracy:"Assumption accuracy",executionFidelity:"Execution fidelity",externalChange:"External change",observedOutcome:"Observed outcome",causalConfidence:"Causal confidence"};
   return <div className="min-w-0 space-y-4"><p className="font-medium">{review.status.replaceAll("_"," ")} · due {new Date(review.reviewDueAt).toLocaleString()}</p>
@@ -40,7 +40,7 @@ export function DecisionOutcomeReviewPanel({companyId,userId,decisionId,version,
   return <section aria-label="Decision outcome review" className="min-w-0 space-y-4 border-t border-border pt-5"><h3 className="font-semibold">Outcome review</h3><p className="text-sm text-muted-foreground">Review what happened separately from what was known before choosing.</p>
     {detail.isFetching&&<p role="status">Rechecking current outcome review authority…</p>}{error&&<div role="alert" className="space-y-2"><p>{error.message}</p><Button variant="outline" onClick={()=>void detail.refetch()}>Recheck outcome review</Button></div>}
     {unavailable&&<p role="status">Retained review evidence is unavailable. Recheck current authority before using it.</p>}
-    {review&&<ReviewDetails review={review}/>}
+    {review&&<DecisionOutcomeReviewDetails review={review}/>}
     {data===null&&hasBaseline&&<p>No outcome review has been recorded. The review date comes from the frozen expectations.</p>}
     {!error&&!detail.isFetching&&!unavailable&&hasBaseline&&(data===null&&expectations.length>0||review&&["scheduled","due","in_review"].includes(review.status))&&<>
       {editing&&review?.status==="in_review"?<DecisionOutcomeReviewForm key={`${review.id}:${review.revision}`} companyId={companyId} userId={userId} version={version} optionId={optionId} chosenAt={chosenAt} revision={review.revision} busy={busy} onSave={input=>finish.mutate(input)} onCancel={()=>setEditing(false)}/>:<>

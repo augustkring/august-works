@@ -15,12 +15,15 @@ import { decisionOutcomeReviewService } from "../decision-outcome-reviews.js";
 import { inspectBoundDecisionContext } from "../decision-intelligence.js";
 import { learningService, learningRoots } from "../learning/learning-service.js";
 import { analyticalSourceSuppressions } from "@paperclipai/db";
+import { aiGovernanceService } from "../ai-governance/governance-service.js";
 export interface ManagementPrimitiveLink { sourceType: "issue" | "project" | "goal" | "document" | "document_revision" | "learning_cycle"; sourceRef: string; sourceHash: string }
 const DAY = 86400000, LIMIT = 20065;
 const grades = { metric_observation: "native_observation", process_finding: "native_observation", forecast_run: "predictive", scenario_run: "conditional_scenario", experiment_analysis: "human_interpreted_experiment", causal_analysis: "conditional_causal" } as const;
 /** Caller owns company → Memory locks and current destination admission. Capture
- * resolves every pin through its native owner; public copied facts are excluded. */
-export async function captureManagementSources(tx: Db, companyId: string, actor: AuthorizationActor, definition: ManagementReviewDefinition) {
+ * resolves every pin through its native owner; public copied facts are excluded.
+ * compareCurrentVersions is private historical qualification only: creation
+ * requires exact mutable owner versions, publication requires a current packet. */
+export async function captureManagementSources(tx: Db, companyId: string, actor: AuthorizationActor, definition: ManagementReviewDefinition, compareCurrentVersions = false) {
   const started = new Date(), deadline = performance.now() + 30000;
   const policies = await currentAnalyticalPurpose(tx, companyId, definition, "reviews", started);
   let expiresAt = new Date(Math.min(started.getTime() + definition.retentionDays * DAY, ...policies.flatMap(policy => [policy.nextReviewAt.getTime(), Date.parse(policy.obligation.nextReviewAt), ...(policy.obligation.effectiveUntil ? [Date.parse(policy.obligation.effectiveUntil)] : [])])));
@@ -40,7 +43,7 @@ export async function captureManagementSources(tx: Db, companyId: string, actor:
   }
   for (const item of definition.sources) {
     budget(); const source = item.source; if (source.kind === "analytical") continue;
-    let facts: CapturedManagementSource["facts"], material: unknown, grade: CapturedManagementSource["grade"] = "native_current_state";
+    let facts: CapturedManagementSource["facts"], material: unknown, grade: CapturedManagementSource["grade"] = "native_current_state", outcome: CapturedManagementSource["outcome"], governance: CapturedManagementSource["governance"];
     const limitations = ["Native state observed at capture; the requested period does not reconstruct historical state."];
     if (source.kind === "canonical") {
       const ref = source.reference; await ancestry(ref); await validateCurrentStrategyReference(tx, companyId, actor, ref);
@@ -50,6 +53,9 @@ export async function captureManagementSources(tx: Db, companyId: string, actor:
         const health = roadmapHealth(roadmap.tasks, new Date(), { dependencies: roadmap.dependencies, milestones: roadmap.milestones, waitingApprovalTaskIds: roadmap.health.metrics?.waitingApprovalTaskIds ?? undefined });
         material = { projectUpdatedAt: roadmap.projectUpdatedAt, tasks: roadmap.tasks, milestones: roadmap.milestones, dependencies: roadmap.dependencies, policy: roadmap.policy, health: { status: health.status, facts: health.facts, metrics: health.metrics } };
         facts = { projectName: roadmap.projectName, health: health.status, authorizedTaskCount: roadmap.tasks.length, unscheduledTasks: roadmap.tasks.filter(task => !task.plannedStartAt || !task.plannedEndAt).length, completedTasks: roadmap.tasks.filter(task => task.status === "done").length, blockedTasks: roadmap.tasks.filter(task => task.status === "blocked").length, milestoneCount: roadmap.milestones.length, ...Object.fromEntries(health.facts.slice(0, 16).map((fact, index) => [`healthFact${index + 1}`, fact])) };
+        const actuals = roadmap.tasks.filter(task => task.status === "done" && task.plannedEndAt && task.completedAt);
+        Object.assign(facts, { completedTasksWithKnownPlanAndActual: actuals.length, completedTasksAfterCommittedEnd: actuals.filter(task => Date.parse(task.completedAt!) > Date.parse(task.plannedEndAt!)).length, overdueOpenTasks: health.metrics?.overdueTaskIds.length ?? null, forecastSlipTasks: health.metrics?.forecastSlipTaskIds.length ?? null, waitingApprovalTasks: health.metrics?.waitingApprovalTaskIds?.length ?? null, milestonesWithKnownActualVariance: health.metrics?.milestoneVariance.filter(item => item.basis === "actual" && item.days !== null).length ?? null, milestonesWithConditionalForecastVariance: health.metrics?.milestoneVariance.filter(item => item.basis === "forecast" && item.days !== null).length ?? null });
+        limitations.push("Plan/actual counts include only completed authorized Tasks with both dates. Forecast slips and conditional milestone forecasts remain separate from actual completion.");
         limitations.push("Counts describe the current actor's authorized Roadmap task view, not an unrestricted company population.");
       } else if (ref.type === "issue") {
         const [row] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, ref.id), isNull(issues.hiddenAt))).for("share"); if (!row || row.harnessKind === "conversation") throw notFound("Native management task source is unavailable"); material = row;
@@ -58,6 +64,7 @@ export async function captureManagementSources(tx: Db, companyId: string, actor:
         const [row] = await tx.select().from(goals).where(and(eq(goals.companyId, companyId), eq(goals.id, ref.id))).for("share"); if (!row) throw notFound("Native management goal source is unavailable"); link("goal", row.id); material = row; facts = { title: row.title, status: row.status, level: row.level };
       } else if (ref.type === "milestone") {
         const [row] = await tx.select().from(projectMilestones).where(and(eq(projectMilestones.companyId, companyId), eq(projectMilestones.projectId, ref.projectId), eq(projectMilestones.id, ref.id))).for("share"); if (!row) throw notFound("Native management milestone source is unavailable"); material = row; facts = { name: row.name, status: row.status, targetDate: row.targetDate, plannedEndAt: row.plannedEndAt?.toISOString() ?? null, completedAt: row.completedAt?.toISOString() ?? null };
+        const planned = row.plannedEndAt?.getTime() ?? (row.targetDate ? Date.parse(`${row.targetDate}T23:59:59.999Z`) : null); facts.actualVarianceDays = planned !== null && row.completedAt ? Math.ceil((row.completedAt.getTime() - planned) / DAY) : null; facts.varianceBasis = facts.actualVarianceDays === null ? "unknown" : "actual";
       } else if (ref.type === "foundation_section") {
         const [root] = await tx.select().from(foundationDocuments).where(and(eq(foundationDocuments.companyId, companyId), eq(foundationDocuments.id, ref.foundationDocumentId))).for("share");
         const [section] = await tx.select().from(foundationSections).where(and(eq(foundationSections.companyId, companyId), eq(foundationSections.id, ref.sectionId), eq(foundationSections.documentRevisionId, ref.approvedRevisionId))).for("share");
@@ -72,20 +79,36 @@ export async function captureManagementSources(tx: Db, companyId: string, actor:
       } else {
         const captured = await captureAnalyticalEvidence(tx, companyId, actor, { sensitivity: definition.sensitivity, retentionDays: definition.retentionDays, evidence: [{ key: item.key, source: ref }] }, deadline); for (const value of captured.edges) edge(value); for (const id of captured.manifestIds) dependencies.add(id); expiresAt = new Date(Math.min(expiresAt.getTime(), captured.expiresAt.getTime())); material = { source: captured.evidence[0].source, sourceHash: captured.evidence[0].sourceHash, facts: captured.evidence[0].facts, limitations: captured.evidence[0].limitations }; facts = captured.evidence[0].facts; limitations.push(...captured.evidence[0].limitations);
       }
+    } else if (source.kind === "governance_obligation") {
+      const value = await aiGovernanceService(tx).inspectReviewSource(actor, companyId, source.id, source.contentHash), obligation = value.obligation;
+      const reviewDue = value.row.nextReviewAt <= started || Date.parse(obligation.nextReviewAt) <= started.getTime(), effectiveState = Date.parse(obligation.effectiveFrom) > started.getTime() ? "not_effective_yet" : obligation.effectiveUntil && Date.parse(obligation.effectiveUntil) <= started.getTime() ? "expired" : "effective";
+      edge({ inputType: "governance_obligation", inputRef: value.row.id, inputHash: value.row.obligationHash, relationship: "source" });
+      material = { row: value.row, currentRevision: value.currentRevision, reviewDue, effectiveState };
+      governance = { id: value.row.id, contentHash: value.row.obligationHash, obligation };
+      facts = { framework: obligation.framework, authority: obligation.authority, citation: obligation.citation, jurisdictionOrScope: obligation.jurisdictionOrScope, applicabilityState: obligation.applicabilityState, humanDeclaredApplicabilityFacts: obligation.applicabilityFacts, requiredControl: obligation.requiredControl, requiredEvidenceCount: obligation.evidenceRequired.length, declaredControlReferenceCount: obligation.controlRefs.length, ownerUserId: value.row.ownerUserId, lastReviewedAt: value.row.lastReviewedAt.toISOString(), nextReviewAt: obligation.nextReviewAt, reviewDue, currentRevision: value.currentRevision, effectiveState, effectiveFrom: obligation.effectiveFrom, effectiveUntil: obligation.effectiveUntil, sourceVersionOrDate: obligation.sourceVersionOrDate, sourceUrl: obligation.sourceUrl, reviewTrigger: obligation.reviewTrigger, controlEffectiveness: "not_verified" };
+      limitations.push("Applicability, required controls and evidence are the original human governance declaration, not a legal ruling or proof of control effectiveness.", "Review-due or expired legal evidence is reported as a risk and never grants analytical purpose approval.");
     } else if (source.kind === "decision_outcome") {
-      const value = await decisionOutcomeReviewService(tx).detail(companyId, actor, source.decisionId); if (!value || value.id !== source.reviewId || value.revision !== source.revision) throw conflict("Native decision outcome review identity/revision changed");
+      const value = await decisionOutcomeReviewService(tx).detail(companyId, actor, source.decisionId); if (!value || value.id !== source.reviewId || !compareCurrentVersions && value.revision !== source.revision) throw conflict("Native decision outcome review identity/revision changed");
       const bound = await inspectBoundDecisionContext(tx, companyId, actor, source.decisionId); if (bound.version.definition.sensitivity === "confidential" && definition.sensitivity !== "confidential") throw forbidden("Management cannot downgrade decision outcome sensitivity");
+      await manifest(bound.version.lineageManifestId);
+      // Receipt manifests preserve copied outcome judgments. Also inherit the
+      // original baseline/actual owners so their deletion cannot leave those
+      // copied measurements or dependent management prose behind.
+      const originals = [...bound.version.definition.evidence.map(pin => pin.source), ...value.receipts.flatMap(receipt => receipt.actualEvidence.map(pin => pin.source))], distinct = [...new Map(originals.map(pin => [nativeSha256(pin), pin])).values()];
+      if (distinct.length) { const inherited = await captureAnalyticalEvidence(tx, companyId, actor, { sensitivity: definition.sensitivity, retentionDays: definition.retentionDays, evidence: distinct.map((source, index) => ({ key: `inherited_${index}`, source })) }, deadline); for (const id of inherited.manifestIds) { dependencies.add(id); budget(); } for (const value of inherited.edges) edge(value); expiresAt = new Date(Math.min(expiresAt.getTime(), inherited.expiresAt.getTime())); }
       const rows = await tx.select().from(decisionOutcomeReviewReceipts).where(and(eq(decisionOutcomeReviewReceipts.companyId, companyId), eq(decisionOutcomeReviewReceipts.reviewId, value.id))).limit(4); if (rows.length !== value.revision) throw notFound("Decision outcome source receipts are unavailable"); for (const row of rows) await manifest(row.lineageManifestId); await ancestry({ type: "decision", id: source.decisionId });
-      grade = "native_outcome_review"; const { authorizationCheckedAt, ...retainedOutcome } = value; material = retainedOutcome; facts = { reviewStatus: value.status, revision: value.revision, reviewDueAt: value.reviewDueAt, chosenOptionId: value.optionId, contextHash: value.contextHash }; limitations.push("Human outcome assessments remain separate judgments; a before/after association does not identify the effect of the decision.");
+      grade = "native_outcome_review"; const { authorizationCheckedAt, ...retainedOutcome } = value; material = retainedOutcome; if (value.revision === source.revision) outcome = retainedOutcome;
+      const assessment = value.receipts.find(receipt => receipt.assessment)?.assessment;
+      facts = { reviewStatus: value.status, revision: value.revision, reviewDueAt: value.reviewDueAt, chosenOptionId: value.optionId, contextHash: value.contextHash, lessonSummary: assessment?.lessonSummary ?? null, ...Object.fromEntries(["decisionProcessQuality", "assumptionAccuracy", "executionFidelity", "externalChange", "observedOutcome", "causalConfidence"].map(key => [key, assessment?.assessments[key as keyof typeof assessment.assessments].assessment ?? null])) }; limitations.push("Human outcome assessments remain separate judgments; a before/after association does not identify the effect of the decision.");
     } else {
-      const value = await learningService(tx).get(actor, companyId, source.id); if (value.version !== source.expectedVersion) throw conflict("Native Learning source version changed");
+      const value = await learningService(tx).get(actor, companyId, source.id); if (!compareCurrentVersions && value.version !== source.expectedVersion) throw conflict("Native Learning source version changed");
       const [cycle] = await tx.select().from(learningCycles).where(and(eq(learningCycles.companyId, companyId), eq(learningCycles.id, value.id))).for("share"); if (!cycle || cycle.erasedAt) throw notFound("Native Learning source is unavailable"); const roots = await learningRoots(tx, actor, cycle);
       if (roots.some(root => root.sensitivityLabel === "restricted" || root.sensitivityLabel === "confidential" && definition.sensitivity !== "confidential")) throw forbidden("Management cannot downgrade Learning source sensitivity");
       for (const root of roots) expiresAt = new Date(Math.min(expiresAt.getTime(), root.expiresAt?.getTime() ?? Infinity, root.validUntil?.getTime() ?? Infinity));
       link("learning_cycle", cycle.id); for (const id of Object.keys(cycle.outcomeVersions)) await ancestry({ type: "issue", id }); if (cycle.scopeType === "project") await ancestry({ type: "project", id: cycle.scopeId! });
       grade = "native_learning_cycle"; material = value; facts = { status: value.status, version: value.version, hypothesisCount: value.hypotheses.length, evaluationCount: value.evaluations.length, proposalCount: value.candidates.length, acceptedPromotionReceipts: value.candidates.filter(candidate => !!candidate.promotionReceipt).length }; limitations.push("Native Learning still requires surviving verified canonical Task roots and independent evaluations; analytical proxies do not substitute for those roots.");
     }
-    sources.push({ key: item.key, source, sourceHash: nativeSha256(material), capturedAt: new Date().toISOString(), expiresAt: expiresAt.toISOString(), grade, facts, limitations });
+    sources.push({ key: item.key, source, sourceHash: nativeSha256(material), capturedAt: new Date().toISOString(), expiresAt: expiresAt.toISOString(), grade, facts, limitations, ...(outcome ? { outcome } : {}), ...(governance ? { governance } : {}) });
   }
   // Capture typed original metric material only for explicitly requested pairs.
   // This is a read of an existing observation, never a query/new measurement.

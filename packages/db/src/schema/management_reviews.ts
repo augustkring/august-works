@@ -3,6 +3,7 @@ import { check, foreignKey, index, integer, jsonb, pgTable, text, timestamp, uni
 import type { CapturedManagementSource, ManagementReviewDefinition, ManagementReviewPacket } from "@paperclipai/shared";
 import { companies } from "./companies.js";
 import { analyticalLineageManifests } from "./analytical_lineage.js";
+import { governanceObligations } from "./ai_governance.js";
 
 /** Historical synthesis, never a parallel Goal/Project/Decision authority. */
 export const managementReviewSnapshots = pgTable("management_review_snapshots", {
@@ -51,4 +52,14 @@ export const managementReviewEvents = pgTable("management_review_events", {
   reviewFk: foreignKey({ name: "management_review_events_review_fk", columns: [t.companyId, t.reviewId], foreignColumns: [managementReviewSnapshots.companyId, managementReviewSnapshots.id] }).onDelete("cascade"),
   ordinalUq: unique("management_review_events_ordinal_uq").on(t.companyId, t.reviewId, t.ordinal),
   contentCheck: check("management_review_events_content_check", sql`${t.ordinal} between 1 and 100 and ${t.itemKey} ~ '^[a-z][a-z0-9_-]{0,79}$' and ${t.event} in ('opened','ignored','acted_on','false_alarm','correction') and length(btrim(${t.rationale})) between 10 and 2000 and ${t.contentHash} ~ '^[a-f0-9]{64}$' and ${t.signature} ~ '^decision-spec-v1[.][a-f0-9]{64}$'`),
+}));
+/** Both destination purpose and explicitly cited governance roots erase the
+ * whole copied review when their native tenant-bound obligation is deleted. */
+export const managementReviewGovernanceDependencies = pgTable("management_review_governance_dependencies", {
+  companyId: uuid("company_id").notNull(), reviewId: uuid("review_id").notNull(), obligationId: uuid("obligation_id").notNull(),
+}, (t) => ({
+  sourceUq: unique("management_review_governance_dependencies_source_uq").on(t.companyId, t.reviewId, t.obligationId),
+  sourceIdx: index("management_review_governance_dependencies_source_idx").on(t.companyId, t.obligationId),
+  reviewFk: foreignKey({ name: "management_review_governance_dependencies_review_fk", columns: [t.companyId, t.reviewId], foreignColumns: [managementReviewSnapshots.companyId, managementReviewSnapshots.id] }).onDelete("cascade"),
+  sourceFk: foreignKey({ name: "management_review_governance_dependencies_source_fk", columns: [t.companyId, t.obligationId], foreignColumns: [governanceObligations.companyId, governanceObligations.id] }).onDelete("cascade"),
 }));

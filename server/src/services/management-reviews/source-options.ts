@@ -1,5 +1,5 @@
 import { and, asc, eq, ilike, isNull, ne, or } from "drizzle-orm";
-import { analyticalSourceSuppressions, businessMetrics, businessMetricTargets, businessMetricObservations, decisions, foundationDocuments, goals, issues, learningCycles, projects, projectMilestones, type Db } from "@paperclipai/db";
+import { analyticalSourceSuppressions, businessMetrics, businessMetricTargets, businessMetricObservations, decisions, foundationDocuments, goals, governanceObligations, issues, learningCycles, projects, projectMilestones, type Db } from "@paperclipai/db";
 import type { ManagementReviewSource, ManagementSourceOptions, ManagementSourceOptionsQuery, StrategyExecutionReference } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { HttpError, unprocessable } from "../../errors.js";
@@ -10,6 +10,7 @@ import { decisionOutcomeReviewService } from "../decision-outcome-reviews.js";
 import { learningService } from "../learning/learning-service.js";
 import { inspectAnalyticalEvidenceAuthority } from "../analytical-evidence.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { aiGovernanceService } from "../ai-governance/governance-service.js";
 
 /** Private candidate lookup only. Every disclosed pin/title passes its native
  * owner's current authority and lifecycle checks in the caller's locked TX. */
@@ -18,6 +19,7 @@ export async function managementSourceOptions(tx: Db, companyId: string, actor: 
   const pattern = `%${(query.q ?? "").replace(/[\\%_]/g, "\\$&")}%`;
   const canonical = (reference: StrategyExecutionReference, title: string) => candidates.push({ source: { kind: "canonical", reference }, title });
   switch (query.kind) {
+    case "governance_obligation": await assertV7Authorization(tx, actor, companyId, "users:manage_permissions"); for (const row of await tx.select().from(governanceObligations).where(eq(governanceObligations.companyId, companyId)).orderBy(asc(governanceObligations.id)).limit(20)) candidates.push({ source: { kind: "governance_obligation", id: row.id, contentHash: row.obligationHash }, title: `${row.obligation.citation} · ${row.obligation.applicabilityState}` }); break;
     case "goal": for (const row of await tx.select().from(goals).where(and(eq(goals.companyId, companyId), ilike(goals.title, pattern))).orderBy(asc(goals.id)).limit(20)) canonical({ type: "goal", id: row.id }, row.title); break;
     case "project": for (const row of await tx.select().from(projects).where(and(eq(projects.companyId, companyId), isNull(projects.archivedAt), ilike(projects.name, pattern))).orderBy(asc(projects.id)).limit(20)) canonical({ type: "project", id: row.id }, row.name); break;
     case "issue": for (const row of await tx.select().from(issues).where(and(eq(issues.companyId, companyId), isNull(issues.hiddenAt), or(isNull(issues.harnessKind), ne(issues.harnessKind, "conversation")), ilike(issues.title, pattern))).orderBy(asc(issues.id)).limit(20)) canonical({ type: "issue", id: row.id }, `${row.identifier ?? "Task"} · ${row.title}`); break;
@@ -51,6 +53,7 @@ export async function managementSourceOptions(tx: Db, companyId: string, actor: 
         if (ref.type === "foundation_section") { const [document] = await tx.select().from(foundationDocuments).where(and(eq(foundationDocuments.companyId, companyId), eq(foundationDocuments.id, ref.foundationDocumentId))); if (document) primitives.push({ type: "document", id: document.documentId }, { type: "document_revision", id: ref.approvedRevisionId }); }
         for (const primitive of primitives) if ((await tx.select({ id: analyticalSourceSuppressions.inputRef }).from(analyticalSourceSuppressions).where(and(eq(analyticalSourceSuppressions.companyId, companyId), eq(analyticalSourceSuppressions.inputType, primitive.type), eq(analyticalSourceSuppressions.inputRef, primitive.id))).limit(1)).length) throw new HttpError(409, "Source was erased");
       } else if (source.kind === "learning_cycle") await learningService(tx).get(actor, companyId, source.id);
+      else if (source.kind === "governance_obligation" && !(await aiGovernanceService(tx).inspectReviewSource(actor, companyId, source.id, source.contentHash)).currentRevision) continue;
       items.push(candidate);
     } catch (error) { if (!(error instanceof HttpError && [403, 404, 409].includes(error.status))) throw error; }
   }

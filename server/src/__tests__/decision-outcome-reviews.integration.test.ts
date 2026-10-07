@@ -4,11 +4,12 @@ import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq,sql} from "drizzle-orm";
 import {agents,authUsers,companies,companyMemberships,createDb,decisions,heartbeatRuns,issues,projects,issueComments,
   decisionContexts,decisionContextVersions,decisionContextBindings,decisionContextPreparations,decisionCriteria,decisionAssumptions,decisionExpectedOutcomes,
-  decisionEvidenceLinks,analyticalLineageManifests,analyticalLineageEdges,decisionOutcomeReviews,decisionOutcomeReviewReceipts} from "@paperclipai/db";
+  decisionEvidenceLinks,analyticalLineageManifests,analyticalLineageEdges,decisionOutcomeReviews,decisionOutcomeReviewReceipts,managementReviewSnapshots} from "@paperclipai/db";
 import {decisionContextDefinitionSchema,type DecisionContextDefinition,type FinishDecisionOutcomeReview} from "@paperclipai/shared";
 import {decisionOutcomeReviewService} from "../services/decision-outcome-reviews.js";
 import {decisionIntelligenceService} from "../services/decision-intelligence.js";
 import {decisionService} from "../services/decisions.js";
+import {managementReviewService} from "../services/management-reviews/service.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
 import {aiGovernanceService} from "../services/ai-governance/governance-service.js";
 import {instanceSettingsService} from "../services/instance-settings.js";
@@ -76,6 +77,27 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
       assumptionOutcomes:[{key:"capacity",kind:"human_judgment",assessment:"inconclusive",explanation:"Delivery capacity has not been independently validated",evidenceKeys:[]}]};
   };
   const begin=(id:string)=>reviews().transition(companyId,actor,id,{expectedRevision:1,action:"begin",rationale:"A human begins the separate outcome assessment"});
+  it("retains a signed management packet after an authorized outcome revision changes and requires a fresh exact pin for publication",async()=>{
+    await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({management_reviews_v8:true});const purpose=analyticalPurpose();purpose.citation+=" retained outcome review";purpose.analyticalPurpose!.capabilities=["reviews"];const destination=(await aiGovernanceService(db).obligation(actor,companyId,purpose)).id;
+    const {d,review}=await scheduled(),management=managementReviewService(db),now=new Date(),definition={name:"Original scheduled native outcome review",reviewType:"ad_hoc" as const,period:{from:new Date(now.getTime()-86400000).toISOString(),until:now.toISOString()},purpose:"management_intelligence" as const,sensitivity:"internal" as const,retentionDays:1,governanceObligationRefs:[destination],sources:[{key:"outcome",source:{kind:"decision_outcome" as const,decisionId:d.id,reviewId:review.id,revision:review.revision}}],agenda:[{key:"inspect",category:"INVESTIGATE" as const,ownerUserId:"local-board",dueAt:new Date(now.getTime()+86400000).toISOString(),sourceKeys:["outcome"],nextAction:"Human inspects the exact originally scheduled review before publication",hypothesis:null}]};
+    const created=await management.create(companyId,actor,definition),original=await management.detail(companyId,actor,created.id);await begin(d.id);await reviews().finish(companyId,actor,d.id,final());const retained=await management.detail(companyId,actor,created.id);
+    expect(retained.currentQualification).toBe("needs_revalidation");expect(retained.sources).toEqual(original.sources);expect(retained.packet).toEqual(original.packet);expect(retained.sources[0].facts.reviewStatus).toBe("scheduled");
+    await expect(management.publish(companyId,actor,created.id,{expectedContentHash:created.contentHash,rationale:"Attempt to rely on the old scheduled outcome after a newer human review",evidenceAndUncertaintyAcknowledged:true,supersedesId:null})).rejects.toMatchObject({status:409});await expect(management.create(companyId,actor,definition)).rejects.toMatchObject({status:409});
+  });
+  it("inherits all six original outcome judgments and receipt erasure into a separately published native management review",async()=>{
+    await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({management_reviews_v8:true}); const purpose=analyticalPurpose();purpose.citation+=" management review";purpose.analyticalPurpose!.capabilities=["reviews"];
+    const destination=(await aiGovernanceService(db).obligation(actor,companyId,purpose)).id;
+    const {d}=await scheduled();await begin(d.id);const original=await reviews().finish(companyId,actor,d.id,final()),chosen=await native().get(d.id);
+    const management=managementReviewService(db),now=new Date(),created=await management.create(companyId,actor,{name:"Cited independent native outcome judgments",reviewType:"weekly_leadership",period:{from:new Date(now.getTime()-86400000).toISOString(),until:now.toISOString()},purpose:"management_intelligence",sensitivity:"internal",retentionDays:1,governanceObligationRefs:[destination],sources:[{key:"outcome",source:{kind:"decision_outcome",decisionId:d.id,reviewId:original.id,revision:original.revision}}],agenda:[{key:"inspect",category:"INVESTIGATE",ownerUserId:"local-board",dueAt:new Date(now.getTime()+86400000).toISOString(),sourceKeys:["outcome"],nextAction:"Human reviews original independent judgments before proposing another decision",hypothesis:null}]});
+    const view=await management.detail(companyId,actor,created.id),facts=view.packet.claims[0].facts;
+    expect(facts).toMatchObject({decisionProcessQuality:"supported",assumptionAccuracy:"unknown",executionFidelity:"unknown",externalChange:"unknown",observedOutcome:"unknown",causalConfidence:"not_assessed",lessonSummary:final().lessonSummary});
+    const {authorizationCheckedAt,...retained}=original;expect(view.sources[0].outcome).toEqual(retained);expect(view.currentQualification).toBe("current");
+    await management.publish(companyId,actor,created.id,{expectedContentHash:created.contentHash,rationale:"Human acknowledges every retained independent outcome judgment",evidenceAndUncertaintyAcknowledged:true,supersedesId:null});
+    expect((await native().get(d.id))!.chosenOptionId).toBe(chosen!.chosenOptionId);expect(await db.select().from(issueComments).where(eq(issueComments.issueId,targetId))).toHaveLength(1);
+    const [receipt]=await db.select().from(decisionOutcomeReviewReceipts).where(and(eq(decisionOutcomeReviewReceipts.reviewId,original.id),eq(decisionOutcomeReviewReceipts.revision,1)));
+    await disableV8Rollout(db);await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,receipt.lineageManifestId));
+    expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id,created.id))).toHaveLength(0);expect((await native().get(d.id))!.chosenOptionId).toBe(chosen!.chosenOptionId);
+  });
   it("requires an actual surviving prospective binding and schedules only the chosen declared horizon",async()=>{
     const bare=await create();await choose(bare.id);
     await expect(reviews().schedule(companyId,actor,bare.id,{contextVersionId:randomUUID(),rationale:"Attempt to invent a retrospective decision baseline"})).rejects.toMatchObject({status:404});
@@ -132,6 +154,11 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     expect(completed.causalClaimRef).toBeNull();expect(completed.receipts[0].comparisons[0].limitations.join(" ")).toContain("does not identify");
     expect((await service().detail(companyId,actor,d.id)).versions[0].contentHash).toBe(context.versions[0].contentHash);
     expect((await service().detail(companyId,actor,d.id)).versions[0].evidence[0].facts.value).toBe(0.5);
+    await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({management_reviews_v8:true}); const purpose=analyticalPurpose();purpose.citation+=" completed outcome review";purpose.analyticalPurpose!.capabilities=["reviews"]; const destination=(await aiGovernanceService(db).obligation(actor,companyId,purpose)).id;
+    const management=managementReviewService(db),now=new Date(),copied=await management.create(companyId,actor,{name:"Cited native baseline and post-choice actual",reviewType:"monthly_business",period:{from:new Date(now.getTime()-86400000).toISOString(),until:now.toISOString()},purpose:"management_intelligence",sensitivity:"internal",retentionDays:1,governanceObligationRefs:[destination],sources:[{key:"outcome",source:{kind:"decision_outcome",decisionId:d.id,reviewId:completed.id,revision:completed.revision}}],agenda:[{key:"inspect",category:"INVESTIGATE",ownerUserId:"local-board",dueAt:new Date(now.getTime()+86400000).toISOString(),sourceKeys:["outcome"],nextAction:"Human reviews the complete original baseline and actual measurement",hypothesis:null}]});
+    const retained=await management.detail(companyId,actor,copied.id);expect(retained.sources[0].outcome!.receipts[0].comparisons).toEqual(completed.receipts[0].comparisons);expect(retained.sources[0].outcome!.receipts[0].actualEvidence).toEqual(completed.receipts[0].actualEvidence);expect(retained.currentQualification).toBe("current");
+    await management.publish(companyId,actor,copied.id,{expectedContentHash:copied.contentHash,rationale:"Human acknowledges original actuals without causal attribution",evidenceAndUncertaintyAcknowledged:true,supersedesId:null});
+    await disableV8Rollout(db);await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,actual.lineageManifestId));expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id,copied.id))).toHaveLength(0);expect((await native().get(d.id))!.chosenOptionId).toBe("proceed");
   });
   it("denies old observations as later outcomes and rechecks hidden sources on reads and writes",async()=>{
     const baseline=await observation(),{d}=await scheduled();await begin(d.id);

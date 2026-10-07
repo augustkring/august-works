@@ -2871,6 +2871,13 @@
       "when": 1791374444701,
       "tag": "0411_lively_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 412,
+      "version": "7",
+      "when": 1791381033905,
+      "tag": "0412_woozy_scrambler",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,8 @@ import { strategyExecutionReferenceSchema } from "./strategy-execution.js";
 import type { CapturedDecisionEvidence } from "./decision-intelligence.js";
 import type { BusinessMetricResult } from "./business-metrics.js";
 import type { BusinessMetricTargetDefinition } from "./business-metric-targets.js";
+import type { DecisionOutcomeReviewView } from "./decision-outcome-reviews.js";
+import type { GovernanceObligation } from "./ai-governance.js";
 
 const key = z.string().regex(/^[a-z][a-z0-9_-]{0,79}$/);
 const instant = z.string().datetime({ offset: true });
@@ -13,6 +15,7 @@ export const managementReviewSourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("canonical"), reference: strategyExecutionReferenceSchema }).strict(),
   z.object({ kind: z.literal("decision_outcome"), decisionId: z.string().uuid(), reviewId: z.string().uuid(), revision: z.number().int().positive() }).strict(),
   z.object({ kind: z.literal("learning_cycle"), id: z.string().uuid(), expectedVersion: z.number().int().positive() }).strict(),
+  z.object({ kind: z.literal("governance_obligation"), id: z.string().uuid(), contentHash: sha }).strict(),
 ]);
 export const managementAgendaCategorySchema = z.enum(["DECISION_REQUIRED", "INVESTIGATE", "APPROVAL_REQUIRED", "AT_RISK", "NO_ACTION"]);
 export const managementReviewDefinitionSchema = z.object({
@@ -48,7 +51,7 @@ export const recordManagementReviewEventSchema = z.object({ expectedContentHash:
 export type ManagementReviewDefinition = z.infer<typeof managementReviewDefinitionSchema>;
 export type ManagementReviewSource = z.infer<typeof managementReviewSourceSchema>;
 export const managementSourceOptionsQuerySchema = z.object({
-  kind: z.enum(["foundation_section", "goal", "project", "milestone", "issue", "decision", "metric", "metric_target", "metric_observation", "decision_outcome", "learning_cycle"]),
+  kind: z.enum(["foundation_section", "goal", "project", "milestone", "issue", "decision", "metric", "metric_target", "metric_observation", "decision_outcome", "learning_cycle", "governance_obligation"]),
   q: z.string().trim().max(200).optional(), parentId: z.string().uuid().optional(), expectedUserId: z.string().min(1).max(300).optional(),
 }).strict();
 export type ManagementSourceOptionsQuery = z.infer<typeof managementSourceOptionsQuerySchema>;
@@ -63,6 +66,8 @@ export interface CapturedManagementSource {
   analytical?: CapturedDecisionEvidence;
   metric?: { observation: BusinessMetricResult; unit: string; timeSemantics: string };
   target?: { id: string; versionId: string; definition: BusinessMetricTargetDefinition };
+  outcome?: Omit<DecisionOutcomeReviewView, "authorizationCheckedAt">;
+  governance?: { id: string; contentHash: string; obligation: GovernanceObligation };
 }
 export interface ManagementReviewPacket {
   engineVersion: "aw-native-management-skeleton-v1";

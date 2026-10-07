@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { analyticalLineageEdges, analyticalLineageManifests, managementReviewSnapshots, managementReviewSourceLinks, managementReviewManifestDependencies, managementReviewEvents, type Db } from "@paperclipai/db";
+import { analyticalLineageEdges, analyticalLineageManifests, managementReviewSnapshots, managementReviewSourceLinks, managementReviewManifestDependencies, managementReviewGovernanceDependencies, managementReviewEvents, type Db } from "@paperclipai/db";
 import { managementReviewDefinitionSchema, managementSourceOptionsQuerySchema, publishManagementReviewSchema, recordManagementReviewEventSchema, v7FeatureEnabled, v8FeatureEnabled, type ManagementReviewDefinition, type ManagementReviewView, type ManagementSourceOptionsQuery } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { conflict, notFound } from "../../errors.js";
@@ -17,6 +17,7 @@ import { inspectAnalyticalEvidenceAuthority } from "../analytical-evidence.js";
 import { managementSourceOptions } from "./source-options.js";
 type Row = typeof managementReviewSnapshots.$inferSelect;
 const LIMIT = 20065;
+function governanceRoots(definition: ManagementReviewDefinition) { return [...new Set([...definition.governanceObligationRefs, ...definition.sources.flatMap(item => item.source.kind === "governance_obligation" ? [item.source.id] : [])])].sort(); }
 async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, requireFlags = true) {
   v7HumanActorId(actor); await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
   await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await tx.execute(sql`set local statement_timeout='8s'`);
@@ -34,6 +35,8 @@ async function retained(tx: Db, companyId: string, actor: AuthorizationActor, ro
   const links = (await tx.select().from(managementReviewSourceLinks).where(and(eq(managementReviewSourceLinks.companyId, companyId), eq(managementReviewSourceLinks.reviewId, row.id))).limit(LIMIT + 1)).map(({ sourceType, sourceRef, sourceHash }) => ({ sourceType, sourceRef, sourceHash })).sort((a, b) => `${a.sourceType}:${a.sourceRef}`.localeCompare(`${b.sourceType}:${b.sourceRef}`));
   const dependencies = (await tx.select().from(managementReviewManifestDependencies).where(and(eq(managementReviewManifestDependencies.companyId, companyId), eq(managementReviewManifestDependencies.reviewId, row.id))).limit(LIMIT + 1)).map(dep => dep.sourceManifestId).sort();
   if (edges.length > LIMIT || links.length > LIMIT || dependencies.length > LIMIT || manifest.sourceCount !== edges.length || manifest.parameters.primitiveCount !== links.length || manifest.parameters.dependencyCount !== dependencies.length || manifest.parameters.signature !== row.signature || !verifyDecisionSpec(proof(row, edges, links, dependencies), row.signature)) throw notFound("Management signed historical source receipt is unavailable");
+  const governance = (await tx.select({ id: managementReviewGovernanceDependencies.obligationId }).from(managementReviewGovernanceDependencies).where(and(eq(managementReviewGovernanceDependencies.companyId, companyId), eq(managementReviewGovernanceDependencies.reviewId, row.id))).limit(37)).map(item => item.id).sort();
+  if (nativeSha256(governance) !== nativeSha256(governanceRoots(definition))) throw notFound("Management native governance dependencies are incomplete");
   const replay = composeManagementReview(definition, row.sources, row.createdAt.toISOString());
   if (replay.contentHash !== row.contentHash || nativeSha256(replay) !== nativeSha256(row.packet)) throw notFound("Management deterministic original source replay is unavailable");
   if (row.status !== "draft" && (!row.publicationSignature || !verifyDecisionSpec(publication(row), row.publicationSignature))) throw notFound("Management human publication receipt is unavailable");
@@ -47,7 +50,7 @@ async function retained(tx: Db, companyId: string, actor: AuthorizationActor, ro
     if (event.ordinal !== index + 1 || event.contentHash !== nativeSha256(material) || !verifyDecisionSpec({ domain: "aw-management-event:v1", contentHash: event.contentHash, ...material }, event.signature)) throw notFound("Management human event receipt is unavailable");
     return { id: material.id, itemKey: material.itemKey, event: material.event, rationale: material.rationale, recordedBy: material.recordedBy, recordedAt: material.recordedAt, ordinal: material.ordinal, interpretation: material.interpretation };
   });
-  const current = await captureManagementSources(tx, companyId, actor, definition);
+  const current = await captureManagementSources(tx, companyId, actor, definition, true);
   const fresh = composeManagementReview(definition, current.sources, current.asOf.toISOString());
   return { id: row.id, companyId, status: row.status, definition, sources: row.sources, packet: row.packet, createdBy: row.createdBy, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString(), publishedBy: row.publishedBy, publishedAt: row.publishedAt?.toISOString() ?? null, currentQualification: fresh.inputHash === row.packet.inputHash ? "current" : "needs_revalidation", events };
 }
@@ -67,6 +70,7 @@ export function managementReviewService(db: Db) {
         await tx.insert(managementReviewSnapshots).values({ ...material, lineageManifestId, signature, status: "draft" });
         for (let offset = 0; offset < captured.links.length; offset += 500) await tx.insert(managementReviewSourceLinks).values(captured.links.slice(offset, offset + 500).map(link => ({ ...link, companyId, reviewId: id })));
         for (let offset = 0; offset < captured.dependencies.length; offset += 500) await tx.insert(managementReviewManifestDependencies).values(captured.dependencies.slice(offset, offset + 500).map(sourceManifestId => ({ companyId, reviewId: id, sourceManifestId })));
+        await tx.insert(managementReviewGovernanceDependencies).values(governanceRoots(definition).map(obligationId => ({ companyId, reviewId: id, obligationId })));
         await logActivity(tx, { companyId, actorType: "user", actorId: createdBy, action: "management_review.drafted", entityType: "management_review", entityId: id, details: { contentHash: packet.contentHash } }, publications);
         return { id, companyId, status: "draft" as const, contentHash: packet.contentHash };
       });

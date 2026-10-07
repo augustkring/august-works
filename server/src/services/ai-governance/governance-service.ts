@@ -112,6 +112,17 @@ export function aiGovernanceService(db: Db) {
     };
   }
   return {
+    /** Native read of an exact human obligation. Review-due legal evidence is
+     * still inspectable as a risk; it never grants analytical purpose approval. */
+    inspectReviewSource: async (actor: AuthorizationActor, companyId: string, id: string, contentHash?: string) => {
+      await assertV7Enabled(db, "governance_evidence_v7"); await access(db, actor, companyId, true);
+      const [row] = await db.select().from(governanceObligations).where(and(eq(governanceObligations.companyId, companyId), eq(governanceObligations.id, id))).for("share");
+      if (!row) throw notFound("Native governance source is unavailable");
+      const obligation = governanceObligationSchema.parse(row.obligation);
+      if (nativeSha256(obligation) !== row.obligationHash || contentHash && row.obligationHash !== contentHash) throw conflict("Native governance source identity/hash changed");
+      const [latest] = await db.select({ id: governanceObligations.id }).from(governanceObligations).where(and(eq(governanceObligations.companyId, companyId), sql`${governanceObligations.obligation}->>'framework'=${obligation.framework}`, sql`${governanceObligations.obligation}->>'authority'=${obligation.authority}`, sql`${governanceObligations.obligation}->>'citation'=${obligation.citation}`, sql`${governanceObligations.obligation}->>'jurisdictionOrScope'=${obligation.jurisdictionOrScope}`)).orderBy(desc(governanceObligations.createdAt), desc(governanceObligations.id)).limit(1).for("share");
+      return { row, obligation, currentRevision: latest?.id === row.id };
+    },
     targets: async (actor: AuthorizationActor, companyId: string) => {
       await assertV7Enabled(db, "ai_use_cases_v7");
       await access(db, actor, companyId, true);
