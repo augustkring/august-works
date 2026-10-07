@@ -30,6 +30,11 @@ export function agentRuntimeFabricRoutes(db: Db) {
     const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId);
     res.json(await svc.getManifest(req.actor, companyId, req.params.runId as string));
   });
+  router.get("/companies/:companyId/runs/:runId/playbooks/:playbookId/body",async(req,res)=>{
+    const companyId=req.params.companyId as string;assertCompanyAccess(req,companyId);
+    res.set("Cache-Control","no-store");
+    res.json(await svc.loadPlaybook(req.actor,companyId,req.params.runId as string,req.params.playbookId as string));
+  });
   router.get("/companies/:companyId/runtime/capabilities", async (req, res) => {
     const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId);
     await assertV5Enabled(db, "agent_runtime_fabric_v5");

@@ -1,5 +1,7 @@
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
 import {assertLearnedAssetAnalyticalSources,assertLearningCandidateAnalyticalSources} from "./learning/learning-analytical-sources.js";
+import {assertLearningAssetCurrent} from "./learning/learning-assets.js";
+import type {NativeReadScope} from "./analytical-reader.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { companySkillService } from "./company-skills.js";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
@@ -38,6 +40,17 @@ export function playbookService(db: Db) {
     return next!;
   }
   return {
+    // Runtime consumes only the exact reviewed procedure. The ordinary detail
+    // owner also checks proposals and drafts; those bodies are not runtime pins.
+    runtimeRevision: async (actor:AuthorizationActor,companyId:string,ref:string,revisionId?:string,readScope?:NativeReadScope)=>{
+      await authorize(actor,companyId);
+      const [row]=await db.select().from(playbookDocuments).where(and(eq(playbookDocuments.companyId,companyId),/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(ref)?eq(playbookDocuments.id,ref):eq(playbookDocuments.key,ref))).limit(1);
+      if(!row)throw notFound("Playbook not found");
+      if(["confidential","restricted"].includes(row.sensitivity))await assertV5Authorization(db,actor,companyId,"users:manage_permissions");
+      if(!["approved","in_review"].includes(row.status)||!row.approvedRevisionId||revisionId&&row.approvedRevisionId!==revisionId||row.nextReviewAt&&row.nextReviewAt<=new Date())throw conflict("Pinned Playbook is stale, unapproved, or overdue");
+      await assertLearningAssetCurrent(db,companyId,"document_revision",row.approvedRevisionId,actor,readScope);
+      return {...row,revision:await revision(db,companyId,row.documentId,row.approvedRevisionId)};
+    },
     list: async (actor: AuthorizationActor, companyId: string) => {
       await authorize(actor, companyId);
       const rows = await db.select({ playbook: playbookDocuments, title: documents.title, latestRevisionId: documents.latestRevisionId }).from(playbookDocuments).innerJoin(documents, eq(documents.id, playbookDocuments.documentId)).where(eq(playbookDocuments.companyId, companyId)).orderBy(asc(playbookDocuments.key)).limit(501);

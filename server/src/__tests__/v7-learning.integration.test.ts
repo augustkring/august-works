@@ -1,3 +1,7 @@
+import {readFile} from "node:fs/promises";
+import {orchestrationService} from "../services/orchestration/orchestration-service.js";
+import {completionContracts,orchestrationPlans,verificationRuns,documents} from "@paperclipai/db";
+import {playbookResolverService} from "../services/playbook-resolver.js";
 import {agentProviderBindingService} from "../services/agent-provider-bindings.js";
 import {discoverNativeCapabilities} from "../services/native-provider-conformance.js";
 import {agentRuntimeFabricService} from "../services/agent-runtime-fabric.js";
@@ -477,14 +481,24 @@ const support = await getEmbeddedPostgresTestSupport();
     await db.update(heartbeatRuns).set({resultJson:{late:"Source copy"},contextSnapshot:{late:"Source copy"}}).where(eq(heartbeatRuns.id,run!.id));expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,run!.id)))[0]).toMatchObject({resultJson:null,contextSnapshot:{}});
     await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,cognitive_memory_v7:true,memory_observations_v7:true,enableCollectiveMemoryV1:true});
   });
-  it("retains actual learned Role Pack signals before ordinary native runtime inventory consumption",async()=>{
+  it.each(["role_pack","playbook"])("retains actual learned %s signals before ordinary native runtime consumption",async(domain)=>{
     const userId=randomUUID();await db.insert(authUsers).values({id:userId,name:"Runtime operator",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
     await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,status:"active",membershipRole:"admin"});
     await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"user",principalId:userId,permissionKey})));
     const signal=await analyticalSignal("internal",userId),packs=rolePackService(db),pack=await packs.create(owner,companyId,{key:"runtime-learning",name:"Runtime learning",description:""});
-    const baseline=await packs.createVersion(owner,companyId,pack.id,{summary:"Baseline",items:[{type:"required_policy",ref:"approval_before_side_effects",operation:"add",versionId:null,loadPoint:"always",triggerTerms:[],excludeTerms:[]}]});
+    const playbooks=playbookService(db);let playbook:{id:string;revisionId:string}|null=null;
+    if(domain==="playbook"){
+      const created=await playbooks.create(owner,companyId,createPlaybookSchema.parse({key:"native-source-procedure",title:"Source procedure",markdown:"Initial procedure"}));
+      const proposal=await domainProposal(created.id,`playbook://${created.id}/none`,{targetDomain:"playbook",proposal:{baseApprovedRevisionId:null,title:"Source procedure",markdown:"Approved learned evidence procedure",reason:"Verified outcomes and actual Source support this procedure"}},[signal.pin]);
+      await playbooks.reviewProposal(owner,companyId,created.id,proposal.candidateId,true,"Human review of the exact original governed procedure");
+      const approved=(await playbooks.get(owner,companyId,created.id)).document.latestRevisionId!;
+      await playbooks.review(owner,companyId,created.id,{expectedRevisionId:approved,decision:"approve",rationale:"Human approves the exact learned procedure"});
+      await playbooks.draft(owner,companyId,created.id,{expectedRevisionId:approved,title:"New unreviewed title",markdown:"UNREVIEWED PRIVATE DRAFT",changeSummary:"Human starts the next procedure draft"});
+      playbook={id:created.id,revisionId:approved};
+    }
+    const baseline=await packs.createVersion(owner,companyId,pack.id,{summary:"Baseline",items:[{type:"required_policy",ref:"approval_before_side_effects",operation:"add",versionId:null,loadPoint:"always",triggerTerms:[],excludeTerms:[]},...(playbook?[{type:"required_playbook" as const,ref:playbook.id,operation:"add" as const,versionId:playbook.revisionId,loadPoint:"always" as const,triggerTerms:[],excludeTerms:[]}]:[])]});
     await packs.publish(owner,companyId,pack.id,baseline.id,null);
-    const candidate=await domainProposal(pack.id,`role_pack://${pack.id}/${baseline.id}`,{targetDomain:"role_pack",expectedPublishedVersionId:baseline.id,draft:{items:baseline.items,summary:"Verified outcomes and current Source support this policy selection"}},[signal.pin]);
+    const candidate=await domainProposal(pack.id,`role_pack://${pack.id}/${baseline.id}`,{targetDomain:"role_pack",expectedPublishedVersionId:baseline.id,draft:{items:baseline.items,summary:"Verified outcomes and current Source support this policy selection"}},domain==="role_pack"?[signal.pin]:undefined);
     await packs.publish(owner,companyId,pack.id,candidate.candidateId,baseline.id);
     const [identity]=await db.insert(agentIdentities).values({name:"Runtime policy consumer",homeCompanyId:companyId}).returning();
     const [agent]=await db.insert(agents).values({companyId,agentIdentityId:identity!.id,name:"Runtime policy consumer",status:"idle",adapterType:"paperclip_runner"}).returning();
@@ -497,7 +511,8 @@ const support = await getEmbeddedPostgresTestSupport();
     const actor={type:"agent" as const,source:"agent_jwt" as const,companyId,agentId:agent!.id,runId:run!.id,onBehalfOfUserId:userId};
     // The ordinary configuration reader retains its conversation gate. Only
     // actual assigned runtime assembly selects the explicit native Task scope.
-    await expect(packs.resolve(actor,companyId,agent!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    if(domain==="role_pack")await expect(packs.resolve(actor,companyId,agent!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    else await expect(playbookResolverService(db).validate(actor,companyId,{playbookId:playbook!.id,revisionId:playbook!.revisionId,required:true})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
     const providers=agentProviderBindingService(db),binding=await providers.create(owner,companyId,agent!.id,{providerType:"paperclip_native",providerAgentRef:agent!.id,providerEndpointRef:null,isolationMode:"isolated_per_presence"});
     await providers.attach(owner,companyId,agent!.id,{providerBindingId:binding.id,providerProfileRef:agent!.id});
     // Static included-backend contract and synthetic retained checks only; this
@@ -507,17 +522,68 @@ const support = await getEmbeddedPostgresTestSupport();
     try{
       const fabric=agentRuntimeFabricService(db),input={companyId,agentId:agent!.id,runId:run!.id,responsibleUserId:userId,issueId:task!.id,query:"Apply evidence review"},prepared=await fabric.prepare(input);
       expect(prepared!.manifest.rolePack!.pins).toContainEqual({rolePackId:pack.id,versionId:candidate.candidateId,scopeType:"agent",scopeId:agent!.id});
+      if(playbook){
+        expect(prepared!.manifest.playbooks).toEqual([{playbookId:playbook.id,revisionId:playbook.revisionId,required:true}]);
+        expect(prepared!.contextMarkdown).toContain(`/runs/${run!.id}/playbooks/${playbook.id}/body`);
+        await expect(fabric.loadPlaybook(actor,companyId,run!.id,playbook.id)).resolves.toEqual({playbookId:playbook.id,revisionId:playbook.revisionId,markdown:"Approved learned evidence procedure"});
+        await expect(fabric.loadPlaybook(owner,companyId,run!.id,playbook.id)).rejects.toMatchObject({status:403});
+        await expect(fabric.loadPlaybook({...actor,runId:randomUUID()},companyId,run!.id,playbook.id)).rejects.toMatchObject({status:403});
+        await expect(fabric.loadPlaybook(actor,companyId,run!.id,randomUUID())).rejects.toMatchObject({status:403});
+        // Historical inventory metadata without actual Source retention cannot
+        // admit a body, even for a currently authorized native Task reader.
+        const [unretainedTask]=await db.insert(issues).values({companyId,title:"Apply evidence review",status:"in_progress",assigneeAgentId:agent!.id,responsibleUserId:userId}).returning();
+        const [unretainedRun]=await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,responsibleUserId:userId,status:"running",runtimeMode:"native",runtimeModeResolvedAt:new Date(),nativeIssueId:unretainedTask!.id,contextSnapshot:{issueId:unretainedTask!.id}}).returning();
+        await db.update(issues).set({executionRunId:unretainedRun!.id}).where(eq(issues.id,unretainedTask!.id));
+        const unretainedContext=await contextEngineService(db).assemble({...input,runId:unretainedRun!.id,issueId:unretainedTask!.id,intent:"native_task_execution",enforceResponsibleUserIntersection:true});
+        await db.insert(agentExecutionManifests).values({companyId,runId:unretainedRun!.id,agentId:agent!.id,agentIdentityId:identity!.id,contextManifestId:unretainedContext.packet.manifest!.id,manifest:{...prepared!.manifest,runId:unretainedRun!.id,contextManifests:[{companyId,contextManifestId:unretainedContext.packet.manifest!.id}]},policySnapshotHash:"historical-fixture",hash:"historical-fixture"});
+        await expect(fabric.loadPlaybook({...actor,runId:unretainedRun!.id},companyId,unretainedRun!.id,playbook.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      }
+      // Persisted pass receipt is a software guard fixture, not a performed
+      // human/provider review. Its actual native FK owner remains nonterminal.
+      let protectedReceipt:typeof verificationRuns.$inferSelect|undefined;
+      if(playbook){
+        await instanceSettingsService(db).updateExperimental({orchestration_v7:true});
+        const [protectedTask]=await db.insert(issues).values({companyId,title:"Protected procedure fixture",status:"todo",assigneeAgentId:agent!.id}).returning();
+        const plan=await orchestrationService(db).create(owner,companyId,{issueId:protectedTask!.id,expectedIssueUpdatedAt:protectedTask!.updatedAt.toISOString(),riskClass:"C0",workload:"semantic",completionContract:{objective:"Retain the native procedure reference",requiredOutputs:[{key:"result"}],businessInvariants:["Native Source provenance must remain current"]},budgets:{},workers:[{key:"worker",issueId:protectedTask!.id}]});
+        const [contract]=await db.select().from(completionContracts).where(eq(completionContracts.id,plan.completionContractId));
+        const [canonical]=await db.select().from(documentRevisions).where(eq(documentRevisions.id,playbook.revisionId));
+        [protectedReceipt]=await db.insert(verificationRuns).values({companyId,planId:plan.id,issueId:protectedTask!.id,completionContractId:plan.completionContractId,completionContractHash:contract!.canonicalSha256,expectedPlanVersion:plan.version,resultHash:"0".repeat(64),inputArtifactRefs:[{type:"task_document",sourceId:canonical!.documentId}],evidenceRefs:[],reviewerType:"human",reviewerId:userId,result:"pass",failedInvariants:[],uncertainties:[],review:null,recommendation:"Persisted software guard fixture"}).returning();
+        expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id,plan.id)))[0]!.status).toBe("draft");
+        await expect(db.update(documentRevisions).set({body:"Unapproved source rewrite"}).where(eq(documentRevisions.id,playbook.revisionId))).rejects.toThrow();
+        await expect(db.update(documents).set({latestBody:"Unapproved canonical rewrite"}).where(eq(documents.id,canonical!.documentId))).rejects.toMatchObject({cause:{message:"verified_output_requires_new_plan"}});
+      }
       const retained=await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId));expect(retained).toHaveLength(1);expect(retained[0]!.authorityPins).toEqual([signal.pin]);
       expect((await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,prepared!.record.contextManifestId))).map(r=>r.memoryRecordId).sort()).toEqual([...roots,retained[0]!.memoryRecordId].sort());
       await expect(fabric.getManifest(actor,companyId,run!.id)).resolves.toMatchObject({id:prepared!.record.id});
       await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
       await expect(fabric.getManifest(actor,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       await expect(fabric.prepare(input)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      if(playbook)await expect(fabric.loadPlaybook(actor,companyId,run!.id,playbook.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));await expect(fabric.getManifest(actor,companyId,run!.id)).resolves.toMatchObject({id:prepared!.record.id});
       await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,cognitive_memory_v7:false,memory_observations_v7:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false,enableCollectiveMemoryV1:false,enablePrivateAgentMemoryV1:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
-      await db.delete(issues).where(eq(issues.id,signal.sourceId));await memoryJobService(db).tick({limit:100});
+      await db.delete(issues).where(eq(issues.id,signal.sourceId));
+      if(playbook){
+        // Qualify the exact migration backfill on populated Source-erased rows,
+        // while its Learning cycle still awaits the existing native outbox.
+        const migration=await readFile(new URL("../../../packages/db/src/migrations/0428_playbook_learning_source_erasure.sql",import.meta.url),"utf8");
+        for(const statement of migration.split("--> statement-breakpoint"))if(statement.trim())await db.execute(sql.raw(statement));
+        const [canonical]=await db.select().from(documentRevisions).where(eq(documentRevisions.id,playbook.revisionId));expect(canonical!.body).toBe("");
+        await db.update(documents).set({latestBody:"Late canonical Source before worker"}).where(eq(documents.id,canonical!.documentId));
+        expect((await db.select().from(documents).where(eq(documents.id,canonical!.documentId)))[0]!.latestBody).toBe("");
+        await db.update(documentRevisions).set({body:"Late revision Source before worker"}).where(eq(documentRevisions.id,playbook.revisionId));
+        expect((await db.select().from(documentRevisions).where(eq(documentRevisions.id,playbook.revisionId)))[0]).toEqual(canonical);
+      }
+      await memoryJobService(db).tick({limit:100});
       expect((await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.id,prepared!.record.id)))[0]!.manifest).toEqual({payloadDeleted:true});
-      expect((await db.select().from(rolePackVersions).where(eq(rolePackVersions.id,candidate.candidateId)))[0]!.summary).toBe("");
+      if(domain==="role_pack")expect((await db.select().from(rolePackVersions).where(eq(rolePackVersions.id,candidate.candidateId)))[0]!.summary).toBe("");
+      if(playbook){
+        const [erased]=await db.select().from(documentRevisions).where(eq(documentRevisions.id,playbook.revisionId));expect(erased!.body).toBe("");
+        await db.update(documentRevisions).set({body:"Late Source procedure",title:"Late Source title"}).where(eq(documentRevisions.id,playbook.revisionId));
+        expect((await db.select().from(documentRevisions).where(eq(documentRevisions.id,playbook.revisionId)))[0]).toEqual(erased);
+        expect((await db.select().from(verificationRuns).where(eq(verificationRuns.id,protectedReceipt!.id)))[0]).toEqual(protectedReceipt);
+        await expect(db.update(documentRevisions).set({revisionNumber:erased!.revisionNumber+1}).where(eq(documentRevisions.id,playbook.revisionId))).rejects.toThrow();
+        await expect(db.update(documentRevisions).set({createdAt:new Date(0)}).where(eq(documentRevisions.id,playbook.revisionId))).rejects.toThrow();
+      }
       for(const id of roots)expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,id)))[0]!.deletedAt).toBeNull();
     }finally{await instanceSettingsService(db).updateExperimental(previous);}
   },60000);
