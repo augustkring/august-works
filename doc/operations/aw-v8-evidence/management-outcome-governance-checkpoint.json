@@ -1,0 +1,324 @@
+{
+  "checkpoint": "Native management original outcome judgments and governance risks",
+  "sourceCommit": "5ada1f9621c14f72b354ea9cd49451801d11848c",
+  "parentCommit": "f0fdb093a580eb84a9d162a2db478f7d7ecafb9a",
+  "recordedAt": "2026-10-07T14:16:48.670775+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0412_woozy_scrambler.sql",
+      "sha256": "9201c36c13ff1c7bfa215c4430a62ec6255c58a0f5b281a6407ee7e92385e4e0"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0412_snapshot.json",
+      "sha256": "f9e74f6fdde3f1d9ab70b63da0ef3be83d2c4bec175d967db57eab5cc1f993ce"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "a654626d90a38270abf7295e98c974284b08552e934c6f4faf7c23043d1a5302"
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "060e535beaa1fafb5b90dfcd35122eee45fca938052654be7efb241264eeb6e8"
+    },
+    {
+      "path": "packages/db/src/schema/management_reviews.ts",
+      "sha256": "018a142b24a50e129ff6af3469cd0c24bc0848cc949475a7aedaaf828522b7e7"
+    },
+    {
+      "path": "packages/shared/src/management-reviews.ts",
+      "sha256": "a8b440c881315b1312be96a4dc599fc5c1ba143a1aa1ccfc52491eab5244dec8"
+    },
+    {
+      "path": "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
+      "sha256": "7376173168dd5e813c427ac7c28e143a092b6fd9e41416cae2699e1dccdf5b51"
+    },
+    {
+      "path": "server/src/__tests__/management-reviews.integration.test.ts",
+      "sha256": "f8176cd66a81dfd5b4acd10984955e9c751dd90cab4d29676929266315f1e83a"
+    },
+    {
+      "path": "server/src/services/ai-governance/governance-service.ts",
+      "sha256": "c7f6b15c4966c070da35032a9387d1115823df53692521fbe10a994b4defdc04"
+    },
+    {
+      "path": "server/src/services/management-reviews/capture.ts",
+      "sha256": "598320d51e76618bf4778ecd867c7543bbf0c5c8cc92ae68d2b328ecb1b457ec"
+    },
+    {
+      "path": "server/src/services/management-reviews/kernel.ts",
+      "sha256": "f445a9ccb5f663ae3078a84119b59480c955269b7216b5f5804a36b681408933"
+    },
+    {
+      "path": "server/src/services/management-reviews/service.ts",
+      "sha256": "3b6e0dc533d88ffe42815529255fda89b4d832bb93063be40011ffda797a3bec"
+    },
+    {
+      "path": "server/src/services/management-reviews/source-options.ts",
+      "sha256": "39845fa8342c0327a2db0fac38bb7b01c2fb5659d534c6b7acab281b22eb497f"
+    },
+    {
+      "path": "tests/storybook-visual/management-reviews.spec.ts",
+      "sha256": "740a7129adeb9be40c5f2071f46a2ef524cf1d87f9c0802852f3bda6a1a4fff9"
+    },
+    {
+      "path": "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+      "sha256": "e3572fc53582dd1f50f1416ef23a64ee7aee3eab0eb26f0a920158774f6d3376"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewResult.tsx",
+      "sha256": "66fd84e49c34329ddacad44e48db0b791403d52afff3c3a4af582732d7404657"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewSourcePicker.tsx",
+      "sha256": "d959438d69da20b145cd58e7d40e6c3c670a37d7bd0130436b4c5e076ba5cf74"
+    },
+    {
+      "path": "ui/src/pages/ManagementReviews.test.tsx",
+      "sha256": "c831d5138dfe454b103b321f923b48f1494323a852e1a7e3b70ab42f08a785e9"
+    },
+    {
+      "path": "ui/storybook/stories/management-reviews.stories.tsx",
+      "sha256": "feb05810de4e8ccd1f087584531bdbd79d2aa034bd434d5c9840a3dfdbb222a2"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native-management-outcome-kernel-api",
+      "checks": 62,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-enriched-native-qualified.log",
+      "logSha256": "3e2eae0b2a5e85d9bfcc88d817429098b05f6a7c9d400e6124297f148b7a2812"
+    },
+    {
+      "name": "ui-management-outcome-and-picker",
+      "checks": 26,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-enriched-ui-tests.log",
+      "logSha256": "43be2a9c6be83cc52116e1d52484881cbf98a5cfe9984df24da2b79635dd6c8a"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-enriched-server-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-enriched-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-enriched-ui-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "migration-snapshot",
+      "checks": 1,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-enriched-snapshot.log",
+      "logSha256": "293bb49f39cfd1672e9c9975f5fecaeb164cfd669e08e26bad8399e9bd98b382"
+    },
+    {
+      "name": "migration-safety",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-enriched-migrations.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "name": "token-gates",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-enriched-tokens.log",
+      "logSha256": "4ace44276894c22596ef2d7c39115bb12eae33e08d100ee72e060ecd83331f69"
+    },
+    {
+      "name": "final-storybook",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-enriched-storybook-final.log",
+      "logSha256": "ebe9676d22ef1e43cfd149984b7947f395f6333249f66264791de6c14208563b"
+    },
+    {
+      "name": "final-stable-browser",
+      "checks": 36,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-enriched-browser-final.log",
+      "logSha256": "87ebca2cd0fcd4fcb9b97aab1c055c6039fc6375e36c8d51d065e9ef9062f10c"
+    },
+    {
+      "name": "exact-integrated-build",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-build-audit-enriched.log",
+      "logSha256": "3e1006aeef40d6df26ea07b49d9ad06d85ad4576fff4d908825b4f3b8ed68415"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-comparison-light-390.png",
+      "sha256": "750d5f07b8e653a2209226bde4cc3aa020b0372e1e0dbd447e79fbb7a70e1e8a"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-disabled-light-1200.png",
+      "sha256": "a73f456bf4a2fd27c7ec1e8763d5ea629769462101ccdaba09f73f9c73306bd3"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-disabled-light-390.png",
+      "sha256": "ab6dfa54c7fa8d8cdbca840dc16ae9070b15e5e7a678bff9c1d442362f1b0192"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-published-light-1200.png",
+      "sha256": "065a72d5445baf4934d510595983f79598ba45de727506b5bad1d505a4c43d50"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-published-light-390.png",
+      "sha256": "471ec102a07e8a3a2781d3b6ce39ecdc1d53fc6defff1f0fd98dde1bc0a0bc32"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-original-outcome-dark-390.png",
+      "sha256": "d48d315c179a4da660d84495f947d330e320f2b6a174f1b5f3ff4711b2bd1abd"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-retained-dark-390.png",
+      "sha256": "7cf989546addf85d210143497c4debbddd75315ca9b3d91d9b55c32d28200fce"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-governance-risk-light-1200.png",
+      "sha256": "6cc208c4212deeefb25fbc5cd3d91935cc291771d8404762b4a0dfd1957dae3f"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-current-dark-1200.png",
+      "sha256": "1255c822e98882b01930a7885ef62a2138c23725db22fc8f7528485498b5c074"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-current-light-390.png",
+      "sha256": "d398ca6a25d15b728092de0f793f4ac9d4c1ec12c6ad07da4f371f12280ae3bc"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-declarations-light-1200.png",
+      "sha256": "6723a333e172bb92a09bb87e34085eb33a7db5b996c73a05f42f474dbfa7f4a7"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-governance-risk-light-390.png",
+      "sha256": "b61b434edb5cab7e1c1c74b171e7b32a77adb7ead97ef08cdabdbf077729b687"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-governance-risk-dark-390.png",
+      "sha256": "f42549645e0d4146ce3ce9bb422bdb8e2dae7cfdd0af2587a06e028255113314"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-retained-dark-1200.png",
+      "sha256": "077a87399ca05b1fa9266dbf540282b40c71e099a9c1803f28bd7518a39ae81f"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-comparison-light-1200.png",
+      "sha256": "db9e7d137833853d43d854ad178efef9cbc6783a89fb3e29a9b165d23599dd4b"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-original-outcome-dark-1200.png",
+      "sha256": "41c76864d3afef72e7cd97f24ba5e61a9bd328305c9f258675b3f354156b5930"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-prediction-dark-1200.png",
+      "sha256": "1d4ca68a4b2c399afd129097c3718620e93151c63345887c7c09bc022002b4bb"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-governance-risk-dark-1200.png",
+      "sha256": "a920c29a3fbaf700f7969fa3f33861792a38bc66c3be3873768ce4e3baebe49f"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-original-outcome-light-390.png",
+      "sha256": "8c60ad201f11323fe3f26b4a72a0f7d07af5bd4656c989228c6833183a3fc31c"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-prediction-dark-390.png",
+      "sha256": "f614d3b097b5f856b781fbcdf05f57c642dc68ea40fe6ed826cd322df9a141b6"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-comparison-dark-1200.png",
+      "sha256": "0fd74a04d0755f152a2fcb8b73401cd25f1d2eefb0fc27de0054b6c5a1129844"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-disabled-dark-390.png",
+      "sha256": "ecb653763daf82f673cc032af8477590c6d21634f54cca26b622f73e93880e8b"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-disabled-dark-1200.png",
+      "sha256": "9b04395e080d0512f899402ae393e395fdc8f2c73a70b054fe7648310b519eb2"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-prediction-light-1200.png",
+      "sha256": "2ba955f15d0c492dd1ada4420d62c51a5b1615d1b291c198988593b7f6bd1f6e"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-retained-light-1200.png",
+      "sha256": "b1d8119120c8a46294d107e75ae35966dbb65b700a5da48a06af05e0eba5e84f"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-declarations-light-390.png",
+      "sha256": "1f4010a255200f6e2ddb5124f0664836a78792157b7279634fe20c2c697c8b22"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-current-dark-390.png",
+      "sha256": "e9b9f1a3f930df193601ff81dde5008309200cd497bd5b7759b04525e9072aaa"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-declarations-dark-1200.png",
+      "sha256": "befe397ce9cf8f36c462f8ed403acc701f1a1c47425a7ff4ccaad9557d9cdf94"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-published-dark-1200.png",
+      "sha256": "b80763d2e1e0e83b2902281a847b833703562bcd18126f354cfbee9c9c55f9e5"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-prediction-light-390.png",
+      "sha256": "3727c30813938985d81f63033118533141e9ea2f9effa36b7ce3ee6f73537451"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-published-dark-390.png",
+      "sha256": "a306902802cb1f4a931ce55eef86db064b9e70043c823badc6885b44cbe72e2e"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-original-outcome-light-1200.png",
+      "sha256": "aee2d3b64d10c7f3cccab7467970c516be64e159ac0a74cb5646e0f48b38bc83"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-retained-light-390.png",
+      "sha256": "611107a2de7201c4de2cca8b97fad1cc686e1acea65a8aae5b795636d142fd2c"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-comparison-dark-390.png",
+      "sha256": "ae638c0b0e564be4db089c8f99a73f75ab44e4d1ec0b2c4c20d233fb2b181fb6"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-current-light-1200.png",
+      "sha256": "3fd5f6808374c39b02c3ce220f2e982ac880818110d7259aff36e8cebbe9311e"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-enriched-final-screens/management-declarations-dark-390.png",
+      "sha256": "1d0d83f5c71c48ed34c6dc8671c23e8fbc463f3e6ac1d12bcfc8986f20d22972"
+    }
+  ],
+  "visuallyInspected": [
+    "management-governance-risk-light-390.png",
+    "management-governance-risk-dark-1200.png",
+    "management-original-outcome-dark-390.png",
+    "management-original-outcome-light-1200.png"
+  ],
+  "correctedQualificationFailures": [
+    "Direct governance evidence deletion is rejected by its immutable native owner; dependency withdrawal and actual company purge qualify whole-review closure.",
+    "An original actual-observation manifest was initially missing from copied outcome dependencies; complete baseline/actual/context manifest inheritance now qualifies.",
+    "Two browser checks saw missing static assets during overlapping Storybook rebuild; all 36 pass against the final stable build."
+  ],
+  "limitations": [
+    "Browser evidence is cached synthetic presentation with all API calls aborted, not an official baseline or operational qualification.",
+    "Complete analytical-source cases, Routines/Chat, analytical Learning bridge and remaining whole-brief work stay open."
+  ]
+}
