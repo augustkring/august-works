@@ -195,6 +195,14 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(link.candidateId).toBe(replay.evaluationId);
     expect((await db.select().from(automationArtifacts).where(eq(automationArtifacts.id, replay.artifactId)))[0]!.status).toBe("testing");
     const artifacts=automationArtifactService(db);
+    // Passing immutable gates does not authorize a generic live-status bypass.
+    for(const status of ["shadow","active"] as const){
+      const request={expectedStatus:"testing" as const,expectedLatestVersionId:replay.artifactVersionId,status};
+      await expect(artifacts.transitionStatus(companyId,replay.artifactId,request,principal)).rejects.toMatchObject({status:403,details:{code:"optimizer_lifecycle_owner_required"}});
+      await expect(artifacts.transitionStatus(companyId,replay.artifactId,request,{principal:{type:"system",service:"artifact-security-evaluator"},sourceActor:owner})).rejects.toMatchObject({status:403,details:{code:"optimizer_lifecycle_owner_required"}});
+    }
+    expect((await db.select().from(automationArtifacts).where(eq(automationArtifacts.id,replay.artifactId)))[0]!.status).toBe("testing");
+    await expect(optimizer.startShadow(companyId,replay.evaluationId,{principal:{type:"user",userId:"unrelated-unadmitted-reviewer"}})).rejects.toMatchObject({status:403});
     let descendantVersionId:string|null=null;
     if(signal){
       expect((await artifacts.getDetail(companyId,replay.artifactId,principal))!.latestVersion!.sourceCode).not.toBe("");

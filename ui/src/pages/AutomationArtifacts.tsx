@@ -1,3 +1,4 @@
+import {Link} from "@/lib/router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAutomationArtifactSchema, type AutomationArtifactStatus } from "@paperclipai/shared";
@@ -97,11 +98,12 @@ function AutomationArtifactsContent() {
             { label: "Security evidence", value: JSON.stringify(version.securityReport, null, 2) }].map((item) =>
               <details key={item.label}><summary className="cursor-pointer text-sm font-medium">{item.label}</summary>
                 <pre className="overflow-auto whitespace-pre-wrap break-words font-mono text-xs">{item.value}</pre></details>)}
+          {artifact.createdByOptimizerSuggestionId?<p className="text-sm text-muted-foreground">Optimizer candidates require replay, shadow review, approval and a canary in their original workflow.{artifact.originWorkflowId?<>{" "}<Link to={`/workflows/${artifact.originWorkflowId}`}>Open workflow review</Link></>:null}</p>:null}
           {!artifact.archivedAt ? <div className="flex flex-wrap gap-2">
             {capabilities.data?.edit ? <Button disabled={mutation.isPending} variant="outline" onClick={() => mutation.mutate("evaluate")}>Run validation and security tests</Button> : null}
             {capabilities.data?.publish ? <>
               {artifact.status === "candidate" ? <Button disabled={mutation.isPending} onClick={() => mutation.mutate("testing")}>Start testing</Button> : null}
-              {artifact.status === "testing" && version.validationReport?.status === "passed" && version.securityReport?.status === "passed" ?
+              {!artifact.createdByOptimizerSuggestionId && artifact.status === "testing" && version.validationReport?.status === "passed" && version.securityReport?.status === "passed" ?
                 <Button disabled={mutation.isPending} onClick={() => mutation.mutate("active")}>Activate reviewed version</Button> : null}
               {artifact.status !== "revoked" ? <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate("revoked")}>Revoke version</Button> : null}
               <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate("archive")}>Archive artifact</Button>
