@@ -55,6 +55,7 @@ export async function assembleFreshNativeGovernedContext(
     companyId: input.companyId,
     agentId: input.agentId,
     responsibleUserId: input.responsibleUserId ?? null,
+    enforceResponsibleUserIntersection: true,
     runId: input.runId,
     issueId: input.issueId,
     projectId: input.projectId ?? null,

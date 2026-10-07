@@ -30,6 +30,36 @@ describe.skipIf(!support.supported)("Current native analytical conversation iden
  });
  it("refuses ordinary agent reads without the private retained boundary and releases the permit after return",async()=>{await expect(assertAnalyticalReader(db,companyId,actor())).rejects.toMatchObject({status:403});await nativeRead(()=>assertAnalyticalReader(db,companyId,actor()));await expect(businessMetricService(db).list(companyId,actor())).rejects.toMatchObject({status:403});await expect(assertAnalyticalReader(db,companyId,actor())).rejects.toMatchObject({status:403});});
  it("requires explicit native rollout and preserves human-only metric publication",async()=>{await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({management_chat_tools_v8:false});await expect(nativeRead(()=>assertAnalyticalReader(db,companyId,actor()))).rejects.toMatchObject({status:404});await expect(assertAnalyticalReader(db,companyId,board)).resolves.toBeUndefined();await expect(businessMetricService(db).create(companyId,actor(),{key:"forbidden",definition:metricDefinition(randomUUID())})).rejects.toMatchObject({status:403});});
+ async function ordinaryTask(){await db.update(issues).set({conversationAgentId:null,conversationUserId:null,conversationState:null}).where(eq(issues.id,issueId));}
+ const taskRead=<T>(read:()=>Promise<T>)=>withNativeAnalyticalReader(db,companyId,actor(),read,"task");
+ it("admits an actual ordinary Task only at the explicit in-process boundary and preserves the private tool gate",async()=>{
+  await ordinaryTask();await expect(nativeRead(()=>assertAnalyticalReader(db,companyId,actor()))).rejects.toMatchObject({status:403});
+  await expect(taskRead(()=>assertAnalyticalReader(db,companyId,actor()))).resolves.toBeUndefined();
+  await expect(assertAnalyticalReader(db,companyId,actor())).rejects.toMatchObject({status:403});
+  await expect(taskRead(()=>withNativeAnalyticalReader(db,companyId,actor(),()=>assertAnalyticalReader(db,companyId,actor())))).resolves.toBeUndefined();
+ });
+ it("uses only persisted Task ownership before native runtime selection and refuses resolved legacy execution",async()=>{
+  await ordinaryTask();await db.update(heartbeatRuns).set({nativeIssueId:null,runtimeMode:"legacy",runtimeModeResolvedAt:null}).where(eq(heartbeatRuns.id,runId));
+  await expect(taskRead(()=>assertAnalyticalReader(db,companyId,actor()))).resolves.toBeUndefined();
+  await db.update(heartbeatRuns).set({runtimeModeResolvedAt:new Date()}).where(eq(heartbeatRuns.id,runId));await expect(taskRead(()=>assertAnalyticalReader(db,companyId,actor()))).rejects.toMatchObject({status:403});
+ });
+ it("does not inherit an expired Task permit in a detached new source read",async()=>{
+  await ordinaryTask();let release!:()=>void;const delay=new Promise<void>(resolve=>{release=resolve;});let detached!:Promise<void>;
+  await taskRead(async()=>{detached=delay.then(()=>withNativeAnalyticalReader(db,companyId,actor(),()=>assertAnalyticalReader(db,companyId,actor())));});
+  release();await expect(detached).rejects.toMatchObject({status:403});
+ });
+ it.each(["task_owner","assignment","human","hidden","run","agent","retired","forged_task"])("withdraws the ordinary Task permit after current %s changes",async(kind)=>{
+  await ordinaryTask();
+  if(kind==="task_owner")await db.update(issues).set({responsibleUserId:randomUUID()}).where(eq(issues.id,issueId));
+  if(kind==="assignment")await db.update(issues).set({executionRunId:null}).where(eq(issues.id,issueId));
+  if(kind==="human")await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));
+  if(kind==="hidden")await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,issueId));
+  if(kind==="run")await db.update(heartbeatRuns).set({status:"succeeded"}).where(eq(heartbeatRuns.id,runId));
+  if(kind==="agent")await db.update(agents).set({status:"paused"}).where(eq(agents.id,agentId));
+  if(kind==="retired")await db.update(issues).set({conversationRetiredAt:new Date(),status:"cancelled",hiddenAt:new Date(),assigneeAgentId:null,assigneeUserId:null,executionRunId:null,checkoutRunId:null}).where(eq(issues.id,issueId));
+  if(kind==="forged_task")await db.update(heartbeatRuns).set({nativeIssueId:null,contextSnapshot:{issueId:randomUUID()}}).where(eq(heartbeatRuns.id,runId));
+  await expect(taskRead(()=>assertAnalyticalReader(db,companyId,actor()))).rejects.toMatchObject({status:403});
+ });
  it("lists only currently admitted published metrics and keeps later human draft definitions out of agent reads",async()=>{
   const policy=(await aiGovernanceService(db).obligation(board,companyId,analyticalPurpose())).id,owner=businessMetricService(db),definition={...metricDefinition(policy),ownerUserId:userId},published=await owner.create(companyId,board,{key:"published",definition});await owner.publish(companyId,board,published.metric.id,{expectedRevision:1,versionId:published.version.id});await owner.create(companyId,board,{key:"private_unpublished",definition});const pending=await owner.createVersion(companyId,board,published.metric.id,{expectedRevision:2,definition:{...definition,name:"Private proposed definition awaiting human publication"}});const list=await nativeRead(()=>owner.list(companyId,actor()));expect(list.items.map(item=>item.key)).toEqual(["published"]);const detail=await nativeRead(()=>owner.detail(companyId,actor(),published.metric.id));expect(detail.versions.map(version=>version.id)).toEqual([published.version.id]);expect(JSON.stringify(detail)).not.toContain(pending.id);expect(JSON.stringify(detail)).not.toContain("Private proposed definition");
  });

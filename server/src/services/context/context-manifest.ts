@@ -18,8 +18,10 @@ import type {
   EvidenceItem,
 } from "@paperclipai/shared";
 import { conflict, forbidden, unprocessable } from "../../errors.js";
-import { learningAssetRoots } from "../learning/learning-assets.js";
+import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
 import { lockMemoryPrivacy, memoryPayloadVisible } from "../memory/memory-privacy.js";
+import {lockAnalyticalCompany} from "../analytical-privacy.js";
+import type {AuthorizationActor} from "../authorization.js";
 
 type JsonScalar = string | number | boolean | null;
 type CanonicalJson = JsonScalar | CanonicalJson[] | { [key: string]: CanonicalJson };
@@ -91,6 +93,7 @@ export interface CreateContextManifestInput {
   agentId: string;
   issueId?: string | null;
   projectId?: string | null;
+  responsibleUserId?: string | null;
   query: string;
   policySnapshot: unknown;
   selected: ContextManifestSelectedEvidence[];
@@ -180,6 +183,7 @@ export function contextManifestService(db: Db) {
       const policySnapshotHash = hashContextPolicySnapshot(input.policySnapshot);
 
       return db.transaction(async (tx) => {
+        await lockAnalyticalCompany(tx as unknown as Db,input.companyId);
         await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
         const [manifest] = await tx
           .insert(contextManifests)
@@ -218,13 +222,16 @@ export function contextManifestService(db: Db) {
           : [];
 
         const learnedRoots = new Map<string, string>();
+        const learnedAssets:{type:string;id:string}[]=[];
+        const sourceActor:AuthorizationActor={type:"agent",source:"agent_jwt",companyId:input.companyId,agentId:input.agentId,runId:input.runId??undefined,onBehalfOfUserId:input.responsibleUserId??null};
         const purpose = input.policySnapshot && typeof input.policySnapshot === "object" && "intent" in input.policySnapshot && typeof input.policySnapshot.intent === "string" ? input.policySnapshot.intent : "general_work";
         for (const { decision } of input.selected) {
           const evidence = decision.evidence;
           if (evidence.sourceProvider !== "august_works_foundation") continue;
           const ref = /^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/\d+$/i.exec(evidence.sourceRef);
           if (!ref || evidence.sourceVersion !== ref[1]) throw unprocessable("Foundation Context requires its pinned canonical revision");
-          for (const root of await learningAssetRoots(tx as unknown as Db, input.companyId, "document_revision", ref[1]!, purpose)) {
+          learnedAssets.push({type:"document_revision",id:ref[1]!});
+          for (const root of await learningAssetRoots(tx as unknown as Db, input.companyId, "document_revision", ref[1]!, purpose,sourceActor,"task")) {
             if (learnedRoots.has(root.id) && learnedRoots.get(root.id) !== root.expectedVersion) throw conflict("Learned Context roots have conflicting versions");
             learnedRoots.set(root.id, root.expectedVersion);
           }
@@ -255,6 +262,8 @@ export function contextManifestService(db: Db) {
           }
           await tx.insert(contextManifestMemoryRoots).values(roots.map((root) => ({ companyId: input.companyId, manifestId: manifest!.id, memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString() })));
         }
+
+        await retainLearnedAssetsInContext(tx as unknown as Db,input.companyId,sourceActor,manifest!.id,learnedAssets);
 
         return { manifest: manifest!, items };
       });

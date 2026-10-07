@@ -2969,6 +2969,13 @@
       "when": 1791410986626,
       "tag": "0425_artifact_native_learning_inheritance",
       "breakpoints": true
+    },
+    {
+      "idx": 426,
+      "version": "7",
+      "when": 1791413208005,
+      "tag": "0426_analytical_native_task_source_retention",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,11 @@
+import {contextManifestService} from "../services/context/context-manifest.js";
+import {authUsers,analyticalContextRoots,contextManifests} from "@paperclipai/db";
+import {assertNativeAnalyticalRunPayloadAccess} from "../services/analytical-context-authority.js";
 import {automationArtifactService} from "../services/automation-artifacts/automation-artifact-service.js";
 import {automationArtifactRuntimeService} from "../services/automation-artifacts/automation-artifact-runtime.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflows, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, providerTraceRecords, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
 import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, type LearningChange } from "@paperclipai/shared";
 import { learningService } from "../services/learning/learning-service.js";
@@ -44,7 +47,7 @@ const support = await getEmbeddedPostgresTestSupport();
     await instanceSettingsService(db).updateExperimental({ enableFoundationV1: true, enableWorkflowsV1: true, enableWorkflowOptimizerSuggestions: true, enableWorkflowOptimizerShadow: true, enableAutomationArtifactsV1: true, agent_identities_v5: true, agent_provider_bindings_v5: true, agent_runtime_fabric_v5: true, role_packs_v5: true, enableCollectiveMemoryV1: true, enableContextEngineV1: true, readiness_engine_v7: true, cognitive_memory_v7: true, memory_observations_v7: true, skill_lifecycle_v5: true, playbooks_v5: true, project_roadmap_v5: true, learning_engine_v7: true }); });
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {
-    await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,management_reviews_v8:false});
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,cognitive_memory_v7:true,memory_observations_v7:true,management_reviews_v8:false,enableCollectiveMemoryV1:true});
     companyId = randomUUID(); roots = [randomUUID(), randomUUID()]; tasks = Array.from({ length: 4 }, () => randomUUID());
     await db.insert(companies).values({ id: companyId, name: "Learning fixture", issuePrefix: `L${companyId.slice(0, 7)}` });
     for (const id of tasks) await db.insert(issues).values({ id, companyId, title: `Reviewed outcome ${id}`, status: "done", completedAt: new Date() });
@@ -75,11 +78,11 @@ const support = await getEmbeddedPostgresTestSupport();
     const evaluation = await service.evaluate(owner, companyId, hypothesis.id, evaluationInput(1));
     return service.proposeChange(owner, companyId, hypothesis.id, { expectedHypothesisVersion: 2, evaluationId: evaluation.id, change: normalized });
   }
-  async function analyticalSignal(sensitivity:"internal"|"confidential"="internal"){
+  async function analyticalSignal(sensitivity:"internal"|"confidential"="internal",ownerUserId="local-board"){
     await instanceSettingsService(db).updateExperimental({analytical_lineage_v8:true,business_metrics_v8:true,management_reviews_v8:true,ai_use_cases_v7:true,governance_evidence_v7:true});
     const purpose=analyticalPurpose();purpose.analyticalPurpose!.permittedSensitivity=[sensitivity];
     const policy=await aiGovernanceService(db).obligation(owner,companyId,purpose),metrics=businessMetricService(db);
-    const metric=await metrics.create(companyId,owner,{key:"learning_signal",definition:{...metricDefinition(policy.id),sensitivity}});
+    const metric=await metrics.create(companyId,owner,{key:"learning_signal",definition:{...metricDefinition(policy.id),sensitivity,ownerUserId}});
     await metrics.publish(companyId,owner,metric.metric.id,{expectedRevision:1,versionId:metric.version.id});
     const sourceId=randomUUID();await db.insert(issues).values({id:sourceId,companyId,title:"Independent synthetic analytical signal",status:"done",completedAt:new Date()});
     const now=Date.now(),observation=await metrics.query(companyId,owner,{metricId:metric.metric.id,versionId:metric.version.id,from:new Date(now-86400000).toISOString(),until:new Date(now+1000).toISOString(),dimensions:[],maxRows:100});
@@ -409,6 +412,42 @@ const support = await getEmbeddedPostgresTestSupport();
     await db.update(heartbeatRuns).set({ resultJson: { restored: "Late learned source prose" } }).where(eq(heartbeatRuns.id, run!.id));
     expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id)))[0]!.resultJson).toBeNull();
     await instanceSettingsService(db).updateExperimental({ learning_engine_v7: true });
+  });
+  it.each(["preparation","native"])("retains actual analytical Foundation Context for an ordinary assigned %s run and preserves independent verified outcomes on C7",async(stage)=>{
+    const userId=randomUUID();await db.insert(authUsers).values({id:userId,name:"Current Context operator",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,status:"active",membershipRole:"admin"});
+    await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"user",principalId:userId,permissionKey})));
+    const signal=await analyticalSignal("internal",userId),link=await domainProposal(targetId,`foundation://${targetId}/${revisionId}`,change(),[signal.pin]),foundation=foundationService(db);
+    await foundation.acceptProposal(companyId,targetId,link.candidateId,principal);const approved=(await foundation.get(companyId,targetId,owner))!.latestRevisionId!;
+    await foundation.submitForReview(companyId,targetId,approved,principal);await foundation.approve(companyId,targetId,approved,principal);
+    const [agent]=await db.insert(agents).values({companyId,name:"Actual Context consumer",status:"active",adapterType:"paperclip_runner"}).returning();
+    await db.insert(companyMemberships).values({companyId,principalType:"agent",principalId:agent!.id,status:"active"});
+    await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"agent",principalId:agent!.id,permissionKey})));
+    const [task]=await db.insert(issues).values({companyId,title:"Apply evidence review",status:"in_progress",description:"Actual assigned procedure",assigneeAgentId:agent!.id,responsibleUserId:userId}).returning();
+    const [run]=await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,status:"running",responsibleUserId:userId,contextSnapshot:{issueId:task!.id}}).returning();await db.update(issues).set({executionRunId:run!.id}).where(eq(issues.id,task!.id));
+    const input={companyId,agentId:agent!.id,runId:run!.id,issueId:task!.id,responsibleUserId:userId,enforceResponsibleUserIntersection:true,query:"evidence review",intent:"native_task_execution",totalDeadlineMs:30000};
+    const assembled=await contextEngineService(db).assemble(input);expect(assembled.packet.foundation).toHaveLength(1);expect(assembled.markdown).toContain(change().proposedBody);
+    const [retention]=await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId));expect(retention!.authorityPins).toEqual([signal.pin]);
+    const [privateRoot]=await db.select().from(memoryRecords).where(eq(memoryRecords.id,retention!.memoryRecordId));expect(privateRoot).toMatchObject({reviewState:"rejected",verificationState:"unverified",sensitivityLabel:"restricted"});
+    expect((await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,assembled.packet.manifest!.id))).map(r=>r.memoryRecordId).sort()).toEqual([...roots,retention!.memoryRecordId].sort());
+    await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).resolves.toBeUndefined();
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId,companyId),eq(principalPermissionGrants.principalType,"user"),eq(principalPermissionGrants.principalId,userId),eq(principalPermissionGrants.permissionKey,"foundation:read")));
+    await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    await db.insert(principalPermissionGrants).values({companyId,principalType:"user",principalId:userId,permissionKey:"foundation:read"});
+    const [otherTask]=await db.insert(issues).values({companyId,title:"Unrelated Task"}).returning(),contexts=await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId));
+    await expect(contextManifestService(db).create({...input,issueId:otherTask!.id,policySnapshot:{intent:input.intent},selected:assembled.decisions.map(decision=>({decision}))})).rejects.toMatchObject({status:409});
+    expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(contexts.length);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(1);
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    const before=await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId));await expect(contextEngineService(db).assemble(input)).rejects.toMatchObject({status:403});expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(before.length);
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).resolves.toBeUndefined();
+    await db.update(heartbeatRuns).set({...(stage==="native"?{runtimeMode:"native" as const,runtimeModeResolvedAt:new Date(),nativeIssueId:task!.id}:{}),resultJson:{procedure:"Copied original learned procedure"}}).where(eq(heartbeatRuns.id,run!.id));
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,cognitive_memory_v7:false,memory_observations_v7:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false,enableCollectiveMemoryV1:false,enablePrivateAgentMemoryV1:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await db.delete(issues).where(eq(issues.id,signal.sourceId));await memoryJobService(db).tick({limit:100});
+    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,retention!.memoryRecordId)))[0]!.deletedAt).not.toBeNull();
+    for(const rootId of roots)expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,rootId)))[0]!.deletedAt).toBeNull();
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,run!.id)))[0]).toMatchObject({resultJson:null,contextSnapshot:{}});
+    await db.update(heartbeatRuns).set({resultJson:{late:"Source copy"},contextSnapshot:{late:"Source copy"}}).where(eq(heartbeatRuns.id,run!.id));expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,run!.id)))[0]).toMatchObject({resultJson:null,contextSnapshot:{}});
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,cognitive_memory_v7:true,memory_observations_v7:true,enableCollectiveMemoryV1:true});
   });
   it("lets an owned live worker propose a hypothesis but cannot self-review or write after Stop", async () => {
     const [identity] = await db.insert(agentIdentities).values({ name: "Learning worker", homeCompanyId: companyId }).returning();

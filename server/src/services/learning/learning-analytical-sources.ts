@@ -4,6 +4,7 @@ import type {AuthorizationActor} from "../authorization.js";
 import {inspectAnalyticalContextPins} from "../analytical-context-authority.js";
 import {HttpError} from "../../errors.js";
 import type {ExecutionPrincipal} from "@paperclipai/shared";
+import type {NativeReadScope} from "../analytical-reader.js";
 
 const lost=()=>new HttpError(403,"Learning analytical source access is unavailable",{code:"analytical_source_access_lost"});
 export function learningActorFromPrincipal(companyId:string,principal:ExecutionPrincipal,runId?:string|null):AuthorizationActor|undefined {
@@ -12,7 +13,7 @@ export function learningActorFromPrincipal(companyId:string,principal:ExecutionP
  return {type:"agent",source:runId?"agent_jwt":"agent_key",companyId,agentId:principal.agentId,runId:runId??undefined,onBehalfOfUserId:principal.responsibleUserId??null};
 }
 /** Supplemental analytical signals never supply verified Learning outcomes. */
-export async function assertLearningAnalyticalSources(db:Db,actor:AuthorizationActor|undefined,cycle:typeof learningCycles.$inferSelect) {
+export async function assertLearningAnalyticalSources(db:Db,actor:AuthorizationActor|undefined,cycle:typeof learningCycles.$inferSelect,readScope?:NativeReadScope) {
  if(!cycle.analyticalSourceCount)return null;
  if(!actor||!cycle.analyticalSourceExpiresAt||cycle.analyticalSourceExpiresAt.getTime()<=Date.now())throw lost();
  const inspect=async()=>{
@@ -26,14 +27,14 @@ export async function assertLearningAnalyticalSources(db:Db,actor:AuthorizationA
  try {
   if(actor.type==="agent"){
    const {withNativeAnalyticalReader}=await import("../analytical-reader.js");
-   return await withNativeAnalyticalReader(db,cycle.companyId,actor,inspect);
+   return await withNativeAnalyticalReader(db,cycle.companyId,actor,inspect,readScope);
   }else return await inspect();
  }catch(error){if(error instanceof HttpError&&[403,404,409,422].includes(error.status))throw lost();throw error;}
 }
 
 /** A native consumer must supply its current actor before copying learned
  * content with analytical signal dependencies. Missing actor never grants access. */
-export async function assertLearnedAssetAnalyticalSources(db:Db,companyId:string,type:string,id:string,actor?:AuthorizationActor) {
+export async function assertLearnedAssetAnalyticalSources(db:Db,companyId:string,type:string,id:string,actor?:AuthorizationActor,readScope?:NativeReadScope) {
  const cycles=await db.selectDistinct({cycle:learningCycles}).from(learningRetainedAssets)
   .innerJoin(learningDomainCandidates,and(eq(learningDomainCandidates.companyId,companyId),eq(learningDomainCandidates.id,learningRetainedAssets.candidateLinkId)))
   .innerJoin(learningHypotheses,and(eq(learningHypotheses.companyId,companyId),eq(learningHypotheses.id,learningDomainCandidates.hypothesisId)))
@@ -41,7 +42,7 @@ export async function assertLearnedAssetAnalyticalSources(db:Db,companyId:string
   .where(and(eq(learningRetainedAssets.companyId,companyId),eq(learningRetainedAssets.assetType,type),eq(learningRetainedAssets.assetId,id),sql`(${learningCycles.analyticalSourceCount}>0 or ${learningCycles.erasedAt} is not null)`)).limit(21);
  if(cycles.length>20)throw lost();
  let sourceSensitivity:"internal"|"confidential"|null=null;
- for(const {cycle} of cycles){if(cycle.erasedAt)throw lost();const sensitivity=await assertLearningAnalyticalSources(db,actor,cycle);if(sensitivity==="confidential"||!sourceSensitivity)sourceSensitivity=sensitivity;}
+ for(const {cycle} of cycles){if(cycle.erasedAt)throw lost();const sensitivity=await assertLearningAnalyticalSources(db,actor,cycle,readScope);if(sensitivity==="confidential"||!sourceSensitivity)sourceSensitivity=sensitivity;}
  return {cycles:cycles.map(row=>row.cycle),sourceSensitivity};
 }
 

@@ -38,6 +38,7 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { retrieveEligibleMemory } from "../memory/memory-retrieval.js";
 import { cognitiveContextProvider } from "../memory/cognitive-context.js";
 import { derivedMemoryContextProvider } from "../memory/derived-context.js";
+import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
 
 export const DEFAULT_CONTEXT_TOTAL_DEADLINE_MS = 1_500;
 export const DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS = 900;
@@ -386,7 +387,7 @@ function foundationProvider(db: Db): ContextProvider {
         query: request.query.slice(0, 500),
         limit: 12,
         scope: "approved",
-      });
+      },{type:"agent",source:"agent_jwt",companyId:request.companyId,agentId:request.agentId,runId:request.runId??undefined,onBehalfOfUserId:request.responsibleUserId??null},"task");
       const observedAt = new Date().toISOString();
       return {
         evidence: rows.map((row) => ({
@@ -577,6 +578,7 @@ function taskProvider(db: Db): ContextProvider {
           });
         }
 
+        await assertAnalyticalContextPayloadAccess(txDb,request.companyId,{type:"agent",source:"agent_jwt",companyId:request.companyId,agentId:request.agentId,runId:request.runId??undefined,onBehalfOfUserId:request.responsibleUserId??null},{issueId:issueScope.id},"task");
         const issue = await txDb
           .select({
             id: issues.id,
@@ -734,6 +736,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
           runId: input.runId ?? null,
           agentId: input.agentId,
           issueId: input.issueId ?? null,
+          responsibleUserId: input.responsibleUserId ?? null,
           projectId: input.projectId ?? null,
           query: input.query,
           policySnapshot: {
