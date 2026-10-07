@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { NATIVE_PROCESS_ACTIVITIES, NATIVE_PROCESS_ANALYSIS_FAMILIES, processAnalysisDefinitionSchema, type ProcessAnalysisDefinition } from "@paperclipai/shared";
+import { NATIVE_PROCESS_ACTIVITIES, NATIVE_PROCESS_ANALYSIS_FAMILIES, processAnalysisDefinitionSchema, type ProcessAnalysisDefinition, type ProcessConformanceExpectation } from "@paperclipai/shared";
+import { ProcessConformanceEditor } from "./ProcessConformanceEditor";
 import { aiGovernanceApi } from "@/api/ai-governance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { Link } from "@/lib/router";
 
 export const processFamilyLabel: Record<ProcessAnalysisDefinition["analysisFamilies"][number], string> = {
   event_volume: "Observed activity volume", directly_follows: "Directly follows", variants: "Observed path variants",
-  cycle_time: "Time to first completion", blocked_time: "Observed blocked time", rework: "Observed reopening",
+  cycle_time: "Time to first completion", blocked_time: "Observed blocked time", rework: "Observed reopening", conformance: "Explicit process conformance",
 };
 export const processActivityLabel: Record<typeof NATIVE_PROCESS_ACTIVITIES[number], string> = {
   "issue.created": "Task created", "issue.updated": "Task updated", "issue.checked_out": "Task checked out", "issue.released": "Task released",
@@ -29,6 +30,8 @@ export function ProcessDefinitionForm({ companyId, userId, initial, busy, onSave
   const [objects, setObjects] = useState<ProcessAnalysisDefinition["objectTypes"]>(initial?.objectTypes ?? ["issue"]);
   const [activities, setActivities] = useState<ProcessAnalysisDefinition["requiredActivities"]>(initial?.requiredActivities ?? ["issue.created", "issue.updated"]);
   const [families, setFamilies] = useState<ProcessAnalysisDefinition["analysisFamilies"]>(initial?.analysisFamilies ?? ["event_volume", "directly_follows", "variants"]);
+  const [models,setModels]=useState<Record<"issue"|"project",ProcessConformanceExpectation>>(()=>Object.fromEntries((["issue","project"] as const).map(objectType=>[objectType,
+    initial?.conformance?.expectations.find(value=>value.objectType===objectType) ?? {objectType,initialStates:[],terminalStates:[],requiredStates:[],allowedTransitions:[]}])) as Record<"issue"|"project",ProcessConformanceExpectation>);
   const [hours, setHours] = useState(String((initial?.minimumCoverageSeconds ?? 3600) / 3600));
   const [arrival, setArrival] = useState(initial?.requiresArrivalEvidence ?? false);
   const [review, setReview] = useState(String(initial?.reviewFrequencyDays ?? 30)), [retention, setRetention] = useState(String(initial?.retentionDays ?? 30));
@@ -38,6 +41,7 @@ export function ProcessDefinitionForm({ companyId, userId, initial, busy, onSave
     governanceObligationRefs: [policyId, ...(initial?.governanceObligationRefs.slice(1) ?? [])],
     requiredSourceProviders: initial?.requiredSourceProviders ?? ["activity_log"], objectTypes: objects, requiredActivities: activities,
     minimumCoverageSeconds: Number(hours) * 3600, analysisFamilies: families, requiresArrivalEvidence: arrival, maxLateArrivalRate: initial?.maxLateArrivalRate ?? 0,
+    conformance:families.includes("conformance") ? {kind:"explicit_definition",expectations:objects.map(type=>models[type])} : null,
   });
   return <form aria-label="Process definition proposal" className="space-y-5" onSubmit={event => { event.preventDefault(); if (valid.success && !policies.isError) onSave(valid.data); }}>
     <fieldset disabled={busy} className="space-y-5">
@@ -48,6 +52,8 @@ export function ProcessDefinitionForm({ companyId, userId, initial, busy, onSave
       <fieldset className="space-y-3"><legend className="font-medium">Object perspectives</legend>{(["issue", "project"] as const).map(value => <label key={value} className="flex items-center gap-3"><Checkbox aria-label={`Analyze ${value === "issue" ? "Tasks" : "Projects"}`} checked={objects.includes(value)} onCheckedChange={checked => setObjects(toggle(objects, value, checked === true))} /><span>{value === "issue" ? "Tasks" : "Projects"}</span></label>)}</fieldset>
       <fieldset className="space-y-3"><legend className="font-medium">Required observed activities</legend>{NATIVE_PROCESS_ACTIVITIES.map(value => <label key={value} className="flex items-center gap-3"><Checkbox aria-label={`Require ${processActivityLabel[value]}`} checked={activities.includes(value)} onCheckedChange={checked => setActivities(toggle(activities, value, checked === true))} /><span>{processActivityLabel[value]}</span></label>)}</fieldset>
       <fieldset className="space-y-3"><legend className="font-medium">Analysis families</legend>{NATIVE_PROCESS_ANALYSIS_FAMILIES.map(value => <label key={value} className="flex items-center gap-3"><Checkbox aria-label={processFamilyLabel[value]} checked={families.includes(value)} onCheckedChange={checked => setFamilies(toggle(families, value, checked === true))} /><span>{processFamilyLabel[value]}</span></label>)}</fieldset>
+      {families.includes("conformance") && objects.map(type=><ProcessConformanceEditor key={type} model={models[type]} onChange={model=>setModels({...models,[type]:model})} />)}
+      {families.includes("conformance") && !valid.success && <p role="status" className="text-sm text-muted-foreground">Each perspective needs a model with an expected start, a terminal state and reachable required visits. Metadata and repeated status observations do not count as transitions.</p>}
       <p className="text-sm text-muted-foreground">Ordered paths require unambiguous timestamps. Duration and reopening require recorded primary creation and completion facts. A related Project cannot inherit a Task's lifecycle.</p>
       <label className="block space-y-2">Minimum observed period (hours)<Input type="number" min={1 / 3600} max={3650 * 24} step="any" value={hours} onChange={event => setHours(event.target.value)} required /></label>
       <div className="flex items-center gap-3"><ToggleSwitch aria-label="Require arrival evidence" checked={arrival} onCheckedChange={setArrival} /><span>Require arrival evidence</span></div>

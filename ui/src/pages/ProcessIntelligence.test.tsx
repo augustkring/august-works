@@ -52,6 +52,27 @@ beforeEach(()=>{
   vi.mocked(processAnalysisApi.listFindings).mockResolvedValue({items:[],nextCursor:null});
 });
 describe("native process operator authority",()=>{
+  it("requires a reviewed explicit state model before saving conformance and keeps publication separate",async()=>{
+    vi.mocked(processAnalysisApi.create).mockImplementation(async(_company,input)=>{
+      const value=detail("draft");value.effectiveVersion.definition=input.definition;return {root:value.root,version:value.effectiveVersion};
+    });
+    const app=await mount();try {
+      await click(app.container,"Propose a process");const form=app.container.querySelector('form[aria-label="Process definition proposal"]')!;
+      await text(form.querySelector("input")!,"Reviewed conformance model");await text(form.querySelector("textarea")!,"Which complete task paths conform to the published expectation?");
+      await select(app.container,"Approved process purpose",id(4));
+      const check=async(label:string)=>{await act(async()=>app.container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!.click());await flush();};
+      await check("Explicit process conformance");
+      const save=()=>[...app.container.querySelectorAll<HTMLButtonElement>("button")].find(button=>button.textContent==="Save process proposal")!;
+      expect(save().disabled).toBe(true);
+      await check("Tasks expected start todo");await check("Tasks expected terminal done");
+      expect(save().disabled).toBe(true);
+      await select(app.container,"Tasks transition from","todo");await select(app.container,"Tasks transition to","done");await click(app.container,"Add tasks transition");
+      expect(save().disabled).toBe(false);await click(app.container,"Save process proposal");
+      expect(processAnalysisApi.create).toHaveBeenCalledWith(id(1),expect.objectContaining({definition:expect.objectContaining({conformance:{kind:"explicit_definition",expectations:[{
+        objectType:"issue",initialStates:["todo"],terminalStates:["done"],requiredStates:[],allowedTransitions:[{from:"todo",to:"done"}]}]}})}),"account-one");
+      expect(processAnalysisApi.publish).not.toHaveBeenCalled();expect(processAnalysisApi.run).not.toHaveBeenCalled();
+    } finally {await app.cleanup();}
+  });
   it("saves a proposal without publication or execution, then requires a separate current human review",async()=>{
     const proposed=detail("draft");vi.mocked(processAnalysisApi.create).mockImplementation(async(_company,input)=>{
       proposed.effectiveVersion.definition=input.definition;vi.mocked(processAnalysisApi.list).mockResolvedValue(page(proposed));vi.mocked(processAnalysisApi.detail).mockResolvedValue(proposed);

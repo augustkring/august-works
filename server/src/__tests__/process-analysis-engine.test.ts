@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BUSINESS_EVENT_PROJECTOR_VERSION, processAnalysisDefinitionSchema, type BusinessEvent, type ProcessAnalysisDefinition } from "@paperclipai/shared";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { calculateNativeProcess, nativeProcessRequirements } from "../services/process-analysis-engine.js";
 import { assessNativeProcessData } from "../services/process-data-readiness-engine.js";
 
@@ -85,5 +86,62 @@ describe("bounded native object-process calculations", () => {
     const volume = { ...definition, analysisFamilies: ["event_volume"] as ProcessAnalysisDefinition["analysisFamilies"] };
     expect(calculate(events, volume).objectSummaries[0]).toMatchObject({ eventCount: 513, closedCompletionCount: null, censoredCount: null });
     expect(calculate(events).errorCode).toBe("RESULT_BOUND_EXCEEDED");
+  });
+  it("qualifies complete typed state paths while preserving first-completion semantics", () => {
+    const reopened=[event(2,0,"todo",id(7),true),event(3,10,"done"),event(4,20,"in_progress")];
+    expect(assess(reopened).dimensions.find(value=>value.dimension==="lifecycle_completeness")?.state).toBe("unknown");
+    expect(calculate(reopened).errorCode).toBe("DATA_NOT_READY");
+    const firstCompletion={...definition,analysisFamilies:["cycle_time"] as ProcessAnalysisDefinition["analysisFamilies"]};
+    expect(calculate(reopened,firstCompletion).objectSummaries[0].medianCycleSeconds).toBe(10);
+    for(const invalid of [undefined,"completed","paused"]) {
+      const events=[event(2,0,invalid,id(7),true),event(3,10,"done")];
+      expect(assess(events).admission).toBe("DATA_NOT_READY");
+      expect(calculate(events).errorCode).toBe("DATA_NOT_READY");
+    }
+    expect(calculate([event(2,0,"todo",id(7),true),event(3,10,"completed"),event(4,20,"done")]).errorCode).toBe("DATA_NOT_READY");
+  });
+  it("compares qualified primary status paths to the exact published explicit model",()=>{
+    const input=processAnalysisDefinitionSchema.parse({...definition,analysisFamilies:["conformance"],conformance:{kind:"explicit_definition",expectations:[{
+      objectType:"issue",initialStates:["todo"],terminalStates:["done"],requiredStates:["in_review"],allowedTransitions:[
+        {from:"todo",to:"in_progress"},{from:"in_progress",to:"in_review"},{from:"in_review",to:"done"}]}]}});
+    const events=[event(2,0,"todo",id(7),true),event(3,10,"in_progress"),event(4,11,undefined),event(5,12,"in_progress"),event(6,20,"in_review"),event(9,30,"done"),
+      event(11,0,"backlog",id(12),true),event(13,10,"blocked",id(12)),event(14,20,"cancelled",id(12))];
+    const result=calculate(events,input);
+    expect(result.status).toBe("succeeded");
+    expect(result.objectSummaries[0].conformance).toEqual({target:"explicit_published_process_definition",targetVersionId:window.versionId,
+      modelHash:nativeSha256(input.conformance!.expectations[0]),evaluatedObjectCount:2,conformingObjectCount:1,deviatingObjectCount:1,
+      violationCounts:{initial_state_not_expected:1,terminal_state_not_expected:1,transition_not_expected:2,required_state_missing:1},
+      coverage:"qualified_primary_object_lifecycle_in_observed_window"});
+    expect(calculate([...events].reverse(),input)).toEqual(result);
+    expect(result.objectSummaries[0].conformance).not.toHaveProperty("fitness");
+    expect(calculate(events,{...input,requiresArrivalEvidence:true}).errorCode).toBe("DATA_NOT_READY");
+    expect(calculate(events.slice(0,-1),input).errorCode).toBe("DATA_NOT_READY");
+    expect(calculateNativeProcess(id(1),input,window,events,assess(events,{...definition,analysisFamilies:["event_volume"]}),now).errorCode).toBe("DATA_NOT_READY");
+  });
+  it("validates explicit native state models and retains legacy definitions without rewriting their content",()=>{
+    const model={objectType:"issue",initialStates:["todo"],terminalStates:["done"],requiredStates:["in_review"],allowedTransitions:[{from:"todo",to:"in_review"},{from:"in_review",to:"done"}]};
+    const input={...definition,analysisFamilies:["conformance"],conformance:{kind:"explicit_definition",expectations:[model]}};
+    expect(processAnalysisDefinitionSchema.safeParse(input).success).toBe(true);
+    for(const changed of [{...model,initialStates:["planned"]},{...model,terminalStates:["blocked"]},{...model,requiredStates:["blocked"]},
+      {...model,allowedTransitions:[{from:"todo",to:"done"}]},{...model,allowedTransitions:[...model.allowedTransitions,{from:"done",to:"done"}]},
+      {...model,initialStates:["todo","todo"]},
+      {...model,requiredStates:["blocked","in_review"],allowedTransitions:[{from:"todo",to:"blocked"},{from:"blocked",to:"done"},{from:"todo",to:"in_review"},{from:"in_review",to:"done"}]}])
+      expect(processAnalysisDefinitionSchema.safeParse({...input,conformance:{kind:"explicit_definition",expectations:[changed]}}).success).toBe(false);
+    expect(processAnalysisDefinitionSchema.safeParse({...input,objectTypes:["issue","project"]}).success).toBe(false);
+    expect(processAnalysisDefinitionSchema.safeParse({...input,conformance:null}).success).toBe(false);
+    expect(processAnalysisDefinitionSchema.safeParse({...input,analysisFamilies:["event_volume"]}).success).toBe(false);
+    const {conformance:_,...legacy}=definition;
+    const hash=nativeSha256(legacy);
+    expect(processAnalysisDefinitionSchema.parse(legacy).conformance).toBeNull();
+    expect(nativeSha256(legacy)).toBe(hash);
+  });
+  it("uses project-native states and cannot replace a project's primary lifecycle with related task observations",()=>{
+    const input=processAnalysisDefinitionSchema.parse({...definition,objectTypes:["project"],requiredActivities:["project.created","project.updated"],analysisFamilies:["conformance"],
+      conformance:{kind:"explicit_definition",expectations:[{objectType:"project",initialStates:["planned"],terminalStates:["completed"],requiredStates:[],allowedTransitions:[{from:"planned",to:"completed"}]}]}});
+    const events=[event(2,0,"planned",id(8),true),event(3,10,"completed",id(8))].map(value=>({...value,activity:value.lifecycle==="created" ? "project.created" : "project.updated",
+      eventType:value.lifecycle==="created" ? "project.created" : "project.updated",objects:[{objectType:"project" as const,objectId:id(8),qualifier:"primary" as const}]}));
+    expect(calculate(events,input).objectSummaries[0].conformance).toMatchObject({evaluatedObjectCount:1,conformingObjectCount:1,deviatingObjectCount:0});
+    expect(calculate(events.map(value=>({...value,objects:value.objects.map(object=>({...object,qualifier:"related" as const}))})),input).errorCode).toBe("DATA_NOT_READY");
+    expect(calculate([{...events[0],attributes:{status:"todo"}},events[1]],input).errorCode).toBe("DATA_NOT_READY");
   });
 });

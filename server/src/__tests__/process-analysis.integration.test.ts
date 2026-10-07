@@ -15,6 +15,7 @@ import { eraseBusinessEventObjectUnderMemory } from "../services/business-event-
 import { eraseExpiredAnalyticalLineage } from "../services/analytical-retention.js";
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
 import { analyticalPurpose } from "./helpers/business-metric-fixture.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -111,6 +112,39 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     await db.insert(activityLog).values({ companyId, actorType: "user", actorId: "private-person", entityType: "issue", entityId: issueId, action: "issue.updated",
       createdAt: new Date("2026-01-01T12:02:00Z"), details: { priority: "high" } });
     await expect(service().getRun(companyId, actor, created.root.id, run.id)).rejects.toMatchObject({ status: 409 });
+  });
+  it("pins explicit conformance to human publication and current source authority without promoting a proposed model",async()=>{
+    const value=processAnalysisDefinitionSchema.parse({...definition(),analysisFamilies:["conformance"],conformance:{kind:"explicit_definition",expectations:[{
+      objectType:"issue",initialStates:["todo"],terminalStates:["done"],requiredStates:["in_review"],
+      allowedTransitions:[{from:"todo",to:"in_review"},{from:"in_review",to:"done"}]}]}});
+    const created=await published(value);await project();
+    const run=await service().run(companyId,actor,created.root.id,{versionId:created.version.id,...period});
+    expect(run.result).toMatchObject({engineVersion:"aw-native-object-process-v2",status:"succeeded",objectSummaries:[{conformance:{
+      targetVersionId:created.version.id,modelHash:nativeSha256(value.conformance!.expectations[0]),evaluatedObjectCount:1,deviatingObjectCount:1,
+      violationCounts:{initial_state_not_expected:0,terminal_state_not_expected:0,transition_not_expected:1,required_state_missing:1}}}]});
+    expect((await service().getRun(companyId,actor,created.root.id,run.id)).result).toEqual(run.result);
+    const proposed=await service().revise(companyId,actor,created.root.id,{expectedRevision:2,definition:{...value,
+      conformance:{kind:"explicit_definition",expectations:[{objectType:"issue",initialStates:["todo"],terminalStates:["done"],requiredStates:[],allowedTransitions:[{from:"todo",to:"done"}]}]}}});
+    await expect(service().run(companyId,actor,created.root.id,{versionId:proposed.id,...period})).rejects.toMatchObject({status:409});
+    expect((await service().getRun(companyId,actor,created.root.id,run.id)).result.objectSummaries[0].conformance?.deviatingObjectCount).toBe(1);
+    await expect(db.update(processAnalysisRuns).set({result:{...run.result,objectSummaries:[]}}).where(eq(processAnalysisRuns.id,run.id))).rejects.toMatchObject({cause:{code:"23514"}});
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,issueId));
+    await expect(service().getRun(companyId,actor,created.root.id,run.id)).rejects.toMatchObject({status:409});
+  });
+  it("reads a retained V1 definition without adding fields to its frozen hash material",async()=>{
+    const created=await service().create(companyId,actor,{key:`legacy_${randomUUID()}`,definition:definition()});
+    const [row]=await db.select().from(processAnalysisVersions).where(eq(processAnalysisVersions.id,created.version.id));
+    const {conformance:_,...legacy}=row.definition;
+    const versionId=randomUUID(),hash=nativeSha256(legacy);
+    // Represents persisted V1 JSON, not a mutation of an immutable version.
+    await db.insert(processAnalysisVersions).values({...row,id:versionId,revision:2,definition:legacy as ProcessAnalysisDefinition,contentHash:hash});
+    await db.update(processAnalysisDefinitions).set({revision:2}).where(eq(processAnalysisDefinitions.id,created.root.id));
+    await service().publish(companyId,actor,created.root.id,{expectedRevision:2,versionId,rationale:"Human reviewed a retained native V1 process definition"});
+    const retained=await service().detail(companyId,actor,created.root.id);
+    expect(retained.effectiveVersion.contentHash).toBe(hash);
+    expect(retained.effectiveVersion.definition).not.toHaveProperty("conformance");
+    await project();const run=await service().run(companyId,actor,created.root.id,{versionId,...period});
+    expect(run.definitionHash).toBe(hash);expect(run.result.status).toBe("succeeded");
   });
   it("keeps external/arrival and incomplete lifecycle data inconclusive without weakening the published definition", async () => {
     await project();

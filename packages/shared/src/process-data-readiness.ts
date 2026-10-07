@@ -21,6 +21,7 @@ export const assessProcessDataSchema = z.object({
   minimumCoverageSeconds: z.number().int().min(1).max(3650*86400),
   requiresOrdering: z.boolean(),
   requiresLifecycle: z.boolean(),
+  lifecycleSemantics: z.enum(["recorded_creation_and_any_terminal", "recorded_typed_creation_and_latest_terminal"]).default("recorded_creation_and_any_terminal"),
   requiresArrivalEvidence: z.boolean(),
   maxDuplicateRate: z.number().min(0).max(1),
   maxUnknownObjectRate: z.number().min(0).max(1),

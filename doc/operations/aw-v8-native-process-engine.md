@@ -1,8 +1,9 @@
 # Bounded native process calculation kernel
 
-This source slice implements six native analysis families: event volume,
+This source slice implements seven native analysis families: event volume,
 directly-follows paths, full-sequence variants, first-completion cycle time,
-observed blocked intervals and observed terminal-to-nonterminal reopening.
+observed blocked intervals, observed terminal-to-nonterminal reopening and
+explicit typed process conformance (see `aw-v8-process-conformance.md`).
 It is an internal calculation kernel, not an independently authorized API or a
 complete Process Intelligence release.
 
@@ -31,9 +32,9 @@ arrival evidence or unqualified external coverage produce DATA_NOT_READY.
 
 Nine calculation/readiness tests pass, including known durations, blocked time,
 reopening, cancellation, zero/null, reversed input, multi-object paths, changed or
-expired readiness, cross-company inputs and result bounds. Conformance,
-finding lifecycle and hosted qualification remain
-separate open work.
+expired readiness, cross-company inputs and result bounds. Explicit conformance
+and human finding lifecycle have subsequent source slices; additional conformance
+targets, finding conversions and hosted qualification remain open work.
 
 ## Native publication and retained runs
 
@@ -83,7 +84,7 @@ The native default-off Process Intelligence page and sidebar entry now expose
 definition proposals, separate publication with a human rationale, retirement,
 bounded UTC-day analysis and retained run inspection. Forms choose existing
 company owners and current process-purpose evidence; they do not ask operators
-to supply readiness grants or raw events. Six analysis families and sixteen
+to supply readiness grants or raw events. Seven analysis families and sixteen
 readiness dimensions have explicit labels and meanings. Null samples remain
 different from zero. Ordered variants and directly-follows relationships use
 accessible text/tables. Source/hash detail and historical calculation time are

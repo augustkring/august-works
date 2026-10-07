@@ -20,7 +20,7 @@ async function accessibility(page:Page) {
     }
   });expect(violations).toEqual([]);
 }
-for(const theme of ["light","dark"]) for(const width of [390,1200]) for(const state of ["published","draft","needs-review","inconclusive"]) {
+for(const theme of ["light","dark"]) for(const width of [390,1200]) for(const state of ["published","draft","needs-review","inconclusive","conformance"]) {
   test(`process ${state} ${theme} at ${width}px preserves native human review and readiness`,async({page},info)=>{
     await page.route("**/api/**",route=>route.abort());await page.setViewportSize({width,height:1000});
     await page.goto(`/iframe.html?id=business-intelligence-process-intelligence--${state}&viewMode=story&globals=theme:${theme}`);
@@ -29,14 +29,18 @@ for(const theme of ["light","dark"]) for(const width of [390,1200]) for(const st
     await expect(panel.getByRole("button",{name:"Publish selected version"})).toBeDisabled();
     const summary=panel.getByText("Inspect immutable definition",{exact:true});await summary.focus();await page.keyboard.press("Space");
     await expect(panel.locator("pre").first()).toContainText('"governanceObligationRefs"');
-    if(state==="published" || state==="inconclusive") {
+    if(state==="published" || state==="inconclusive" || state==="conformance") {
       await page.getByLabel("Retained process run",{exact:true}).selectOption("00000000-0000-4000-8000-000000000005");
       const result=page.getByRole("region",{name:"Observed process result"});await expect(result).toBeVisible();
       await expect(result).toContainText("does not estimate causal effects or score people");
-      if(state==="published") {
+      if(state==="published" || state==="conformance") {
         await expect(result).toContainText("60 s");await expect(result).toContainText("Observed reopening");
         const edges=result.getByText("Directly follows (2)",{exact:true});await edges.focus();await page.keyboard.press("Space");
         await expect(result.getByRole("table")).toContainText("Task updated / blocked");
+        if(state==="conformance") {
+          const model=result.getByRole("region",{name:"Explicit process conformance"});await expect(model).toContainText("1 with observed deviations");
+          await model.getByText("Inspect comparison model",{exact:true}).click();await expect(model).toContainText("Required visits: in_review");
+        }
       } else {await expect(result).toContainText("No process statistics are published");await expect(result).toContainText("source coverage");await expect(result.getByRole("heading",{name:"Task perspective"})).toHaveCount(0);}
       const findings=page.getByRole("region",{name:"Process findings",exact:true});await expect(findings).toBeVisible();
       await findings.getByRole("button",{name:"Inspect finding",exact:true}).click();
@@ -65,6 +69,11 @@ for(const theme of ["light","dark"]) for(const width of [390,1200]) {
     await expect(form.getByRole("button",{name:"Save process proposal"})).toBeDisabled();
     await form.getByLabel("Definition name",{exact:true}).fill("Recorded delivery evidence review");await form.getByLabel("Business question",{exact:true}).fill("Which recorded native Task paths reach their first completion?");
     await form.getByLabel("Approved process purpose",{exact:true}).selectOption({label:"Approved advisory process purpose"});
+    await expect(form.getByRole("button",{name:"Save process proposal"})).toBeEnabled();
+    await form.getByRole("checkbox",{name:"Explicit process conformance",exact:true}).check();
+    await expect(form.getByRole("button",{name:"Save process proposal"})).toBeDisabled();
+    await form.getByRole("checkbox",{name:"Tasks expected start todo",exact:true}).check();await form.getByRole("checkbox",{name:"Tasks expected terminal done",exact:true}).check();
+    await form.getByLabel("Tasks transition from",{exact:true}).selectOption("todo");await form.getByLabel("Tasks transition to",{exact:true}).selectOption("done");await form.getByRole("button",{name:"Add tasks transition",exact:true}).click();
     await expect(form.getByRole("button",{name:"Save process proposal"})).toBeEnabled();
     await form.getByRole("switch",{name:"Require arrival evidence"}).focus();await page.keyboard.press("Space");
     await expect(form).toContainText("no qualified transport-arrival evidence");

@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { BUSINESS_EVENT_PROJECTOR_VERSION, PROCESS_DATA_DIMENSIONS, assessProcessDataSchema, businessEventObjectSchema,
+import { BUSINESS_EVENT_PROJECTOR_VERSION, NATIVE_PROCESS_STATES, PROCESS_DATA_DIMENSIONS, assessProcessDataSchema, businessEventObjectSchema,
   type AssessProcessData, type BusinessEvent, type ProcessDataDimension, type ProcessDataDimensionResult, type ProcessDataReadinessResult } from "@paperclipai/shared";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 
-export const PROCESS_DATA_READINESS_VERSION = "aw-native-process-data-readiness-v1";
+export const PROCESS_DATA_READINESS_VERSION = "aw-native-process-data-readiness-v2";
 /** Internal owner facts, not accepted in the public assessment request. A bounded
  * event page or a customer assertion cannot certify source coverage or deletion. */
 export interface NativeProcessSourceInspection {
@@ -74,9 +74,18 @@ export function assessNativeProcessData(companyId: string, raw: AssessProcessDat
   const lifecycles = [...paths].filter(([key]) => requirements.requiredObjectTypes.some(type => key.startsWith(`${type}:`))).every(([key,path]) => {
     const primary = path.filter(item => item.event.objects.some(object => object.qualifier==="primary" && `${object.objectType}:${object.objectId}`===key));
     const ordered=primary.toSorted((a,b) => a.time===null || b.time===null ? 0 : a.time<b.time ? -1 : a.time>b.time ? 1 : 0);
-    return ordered.length>0 && ordered[0].event.lifecycle==="created" && ordered.some(item => ["done","completed","cancelled"].includes(item.event.attributes.status ?? ""));
+    if (!ordered.length || ordered[0].event.lifecycle!=="created") return false;
+    const objectType=key.startsWith("issue:") ? "issue" : "project";
+    const terminal=(status:string|undefined) => status==="cancelled" || status===(objectType==="issue" ? "done" : "completed");
+    if(requirements.lifecycleSemantics==="recorded_creation_and_any_terminal") return ordered.some(item=>terminal(item.event.attributes.status));
+    const allowed=new Set<string>(NATIVE_PROCESS_STATES[objectType]);
+    const states=ordered.flatMap(item=>item.event.attributes.status ? [item.event.attributes.status] : []);
+    return Boolean(ordered[0].event.attributes.status) && states.every(status=>allowed.has(status)) && terminal(states.at(-1));
   });
-  set("lifecycle_completeness",requirements.requiresLifecycle ? lifecycles && !ambiguous && events.length>0 ? "satisfied" : "unknown" : "not_applicable","Closed lifecycle claims require observed creation and terminal source facts; open or censored paths are not silently completed",requirements.requiresLifecycle);
+  set("lifecycle_completeness",requirements.requiresLifecycle ? lifecycles && !ambiguous && events.length>0 ? "satisfied" : "unknown" : "not_applicable",
+    requirements.lifecycleSemantics==="recorded_typed_creation_and_latest_terminal"
+      ? "Complete state paths require a typed native creation, known object states and a latest recorded terminal state; reopened paths remain incomplete"
+      : "First-completion claims require observed creation and a recorded native terminal state; later reopenings do not erase the first completion",requirements.requiresLifecycle);
   set("late_arrival_rate",requirements.requiresArrivalEvidence ? "unknown" : "not_applicable","Projection observedAt is not a transport-arrival timestamp; no late-arrival rate is fabricated",requirements.requiresArrivalEvidence);
   set("source_deletion_edit_propagation",inspection.nativeSourceLifecycleVerified && coverage ? "satisfied" : "unknown","Current source hash, suppression, retention and native Memory admission must all hold for the inspected snapshot");
   set("actor_mapping_quality","not_applicable","No actor mapping, person ranking or person-level attribute is used",false);

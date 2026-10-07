@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { businessEventPurposeSchema } from "./business-events.js";
 import { NATIVE_PROCESS_ACTIVITIES, assessProcessDataSchema, type ProcessDataReadinessResult } from "./process-data-readiness.js";
+import { processConformanceSchema, type NativeProcessConformanceSummary } from "./process-conformance.js";
 
-export const NATIVE_PROCESS_ANALYSIS_FAMILIES = ["event_volume","directly_follows","variants","cycle_time","blocked_time","rework"] as const;
+export const NATIVE_PROCESS_ANALYSIS_FAMILIES = ["event_volume","directly_follows","variants","cycle_time","blocked_time","rework","conformance"] as const;
 export const processAnalysisDefinitionSchema = z.object({
   ...businessEventPurposeSchema.shape,
   name:z.string().trim().min(3).max(160), businessQuestion:z.string().trim().min(10).max(2000),
@@ -12,11 +13,19 @@ export const processAnalysisDefinitionSchema = z.object({
   objectTypes:assessProcessDataSchema.shape.requiredObjectTypes,
   requiredActivities:z.array(z.enum(NATIVE_PROCESS_ACTIVITIES)).min(1).max(6),
   minimumCoverageSeconds:assessProcessDataSchema.shape.minimumCoverageSeconds,
-  analysisFamilies:z.array(z.enum(NATIVE_PROCESS_ANALYSIS_FAMILIES)).min(1).max(6),
+  analysisFamilies:z.array(z.enum(NATIVE_PROCESS_ANALYSIS_FAMILIES)).min(1).max(7),
+  conformance:processConformanceSchema.nullable().default(null),
   cycleTimeSemantics:z.literal("first_completion_since_recorded_creation").default("first_completion_since_recorded_creation"),
   requiresArrivalEvidence:z.boolean(), maxLateArrivalRate:z.number().min(0).max(1),
 }).strict().refine(value => new Set(value.objectTypes).size===value.objectTypes.length && new Set(value.requiredSourceProviders).size===value.requiredSourceProviders.length
-  && new Set(value.requiredActivities).size===value.requiredActivities.length && new Set(value.analysisFamilies).size===value.analysisFamilies.length,"Definition identities cannot repeat");
+  && new Set(value.requiredActivities).size===value.requiredActivities.length && new Set(value.analysisFamilies).size===value.analysisFamilies.length,"Definition identities cannot repeat")
+  .superRefine((value,ctx)=>{
+    if(value.analysisFamilies.includes("conformance") !== (value.conformance!==null))
+      ctx.addIssue({code:"custom",message:"Conformance requires an explicit typed expectation and the selected analysis family"});
+    if(value.conformance && (new Set(value.conformance.expectations.map(model=>model.objectType)).size!==value.objectTypes.length
+      || value.conformance.expectations.length!==value.objectTypes.length || value.objectTypes.some(type=>!value.conformance!.expectations.some(model=>model.objectType===type))))
+      ctx.addIssue({code:"custom",message:"Every selected object perspective requires exactly one typed conformance model"});
+  });
 export type ProcessAnalysisDefinition=z.infer<typeof processAnalysisDefinitionSchema>;
 const revision=z.number().int().min(1);
 export const createProcessAnalysisDefinitionSchema=z.object({key:z.string().trim().regex(/^[a-z][a-z0-9_-]{2,99}$/),definition:processAnalysisDefinitionSchema}).strict();
@@ -47,6 +56,7 @@ export interface NativeProcessObjectSummary {
   medianCycleSeconds:number|null;p90CycleSeconds:number|null;knownBlockedSeconds:number|null;reopenCount:number|null;
   directlyFollows:{from:string;to:string;count:number}[];
   variants:{hash:string;activities:string[];objectCount:number}[];
+  conformance?:NativeProcessConformanceSummary|null;
 }
 export interface NativeProcessAnalysisResult {
   engineVersion:string;status:"succeeded"|"inconclusive";errorCode:"DATA_NOT_READY"|"RESULT_BOUND_EXCEEDED"|null;
