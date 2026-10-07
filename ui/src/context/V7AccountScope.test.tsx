@@ -8,7 +8,7 @@ import { DerivedMemory } from "@/pages/DerivedMemory";
 import { queryKeys } from "@/lib/queryKeys";
 import { useV7AccountScope, withV7AccountScope } from "./V7AccountScope";
 
-const fixture = vi.hoisted(() => ({ userId: "a" as string | null, settled: true, failed: false, companyId: "company", breadcrumbs: vi.fn() }));
+const fixture = vi.hoisted(() => ({ userId: "a" as string | null, localImplicit: false, settled: true, failed: false, companyId: "company", breadcrumbs: vi.fn() }));
 vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => fixture }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: fixture.companyId }) }));
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: fixture.breadcrumbs }) }));
@@ -19,7 +19,7 @@ vi.mock("@/lib/router", () => ({ useParams: () => ({ bootstrapRunId: "run" }), L
 let root: Root, container: HTMLDivElement, client: QueryClient;
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
 beforeEach(() => {
-  Object.assign(fixture, { userId: "a", settled: true, failed: false, companyId: "company" });
+  Object.assign(fixture, { userId: "a", localImplicit: false, settled: true, failed: false, companyId: "company" });
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
@@ -139,4 +139,19 @@ it("does not treat a signed-out authenticated session as local board authority",
   await render(<ScopedProbe />);
   expect(container.textContent).toContain("Sign in to continue");
   expect(container.querySelector("input")).toBeNull();
+});
+
+
+it("uses current local provenance rather than the persisted profile ID and remounts when provenance changes", async () => {
+  fixture.userId = "local-board";
+  fixture.localImplicit = true;
+  const fetch = vi.fn(async (_url: string) => response({ status: "done", count: 0 })); vi.stubGlobal("fetch", fetch);
+  await render(<ScopedProbe />); await input("Local operator draft");
+  await act(async () => container.querySelector("button")!.click());
+  expect(fetch.mock.calls[0]![0]).toContain("expectedActorId=local-board");
+  fixture.localImplicit = false;
+  await render(<ScopedProbe />);
+  expect(container.querySelector("input")!.value).toBe("");
+  await act(async () => container.querySelector("button")!.click());
+  expect(fetch.mock.calls[1]![0]).toContain("expectedActorId=user%3Alocal-board");
 });
