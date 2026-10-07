@@ -123,6 +123,39 @@ test("chat first open is read-only; concurrent first sends and retries share one
   }
 });
 
+// UI response-contract fixture; original source erasure and fresh native SDK
+// admission are separately exercised against PostgreSQL, without this routing.
+test("source loss refreshes the read-only chat identity and drops cached history before another send", async ({ page, request }) => {
+  const f = await setup(request);
+  try {
+    const original = await json(await request.post(f.chatPath, { data: {} }));
+    await json(await request.post(`/api/issues/${original.id}/comments`, { data: { body: "Private history before source loss", clientRequestId: "00000000-0000-4000-8000-000000000099" } }));
+    await idle(request, f.chatPath, 1);
+    await page.goto(f.route);
+    await expect(page.getByText("Private history before source loss", { exact: true })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("source-retained-history.png"), fullPage: true });
+    let sourceLost = false, refreshed = 0, creations = 0;
+    await page.route(`**${f.chatPath}`, async route => {
+      if (route.request().method() === "POST") creations++;
+      if (sourceLost && route.request().method() === "GET") {
+        refreshed++;
+        return route.fulfill({ status: 200, contentType: "application/json", body: "null" });
+      }
+      await route.continue();
+    });
+    await page.route(`**/api/issues/${original.id}/comments*`, async route => {
+      sourceLost = true;
+      await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "Analytical conversation source access is unavailable", details: { code: "analytical_source_access_lost" } }) });
+    });
+    await page.reload();
+    await expect.poll(() => refreshed).toBeGreaterThan(0);
+    await expect(page.getByTestId("task-chat-composer-input")).toBeVisible();
+    await expect(page.getByText("Private history before source loss", { exact: true })).toHaveCount(0);
+    expect(creations).toBe(0);
+    await page.screenshot({ path: test.info().outputPath("source-loss-fresh-draft.png"), fullPage: true });
+  } finally { await f.restore(); }
+});
+
 test("feature flag blocks new sends and resets while preserving existing history", async ({
   page,
   request,

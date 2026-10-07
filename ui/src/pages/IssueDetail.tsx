@@ -2858,7 +2858,7 @@ export function IssueDetail({ tasksTab }: { tasksTab?: TaskSidePanelProps["tasks
 
 /** One controller and surface for both task URLs and agent conversations. */
 export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskSidePanelProps["tasksTab"]; conversation?: {
-  agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>;
+  agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>; refreshConversation?: () => void;
 } }) {
   const { issueId: routeIssueId, companyPrefix } = useParams<{ issueId: string; companyPrefix: string }>();
   const issueId = conversation ? conversation.issue?.id : routeIssueId;
@@ -3107,6 +3107,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       });
     },
   });
+  useEffect(() => {
+    if (isAnalyticalSourceAccessLost(error)) conversation?.refreshConversation?.();
+  }, [error, conversation?.refreshConversation]);
   const externalObjectsState = useIssueExternalObjects(conversation && !conversation.issue ? null : issue?.id ?? null);
   // A closed isolated workspace no longer blocks the composer. The server reopens
   // the workspace when the next comment or resume arrives, so the composer stays
@@ -3138,6 +3141,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         ...(pageParam ? { after: pageParam } : {}),
       }),
     enabled: !!issueId,
+    retry: (count, error) => !isAnalyticalSourceAccessLost(error) && count < 3,
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) =>
       getNextIssueCommentPageParam(lastPage, ISSUE_COMMENT_PAGE_SIZE),
@@ -3145,6 +3149,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       InfiniteData<IssueComment[], string | null>
     >(issueId ?? "pending"),
   });
+  useEffect(() => {
+    if (isAnalyticalSourceAccessLost(commentsReadError)) conversation?.refreshConversation?.();
+  }, [commentsReadError, conversation?.refreshConversation]);
   const comments = useMemo(
     () => flattenIssueCommentPages(commentPages?.pages),
     [commentPages?.pages],

@@ -1438,6 +1438,17 @@ describe("IssueDetail", () => {
     expect(mockIssuesApi.markRead).toHaveBeenCalledWith(canonical.id);
   });
 
+  it("refreshes the canonical agent chat after source loss without showing cached private history", async () => {
+    const agent = createAgent(), canonical = createIssue({ conversationAgentId: agent.id, conversationUserId: "user-1", conversationState: "waiting", status: "in_review" });
+    const refreshConversation = vi.fn();
+    mockIssuesApi.get.mockResolvedValue(canonical);
+    mockIssuesApi.listComments.mockRejectedValue(new ApiError("Source access is unavailable", 403, { details: { code: "analytical_source_access_lost" } }));
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><TaskDetailSurface conversation={{ agent, issue: canonical, ensureIssue: async () => canonical, refreshConversation }} /></QueryClientProvider>));
+    await flushReact();
+    expect(refreshConversation).toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="issue-chat-thread"]')).toBeNull();
+  });
+
   it.each(["message", "attachment"])("creates an unused conversation only for the first %s and updates its canonical cache", async (kind) => {
     mockIssuesApi.markRead.mockClear();
     const agent = createAgent();

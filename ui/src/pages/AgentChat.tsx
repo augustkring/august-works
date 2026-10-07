@@ -40,7 +40,7 @@ export function AgentChat() {
   const creating = useRef<Promise<Issue> | null>(null);
   useEffect(() => {
     creating.current = null;
-  }, [selectedCompanyId, userId, agent?.id]);
+  }, [selectedCompanyId, userId, agent?.id, chat.data?.id]);
   useEffect(() => {
     if (enabled && agent && session.isFetched)
       recordAgentChatVisit(agent.companyId, userId, agent.id);
@@ -62,6 +62,7 @@ export function AgentChat() {
       throw error;
     }
   }, [agent, selectedCompanyId, chat.data, client, userId]);
+  const refreshConversation = useCallback(() => { void chat.refetch(); }, [chat.refetch]);
   if (!loaded || agents.isPending || session.isPending)
     return (
       <p className="text-sm text-muted-foreground">Loading conversation…</p>
@@ -87,8 +88,8 @@ export function AgentChat() {
     );
   return (
     <TaskDetailSurface
-      key={`${agent.id}:${userId}`}
-      conversation={{ agent, issue: chat.data ?? null, ensureIssue }}
+      key={`${agent.id}:${userId}:${chat.data?.id ?? "draft"}`}
+      conversation={{ agent, issue: chat.data ?? null, ensureIssue, refreshConversation }}
     />
   );
 }

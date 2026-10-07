@@ -4886,6 +4886,7 @@ const issueListSelect = {
   conversationAgentId: issues.conversationAgentId,
   conversationUserId: issues.conversationUserId,
   conversationState: issues.conversationState,
+  conversationRetiredAt: issues.conversationRetiredAt,
   conversationSessionGeneration: issues.conversationSessionGeneration,
   conversationBoundaryCommentId: issues.conversationBoundaryCommentId,
   id: issues.id,
@@ -9753,6 +9754,7 @@ export function issueService(db: Db) {
 
     getConversation: async (companyId: string, agentId: string, userId: string) => db.select().from(issues).where(and(
       eq(issues.companyId, companyId), eq(issues.conversationAgentId, agentId), eq(issues.conversationUserId, userId),
+      sql`not aw_workflow_memory_erased(${companyId}::uuid, null, ${issues.id})`,
     )).then((rows) => rows[0] ?? null),
 
     create: async (
@@ -9805,14 +9807,24 @@ export function issueService(db: Db) {
       const persist = async (tx: DbTransaction) => {
         await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
         if (issueData.conversationAgentId && issueData.conversationUserId) {
+          await lockBusinessEventCompany(tx, companyId);
+          await lockMemoryPrivacy(tx as unknown as Db, companyId);
           const identity = `conversation:${companyId}:${issueData.conversationAgentId}:${issueData.conversationUserId}`;
           await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${identity}, 0))`);
           const [existing] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId),
             eq(issues.conversationAgentId, issueData.conversationAgentId), eq(issues.conversationUserId, issueData.conversationUserId)));
           if (existing) {
-            const [enriched] = await withIssueLabels(tx, [existing]);
-            const [withRelations] = await withIssueRelationSummaries(companyId, [enriched], tx);
-            return withRelations;
+            const [source] = await tx.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${companyId}::uuid, null, ${existing.id}::uuid) as erased`);
+            if (!source?.erased) {
+              const [enriched] = await withIssueLabels(tx, [existing]);
+              const [withRelations] = await withIssueRelationSummaries(companyId, [enriched], tx);
+              return withRelations;
+            }
+            const at = new Date();
+            await tx.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null,
+              conversationRetiredAt: at, status: "cancelled", cancelledAt: at, hiddenAt: at,
+              assigneeAgentId: null, assigneeUserId: null, executionRunId: null, checkoutRunId: null, updatedAt: at,
+            }).where(and(eq(issues.companyId, companyId), eq(issues.id, existing.id)));
           }
         }
         const idempotencyKey = rawIdempotencyKey?.trim() || null;
@@ -10622,6 +10634,7 @@ export function issueService(db: Db) {
         .where(idPredicate)
         .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
       if (!existing) return null;
+      if (existing.conversationRetiredAt) throw conflict("The native conversation is permanently closed");
       await assertRoadmapFieldOwnership(dbOrTx as Db, existing.companyId, existing.projectId, data, existing);
       if (data.parentId !== undefined && data.parentId !== existing.parentId) {
         await assertExecutionTaskParent(dbOrTx, existing.companyId, data.parentId);

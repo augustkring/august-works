@@ -1,5 +1,6 @@
 import express from "express";
 import request from "supertest";
+import {issueService} from "../services/issues.js";
 import {issueRoutes} from "../routes/issues.js";
 import {errorHandler} from "../middleware/index.js";
 import {randomUUID} from "node:crypto";
@@ -134,5 +135,31 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  it("closes copied prose when the native result owner is deleted and rejects restored-source recapture",async()=>{const f=await fixture(),result=await f.capture(),[original]=await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.id,result.id));await copied();await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,result.id));expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);expect(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,result.lineageManifestId))).toHaveLength(1);await reapplyMemoryDeletionMarkers(db,companyId);await erased();await db.insert(businessMetricObservations).values(original!);const nextIssue=randomUUID(),nextRun=randomUUID(),nextAgent=randomUUID();await db.insert(agents).values({id:nextAgent,companyId,name:"Independent actual native reader",role:"engineer",status:"active",adapterType:"paperclip_runner"});await db.insert(issues).values({id:nextIssue,companyId,title:"New actual native conversation",assigneeAgentId:nextAgent,conversationAgentId:nextAgent,conversationUserId:userId,conversationState:"active",responsibleUserId:userId});await db.insert(heartbeatRuns).values({id:nextRun,companyId,agentId:nextAgent,nativeIssueId:nextIssue,runtimeMode:"native",status:"running",responsibleUserId:userId,contextSnapshot:{issueId:nextIssue}});await db.update(issues).set({executionRunId:nextRun}).where(eq(issues.id,nextIssue));await contextManifestService(db).create({companyId,agentId:nextAgent,issueId:nextIssue,runId:nextRun,query:"Restore attempt in a new run",policySnapshot:{fixture:true},selected:[]});expect(await heartbeatMemoryPayloadRetained(db,companyId,nextRun)).toBe(true);await expect(withAnalyticalConversationRetention(db,companyId,{...actor(),agentId:nextAgent,runId:nextRun},async()=>({result,sourceManifestIds:[result.lineageManifestId],retentionUntil:new Date(result.expiresAt)}))).rejects.toMatchObject({status:409});});
 
  it("withholds actual HTTP comment history after original source access changes",async()=>{const f=await fixture();await f.capture();await copied();const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor={type:"board",source:"session",userId,companyIds:[companyId]};next();});app.use("/api",issueRoutes(db));app.use(errorHandler);const before=await request(app).get(`/api/issues/${issueId}/comments`);expect(before.status).toBe(200);expect(JSON.stringify(before.body)).toContain("Synthetic analytical answer");await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));const after=await request(app).get(`/api/issues/${issueId}/comments`);expect(after.status).toBe(403);expect(JSON.stringify(after.body)).not.toContain("Synthetic analytical answer");});
+
+ it("recovers the same person's erased conversation atomically without reviving its history or Task outcome",async()=>{
+  await instanceSettingsService(db).updateExperimental({enableAgentChat:true});
+  const f=await fixture(),result=await f.capture();await copied();
+  await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,result.lineageManifestId));
+  const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor={type:"board",source:"session",userId,companyIds:[companyId]};next();});app.use("/api",issueRoutes(db));app.use(errorHandler);
+  const path=`/api/companies/${companyId}/chats/${agentId}`;
+  const unused=await request(app).get(path);expect(unused.status).toBe(200);expect(unused.body).toBeNull();
+  expect((await db.select().from(issues).where(eq(issues.id,issueId)))[0]!.conversationAgentId).toBe(agentId);
+  const opened=await Promise.all(Array.from({length:6},()=>request(app).post(path)));
+  expect(opened.map(r=>r.status)).toEqual(Array(6).fill(200));expect(new Set(opened.map(r=>r.body.id)).size).toBe(1);
+  const freshId=opened[0]!.body.id;expect(freshId).not.toBe(issueId);
+  const [retired]=await db.select().from(issues).where(eq(issues.id,issueId));
+  expect(retired).toMatchObject({conversationAgentId:null,conversationUserId:null,conversationState:null,status:"cancelled",assigneeAgentId:null,executionRunId:null});expect(retired!.conversationRetiredAt).toBeInstanceOf(Date);
+  expect((await request(app).get(`${path}`)).body.id).toBe(freshId);
+  const old=await request(app).get(`/api/issues/${issueId}/comments`);expect(old.status).toBe(403);expect(old.body.details.code).toBe("analytical_source_access_lost");expect(JSON.stringify(old.body)).not.toContain("Synthetic analytical answer");
+  await expect(issueService(db).update(issueId,{status:"done"})).rejects.toMatchObject({status:409});
+  await expect(db.update(issues).set({conversationRetiredAt:null}).where(eq(issues.id,issueId))).rejects.toMatchObject({cause:{code:"23514"}});
+  await expect(toolAuthority().execute({tool:"query_business_metric",callId:randomUUID(),arguments:f.query})).rejects.toThrow();
+  const freshRun=randomUUID();await db.insert(heartbeatRuns).values({id:freshRun,companyId,agentId,nativeIssueId:freshId,runtimeMode:"native",status:"running",responsibleUserId:userId,contextSnapshot:{issueId:freshId}});await db.update(issues).set({executionRunId:freshRun,conversationState:"active"}).where(eq(issues.id,freshId));
+  await contextManifestService(db).create({companyId,agentId,issueId:freshId,runId:freshRun,query:"A fresh source read",policySnapshot:{fixture:true},selected:[]});
+  const tools=new PaperclipRunnerToolAuthority(db,{companyId,agentId,issueId:freshId,runId:freshRun,managementToolsEnabled:true});
+  expect(await tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:f.query})).toMatchObject({result:{grade:"native_observation"}});
+  expect(await heartbeatMemoryPayloadRetained(db,companyId,freshRun)).toBe(true);expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);
+  expect((await purgeCompanyContent(db,companyId)).companyTombstoneRetained).toBe(true);
+ });
 
 });
