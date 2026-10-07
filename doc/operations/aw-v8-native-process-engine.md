@@ -31,8 +31,8 @@ arrival evidence or unqualified external coverage produce DATA_NOT_READY.
 
 Nine calculation/readiness tests pass, including known durations, blocked time,
 reopening, cancellation, zero/null, reversed input, multi-object paths, changed or
-expired readiness, cross-company inputs and result bounds. Operator UI,
-conformance, finding lifecycle and hosted qualification remain
+expired readiness, cross-company inputs and result bounds. Conformance,
+finding lifecycle and hosted qualification remain
 separate open work.
 
 ## Native publication and retained runs
@@ -76,3 +76,33 @@ backdated arrival during object authorization and replay into a separate migrate
 quarantine database. This copied-row restore proof does not qualify backup archive
 or hosted recovery. The generated 0393 snapshot matches the Drizzle schema. Direct
 server/UI TypeScript checks pass; full monorepo/release checks remain open.
+
+## Human inspection and proposal interface
+
+The native default-off Process Intelligence page and sidebar entry now expose
+definition proposals, separate publication with a human rationale, retirement,
+bounded UTC-day analysis and retained run inspection. Forms choose existing
+company owners and current process-purpose evidence; they do not ask operators
+to supply readiness grants or raw events. Six analysis families and sixteen
+readiness dimensions have explicit labels and meanings. Null samples remain
+different from zero. Ordered variants and directly-follows relationships use
+accessible text/tables. Source/hash detail and historical calculation time are
+separate from the current access check.
+
+Run history scans at most six candidates per five-run page and reauthorizes every
+returned payload. A denied run is omitted, not disclosed as an old cached result.
+The page keys all queries by company and current account, hides evidence while
+refreshing or after failed access checks, and removes payload at its retention
+expiry. Native issue/project, governance, membership and Memory/Learning changes
+invalidate only the relevant company's process cache.
+
+Sixty-five UI/cache tests and twenty Chromium scenarios pass. The browser matrix
+covers published, draft, review-required and inconclusive states plus proposal
+forms at 390/1200 pixels, light/dark, keyboard disclosure controls and WCAG A/AA
+axe checks. Proposal and mobile result screenshots were visually inspected.
+Storybook fixtures explicitly contain synthetic source pins and do not qualify
+live providers or hosted rollout. An optional `StatusBadge.className` uses the
+existing foreground token for this page's neutral draft/retired badge; default
+badge colors elsewhere are unchanged. Token gates and TypeScript pass. The
+official maintainer-published visual baseline and full release checks remain
+open; these local screenshots do not update or impersonate that baseline.

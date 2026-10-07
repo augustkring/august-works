@@ -16,6 +16,12 @@ import { __liveUpdatesTestUtils } from "./LiveUpdatesProvider";
 import { queryKeys } from "../lib/queryKeys";
 
 describe("LiveUpdatesProvider issue invalidation", () => {
+  it.each(["issue.updated", "project.deleted", "memory.source_erased", "resource_membership.removed"])("reauthorizes this company's retained process evidence after %s", action => {
+    const client=new QueryClient();const invalidate=vi.spyOn(client,"invalidateQueries");
+    __liveUpdatesTestUtils.invalidateActivityQueries(client,"company-1",{entityType:action.split(".")[0],entityId:"source-1",action},{userId:"user-1",agentId:null});
+    expect(invalidate).toHaveBeenCalledWith({queryKey:["process-definitions","company-1"]});
+    expect(invalidate).not.toHaveBeenCalledWith({queryKey:["process-definitions","company-2"]});client.clear();
+  });
   it("refreshes the source task activity when a company skill is created", () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");

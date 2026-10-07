@@ -84,6 +84,7 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     expect(run.result).toMatchObject({ status: "succeeded", objectSummaries: [{ objectType: "issue", objectCount: 1, medianCycleSeconds: 60 }] });
     expect(JSON.stringify(run)).not.toMatch(/private-person|secret body/);
     const retained = await service().getRun(companyId, actor, created.root.id, run.id);
+    expect((await service().listRuns(companyId,actor,created.root.id)).items.map(item=>item.id)).toEqual([run.id]);
     expect(retained.from).toBe(period.from); expect(retained.until).toBe(period.until);
     expect(retained.result).toEqual(run.result);
     expect(await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId, run.lineageManifestId))).toHaveLength(5);

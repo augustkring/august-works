@@ -42,6 +42,9 @@ export function processAnalysisRoutes(db: Db) {
   router.post("/companies/:companyId/process-definitions/:definitionId/runs", validate(runProcessAnalysisSchema), async (req, res) => {
     res.status(201).json(await service.run(company(req), req.actor, id(req.params.definitionId), req.body));
   });
+  router.get("/companies/:companyId/process-definitions/:definitionId/runs", async (req,res)=>{
+    res.json(await service.listRuns(company(req,true),req.actor,id(req.params.definitionId),req.query.cursor===undefined ? undefined : id(req.query.cursor)));
+  });
   router.get("/companies/:companyId/process-definitions/:definitionId/runs/:runId", async (req, res) => {
     res.json(await service.getRun(company(req), req.actor, id(req.params.definitionId), id(req.params.runId)));
   });

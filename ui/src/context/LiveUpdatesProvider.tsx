@@ -1267,6 +1267,12 @@ function invalidateActivityQueries(
   const actorType = readString(payload.actorType);
   const actorId = readString(payload.actorId);
   const details = readRecord(payload.details);
+  // Reauthorize retained process payloads when native source, purpose or access
+  // owners change. This invalidates only this company's analytical cache.
+  if (["issue", "project", "governance_obligation", "process_analysis_definition", "company_membership"].includes(entityType ?? "")
+    || ["memory.", "learning.", "resource_membership."].some(prefix => action?.startsWith(prefix))) {
+    queryClient.invalidateQueries({ queryKey: ["process-definitions",companyId] });
+  }
   const ownActorActivity =
     (actorType === "user" &&
       !!currentActor.userId &&

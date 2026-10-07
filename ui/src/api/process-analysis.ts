@@ -19,4 +19,8 @@ export const processAnalysisApi = {
   retire: (companyId: string, id: string, input: RetireProcessAnalysisDefinition, expectedUserId?: string) => api.post<ProcessAnalysisDefinitionView>(path(companyId, `${pin(id)}/retire`, expectedUserId), input),
   run: (companyId: string, id: string, input: RunProcessAnalysis, expectedUserId?: string) => api.post<ProcessAnalysisRunView>(path(companyId, `${pin(id)}/runs`, expectedUserId), input),
   getRun: (companyId: string, id: string, runId: string, expectedUserId?: string) => api.get<ProcessAnalysisRunView>(path(companyId, `${pin(id)}/runs/${encodeURIComponent(runId)}`, expectedUserId), { cache: "no-store" }),
+  listRuns: (companyId:string,id:string,cursor?:string,expectedUserId?:string)=>{
+    const query=new URLSearchParams();if(cursor) query.set("cursor",cursor);if(expectedUserId) query.set("expectedUserId",expectedUserId);
+    return api.get<{items:ProcessAnalysisRunView[];nextCursor:string|null;coverage:"bounded_current_authorized_page"}>(`${path(companyId,`${pin(id)}/runs`)}${query.size ? `?${query}` : ""}`,{cache:"no-store"});
+  },
 };

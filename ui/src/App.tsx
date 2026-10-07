@@ -57,6 +57,7 @@ import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
 import { Readiness } from "./pages/Readiness";
 import { StrategyExecution } from "./pages/StrategyExecution";
+import { ProcessIntelligence } from "./pages/ProcessIntelligence";
 import { BusinessMetrics } from "./pages/BusinessMetrics";
 import { V8FeatureGate } from "./components/V8FeatureGate";
 import { DerivedMemory } from "./pages/DerivedMemory";
@@ -377,6 +378,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="foundation/discovery" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
       <Route path="foundation/discovery/:bootstrapRunId" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
       <Route path="strategy-execution" element={<V8FeatureGate feature="strategy_execution_v8"><V7FeatureGate feature="governance_evidence_v7"><StrategyExecution /></V7FeatureGate></V8FeatureGate>} />
+      <Route path="process-intelligence" element={<V8FeatureGate feature="process_intelligence_v8"><V7FeatureGate feature="governance_evidence_v7"><ProcessIntelligence /></V7FeatureGate></V8FeatureGate>} />
       <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessMetrics /></V7FeatureGate></V8FeatureGate>} />
       <Route path="readiness" element={<V7FeatureGate feature="readiness_engine_v7"><Readiness /></V7FeatureGate>} />
       <Route
@@ -894,6 +896,7 @@ export function App() {
           <Route path="routines/:routineId" element={<UnprefixedBoardRedirect />} />
           <Route path="review-queue" element={<UnprefixedBoardRedirect />} />
           <Route path="strategy-execution" element={<V8FeatureGate feature="strategy_execution_v8"><V7FeatureGate feature="governance_evidence_v7"><StrategyExecution /></V7FeatureGate></V8FeatureGate>} />
+      <Route path="process-intelligence" element={<V8FeatureGate feature="process_intelligence_v8"><V7FeatureGate feature="governance_evidence_v7"><ProcessIntelligence /></V7FeatureGate></V8FeatureGate>} />
           <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessMetrics /></V7FeatureGate></V8FeatureGate>} />
       <Route path="readiness" element={<UnprefixedBoardRedirect />} />
           <Route path="orchestration" element={<UnprefixedBoardRedirect />} />

@@ -211,6 +211,22 @@ export function processAnalysisService(db: Db) {
         return { ...retained, from: run.exactFrom, until: run.exactUntil, createdAt: run.row.createdAt.toISOString(), expiresAt: run.row.expiresAt.toISOString(), authorizationCheckedAt: snapshot.readiness.assessedAt };
       });
     },
+    async listRuns(companyId: string, actor: AuthorizationActor, id: string, cursor?: string) {
+      return db.transaction(async rawTx=>{
+        const tx=rawTx as unknown as Db;await boundary(tx,companyId,actor);
+        await inspect(tx,companyId,actor,await root(tx,companyId,id),false);
+        const deadline=performance.now()+30_000;
+        const rows=await tx.select({id:processAnalysisRuns.id}).from(processAnalysisRuns).where(and(eq(processAnalysisRuns.companyId,companyId),
+          eq(processAnalysisRuns.definitionId,id),cursor ? sql`${processAnalysisRuns.id}>${cursor}::uuid` : undefined)).orderBy(asc(processAnalysisRuns.id)).limit(6);
+        const items:ProcessAnalysisRunView[]=[];
+        for(const row of rows.slice(0,5)) {
+          if(performance.now()>=deadline) throw conflict("Retained process inspection exceeded its bounded budget; inspect individual runs");
+          try {items.push(await processAnalysisService(tx).getRun(companyId,actor,id,row.id));}
+          catch(error) {if(!statusError(error,[403,404,409])) throw error;}
+        }
+        return {items,nextCursor:rows.length>5 ? rows[4].id : null,coverage:"bounded_current_authorized_page" as const};
+      });
+    },
     async sweepExpired(now = new Date()) {
       const due = await db.transaction(async rawTx => {
         const tx = rawTx as unknown as Db; await tx.execute(sql`set local statement_timeout='8s'`);
