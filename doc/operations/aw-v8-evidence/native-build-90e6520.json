@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "90e6520faf8ba34af9f60863b758b9fb3e3091c7",
+  "command": "pnpm build",
+  "status": "passed",
+  "exitCode": 0,
+  "logPath": "/var/tmp/aw-v8-integrated-90e6520-build.log",
+  "logSha256": "c88d2a815fff7619949a1ca55e80e2bc0673ab95dfe569efb8d66c824cac671f",
+  "scope": "Exact integrated experiment-to-Decision checkpoint. Does not qualify subsequent causal source, other V8 domains, optional providers or actual hosted release."
+}

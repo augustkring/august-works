@@ -6,12 +6,13 @@ const scope=z.discriminatedUnion("type",[
   z.object({type:z.literal("company"),id:z.null()}).strict(),
   z.object({type:z.literal("project"),id}).strict(),z.object({type:z.literal("issue"),id}).strict(),
 ]);
+export const experimentAnalysisEvidenceReferenceSchema=z.object({type:z.literal("experiment_analysis"),id,experimentId:id,versionId:id,interpretationId:id}).strict();
 export const decisionEvidenceReferenceSchema=z.discriminatedUnion("type",[
   z.object({type:z.literal("metric_observation"),id,metricId:id,metricVersionId:id}).strict(),
   z.object({type:z.literal("process_finding"),id,definitionId:id,runId:id}).strict(),
   z.object({type:z.literal("forecast_run"),id,specId:id,versionId:id,pointIndex:z.number().int().min(0).max(59)}).strict(),
   z.object({type:z.literal("scenario_run"),id,scenarioId:id,versionId:id,caseKey:z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),outputKey:z.string().regex(/^[a-z][a-z0-9_]{0,63}$/)}).strict(),
-  z.object({type:z.literal("experiment_analysis"),id,experimentId:id,versionId:id,interpretationId:id}).strict(),
+  experimentAnalysisEvidenceReferenceSchema,
 ]);
 const evidence=z.object({key,source:decisionEvidenceReferenceSchema,
   relationship:z.enum(["supports_option","contradicts_option","informs_criterion","establishes_constraint","metric_observation","process_finding","forecast_result","scenario_result","experiment_result","risk"]),
