@@ -1,6 +1,6 @@
 import { admitOrchestrationHeartbeat, hasOrchestrationPlan } from "./orchestration/orchestration-admission.js";
 import { assertV7Enabled } from "./v7-authorization.js";
-import { learningAssetRoots } from "./learning/learning-assets.js";
+import { learningAssetRoots,retainLearnedAssetsInContext } from "./learning/learning-assets.js";
 import { lockMemoryPrivacy,heartbeatMemoryPayloadRetained } from "./memory/memory-privacy.js";
 import {assertAnalyticalContextPayloadAccess} from "./analytical-context-authority.js";
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
@@ -101,7 +101,7 @@ export function agentRuntimeFabricService(db: Db) {
       const scoped = scope.delegatedScopes.length ? await crossCompanyContextService(db).resolve(actor, scope) : null;
       const provider = await agentProviderBindingService(db).assertRuntime(input.companyId, input.agentId);
       const providers = [{ companyId: input.companyId, agentId: input.agentId, providerBindingId: provider.provider.id, profileRef: provider.runtime.providerProfileRef, snapshotHash: provider.provider.capabilitySnapshot!.hash, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime" }, ...(scoped?.scopes.filter((s) => s.companyId !== input.companyId).map((s) => ({ companyId: s.companyId, agentId: s.presence.id, providerBindingId: s.provider.provider.id, profileRef: s.provider.runtime.providerProfileRef, snapshotHash: s.provider.provider.capabilitySnapshot!.hash, isolationMode: s.provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime" })) ?? [])];
-      const rolePack = v5FeatureEnabled(flags, "role_packs_v5") ? await rolePackService(db).resolve(actor, input.companyId, input.agentId) : null;
+      const rolePack = v5FeatureEnabled(flags, "role_packs_v5") ? await rolePackService(db).resolve(actor, input.companyId, input.agentId,undefined,"task") : null;
       const [test] = input.issueId ? await db.select().from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId, input.companyId), eq(companySkillTestRuns.agentId, input.agentId), eq(companySkillTestRuns.issueId, input.issueId))).limit(1) : [];
       if (test?.deletedAt) throw conflict("This Skill test was deleted");
       if (test?.evaluationContext) {
@@ -157,10 +157,11 @@ export function agentRuntimeFabricService(db: Db) {
           ...(manifest.rolePack?.pins.map(pin => ({ type: "role_pack_version", id: pin.versionId })) ?? []),
         ];
         for (const pin of learnedPins) {
-          const roots = await learningAssetRoots(tx, input.companyId, pin.type, pin.id, "v5_runtime_execution");
+          const roots = await learningAssetRoots(tx, input.companyId, pin.type, pin.id, "v5_runtime_execution",actor,"task");
           if (roots.length && !localContext) throw conflict("Learned runtime procedures require a local Context manifest");
           if (roots.length) await tx.insert(contextManifestMemoryRoots).values(roots.map(root => ({ companyId: input.companyId, manifestId: localContext!.contextManifestId, memoryRecordId: root.id, sourceVersion: root.expectedVersion }))).onConflictDoNothing();
         }
+        if(localContext)await retainLearnedAssetsInContext(tx,input.companyId,actor,localContext.contextManifestId,learnedPins);
         await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.id, input.runId)).for("update");
         let row = stored;
         if (!row) {

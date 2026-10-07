@@ -1,0 +1,48 @@
+{
+  "checkpoint": "Actual native runtime Role Pack selection retains supplemental Source through original Context before consumption",
+  "parentCommit": "cd794fa23dac2717327e24b37132920a9f4c3f8e",
+  "recordedAt": "2026-10-07T23:21:32.675792+00:00",
+  "sourceFiles": [
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "f68306b31b699bf1bc24d93a4a30593e8aa9ac1955537306f018d1cbf06f2f90"
+    },
+    {
+      "path": "server/src/services/agent-runtime-fabric.ts",
+      "sha256": "903388819012c42961e70569c29ad8bfbe7a91038c14a4fb08a1fbf69ffc2ef2"
+    },
+    {
+      "path": "server/src/services/role-packs.ts",
+      "sha256": "dbbc286a9bfdf0e230d2a9189f55b94b2333037ee678f04160b9ba17ec8e80f4"
+    }
+  ],
+  "validation": {
+    "nativeChecks": 40,
+    "files": 3,
+    "skipped": 0,
+    "logs": [
+      "/var/tmp/aw-v8-runtime-rolepack-source-tests-final.log",
+      "/var/tmp/aw-v8-runtime-rolepack-owner-tests.log"
+    ],
+    "serverTypes": "passed",
+    "parentWholeNativeBuild": {
+      "commit": "1a7166215fc2774f2424d26a01d820ba7166ba5a",
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-execution-manifest-source.log"
+    }
+  },
+  "qualified": [
+    "real original runtime Fabric prepare and persisted role-pack pin for actual native assigned Task and responsible authenticated Human",
+    "private rejected/unverified Source retention stored separately from independent verified outcomes",
+    "ordinary configuration reader retains private conversation gate",
+    "current Source hidden/restored denies/allows manifest disclosure and preparation",
+    "flags-off/company-paused C7 erases native Role Pack summary and copied execution inventory; independent verified outcomes survive",
+    "original mandatory policy, published pin, tenant pointer and provenance immutability regressions pass"
+  ],
+  "limits": [
+    "native static capability discovery and conformance records are synthetic fixture prerequisites; no provider probe, call or trial is claimed",
+    "Skill/Playbook/runtime Artifact analytical copy admission remains open",
+    "maximum-volume and hosted qualification remain open",
+    "no new Chromium, hard latency or whole-brief completion claim"
+  ]
+}
