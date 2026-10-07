@@ -30,7 +30,7 @@ export function skillResolverService(db: Db) {
       .innerJoin(companySkillVersions, and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, companySkills.id), eq(companySkillVersions.id, versionId)))
       .where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId))).limit(1);
     if (!row || !(await companySkillService(db).canReadSkill(companyId, skillId, actor))) throw notFound("Skill version not found");
-    await assertLearningAssetCurrent(db, companyId, "skill_version", versionId);
+    await assertLearningAssetCurrent(db, companyId, "skill_version", versionId,actor);
     if (!test && (row.skill.lifecycleState !== "active" || row.skill.activeVersionId !== versionId || row.version.state !== "active" || row.version.visibility !== "company")) throw conflict("The pinned Skill is no longer active; revalidation is required");
     if (row.skill.compatibility !== "compatible" || (!test && row.skill.nextReviewAt && row.skill.nextReviewAt <= new Date())) throw conflict("Skill compatibility or review is overdue");
     const policy = companySkillPolicyService(db);

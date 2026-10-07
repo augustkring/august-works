@@ -4,6 +4,11 @@ import { eq } from "drizzle-orm";
 import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflows, workflowRevisions, workflowRuns, workflowStepRuns, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
 import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, type LearningChange } from "@paperclipai/shared";
 import { learningService } from "../services/learning/learning-service.js";
+import {businessMetricService} from "../services/business-metrics/service.js";
+import {businessMetricObservations,learningAnalyticalDependencies,memoryJobs} from "@paperclipai/db";
+import {metricDefinition} from "./helpers/business-metric-fixture.js";
+import {memoryJobService} from "../services/memory/memory-jobs.js";
+import {eraseExpiredAnalyticalLineage} from "../services/analytical-retention.js";
 import { strategyExecutionService } from "../services/strategy-execution/service.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { analyticalPurpose } from "./helpers/business-metric-fixture.js";
@@ -32,6 +37,7 @@ const support = await getEmbeddedPostgresTestSupport();
     await instanceSettingsService(db).updateExperimental({ enableFoundationV1: true, enableWorkflowsV1: true, enableWorkflowOptimizerSuggestions: true, enableWorkflowOptimizerShadow: true, enableAutomationArtifactsV1: true, agent_identities_v5: true, agent_provider_bindings_v5: true, agent_runtime_fabric_v5: true, role_packs_v5: true, enableCollectiveMemoryV1: true, enableContextEngineV1: true, readiness_engine_v7: true, cognitive_memory_v7: true, memory_observations_v7: true, skill_lifecycle_v5: true, playbooks_v5: true, project_roadmap_v5: true, learning_engine_v7: true }); });
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,management_reviews_v8:false});
     companyId = randomUUID(); roots = [randomUUID(), randomUUID()]; tasks = Array.from({ length: 4 }, () => randomUUID());
     await db.insert(companies).values({ id: companyId, name: "Learning fixture", issuePrefix: `L${companyId.slice(0, 7)}` });
     for (const id of tasks) await db.insert(issues).values({ id, companyId, title: `Reviewed outcome ${id}`, status: "done", completedAt: new Date() });
@@ -62,6 +68,91 @@ const support = await getEmbeddedPostgresTestSupport();
     const evaluation = await service.evaluate(owner, companyId, hypothesis.id, evaluationInput(1));
     return service.proposeChange(owner, companyId, hypothesis.id, { expectedHypothesisVersion: 2, evaluationId: evaluation.id, change: normalized });
   }
+  async function analyticalSignal(sensitivity:"internal"|"confidential"="internal"){
+    await instanceSettingsService(db).updateExperimental({analytical_lineage_v8:true,business_metrics_v8:true,management_reviews_v8:true,ai_use_cases_v7:true,governance_evidence_v7:true});
+    const purpose=analyticalPurpose();purpose.analyticalPurpose!.permittedSensitivity=[sensitivity];
+    const policy=await aiGovernanceService(db).obligation(owner,companyId,purpose),metrics=businessMetricService(db);
+    const metric=await metrics.create(companyId,owner,{key:"learning_signal",definition:{...metricDefinition(policy.id),sensitivity}});
+    await metrics.publish(companyId,owner,metric.metric.id,{expectedRevision:1,versionId:metric.version.id});
+    const sourceId=randomUUID();await db.insert(issues).values({id:sourceId,companyId,title:"Independent synthetic analytical signal",status:"done",completedAt:new Date()});
+    const now=Date.now(),observation=await metrics.query(companyId,owner,{metricId:metric.metric.id,versionId:metric.version.id,from:new Date(now-86400000).toISOString(),until:new Date(now+1000).toISOString(),dimensions:[],maxRows:100});
+    return {sourceId,observation,pin:{kind:"analytical_evidence" as const,source:{type:"metric_observation" as const,id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}}};
+  }
+  it("retains a supplemental original V8 signal while still requiring verified native Task outcomes and current source access",async()=>{
+    const signal=await analyticalSignal(),service=learningService(db);
+    await db.update(memoryRecords).set({verificationState:"unverified"}).where(eq(memoryRecords.id,roots[0]!));
+    await expect(service.create(owner,companyId,{...cycleInput(),analyticalSources:[signal.pin]})).rejects.toMatchObject({status:409});
+    await db.update(memoryRecords).set({verificationState:"human_verified"}).where(eq(memoryRecords.id,roots[0]!));
+    const cycle=await service.create(owner,companyId,{...cycleInput(),analyticalSources:[signal.pin]});
+    expect(cycle.analyticalSourceCount).toBe(1);expect(Object.keys(cycle.outcomeVersions).sort()).toEqual(tasks.slice(0,2).sort());
+    expect(await db.select().from(learningAnalyticalDependencies).where(eq(learningAnalyticalDependencies.cycleId,cycle.id))).toHaveLength(1);
+    await service.addHypothesis(owner,companyId,cycle.id,hypothesisInput(1));
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,tasks[3]!));
+    await expect(service.get(owner,companyId,cycle.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    expect(await service.list(owner,companyId)).toEqual([]);
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,tasks[3]!));
+    expect((await service.get(owner,companyId,cycle.id)).hypotheses).toHaveLength(1);
+  });
+  it("erases analytical Learning derivatives through the existing outbox with flags off and company paused, preserving verified outcomes",async()=>{
+    const signal=await analyticalSignal(),service=learningService(db),cycle=await service.create(owner,companyId,{...cycleInput(),analyticalSources:[signal.pin]});
+    const hypothesis=await service.addHypothesis(owner,companyId,cycle.id,hypothesisInput(1)),evaluation=await service.evaluate(owner,companyId,hypothesis.id,evaluationInput(1));
+    const link=await service.proposeChange(owner,companyId,hypothesis.id,{expectedHypothesisVersion:2,evaluationId:evaluation.id,change:change()});
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,business_metrics_v8:false,management_reviews_v8:false,analytical_lineage_v8:false});
+    await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,signal.observation.id));
+    expect((await db.select().from(learningCycles).where(eq(learningCycles.id,cycle.id)))[0]).toMatchObject({trigger:"",outcomeVersions:{},analyticalSourcePins:[],analyticalSourceCount:0});
+    expect((await db.select().from(learningHypotheses).where(eq(learningHypotheses.id,hypothesis.id)))[0]).toMatchObject({claim:"",predictedEffect:"",evaluationContract:null});
+    expect((await db.select().from(learningEvaluations).where(eq(learningEvaluations.id,evaluation.id)))[0]).toMatchObject({cases:[],metrics:{},limitations:[]});
+    const lateHypothesisId=randomUUID();
+    await db.insert(learningHypotheses).values({...hypothesis,id:lateHypothesisId,claim:"Late restored analytical claim",predictedEffect:"Late restored prediction",evaluationContract:contract(),erasedAt:null});
+    expect((await db.select().from(learningHypotheses).where(eq(learningHypotheses.id,lateHypothesisId)))[0]).toMatchObject({claim:"",predictedEffect:"",evaluationContract:null});
+    const lateEvaluationId=randomUUID();
+    await db.insert(learningEvaluations).values({...evaluation,id:lateEvaluationId,hypothesisId:lateHypothesisId,cases:evaluationInput(1).cases,metrics:{copiedAnalyticalFacts:"Late restored facts"},limitations:["Late private copy"],erasedAt:null});
+    expect((await db.select().from(learningEvaluations).where(eq(learningEvaluations.id,lateEvaluationId)))[0]).toMatchObject({cases:[],metrics:{},limitations:[]});
+    const [job]=await db.select().from(memoryJobs).where(eq(memoryJobs.jobKey,`learning-analytical-erasure:v1:${cycle.id}`));expect(job!.sourceRefJson).toEqual({kind:"learning_analytical_erasure",cycleId:cycle.id});
+    await memoryJobService(db).tick({limit:10});
+    expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id,job!.id)))[0]!.status).toBe("succeeded");
+    expect((await db.select().from(foundationChangeProposals).where(eq(foundationChangeProposals.id,link.candidateId)))[0]!.proposedBody).toBe("");
+    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[0]!)))[0]!.content).toContain("Actual customer outcome");
+    expect((await db.select().from(issues).where(eq(issues.id,tasks[0]!)))[0]!.status).toBe("done");
+    await db.update(learningCycles).set({erasedAt:null}).where(eq(learningCycles.id,cycle.id));
+    expect((await db.select().from(learningCycles).where(eq(learningCycles.id,cycle.id)))[0]!.erasedAt).not.toBeNull();
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,management_reviews_v8:false});
+  });
+  it("closes an expired original analytical signal through the native retention owner",async()=>{
+    const signal=await analyticalSignal(),cycle=await learningService(db).create(owner,companyId,{...cycleInput(),analyticalSources:[signal.pin]});
+    // Exercise the native retention cutoff; immutable source timestamps stay intact.
+    await eraseExpiredAnalyticalLineage(db,new Date(Date.parse(signal.observation.expiresAt)+1));
+    expect((await db.select().from(learningCycles).where(eq(learningCycles.id,cycle.id)))[0]!.erasedAt).not.toBeNull();
+  });
+  it("requires current signal access for native human Foundation reads and approval, then leaves approval with that owner",async()=>{
+    const signal=await analyticalSignal(),service=learningService(db),cycle=await service.create(owner,companyId,{...cycleInput(),analyticalSources:[signal.pin]});
+    const hypothesis=await service.addHypothesis(owner,companyId,cycle.id,hypothesisInput(1)),evaluation=await service.evaluate(owner,companyId,hypothesis.id,evaluationInput(1));
+    const link=await service.proposeChange(owner,companyId,hypothesis.id,{expectedHypothesisVersion:2,evaluationId:evaluation.id,change:change()});
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+    await expect(foundationService(db).listProposals(companyId,targetId,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    await expect(foundationService(db).acceptProposal(companyId,targetId,link.candidateId,principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
+    const accepted=await foundationService(db).acceptProposal(companyId,targetId,link.candidateId,principal);
+    expect(accepted.foundation.body).toBe(change().proposedBody);
+    await expect(foundationService(db).get(companyId,targetId)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    expect((await foundationService(db).get(companyId,targetId,owner))!.body).toBe(change().proposedBody);
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+    await expect(foundationService(db).get(companyId,targetId,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+  });
+  it("preserves original analytical sensitivity when proposing a native Learning change",async()=>{
+    const signal=await analyticalSignal("confidential"),service=learningService(db),cycle=await service.create(owner,companyId,{...cycleInput(),analyticalSources:[signal.pin]});
+    const hypothesis=await service.addHypothesis(owner,companyId,cycle.id,hypothesisInput(1)),evaluation=await service.evaluate(owner,companyId,hypothesis.id,evaluationInput(1));
+    await expect(service.proposeChange(owner,companyId,hypothesis.id,{expectedHypothesisVersion:2,evaluationId:evaluation.id,change:change()})).rejects.toMatchObject({status:403});
+    expect(await db.select().from(learningDomainCandidates).where(eq(learningDomainCandidates.hypothesisId,hypothesis.id))).toHaveLength(0);
+  });
+  it("rejects incomplete or mutable signal bindings at the native PostgreSQL boundary",async()=>{
+    const signal=await analyticalSignal(),cycle=await learningService(db).create(owner,companyId,{...cycleInput(),analyticalSources:[signal.pin]});
+    await expect(db.insert(learningCycles).values({...cycle,id:randomUUID()})).rejects.toMatchObject({cause:{code:"23514"}});
+    await expect(db.update(learningCycles).set({analyticalSourceExpiresAt:new Date(Date.now()+86400000)}).where(eq(learningCycles.id,cycle.id))).rejects.toMatchObject({cause:{code:"23514"}});
+    const [edge]=await db.select().from(learningAnalyticalDependencies).where(eq(learningAnalyticalDependencies.cycleId,cycle.id));
+    await expect(db.update(learningAnalyticalDependencies).set({sourceManifestId:edge!.sourceManifestId}).where(eq(learningAnalyticalDependencies.cycleId,cycle.id))).rejects.toMatchObject({cause:{code:"23514"}});
+  });
   it("links a native replayed Optimizer candidate without granting activation and erases its immutable payload", async () => {
     const service = workflowService(db), created = await service.create(companyId, { name: "Reviewed pure transform" }, principal);
     const draft = await service.updateDraft(companyId, created.id, { expectedRevisionId: created.draftRevisionId!, graph: {

@@ -9,13 +9,17 @@ import { eraseStrategySource } from "../strategy-execution/privacy.js";
 export async function invalidateLearningMemory(tx: Db, companyId: string, recordIds: string[], erase = false) {
   if (!recordIds.length) return;
   const evidence = await tx.select({ cycleId: learningEvidence.cycleId }).from(learningEvidence).where(and(eq(learningEvidence.companyId, companyId), inArray(learningEvidence.memoryRecordId, recordIds)));
-  const cycleIds = [...new Set(evidence.map((edge) => edge.cycleId))]; if (!cycleIds.length) return;
+  return invalidateLearningCycles(tx,companyId,[...new Set(evidence.map(edge=>edge.cycleId))],erase);
+}
+/** The native Memory outbox also uses this owner for analytical-source erasure. */
+export async function invalidateLearningCycles(tx:Db,companyId:string,cycleIds:string[],erase=false) {
+  if(!cycleIds.length)return;
   // A copied review cannot retain private Learning context after a root is erased.
   if (erase) await eraseManagementSourceUnderMemory(tx, companyId, "learning_cycle", cycleIds);
   const now = new Date();
   const hypotheses = await tx.update(learningHypotheses).set(erase ? { status: "rejected", claim: "", predictedEffect: "", evaluationContract: null, erasedAt: now, updatedAt: now } : { status: "inconclusive", updatedAt: now })
     .where(and(eq(learningHypotheses.companyId, companyId), inArray(learningHypotheses.cycleId, cycleIds))).returning({ id: learningHypotheses.id });
-  await tx.update(learningCycles).set(erase ? { status: "cancelled", trigger: "", purpose: "erased", outcomeVersions: {}, erasedAt: now, updatedAt: now } : { status: "failed", updatedAt: now })
+  await tx.update(learningCycles).set(erase ? { status: "cancelled", trigger: "", purpose: "erased", outcomeVersions: {}, analyticalSourcePins:[],analyticalSourceCount:0,analyticalSourceExpiresAt:null,erasedAt: now, updatedAt: now } : { status: "failed", updatedAt: now })
     .where(and(eq(learningCycles.companyId, companyId), inArray(learningCycles.id, cycleIds)));
   if (!hypotheses.length) return;
   const hypothesisIds = hypotheses.map((row) => row.id);

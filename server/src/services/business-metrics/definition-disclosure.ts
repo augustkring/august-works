@@ -36,5 +36,5 @@ export async function inspectMetricDefinitionDisclosure(tx:Db,companyId:string,a
  const edges=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),eq(analyticalLineageEdges.manifestId,pin.manifestId))).limit(19);
  const sourceEdges=edges.map(({inputType,inputRef,inputHash,relationship})=>({inputType,inputRef,inputHash,relationship})).sort((a,b)=>`${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
  if(!manifest||manifest.expiresAt<=new Date()||manifest.analysisType!=="metric_definition_disclosure"||manifest.analysisRef!==pin.versionId||manifest.engineVersion!==ENGINE||manifest.sourceCount!==0||manifest.definitionHash!==current.version.contentHash||manifest.inputHash!==nativeSha256(current.value)||manifest.parameters.metricId!==pin.metricId||manifest.parameters.versionId!==pin.versionId||manifest.parameters.lineageHash!==nativeSha256(current.edges)||nativeSha256(sourceEdges)!==nativeSha256(current.edges))throw conflict("Exact native metric metadata provenance is unavailable");
- return {manifestId:manifest.id,expiresAt:new Date(Math.min(manifest.expiresAt.getTime(),current.expiresAt.getTime()))};
+ return {sourceSensitivity:current.value.definition.sensitivity,manifestId:manifest.id,expiresAt:new Date(Math.min(manifest.expiresAt.getTime(),current.expiresAt.getTime()))};
 }

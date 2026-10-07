@@ -10,7 +10,7 @@ export function playbookResolverService(db: Db) {
   async function validate(actor: AuthorizationActor, companyId: string, pin: AgentExecutionManifest["playbooks"][number]) {
     const row = await playbookService(db).get(actor, companyId, pin.playbookId);
     if (!["approved", "in_review"].includes(row.status) || row.approvedRevisionId !== pin.revisionId || row.overdue) throw conflict("Pinned Playbook is stale, unapproved, or overdue");
-    await assertLearningAssetCurrent(db, companyId, "document_revision", pin.revisionId);
+    await assertLearningAssetCurrent(db, companyId, "document_revision", pin.revisionId,actor);
     return row;
   }
   return {
