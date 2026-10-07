@@ -23,6 +23,7 @@ import {
   transitionBusinessMetricSchema,
   queryBusinessMetricSchema,
   businessEventBackfillSchema,
+  businessEventExportSchema,
   businessEventCursorSchema,
   businessEventListSchema,
   workerModelCallSchema,
@@ -1701,7 +1702,7 @@ function resolveOperationAuthLevel(
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
-  if (key === "POST /api/companies/{companyId}/business-events/backfill" || (path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links"))) return "board";
+  if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || (path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links"))) return "board";
   if (
     isBoardOnlyOperation(method, path) ||
     experimentalApiMetadata[`${method.toUpperCase()} ${path}`]?.boardOnly
@@ -11802,6 +11803,11 @@ registerCurrentRoute({
   method: "post", path: "/api/companies/{companyId}/business-events/backfill", tags: ["V8"],
   summary: "Project one bounded native activity batch with current board audit authority",
   body: businessEventBackfillSchema,
+});
+registerCurrentRoute({
+  method: "post", path: "/api/companies/{companyId}/business-events/export", tags: ["V8"],
+  summary: "Export one current authorized native event page with pinned format and lineage",
+  body: businessEventExportSchema,
 });
 registerCurrentRoute({
   method: "delete", path: "/api/companies/{companyId}/business-events/sources/{sourceRef}", tags: ["V8"],

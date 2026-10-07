@@ -85,7 +85,7 @@ by its existing owner. Raw database deletion and independent source-log retentio
 are not covered by these service hooks.
 
 Still unfinished: remaining source-owner erasure and retention coverage, other source adapters, incremental dispatch,
-general analytical lineage/invalidation, OCEL/JSONL export, quality/readiness,
+remaining analytical lineage/invalidation, quality/readiness,
 process analysis, operator UI, independent security review and hosted evidence.
 Source references and suppression identities still require an explicit retention
 policy. No customer-data processing or production-readiness qualification is
@@ -126,3 +126,49 @@ List admission aborts instead of returning an incomplete page after its work bud
 These bounds are implementation limits, not hosted performance or completeness
 qualification. Operational backfill counts/audit metadata and the minimal retained
 suppression register still need their complete lifecycle/retention qualification.
+
+## Bounded native interchange
+
+`POST /api/companies/:companyId/business-events/export` accepts the explicit
+window, page/cursor bound, process-purpose references, retention and one format:
+`native_jsonl`, `ocel_2_json` or `ocel_2_sqlite`. OCEL requires the default-off
+`process_ocel_export_v8` flag; all formats require human board audit authority and
+current process purpose. It uses the native event reader inside the same company
+→ Memory transaction. Every event still independently passes its pinned purpose,
+source integrity, expiry and native source access before serialization.
+
+The response contains a file name, MIME type, base64 payload and separate manifest
+with format/exporter versions, hashes, window, authorized event/object counts,
+expiry, cursor and immutable lineage identity. Coverage is explicitly one bounded
+current authorized page. A downloaded file cannot establish full process coverage
+or readiness. Neither format flattens a shared event to one case ID. Objects use
+typed native identities; source-recorded qualifiers and exact timestamps survive.
+No object-to-object relationships, object attributes, actor identities, names,
+bodies or current project assignment are invented in the interchange. Stable
+source/object UUIDs can still constitute personal data.
+
+JSON/SQLite mappings are pinned to OCEL 2.0; official format sources and retrieval
+hashes are recorded in `aw-v8-evidence/ocel-format-sources.json`. SQLite uses the
+already required Node runtime's `node:sqlite` module with bound values and fixed
+native type names, not an added provider/package. Temporary files are removed
+after producing the artifact bytes, including failures. The server retains only
+immutable lineage/audit metadata, not a duplicate export payload. No third-party
+upload or messaging action is introduced.
+
+Lineage includes native event-source identity/hash, recorded object identities,
+current Task project ancestry for erasure and requested policy pins. Explicit
+event suppression, source/Memory erasure and signed quarantine replay erase
+dependent manifests/edges. Existing metric lineage rules remain intact. The
+internal reconciliation queue also erases expired native analytical manifests and
+FK-dependent observations across at most 20 companies/100 manifests per company,
+including paused companies with rollout disabled. Expiry of an analytical
+snapshot does not delete a canonical metric definition or native source.
+
+Native event/metrics/target/strategy and format regression passes (66 before the
+added metric-retention case); the complete metrics selection now passes 23. Real
+SQLite reopening checks integrity, foreign keys, sparse attributes, exact time and
+OCEL table/type mappings. Isolated native quarantine replay removes the erased
+event's pre-backup export lineage and retains unrelated export lineage. Schema
+snapshot drift and server/UI TypeScript checks pass. These are local source
+checks: external-consumer interoperability, complete event producers, whole-window
+coverage, OCEL 2.1 additions and actual hosted/archive recovery remain open.

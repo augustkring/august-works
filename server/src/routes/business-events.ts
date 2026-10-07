@@ -1,9 +1,10 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { businessEventBackfillSchema, businessEventListSchema } from "@paperclipai/shared";
+import { businessEventBackfillSchema, businessEventExportSchema, businessEventListSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { businessEventService } from "../services/business-events.js";
+import { businessEventExportService } from "../services/business-event-export.js";
 import { badRequest, conflict } from "../errors.js";
 import { assertCompanyAccess, assertInstanceAdmin } from "./authz.js";
 
@@ -28,6 +29,9 @@ export function businessEventRoutes(db: Db) {
   router.post("/companies/:companyId/business-events/backfill", validate(businessEventBackfillSchema), async (req, res) => {
     const companyId = company(req);
     res.json(await service.backfill(companyId, req.actor, req.body));
+  });
+  router.post("/companies/:companyId/business-events/export", validate(businessEventExportSchema), async (req, res) => {
+    res.json(await businessEventExportService(db).exportPage(company(req),req.actor,req.body));
   });
   router.delete("/companies/:companyId/business-events/sources/:sourceRef", async (req, res) => {
     const companyId = company(req);

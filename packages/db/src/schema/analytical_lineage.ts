@@ -24,7 +24,7 @@ export const analyticalLineageManifests = pgTable("analytical_lineage_manifests"
  * grants source access. Native owner erasure removes dependent manifests. */
 export const analyticalLineageEdges = pgTable("analytical_lineage_edges", {
   companyId: uuid("company_id").notNull(), manifestId: uuid("manifest_id").notNull(),
-  inputType: text("input_type").$type<"issue" | "project" | "metric_version" | "governance_obligation">().notNull(),
+  inputType: text("input_type").$type<"issue" | "project" | "metric_version" | "governance_obligation" | "business_event_source">().notNull(),
   inputRef: uuid("input_ref").notNull(), inputHash: text("input_hash").notNull(),
   relationship: text("relationship").$type<"source" | "definition" | "policy">().notNull(),
 }, (t) => ({
@@ -32,7 +32,7 @@ export const analyticalLineageEdges = pgTable("analytical_lineage_edges", {
     foreignColumns: [analyticalLineageManifests.companyId, analyticalLineageManifests.id] }).onDelete("cascade"),
   edgeUq: unique("analytical_lineage_edges_input_uq").on(t.companyId, t.manifestId, t.inputType, t.inputRef),
   sourceIdx: index("analytical_lineage_edges_source_idx").on(t.companyId, t.inputType, t.inputRef),
-  typeCheck: check("analytical_lineage_edges_type_check", sql`${t.inputType} in ('issue','project','metric_version','governance_obligation') and ${t.relationship} in ('source','definition','policy')`),
+  typeCheck: check("analytical_lineage_edges_type_check", sql`${t.inputType} in ('issue','project','metric_version','governance_obligation','business_event_source') and ${t.relationship} in ('source','definition','policy')`),
   hashCheck: check("analytical_lineage_edges_hash_check", sql`${t.inputHash} ~ '^[0-9a-f]{64}$'`),
 }));
 

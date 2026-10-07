@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { businessEvents, type Db } from "@paperclipai/db";
+import { analyticalLineageManifests, businessEvents, type Db } from "@paperclipai/db";
 
 /** Native source erasure callers hold Memory; projection takes analytical then
  * Memory. This payload-only step intentionally acquires no advisory lock. */
@@ -14,5 +14,8 @@ export async function eraseBusinessEventObjectUnderMemory(tx: Db, companyId: str
       where o.company_id=${companyId}::uuid and o.object_type=${objectType} and o.object_id=${objectId}::uuid
     ) sources on conflict (company_id,source_ref) do nothing
   `);
+  await tx.delete(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId, companyId), sql`exists (
+    select 1 from analytical_lineage_edges e join business_event_suppressions s on s.company_id=e.company_id and s.source_ref=e.input_ref
+    where e.company_id=${analyticalLineageManifests.companyId} and e.manifest_id=${analyticalLineageManifests.id} and e.input_type='business_event_source')`));
   await tx.delete(businessEvents).where(and(eq(businessEvents.companyId, companyId), sql`exists (select 1 from business_event_suppressions s where s.company_id=${businessEvents.companyId} and s.source_ref=${businessEvents.sourceRef})`));
 }

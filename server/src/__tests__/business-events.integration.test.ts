@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { activityLog, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, governanceObligations, createDb, applyPendingMigrations, issues, projects } from "@paperclipai/db";
+import { activityLog, analyticalLineageEdges, analyticalLineageManifests, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, governanceObligations, createDb, applyPendingMigrations, issues, projects } from "@paperclipai/db";
 import { businessEventBackfillSchema } from "@paperclipai/shared";
 import { businessEventService } from "../services/business-events.js";
+import { businessEventExportService } from "../services/business-event-export.js";
+import { eraseExpiredAnalyticalLineage } from "../services/analytical-retention.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { analyticalPurpose } from "./helpers/business-metric-fixture.js";
 import { issueService } from "../services/issues.js";
@@ -53,6 +55,50 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
   }
   const service = () => businessEventService(db);
   const stored = () => db.select().from(businessEvents).where(eq(businessEvents.companyId, companyId));
+
+  it("exports only current native business objects with exact time, qualified format and source-erasure lineage", async () => {
+    const row = await source({ status: "done", projectId, body: "secret private message" });
+    await service().backfill(companyId, actor, window);
+    const exporter = businessEventExportService(db);
+    await expect(exporter.exportPage(companyId, actor, { ...window, format: "ocel_2_json" })).rejects.toMatchObject({ status: 404 });
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ process_ocel_export_v8: true });
+    try {
+      for (const format of ["native_jsonl", "ocel_2_json", "ocel_2_sqlite"] as const) {
+        const artifact = await exporter.exportPage(companyId, actor, { ...window, format });
+        expect(artifact.manifest).toMatchObject({ eventCount: 1, objectCount: 2, coverage: "bounded_current_authorized_page", privacy: "current_business_objects_no_person_attributes" });
+        const payload = Buffer.from(artifact.payloadBase64,"base64");
+        expect(payload.includes(Buffer.from("secret private message"))).toBe(false);
+        expect(payload.includes(Buffer.from("private-identity"))).toBe(false);
+        if (format === "ocel_2_json") {
+          const log = JSON.parse(payload.toString());
+          expect(log.events[0].relationships).toEqual(expect.arrayContaining([{ objectId: `issue:${issueId}`, qualifier: "primary" },{ objectId: `project:${projectId}`, qualifier: "related" }]));
+          expect(log.objects.every((object: { relationships: unknown[] }) => object.relationships.length === 0)).toBe(true);
+        }
+        expect((await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,artifact.manifest.lineageManifestId))).some(edge => edge.inputType === "business_event_source" && edge.inputRef === row.id)).toBe(true);
+      }
+      await service().suppressSource(companyId,actor,row.id);
+      expect(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId,companyId))).toHaveLength(0);
+    } finally { await instanceSettingsService(db,{ runtimeEnv: {} }).updateExperimental({ process_ocel_export_v8: false }); }
+  });
+
+  it("erases export lineage at its declared expiry without deleting current event facts", async () => {
+    await source(); await service().backfill(companyId,actor,window);
+    const exporter = businessEventExportService(db);
+    const expired = await exporter.exportPage(companyId,actor,{ ...window,retentionDays: 1, format: "native_jsonl" });
+    const retained = await exporter.exportPage(companyId,actor,{ ...window,format: "native_jsonl" });
+    await db.update(companies).set({ status: "paused" }).where(eq(companies.id,companyId));
+    await instanceSettingsService(db,{ runtimeEnv: {} }).updateExperimental({ business_events_v8: false });
+    try {
+      await eraseExpiredAnalyticalLineage(db,new Date(Date.now()+2*86400000));
+      expect(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,expired.manifest.lineageManifestId))).toHaveLength(0);
+      expect(await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,expired.manifest.lineageManifestId))).toHaveLength(0);
+      expect(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,retained.manifest.lineageManifestId))).toHaveLength(1);
+      expect(await stored()).toHaveLength(1);
+    } finally {
+      await db.update(companies).set({ status: "active" }).where(eq(companies.id,companyId));
+      await instanceSettingsService(db,{ runtimeEnv: {} }).updateExperimental({ business_events_v8: true });
+    }
+  });
 
   it("requires current process purpose without inheriting metric authority or keeping a suspended source visible", async () => {
     await source();
@@ -168,10 +214,15 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
 
   it("reapplies post-backup suppression in native restore quarantine while flags are disabled, preserving unrelated sources", async () => {
     const erased = await source();
-    const retained = await source({ status: "done" });
+    const retained = await source({ status: "done" }, { createdAt: new Date("2026-01-01T12:01:00Z") });
     await service().backfill(companyId, actor, window);
     await db.update(activityLog).set({ details: { status: "in_progress" } }).where(eq(activityLog.id, erased.id));
     await service().backfill(companyId, actor, window);
+    const exporter = businessEventExportService(db);
+    const erasedExport = await exporter.exportPage(companyId,actor,{ ...window,from: "2026-01-01T12:00:00Z",until: "2026-01-01T12:00:00Z",format: "native_jsonl" });
+    const retainedExport = await exporter.exportPage(companyId,actor,{ ...window,from: "2026-01-01T12:01:00Z",until: "2026-01-01T12:01:00Z",format: "native_jsonl" });
+    const backupManifests = await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId,companyId));
+    const backupEdges = await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.companyId,companyId));
     const backupEvents = await stored();
     const backupObjects = await db.select().from(businessEventObjects).where(eq(businessEventObjects.companyId, companyId));
     const name = `aw_restore_${randomUUID().replaceAll("-", "")}`;
@@ -187,6 +238,8 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       await restored.insert(activityLog).values(await db.select().from(activityLog).where(eq(activityLog.companyId, companyId)));
       for (const event of backupEvents.sort((a, b) => a.revision - b.revision)) await restored.insert(businessEvents).values(event);
       await restored.insert(businessEventObjects).values(backupObjects);
+      await restored.insert(analyticalLineageManifests).values(backupManifests);
+      await restored.insert(analyticalLineageEdges).values(backupEdges);
       // The old backup has projections, but no post-backup suppression register.
       const suppressedAt = new Date().toISOString();
       const marker = { company_id: companyId, source_ref: erased.id, suppressed_at: suppressedAt };
@@ -200,6 +253,9 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       expect(await restored.select().from(businessEventObjects).where(eq(businessEventObjects.eventId, erased.id))).toHaveLength(0);
       expect(await restored.select().from(businessEvents).where(eq(businessEvents.sourceRef, retained.id))).toHaveLength(1);
       expect(await restored.select().from(businessEventSuppressions).where(eq(businessEventSuppressions.companyId, companyId))).toHaveLength(1);
+      expect(await restored.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,erasedExport.manifest.lineageManifestId))).toHaveLength(0);
+      expect(await restored.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,erasedExport.manifest.lineageManifestId))).toHaveLength(0);
+      expect(await restored.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,retainedExport.manifest.lineageManifestId))).toHaveLength(1);
       await instanceSettingsService(restored, { runtimeEnv: {} }).updateExperimental({ business_events_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true });
       expect((await businessEventService(restored).backfill(companyId, actor, window)).projected).toBe(0);
       expect((await businessEventService(restored).list(companyId, actor, timeWindow)).items.map(event => event.source.ref)).toEqual([retained.id]);

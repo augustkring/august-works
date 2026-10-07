@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { businessEvents, businessEventSuppressions, type Db } from "@paperclipai/db";
+import { analyticalLineageManifests, businessEvents, businessEventSuppressions, type Db } from "@paperclipai/db";
 
 export type BusinessEventPrivacyTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
@@ -33,5 +33,7 @@ export async function suppressBusinessEventsForObject(
 export async function suppressBusinessEventSource(tx: BusinessEventPrivacyTx, companyId: string, sourceRef: string, suppressedAt = new Date()) {
   await lockBusinessEventSource(tx, companyId, sourceRef);
   await tx.insert(businessEventSuppressions).values({ companyId, sourceRef, suppressedAt }).onConflictDoNothing();
+  await tx.delete(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId, companyId),
+    sql`exists (select 1 from analytical_lineage_edges e where e.company_id=${analyticalLineageManifests.companyId} and e.manifest_id=${analyticalLineageManifests.id} and e.input_type='business_event_source' and e.input_ref=${sourceRef}::uuid)`));
   await tx.delete(businessEvents).where(and(eq(businessEvents.companyId, companyId), eq(businessEvents.sourceRef, sourceRef)));
 }

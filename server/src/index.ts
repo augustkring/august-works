@@ -6,6 +6,7 @@ import { reconcileGovernanceDeployments, deliverGovernanceStops } from "./servic
 import { supervisionService } from "./services/supervision/supervision-service.js";
 import { strategyExecutionService } from "./services/strategy-execution/service.js";
 import { businessEventService } from "./services/business-events.js";
+import { eraseExpiredAnalyticalLineage } from "./services/analytical-retention.js";
 import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network-policy.js";
 /// <reference path="./types/express.d.ts" />
 // Kicks off the OTel bootstrap as early as possible (no-op unless
@@ -1241,6 +1242,10 @@ async function startServerWithDatabaseTeardown(
     ["business_event_retention", async () => {
       const result = await businessEventService(db).expireDueSources();
       if (result.erasedSources > 0) logger.info(result, "Business Event retention sweep removed source histories");
+    }],
+    ["analytical_retention", async () => {
+      const result = await eraseExpiredAnalyticalLineage(db);
+      if (result.erasedManifests > 0) logger.info(result, "Analytical retention sweep removed expired manifests and dependent payloads");
     }],
     ["work_signal_followups", () => workSignalService(db).deliverFollowups(20)],
     ["finalization", () => reconcileAbandonedExecutionControl(db)],

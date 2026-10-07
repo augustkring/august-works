@@ -2731,6 +2731,13 @@
       "when": 1791331336912,
       "tag": "0391_first_redwing",
       "breakpoints": true
+    },
+    {
+      "idx": 392,
+      "version": "7",
+      "when": 1791331834828,
+      "tag": "0392_regular_pepper_potts",
+      "breakpoints": true
     }
   ]
 }

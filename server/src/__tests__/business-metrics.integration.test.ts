@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { analyticalLineageEdges, analyticalLineageManifests, analyticalSourceSuppressions, businessMetricObservations, businessMetricVersions, businessMetricPublications, businessMetrics, applyPendingMigrations, companies, createDb, governanceObligations, issues, projects } from "@paperclipai/db";
 import { businessMetricDefinitionSchema, queryBusinessMetricSchema } from "@paperclipai/shared";
 import { currentAnalyticalPurpose } from "../services/analytical-purpose.js";
+import { eraseExpiredAnalyticalLineage } from "../services/analytical-retention.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -44,6 +45,23 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
     return queryBusinessMetricSchema.parse({ metricId, versionId, from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", ...overrides });
   }
   const observations = () => db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId, companyId));
+
+  it("erases expired native metric snapshots and edges with rollout off while retaining current snapshots and canonical sources", async () => {
+    const issue = await source("done");
+    const short = await published({ ...metricDefinition(policyId), retentionDays: 1 });
+    const long = await published();
+    const expired = await service().query(companyId,actor,query(short.metric.id,short.version.id));
+    const retained = await service().query(companyId,actor,query(long.metric.id,long.version.id));
+    await db.update(companies).set({ status: "paused" }).where(eq(companies.id,companyId));
+    await instanceSettingsService(db,{ runtimeEnv: {} }).updateExperimental({ business_metrics_v8: false });
+    await eraseExpiredAnalyticalLineage(db,new Date(Date.now()+2*86400000));
+    expect(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,expired.lineageManifestId))).toHaveLength(0);
+    expect(await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,expired.lineageManifestId))).toHaveLength(0);
+    expect((await observations()).map(row => row.id)).toEqual([retained.id]);
+    expect(await db.select().from(issues).where(eq(issues.id,issue.id))).toHaveLength(1);
+    expect((await db.select().from(businessMetrics).where(eq(businessMetrics.id,short.metric.id)))[0].publishedVersionId).toBe(short.version.id);
+    expect(await db.select().from(businessMetricVersions).where(eq(businessMetricVersions.id,short.version.id))).toHaveLength(1);
+  });
 
   it("requires an explicitly approved strategy capability without inheriting ordinary metric permission", async () => {
     await expect(currentAnalyticalPurpose(db, companyId, metricDefinition(policyId), "strategy")).rejects.toMatchObject({ status: 409 });

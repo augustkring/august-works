@@ -38,6 +38,31 @@ export type BusinessEventAttributes = z.infer<typeof businessEventAttributesSche
 export type BusinessEventObject = z.infer<typeof businessEventObjectSchema>;
 export type BusinessEventBackfill = z.infer<typeof businessEventBackfillSchema>;
 export type BusinessEventList = z.infer<typeof businessEventListSchema>;
+export const businessEventExportSchema = z.object({
+  ...businessEventListSchema.shape,
+  ...businessEventPurposeSchema.shape,
+  format: z.enum(["native_jsonl", "ocel_2_json", "ocel_2_sqlite"]),
+}).strict().refine(v => Date.parse(v.from) <= Date.parse(v.until), "Invalid event window")
+  .refine(v => !v.cursor || (Date.parse(v.cursor.at) >= Date.parse(v.from) && Date.parse(v.cursor.at) <= Date.parse(v.until)), "Cursor outside event window");
+export type BusinessEventExport = z.infer<typeof businessEventExportSchema>;
+export interface BusinessEventExportManifest {
+  id: string;
+  companyId: string;
+  format: BusinessEventExport["format"];
+  formatVersion: "aw-business-events-jsonl-v2" | "OCEL 2.0";
+  exporterVersion: string;
+  createdAt: string;
+  expiresAt: string;
+  payloadHash: string;
+  inputHash: string;
+  lineageManifestId: string;
+  eventCount: number;
+  objectCount: number;
+  coverage: "bounded_current_authorized_page";
+  nextCursor: z.infer<typeof businessEventCursorSchema> | null;
+  window: { from: string; until: string };
+  privacy: "current_business_objects_no_person_attributes";
+}
 export interface BusinessEventBackfillResult {
   runId: string;
   projectorVersion: string;
