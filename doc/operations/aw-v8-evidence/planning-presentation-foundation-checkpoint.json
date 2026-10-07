@@ -1,0 +1,59 @@
+{
+  "checkpoint": "Typed planning API client and conditional mathematical result renderer; Roadmap mount still in progress",
+  "parentCommit": "577d6f77d9ef46305ed6bd0a188bd78cf4821d5a",
+  "recordedAt": "2026-10-07T11:25:47.522853+00:00",
+  "sourceFiles": [
+    {
+      "path": "ui/src/api/adaptive-planning.ts",
+      "sha256": "88a90ce19e52aac1021569e51d5863da9dac8cf11fe3534e0cc160f9393037d6"
+    },
+    {
+      "path": "ui/src/components/ProjectPlanningResult.tsx",
+      "sha256": "2ba0c4078f03cf7f7a6cd953d44ab3473d895e5ee4456a33ee797b1204df4096"
+    },
+    {
+      "path": "ui/src/components/ProjectPlanningResult.test.tsx",
+      "sha256": "2c044a24466516184f034a7224f61cc8fad310507fcc0e4ce609ee31fdfeaf33"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "d7245123e3a87c89ff0d21d8336b9466f0aaa78b7d1eca869b47267cb6b5d715"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-577d6f77.json",
+      "sha256": "9307e61846e2ba923995c50dde46c8227b52882df00e2b90496823edd42e9e40"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "tests-final",
+      "checks": 4,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-ui-result-tests-final.log",
+      "logSha256": "1351f4eb66580de71e9f286ca31e738bcba0d713a2c8984d3ea712bde1cea54d"
+    },
+    {
+      "name": "types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-ui-result-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tokens",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-ui-result-tokens.log",
+      "logSha256": "6c4a18590798e60fb92b62e8425c5980ba54bdb3b8391c72788692ef0084715c"
+    }
+  ],
+  "evidenceClass": "Four synthetic read-only presentation checks plus native UI types/tokens; no mounted Roadmap workflow, browser baseline, complete source build or hosted release.",
+  "remaining": [
+    "Complete native project planning operator UI and browser qualification",
+    "Cross-project Planning, Management/Learning and optional analytical providers",
+    "Complete V8 integration and hosted release qualification"
+  ]
+}
