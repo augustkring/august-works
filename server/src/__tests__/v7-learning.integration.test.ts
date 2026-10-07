@@ -1,3 +1,5 @@
+import {agentProviderBindingService} from "../services/agent-provider-bindings.js";
+import {discoverNativeCapabilities} from "../services/native-provider-conformance.js";
 import {agentRuntimeFabricService} from "../services/agent-runtime-fabric.js";
 import {agentExecutionManifests} from "@paperclipai/db";
 import {agentExecutionManifestSchema} from "@paperclipai/shared";
@@ -475,6 +477,50 @@ const support = await getEmbeddedPostgresTestSupport();
     await db.update(heartbeatRuns).set({resultJson:{late:"Source copy"},contextSnapshot:{late:"Source copy"}}).where(eq(heartbeatRuns.id,run!.id));expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,run!.id)))[0]).toMatchObject({resultJson:null,contextSnapshot:{}});
     await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,cognitive_memory_v7:true,memory_observations_v7:true,enableCollectiveMemoryV1:true});
   });
+  it("retains actual learned Role Pack signals before ordinary native runtime inventory consumption",async()=>{
+    const userId=randomUUID();await db.insert(authUsers).values({id:userId,name:"Runtime operator",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,status:"active",membershipRole:"admin"});
+    await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"user",principalId:userId,permissionKey})));
+    const signal=await analyticalSignal("internal",userId),packs=rolePackService(db),pack=await packs.create(owner,companyId,{key:"runtime-learning",name:"Runtime learning",description:""});
+    const baseline=await packs.createVersion(owner,companyId,pack.id,{summary:"Baseline",items:[{type:"required_policy",ref:"approval_before_side_effects",operation:"add",versionId:null,loadPoint:"always",triggerTerms:[],excludeTerms:[]}]});
+    await packs.publish(owner,companyId,pack.id,baseline.id,null);
+    const candidate=await domainProposal(pack.id,`role_pack://${pack.id}/${baseline.id}`,{targetDomain:"role_pack",expectedPublishedVersionId:baseline.id,draft:{items:baseline.items,summary:"Verified outcomes and current Source support this policy selection"}},[signal.pin]);
+    await packs.publish(owner,companyId,pack.id,candidate.candidateId,baseline.id);
+    const [identity]=await db.insert(agentIdentities).values({name:"Runtime policy consumer",homeCompanyId:companyId}).returning();
+    const [agent]=await db.insert(agents).values({companyId,agentIdentityId:identity!.id,name:"Runtime policy consumer",status:"idle",adapterType:"paperclip_runner"}).returning();
+    await db.insert(companyMemberships).values({companyId,principalType:"agent",principalId:agent!.id,status:"active"});
+    await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"agent",principalId:agent!.id,permissionKey})));
+    await packs.assign(owner,companyId,{scopeType:"agent",scopeId:agent!.id,rolePackId:pack.id,versionPolicy:"pinned",pinnedVersionId:candidate.candidateId});
+    const [task]=await db.insert(issues).values({companyId,title:"Apply evidence review",status:"in_progress",assigneeAgentId:agent!.id,responsibleUserId:userId}).returning();
+    const [run]=await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,responsibleUserId:userId,status:"running",runtimeMode:"native",runtimeModeResolvedAt:new Date(),nativeIssueId:task!.id,contextSnapshot:{issueId:task!.id}}).returning();
+    await db.update(issues).set({executionRunId:run!.id}).where(eq(issues.id,task!.id));
+    const actor={type:"agent" as const,source:"agent_jwt" as const,companyId,agentId:agent!.id,runId:run!.id,onBehalfOfUserId:userId};
+    // The ordinary configuration reader retains its conversation gate. Only
+    // actual assigned runtime assembly selects the explicit native Task scope.
+    await expect(packs.resolve(actor,companyId,agent!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    const providers=agentProviderBindingService(db),binding=await providers.create(owner,companyId,agent!.id,{providerType:"paperclip_native",providerAgentRef:agent!.id,providerEndpointRef:null,isolationMode:"isolated_per_presence"});
+    await providers.attach(owner,companyId,agent!.id,{providerBindingId:binding.id,providerProfileRef:agent!.id});
+    // Static included-backend contract and synthetic retained checks only; this
+    // fixture performs no provider probe or external execution.
+    await providers.recordDiscovery(companyId,agent!.id,await discoverNativeCapabilities({companyId,adapterType:agent!.adapterType,config:agent!.adapterConfig}),{connect:true,identity:true,start:true,stream:true,wait:true,cancel:true,resume:true,memoryScoping:true});
+    const previous=await instanceSettingsService(db).getExperimental();await instanceSettingsService(db).updateExperimental({skill_resolver_v5:true});
+    try{
+      const fabric=agentRuntimeFabricService(db),input={companyId,agentId:agent!.id,runId:run!.id,responsibleUserId:userId,issueId:task!.id,query:"Apply evidence review"},prepared=await fabric.prepare(input);
+      expect(prepared!.manifest.rolePack!.pins).toContainEqual({rolePackId:pack.id,versionId:candidate.candidateId,scopeType:"agent",scopeId:agent!.id});
+      const retained=await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId));expect(retained).toHaveLength(1);expect(retained[0]!.authorityPins).toEqual([signal.pin]);
+      expect((await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,prepared!.record.contextManifestId))).map(r=>r.memoryRecordId).sort()).toEqual([...roots,retained[0]!.memoryRecordId].sort());
+      await expect(fabric.getManifest(actor,companyId,run!.id)).resolves.toMatchObject({id:prepared!.record.id});
+      await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+      await expect(fabric.getManifest(actor,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await expect(fabric.prepare(input)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));await expect(fabric.getManifest(actor,companyId,run!.id)).resolves.toMatchObject({id:prepared!.record.id});
+      await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,cognitive_memory_v7:false,memory_observations_v7:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false,enableCollectiveMemoryV1:false,enablePrivateAgentMemoryV1:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+      await db.delete(issues).where(eq(issues.id,signal.sourceId));await memoryJobService(db).tick({limit:100});
+      expect((await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.id,prepared!.record.id)))[0]!.manifest).toEqual({payloadDeleted:true});
+      expect((await db.select().from(rolePackVersions).where(eq(rolePackVersions.id,candidate.candidateId)))[0]!.summary).toBe("");
+      for(const id of roots)expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,id)))[0]!.deletedAt).toBeNull();
+    }finally{await instanceSettingsService(db).updateExperimental(previous);}
+  },60000);
   it("lets an owned live worker propose a hypothesis but cannot self-review or write after Stop", async () => {
     const [identity] = await db.insert(agentIdentities).values({ name: "Learning worker", homeCompanyId: companyId }).returning();
     const [agent] = await db.insert(agents).values({ companyId, agentIdentityId: identity!.id, name: "Learning worker" }).returning();

@@ -1,5 +1,6 @@
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
 import {assertLearnedAssetAnalyticalSources} from "./learning/learning-analytical-sources.js";
+import type {NativeReadScope} from "./analytical-reader.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { agents, agentRolePackAssignments, orgUnitMemberships, orgUnits, rolePackItems, rolePacks, rolePackVersions, type Db } from "@paperclipai/db";
 import { assignRolePackSchema, createRolePackSchema, mergeRolePackItems, rolePackVersionInputSchema, SYSTEM_ROLE_PACKS, type RolePackItem } from "@paperclipai/shared";
@@ -27,10 +28,10 @@ export function rolePackService(db: Db) {
     if (!row || row.status !== "active") throw notFound("Role Pack not found");
     return row;
   }
-  async function version(tx: Db, companyId: string, packId: string, versionId: string,actor?:AuthorizationActor) {
+  async function version(tx: Db, companyId: string, packId: string, versionId: string,actor?:AuthorizationActor,readScope?:NativeReadScope) {
     const [row] = await tx.select().from(rolePackVersions).where(and(eq(rolePackVersions.companyId, companyId), eq(rolePackVersions.rolePackId, packId), eq(rolePackVersions.id, versionId))).limit(1);
     if (!row) throw notFound("Role Pack version not found");
-    await assertLearningAssetCurrent(tx, companyId, "role_pack_version", row.id,actor);
+    await assertLearningAssetCurrent(tx, companyId, "role_pack_version", row.id,actor,readScope);
     const rows = await tx.select().from(rolePackItems).where(and(eq(rolePackItems.companyId, companyId), eq(rolePackItems.versionId, versionId))).orderBy(asc(rolePackItems.ordinal));
     return { ...row, items: rows.map((item) => item.item) };
   }
@@ -99,7 +100,7 @@ export function rolePackService(db: Db) {
         await audit(tx, actor, companyId, row.id, "role_pack.assigned", publications); return assignment!;
       });
     },
-    resolve: async (actor: AuthorizationActor, companyId: string, agentId: string, proposedAgentAssignment?: {rolePackId:string;versionId:string}) => {
+    resolve: async (actor: AuthorizationActor, companyId: string, agentId: string, proposedAgentAssignment?: {rolePackId:string;versionId:string},readScope?:NativeReadScope) => {
       await readable(actor, companyId);
       const [agent] = await db.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).limit(1);
       if (!agent) throw notFound("Agent presence not found");
@@ -131,7 +132,7 @@ export function rolePackService(db: Db) {
         const assigned = await pack(db, companyId, assignment.rolePackId);
         const versionId = assignment.pinnedVersionId ?? assigned.publishedVersionId;
         if (!versionId) throw conflict("Assigned Role Pack has no published version");
-        const selected = await version(db, companyId, assigned.id, versionId,actor);
+        const selected = await version(db, companyId, assigned.id, versionId,actor,readScope);
         if (selected.state !== "published") throw conflict("Assigned Role Pack version is not published");
         layers.push(selected.items); pins.push({ rolePackId: assigned.id, versionId, scopeType: assignment.scopeType, scopeId: assignment.scopeId });
       }
