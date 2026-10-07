@@ -133,6 +133,10 @@ export function errorHandler(
   let constraintError: unknown = err;
   for (let depth = 0; depth < 3 && constraintError && typeof constraintError === "object"; depth++) {
     const pg = constraintError as { code?: string; constraint_name?: string; cause?: unknown };
+    if (pg.code === "23514" && pg.constraint_name === "aw_analytical_source_erased") {
+      res.status(409).json({ error: "Original analytical source was erased", code: pg.constraint_name });
+      return;
+    }
     if (pg.code === "23514" && ["aw_v5_home_requires_rehome_or_archive", "aw_v5_identity_association_immutable", "aw_v5_published_role_pack_immutable", "aw_v5_skill_version_immutable", "aw_v5_execution_manifest_immutable", "aw_v5_eval_case_immutable", "aw_v5_playbook_revision_immutable", "aw_v5_schedule_baseline_immutable", "aw_v5_dependency_company_boundary", "aw_v5_dependency_cycle", "aw_v5_publication_immutable"].includes(pg.constraint_name ?? "")) {
       res.status(409).json({ error: pg.constraint_name === "aw_v5_identity_association_immutable"
         ? "Agent identity association cannot be changed"

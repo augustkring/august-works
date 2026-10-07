@@ -14,6 +14,7 @@ export const analyticalContextRoots=pgTable("analytical_context_roots",{
 },t=>({tenantUq:unique("analytical_context_roots_tenant_uq").on(t.companyId,t.memoryRecordId),
  memoryFk:foreignKey({name:"analytical_context_roots_memory_fk",columns:[t.companyId,t.memoryRecordId],foreignColumns:[memoryRecords.companyId,memoryRecords.id]}).onDelete("cascade"),
  validity:check("analytical_context_roots_validity",sql`${t.sourceCount} between 1 and 26200 and ${t.contentHash} ~ '^[0-9a-f]{64}$' and ${t.deletionKey} ~ '^[0-9a-f]{64}$' and ${t.expiresAt}>${t.createdAt}`),
+ pinsValidity:check("analytical_context_roots_pins_validity",sql`jsonb_typeof(${t.authorityPins})='array' and jsonb_array_length(${t.authorityPins}) between 0 and 32`),
  expiryIdx:index("analytical_context_roots_expiry_idx").on(t.companyId,t.expiresAt),
 }));
 export const analyticalContextDependencies=pgTable("analytical_context_dependencies",{

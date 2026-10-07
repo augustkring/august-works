@@ -232,8 +232,9 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
     expect(Object.keys(guards[0]).sort()).toEqual(["companyId", "inputRef", "inputType", "suppressedAt"]);
     // Simulate pre-deletion source/manifest payload arriving after its retained guard.
     await db.insert(issues).values(issue);
-    await db.insert(analyticalLineageManifests).values(manifest);
-    await expect(db.insert(analyticalLineageEdges).values(edges.find(edge => edge.inputType === "issue")!)).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.insert(analyticalLineageManifests).values(manifest)).rejects.toMatchObject({cause:{code:"23514",constraint_name:"aw_analytical_source_erased"}});
+    const lateManifestId=randomUUID();await db.insert(analyticalLineageManifests).values({...manifest,id:lateManifestId});
+    await expect(db.insert(analyticalLineageEdges).values({...edges.find(edge => edge.inputType === "issue")!,manifestId:lateManifestId})).rejects.toMatchObject({ cause: { code: "23514" } });
     await expect(service().query(companyId, actor, query(registered.metric.id, registered.version.id))).rejects.toMatchObject({ status: 409 });
     expect(await observations()).toHaveLength(0);
   });

@@ -3,6 +3,7 @@ import { governanceObligations, type Db } from "@paperclipai/db";
 import { governanceObligationSchema, type BusinessMetricDefinition, type GovernanceObligation } from "@paperclipai/shared";
 import { conflict } from "../errors.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
+import {assertMemorySourcesRetained} from "./memory/memory-privacy.js";
 
 /** Reuse the canonical governance owner. Ordinary legal evidence is insufficient
  * to approve an analytical population or purpose. */
@@ -12,6 +13,7 @@ export async function currentAnalyticalPurpose(tx: Db, companyId: string, defini
   const refs = [...new Set(definition.governanceObligationRefs)];
   const rows = await tx.select().from(governanceObligations).where(and(eq(governanceObligations.companyId, companyId), inArray(governanceObligations.id, refs))).for("share");
   if (rows.length !== refs.length) throw conflict("Current company analytical purpose evidence is required");
+  await assertMemorySourcesRetained(tx,companyId,refs.map(id=>({sourceProvider:"august_works_analytical_input",sourceRef:`governance_obligation://${id}`})));
   let approved = false;
   for (const row of rows) {
     const parsed = governanceObligationSchema.safeParse(row.obligation);
@@ -37,4 +39,3 @@ export async function currentAnalyticalPurpose(tx: Db, companyId: string, defini
   if (!approved) throw conflict("An approved company analytical purpose is required; legal evidence alone is insufficient");
   return rows;
 }
-

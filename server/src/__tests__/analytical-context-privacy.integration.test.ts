@@ -4,7 +4,7 @@ import {issueRoutes} from "../routes/issues.js";
 import {errorHandler} from "../middleware/index.js";
 import {randomUUID} from "node:crypto";
 import {and,eq,sql} from "drizzle-orm";
-import {agents,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issueComments,businessMetricObservations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,createDb} from "@paperclipai/db";
+import {agents,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,createDb} from "@paperclipai/db";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {instanceSettingsService} from "../services/instance-settings.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
@@ -45,6 +45,46 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  async function erased(){expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);const [run]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId));expect(run!.resultJson).toBeNull();expect(run!.contextSnapshot).toEqual({});expect((await db.select().from(issueComments).where(eq(issueComments.issueId,issueId))).every(c=>c.body==="Source payload erased")).toBe(true);}
 
  const toolAuthority=()=>new PaperclipRunnerToolAuthority(db,{companyId,agentId,issueId,runId,managementToolsEnabled:true});
+ it("discovers original published metric metadata without creating a fabricated measurement or disclosing a later human draft",async()=>{
+  const f=await fixture(),[version]=await db.select().from(businessMetricVersions).where(eq(businessMetricVersions.id,f.query.versionId));
+  await businessMetricService(db).createVersion(companyId,board,f.query.metricId,{expectedRevision:2,definition:{...version!.definition,name:"Private pending metric definition"}});
+  const listed=await toolAuthority().execute({tool:"list_business_metrics",callId:randomUUID(),arguments:{limit:1}});
+  expect(listed).toMatchObject({result:{items:[{versionId:f.query.versionId,grade:"native_definition",measurement:null}]}});expect(JSON.stringify(listed)).not.toContain("Private pending");
+  expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(0);
+  const retained=await root();expect(retained.authorityPins).toMatchObject([{kind:"metric_definition"}]);expect(retained.sourceCount).toBe(1);
+ });
+ it("returns an empty authorized discovery page without inventing source facts or a Memory root",async()=>{
+  await contextManifestService(db).create({companyId,agentId,issueId,runId,query:"Empty metadata discovery",policySnapshot:{fixture:true},selected:[]});
+  expect(await toolAuthority().execute({tool:"list_business_metrics",callId:randomUUID(),arguments:{}})).toEqual([]);
+  expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);
+ });
+ it("closes metadata copies immediately when the original definition row is deleted",async()=>{
+  const f=await fixture();await toolAuthority().execute({tool:"list_business_metrics",callId:randomUUID(),arguments:{}});await copied();
+  await db.update(businessMetrics).set({status:"revoked",publishedVersionId:null}).where(eq(businessMetrics.id,f.query.metricId));
+  await db.delete(businessMetricVersions).where(eq(businessMetricVersions.id,f.query.versionId));
+  expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);await reapplyMemoryDeletionMarkers(db,companyId);await erased();
+ });
+ it("refuses a restored metadata definition from a new actual native consumer without reusing the erased conversation",async()=>{
+  const f=await fixture(),[version]=await db.select().from(businessMetricVersions).where(eq(businessMetricVersions.id,f.query.versionId)),[publication]=await db.select().from(businessMetricPublications).where(eq(businessMetricPublications.versionId,f.query.versionId));
+  await toolAuthority().execute({tool:"list_business_metrics",callId:randomUUID(),arguments:{}});
+  await db.update(businessMetrics).set({status:"revoked",publishedVersionId:null}).where(eq(businessMetrics.id,f.query.metricId));await db.delete(businessMetricVersions).where(eq(businessMetricVersions.id,f.query.versionId));
+  await db.insert(businessMetricVersions).values(version!);await db.insert(businessMetricPublications).values(publication!);await db.update(businessMetrics).set({status:"published",publishedVersionId:f.query.versionId}).where(eq(businessMetrics.id,f.query.metricId));
+  agentId=randomUUID();issueId=randomUUID();runId=randomUUID();
+  await db.insert(agents).values({id:agentId,companyId,name:"Independent metadata consumer",role:"engineer",status:"active",adapterType:"paperclip_runner"});
+  await db.insert(issues).values({id:issueId,companyId,title:"Independent private metadata conversation",assigneeAgentId:agentId,conversationAgentId:agentId,conversationUserId:userId,conversationState:"active",responsibleUserId:userId});
+  await db.insert(heartbeatRuns).values({id:runId,companyId,agentId,nativeIssueId:issueId,runtimeMode:"native",status:"running",responsibleUserId:userId});await db.update(issues).set({executionRunId:runId}).where(eq(issues.id,issueId));
+  await contextManifestService(db).create({companyId,agentId,issueId,runId,query:"Restored source denied",policySnapshot:{syntheticSoftwareFixture:true},selected:[]});
+  expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(true);
+  await expect(toolAuthority().execute({tool:"query_business_metric",callId:randomUUID(),arguments:f.query})).rejects.toMatchObject({status:409});
+ });
+ it("preserves immutable governance and reauthorizes metadata against a superseding native purpose review",async()=>{
+  const f=await fixture();await toolAuthority().execute({tool:"list_business_metrics",callId:randomUUID(),arguments:{}});
+  await expect(db.delete(governanceObligations).where(eq(governanceObligations.companyId,companyId))).rejects.toMatchObject({cause:{code:"23514",message:"governance_versioned_evidence_immutable"}});
+  const updated=analyticalPurpose();updated.analyticalPurpose!.approvalRationale="A subsequent explicit native human purpose review";
+  await aiGovernanceService(db).obligation(board,companyId,updated);
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,{type:"board",source:"session",userId},{issueId})).rejects.toMatchObject({status:409,details:{code:"analytical_source_access_lost"}});
+  expect(await db.select().from(businessMetricVersions).where(eq(businessMetricVersions.id,f.query.versionId))).toHaveLength(1);
+ });
  it("dispatches a real SDK metric tool and retains its exact native source before returning facts",async()=>{
   const f=await fixture(),binding={companyId,agentId,runId};expect(await nativeManagementToolsAvailable(db,binding,userId)).toBe(true);
   const tools=toolAuthority();expect(tools.definitions().some(d=>d.name==="query_business_metric")).toBe(true);
@@ -81,7 +121,7 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  it("runs native analytical expiry while rollout is off and scrubs consumed results",async()=>{const f=await fixture();await f.capture();await copied();await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false});await eraseExpiredAnalyticalLineage(db,new Date(Date.now()+31*86400000));await erased();});
  it("rejects mutable provenance and incomplete added source roots",async()=>{const f=await fixture();await f.capture();const r=await root();await expect(db.update(analyticalContextRoots).set({sourceCount:2}).where(eq(analyticalContextRoots.memoryRecordId,r.memoryRecordId))).rejects.toThrow();await expect(db.insert(analyticalContextDependencies).values({companyId,memoryRecordId:r.memoryRecordId,sourceManifestId:randomUUID()})).rejects.toThrow();});
  it("withholds copied payload at the original result expiry before any cleanup worker runs",async()=>{const f=await fixture(),result=await f.capture();const now=new Date();await contextManifestService(db).create({companyId,agentId,issueId,runId,query:"Short result expiry",policySnapshot:{fixture:true},selected:[]});await withAnalyticalConversationRetention(db,companyId,actor(),async tx=>({result:await businessMetricService(tx).inspectCurrentObservation(companyId,actor(),result.id),sourceManifestIds:[result.lineageManifestId],retentionUntil:new Date(now.getTime()+300)}));await new Promise(resolve=>setTimeout(resolve,350));expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);await expect(f.capture()).rejects.toMatchObject({status:403});});
- it("preserves provenance against direct root removal and permits actual native company purge",async()=>{const f=await fixture();await f.capture();const r=await root();await expect(db.delete(analyticalContextRoots).where(eq(analyticalContextRoots.memoryRecordId,r.memoryRecordId))).rejects.toThrow();const foreign=randomUUID();await db.insert(companies).values({id:foreign,name:"Independent preserved tenant",issuePrefix:randomUUID()});await db.insert(issues).values({companyId:foreign,title:"Independent original source"});const purge=await purgeCompanyContent(db,companyId);expect(purge.companyTombstoneRetained).toBe(true);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);expect(await db.select().from(issues).where(eq(issues.companyId,foreign))).toHaveLength(1);});
+ it("preserves provenance against direct root removal and permits actual native company purge",async()=>{const f=await fixture();await f.capture();await toolAuthority().execute({tool:"list_business_metrics",callId:randomUUID(),arguments:{}});const r=await root();await expect(db.delete(analyticalContextRoots).where(eq(analyticalContextRoots.memoryRecordId,r.memoryRecordId))).rejects.toThrow();const foreign=randomUUID();await db.insert(companies).values({id:foreign,name:"Independent preserved tenant",issuePrefix:randomUUID()});await db.insert(issues).values({companyId:foreign,title:"Independent original source"});const purge=await purgeCompanyContent(db,companyId);expect(purge.companyTombstoneRetained).toBe(true);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);expect(await db.select().from(issues).where(eq(issues.companyId,foreign))).toHaveLength(1);});
 
  it("closes a whole multi-source result when one source disappears without deleting the other observation",async()=>{const f=await fixture(),first=await f.capture(),second=await f.capture();await withAnalyticalConversationRetention(db,companyId,actor(),async tx=>({result:{first:await businessMetricService(tx).inspectCurrentObservation(companyId,actor(),first.id),second:await businessMetricService(tx).inspectCurrentObservation(companyId,actor(),second.id)},sourceManifestIds:[first.lineageManifestId,second.lineageManifestId],retentionUntil:new Date(Math.min(Date.parse(first.expiresAt),Date.parse(second.expiresAt)))}));expect((await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).some(r=>r.sourceCount===2)).toBe(true);await copied();await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,first.lineageManifestId));expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.id,second.id))).toHaveLength(1);await reapplyMemoryDeletionMarkers(db,companyId);await erased();});
 

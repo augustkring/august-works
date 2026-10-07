@@ -23,6 +23,9 @@ export async function withAnalyticalConversationRetention<T>(db:Db,companyId:str
   if(!context?.issueId)throw conflict("The native conversation Context manifest is unavailable");
   const deadline=performance.now()+30000;
   const captured=await read(tx),ids=[...new Set(captured.sourceManifestIds)].sort();
+  // The native owner may return an empty authorized discovery page. An exact
+  // empty array carries no source facts and must not invent a retention root.
+  if(!ids.length&&captured.authorityPins?.length===0&&Array.isArray(captured.result)&&captured.result.length===0)return captured.result;
   if(!ids.length||ids.length>26200)throw conflict("The complete analytical source manifest set is required");
   const sources=await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,companyId),inArray(analyticalLineageManifests.id,ids))).for("share");
   let authorityPins=captured.authorityPins;

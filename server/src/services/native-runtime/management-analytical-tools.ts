@@ -8,6 +8,8 @@ import {withNativeAnalyticalReader} from "../analytical-reader.js";
 import {withAnalyticalConversationRetention} from "../analytical-context-privacy.js";
 
 const descriptions:Record<ManagementChatToolName,string>={
+ list_business_metrics:"Discover a bounded current-authorized page of human-published metric definitions with exact version pins. Definitions are metadata, not measurements; an empty page is not a company census.",
+ list_forecasts:"Discover a bounded current-authorized page of human-published Forecast specifications and their original qualification provenance. Preserve current qualification and do not call metadata a predicted actual.",
  query_business_metric:"Observe one exact human-published native metric in a bounded declared window. Cite its observation and original lineage; this is no forecast or causal claim.",
  compare_business_metrics:"Compare two exact native observations. Incompatible or unfinished windows remain unknown; a descriptive change does not establish its cause.",
  explain_metric_lineage:"Read the complete current-authorized original lineage of one exact native observation. Source identifiers grant no access.",
@@ -33,7 +35,7 @@ export async function executeManagementAnalyticalTool(db:Db,companyId:string,act
  if(actor.type!=="agent")throw forbidden("Management tools require their native bound conversation");
  // Parse before source access. Unknown identity/prose/value fields are rejected.
  managementChatToolSchemas[name].parse(raw);
- return withAnalyticalConversationRetention(db,companyId,actor,async tx=>{
+ return withAnalyticalConversationRetention<unknown>(db,companyId,actor,async tx=>{
   const {businessMetricService}=await import("../business-metrics/service.js");
   const {captureAnalyticalEvidence}=await import("../analytical-evidence.js");
   let result:unknown,pins:AnalyticalContextAuthorityPin[]=[];
@@ -42,6 +44,18 @@ export async function executeManagementAnalyticalTool(db:Db,companyId:string,act
    return captureAnalyticalEvidence(tx,companyId,actor,{sensitivity:"confidential",retentionDays:3650,evidence:sources.map((source,index)=>({key:`source_${index}`,source}))},performance.now()+30000);
   };
   switch(name){
+   case "list_business_metrics":{
+    const input=managementChatToolSchemas[name].parse(raw),page=await businessMetricService(tx).list(companyId,actor,input.cursor),rows=page.items.slice(0,input.limit);
+    if(!rows.length)return {result:[],sourceManifestIds:[],retentionUntil:new Date(),authorityPins:[]};
+    const {captureMetricDefinitionDisclosure}=await import("../business-metrics/definition-disclosure.js"),items=[];
+    for(const row of rows){if(!row.publishedVersionId)throw conflict("The current native metric publication is unavailable");const source=await captureMetricDefinitionDisclosure(tx,companyId,actor,row.id,row.publishedVersionId);items.push(source.value);pins.push({kind:"metric_definition",metricId:row.id,versionId:row.publishedVersionId,manifestId:source.manifestId});}
+    result={items,nextCursor:page.items.length>input.limit?rows.at(-1)!.id:page.nextCursor,coverage:"bounded_current_authorized_page"};break;
+   }
+   case "list_forecasts":{
+    const input=managementChatToolSchemas[name].parse(raw),{businessForecastService}=await import("../business-forecasting/service.js"),page=await businessForecastService(tx).listPublishedForNativeReader(companyId,actor,input.cursor,input.limit);
+    if(!page.items.length)return {result:[],sourceManifestIds:[],retentionUntil:new Date(),authorityPins:[]};
+    pins=page.items.map(item=>({kind:"forecast_specification",specId:item.value.specId,versionId:item.value.versionId}));result={items:page.items.map(item=>item.value),nextCursor:page.nextCursor,coverage:"bounded_current_authorized_page"};break;
+   }
    case "query_business_metric":{
     const input=managementChatToolSchemas[name].parse(raw),value=await businessMetricService(tx).query(companyId,actor,input);
     pins=[{kind:"analytical_evidence",source:{type:"metric_observation",id:value.id,metricId:value.metricId,metricVersionId:value.versionId}}];

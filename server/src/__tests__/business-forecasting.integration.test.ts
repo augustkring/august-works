@@ -1,4 +1,8 @@
 import {managementAnalyticalFixture} from "./helpers/management-analytical-fixture.js";
+import {companyMemberships,analyticalContextRoots,analyticalContextDependencies} from "@paperclipai/db";
+import {contextManifestService} from "../services/context/context-manifest.js";
+import {PaperclipRunnerToolAuthority} from "../services/native-runtime/paperclip-runner-tool-authority.js";
+import {heartbeatMemoryPayloadRetained} from "../services/memory/memory-privacy.js";
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq,sql} from "drizzle-orm";
@@ -25,10 +29,12 @@ const actor={type:"board" as const,source:"local_implicit" as const};
 const flags={analytical_lineage_v8:true,business_metrics_v8:true,business_forecasting_v8:true,scenario_planning_v8:true,decision_intelligence_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true};
 const DAY=86_400_000;
 suite("Governed native business forecasts on migrated PostgreSQL",()=>{
+ let nativeOwnerUserId:string|null=null;
  let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>,companyId:string,otherId:string,projectId:string,policyId:string;
  beforeAll(async()=>{database=await startEmbeddedPostgresTestDatabase("aw-v8-forecast-");db=createDb(database.connectionString);process.env.PAPERCLIP_DECISION_SIGNING_SECRET="0123456789abcdef0123456789abcdef";await db.insert(authUsers).values({id:"local-board",name:"Local native board",email:"local-board-forecast@example.test",createdAt:new Date(),updatedAt:new Date()});});
  afterAll(async()=>database?.cleanup());
  beforeEach(async()=>{
+  nativeOwnerUserId=null;
   await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental(flags);companyId=randomUUID();otherId=randomUUID();projectId=randomUUID();
   await db.insert(companies).values([{id:companyId,name:"Native forecasting test",issuePrefix:randomUUID()},{id:otherId,name:"Foreign tenant",issuePrefix:randomUUID()}]);
   await db.insert(projects).values({id:projectId,companyId,name:"Synthetic retained historical fixture",createdAt:new Date(Date.now()-20*DAY)});
@@ -54,7 +60,7 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   * They do not establish an actually collected production history or release qualification. */
  async function history(values=Array(10).fill(1) as number[]) {
   const cutoff=new Date(Math.floor(Date.now()/DAY)*DAY),start=new Date(cutoff.getTime()-values.length*DAY),metricId=randomUUID(),versionId=randomUUID();
-  const definition=businessMetricDefinitionSchema.parse({...metricDefinition(policyId),valueType:"count",unit:"objects",freshnessSeconds:20*DAY/1000,calculation:{kind:"native_count",population:{entity:"issue",statuses:["done"],projectId}}});
+  const definition=businessMetricDefinitionSchema.parse({...metricDefinition(policyId),ownerUserId:nativeOwnerUserId??"local-board",valueType:"count",unit:"objects",freshnessSeconds:20*DAY/1000,calculation:{kind:"native_count",population:{entity:"issue",statuses:["done"],projectId}}});
   const definitionHash=nativeSha256(definition),createdAt=new Date(start.getTime()-DAY);
   await db.insert(businessMetrics).values({id:metricId,companyId,key:`history_${randomUUID().replaceAll("-","")}`,createdBy:"local-board",createdAt,updatedAt:createdAt});
   await db.insert(businessMetricVersions).values({id:versionId,companyId,metricId,revision:1,definition,contentHash:definitionHash,createdBy:"local-board",createdAt});
@@ -75,10 +81,30 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   }
   return {metricId,versionId,cutoff,observations,sourceIds};
  }
- const definition=(h:Awaited<ReturnType<typeof history>>)=>businessForecastDefinitionSchema.parse({name:"Daily native workload forecast",businessQuestion:"What workload could be observed next?",decisionUse:"Human capacity review without changing commitments",ownerUserId:"local-board",metricId:h.metricId,metricVersionId:h.versionId,scope:{type:"project",id:projectId},frequency:"daily_utc",horizon:1,provider:"aw_native",candidate:{kind:"naive"},baselines:[{kind:"naive"}],minimumHistory:8,captureLatencySeconds:60,backtest:{minimumTrainingPoints:3,minimumOrigins:3,gapPeriods:1,maximumMAE:1,minimumRelativeMAEImprovement:0},knownFailureModes:["Synthetic fixtures do not qualify a production measurement history"],sensitivity:"internal",purpose:"management_intelligence",governanceObligationRefs:[policyId],retentionDays:20});
+ const definition=(h:Awaited<ReturnType<typeof history>>)=>businessForecastDefinitionSchema.parse({name:"Daily native workload forecast",businessQuestion:"What workload could be observed next?",decisionUse:"Human capacity review without changing commitments",ownerUserId:nativeOwnerUserId??"local-board",metricId:h.metricId,metricVersionId:h.versionId,scope:{type:"project",id:projectId},frequency:"daily_utc",horizon:1,provider:"aw_native",candidate:{kind:"naive"},baselines:[{kind:"naive"}],minimumHistory:8,captureLatencySeconds:60,backtest:{minimumTrainingPoints:3,minimumOrigins:3,gapPeriods:1,maximumMAE:1,minimumRelativeMAEImprovement:0},knownFailureModes:["Synthetic fixtures do not qualify a production measurement history"],sensitivity:"internal",purpose:"management_intelligence",governanceObligationRefs:[policyId],retentionDays:20});
  async function draft(source?:Awaited<ReturnType<typeof history>>) {const h=source??await history();const created=await service().create(companyId,actor,{key:`forecast_${randomUUID().replaceAll("-","")}`,definition:definition(h)});return {h,...created};}
  const backtest=(d:Awaited<ReturnType<typeof draft>>)=>service().backtest(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()});
  async function published() {const d=await draft(),test=await backtest(d),spec=await service().publish(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,backtestId:test.id,rationale:"Human approval of this exact retained time-safe backtest"});return {...d,test,spec};}
+ it("discovers only original human-published Forecast metadata through a real native consumer and closes on original measurement deletion",async()=>{
+  nativeOwnerUserId=randomUUID();const agentId=randomUUID(),issueId=randomUUID(),runId=randomUUID();
+  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({...flags,management_reviews_v8:true,management_chat_tools_v8:true,enableContextEngineV1:true});
+  await db.insert(authUsers).values({id:nativeOwnerUserId,name:"Actual metadata reader",email:`${nativeOwnerUserId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
+  await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:nativeOwnerUserId,membershipRole:"admin",status:"active"});
+  await db.insert(agents).values({id:agentId,companyId,name:"Actual native Forecast reader",role:"engineer",status:"active",adapterType:"paperclip_runner"});
+  await db.insert(issues).values({id:issueId,companyId,title:"Private native Forecast conversation",assigneeAgentId:agentId,conversationAgentId:agentId,conversationUserId:nativeOwnerUserId,conversationState:"active",responsibleUserId:nativeOwnerUserId});
+  await db.insert(heartbeatRuns).values({id:runId,companyId,agentId,nativeIssueId:issueId,runtimeMode:"native",status:"running",responsibleUserId:nativeOwnerUserId});
+  await db.update(issues).set({executionRunId:runId}).where(eq(issues.id,issueId));
+  await contextManifestService(db).create({companyId,agentId,issueId,runId,query:"Published Forecast metadata",policySnapshot:{syntheticSoftwareFixture:true},selected:[]});
+  const d=await published();await service().revise(companyId,actor,d.spec.id,{expectedRevision:d.spec.revision,definition:{...d.version.definition,name:"Private pending Forecast definition"}});
+  const authority=new PaperclipRunnerToolAuthority(db,{companyId,agentId,issueId,runId,managementToolsEnabled:true});
+  const listed=await authority.execute({tool:"list_forecasts",callId:randomUUID(),arguments:{limit:1}});
+  expect(listed).toMatchObject({result:{items:[{specId:d.spec.id,versionId:d.version.id,grade:"native_definition",measurement:null,currentQualification:"qualified"}]}});
+  expect(JSON.stringify(listed)).not.toContain("Private pending");
+  const [root]=await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId));
+  expect(root!.sourceCount).toBe(12);expect(await db.select().from(analyticalContextDependencies).where(eq(analyticalContextDependencies.companyId,companyId))).toHaveLength(12);
+  await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,d.h.observations[0]!.id));
+  expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);
+ });
  it("persists separate definitions, native rolling-origin qualification and human publication before a run",async()=>{
   const d=await draft(),test=await backtest(d);expect(test).toMatchObject({kind:"backtest",currentQualification:"qualified",result:{status:"qualified",uncertainty:{method:"unavailable"}}});
   await expect(service().run(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()})).rejects.toMatchObject({status:409});

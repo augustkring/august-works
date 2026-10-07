@@ -19,6 +19,11 @@ describe.skipIf(!support.supported)("Current native analytical conversation iden
  });
  const actor=()=>({type:"agent" as const,source:"agent_jwt" as const,companyId,agentId,runId,onBehalfOfUserId:userId});
  const nativeRead=<T>(read:()=>Promise<T>)=>withNativeAnalyticalReader(db,companyId,actor(),read);
+ it("revokes the internal permit for a detached callback after its retained read has returned",async()=>{
+  let release!:()=>void;const delay=new Promise<void>(resolve=>{release=resolve;});let detached!:Promise<void>;
+  await nativeRead(async()=>{detached=delay.then(()=>assertAnalyticalReader(db,companyId,actor()));});
+  release();await expect(detached).rejects.toMatchObject({status:403});
+ });
  it("admits only a persisted running native private conversation without producing a board identity",async()=>{await expect(nativeRead(()=>assertAnalyticalReader(db,companyId,actor()))).resolves.toBeUndefined();expect(analyticalRequesterId(actor())).toBe(`agent:${agentId}`);for(const changed of [{source:"agent_key" as const},{runId:randomUUID()},{runId:"malformed"},{onBehalfOfUserId:randomUUID()},{companyId:randomUUID()},{agentId:randomUUID()}])await expect(nativeRead(()=>assertAnalyticalReader(db,companyId,{...actor(),...changed}))).rejects.toMatchObject({status:403});});
  it.each(["run","conversation_owner","assignment","human","agent","hidden"])("withdraws native read authority after current %s changes",async(kind)=>{
   if(kind==="run")await db.update(heartbeatRuns).set({status:"succeeded"}).where(eq(heartbeatRuns.id,runId));if(kind==="conversation_owner")await db.update(issues).set({conversationUserId:randomUUID()}).where(eq(issues.id,issueId));if(kind==="assignment")await db.update(issues).set({executionRunId:null}).where(eq(issues.id,issueId));if(kind==="human")await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));if(kind==="agent")await db.update(agents).set({status:"paused"}).where(eq(agents.id,agentId));if(kind==="hidden")await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,issueId));await expect(nativeRead(()=>assertAnalyticalReader(db,companyId,actor()))).rejects.toMatchObject({status:403});

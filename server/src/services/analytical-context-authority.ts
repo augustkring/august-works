@@ -26,13 +26,17 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
    const [stored]=await tx.select().from(decisionContextVersions).where(and(eq(decisionContextVersions.companyId,companyId),eq(decisionContextVersions.decisionId,pin.decisionId),eq(decisionContextVersions.id,pin.versionId))).for("share");
    if(!stored||stored.contentHash!==version.contentHash)throw conflict("The native Decision context changed");
    manifestIds.add(stored.lineageManifestId);expiresAt=Math.min(expiresAt,stored.expiresAt.getTime());
-  }else{
+  }else if(pin.kind==="outcome_review"){
    const {decisionOutcomeReviewService}=await import("./decision-outcome-reviews.js");
    const view=await decisionOutcomeReviewService(tx).detail(companyId,actor,pin.decisionId);
    if(!view||view.revision!==pin.revision)throw conflict("The retained native outcome review changed");
    const receipts=await tx.select().from(decisionOutcomeReviewReceipts).where(and(eq(decisionOutcomeReviewReceipts.companyId,companyId),eq(decisionOutcomeReviewReceipts.reviewId,view.id))).limit(4);
    if(receipts.length!==view.receipts.length)throw conflict("Native outcome review provenance is unavailable");
    for(const receipt of receipts){manifestIds.add(receipt.lineageManifestId);expiresAt=Math.min(expiresAt,Date.parse(receipt.payload.expiresAt));}
+  }else if(pin.kind==="metric_definition"){
+   const {inspectMetricDefinitionDisclosure}=await import("./business-metrics/definition-disclosure.js"),source=await inspectMetricDefinitionDisclosure(tx,companyId,actor,pin);manifestIds.add(source.manifestId);expiresAt=Math.min(expiresAt,source.expiresAt.getTime());
+  }else{
+   const {inspectPublishedForecastDefinition}=await import("./business-forecasting/service.js"),source=await inspectPublishedForecastDefinition(tx,companyId,actor,pin.specId,pin.versionId);source.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,source.expiresAt.getTime());
   }
  }
  if(performance.now()>deadline)throw unprocessable("The complete analytical source review exceeded its time budget");

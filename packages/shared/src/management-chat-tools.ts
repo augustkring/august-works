@@ -8,6 +8,8 @@ const scenario=z.object({type:z.literal("scenario_run"),id,scenarioId:id,version
 /** First-party tool arguments contain bounded native pins, never identities,
  * copied measurements, SQL, authorization flags or approval decisions. */
 export const managementChatToolSchemas={
+ list_business_metrics:z.object({cursor:id.optional(),limit:z.number().int().min(1).max(20).default(5)}).strict(),
+ list_forecasts:z.object({cursor:id.optional(),limit:z.number().int().min(1).max(20).default(5)}).strict(),
  query_business_metric:queryBusinessMetricSchema,
  compare_business_metrics:z.object({before:metric,after:metric}).strict().refine(v=>v.before.id!==v.after.id,"Two distinct observations are required"),
  explain_metric_lineage:z.object({source:metric}).strict(),

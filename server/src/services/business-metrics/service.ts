@@ -11,7 +11,7 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { v7HumanActorId, assertV7Authorization } from "../v7-authorization.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { lockMemoryPrivacy,assertMemorySourcesRetained } from "../memory/memory-privacy.js";
 import { lockBusinessEventCompany } from "../business-event-privacy.js";
 import { calculateNativeMetric, NATIVE_METRIC_ENGINE_VERSION, type NativeMetricInput } from "./native-engine.js";
 import { assertAnalyticalSourcesNotErased } from "../analytical-privacy.js";
@@ -45,6 +45,7 @@ export function businessMetricService(db: Db) {
   async function version(tx: Db, companyId: string, metricId: string, id: string) {
     const [row] = await tx.select().from(businessMetricVersions).where(and(eq(businessMetricVersions.companyId, companyId), eq(businessMetricVersions.metricId, metricId), eq(businessMetricVersions.id, id))).for("share");
     if (!row || !businessMetricDefinitionSchema.safeParse(row.definition).success || nativeSha256(row.definition) !== row.contentHash) throw conflict("Metric definition version is unavailable");
+    await assertMemorySourcesRetained(tx,companyId,[{sourceProvider:"august_works_analytical_input",sourceRef:`metric_version://${id}`}]);
     if (row.createdAt.getTime() + row.definition.reviewFrequencyDays * 86_400_000 <= Date.now()) throw conflict("Metric definition review is overdue; publish a current review version");
     return row;
   }
@@ -125,6 +126,7 @@ export function businessMetricService(db: Db) {
       await admit(db, companyId, actor);
       const [observation] = await db.select().from(businessMetricObservations).where(and(eq(businessMetricObservations.companyId, companyId), eq(businessMetricObservations.id, observationId))).for("share");
       if (!observation || observation.expiresAt.getTime() <= Date.now()) throw conflict("Metric observation is no longer current");
+      await assertMemorySourcesRetained(db,companyId,[{sourceProvider:"august_works_analytical",sourceRef:`manifest://${observation.lineageManifestId}`}]);
       const row = await metric(db, companyId, observation.metricId);
       if (row.status !== "published") throw conflict("Metric is not currently published");
       const revision = await version(db, companyId, row.id, observation.versionId);

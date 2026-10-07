@@ -162,6 +162,13 @@ export async function inspectBusinessForecastRun(tx:Db,companyId:string,actor:Au
 export function businessForecastService(db:Db) {
  const audit=(tx:Db,companyId:string,actor:AuthorizationActor,id:string,action:string,details:Record<string,unknown>,publications:Parameters<typeof logActivity>[2])=>logActivity(tx,{companyId,actorType:"user",actorId:v7HumanActorId(actor),action:`business_forecast.${action}`,entityType:"forecast_spec",entityId:id,details},publications);
  return {
+  async listPublishedForNativeReader(companyId:string,actor:AuthorizationActor,cursor?:string,limit=5){
+   await admit(db,companyId,actor);
+   const rows=await db.select({id:forecastSpecs.id,versionId:forecastSpecs.publishedVersionId}).from(forecastSpecs).where(and(eq(forecastSpecs.companyId,companyId),eq(forecastSpecs.status,"published"),cursor?sql`${forecastSpecs.id}>${cursor}::uuid`:undefined)).orderBy(asc(forecastSpecs.id)).limit(limit+1);
+   const items:Awaited<ReturnType<typeof inspectPublishedForecastDefinition>>[]=[];
+   for(const row of rows.slice(0,limit))if(row.versionId)try{items.push(await inspectPublishedForecastDefinition(db,companyId,actor,row.id,row.versionId));}catch(error){if(!(error&&typeof error==="object"&&"status"in error&&[403,404,409].includes(Number(error.status))))throw error;}
+   return {items,nextCursor:rows.length>limit?rows[limit-1]!.id:null};
+  },
   async list(companyId:string,actor:AuthorizationActor,cursor?:string) {
    return db.transaction(async raw=>{const tx=raw as unknown as Db;await admit(tx,companyId,actor);const rows=await tx.select({id:forecastSpecs.id}).from(forecastSpecs).where(and(eq(forecastSpecs.companyId,companyId),cursor?sql`${forecastSpecs.id}>${cursor}::uuid`:undefined)).orderBy(asc(forecastSpecs.id)).limit(21);
     const items:BusinessForecastSpecView[]=[];
@@ -213,4 +220,18 @@ export function businessForecastService(db:Db) {
    const input=retireBusinessForecastSpecSchema.parse(raw);return withV7ActivityTransaction(db,async(tx,publications)=>{await admit(tx,companyId,actor,true,false);const prior=await root(tx,companyId,id);if(prior.revision!==input.expectedRevision||prior.status==="retired") throw conflict("Forecast changed or was retired");const [row]=await tx.update(forecastSpecs).set({status:"retired",publishedVersionId:null,revision:prior.revision+1,updatedAt:new Date()}).where(and(eq(forecastSpecs.companyId,companyId),eq(forecastSpecs.id,id),eq(forecastSpecs.revision,prior.revision))).returning();await audit(tx,companyId,actor,id,"retired",{revision:row.revision,rationaleHash:nativeSha256(input.rationale)},publications);return rootView(row);});
   },
  };
+}
+
+/** Retain the original human publication and every measurement supporting its
+ * qualification; a definition is metadata and never a predicted actual. */
+export async function inspectPublishedForecastDefinition(tx:Db,companyId:string,actor:AuthorizationActor,specId:string,versionId:string){
+ await admit(tx,companyId,actor);const row=await root(tx,companyId,specId);
+ if(row.status!=="published")throw notFound("A current human-published Forecast specification is required");
+ const pin=await version(tx,row,actor,versionId);
+ const [publication]=await tx.select().from(forecastPublications).where(and(eq(forecastPublications.companyId,companyId),eq(forecastPublications.specId,specId),eq(forecastPublications.versionId,versionId))).for("share");
+ const [backtest]=publication?await tx.select().from(forecastBacktests).where(and(eq(forecastBacktests.companyId,companyId),eq(forecastBacktests.specId,specId),eq(forecastBacktests.versionId,versionId),eq(forecastBacktests.id,publication.backtestId))).for("share"):[];
+ if(!publication||!backtest)throw notFound("The original human Forecast publication is unavailable");
+ const qualification=await inspectArtifact(tx,row,actor,pin,backtest,"backtest"),ids=new Set([pin.value.lineageManifestId,backtest.lineageManifestId]);let expiry=Math.min(pin.value.expiresAt.getTime(),backtest.expiresAt.getTime());
+ for(const point of backtest.series){const observation=await businessMetricService(tx).inspectCurrentObservation(companyId,actor,point.observationId);ids.add(observation.lineageManifestId);expiry=Math.min(expiry,Date.parse(observation.expiresAt));}
+ return {value:{specId,key:row.key,versionId,definition:pin.value.definition,grade:"native_definition" as const,currentQualification:qualification.currentQualification,publishedAt:publication.publishedAt.toISOString(),measurement:null},manifestIds:[...ids].sort(),expiresAt:new Date(expiry)};
 }
