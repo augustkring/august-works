@@ -8,7 +8,7 @@ import {AutomationArtifacts} from "./AutomationArtifacts";
 
 // Browser response contracts; original Source authority is separately exercised
 // against actual PostgreSQL. The real shared account wrapper/client runs here.
-const state=vi.hoisted(()=>({userId:"a",localImplicit:false,settled:true,failed:false,companyId:"company",lost:false,breadcrumbs:vi.fn()}));
+const state=vi.hoisted(()=>({userId:"a",localImplicit:false,settled:true,failed:false,companyId:"company",lost:false,optimizer:false,breadcrumbs:vi.fn()}));
 vi.mock("@/api/companies-query",()=>({useAccountIdentity:()=>state}));
 vi.mock("@/context/CompanyContext",()=>({useCompany:()=>({selectedCompanyId:state.companyId})}));
 vi.mock("@/context/BreadcrumbContext",()=>({useBreadcrumbs:()=>({setBreadcrumbs:state.breadcrumbs})}));
@@ -20,14 +20,14 @@ const response=(value:unknown,status=200)=>new Response(JSON.stringify(value),{s
 let root:Root,container:HTMLDivElement,client:QueryClient;
 let fetch:ReturnType<typeof vi.fn>;
 beforeEach(()=>{
- Object.assign(state,{userId:"a",localImplicit:false,settled:true,failed:false,companyId:"company",lost:false});
+ Object.assign(state,{userId:"a",localImplicit:false,settled:true,failed:false,companyId:"company",lost:false,optimizer:false});
  client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity},mutations:{retry:false}}});
  fetch=vi.fn(async(url:string)=>{
   const parsed=new URL(url,"http://localhost"),principal=parsed.searchParams.get("expectedActorId");
   if(parsed.pathname.endsWith("/experimental"))return response({enableAutomationArtifactsV1:true});
   if(parsed.pathname.endsWith("/capabilities"))return response({edit:true,publish:true});
   if(parsed.pathname.endsWith("/automation-artifacts"))return response(state.lost||principal==="user:b"?[independent]:[artifact,independent]);
-  if(parsed.pathname.endsWith("/automation-artifacts/artifact"))return state.lost||principal==="user:b"?response({error:"Current source access lost",details:{code:"analytical_source_access_lost"}},403):response(detail);
+  if(parsed.pathname.endsWith("/automation-artifacts/artifact"))return state.lost||principal==="user:b"?response({error:"Current source access lost",details:{code:"analytical_source_access_lost"}},403):response(state.optimizer?{...detail,artifact:{...artifact,createdByOptimizerSuggestionId:"suggestion",originWorkflowId:"workflow"}}:detail);
   throw new Error(`Unexpected fixture URL ${parsed.pathname}`);
  });vi.stubGlobal("fetch",fetch);
  container=document.createElement("div");document.body.append(container);root=createRoot(container);
@@ -55,4 +55,11 @@ it("remounts forms and keeps prior account code out of the next account's querie
  await act(async()=>{await vi.waitFor(()=>expect(container.textContent).toContain("Current source access lost"));});
  expect(fetch.mock.calls.every(([url])=>new URL(String(url),"http://localhost").searchParams.get("expectedActorId")==="user:b")).toBe(true);
  expect(client.getQueryData(["automation-artifact","company","user:b","artifact"])).toBeUndefined();
+});
+
+it("keeps live optimizer promotion in its original workflow rather than offering generic activation",async()=>{
+ state.optimizer=true;await render();await ready();
+ expect(container.textContent).toContain("Optimizer candidates require replay, shadow review, approval and a canary");
+ expect(container.textContent).not.toContain("Activate reviewed version");
+ expect(container.querySelector('a[href$="/workflows/workflow"]')?.textContent).toBe("Open workflow review");
 });

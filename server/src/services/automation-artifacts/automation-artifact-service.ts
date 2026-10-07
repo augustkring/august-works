@@ -186,7 +186,19 @@ async function assertActorCompanyScope(
   companyId: string,
   actor: AutomationArtifactMutationActor,
 ) {
-  if (actor.principal.type === "system") return;
+  if (actor.principal.type === "system") {
+    // A native owner keeps its system write identity while carrying the actual
+    // requesting reader. Preserve that reader's original company admission.
+    const source=actor.sourceActor;
+    if(source?.type==="board"&&source.source!=="local_implicit"){
+      if(!source.userId)throw forbidden("Current requesting user identity required");
+      await assertActorCompanyScope(db,companyId,{principal:{type:"user",userId:source.userId}});
+    }else if(source?.type==="agent"){
+      if(!source.agentId)throw forbidden("Current requesting agent identity required");
+      await assertActorCompanyScope(db,companyId,{principal:{type:"agent",agentId:source.agentId,responsibleUserId:source.onBehalfOfUserId??null}});
+    }
+    return;
+  }
 
   if (actor.principal.type === "agent") {
     const row = await db
@@ -966,6 +978,7 @@ export function automationArtifactService(db: Db) {
         if (artifact.status === input.status) return;
 
         if (input.status === "active" || input.status === "shadow") {
+          if(artifact.createdByOptimizerSuggestionId&&!(actor.principal.type==="system"&&actor.principal.service==="workflow-optimizer"))throw forbidden("Optimizer candidates require their original replay, shadow, approval and canary owner",{code:"optimizer_lifecycle_owner_required"});
           const version = await getVersionRow(
             txDb,
             companyId,

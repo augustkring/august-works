@@ -269,7 +269,7 @@ export function optimizerEvaluationService(db: Db) {
         const [current] = await tx.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id, evaluationId)).for("update");
         if (current?.status !== "testing") throw conflict("Optimizer lifecycle changed");
         await automationArtifactService(tx as unknown as Db).transitionStatus(companyId, artifact.id,
-          { expectedLatestVersionId: version.id, expectedStatus: "testing", status: "shadow" }, actor);
+          { expectedLatestVersionId: version.id, expectedStatus: "testing", status: "shadow" }, {...SYSTEM,sourceActor:learningActorFromPrincipal(companyId,actor.principal,actor.runId)});
         await tx.update(workflowOptimizerEvaluations).set({ status: "shadow", updatedAt: new Date() }).where(eq(workflowOptimizerEvaluations.id, evaluationId));
         await tx.update(workflowOptimizerSuggestions).set({ status: "shadowing", updatedAt: new Date() }).where(eq(workflowOptimizerSuggestions.id, evaluation.suggestionId));
       });
