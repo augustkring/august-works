@@ -16,6 +16,7 @@ function company(req:Request) {
 export function decisionIntelligenceRoutes(db:Db) {
   const router=Router(),service=decisionIntelligenceService(db),path="/companies/:companyId/decisions/:decisionId/context";
   const reviews=decisionOutcomeReviewService(db);
+  router.get("/companies/:companyId/decision-context-source-options",async(req,res)=>{const query=z.object({kind:z.enum(["project","issue"]),expectedUserId:z.string().min(1).max(300).optional()}).strict().parse(req.query);if(query.expectedUserId&&(req.actor.type!=="board"||req.actor.userId!==query.expectedUserId))throw conflict("Account changed; reload this decision",{code:"ACCOUNT_CHANGED"});const companyId=id(req.params.companyId);assertCompanyAccess(req,companyId);res.setHeader("Cache-Control","no-store");res.json(await service.scopeOptions(companyId,req.actor,query.kind));});
   router.use(path,(_req,res,next)=>{res.setHeader("Cache-Control","no-store");next();});
   router.get(path,async(req,res)=>res.json(await service.detail(company(req),req.actor,id(req.params.decisionId))));
   router.post(`${path}/versions`,validate(proposeDecisionContextSchema),async(req,res)=>res.status(201).json(await service.propose(company(req),req.actor,id(req.params.decisionId),req.body)));

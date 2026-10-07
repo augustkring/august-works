@@ -24,6 +24,7 @@ import { experimentInterpretationView } from "./business-experiments/results.js"
 import { inspectBusinessExperimentEvidence } from "./business-experiments/evidence.js";
 import { inspectCausalClaimEvidence } from "./causal-claims/service.js";
 import { logActivity, withV7ActivityTransaction } from "./v7-mutations.js";
+import { managementSourceOptions } from "./management-reviews/source-options.js";
 
 type Decision = typeof decisions.$inferSelect;
 type Version = typeof decisionContextVersions.$inferSelect;
@@ -200,6 +201,7 @@ export async function inspectBoundDecisionContext(tx:Db,companyId:string,actor:A
 export {inspectAuthorityEdges as inspectDecisionSourceAuthority};
 export function decisionIntelligenceService(db:Db) {
   return {
+    async scopeOptions(companyId:string,actor:AuthorizationActor,kind:"project"|"issue") { return db.transaction(async rawTx=>{const tx=rawTx as unknown as Db;await locks(tx,companyId);await admission(tx,companyId,actor);return managementSourceOptions(tx,companyId,actor,{kind});}); },
     async detail(companyId:string,actor:AuthorizationActor,id:string) {
       return db.transaction(async rawTx=>{const tx=rawTx as unknown as Db;await locks(tx,companyId);await admission(tx,companyId,actor);return inspect(tx,await decision(tx,companyId,id),actor);});
     },

@@ -1,3 +1,7 @@
+import express from "express";
+import request from "supertest";
+import {decisionIntelligenceRoutes} from "../routes/decision-intelligence.js";
+import {errorHandler} from "../middleware/index.js";
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq,sql} from "drizzle-orm";
@@ -60,6 +64,14 @@ suite("Native prospective decision context on migrated PostgreSQL",()=>{
     await metrics.publish(companyId,actor,created.metric.id,{expectedRevision:1,versionId:created.version.id});
     return metrics.query(companyId,actor,{metricId:created.metric.id,versionId:created.version.id,from:"2026-01-01T00:00:00Z",until:"2026-01-02T00:00:00Z",dimensions:[],maxRows:100});
   }
+  it("keeps bounded native scope menus independent of management rollout and current-account/tenant/private-source admission",async()=>{
+    await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({management_reviews_v8:false});await db.insert(projects).values({companyId:foreignId,name:"Foreign private project"});
+    const choices=await service().scopeOptions(companyId,actor,"project");expect(choices.items.map(item=>item.title)).toEqual(["Controlled native project"]);expect(choices.coverage).toBe("bounded_authorized_native_choices");
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,targetId));const tasks=await service().scopeOptions(companyId,actor,"issue");expect(tasks.items.map(item=>item.title)).toEqual(["Task · Private origin title"]);
+    const app=express();app.use((req,_res,next)=>{req.actor={...actor,userId:"operator"};next();});app.use(decisionIntelligenceRoutes(db));app.use(errorHandler);const path=`/companies/${companyId}/decision-context-source-options`;
+    const good=await request(app).get(`${path}?kind=project&expectedUserId=operator`);expect(good.status,JSON.stringify(good.body)).toBe(200);expect(good.headers["cache-control"]).toBe("no-store");const changed=await request(app).get(`${path}?kind=project&expectedUserId=other`);expect(changed.status).toBe(409);expect(JSON.stringify(changed.body)).not.toContain("Controlled native project");expect((await request(app).get(`${path}?kind=project&facts=1`)).status).toBe(400);expect((await request(app).get(`${path}?kind=all`)).status).toBe(400);
+    await expect(service().scopeOptions(companyId,{type:"agent",agentId,companyId,source:"agent_jwt"},"project")).rejects.toMatchObject({status:403});await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({decision_intelligence_v8:false});await expect(service().scopeOptions(companyId,actor,"project")).rejects.toMatchObject({status:404});
+  });
   it("separates immutable proposal versions and explicit preparation, with native CAS and tenant constraints",async()=>{
     const d=await create(),proposal=await service().propose(companyId,actor,d.id,{expectedRevision:0,definition:definition()});
     expect(proposal).toMatchObject({revision:1,preparedVersionId:null,binding:null,versions:[{state:"draft"}]});

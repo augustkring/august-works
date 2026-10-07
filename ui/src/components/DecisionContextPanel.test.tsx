@@ -12,7 +12,7 @@ const state=vi.hoisted(()=>({companyId:"00000000-0000-4000-8000-000000000001",us
 vi.mock("@/context/CompanyContext",()=>({useCompany:()=>({selectedCompanyId:state.companyId})}));
 vi.mock("@/api/companies-query",()=>({useAccountIdentity:()=>state}));
 vi.mock("@/api/instanceSettings",()=>({instanceSettingsApi:{getExperimental:vi.fn(async()=>({analytical_lineage_v8:true,business_metrics_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true,decision_intelligence_v8:state.enabled}))}}));
-vi.mock("@/api/decision-intelligence",()=>({decisionIntelligenceApi:{detail:vi.fn(),propose:vi.fn(),prepare:vi.fn(),withdraw:vi.fn()}}));
+vi.mock("@/api/decision-intelligence",()=>({decisionIntelligenceApi:{detail:vi.fn(),propose:vi.fn(),prepare:vi.fn(),withdraw:vi.fn(),scopeSources:vi.fn(async()=>({items:[],coverage:"bounded_authorized_native_choices"}))}}));
 vi.mock("@/api/decision-outcome-reviews",()=>({decisionOutcomeReviewsApi:{detail:vi.fn(async()=>null),schedule:vi.fn(),transition:vi.fn(),finish:vi.fn()}}));
 vi.mock("@/api/ai-governance",()=>({aiGovernanceApi:{obligations:vi.fn(async()=>[{id:"00000000-0000-4000-8000-000000000004",obligation:{framework:"company_policy",citation:"Reviewed decision purpose",analyticalPurpose:{status:"approved",purpose:"management_intelligence",capabilities:["decision"]}}}])}}));
 vi.mock("@/api/projects",()=>({projectsApi:{list:vi.fn(async()=>[])}}));
@@ -34,7 +34,7 @@ async function mount(nativeDecision=decision()) {
 const button=(container:HTMLElement,name:string)=>[...container.querySelectorAll<HTMLButtonElement>("button")].find(button=>button.textContent===name)!;
 async function click(container:HTMLElement,name:string) {await act(async()=>button(container,name).click());await flush();}
 async function reason(container:HTMLElement,value:string) {await act(async()=>{const field=container.querySelector<HTMLTextAreaElement>("textarea")!;Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value")!.set!.call(field,value);field.dispatchEvent(new Event("input",{bubbles:true}));});await flush();}
-beforeEach(()=>{vi.clearAllMocks();state.companyId=id(1);state.userId="account-one";state.settled=true;state.failed=false;state.enabled=true;vi.mocked(decisionIntelligenceApi.detail).mockResolvedValue(context());});
+beforeEach(()=>{vi.clearAllMocks();vi.mocked(decisionIntelligenceApi.scopeSources).mockResolvedValue({items:[],coverage:"bounded_authorized_native_choices"});state.companyId=id(1);state.userId="account-one";state.settled=true;state.failed=false;state.enabled=true;vi.mocked(decisionIntelligenceApi.detail).mockResolvedValue(context());});
 describe("Human native Decision context",()=>{
   it("reads only after current account/company/feature admission and uses the account-scoped endpoint",async()=>{
     state.settled=false;const view=await mount();expect(decisionIntelligenceApi.detail).not.toHaveBeenCalled();state.settled=true;state.enabled=false;await view.render();expect(decisionIntelligenceApi.detail).not.toHaveBeenCalled();await view.cleanup();
@@ -46,6 +46,17 @@ describe("Human native Decision context",()=>{
     await reason(view.container,"Explicit human review of the exact prospective context");await click(view.container,"Prepare this context");
     expect(decisionIntelligenceApi.prepare).toHaveBeenCalledWith(id(1),id(2),{expectedRevision:1,versionId:id(3),rationale:"Explicit human review of the exact prospective context"},"account-one");await view.cleanup();
     vi.mocked(decisionIntelligenceApi.propose).mockResolvedValue(context());const proposal=await mount();await click(proposal.container,"Propose a context revision");await click(proposal.container,"Save context proposal");expect(decisionIntelligenceApi.propose).toHaveBeenCalledWith(id(1),id(2),{expectedRevision:1,definition:context().versions[0].definition},"account-one");expect(decisionIntelligenceApi.prepare).toHaveBeenCalledTimes(1);await proposal.cleanup();
+  });
+  it("keeps all eight optional templates as guidance without mutating the human proposal or preparing it",async()=>{
+    const view=await mount();try{await click(view.container,"Propose a context revision");const select=view.container.querySelector<HTMLSelectElement>('[aria-label="Optional decision template"]')!;expect(select.options).toHaveLength(9);
+      for(const option of [...select.options].slice(1)){await act(async()=>{select.value=option.value;select.dispatchEvent(new Event("change",{bubbles:true}));});expect(view.container.textContent).toContain(`${option.text} guidance`);expect(view.container.querySelector("textarea")!.value).toBe(context().versions[0].definition.question);}
+      expect(decisionIntelligenceApi.propose).not.toHaveBeenCalled();expect(decisionIntelligenceApi.prepare).not.toHaveBeenCalled();vi.mocked(decisionIntelligenceApi.propose).mockResolvedValue(context());await click(view.container,"Save context proposal");expect(decisionIntelligenceApi.propose).toHaveBeenCalledWith(id(1),id(2),{expectedRevision:1,definition:context().versions[0].definition},"account-one");
+    }finally{await view.cleanup();}
+  });
+  it("binds native scope choices to the account and clears draft source caches when admission fails",async()=>{
+    const view=await mount();try{await click(view.container,"Propose a context revision");view.client.setQueryData(["decision-evidence",id(1),state.userId,"private"],{title:"Previously visible source"});vi.mocked(decisionIntelligenceApi.scopeSources).mockRejectedValue(new Error("Current scoped source authority denied"));const select=view.container.querySelector<HTMLSelectElement>('[aria-label="Decision scope"]')!;
+      await act(async()=>{select.value="project";select.dispatchEvent(new Event("change",{bubbles:true}));});await flush();await flush();expect(decisionIntelligenceApi.scopeSources).toHaveBeenCalledWith(id(1),"project","account-one");expect(view.container.querySelector('[aria-label="Decision context proposal"]')).toBeNull();for(const namespace of ["decision-scope","decision-evidence","governance-obligations"])expect(view.client.getQueriesData({queryKey:[namespace,id(1),state.userId]})).toHaveLength(0);
+    }finally{await view.cleanup();}
   });
   it("hides retained facts while reauthorizing and after native source access fails",async()=>{
     const view=await mount();let deny!:(reason:Error)=>void;vi.mocked(decisionIntelligenceApi.detail).mockImplementation(()=>new Promise((_resolve,reject)=>{deny=reject;}));

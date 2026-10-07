@@ -1,9 +1,9 @@
-import {useState} from "react";
+import {useEffect,useState} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {decisionContextDefinitionSchema,type DecisionContextDefinition,type DecisionEvidenceReference,type DecisionOption} from "@paperclipai/shared";
 import {aiGovernanceApi} from "@/api/ai-governance";
-import {projectsApi} from "@/api/projects";
-import {issuesApi} from "@/api/issues";
+import {decisionIntelligenceApi} from "@/api/decision-intelligence";
+import {DecisionTemplateGuidance} from "./DecisionTemplateGuidance";
 import {DecisionEvidencePicker} from "./DecisionEvidencePicker";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
@@ -12,7 +12,7 @@ const selectStyle="w-full min-w-0 rounded-md border border-input bg-background p
 const day=(value:string)=>value.slice(0,10),iso=(value:string)=>`${value}T00:00:00Z`;
 type Definition=DecisionContextDefinition;
 type Evidence=Omit<Definition["evidence"][number],"source">&{source:DecisionEvidenceReference|null};
-export function DecisionContextForm({companyId,userId,options,initial,busy,onSave,onCancel}:{companyId:string;userId:string|null;options:DecisionOption[];initial?:Definition;busy:boolean;onSave:(definition:Definition)=>void;onCancel:()=>void}) {
+export function DecisionContextForm({companyId,userId,options,initial,busy,onSave,onCancel,onAuthorityLost=onCancel}:{companyId:string;userId:string|null;options:DecisionOption[];initial?:Definition;busy:boolean;onSave:(definition:Definition)=>void;onCancel:()=>void;onAuthorityLost?:()=>void}) {
   const [question,setQuestion]=useState(initial?.question??""),[objective,setObjective]=useState(initial?.objective??"");
   const [owner,setOwner]=useState(initial?.ownerUserId??userId??"local-board"),[uncertainty,setUncertainty]=useState(initial?.uncertaintySummary??"");
   const [from,setFrom]=useState(day(initial?.timeHorizon.from??new Date().toISOString())),[until,setUntil]=useState(day(initial?.timeHorizon.until??new Date(Date.now()+90*86400000).toISOString()));
@@ -23,9 +23,11 @@ export function DecisionContextForm({companyId,userId,options,initial,busy,onSav
   const [criteria,setCriteria]=useState<Definition["criteria"]>(initial?.criteria??[{key:"delivery",name:"Delivery",description:"",type:"qualitative",priority:"medium",evidenceKey:null}]);
   const [outcomes,setOutcomes]=useState<Definition["expectedOutcomes"]>(initial?.expectedOutcomes??[{kind:"qualitative",optionId:options[0]?.id??"",statement:"",reviewAt:iso(day(new Date(Date.now()+91*86400000).toISOString())),uncertaintySummary:""}]);
   const policies=useQuery({queryKey:["governance-obligations",companyId,userId],queryFn:()=>aiGovernanceApi.obligations(companyId,userId??undefined)});
-  const scopeProjects=useQuery({queryKey:["decision-scope",companyId,userId,"projects"],queryFn:()=>projectsApi.list(companyId),enabled:scope.type==="project"});
-  const scopeIssues=useQuery({queryKey:["decision-scope",companyId,userId,"issues"],queryFn:()=>issuesApi.list(companyId,{limit:50}),enabled:scope.type==="issue"});
+  const scopeProjects=useQuery({queryKey:["decision-scope",companyId,userId,"projects"],queryFn:()=>decisionIntelligenceApi.scopeSources(companyId,"project",userId??undefined),enabled:scope.type==="project",retry:false});
+  const scopeIssues=useQuery({queryKey:["decision-scope",companyId,userId,"issues"],queryFn:()=>decisionIntelligenceApi.scopeSources(companyId,"issue",userId??undefined),enabled:scope.type==="issue",retry:false});
   const scopeQuery=scope.type==="project"?scopeProjects:scope.type==="issue"?scopeIssues:null;
+  const authorityLost=policies.isError||scopeQuery?.isError;
+  useEffect(()=>{if(authorityLost)onAuthorityLost();},[authorityLost,onAuthorityLost]);
   const valid=decisionContextDefinitionSchema.safeParse({question,objective,ownerUserId:owner,scope,timeHorizon:{from:iso(from),until:iso(until)},uncertaintySummary:uncertainty,revisitAt:revisit?iso(revisit):null,
     sensitivity,purpose:"management_intelligence",governanceObligationRefs:[policyId,...(initial?.governanceObligationRefs.slice(1)??[])],retentionDays:retention.trim()?Number(retention):NaN,evidence,assumptions,criteria,expectedOutcomes:outcomes});
   const updateEvidence=(index:number,patch:Partial<Evidence>)=>setEvidence(evidence.map((item,i)=>i===index?{...item,...patch}:item));
@@ -36,12 +38,13 @@ export function DecisionContextForm({companyId,userId,options,initial,busy,onSav
   return <form aria-label="Decision context proposal" className="space-y-5" onSubmit={event=>{event.preventDefault();if(valid.success&&!policies.isError&&!policies.isFetching&&!sourceUnavailable) onSave(valid.data);}}>
     <fieldset disabled={busy} className="min-w-0 space-y-5"><legend className="font-semibold">Propose decision context</legend>
       <p className="text-sm text-muted-foreground">Record the question, assumptions and expected outcomes before choosing. Saving creates a proposal; preparation requires a separate human review.</p>
+      <DecisionTemplateGuidance/>
       <label className="block space-y-2">Question<Textarea value={question} onChange={event=>setQuestion(event.target.value)} minLength={10} maxLength={2000} required/></label>
       <label className="block space-y-2">Objective<Textarea value={objective} onChange={event=>setObjective(event.target.value)} minLength={10} maxLength={2000} required/></label>
       <label className="block space-y-2">Human owner<Input value={owner} onChange={event=>setOwner(event.target.value)} required/></label>
       <div className="grid gap-3 sm:grid-cols-2"><label className="block space-y-2">Horizon start<Input type="date" value={from} onChange={event=>setFrom(event.target.value)} required/></label><label className="block space-y-2">Horizon end<Input type="date" value={until} onChange={event=>setUntil(event.target.value)} required/></label></div>
       <label className="block space-y-2">Decision scope<select aria-label="Decision scope" className={selectStyle} value={scope.type} onChange={event=>setScope(event.target.value==="company"?{type:"company",id:null}:{type:event.target.value as "project"|"issue",id:""})}><option value="company">Company</option><option value="project">Project</option><option value="issue">Task</option></select></label>
-      {scope.type!=="company"&&<label className="block space-y-2">Scoped native object<select aria-label="Scoped native object" className={selectStyle} value={scope.id} onChange={event=>setScope({...scope,id:event.target.value})}><option value="">Choose a current native object</option>{!sourceUnavailable&&(scope.type==="project"?scopeProjects.data?.map(row=><option key={row.id} value={row.id}>{row.name}</option>):scopeIssues.data?.map(row=><option key={row.id} value={row.id}>{row.identifier??row.title}</option>))}{scope.id&&<option value={scope.id}>Previously selected native object · current access is rechecked</option>}</select></label>}
+      {scope.type!=="company"&&<label className="block space-y-2">Scoped native object<select aria-label="Scoped native object" className={selectStyle} value={scope.id} onChange={event=>setScope({...scope,id:event.target.value})}><option value="">Choose a current native object</option>{!sourceUnavailable&&scopeQuery?.data?.items.map(row=>row.source.kind==="canonical"&&row.source.reference.type!=="foundation_section"?<option key={row.source.reference.id} value={row.source.reference.id}>{row.title}</option>:null)}{scope.id&&!scopeQuery?.data?.items.some(row=>row.source.kind==="canonical"&&row.source.reference.type!=="foundation_section"&&row.source.reference.id===scope.id)&&<option value={scope.id}>Previously selected native object · current access is rechecked</option>}</select><span className="text-sm text-muted-foreground">Showing bounded authorized choices; an empty list does not establish completeness.</span></label>}
       <p className="text-sm text-muted-foreground">Dates use UTC. Native evidence retains its own declared population; selecting a scope does not redefine a metric.</p>
       <label className="block space-y-2">Uncertainty<Textarea value={uncertainty} onChange={event=>setUncertainty(event.target.value)} minLength={10} maxLength={2000} required/></label>
       <label className="block space-y-2">Revisit date (optional)<Input type="date" value={revisit} onChange={event=>setRevisit(event.target.value)}/></label>
