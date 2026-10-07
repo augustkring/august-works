@@ -187,6 +187,14 @@ export function businessForecastService(db:Db) {
     if(!backtest||(await inspectArtifact(tx,row,actor,pin,backtest,"backtest")).currentQualification!=="qualified") throw conflict("Forecast must be revalidated and human-published against its changed history before running");
     const result=await appendArtifact(tx,row,actor,pin,input,"run");await audit(tx,companyId,actor,id,"run",{runId:result.id,contentHash:result.contentHash,status:result.result.status},publications);return result;});
   },
+  async listArtifacts(companyId:string,actor:AuthorizationActor,id:string,kind:"backtest"|"run",cursor?:string) {
+   return db.transaction(async raw=>{const tx=raw as unknown as Db;await admit(tx,companyId,actor);const row=await root(tx,companyId,id),table=kind==="backtest"?forecastBacktests:forecastRuns;
+    const rows=await tx.select().from(table).where(and(eq(table.companyId,companyId),eq(table.specId,id),sql`${table.expiresAt}>now()`,cursor?sql`${table.id}>${cursor}::uuid`:undefined)).orderBy(asc(table.id)).limit(21);
+    const items:BusinessForecastArtifactView[]=[],deadline=performance.now()+30_000;
+    for(const value of rows.slice(0,20)) {timeBudget(deadline);try {const pin=await version(tx,row,actor,value.versionId);items.push(await inspectArtifact(tx,row,actor,pin,value,kind));}
+     catch(error) {if(!error||typeof error!=="object"||!("status" in error)||![403,404,409].includes(Number(error.status))) throw error;}}
+    timeBudget(deadline);return {items,nextCursor:rows.length>20?rows[19].id:null,coverage:"bounded_current_authorized_page" as const};});
+  },
   async artifact(companyId:string,actor:AuthorizationActor,id:string,artifactId:string,kind:"backtest"|"run") {
    return db.transaction(async raw=>{const tx=raw as unknown as Db;await admit(tx,companyId,actor);const row=await root(tx,companyId,id),table=kind==="backtest"?forecastBacktests:forecastRuns;const [value]=await tx.select().from(table).where(and(eq(table.companyId,companyId),eq(table.specId,id),eq(table.id,artifactId))).for("share");if(!value) throw notFound("Forecast artifact is unavailable");const pin=await version(tx,row,actor,value.versionId);return inspectArtifact(tx,row,actor,pin,value,kind);});
   },

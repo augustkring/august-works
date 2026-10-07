@@ -1,0 +1,24 @@
+import {useState} from "react";
+import {useInfiniteQuery} from "@tanstack/react-query";
+import {backtestBusinessForecastSchema,type BacktestBusinessForecast,type BusinessForecastVersionView} from "@paperclipai/shared";
+import {businessMetricsApi} from "@/api/business-metrics";
+import {Button} from "@/components/ui/button";
+import {Input} from "@/components/ui/input";
+export function BusinessForecastHistoryForm({companyId,userId,version,revision,busy,canBacktest,canRun,onBacktest,onRun,onCancel}:{companyId:string;userId:string|null;version:BusinessForecastVersionView;revision:number;busy:boolean;canBacktest:boolean;canRun:boolean;onBacktest:(input:BacktestBusinessForecast)=>void;onRun:(input:BacktestBusinessForecast)=>void;onCancel:()=>void}) {
+ const [selected,setSelected]=useState<string[]>([]),[cutoff,setCutoff]=useState(new Date().toISOString().slice(0,19));
+ const sources=useInfiniteQuery({queryKey:["forecast-history",companyId,userId,version.definition.metricId,version.definition.metricVersionId],initialPageParam:undefined as string|undefined,queryFn:({pageParam})=>businessMetricsApi.observations(companyId,version.definition.metricId,pageParam,userId??undefined),getNextPageParam:page=>page.nextCursor??undefined,refetchInterval:30000,retry:false});
+ const rows=sources.data?.pages.flatMap(page=>page.items).filter(value=>value.companyId===companyId&&value.metricId===version.definition.metricId&&value.versionId===version.definition.metricVersionId&&Date.parse(value.expiresAt)>Date.now()).sort((a,b)=>Date.parse(a.from)-Date.parse(b.from))??[];
+ const selectedRows=rows.filter(value=>selected.includes(value.id));
+ const cutoffMs=cutoff?Date.parse(`${cutoff}Z`):NaN;
+ const parsed=backtestBusinessForecastSchema.safeParse({expectedRevision:revision,versionId:version.id,observationIds:selectedRows.map(value=>value.id),cutoff:Number.isFinite(cutoffMs)?new Date(cutoffMs).toISOString():""});
+ const available=!sources.isFetching&&!sources.isError,valid=available&&parsed.success&&selectedRows.length===selected.length&&Date.parse(parsed.data.cutoff)<=Date.now();
+ return <section aria-label="Native forecast history selection" className="min-w-0 space-y-4"><h3 className="font-semibold">Choose retained observation history</h3>
+  <p className="text-sm text-muted-foreground">Use exact observations of this published metric definition. Missing, late or nonconsecutive periods abstain. The selected values are captured by their native owner.</p>
+  <label className="block space-y-2">Forecast cutoff (UTC)<Input aria-label="Forecast cutoff (UTC)" type="datetime-local" step={1} value={cutoff} onChange={event=>setCutoff(event.target.value)} required/></label>
+  {sources.isFetching&&<p role="status">Rechecking retained measurement authority…</p>}{sources.isError&&<p role="alert">{sources.error.message}</p>}
+  {available&&<fieldset className="space-y-2"><legend>Retained native observations</legend>{rows.map(value=><label key={value.id} className="flex items-start gap-3 rounded-md border border-border p-3"><input type="checkbox" className="mt-1" checked={selected.includes(value.id)} disabled={busy} onChange={()=>setSelected(current=>current.includes(value.id)?current.filter(id=>id!==value.id):current.length<1000?[...current,value.id]:current)}/><span>{value.from.slice(0,10)} to {value.until.slice(0,10)} · {value.value===null?"unknown":value.value} {version.definition.metricVersionId===value.versionId?"":"definition mismatch"}<span className="block text-sm text-muted-foreground">{value.status} · observed {new Date(value.asOf).toLocaleString(undefined,{timeZone:"UTC"})} UTC</span></span></label>)}{!rows.length&&<p>No retained authorized observations were returned on this page.</p>}</fieldset>}
+  <p className="text-sm">{selected.length} observations selected · policy requires at least {version.definition.minimumHistory}. This bounded page is not proof of complete or missing history.</p>
+  <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={!available||busy||!rows.length} onClick={()=>setSelected(rows.slice(0,1000).map(value=>value.id))}>Use loaded observations</Button>{sources.hasNextPage&&<Button variant="outline" disabled={sources.isFetching||busy} onClick={()=>void sources.fetchNextPage()}>Load more observations</Button>}<Button variant="ghost" disabled={busy} onClick={()=>void sources.refetch()}>Refresh observation authority</Button></div>
+  <div className="flex flex-wrap justify-between gap-2"><Button variant="outline" disabled={busy} onClick={onCancel}>Close history selection</Button><div className="flex flex-wrap gap-2">{canBacktest&&<Button disabled={!valid||busy} onClick={()=>{if(valid&&parsed.success) onBacktest(parsed.data);}}>Backtest this history</Button>}{canRun&&<Button disabled={!valid||busy} onClick={()=>{if(valid&&parsed.success) onRun(parsed.data);}}>Run published forecast</Button>}</div></div>
+ </section>;
+}

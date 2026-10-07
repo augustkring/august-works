@@ -1,8 +1,8 @@
 # Native business forecasting — kernel and governed owner checkpoint
 
 This source checkpoint implements the deterministic native kernel, strict shared
-specification and governed company API/storage owner. It does not complete brief
-section 22: operator UI, advanced providers, downstream evidence pins and hosted
+specification, governed company API/storage owner and native operator UI. It does not complete brief
+section 22: provider/run lifecycle extensions, advanced providers, downstream evidence pins and hosted
 acceptance remain open. The native metric owner authorizes every captured
 observation; public forecast inputs cannot supply copied measurement facts.
 
@@ -36,7 +36,7 @@ zero denominators, complexity ties, overflow and cutoff/freshness abstention.
 Server/UI type checking passed for the initial source; verification logs are
 under `/var/tmp/aw-v8-business-forecast-*`.
 
-Still open: operator UI, advanced provider seams/qualification,
+Still open: asynchronous provider/run lifecycle extensions, advanced provider seams/qualification,
 Decision/Scenario evidence and integrated/hosted acceptance. StatsForecast has
 not been installed or qualified; no external runtime or provider claim is made.
 V5 task/project schedule forecasts retain their native authority.
@@ -79,7 +79,7 @@ publication rationale lives in its source-owned immutable receipt.
 Positive PostgreSQL histories are explicitly synthetic, chronologically coherent
 fixtures for contract/ownership tests. Real native queries captured today for old
 windows abstain as late history. These tests do not qualify an operational dataset,
-external provider, hosted runtime or release. Operator UI, advanced provider
+external provider, hosted runtime or release. Advanced provider/lifecycle
 qualification, Decision/Scenario pins and hosted acceptance remain open.
 
 Checkpoint validation: 57 integrated server checks passed across forecast ownership,
@@ -92,4 +92,39 @@ Earlier test runs found an illegal async default parameter, a PL/pgSQL name
 collision and a wrong test-only erasure call; all were corrected and rerun. An
 initial server package-script invocation stopped because its inherited Rust PATH
 was missing; the final direct native compiler check passed. This checkpoint does
-not qualify the still-open UI/providers/downstream/hosted work.
+not qualify the later UI or still-open providers/downstream/hosted work.
+
+## Native operator UI checkpoint
+
+The `/business-forecasts` native route and sidebar entry use default-off V8/V7
+prerequisites and current account/company boundaries. Proposal editing selects a
+current native metric and separately approved forecast purpose, records model and
+history/loss policy, and saves without publication or execution. Observation
+selection loads bounded currently authorized native pages and sends UUID pins in
+chronological order, with explicit UTC cutoff and expected revision. Copying
+measurement values, hashes or claimed qualification through the form is impossible.
+
+Backtests and runs reload through bounded native artifact lists after current
+source reauthorization. Reads hide retained facts while pending, denied or expired.
+Native Memory events and account changes clear unsaved proposals and selected
+results. Human editing pauses parent refresh/focus replacement; background flag
+polling does not discard drafts. A separate human rationale and exact qualified
+backtest enable publication; stale math remains visibly historical. Runs and
+retirement remain distinct controls. Presentation keeps uncertainty unavailable,
+null scaled denominators explicit and all numeric comparisons separate.
+
+Six actual React Query UI checks passed for proposal/publication separation, exact
+pins and minute-precision UTC cutoff, stale qualification denial, pending/denied
+fact hiding and Memory/account changes. Twenty-six backend/OpenAPI checks passed
+for retained artifact lists and their owner boundaries. Server/UI type checking,
+native token gates and the current Storybook build passed. Thirty-seven Chromium
+checks passed across light/dark and 390/1200 px, including WCAG 2/2.1 AA, keyboard
+provenance, page overflow, form constraints/history selection and an actual
+31-second draft-preservation check. Mobile form and desktop result screenshots
+were inspected. Synthetic stories are presentation evidence only; the official
+maintainer visual baseline and hosted qualification remain unestablished. Logs
+are under `/var/tmp/aw-v8-business-forecast-*`.
+
+An initial pending-state test omitted React Query's render notification wait, and
+one overloaded setup clicked before its control became ready. Bounded waits for
+the actual controls corrected those test races; the final six checks passed.

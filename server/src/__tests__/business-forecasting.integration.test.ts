@@ -64,6 +64,8 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   await expect(service().run(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()})).rejects.toMatchObject({status:409});
   const spec=await service().publish(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,backtestId:test.id,rationale:"Human approval of the exact native backtest evidence"});
   const run=await service().run(companyId,actor,d.spec.id,{expectedRevision:spec.revision,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()});
+  expect((await service().listArtifacts(companyId,actor,d.spec.id,"run")).items.map(item=>item.id)).toEqual([run.id]);
+  expect((await service().listArtifacts(companyId,actor,d.spec.id,"backtest")).items.map(item=>item.id)).toEqual([test.id]);
   expect(run).toMatchObject({kind:"run",currentQualification:"qualified",result:{points:[{value:1,interval:null}]}});expect((await db.select().from(forecastPublications).where(eq(forecastPublications.specId,d.spec.id)))[0].rationale).toContain("Human approval");
   expect(JSON.stringify(run)).not.toContain("Fixture source prose");await expect(service().detail(otherId,actor,d.spec.id)).rejects.toMatchObject({status:404});
  });
@@ -112,6 +114,7 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   const d=await published(),[foreign]=await db.insert(projects).values({companyId:otherId,name:"Currently inaccessible ancestry"}).returning();
   await db.update(issues).set({projectId:foreign.id}).where(eq(issues.id,d.h.sourceIds[0]));
   await expect(service().artifact(companyId,actor,d.spec.id,d.test.id,"backtest")).rejects.toMatchObject({status:403});
+  expect(await service().listArtifacts(companyId,actor,d.spec.id,"backtest")).toMatchObject({items:[],coverage:"bounded_current_authorized_page"});
   expect((await db.select().from(forecastBacktests).where(eq(forecastBacktests.id,d.test.id)))[0].contentHash).toBe(d.test.contentHash);
  });
  it("keeps the human retirement control available after rollout rollback",async()=>{
