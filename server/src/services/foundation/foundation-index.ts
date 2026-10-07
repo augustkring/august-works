@@ -24,6 +24,8 @@ import type {
   FoundationSearchScope,
 } from "@paperclipai/shared";
 import { notFound, unprocessable } from "../../errors.js";
+import type {AuthorizationActor} from "../authorization.js";
+import {assertLearnedAssetAnalyticalSources} from "../learning/learning-analytical-sources.js";
 
 export interface ExtractedFoundationSection {
   headingPath: string[];
@@ -320,6 +322,7 @@ export function foundationIndexService(db: Db) {
     search: async (
       companyId: string,
       input: { query: string; limit: number; scope: FoundationSearchScope },
+      actor?:AuthorizationActor,
     ): Promise<FoundationSearchResult[]> => {
       const query = input.query.trim();
       if (!query) throw unprocessable("Foundation search query is required");
@@ -408,6 +411,7 @@ export function foundationIndexService(db: Db) {
         )
         .limit(input.limit);
 
+      for(const revisionId of new Set(rows.map(row=>row.documentRevisionId)))await assertLearnedAssetAnalyticalSources(db,companyId,"document_revision",revisionId,actor);
       return rows.map((row) => ({
         sectionId: row.sectionId,
         foundationDocumentId: row.foundationDocumentId,

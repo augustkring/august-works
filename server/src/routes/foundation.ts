@@ -217,7 +217,7 @@ export function foundationRoutes(db: Db) {
         query: query.q,
         limit: query.limit,
         scope: query.scope,
-      }),
+      },req.actor),
     );
   });
 

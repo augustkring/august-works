@@ -1,0 +1,76 @@
+{
+  "checkpoint": "Current original analytical sources at native Learning domain owners",
+  "parentCommit": "5155ff770005cfcb430929f21d09d9956c1c6f8b",
+  "recordedAt": "2026-10-07T20:44:00.773369+00:00",
+  "sourceFiles": [
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "3b0d2102ac1753506e9fd8578bad3cee90923f7842f79b14a2fb72fac149fd3e"
+    },
+    {
+      "path": "server/src/routes/company-skills.ts",
+      "sha256": "c67f858fc2da1fe20e13e1a360ef1bf93a5590d3cf497d51e2a15da766225714"
+    },
+    {
+      "path": "server/src/routes/foundation.ts",
+      "sha256": "e6c7084dc1e921e3c37d451b662f94bcb200164ab41ee90abc5d49e32a9e162e"
+    },
+    {
+      "path": "server/src/services/agent-packages/package-service.ts",
+      "sha256": "53ebd70218e95e78c029c95dada1fc58ff49fd657ae0485d2b464b7ca97aeba8"
+    },
+    {
+      "path": "server/src/services/company-skills.ts",
+      "sha256": "b928f2d81ecfd0291940a1e3b72919f64d417f69e70fb85bafa4eb3cdd2ec1ee"
+    },
+    {
+      "path": "server/src/services/foundation/foundation-index.ts",
+      "sha256": "7a0295c59e326d92eed3ca24f5751f4353880196efb9e8bd451954c42ea7c0ae"
+    },
+    {
+      "path": "server/src/services/playbooks.ts",
+      "sha256": "b54cbacdfdf2b218944bd0741fd9f973537b591e5a1dd627d77d789112ca16cc"
+    },
+    {
+      "path": "server/src/services/skill-lifecycle.ts",
+      "sha256": "3217b1dee63904c55d84e772dd9cb63a256888e4625d0728724a5677908acb95"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Native owner regressions",
+      "passedTests": 188,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-source-owners-final.log",
+      "logSha256": "8d2c3d96354581087ffa65f70b1375eb0307781d528b3bba0df51b0743c3dc76"
+    },
+    {
+      "check": "Final actual PostgreSQL Learning/domain/source-search checks",
+      "passedTests": 25,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-source-owners-pg-final.log",
+      "logSha256": "46563caca43509ec09482eff066e9a5382355fcdd558ee3bfb762dea2d5f93ed"
+    },
+    {
+      "check": "Server types",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-source-owners-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "qualified": [
+    "Native Playbook read, revision, proposal and human review paths repeat original Learning signal admission.",
+    "Native Skill candidate/version reads and lifecycle promotion repeat current source admission; accepted source visibility restoration admits ordinary native reads again.",
+    "Foundation section search requires the current reader for analytical Learning derivatives; missing reader and revoked source visibility fail closed.",
+    "Native human API readers pass their actual actor; package readiness also supplies its existing actor.",
+    "Existing domain approval, Skill evaluation, sensitivity and tenant controls remain in force."
+  ],
+  "limits": [
+    "Source-derived Context/runtime consumers without a qualified original source retention bridge remain closed.",
+    "Workflow/Optimizer and remaining downstream projections still need current-source integration and qualification.",
+    "Native Routines, planning outcomes, direct Decision review conversion, full source-family closure, cross-project Planning, external providers and hosted gates remain open.",
+    "No browser or external-provider execution is claimed.",
+    "This is a source checkpoint, not whole-brief completion."
+  ]
+}

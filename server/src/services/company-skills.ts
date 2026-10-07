@@ -1,3 +1,4 @@
+import {assertLearnedAssetAnalyticalSources,assertLearningCandidateAnalyticalSources} from "./learning/learning-analytical-sources.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { v5FeatureEnabled } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
@@ -3238,7 +3239,11 @@ export function companySkillService(db: Db) {
 
   async function canReadSkill(companyId: string, skillId: string, actor: AuthorizationActor) {
     const condition = await privateSkillCondition(companyId, actor);
-    const [row] = await db.select({ id: companySkills.id }).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId), condition)).limit(1);
+    const [row] = await db.select({ id: companySkills.id,activeVersionId:companySkills.activeVersionId,currentVersionId:companySkills.currentVersionId }).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId), condition)).limit(1);
+    if(row)for(const id of new Set([row.activeVersionId,row.currentVersionId].filter((id):id is string=>Boolean(id)))){
+      try{await assertLearningCandidateAnalyticalSources(db,companyId,"skill",id,actor);await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",id,actor);}
+      catch(error){if(error instanceof Error&&"status" in error&&error.status===403)return false;throw error;}
+    }
     return Boolean(row);
   }
 
@@ -3322,7 +3327,9 @@ export function companySkillService(db: Db) {
       }
       return true;
     });
-    const items = filtered.map((skill) => {
+    const admitted=[];
+    for(const skill of filtered)if(!actor||await canReadSkill(companyId,skill.id,actor))admitted.push(skill);
+    const items = admitted.map((skill) => {
       const attachedAgentCount = agentRows.filter((agent) => {
         const desiredSkills = resolveDesiredSkillKeys(rows, agent.adapterConfig as Record<string, unknown>);
         return desiredSkills.includes(skill.key);
@@ -3440,11 +3447,12 @@ export function companySkillService(db: Db) {
       ))
       .then((rows) => rows[0] ?? null);
     if (row && actor && !(await canReadPrivateVersion(companyId, row, actor))) return null;
+    if(row){await assertLearningCandidateAnalyticalSources(db,companyId,"skill",row.id,actor);await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",row.id,actor);}
     return row ? toCompanySkillVersion(row) : null;
   }
 
-  async function getCurrentVersion(skill: CompanySkill): Promise<CompanySkillVersion | null> {
-    return skill.currentVersionId ? getVersion(skill.companyId, skill.id, skill.currentVersionId) : null;
+  async function getCurrentVersion(skill: CompanySkill, actor?:AuthorizationActor): Promise<CompanySkillVersion | null> {
+    return skill.currentVersionId ? getVersion(skill.companyId, skill.id, skill.currentVersionId,actor) : null;
   }
 
   async function isStarredByActor(companyId: string, skillId: string, actor: SkillActor | null | undefined) {
@@ -3562,7 +3570,7 @@ export function companySkillService(db: Db) {
     return summaries;
   }
 
-  async function detail(companyId: string, id: string, actor?: SkillActor | null): Promise<CompanySkillDetail | null> {
+  async function detail(companyId: string, id: string, actor?: SkillActor | null, reader?:AuthorizationActor): Promise<CompanySkillDetail | null> {
     await ensureSkillInventoryCurrent(companyId);
     const skill = await getByRouteRef(companyId, id);
     if (!skill) return null;
@@ -3572,7 +3580,7 @@ export function companySkillService(db: Db) {
       skill,
       usedByAgents.length,
       usedByAgents,
-      await getCurrentVersion(skill),
+      await getCurrentVersion(skill,reader),
       await isStarredByActor(companyId, skill.id, actor),
       existingForks,
     );
@@ -3623,7 +3631,9 @@ export function companySkillService(db: Db) {
       .where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, skillId)))
       .orderBy(desc(companySkillVersions.revisionNumber));
     const allowed = actor ? await Promise.all(rows.map(async (row) => (await canReadPrivateVersion(companyId, row, actor)) ? row : null)) : rows;
-    return allowed.filter((row): row is CompanySkillVersionRow => row !== null).map(toCompanySkillVersion);
+    const retained=allowed.filter((row):row is CompanySkillVersionRow=>row!==null);
+    for(const row of retained){await assertLearningCandidateAnalyticalSources(db,companyId,"skill",row.id,actor);await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",row.id,actor);}
+    return retained.map(toCompanySkillVersion);
   }
 
   async function createVersion(
