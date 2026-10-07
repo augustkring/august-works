@@ -63,7 +63,7 @@ export function workflowRoutes(db: Db) {
     await assertWorkflowsEnabled();
     await assertPermission(req, companyId, "workflows:read");
     if (!await svc.getDetail(companyId, req.params.workflowId as string,req.actor)) throw notFound("Workflow not found");
-    res.json(await optimizerEvaluations.list(companyId, req.params.workflowId as string));
+    res.json(await optimizerEvaluations.list(companyId, req.params.workflowId as string,req.actor));
   });
   router.post("/companies/:companyId/workflows/:workflowId/optimizer-suggestions/:suggestionId/propose",
     validate(z.object({}).strict()), async (req, res) => {
@@ -71,7 +71,7 @@ export function workflowRoutes(db: Db) {
       await assertWorkflowsEnabled();
       await assertPermission(req, companyId, "workflows:publish");
       if (req.actor.type !== "board") throw forbidden("Candidate generation requires board review");
-      res.json(await proposeOptimizerCandidate(db, companyId, req.params.workflowId as string, req.params.suggestionId as string));
+      res.json(await proposeOptimizerCandidate(db, companyId, req.params.workflowId as string, req.params.suggestionId as string,req.actor));
     });
   router.post("/companies/:companyId/workflows/:workflowId/optimizer-suggestions/:suggestionId/compile",
     validate(optimizerCandidateRequestSchema), async (req, res) => {
@@ -91,11 +91,11 @@ export function workflowRoutes(db: Db) {
         .where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.workflowId, req.params.workflowId as string), eq(workflowOptimizerEvaluations.id, evaluationId)));
       if (!bound) throw notFound("Optimizer evaluation not found");
       const actor = mutationActor(req);
-      const result = action === "evaluate" ? await optimizerEvaluations.evaluate(companyId, evaluationId)
+      const result = action === "evaluate" ? await optimizerEvaluations.evaluate(companyId, evaluationId,actor)
         : action === "shadow" ? await optimizerEvaluations.startShadow(companyId, evaluationId, actor)
         : action === "request-approval" ? await optimizerEvaluations.requestPromotionApproval(companyId, evaluationId, actor)
-          : action === "canary" ? await optimizerEvaluations.prepareCanary(companyId, evaluationId)
-            : action === "activate" ? await optimizerEvaluations.activate(companyId, evaluationId)
+          : action === "canary" ? await optimizerEvaluations.prepareCanary(companyId, evaluationId,actor)
+            : action === "activate" ? await optimizerEvaluations.activate(companyId, evaluationId,actor)
               : await optimizerEvaluations.retire(companyId, evaluationId, actor);
       res.json(result);
     },

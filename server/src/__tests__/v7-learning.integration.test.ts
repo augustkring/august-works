@@ -19,7 +19,8 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { purgeMemoryRecords, reapplyMemoryDeletionMarkers } from "../services/memory/memory-privacy.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
-import { optimizerEvaluationService } from "../services/optimizer/optimizer-evaluation.js";
+import {optimizerPromotionService} from "../services/optimizer/optimizer-promotion.js";
+import {optimizerShadowSummary, optimizerEvaluationService } from "../services/optimizer/optimizer-evaluation.js";
 import { optimizerSuggestionService } from "../services/optimizer/optimizer-suggestions.js";
 import { proposeOptimizerCandidate } from "../services/optimizer/optimizer-candidate-proposal.js";
 import { reviewWorkflowRun } from "../services/optimizer/optimizer-run-review.js";
@@ -162,14 +163,20 @@ const support = await getEmbeddedPostgresTestSupport();
     const [edge]=await db.select().from(learningAnalyticalDependencies).where(eq(learningAnalyticalDependencies.cycleId,cycle.id));
     await expect(db.update(learningAnalyticalDependencies).set({sourceManifestId:edge!.sourceManifestId}).where(eq(learningAnalyticalDependencies.cycleId,cycle.id))).rejects.toMatchObject({cause:{code:"23514"}});
   });
-  it("links a native replayed Optimizer candidate without granting activation and erases its immutable payload", async () => {
+  it.each(["verified_memory","artifact_signal","workflow_signal"] as const)("retains current Optimizer source authority and erases native compiler copies: %s", async sourceKind => {
+    const signal=sourceKind==="verified_memory"?null:await analyticalSignal();
     const service = workflowService(db), created = await service.create(companyId, { name: "Reviewed pure transform" }, principal);
     const draft = await service.updateDraft(companyId, created.id, { expectedRevisionId: created.draftRevisionId!, graph: {
       version: 1, nodes: [
         { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
         { id: "copy", type: "core.transform", name: "Copy", position: { x: 100, y: 0 }, config: { mapping: { value: "{{input.value}}" } } },
       ], edges: [{ id: "e", source: "start", target: "copy" }], variables: [], settings: {} } }, principal);
-    const published = await service.publish(companyId, created.id, { expectedDraftRevisionId: draft.draftRevisionId!, expectedPublishedRevisionId: null, approvalId: null }, principal);
+    let currentDraft=draft.draftRevisionId!;
+    if(sourceKind==="workflow_signal"){
+      const graph={...draft.draftRevision!.graph,nodes:draft.draftRevision!.graph.nodes.map(node=>({...node,name:`Reviewed ${node.name}`}))};
+      currentDraft=(await domainProposal(created.id,`workflow://${created.id}/${currentDraft}`,{targetDomain:"workflow",draft:{expectedRevisionId:currentDraft,graph,changeSummary:"Native verified outcomes and current signal inform the exact transform"}},[signal!.pin])).candidateId;
+    }
+    const published = await service.publish(companyId, created.id, { expectedDraftRevisionId: currentDraft, expectedPublishedRevisionId: null, approvalId: null }, principal);
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "local-reviewer", status: "active", membershipRole: "owner" });
     const executor = workflowExecutorService(db);
     // These are actual local engine runs reviewed against the declared fixture contract, not customer pilot evidence.
@@ -178,21 +185,50 @@ const support = await getEmbeddedPostgresTestSupport();
       await reviewWorkflowRun(db, companyId, run.run.id, { humanCorrection: false, correctedOutputs: {}, reason: "Verified the saved engine output against the copy contract" }, { principal: { type: "user", userId: "local-reviewer" } });
     }
     const suggestion = (await optimizerSuggestionService(db).forWorkflow(companyId, created.id))!.suggestions.find(item => item.operationTypes.length === 1 && item.operationTypes[0] === "core.transform")!;
-    const request = await proposeOptimizerCandidate(db, companyId, created.id, suggestion.id);
+    const request = await proposeOptimizerCandidate(db, companyId, created.id, suggestion.id,owner);
     const optimizer = optimizerEvaluationService(db), replay = await optimizer.compile(companyId, created.id, suggestion.id, request, principal);
     expect(replay.gatesPassed).toBe(true);
     const [evaluation] = await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id, replay.evaluationId));
-    const link = await domainProposal(created.id, `optimizer://${created.id}/${published.publishedRevisionId}`, { targetDomain: "automation_artifact", optimizerEvaluationId: replay.evaluationId, expectedArtifactVersionId: replay.artifactVersionId, expectedContentHash: evaluation!.contentHash });
+    const link = await domainProposal(created.id, `optimizer://${created.id}/${published.publishedRevisionId}`, { targetDomain: "automation_artifact", optimizerEvaluationId: replay.evaluationId, expectedArtifactVersionId: replay.artifactVersionId, expectedContentHash: evaluation!.contentHash },sourceKind==="artifact_signal"?[signal!.pin]:undefined);
     expect(link.candidateId).toBe(replay.evaluationId);
     expect((await db.select().from(automationArtifacts).where(eq(automationArtifacts.id, replay.artifactId)))[0]!.status).toBe("testing");
+    if(signal){
+      expect(await optimizer.list(companyId,created.id,owner)).toHaveLength(1);
+      await expect(optimizer.evaluate(companyId,replay.evaluationId)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      expect((await optimizer.evaluate(companyId,replay.evaluationId,principal)).gatesPassed).toBe(true);
+      await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+      for(const read of [()=>optimizer.list(companyId,created.id,owner),()=>optimizer.evaluate(companyId,replay.evaluationId,principal),()=>optimizer.startShadow(companyId,replay.evaluationId,principal),()=>optimizer.requestPromotionApproval(companyId,replay.evaluationId,principal),()=>optimizer.prepareCanary(companyId,replay.evaluationId,principal),()=>optimizer.activate(companyId,replay.evaluationId,principal)])await expect(read()).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      if(sourceKind==="workflow_signal"){
+        await expect(proposeOptimizerCandidate(db,companyId,created.id,suggestion.id,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+        await expect(optimizer.compile(companyId,created.id,suggestion.id,request,principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+        expect(await db.select().from(automationArtifacts).where(eq(automationArtifacts.companyId,companyId))).toHaveLength(1);
+      }
+      const promotion={companyId,suggestionId:suggestion.id,artifactId:replay.artifactId,expectedArtifactVersionId:replay.artifactVersionId,actor:{principal:{type:"system" as const,service:"workflow-optimizer"}},sourceActor:owner,policy:{allowLowRiskAutoPromotion:false,fallbackKind:"published_workflow" as const},evidence:{replayEvaluation:replay.replayEvaluation,shadowEvaluation:optimizerShadowSummary([]),rollbackAvailable:true,driftGuardAvailable:true,humanApproved:false,canaryPassed:false}};
+      await expect(optimizerPromotionService(db).prepareCanary(promotion)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await expect(optimizerPromotionService(db).activate(promotion)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId)))[0]!.status).toBe("testing");
+      await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
+    }
     await optimizer.startShadow(companyId, replay.evaluationId, principal);
-    await db.transaction(async tx => purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]));
+    if(signal){
+      await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false});
+      await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+      await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,signal.observation.id));
+      // Fence restored compiler bytes before the original outbox worker runs.
+      await db.update(workflowOptimizerEvaluations).set({compilerResult:evaluation!.compilerResult,replayEvaluation:evaluation!.replayEvaluation,status:"shadow"}).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId));
+      expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId)))[0]).toMatchObject({status:"retired",compilerResult:null,replayEvaluation:null});
+      // The current Source owner queues the original cycle outbox; no provider is invoked.
+      await memoryJobService(db).tick({limit:10});
+      expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[0]!)))[0]!.deletedAt).toBeNull();
+    }else await db.transaction(async tx => purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]));
     const [erased] = await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id, replay.artifactVersionId));
     expect(erased).toMatchObject({ sourceCode: "", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec: {}, validationReport: null, securityReport: null });
     expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id, replay.evaluationId)))[0]).toMatchObject({ status: "retired", compilerResult: null, replayEvaluation: null, shadowEvaluation: null });
     await expect(optimizer.startShadow(companyId, replay.evaluationId, principal)).rejects.toBeDefined();
     await db.update(automationArtifactVersions).set({ sourceCode: "Restored private facts" }).where(eq(automationArtifactVersions.id, replay.artifactVersionId));
     expect((await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id, replay.artifactVersionId)))[0]!.sourceCode).toBe("");
+    await db.update(workflowOptimizerEvaluations).set({compilerResult:evaluation!.compilerResult,replayEvaluation:evaluation!.replayEvaluation,status:"shadow"}).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId));
+    expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId)))[0]).toMatchObject({status:"retired",compilerResult:null,replayEvaluation:null});
   }, 60_000);
   it("keeps Role Pack challengers unpublished, preserves required policies and erases descendants", async () => {
     const packs = rolePackService(db), pack = await packs.create(owner, companyId, { key: "learning-ops", name: "Operations", description: "" });

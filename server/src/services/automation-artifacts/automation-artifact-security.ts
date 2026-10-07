@@ -210,6 +210,13 @@ export function automationArtifactSecurityService(db: Db) {
         testSpec: version.testSpec,
       });
 
+      // Native gate receipts are finalized once for this immutable content hash.
+      // Re-evaluation verifies content integrity and reuses the original
+      // receipts instead of changing their checkedAt values.
+      if (recomputedHash === version.contentHash &&
+        version.validationReport?.contentHash === version.contentHash &&
+        version.securityReport?.contentHash === version.contentHash) return detail;
+
       const validationChecks: AutomationArtifactGateCheck[] = [];
       const securityChecks: AutomationArtifactGateCheck[] = [];
 

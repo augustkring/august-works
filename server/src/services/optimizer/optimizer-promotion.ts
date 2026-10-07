@@ -1,3 +1,7 @@
+import {lockAnalyticalCompany} from "../analytical-privacy.js";
+import {lockMemoryPrivacy} from "../memory/memory-privacy.js";
+import {assertLearningAssetCurrent} from "../learning/learning-assets.js";
+import type {AuthorizationActor} from "../authorization.js";
 import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
@@ -518,16 +522,19 @@ export function optimizerPromotionService(db: Db) {
       policy: OptimizerPromotionPolicy;
       evidence: OptimizerPromotionEvidence;
       actor: AutomationArtifactMutationActor;
+      sourceActor?:AuthorizationActor;
       approvedByUserId?: string | null;
       approvalId?: string | null;
     }): Promise<OptimizerPromotionDecision> => {
       assertSystemActor(input.actor);
+      await assertLearningAssetCurrent(db,input.companyId,"automation_artifact_version",input.expectedArtifactVersionId,input.sourceActor);
       const experimental = await assertPromotionEnabled(db);
       const state = await loadBoundState(
         input.companyId,
         input.suggestionId,
         input.artifactId,
       );
+      await assertLearningAssetCurrent(db,input.companyId,"workflow_revision",state.suggestion.workflowRevisionId,input.sourceActor);
       assertPromotionBinding({
         suggestion: state.suggestion,
         artifact: state.artifact,
@@ -572,6 +579,10 @@ export function optimizerPromotionService(db: Db) {
       const publications: ActivityPublication[] = [];
       await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockAnalyticalCompany(txDb,input.companyId);
+        await lockMemoryPrivacy(txDb,input.companyId);
+        await assertLearningAssetCurrent(txDb,input.companyId,"workflow_revision",state.suggestion.workflowRevisionId,input.sourceActor);
+        await assertLearningAssetCurrent(txDb,input.companyId,"automation_artifact_version",input.expectedArtifactVersionId,input.sourceActor);
         const [lockedSuggestion] = await txDb
           .select()
           .from(workflowOptimizerSuggestions)
@@ -676,10 +687,12 @@ export function optimizerPromotionService(db: Db) {
       policy: OptimizerPromotionPolicy;
       evidence: OptimizerPromotionEvidence;
       actor: AutomationArtifactMutationActor;
+      sourceActor?:AuthorizationActor;
       approvedByUserId?: string | null;
       approvalId?: string | null;
     }): Promise<OptimizerPromotionDecision> => {
       assertSystemActor(input.actor);
+      await assertLearningAssetCurrent(db,input.companyId,"automation_artifact_version",input.expectedArtifactVersionId,input.sourceActor);
       const experimental = await assertPromotionEnabled(db);
 
       const decisionState = await loadBoundState(
@@ -687,6 +700,7 @@ export function optimizerPromotionService(db: Db) {
         input.suggestionId,
         input.artifactId,
       );
+      await assertLearningAssetCurrent(db,input.companyId,"workflow_revision",decisionState.suggestion.workflowRevisionId,input.sourceActor);
       assertPromotionBinding({
         suggestion: decisionState.suggestion,
         artifact: decisionState.artifact,
@@ -722,6 +736,10 @@ export function optimizerPromotionService(db: Db) {
       const publications: ActivityPublication[] = [];
       await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        await lockAnalyticalCompany(txDb,input.companyId);
+        await lockMemoryPrivacy(txDb,input.companyId);
+        await assertLearningAssetCurrent(txDb,input.companyId,"workflow_revision",decisionState.suggestion.workflowRevisionId,input.sourceActor);
+        await assertLearningAssetCurrent(txDb,input.companyId,"automation_artifact_version",input.expectedArtifactVersionId,input.sourceActor);
         const [suggestion] = await txDb
           .select()
           .from(workflowOptimizerSuggestions)

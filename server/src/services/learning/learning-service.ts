@@ -246,7 +246,7 @@ export function learningService(db: Db) {
         } else if (input.change.targetDomain === "automation_artifact") {
           await assertV7Authorization(tx, actor, companyId, "workflows:edit");
           if (EVIDENCE_SENSITIVITIES.indexOf(sourceSensitivity) > EVIDENCE_SENSITIVITIES.indexOf("internal")) throw forbidden("Automation candidates cannot carry classified Learning roots");
-          const bound = await assertOptimizerEvaluationBinding(tx, companyId, input.change.optimizerEvaluationId);
+          const bound = await assertOptimizerEvaluationBinding(tx, companyId, input.change.optimizerEvaluationId,true,actor);
           if (bound.evaluation.workflowId !== row.targetId || bound.evaluation.status !== "testing" || bound.evaluation.replayEvaluation?.status !== "passed"
             || bound.version.id !== input.change.expectedArtifactVersionId || bound.version.contentHash !== input.change.expectedContentHash
             || `optimizer://${row.targetId}/${bound.evaluation.workflowRevisionId}` !== row.evaluationContract.baselineRef) throw conflict("A current passed native Optimizer replay is required");
