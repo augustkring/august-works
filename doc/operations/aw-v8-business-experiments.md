@@ -109,3 +109,60 @@ resolved failed attempts accompany `aw-v8-evidence/experiment-registry-checkpoin
 The preceding integrated production build passes at exact commit `5927fe1`.
 These local source qualifications do not qualify live exposure or the entire V8
 release; the requested full build continues.
+
+### Native recording and source receipt checkpoint
+
+The first recording mode is explicitly
+`recording_only_human_attested_native_process`. It stores experiment records;
+starting, assigning or attesting does not dispatch native work, change tasks or
+projects, expose a customer or approve a deployment. Exposure provenance is human
+attestation, with separate human-asserted applied time and native recorded time.
+The registered native outcome semantics are current native status at a common
+final capture for units created inside the registered window. Those statuses are
+business-object proxies and inherit their metric definition's Goodhart limits.
+They are not reconstructed historical endpoint states or verified business utility.
+
+Protocol now explicitly pins this provenance/time contract and the exact Fisher
+pretreatment invariant balance method/familywise threshold. Existing proposals
+with the earlier incomplete protocol require an explicit amended version and
+new review; old hashes or review receipts are not rewritten. Horizon and asserted
+exposure times use the native metric's millisecond precision. Analysis continues
+to use the registered fixed horizon; public outcome capture/analysis and operator
+UI follow the recording checkpoint.
+
+Migration 0404 introduces immutable recording, subject assignment, exposure and
+stopping receipts; 0405 strengthens mandatory subject FKs, exact signature-prefix
+checks and tenant-composite readiness FKs. Recording binds the exact current human
+readiness receipt. Only one recording is admitted per company while running or
+paused; this conservative gate does not prove absence of external interference.
+Completion records a separate human concurrent-change review. Pause/resume,
+explicit emergency stopping, elapsed fixed-horizon completion and cancellation
+retain their native lifecycle receipts. No early efficacy stopping is admitted.
+
+The existing protected instance signing owner supplies a domain-separated HMAC
+allocation key; the runtime does not add a credential registry or accept public
+seeds/arms. Signed receipt hashes bind exact identities, definition, readiness,
+source frame and upstream receipts. Every assigned unit is retained, including
+not-applied exposure. Retries return the same allocation and identical exposure
+receipt; conflicting exposure revisions are rejected. Actual native ratio
+calculation captures each unit's pretreatment binary invariant before its label
+is produced. These are experiment receipts, not relabeled company-population
+`business_metric_observations`. Seventeen independent SciPy Fisher reference
+vectors qualify the bounded diagnostic, including empty/constant and n=4000
+populations. The diagnostic does not establish that all confounders are observed.
+
+Registry, receipt and downstream consumers reauthorize every enrolled source
+before returning protocol or receipt data. Recorded and current project ancestry
+are checked separately. Complete version-policy/metric plus enrolled source
+lineage is required. Erasing one enrolled source erases its dependent protocol
+and all recording descendants; a missing subject cannot silently improve an
+intent-to-treat result. This path remains active with rollout disabled and company
+paused. Native company purge clears the recording descendants. Signing-owner
+rotation fails closed for retained receipt validation.
+
+Recording API adds `/:experimentId/start`, `/assignments`, `/exposures`, `/stop`
+and `/versions/:versionId/receipts` under the existing experiment prefix. Human
+source authority, strict commands, expected account and no-store are preserved.
+Private signing material/source snapshots are withheld from public receipt views.
+Applied attestation cannot precede assignment, claim future time or pass registered
+stopping/horizon; explicit not-applied receipts keep their assigned subjects.

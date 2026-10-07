@@ -17,11 +17,12 @@ export const businessExperimentDefinitionSchema = z.object({
   design: z.literal("individual_randomized_two_arm_binary"),
   population: z.object({ randomizationUnit: z.enum(["issue", "project"]), eligibility: prose, trigger: prose, externalValidityLimits: prose }).strict(),
   treatment: prose, control: prose,
+  executionPlan: z.object({ mode: z.literal("recording_only_human_attested_native_process"), exposureProvenance: z.literal("human_attestation"), exposureTimeSemantics: z.literal("human_asserted_event_time"), outcomeTimeSemantics: z.literal("created_in_window_current_state_at_common_final_capture") }).strict(),
   assignment: z.object({ method: z.literal("hmac_sha256_48_v1"), treatmentProbability: z.number().finite().min(0.1).max(0.9) }).strict(),
   primaryMetric: metric.extend({ beneficialDirection: z.enum(["increase", "decrease"]), minimumMeaningfulEffect: z.number().finite().positive().max(1) }).strict(),
   secondaryMetrics: z.array(metric).max(8),
   guardrailMetrics: z.array(metric.extend({ harmfulDirection: z.enum(["increase", "decrease"]), maximumAcceptableHarm: z.number().finite().min(0).max(1) }).strict()).min(1).max(8),
-  diagnostics: z.object({ srmAlpha: z.number().finite().min(0.0001).max(0.05), invariantMetricRefs: z.array(id).min(1).max(8), concurrentExperimentAndInterferencePlan: prose, telemetryAndJoinPlan: prose }).strict(),
+  diagnostics: z.object({ srmAlpha: z.number().finite().min(0.0001).max(0.05), invariantMetricRefs: z.array(id).min(1).max(8), invariantBalance: z.object({ method: z.literal("exact_fisher_probability_ordering_v1"), familywiseAlpha: z.number().finite().min(0.0001).max(0.05) }).strict(), concurrentExperimentAndInterferencePlan: prose, telemetryAndJoinPlan: prose }).strict(),
   analysisPlan: z.object({ method: z.literal("bonferroni_clopper_pearson_difference_v1"), familywiseAlpha: z.number().finite().min(0.001).max(0.2), estimand: z.literal("intention_to_treat"), missingOutcomes: z.literal("invalidate"), multipleComparisonPolicy: z.literal("primary_and_guardrails_familywise_secondary_exploratory"), noveltySeasonalityCarryoverLimits: prose }).strict(),
   sampleOrDurationPlan: z.object({ kind: z.literal("fixed_horizon"), from: z.iso.datetime(), until: z.iso.datetime(), minimumAssignedUnits: z.number().int().min(4).max(4000), maximumAssignedUnits: z.number().int().min(4).max(4000), minimumUnitsPerArm: z.number().int().min(2).max(2000), minimumDetectableEffect: z.number().finite().positive().max(1), powerRationale: prose }).strict(),
   stopRules: z.object({ efficacyLooks: z.literal("one_after_fixed_horizon"), emergencySafetyStop: prose, shipPolicy: prose, rollbackPolicy: prose }).strict(),
@@ -37,6 +38,7 @@ export const businessExperimentDefinitionSchema = z.object({
   if (metrics.some(item => /^invariant_[1-8]$/.test(item.key))) reject("Invariant receipt keys are reserved");
   const plan = value.sampleOrDurationPlan;
   if (Date.parse(plan.from) >= Date.parse(plan.until) || Date.parse(plan.until) - Date.parse(plan.from) > 365 * 86400000) reject("Fixed horizon must be ordered and at most one year");
+  if ([plan.from, plan.until].some(value => /\.\d{4,}Z$/.test(value))) reject("Native experiment horizons use millisecond metric precision");
   if (plan.minimumAssignedUnits > plan.maximumAssignedUnits || plan.minimumUnitsPerArm * 2 > plan.minimumAssignedUnits) reject("Sample policy must support both arms within the bounded plan");
   if (value.ethics.requiresConsent && !value.ethics.consentGovernanceObligationRef) reject("Required consent must bind reviewed native governance evidence");
   if (value.ethics.changesMaterialAiDecisions && !value.ethics.aiUseCaseId) reject("Material AI changes require the existing governed AI use case");
@@ -54,6 +56,19 @@ export const createBusinessExperimentSchema = z.object({ key: z.string().regex(/
 export const amendBusinessExperimentSchema = z.object({ expectedRevision: z.number().int().positive(), definition: businessExperimentDefinitionSchema, reason: prose }).strict();
 export const transitionBusinessExperimentSchema = z.object({ expectedRevision: z.number().int().positive(), versionId: id, state: z.enum(BUSINESS_EXPERIMENT_STATES), rationale: prose }).strict();
 export const analyzeBusinessExperimentSchema = z.object({ expectedRevision: z.number().int().positive(), versionId: id }).strict();
+export const startBusinessExperimentSchema = z.object({ expectedRevision: z.number().int().positive(), versionId: id, mode: z.literal("recording_only_human_attested_native_process"), rationale: prose }).strict();
+export const assignBusinessExperimentUnitSchema = z.object({ expectedRevision: z.number().int().positive(), versionId: id, unitId: id }).strict();
+export const recordBusinessExperimentExposureSchema = z.object({
+  expectedRevision: z.number().int().positive(), versionId: id, assignmentId: id,
+  exposure: z.discriminatedUnion("status", [
+    z.object({ status: z.literal("applied"), assertedAppliedAt: z.iso.datetime().refine(value => !/\.\d{4,}Z$/.test(value), "Exposure time precision is milliseconds"), rationale: prose }).strict(),
+    z.object({ status: z.literal("not_applied"), rationale: prose }).strict(),
+  ]),
+}).strict();
+export const controlBusinessExperimentExecutionSchema = z.object({
+  expectedRevision: z.number().int().positive(), versionId: id, state: z.enum(["running", "paused", "completed", "cancelled"]), rationale: prose,
+  completion: z.object({ reason: z.enum(["fixed_horizon", "emergency_safety_stop"]), concurrentChangeReview: z.object({ assessment: z.enum(["none_identified", "material_or_unknown"]), rationale: prose }).strict() }).strict().nullable(),
+}).strict().refine(value => (value.state === "completed") === (value.completion !== null), "Only completion requires its explicit stopping and human concurrent-change review");
 
 export interface BusinessExperimentMetricPin {
   key: string; role: "primary" | "guardrail" | "exploratory" | "invariant";
@@ -75,6 +90,26 @@ export interface BusinessExperimentTransitionView {
   id: string; companyId: string; experimentId: string; versionId: string;
   revision: number; fromState: BusinessExperimentState; toState: BusinessExperimentState;
   rationale: string; createdBy: string; createdAt: string;
+}
+export interface BusinessExperimentInvariantReceipt {
+  key: string; metricId: string; metricVersionId: string; observedAt: string;
+  value: 0 | 1; inputHash: string;
+}
+export interface BusinessExperimentUnitSnapshot {
+  id: string; entity: "issue" | "project"; status: string; projectId: string | null;
+  createdAt: string; updatedAt: string;
+}
+export interface BusinessExperimentAssignmentView {
+  id: string; companyId: string; experimentId: string; versionId: string;
+  unitId: string; unitType: "issue" | "project"; arm: "control" | "treatment";
+  sourceHash: string; invariantReceipts: BusinessExperimentInvariantReceipt[];
+  receiptHash: string; assignedBy: string; assignedAt: string;
+}
+export interface BusinessExperimentExposureView {
+  id: string; companyId: string; experimentId: string; versionId: string; assignmentId: string;
+  arm: "control" | "treatment"; status: "applied" | "not_applied";
+  provenance: "human_attestation"; assertedAppliedAt: string | null;
+  rationale: string; receiptHash: string; recordedBy: string; recordedAt: string;
 }
 
 /** INTERNAL capture only. The native owner must prove registration, source

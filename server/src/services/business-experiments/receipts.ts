@@ -1,0 +1,143 @@
+import { createHmac } from "node:crypto";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { analyticalLineageEdges, analyticalLineageManifests, businessExperimentAssignments, businessExperimentCompletions, businessExperimentExecutions, businessExperimentExposures, businessExperimentVersions, businessExperimentTransitions, issues, projects, type Db } from "@paperclipai/db";
+import { ISSUE_STATUSES, PROJECT_STATUSES, type BusinessExperimentAssignmentView, type BusinessExperimentExposureView, type BusinessExperimentUnitSnapshot } from "@paperclipai/shared";
+import { conflict, notFound, unprocessable } from "../../errors.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { resolveDecisionSigningSecret, signDecisionSpec, verifyDecisionSpec } from "../decision-signing.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
+import { authorizeStrategyReference } from "../strategy-execution/references.js";
+import { inspectDecisionSourceAuthority } from "../decision-intelligence.js";
+import { assertAnalyticalSourcesNotErased } from "../analytical-privacy.js";
+import { assignNativeBusinessExperimentUnit } from "./kernel.js";
+
+export type ExperimentVersion = typeof businessExperimentVersions.$inferSelect;
+export type ExperimentExecution = typeof businessExperimentExecutions.$inferSelect;
+export type ExperimentAssignment = typeof businessExperimentAssignments.$inferSelect;
+export type ExperimentExposure = typeof businessExperimentExposures.$inferSelect;
+export type ExperimentCompletion = typeof businessExperimentCompletions.$inferSelect;
+export type ExperimentEdge = Pick<typeof analyticalLineageEdges.$inferInsert, "inputType" | "inputRef" | "inputHash" | "relationship">;
+export const EXPERIMENT_OWNER_ENGINE = "aw-native-business-experiment-owner-v1";
+export function experimentBudget(deadline: number) { if (performance.now() > deadline) throw unprocessable("Experiment receipt source budget exceeded"); }
+export function experimentEdges(edges: ExperimentEdge[]) {
+  const result = new Map<string, ExperimentEdge>();
+  for (const edge of edges) {
+    const key = `${edge.inputType}:${edge.inputRef}`, prior = result.get(key);
+    if (prior && prior.inputHash !== edge.inputHash) throw conflict("Experiment receipt source hashes conflict");
+    result.set(key, { inputType: edge.inputType, inputRef: edge.inputRef, inputHash: edge.inputHash, relationship: edge.relationship });
+  }
+  if (result.size > 260) throw unprocessable("Experiment receipt source population exceeds its budget");
+  return [...result.values()].sort((a, b) => `${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
+}
+/** Derive a domain-separated key from the existing protected instance signing
+ * owner. It is never a public field, caller input or alternate credential store. */
+export function experimentAssignmentKey(companyId: string, versionId: string) {
+  return createHmac("sha256", resolveDecisionSigningSecret()).update(`aw-business-experiment-assignment-key-v1:${companyId}:${versionId}`).digest();
+}
+export function signedExperimentReceipt(domain: string, material: Record<string, unknown>) {
+  const receiptHash = nativeSha256(material);
+  return { receiptHash, signature: signDecisionSpec({ domain: `aw-business-experiment:${domain}:v1`, receiptHash }) };
+}
+function verify(domain: string, material: Record<string, unknown>, row: { receiptHash: string; signature: string }) {
+  if (nativeSha256(material) !== row.receiptHash || !verifyDecisionSpec({ domain: `aw-business-experiment:${domain}:v1`, receiptHash: row.receiptHash }, row.signature)) throw notFound("Experiment native receipt integrity is unavailable");
+}
+export function experimentReviewHash(row: typeof businessExperimentTransitions.$inferSelect) {
+  return nativeSha256({ ...row, createdAt: row.createdAt.toISOString() });
+}
+export function executionMaterial(row: ExperimentExecution, definitionHash: string, reviewHash: string) {
+  return { id: row.id, companyId: row.companyId, experimentId: row.experimentId, versionId: row.versionId, definitionHash,
+    mode: row.mode, reviewTransitionId: row.reviewTransitionId, reviewHash, assignmentKeyFingerprint: row.assignmentKeyFingerprint, rationale: row.rationale, startedBy: row.startedBy, startedAt: row.startedAt.toISOString() };
+}
+export function assignmentMaterial(row: ExperimentAssignment, executionHash: string, definitionHash: string) {
+  return { id: row.id, companyId: row.companyId, experimentId: row.experimentId, versionId: row.versionId, definitionHash, executionHash,
+    unitType: row.unitType, unitId: row.unitId, arm: row.arm, sourceSnapshot: row.sourceSnapshot, sourceHash: row.sourceHash, invariantReceipts: row.invariantReceipts,
+    assignedBy: row.assignedBy, assignedAt: row.assignedAt.toISOString() };
+}
+export function exposureMaterial(row: ExperimentExposure, assignmentHash: string) {
+  return { id: row.id, companyId: row.companyId, experimentId: row.experimentId, versionId: row.versionId, assignmentId: row.assignmentId, assignmentHash, arm: row.arm,
+    status: row.status, provenance: row.provenance, assertedAppliedAt: row.assertedAppliedAt?.toISOString() ?? null, rationale: row.rationale, recordedBy: row.recordedBy, recordedAt: row.recordedAt.toISOString() };
+}
+export function completionMaterial(row: ExperimentCompletion, executionHash: string) {
+  return { id: row.id, companyId: row.companyId, experimentId: row.experimentId, versionId: row.versionId, executionHash, reason: row.reason,
+    concurrentChangeReview: row.concurrentChangeReview, rationale: row.rationale, completedBy: row.completedBy, completedAt: row.completedAt.toISOString() };
+}
+export function assignmentView(row: ExperimentAssignment): BusinessExperimentAssignmentView {
+  return { id: row.id, companyId: row.companyId, experimentId: row.experimentId, versionId: row.versionId, unitType: row.unitType, unitId: row.unitId, arm: row.arm,
+    sourceHash: row.sourceHash, invariantReceipts: row.invariantReceipts, receiptHash: row.receiptHash, assignedBy: row.assignedBy, assignedAt: row.assignedAt.toISOString() };
+}
+export function exposureView(row: ExperimentExposure): BusinessExperimentExposureView {
+  return { id: row.id, companyId: row.companyId, experimentId: row.experimentId, versionId: row.versionId, assignmentId: row.assignmentId, arm: row.arm, status: row.status,
+    provenance: row.provenance, assertedAppliedAt: row.assertedAppliedAt?.toISOString() ?? null, rationale: row.rationale, receiptHash: row.receiptHash, recordedBy: row.recordedBy, recordedAt: row.recordedAt.toISOString() };
+}
+export async function nativeExperimentUnit(tx: Db, companyId: string, actor: AuthorizationActor, version: ExperimentVersion, unitId: string) {
+  const entity = version.definition.population.randomizationUnit;
+  const admitted = await authorizeStrategyReference(tx, companyId, actor, { type: entity, id: unitId }, version.definition.sensitivity);
+  await assertAnalyticalSourcesNotErased(tx, companyId, admitted.issueIds, admitted.projectIds);
+  let snapshot: BusinessExperimentUnitSnapshot;
+  if (entity === "issue") {
+    const [row] = await tx.select({ id: issues.id, status: issues.status, projectId: issues.projectId, createdAt: issues.createdAt, updatedAt: issues.updatedAt }).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, unitId), isNull(issues.hiddenAt))).for("share");
+    if (!row) throw notFound("Experiment unit is unavailable");
+    snapshot = { ...row, entity, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() };
+    if (version.definition.scope.type === "project" && row.projectId !== version.definition.scope.id) throw conflict("Experiment unit moved outside its registered project population");
+  } else {
+    const [row] = await tx.select({ id: projects.id, status: projects.status, createdAt: projects.createdAt, updatedAt: projects.updatedAt, archivedAt: projects.archivedAt }).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, unitId))).for("share");
+    if (!row || row.archivedAt) throw notFound("Experiment project is unavailable");
+    snapshot = { id: row.id, entity, status: row.status, projectId: null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() };
+  }
+  const plan = version.definition.sampleOrDurationPlan;
+  const statuses: readonly string[] = entity === "issue" ? ISSUE_STATUSES : PROJECT_STATUSES;
+  if (!statuses.includes(snapshot.status)) throw conflict("Experiment unit has no admitted native status semantics");
+  if (Date.parse(snapshot.createdAt) < Date.parse(plan.from) || Date.parse(snapshot.createdAt) >= Date.parse(plan.until)) throw conflict("Experiment unit was not created in the registered native metric population window");
+  return { snapshot, edges: [
+    ...admitted.issueIds.map(id => ({ inputType: "issue" as const, inputRef: id, inputHash: nativeSha256({ type: "issue", id }), relationship: "source" as const })),
+    ...admitted.projectIds.map(id => ({ inputType: "project" as const, inputRef: id, inputHash: nativeSha256({ type: "project", id }), relationship: "source" as const })),
+  ] };
+}
+/** Registry and recording consumers must authorize every enrolled source before
+ * returning any protocol/receipt/aggregate. No recursive registry admission. */
+export async function inspectBusinessExperimentReceipts(tx: Db, companyId: string, actor: AuthorizationActor, version: ExperimentVersion, deadline: number) {
+  const where = and(eq(businessExperimentExecutions.companyId, companyId), eq(businessExperimentExecutions.experimentId, version.experimentId), eq(businessExperimentExecutions.versionId, version.id));
+  const [execution] = await tx.select().from(businessExperimentExecutions).where(where).for("share");
+  if (!execution) return { execution: null, assignments: [] as ExperimentAssignment[], exposures: [] as ExperimentExposure[], completion: null as ExperimentCompletion | null };
+  const [review] = await tx.select().from(businessExperimentTransitions).where(and(eq(businessExperimentTransitions.companyId, companyId), eq(businessExperimentTransitions.experimentId, version.experimentId), eq(businessExperimentTransitions.versionId, version.id), eq(businessExperimentTransitions.id, execution.reviewTransitionId))).for("share");
+  if (!review || review.toState !== "ready" || review.createdAt > execution.startedAt || review.createdAt.getTime() > Date.parse(version.definition.sampleOrDurationPlan.from)) throw notFound("Experiment exact human preregistration review is unavailable");
+  verify("execution", executionMaterial(execution, version.contentHash, experimentReviewHash(review)), execution);
+  const assignmentKey = experimentAssignmentKey(companyId, version.id);
+  if (nativeSha256(assignmentKey.toString("hex")) !== execution.assignmentKeyFingerprint) throw conflict("Experiment signing owner changed; assignment receipts require operator revalidation");
+  const assignments = await tx.select().from(businessExperimentAssignments).where(and(eq(businessExperimentAssignments.companyId, companyId), eq(businessExperimentAssignments.experimentId, version.experimentId), eq(businessExperimentAssignments.versionId, version.id))).orderBy(asc(businessExperimentAssignments.id)).limit(version.definition.sampleOrDurationPlan.maximumAssignedUnits + 1).for("share");
+  if (assignments.length > version.definition.sampleOrDurationPlan.maximumAssignedUnits) throw unprocessable("Experiment assignment population exceeds preregistered bounds");
+  const versionEdges = await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), eq(analyticalLineageEdges.manifestId, version.lineageManifestId))).limit(257);
+  for (const assignment of assignments) {
+    experimentBudget(deadline); verify("assignment", assignmentMaterial(assignment, execution.receiptHash, version.contentHash), assignment);
+    if (assignment.sourceHash !== nativeSha256({ snapshot: assignment.sourceSnapshot, invariantReceipts: assignment.invariantReceipts })
+      || assignment.arm !== assignNativeBusinessExperimentUnit(assignmentKey, companyId, version.id, assignment.unitId, version.definition.assignment.treatmentProbability)) throw notFound("Experiment assignment source or label integrity is unavailable");
+    const current = await nativeExperimentUnit(tx, companyId, actor, version, assignment.unitId);
+    if (current.snapshot.createdAt !== assignment.sourceSnapshot.createdAt) throw conflict("Experiment enrolled unit identity was corrected");
+    const [manifest] = await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId, companyId), eq(analyticalLineageManifests.id, assignment.lineageManifestId))).for("share");
+    const edges = await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), eq(analyticalLineageEdges.manifestId, assignment.lineageManifestId))).limit(261);
+    const expectedEdges = experimentEdges([...versionEdges,
+      { inputType: assignment.unitType, inputRef: assignment.unitId, inputHash: nativeSha256({ type: assignment.unitType, id: assignment.unitId }), relationship: "source" },
+      ...(assignment.sourceSnapshot.projectId ? [{ inputType: "project" as const, inputRef: assignment.sourceSnapshot.projectId, inputHash: nativeSha256({ type: "project", id: assignment.sourceSnapshot.projectId }), relationship: "source" as const }] : []),
+    ]);
+    if (!manifest || manifest.expiresAt <= new Date() || manifest.engineVersion !== EXPERIMENT_OWNER_ENGINE || manifest.analysisType !== "experiment_assignment" || manifest.analysisRef !== assignment.id
+      || manifest.definitionHash !== version.contentHash || manifest.inputHash !== assignment.sourceHash || manifest.parameters.receiptHash !== assignment.receiptHash
+      || manifest.sourceCount !== edges.length || manifest.parameters.lineageHash !== nativeSha256(experimentEdges(edges)) || nativeSha256(experimentEdges(edges)) !== nativeSha256(expectedEdges)
+      || manifest.createdAt.getTime() !== assignment.assignedAt.getTime() || manifest.expiresAt.getTime() !== version.expiresAt.getTime()
+      || !edges.some(edge => edge.inputType === assignment.unitType && edge.inputRef === assignment.unitId && edge.inputHash === nativeSha256({ type: assignment.unitType, id: assignment.unitId }))) throw notFound("Experiment enrolled source lineage is erased or unavailable");
+    await inspectDecisionSourceAuthority(tx, companyId, actor, edges, deadline);
+  }
+  const exposures = await tx.select().from(businessExperimentExposures).where(and(eq(businessExperimentExposures.companyId, companyId), eq(businessExperimentExposures.experimentId, version.experimentId), eq(businessExperimentExposures.versionId, version.id))).limit(assignments.length + 1).for("share");
+  if (exposures.length > assignments.length) throw notFound("Experiment exposure join integrity is unavailable");
+  for (const exposure of exposures) {
+    const assignment = assignments.find(item => item.id === exposure.assignmentId);
+    if (!assignment || exposure.arm !== assignment.arm || exposure.provenance !== "human_attestation") throw notFound("Experiment exposure receipt has no exact assignment");
+    verify("exposure", exposureMaterial(exposure, assignment.receiptHash), exposure);
+  }
+  const [completion] = await tx.select().from(businessExperimentCompletions).where(and(eq(businessExperimentCompletions.companyId, companyId), eq(businessExperimentCompletions.experimentId, version.experimentId), eq(businessExperimentCompletions.versionId, version.id))).for("share");
+  if (completion) verify("completion", completionMaterial(completion, execution.receiptHash), completion);
+  experimentBudget(deadline); return { execution, assignments, exposures, completion: completion ?? null };
+}
+export async function experimentStatementTime(tx: Db) {
+  const rows = await tx.execute<{ captured_at: Date }>(sql`select statement_timestamp() as captured_at`);
+  return new Date(rows[0].captured_at);
+}

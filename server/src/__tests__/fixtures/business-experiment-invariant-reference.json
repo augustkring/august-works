@@ -1,0 +1,125 @@
+{
+  "evidenceClass": "Synthetic mathematical reference only; no collected operational outcomes or source permission",
+  "provider": "SciPy 1.17.0 stats.fisher_exact, two-sided probability ordering",
+  "vectors": [
+    {
+      "controlUnits": 0,
+      "controlSuccesses": 0,
+      "treatmentUnits": 0,
+      "treatmentSuccesses": 0,
+      "pValue": 1.0
+    },
+    {
+      "controlUnits": 0,
+      "controlSuccesses": 0,
+      "treatmentUnits": 10,
+      "treatmentSuccesses": 5,
+      "pValue": 1.0
+    },
+    {
+      "controlUnits": 10,
+      "controlSuccesses": 0,
+      "treatmentUnits": 0,
+      "treatmentSuccesses": 0,
+      "pValue": 1.0
+    },
+    {
+      "controlUnits": 10,
+      "controlSuccesses": 0,
+      "treatmentUnits": 10,
+      "treatmentSuccesses": 0,
+      "pValue": 1.0
+    },
+    {
+      "controlUnits": 10,
+      "controlSuccesses": 10,
+      "treatmentUnits": 10,
+      "treatmentSuccesses": 10,
+      "pValue": 1.0
+    },
+    {
+      "controlUnits": 10,
+      "controlSuccesses": 3,
+      "treatmentUnits": 10,
+      "treatmentSuccesses": 3,
+      "pValue": 1.0
+    },
+    {
+      "controlUnits": 10,
+      "controlSuccesses": 0,
+      "treatmentUnits": 10,
+      "treatmentSuccesses": 10,
+      "pValue": 1.082508822446903e-05
+    },
+    {
+      "controlUnits": 12,
+      "controlSuccesses": 2,
+      "treatmentUnits": 7,
+      "treatmentSuccesses": 6,
+      "pValue": 0.006271334444709059
+    },
+    {
+      "controlUnits": 9,
+      "controlSuccesses": 7,
+      "treatmentUnits": 21,
+      "treatmentSuccesses": 3,
+      "pValue": 0.0016572133513662747
+    },
+    {
+      "controlUnits": 1,
+      "controlSuccesses": 0,
+      "treatmentUnits": 3999,
+      "treatmentSuccesses": 2000,
+      "pValue": 1.0
+    },
+    {
+      "controlUnits": 3999,
+      "controlSuccesses": 3999,
+      "treatmentUnits": 1,
+      "treatmentSuccesses": 0,
+      "pValue": 0.00025
+    },
+    {
+      "controlUnits": 2000,
+      "controlSuccesses": 0,
+      "treatmentUnits": 2000,
+      "treatmentSuccesses": 2000,
+      "pValue": 0.0
+    },
+    {
+      "controlUnits": 2000,
+      "controlSuccesses": 999,
+      "treatmentUnits": 2000,
+      "treatmentSuccesses": 1001,
+      "pValue": 0.9747734052095391
+    },
+    {
+      "controlUnits": 1800,
+      "controlSuccesses": 400,
+      "treatmentUnits": 2200,
+      "treatmentSuccesses": 500,
+      "pValue": 0.731992579072609
+    },
+    {
+      "controlUnits": 1800,
+      "controlSuccesses": 0,
+      "treatmentUnits": 2200,
+      "treatmentSuccesses": 1,
+      "pValue": 1.0
+    },
+    {
+      "controlUnits": 2000,
+      "controlSuccesses": 3,
+      "treatmentUnits": 2000,
+      "treatmentSuccesses": 17,
+      "pValue": 0.002517173532773709
+    },
+    {
+      "controlUnits": 13,
+      "controlSuccesses": 12,
+      "treatmentUnits": 19,
+      "treatmentSuccesses": 17,
+      "pValue": 1.0
+    }
+  ]
+}

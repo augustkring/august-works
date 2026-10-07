@@ -15,6 +15,7 @@ import { inspectDecisionSourceAuthority } from "../decision-intelligence.js";
 import { businessMetricService } from "../business-metrics/service.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
+import { inspectBusinessExperimentReceipts } from "./receipts.js";
 
 type Root = typeof businessExperiments.$inferSelect;
 type Version = typeof businessExperimentVersions.$inferSelect;
@@ -130,7 +131,8 @@ async function version(tx: Db, row: Root, actor: AuthorizationActor, id: string,
     || manifest.parameters.lineageHash !== nativeSha256(mergeEdges(edges)) || nativeSha256(mergeEdges(edges)) !== nativeSha256(source.edges) || pins.length !== value.metricPins.length
     || value.metricPins.some(pin => !pins.some(item => item.key === pin.key && item.metricId === pin.metricId && item.metricVersionId === pin.metricVersionId && item.contentHash === pin.contentHash)))
     throw notFound("Experiment native source ownership is unavailable");
-  budget(deadline); return { value, source };
+  const receipts = await inspectBusinessExperimentReceipts(tx, row.companyId, actor, value, deadline);
+  budget(deadline); return { value, source, receipts };
 }
 async function audit(tx: Db, publications: Parameters<typeof logActivity>[2], companyId: string, actor: AuthorizationActor, id: string, action: string, details: Record<string, unknown>) {
   await logActivity(tx, { companyId, actorType: "user", actorId: v7HumanActorId(actor), entityType: "business_experiment", entityId: id, action: `business_experiment.${action}`, details }, publications);
@@ -205,3 +207,6 @@ export function businessExperimentService(db: Db) {
     },
   };
 }
+/** Private native recording consumers reuse the registry's actual authority,
+ * source proof and locks inside their own company-serialized transaction. */
+export { admit as admitBusinessExperiment, root as lockBusinessExperimentRoot, version as inspectBusinessExperimentVersion, rootView as businessExperimentRootView, audit as auditBusinessExperiment };

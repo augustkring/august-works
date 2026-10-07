@@ -45,6 +45,26 @@ export function exactExperimentSrm(n: number, treatment: number, expectedProbabi
   for (const weight of weights) if (weight <= boundary) selected += weight;
   return Math.min(1, Math.max(0, selected / sum));
 }
+/** Conditional exact 2×2 test for registered pretreatment binary invariants.
+ * The probability ordering mirrors Fisher's two-sided test, with a bounded
+ * mode-centered hypergeometric recurrence. A balance gate is a diagnostic,
+ * never proof that all confounders or interference have been measured. */
+export function exactExperimentInvariantBalance(controlUnits: number, controlSuccesses: number, treatmentUnits: number, treatmentSuccesses: number): number {
+  if (![controlUnits, controlSuccesses, treatmentUnits, treatmentSuccesses].every(Number.isInteger)
+    || controlUnits < 0 || treatmentUnits < 0 || controlUnits + treatmentUnits > 4000
+    || controlSuccesses < 0 || controlSuccesses > controlUnits || treatmentSuccesses < 0 || treatmentSuccesses > treatmentUnits) throw new Error("invalid_experiment_invariant_table");
+  const total = controlUnits + treatmentUnits, successes = controlSuccesses + treatmentSuccesses;
+  if (total === 0 || controlUnits === 0 || treatmentUnits === 0) return 1;
+  const lower = Math.max(0, successes - controlUnits), upper = Math.min(treatmentUnits, successes);
+  const mode = Math.min(upper, Math.max(lower, Math.floor((treatmentUnits + 1) * (successes + 1) / (total + 2))));
+  const weights = new Float64Array(upper - lower + 1); weights[mode - lower] = 1;
+  for (let k = mode; k < upper; k++) weights[k + 1 - lower] = weights[k - lower] * (successes - k) * (treatmentUnits - k) / ((k + 1) * (total - successes - treatmentUnits + k + 1));
+  for (let k = mode; k > lower; k--) weights[k - 1 - lower] = weights[k - lower] * k * (total - successes - treatmentUnits + k) / ((successes - k + 1) * (treatmentUnits - k + 1));
+  const boundary = weights[treatmentSuccesses - lower] * (1 + 1e-12); let selected = 0, sum = 0;
+  for (const weight of weights) { sum += weight; if (weight <= boundary) selected += weight; }
+  if (!Number.isFinite(sum) || sum <= 0) throw new Error("unsafe_experiment_invariant_arithmetic");
+  return Math.min(1, Math.max(0, selected / sum));
+}
 /** Clopper-Pearson endpoints invert exact binomial tails. Numerical bisection
  * is bounded at 64 iterations; individual zero/all-success bounds stay honest. */
 export function experimentBinomialInterval(n: number, successes: number, tailAlpha: number): { lower: number; upper: number } {

@@ -267,3 +267,25 @@ business-object purpose cannot authorize live customer exposure, consent-depende
 intervention or material AI deployment changes. READY does not grant execution
 or exposure authority; the separate assignment/exposure receipt owner follows
 this checkpoint. Numerical validity never substitutes for those authority gates.
+
+## V8-019 — Native recording preserves assignment provenance and complete source erasure
+
+The first experiment recording mode admits bookkeeping and human exposure
+attestation under an exact reviewed native protocol. It dispatches no work and
+cannot authorize personal-impact intervention or material AI deployment. Native
+recorded time remains separate from human-asserted exposure time; actual outcome
+measurement follows the native metric's current-state semantics at final capture.
+
+Domain-separated protected instance signing and immutable upstream receipt hashes
+bind allocation, exact human readiness and source frames. Actual native ratios
+capture pretreatment invariants before allocation. Fisher probability-ordering
+balance is a registered diagnostic, not universal confounder/causal proof.
+Conservative single-company recording admission and separate human concurrent
+change review preserve declared interference limits.
+
+Current source authority protects every retained protocol/receipt read. Mandatory
+subject FKs, complete inherited lineage and an erasure cascade remove the full
+source-dependent protocol if an enrolled subject is erased. Neither restore nor
+ordinary retry can omit a subject FK, switch its arm or silently revise exposure.
+Cancellation remains available with rollout disabled; analysis/interpretation and
+operator UI follow this checkpoint.

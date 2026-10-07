@@ -24,6 +24,7 @@ import {
   retireBusinessForecastSpecSchema,
   createBusinessScenarioSchema,
   createBusinessExperimentSchema, amendBusinessExperimentSchema, transitionBusinessExperimentSchema,
+  startBusinessExperimentSchema, assignBusinessExperimentUnitSchema, recordBusinessExperimentExposureSchema, controlBusinessExperimentExecutionSchema,
   reviseBusinessScenarioSchema,
   publishBusinessScenarioSchema,
   runBusinessScenarioSchema,
@@ -1632,6 +1633,8 @@ const INSTANCE_ADMIN_OPERATIONS = new Set([
 ]);
 
 const CREATED_OPERATIONS = new Set([
+  "POST /api/companies/{companyId}/experiments/{experimentId}/assignments",
+  "POST /api/companies/{companyId}/experiments/{experimentId}/exposures",
   "POST /api/companies/{companyId}/experiments",
   "POST /api/companies/{companyId}/experiments/{experimentId}/versions",
   "POST /api/adapters/install",
@@ -11999,3 +12002,13 @@ registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control"
 registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "get", path: "/api/companies/{companyId}/experiments/{experimentId}", tags: ["V8"], summary: "Inspect exact experiment protocol and lifecycle history under current source authority", query: z.object({ expectedUserId: z.string().optional() }).strict() });
 registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/versions", tags: ["V8"], summary: "Append an explicit reasoned amendment to an unstarted experiment", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: amendBusinessExperimentSchema });
 registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/transition", tags: ["V8"], summary: "Human review, readiness or cancellation of the exact registered protocol", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: transitionBusinessExperimentSchema });
+
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/start", tags: ["V8"], summary: "Begin bookkeeping for an exact human-reviewed native process protocol without dispatching exposure", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } }, body: startBusinessExperimentSchema });
+
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/assignments", tags: ["V8"], summary: "Record a secret-key-stable native unit allocation with actual pretreatment source receipts", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } }, body: assignBusinessExperimentUnitSchema });
+
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/exposures", tags: ["V8"], summary: "Record immutable human exposure attestation; this is not verified workflow execution", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } }, body: recordBusinessExperimentExposureSchema });
+
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/stop", tags: ["V8"], summary: "Pause, resume, cancel or complete recording under the registered stopping policy", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } }, body: controlBusinessExperimentExecutionSchema });
+
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/experiments/{experimentId}/versions/{versionId}/receipts", tags: ["V8"], summary: "Inspect retained assignment, human attestation and stopping receipts under current source authority", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } } });

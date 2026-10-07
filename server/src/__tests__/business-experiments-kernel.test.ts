@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { businessExperimentDefinitionSchema, type BusinessExperimentDefinition, type NativeBusinessExperimentCapture } from "@paperclipai/shared";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
-import { assignNativeBusinessExperimentUnit, evaluateNativeBusinessExperiment, exactExperimentSrm, experimentBinomialInterval } from "../services/business-experiments/kernel.js";
+import { assignNativeBusinessExperimentUnit, evaluateNativeBusinessExperiment, exactExperimentSrm, experimentBinomialInterval, exactExperimentInvariantBalance } from "../services/business-experiments/kernel.js";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const statement = "Explicit synthetic human declaration for numerical software qualification only.";
@@ -12,10 +12,11 @@ function definition(): BusinessExperimentDefinition {
     name: "Synthetic two-arm process comparison", hypothesis: statement, decisionQuestion: statement, decisionId: null, ownerUserId: "reviewer",
     scope: { type: "company", id: null }, design: "individual_randomized_two_arm_binary",
     population: { randomizationUnit: "issue", eligibility: statement, trigger: statement, externalValidityLimits: statement }, treatment: statement, control: statement,
+    executionPlan: { mode: "recording_only_human_attested_native_process", exposureProvenance: "human_attestation", exposureTimeSemantics: "human_asserted_event_time", outcomeTimeSemantics: "created_in_window_current_state_at_common_final_capture" },
     assignment: { method: "hmac_sha256_48_v1", treatmentProbability: 0.5 },
     primaryMetric: { ...metric("primary", 10), beneficialDirection: "increase", minimumMeaningfulEffect: 0.1 },
     secondaryMetrics: [metric("secondary", 20)], guardrailMetrics: [{ ...metric("guardrail", 30), harmfulDirection: "increase", maximumAcceptableHarm: 0.15 }],
-    diagnostics: { srmAlpha: 0.001, invariantMetricRefs: [id(40)], concurrentExperimentAndInterferencePlan: statement, telemetryAndJoinPlan: statement },
+    diagnostics: { invariantBalance: { method: "exact_fisher_probability_ordering_v1", familywiseAlpha: 0.001 }, srmAlpha: 0.001, invariantMetricRefs: [id(40)], concurrentExperimentAndInterferencePlan: statement, telemetryAndJoinPlan: statement },
     analysisPlan: { method: "bonferroni_clopper_pearson_difference_v1", familywiseAlpha: 0.05, estimand: "intention_to_treat", missingOutcomes: "invalidate", multipleComparisonPolicy: "primary_and_guardrails_familywise_secondary_exploratory", noveltySeasonalityCarryoverLimits: statement },
     sampleOrDurationPlan: { kind: "fixed_horizon", from: "2026-01-01T00:00:00Z", until: "2026-02-01T00:00:00Z", minimumAssignedUnits: 20, maximumAssignedUnits: 4000, minimumUnitsPerArm: 2, minimumDetectableEffect: 0.1, powerRationale: statement },
     stopRules: { efficacyLooks: "one_after_fixed_horizon", emergencySafetyStop: statement, shipPolicy: statement, rollbackPolicy: statement },
@@ -41,6 +42,16 @@ function capture(d: BusinessExperimentDefinition, perArm = 500): NativeBusinessE
   };
 }
 describe("native experiment exact arithmetic", () => {
+  it("matches independent Fisher exact pretreatment balance diagnostics including degenerate and n=4000 tables", () => {
+    const { vectors } = JSON.parse(readFileSync(new URL("./fixtures/business-experiment-invariant-reference.json", import.meta.url), "utf8")) as { vectors: { controlUnits: number; controlSuccesses: number; treatmentUnits: number; treatmentSuccesses: number; pValue: number }[] };
+    for (const item of vectors) {
+      const value = exactExperimentInvariantBalance(item.controlUnits, item.controlSuccesses, item.treatmentUnits, item.treatmentSuccesses);
+      expect(Math.abs(value - item.pValue)).toBeLessThan(2e-10);
+      expect(exactExperimentInvariantBalance(item.treatmentUnits, item.treatmentSuccesses, item.controlUnits, item.controlSuccesses)).toBeCloseTo(value, 12);
+    }
+    expect(() => exactExperimentInvariantBalance(2, 3, 2, 1)).toThrow();
+    expect(() => exactExperimentInvariantBalance(2000, 1, 2001, 1)).toThrow();
+  });
   it("matches independent SciPy exact SRM and Clopper-Pearson vectors including n=4000 and boundaries", () => {
     const vectors = JSON.parse(readFileSync(new URL("./fixtures/business-experiment-binomial-reference.json", import.meta.url), "utf8")) as {
       srm: { n: number; treatment: number; probability: number; pValue: number }[];
