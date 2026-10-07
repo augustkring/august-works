@@ -30,6 +30,9 @@ import {
   publishProcessAnalysisDefinitionSchema,
   retireProcessAnalysisDefinitionSchema,
   runProcessAnalysisSchema,
+  proposeDecisionContextSchema,
+  prepareDecisionContextSchema,
+  withdrawPreparedDecisionContextSchema,
   createProcessFindingSchema,
   transitionProcessFindingSchema,
   businessEventCursorSchema,
@@ -1710,6 +1713,7 @@ function resolveOperationAuthLevel(
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
+  if(path.startsWith("/api/companies/{companyId}/decisions/{decisionId}/context")) return "board";
   if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
   if (
     isBoardOnlyOperation(method, path) ||
@@ -11828,6 +11832,10 @@ registerCurrentRoute({
 });
 
 for (const operation of [
+  { method: "get" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context", summary: "Inspect retained native decision context with current source authority", query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "post" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context/versions", summary: "Propose immutable prospective context around an existing native Decision", body: proposeDecisionContextSchema, query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "post" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context/prepare", summary: "Record explicit human preparation of the exact prospective context", body: prepareDecisionContextSchema, query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "post" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context/withdraw", summary: "Withdraw prospective preparation without choosing a native option", body: withdrawPreparedDecisionContextSchema, query: z.object({expectedUserId:z.string().optional()}).strict() },
   { method: "get" as const, path: "/api/companies/{companyId}/process-definitions", summary: "List bounded current governed process definitions", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
   { method: "get" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}", summary: "Inspect native immutable process definitions and effective publication" },
   { method: "post" as const, path: "/api/companies/{companyId}/process-definitions", summary: "Propose a governed native process definition", body: createProcessAnalysisDefinitionSchema },

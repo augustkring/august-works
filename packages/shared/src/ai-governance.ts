@@ -173,7 +173,7 @@ export const governanceObligationSchema = z
     analyticalPurpose: z.object({
       status: z.enum(["approved", "suspended"]),
       purpose: z.enum(["management_intelligence", "process_intelligence"]),
-      capabilities: z.array(z.enum(["metrics", "strategy", "process", "forecast", "scenario", "experiment", "causal", "planning", "reviews"])).min(1).max(9),
+      capabilities: z.array(z.enum(["metrics", "strategy", "process", "decision", "forecast", "scenario", "experiment", "causal", "planning", "reviews"])).min(1).max(10),
       populationUnits: z.literal("business_objects"),
       peopleImpact: z.literal("none"),
       decisionBoundary: z.literal("advisory_only"),

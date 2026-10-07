@@ -1,5 +1,22 @@
 # V8 architecture decisions
 
+## V8-011 — Prospective context shares the canonical Decision choice
+
+Decision Intelligence stores one immutable typed context aggregate per version.
+Tenant-scoped evidence, assumption, criterion and expectation descendants index
+that exact aggregate; SQL guards prevent divergence or incomplete publication.
+Explicit human preparation is distinct from saving a proposal. Its binding and
+the existing native choice CAS share one company → Memory → Decision transaction;
+the existing effect executor runs afterwards. Historical facts remain captured
+facts under current source authority and expiry. Later observations belong in
+separate outcome reviews. Current Decisions, signatures, options, permissions,
+durable effects and erasure owners are reused; no second choice broker is added.
+
+The first source wave admits native metric observations/process findings and
+human judgment only. Other evidence owners, outcome reviews, Learning, templates,
+AI assistance and DMN remain open until implemented and verified. This ADR records
+the aggregate representation and bounded native fallback, not full acceptance.
+
 Date: 2026-10-06. Base: master `d550aa7ea5ad38b5209d79135cabaa227ab3f902`.
 Scope: supplied Organizational Decision Intelligence, Process Intelligence and
 Adaptive Management V8 V2 brief. Implementation and acceptance remain in progress.

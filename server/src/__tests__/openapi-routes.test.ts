@@ -18,6 +18,7 @@ const apiPrefixes: Record<string, string> = {
   "strategy-execution.ts": "/api",
   "process-data-readiness.ts": "/api",
   "process-analysis.ts": "/api",
+  "decision-intelligence.ts": "/api",
   "agent-packages.ts": "/api",
   "ai-governance.ts": "/api",
   "cognitive-memory.ts": "/api",

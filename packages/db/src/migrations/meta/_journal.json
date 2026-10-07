@@ -2766,6 +2766,13 @@
       "when": 1791338625198,
       "tag": "0396_glossy_lionheart",
       "breakpoints": true
+    },
+    {
+      "idx": 397,
+      "version": "7",
+      "when": 1791340550738,
+      "tag": "0397_faithful_the_spike",
+      "breakpoints": true
     }
   ]
 }

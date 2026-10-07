@@ -124,6 +124,7 @@ import { businessMetricRoutes } from "./routes/business-metrics.js";
 import { strategyExecutionRoutes } from "./routes/strategy-execution.js";
 import { processDataReadinessRoutes } from "./routes/process-data-readiness.js";
 import { processAnalysisRoutes } from "./routes/process-analysis.js";
+import { decisionIntelligenceRoutes } from "./routes/decision-intelligence.js";
 import { businessMetricTargetRoutes } from "./routes/business-metric-targets.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { attentionRoutes } from "./routes/attention.js";
@@ -888,6 +889,7 @@ export async function createApp(
   api.use(strategyExecutionRoutes(db));
   api.use(processDataReadinessRoutes(db));
   api.use(processAnalysisRoutes(db));
+  api.use(decisionIntelligenceRoutes(db));
   api.use(dashboardRoutes(db));
   api.use(attentionRoutes(db));
   api.use(decisionTrainingRoutes(db));
