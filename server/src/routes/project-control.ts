@@ -20,6 +20,7 @@ export function projectControlRoutes(db: Db) {
   router.use(base, (req, _res, next) => { assertCompanyAccess(req, req.params.companyId as string); next(); });
   const planning = projectPlanningService(db);
   router.use(`${base}/planning`, (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+  router.get("/companies/:companyId/projects/:projectId/roadmap/planning/source", async (req, res) => { const { companyId, projectId } = planningAccess(req); res.json(await planning.source(companyId, projectId, req.actor)); });
   router.get("/companies/:companyId/projects/:projectId/roadmap/planning/controls", async (req, res) => { const { companyId, projectId } = planningAccess(req, true); res.json(await planning.controls(companyId, projectId, req.actor, req.query.cursor === undefined ? undefined : planningId(req.query.cursor))); });
   router.post("/companies/:companyId/projects/:projectId/roadmap/planning/preview", validate(projectPlanningProfileSchema), async (req, res) => { const { companyId, projectId } = planningAccess(req); res.json(await planning.preview(companyId, projectId, req.actor, req.body)); });
   router.post("/companies/:companyId/projects/:projectId/roadmap/planning/proposals", validate(proposeProjectPlanningSchema), async (req, res) => { const { companyId, projectId } = planningAccess(req); res.status(201).json(await planning.propose(companyId, projectId, req.actor, req.body)); });

@@ -1,0 +1,126 @@
+{
+  "checkpoint": "Native project planning operator flow mounted in canonical Roadmap",
+  "parentCommit": "6336f390f0e8f276e03508a432e581b42dcc0e22",
+  "recordedAt": "2026-10-07T11:49:59.170416+00:00",
+  "sourceFiles": [
+    {
+      "path": "tests/storybook-visual/project-planning.config.ts",
+      "sha256": "0511fb57624294b87a74b22e0f8f01260b05d58301c095705d302609c371d1ca"
+    },
+    {
+      "path": "tests/storybook-visual/project-planning.spec.ts",
+      "sha256": "5b6896058eefa10295b5f1f802d564ce2e1547ccafbc38b4bae1e734055e29c2"
+    },
+    {
+      "path": "ui/src/components/ProjectAdaptivePlanning.test.tsx",
+      "sha256": "e78bc876bfcded322f20e272c334bd6c193c8507dff80ae0f02876f38f0fbabf"
+    },
+    {
+      "path": "ui/src/components/ProjectAdaptivePlanning.tsx",
+      "sha256": "e394d4b9c5a6e4f576b1ee4ad0561ec4933ba8fc304b7c7a46c7f8314ce49b7f"
+    },
+    {
+      "path": "ui/src/components/ProjectPlanningBasis.tsx",
+      "sha256": "048c1c18862d80305825b9c4fb8cc02a6687d115446ebbe044d2aac75a3569a8"
+    },
+    {
+      "path": "ui/src/components/ProjectPlanningForm.tsx",
+      "sha256": "8e7579a92f25cda7002e4abd9d4d3bcc2f6c668288cc7ee9e6a7c81355b8577f"
+    },
+    {
+      "path": "ui/storybook/stories/project-planning-fixtures.ts",
+      "sha256": "f625d9cbb095bb5f448d46e409d20349c34d030d05160e49ffc799ef0f6a2770"
+    },
+    {
+      "path": "ui/storybook/stories/project-planning.stories.tsx",
+      "sha256": "917d838e1f9e9f6da265e312956c45214dbc5dae8de180a6c8e7993a77eab025"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "804e6855654ea1cc78f65eccbd344b7a336b14b6f45250d620a32102794dcd52"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-project.integration.test.ts",
+      "sha256": "8832d10e676924ac3b8214aa87397dc2f7e49b82a42d712cc77a5f3ffad4ae42"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "f21a1a550978ad946f6ef2a0d241af5663fe6fb58bcb4cc1ecaff2aa4def481c"
+    },
+    {
+      "path": "server/src/routes/project-control.ts",
+      "sha256": "9bd597f17026066dd784bb4d3040227b681d82f8162db93984fd7a6e2719c788"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/project-owner.ts",
+      "sha256": "36d92fa8eb0c38d18c357c44cd280da88e8bbefff47c092e1aa31cc4bba9d411"
+    },
+    {
+      "path": "ui/src/api/adaptive-planning.ts",
+      "sha256": "e5ca6c3b0421ff33c5982816f7c3f5cf40f1ae293883859d3ea541b3c05f1720"
+    },
+    {
+      "path": "ui/src/components/DecisionEvidencePicker.tsx",
+      "sha256": "cc9643dba50f73568fb57f033e6c67bdfad4588c6251e19bcd97fcedf2bd4635"
+    },
+    {
+      "path": "ui/src/pages/ProjectRoadmap.tsx",
+      "sha256": "37448d986401cad5a545338c7848092e9007c1fd3bfa18b0e92be606b1ceeb3b"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "ui-boundaries",
+      "checks": 18,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-workspace-ui-tests-complete.log",
+      "logSha256": "5a5093a23687efc9dbd59af866b6a7d8016a43fe6ba22095e5480231e1889b6b"
+    },
+    {
+      "name": "native-planning-postgresql",
+      "checks": 16,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-source-get-tests.log",
+      "logSha256": "3dcccb5162b14401f037f5840e08e500b036042ae0ab4fc1d390ae08082ea004"
+    },
+    {
+      "name": "legacy-roadmap-health-and-openapi",
+      "checks": 30,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-source-get-regression.log",
+      "logSha256": "46a2b289efb7713fde9064e8121e0a28c1b49505cb3b570ba948b586c76afe09"
+    },
+    {
+      "name": "ui-types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-workspace-types-complete.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-source-get-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "token-gates",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-workspace-tokens.log",
+      "logSha256": "7f26a4f86292a45e863b79bf76657153665fca6629481c2eaa139193e2236503"
+    }
+  ],
+  "limits": [
+    "Synthetic UI fixtures are not source evidence, a collected trial or business impact.",
+    "Browser qualification and official visual baseline are not claimed by this checkpoint.",
+    "Whole brief, cross-project Planning, Management/Learning, providers and hosted acceptance remain open."
+  ]
+}

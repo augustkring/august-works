@@ -1,4 +1,4 @@
-import type { NativePlanningResult, ProjectPlanningContext, ProjectPlanningProfile, ProposeProjectPlanning } from "@paperclipai/shared";
+import type { NativePlanningResult, ProjectPlanningContext, ProjectPlanningProfile, ProjectRoadmap, ProposeProjectPlanning } from "@paperclipai/shared";
 import { api } from "./client";
 
 const base = (companyId: string, projectId: string) => `/companies/${encodeURIComponent(companyId)}/projects/${encodeURIComponent(projectId)}/roadmap/planning`;
@@ -27,6 +27,7 @@ export interface ProjectPlanningControls {
   nextCursor: string | null;
 }
 export const adaptivePlanningApi = {
+  source: (companyId: string, projectId: string, userId?: string | null) => api.get<ProjectRoadmap>(account(`${base(companyId, projectId)}/source`, userId), { cache: "no-store" }),
   preview: (companyId: string, projectId: string, profile: ProjectPlanningProfile, userId?: string | null) => api.post<ProjectPlanningPreview>(account(`${base(companyId, projectId)}/preview`, userId), profile),
   propose: (companyId: string, projectId: string, input: ProposeProjectPlanning, userId?: string | null) => api.post<Omit<ProjectPlanningDetail, "currentQualification">>(account(`${base(companyId, projectId)}/proposals`, userId), input),
   controls: (companyId: string, projectId: string, cursor?: string, userId?: string | null) => api.get<ProjectPlanningControls>(account(`${base(companyId, projectId)}/controls${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, userId), { cache: "no-store" }),

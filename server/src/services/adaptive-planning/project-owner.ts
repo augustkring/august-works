@@ -112,6 +112,13 @@ export async function inspectCurrentProjectPlanningProposal(tx: Db, actor: Autho
 
 export function projectPlanningService(db: Db) {
   return {
+    async source(companyId: string, projectId: string, actor: AuthorizationActor) {
+      return db.transaction(async (rawTx) => {
+        const tx = rawTx as unknown as Db; await admit(tx, companyId, actor);
+        const { projectControlService } = await import("../project-control.js");
+        return projectControlService(tx).get(actor, companyId, projectId);
+      });
+    },
     async review(companyId: string, projectId: string, actor: AuthorizationActor, id: string, accept: boolean, rationale: string) {
       v7HumanActorId(actor);
       await assertV7Authorization(db, actor, companyId, "project:read", { type: "project", companyId, projectId });

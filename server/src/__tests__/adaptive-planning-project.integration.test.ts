@@ -47,6 +47,8 @@ describe.skipIf(!support.supported)("Native project planning source and canonica
   function app() { const api = express(); api.use(express.json()); api.use((req, _res, next) => { req.actor = { ...actor, userId: "local-board" }; next(); }); api.use("/api", projectControlRoutes(db)); api.use(errorHandler); return api; }
   it("qualifies strict account-bound public commands and minimal rollout-independent control metadata", async () => {
     const f = await fixture(), endpoint = `/api/companies/${companyId}/projects/${f.project.id}/roadmap/planning`;
+    const source = await request(app()).get(`${endpoint}/source?expectedUserId=local-board`).expect(200); expect(source.body.projectId).toBe(f.project.id); expect(source.headers["cache-control"]).toBe("no-store");
+    await request(app()).get(`${endpoint}/source?expectedUserId=foreign-account`).expect(409);
     const preview = await request(app()).post(`${endpoint}/preview?expectedUserId=local-board`).send(f.profile).expect(200); expect(preview.headers["cache-control"]).toBe("no-store");
     await request(app()).post(`${endpoint}/preview?expectedUserId=foreign-account`).send(f.profile).expect(409);
     await request(app()).post(`${endpoint}/preview?arbitrarySql=select`).send(f.profile).expect(400);
