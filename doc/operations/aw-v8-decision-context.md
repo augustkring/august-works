@@ -53,9 +53,21 @@ withdrawal, source erasure, paused expiry and company purge. Verification logs
 live under `/var/tmp/aw-v8-decision-context-*`. The API wave passes 60 native
 tests across context, existing Decisions, company purge and OpenAPI; four shared
 contract tests; native snapshot drift/migration safety and server type checking.
+The native Resolver now mounts an account/company-scoped context panel with
+explicit proposal and preparation controls, native evidence pickers and read-only
+frozen history. Editing pauses background context refresh so an unsaved human
+proposal survives the normal 30-second interval; privacy/account changes still
+clear it and mutations reauthorize on the server. Local UI type checking,
+22 component checks, token gates and the production Storybook build pass.
+The 24 browser presentation/form checks cover five states, two themes and
+mobile/desktop widths, keyboard provenance, WCAG axe checks and human
+range/evidence form validation. A separate elapsed-time browser regression
+passes after 31 seconds of unsaved editing. The initial timing check used an
+unstable exact label-text selector; its retained textarea was visible in the
+trace, and the corrected accessible-role selector passes without a source change.
 These are local source checks, not staging,
 pilot, production, maintainer visual baseline or whole-brief acceptance.
 
-Still open: UI/visual verification, outcome reviews and assumption validation,
+Still open: maintainer visual baseline qualification, outcome reviews and assumption validation,
 review rules and Learning conversion, templates and AI assistant, DMN,
 forecast/scenario/experiment/causal evidence owners and final integrated regression.

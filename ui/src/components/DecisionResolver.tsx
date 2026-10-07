@@ -7,6 +7,7 @@ import { issuesApi } from "../api/issues";
 import { queryKeys } from "../lib/queryKeys";
 import { useCompany } from "../context/CompanyContext";
 import { DecisionCard, type DecisionIssueRef } from "./DecisionCard";
+import { DecisionContextPanel } from "./DecisionContextPanel";
 
 interface DecisionResolverProps {
   companyId: string;
@@ -186,6 +187,7 @@ export function DecisionResolver({ companyId, decisionId, originIssue, agentMap,
     null;
 
   return (
+    <div className="min-w-0 space-y-4">
     <DecisionCard
       decision={decision}
       executions={decision.executions}
@@ -209,5 +211,7 @@ export function DecisionResolver({ companyId, decisionId, originIssue, agentMap,
       onDecide={(optionId, inputValues) => decideMutation.mutate({ optionId, inputValues, idempotencyKey: crypto.randomUUID() })}
       onDismiss={(reason) => dismissMutation.mutate(reason)}
     />
+    <DecisionContextPanel decision={decision}/>
+    </div>
   );
 }
