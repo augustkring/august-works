@@ -40,7 +40,9 @@ export async function assertLearnedAssetAnalyticalSources(db:Db,companyId:string
   .innerJoin(learningCycles,and(eq(learningCycles.companyId,companyId),eq(learningCycles.id,learningHypotheses.cycleId)))
   .where(and(eq(learningRetainedAssets.companyId,companyId),eq(learningRetainedAssets.assetType,type),eq(learningRetainedAssets.assetId,id),sql`(${learningCycles.analyticalSourceCount}>0 or ${learningCycles.erasedAt} is not null)`)).limit(21);
  if(cycles.length>20)throw lost();
- for(const {cycle} of cycles){if(cycle.erasedAt)throw lost();await assertLearningAnalyticalSources(db,actor,cycle);}
+ let sourceSensitivity:"internal"|"confidential"|null=null;
+ for(const {cycle} of cycles){if(cycle.erasedAt)throw lost();const sensitivity=await assertLearningAnalyticalSources(db,actor,cycle);if(sensitivity==="confidential"||!sourceSensitivity)sourceSensitivity=sensitivity;}
+ return {cycles:cycles.map(row=>row.cycle),sourceSensitivity};
 }
 
 /** The canonical domain's own human review repeats original signal admission. */

@@ -1,3 +1,4 @@
+import {lockAnalyticalCompany} from "../services/analytical-privacy.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
@@ -153,11 +154,11 @@ suite("native strategy links on migrated PostgreSQL", () => {
       expect(await db.select().from(strategyExecutionLinkVersions).where(eq(strategyExecutionLinkVersions.linkId, created.link.id))).toHaveLength(0);
     } finally { if (secret === undefined) delete process.env.PAPERCLIP_DECISION_SIGNING_SECRET; else process.env.PAPERCLIP_DECISION_SIGNING_SECRET = secret; }
   });
-  it("waits for Memory before taking Foundation rows during a native draft mutation", async () => {
+  it("waits for company and Memory privacy before taking Foundation rows during a native draft mutation", async () => {
     const created = await approved(); let releaseMemory!: () => void, signalHeld!: () => void;
     const held = new Promise<void>(resolve => { signalHeld = resolve; }); const release = new Promise<void>(resolve => { releaseMemory = resolve; });
     const mutation = db.transaction(async rawTx => {
-      const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, companyId); signalHeld(); await release;
+      const tx = rawTx as unknown as typeof db; await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx, companyId); signalHeld(); await release;
       await tx.execute(sql`set local lock_timeout='1s'`);
       await foundationService(tx).updateDraft(companyId, foundation.id, { baseRevisionId: foundation.latestRevisionId!, body: "# Strategy\nA concurrent native working draft" }, foundationActor);
     });

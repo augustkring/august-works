@@ -1,3 +1,4 @@
+import {purgeDerivedWorkflowMemory} from "../memory/memory-privacy.js";
 import { and, eq, sql, ne, inArray } from "drizzle-orm";
 import { learningCycles, companyAgentPackageInstallations, agentPackageUpdateProposals, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, policyChangeProposals, workflowOptimizerEvaluations, automationArtifacts, workflows, workflowRevisions, workflowRuns, rolePacks, rolePackVersions, rolePackItems,
   foundationChangeProposals, playbookChangeProposals, projectRoadmapProposals, companySkills, companySkillVersions, documentRevisions, documents, foundationSections, foundationDocuments, playbookDocuments, type Db } from "@paperclipai/db";
@@ -39,6 +40,7 @@ export async function invalidateLearningCycles(tx:Db,companyId:string,cycleIds:s
   }
   if (!links.length) return;
   const assets = await tx.select().from(learningRetainedAssets).where(and(eq(learningRetainedAssets.companyId, companyId), inArray(learningRetainedAssets.candidateLinkId, links.map((link) => link.id))));
+  if(erase)await purgeDerivedWorkflowMemory(tx,companyId,[],now,{workflowRevisionIds:assets.filter(asset=>asset.assetType==="workflow_revision").map(asset=>asset.assetId),artifactVersionIds:assets.filter(asset=>asset.assetType==="automation_artifact_version").map(asset=>asset.assetId)});
   if (ids("automation_artifact").length) {
     const candidates = await tx.update(workflowOptimizerEvaluations).set({ status: "retired", ...(erase ? { compilerResult: null, invariants: [] } : {}), updatedAt: now }).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), inArray(workflowOptimizerEvaluations.id, ids("automation_artifact")))).returning();
     if (candidates.length) await tx.update(automationArtifacts).set({ status: "deprecated", archivedAt: now, updatedAt: now }).where(and(eq(automationArtifacts.companyId, companyId), inArray(automationArtifacts.id, candidates.map(candidate => candidate.artifactId))));

@@ -18,6 +18,8 @@ import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } fro
 import { eraseAnalyticalSourcesUnderMemory } from "../services/analytical-source-erasure.js";
 import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { learningService } from "../services/learning/learning-service.js";
+import {managementReviewManifestDependencies} from "@paperclipai/db";
+import {memoryJobService} from "../services/memory/memory-jobs.js";
 import { purgeMemoryRecords } from "../services/memory/memory-privacy.js";
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
 import { errorHandler } from "../middleware/index.js";
@@ -79,6 +81,34 @@ describe.skipIf(!support.supported)("Native historical management review owner o
     await db.transaction(async raw => { const tx = raw as unknown as Db; await lockMemoryPrivacy(tx, companyId); await purgeMemoryRecords(tx, companyId, [memory!.id]); });
     expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id, created.id))).toHaveLength(0);
     expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]!.status).toBe("done");
+  });
+  it.each(["internal","confidential"] as const)("inherits original %s analytical Learning sources into the actual management owner without replacing verified outcomes",async(sensitivity)=>{
+    const f=await fixture();await instanceSettingsService(db).updateExperimental({enableContextEngineV1:true,skill_lifecycle_v5:true,playbooks_v5:true,enableCollectiveMemoryV1:true,cognitive_memory_v7:true,memory_observations_v7:true,learning_engine_v7:true});
+    const purpose=analyticalPurpose();purpose.analyticalPurpose!.capabilities=["metrics","reviews"];purpose.analyticalPurpose!.permittedSensitivity=["internal","confidential"];
+    const policy=await aiGovernanceService(db).obligation(actor,companyId,purpose);f.definition.governanceObligationRefs=[policy.id];
+    const [task]=await db.insert(issues).values({companyId,title:"Synthetic verified native work outcome",status:"done",completedAt:new Date(),responsibleUserId:"local-board"}).returning();
+    const [binding]=await db.insert(memoryBindings).values({companyId,key:"analytical_learning",name:"Original verified outcome",providerKey:"local"}).returning();
+    const [memory]=await db.insert(memoryRecords).values({companyId,bindingId:binding!.id,providerKey:"local",memoryType:"outcome",scopeType:"company",content:"Independent verified native Task outcome",reviewState:"accepted",verificationState:"human_verified",observedAt:new Date(),createdByActorType:"system",createdByActorId:"fixture"}).returning();
+    await db.insert(memoryEvidence).values({companyId,memoryRecordId:memory!.id,sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${task!.id}`,sourceVersion:"1",observedAt:new Date(),excerptHash:"a".repeat(64),citationJson:{label:"Synthetic native qualification"},trustLevel:"high",supportsOrContradicts:"supports"});
+    const metrics=businessMetricService(db),metric=await metrics.create(companyId,actor,{key:"learning_review_signal",definition:{...metricDefinition(policy.id),sensitivity}});
+    await metrics.publish(companyId,actor,metric.metric.id,{expectedRevision:1,versionId:metric.version.id});
+    const observation=await metrics.query(companyId,actor,{metricId:metric.metric.id,versionId:metric.version.id,from:f.definition.period.from,until:new Date().toISOString(),dimensions:[],maxRows:100});
+    const cycle=await learningService(db).create(actor,companyId,{scope:{type:"company",id:null},purpose:"native_task_execution",trigger:rationale,memoryRecordIds:[memory!.id],analyticalSources:[{kind:"analytical_evidence",source:{type:"metric_observation",id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}}]});
+    f.definition.sources.push({key:"learning",source:{kind:"learning_cycle",id:cycle.id,expectedVersion:cycle.version}});
+    const owner=managementReviewService(db);
+    if(sensitivity==="confidential")await expect(owner.create(companyId,actor,f.definition)).rejects.toMatchObject({status:403});
+    f.definition.sensitivity=sensitivity;
+    const created=await owner.create(companyId,actor,f.definition),detail=await owner.detail(companyId,actor,created.id);
+    expect((await db.select().from(managementReviewManifestDependencies).where(eq(managementReviewManifestDependencies.reviewId,created.id))).map(row=>row.sourceManifestId)).toEqual([observation.lineageManifestId]);
+    expect(Date.parse(detail.expiresAt)).toBeLessThanOrEqual(Date.parse(observation.expiresAt));
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,task!.id));
+    await expect(owner.detail(companyId,actor,created.id)).rejects.toMatchObject({status:404});
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,task!.id));
+    expect((await owner.detail(companyId,actor,created.id)).sources.find(source=>source.key==="learning")!.grade).toBe("native_learning_cycle");
+    await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,observation.id));await memoryJobService(db).tick({limit:10});
+    expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id,created.id))).toHaveLength(0);
+    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,memory!.id)))[0]!.content).toBe("Independent verified native Task outcome");
   });
   it("purges published review/event content with disabled rollout and a paused company while preserving a foreign Goal", async () => {
     const f = await fixture(), created = await managementReviewService(db).create(companyId, actor, f.definition); await publish(created.id, created.contentHash);
