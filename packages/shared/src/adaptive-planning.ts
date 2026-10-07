@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { decisionEvidenceReferenceSchema, type CapturedDecisionEvidence } from "./decision-intelligence.js";
+import type { RoadmapPolicy } from "./project-control.js";
 
 // This is a sanitized mathematical contract. Authorization, source capture and
 // human approval belong to the native owners, never to the optimization provider.
@@ -54,6 +56,49 @@ export const planningProblemSchema = z.object({
 });
 export type PlanningProblem = z.infer<typeof planningProblemSchema>;
 export type PlanningProblemInput = z.input<typeof planningProblemSchema>;
+export const projectPlanningProfileSchema = z.object({
+  purpose: z.literal("management_intelligence"),
+  sensitivity: z.enum(["internal", "confidential"]),
+  retentionDays: z.number().int().min(1).max(365),
+  governanceObligationRefs: z.array(z.string().uuid()).min(1).max(16),
+  horizon: planningProblemSchema.shape.horizon,
+  pools: planningProblemSchema.shape.pools,
+  policy: planningProblemSchema.shape.policy,
+  tasks: z.array(planningProblemSchema.shape.tasks.element.extend({
+    key: z.string().uuid(),
+    expectedUpdatedAt: z.string().datetime({ offset: true }),
+    rationale: z.string().trim().min(10).max(2000),
+  }).strict()).min(1).max(200),
+  evidence: z.array(z.object({ key, source: decisionEvidenceReferenceSchema, rationale: z.string().trim().min(10).max(2000) }).strict()).max(20),
+}).strict().superRefine((profile, ctx) => {
+  for (const values of [profile.governanceObligationRefs, profile.tasks.map((task) => task.key), profile.evidence.map((item) => item.key)]) if (new Set(values).size !== values.length) ctx.addIssue({ code: "custom", message: "Source and task identities must be unique" });
+});
+export const proposeProjectPlanningSchema = z.object({
+  profile: projectPlanningProfileSchema,
+  expectedSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
+  reason: z.string().trim().min(20).max(4000),
+}).strict();
+export type ProjectPlanningProfile = z.infer<typeof projectPlanningProfileSchema>;
+export type ProposeProjectPlanning = z.infer<typeof proposeProjectPlanningSchema>;
+export interface ProjectPlanningSourceSnapshot {
+  projectId: string;
+  projectUpdatedAt: string;
+  roadmapPolicy: RoadmapPolicy;
+  tasks: Array<{ id: string; updatedAt: string; status: string; plannedStartAt: string | null; plannedEndAt: string | null; estimatedEffortMinutes: number | null; milestoneId: string | null; assigneeAgentId: string | null; assigneeUserId: string | null }>;
+  dependencies: Array<{ before: string; after: string }>;
+  satisfiedDependencies: Array<{ id: string; projectId: string | null; updatedAt: string; status: "done" }>;
+}
+export interface ProjectPlanningContext {
+  profile: ProjectPlanningProfile;
+  sourceSnapshot: ProjectPlanningSourceSnapshot;
+  evidence: CapturedDecisionEvidence[];
+  snapshotHash: string;
+  result: NativePlanningResult;
+  runtimeMs: number;
+  capturedAt: string;
+  expiresAt: string;
+  authority: "human_roadmap_review_required";
+}
 export interface NativePlanningResult {
   provider: { key: "aw_native_constraints"; version: "1" };
   status: "feasible_best_known" | "infeasible" | "inconclusive";

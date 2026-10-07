@@ -1,10 +1,11 @@
 import { sql } from "drizzle-orm";
 import { check, date, foreignKey, index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
-import type { ProjectRoadmap, RoadmapProposalInput } from "@paperclipai/shared";
+import type { ProjectRoadmap, RoadmapProposalInput, ProjectPlanningContext } from "@paperclipai/shared";
 import { companies } from "./companies.js";
 import { projects } from "./projects.js";
 import { agents } from "./agents.js";
 import { goals } from "./goals.js";
+import { analyticalLineageManifests } from "./analytical_lineage.js";
 
 export const projectMilestones = pgTable("project_milestones", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), projectId: uuid("project_id").notNull(), goalId: uuid("goal_id").references(() => goals.id), name: text("name").notNull(), description: text("description").notNull().default(""), status: text("status").notNull().default("planned"), targetDate: date("target_date"),
@@ -16,4 +17,7 @@ export const projectScheduleBaselines = pgTable("project_schedule_baselines", {
 export const projectRoadmapProposals = pgTable("project_roadmap_proposals", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), projectId: uuid("project_id").notNull(), patch: jsonb("patch_json").$type<RoadmapProposalInput>().notNull(), reason: text("reason").notNull(), risk: text("risk").notNull(), status: text("status").notNull().default("pending"),
   createdByAgentId: uuid("created_by_agent_id"), createdByUserId: text("created_by_user_id"), reviewedByUserId: text("reviewed_by_user_id"), reviewRationale: text("review_rationale"), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({ projectFk: foreignKey({ columns: [t.companyId, t.projectId], foreignColumns: [projects.companyId, projects.id] }).onDelete("cascade"), authorFk: foreignKey({ columns: [t.companyId, t.createdByAgentId], foreignColumns: [agents.companyId, agents.id] }), stateCheck: check("project_roadmap_proposals_state_check", sql`${t.status} in ('pending','accepted','rejected','stale')`), projectIdx: index("project_roadmap_proposals_project_idx").on(t.companyId, t.projectId, t.status) }));
+  planningContext: jsonb("planning_context_json").$type<ProjectPlanningContext>(),
+  planningContextHash: text("planning_context_hash"),
+  planningManifestId: uuid("planning_manifest_id"),
+}, (t) => ({ projectFk: foreignKey({ columns: [t.companyId, t.projectId], foreignColumns: [projects.companyId, projects.id] }).onDelete("cascade"), authorFk: foreignKey({ columns: [t.companyId, t.createdByAgentId], foreignColumns: [agents.companyId, agents.id] }), stateCheck: check("project_roadmap_proposals_state_check", sql`${t.status} in ('pending','accepted','rejected','stale')`), projectIdx: index("project_roadmap_proposals_project_idx").on(t.companyId, t.projectId, t.status), planningManifestFk: foreignKey({ name: "project_roadmap_planning_manifest_fk", columns: [t.companyId, t.planningManifestId], foreignColumns: [analyticalLineageManifests.companyId, analyticalLineageManifests.id] }).onDelete("cascade"), planningMaterialCheck: check("project_roadmap_planning_material_check", sql`(${t.planningContext} is null and ${t.planningContextHash} is null and ${t.planningManifestId} is null) or (${t.planningContext} is not null and ${t.planningContextHash} is not null and ${t.planningContextHash} ~ '^[0-9a-f]{64}$' and ${t.planningManifestId} is not null)`) }));

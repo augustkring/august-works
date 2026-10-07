@@ -26,3 +26,53 @@ a public product capability. Single-project proposals must use existing
 `project_roadmap_proposals` and canonical review/apply. Cross-project proposals
 are justified only when scope actually exceeds one project. OR-Tools remains
 a later optional provider after demonstrated customer need.
+
+## Native project source and canonical review
+
+Single-project scheduling now extends `project_roadmap_proposals` with immutable
+planning material and a tenant-bound analytical lineage manifest. Native preview
+reads every eligible visible active business task and every incoming blocking
+edge; individual task denial withholds the solve instead of producing a favorable
+partial population. Native completed predecessors may satisfy a dependency only
+with current source authority and full project ancestry. An unresolved external
+predecessor requires resolution or a cross-project proposal. External ownership
+of planned dates blocks native scheduling before a preview is presented.
+
+Duration, capacity, commitment declarations and separate numerical dimensions
+remain explicit human inputs, with a human rationale per task. They are not
+inferred employee performance, verified metric effects or execution entitlement.
+Optional exact native metric/process/forecast/scenario/experiment/causal evidence
+uses the shared original Decision capture and native source inspectors. Every
+source still has its own admission; destination planning requires current approved
+company purpose, sensitivity and retention. No copied public result, arbitrary SQL
+or provider database access is admitted.
+
+Preview does not persist or mutate. Proposing replays the current snapshot and
+requires the exact preview hash plus independent schedule validation. It creates
+a pending canonical Roadmap proposal; only separate human Roadmap review applies
+it. That owner rechecks signed material, original kernel replay and current
+project/task/dependency/evidence constraints before canonical mutation. Source
+changes block acceptance, and an authorized retained task-state change preserves
+original context bytes with explicit revalidation. The original V5 view omits
+analytical source prose; the governed planning owner supplies it.
+
+Native company purge explicitly deletes frozen planning proposals before its
+generic nullable-FK planner; unlinking would incorrectly rewrite their material.
+Native source erasure and retention remove the entire dependent proposal and
+copied context through the existing manifest owner. Already applied canonical
+task dates remain authoritative. Minimal administrator controls expose only
+proposal identity/status with V8 rollout off and a paused company. Native human
+rejection remains available with V8 rollout off. Public commands bind current
+account and exact company/project identities and return `no-store`.
+
+Generated SQL adds complete all-or-none material, immutable source binding, exact
+UTC schedule/parent identity and deferred lineage completeness checks. It requires
+canonical applied task dates and human review metadata before accepted status.
+Software additionally verifies the original HMAC, native source authority and
+current constraints; copied database proof material cannot establish reliance.
+The manifest preserves the canonical Roadmap's precise database creation time,
+while signed API dates use the existing native Date representation.
+
+Project UI, cross-project prioritization/constraints and their authority owners
+remain open. This checkpoint does not establish a complete V8 build, independent
+external analytical providers or a hosted release.

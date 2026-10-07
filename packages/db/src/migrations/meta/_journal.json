@@ -2857,6 +2857,13 @@
       "when": 1791367359281,
       "tag": "0409_cynical_silk_fever",
       "breakpoints": true
+    },
+    {
+      "idx": 410,
+      "version": "7",
+      "when": 1791370267331,
+      "tag": "0410_rapid_stellaris",
+      "breakpoints": true
     }
   ]
 }

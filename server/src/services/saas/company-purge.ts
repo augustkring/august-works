@@ -1,7 +1,7 @@
 import { eq, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, type Db } from "@paperclipai/db";
+import { projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -46,6 +46,10 @@ export async function purgeCompanyContent(
     // purge rolls it back; normal archival never grants evidence deletion.
     await tx.execute(sql`update ${companies} set status='archived',pause_reason='company_deleted',content_erasure_transaction_id=pg_current_xact_id()::text,updated_at=now() where id=${companyId}::uuid`);
     const deleted: string[] = [];
+    // A planning source link is part of frozen canonical proposal material.
+    // Erase the owned proposal; generic nullable-FK unlinking cannot rewrite it.
+    const planning = await tx.execute(sql`delete from ${projectRoadmapProposals} where company_id=${companyId}::uuid and planning_manifest_id is not null returning id`);
+    if (planning.length) deleted.push("project_roadmap_proposals");
     // Published analytical roots own immutable versions and generated source
     // pins. Delete through those native cascade owners before the generic FK
     // planner, which cannot unlink generated columns or mutate frozen snapshots.
@@ -179,6 +183,6 @@ export async function purgeCompanyContent(
     await tx.execute(
       sql`update ${companies} set name='Deleted company',description=null,default_responsible_user_id=null,interaction_resolver_governance='{}'::jsonb,feedback_data_sharing_enabled=false,feedback_data_sharing_consent_at=null,feedback_data_sharing_consent_by_user_id=null,feedback_data_sharing_terms_version=null,status='archived',pause_reason='company_deleted',updated_at=now() where id=${companyId}::uuid`,
     );
-    return { tables: deleted.sort(), companyTombstoneRetained: true };
+    return { tables: [...new Set(deleted)].sort(), companyTombstoneRetained: true };
   });
 }

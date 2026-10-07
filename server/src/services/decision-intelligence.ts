@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { captureAnalyticalEvidence, inspectAnalyticalEvidenceAuthority as inspectAuthorityEdges } from "./analytical-evidence.js";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { analyticalLineageEdges, analyticalLineageManifests, businessMetricObservations, businessMetricVersions,
+import { analyticalLineageEdges, analyticalLineageManifests,
   companyMemberships, decisionContexts, decisionContextVersions, decisionContextPreparations, decisionContextBindings,
-  decisionEvidenceLinks, decisionCalculationPins, decisionExperimentPins, decisionCausalPins, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes, decisions, processAnalysisRuns,
-  processAnalysisVersions, type Db } from "@paperclipai/db";
+  decisionEvidenceLinks, decisionCalculationPins, decisionExperimentPins, decisionCausalPins, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes, decisions, type Db } from "@paperclipai/db";
 import { decisionContextDefinitionSchema, proposeDecisionContextSchema, prepareDecisionContextSchema, withdrawPreparedDecisionContextSchema,
   v7FeatureEnabled, v8FeatureEnabled, type CapturedDecisionEvidence, type DecisionContextDefinition, type DecisionContextView,
   type ProposeDecisionContext, type PrepareDecisionContext, type WithdrawPreparedDecisionContext } from "@paperclipai/shared";
@@ -17,7 +17,6 @@ import { currentAnalyticalPurpose } from "./analytical-purpose.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { authorizeStrategyReference } from "./strategy-execution/references.js";
 import { businessMetricService } from "./business-metrics/service.js";
-import { processFindingService } from "./process-findings.js";
 import { processAnalysisService } from "./process-analysis.js";
 import { inspectBusinessForecastRun } from "./business-forecasting/service.js";
 import { inspectBusinessScenarioRun } from "./business-scenarios/service.js";
@@ -98,101 +97,21 @@ function optionPins(row:Decision,definition:DecisionContextDefinition) {
 /** Capture only native owner-admitted facts. Public callers cannot supply copied
  * values, timestamps, source hashes or numerical confidence. */
 async function capture(tx:Db,row:Decision,actor:AuthorizationActor,definition:DecisionContextDefinition) {
-  const deadline=performance.now()+30_000,now=new Date(),policies=await purpose(tx,row.companyId,actor,definition);
+  const deadline=performance.now()+30_000,policies=await purpose(tx,row.companyId,actor,definition);
   optionPins(row,definition);
   const ancestry=await decisionAuthority(tx,row,actor,definition.sensitivity),scope=await scopeAuthority(tx,row.companyId,actor,definition);
-  const edges=new Map<string,Edge>(),evidence:CapturedDecisionEvidence[]=[];
-  let expiresAt=new Date(now.getTime()+definition.retentionDays*DAY);
-  function edge(value:Edge) {
-    value={inputType:value.inputType,inputRef:value.inputRef,inputHash:value.inputHash,relationship:value.relationship};
-    const key=`${value.inputType}:${value.inputRef}`,old=edges.get(key);
-    // Object authority edges describe identity. Exact fact hashes remain in
-    // each captured evidence receipt; event/definition/policy pins stay exact.
-    if(value.inputType==="issue" || value.inputType==="project") value={...value,inputHash:nativeSha256({type:value.inputType,id:value.inputRef})};
-    if(old && old.inputHash!==value.inputHash) throw conflict("Evidence pins disagree about a native source version");
-    edges.set(key,value);if(edges.size>EDGE_BUDGET) throw unprocessable("Decision context exceeds its native source budget");
-  }
-  for(const id of [...ancestry.issueIds,...scope.issueIds]) edge({inputType:"issue",inputRef:id,inputHash:"",relationship:"source"});
-  for(const id of [...ancestry.projectIds,...scope.projectIds]) edge({inputType:"project",inputRef:id,inputHash:"",relationship:"source"});
-  for(const policy of policies) edge({inputType:"governance_obligation",inputRef:policy.id,inputHash:policy.obligationHash,relationship:"policy"});
-  for(const link of definition.evidence) {
-    checkTime(deadline);let manifestId:string,facts:CapturedDecisionEvidence["facts"],sourceHash:string,sourceExpiry:Date,limitations:string[];
-    const ref=link.source;
-    if(ref.type==="metric_observation") {
-      await authorizeStrategyReference(tx,row.companyId,actor,ref,definition.sensitivity);
-      const result=await businessMetricService(tx).inspectCurrentObservation(row.companyId,actor,ref.id);
-      const [observation]=await tx.select().from(businessMetricObservations).where(and(eq(businessMetricObservations.companyId,row.companyId),eq(businessMetricObservations.id,ref.id))).for("share");
-      if(!observation || observation.metricId!==ref.metricId || observation.versionId!==ref.metricVersionId) throw conflict("Exact metric observation pins are unavailable");
-      const [metricVersion]=await tx.select().from(businessMetricVersions).where(and(eq(businessMetricVersions.companyId,row.companyId),eq(businessMetricVersions.metricId,ref.metricId),eq(businessMetricVersions.id,ref.metricVersionId))).for("share");
-      if(!metricVersion) throw conflict("Metric evidence definition is unavailable");
-      manifestId=observation.lineageManifestId;sourceExpiry=observation.expiresAt;sourceHash=nativeSha256(result);
-      facts={value:result.value,status:result.status,unit:metricVersion.definition.unit,from:result.from,until:result.until,asOf:result.asOf};
-      limitations=["Frozen measurement of the declared native population and observation window; no causal attribution.","Native population status is observed at capture, not reconstructed at a historical period boundary."];
-    } else if(ref.type==="process_finding") {
-      const {finding}=await processFindingService(tx).detail(row.companyId,actor,ref.definitionId,ref.runId,ref.id);
-      const [run]=await tx.select().from(processAnalysisRuns).where(and(eq(processAnalysisRuns.companyId,row.companyId),eq(processAnalysisRuns.id,ref.runId),eq(processAnalysisRuns.definitionId,ref.definitionId))).for("share");
-      const [version]=run?await tx.select().from(processAnalysisVersions).where(and(eq(processAnalysisVersions.companyId,row.companyId),eq(processAnalysisVersions.id,run.versionId))).for("share"):[];
-      if(!run || !version) throw conflict("Native process finding pins are unavailable");
-      manifestId=run.lineageManifestId;sourceExpiry=new Date(finding.expiresAt);sourceHash=finding.contentHash;
-      facts={findingType:finding.findingType,severity:finding.severity,interpretation:finding.interpretation,summary:finding.summary,...finding.facts.observed};
-      limitations=[...finding.facts.limitations,"The human interpretation and admitted facts were captured before the choice; later lifecycle changes do not rewrite them."];
-    } else if(ref.type==="forecast_run") {
-      const source=await inspectBusinessForecastRun(tx,row.companyId,actor,ref.specId,ref.versionId,ref.id,true),point=source.view.result.points[ref.pointIndex];
-      if(!point || source.view.result.status!=="qualified") throw conflict("Exact qualified forecast point is unavailable");
-      if(definition.sensitivity==="internal" && source.forecastDefinition.sensitivity==="confidential") throw forbidden("Confidential forecast evidence cannot be downgraded");
-      manifestId=source.lineageManifestId;sourceExpiry=new Date(source.view.expiresAt);sourceHash=nativeSha256({runContentHash:source.view.contentHash,pointIndex:ref.pointIndex,point});
-      facts={value:point.value,from:point.from,until:point.until,unit:source.metricDefinition.unit,status:source.view.result.status,cutoff:source.view.cutoff,intervalLower:null,intervalUpper:null,calibration:"not_assessed"};
-      limitations=[...source.view.result.limitations,"A forecast estimates a future metric under its time-safe model; it is not an observed outcome or a causal effect."];
-    } else if(ref.type==="scenario_run") {
-      const source=await inspectBusinessScenarioRun(tx,row.companyId,actor,ref.scenarioId,ref.versionId,ref.id,true),scenarioCase=source.view.result.cases.find(item=>item.key===ref.caseKey),output=scenarioCase?.outputs.find(item=>item.key===ref.outputKey);
-      if(!output || source.view.result.status==="data_not_ready") throw conflict("Exact retained scenario output is unavailable");
-      if(definition.sensitivity==="internal" && source.definition.sensitivity==="confidential") throw forbidden("Confidential scenario evidence cannot be downgraded");
-      manifestId=source.lineageManifestId;sourceExpiry=new Date(source.view.expiresAt);sourceHash=nativeSha256({runContentHash:source.view.contentHash,caseKey:ref.caseKey,outputKey:ref.outputKey,output});
-      facts={nominal:output.nominal,differenceFromBase:output.differenceFromBase,unit:JSON.stringify(output.unit),caseKind:scenarioCase!.kind,status:source.view.result.status,constraint:output.constraint,p10:output.simulation?.p10??null,median:output.simulation?.median??null,p90:output.simulation?.p90??null,uncertaintyMethod:source.view.result.uncertainty.method,uncertaintyQualification:source.view.result.uncertainty.qualification};
-      limitations=[...source.view.result.limitations,"This selected scenario output is conditional on its frozen human assumptions; it is not a measured actual, causal effect or commitment."];
-    } else if(ref.type==="causal_analysis") {
-      const source=await inspectCausalClaimEvidence(tx,row.companyId,actor,ref,true,deadline);
-      if(definition.sensitivity==="internal"&&source.definition.sensitivity==="confidential")throw forbidden("Confidential causal evidence cannot be downgraded");
-      sourceExpiry=source.expiresAt;sourceHash=source.sourceHash;const result=source.view.result;
-      facts={status:result.status,evidenceGrade:result.evidenceGrade,identification:result.identification.status,executionAuthority:"advisory_only",effect:result.estimate?.effect??null,intervalLower:result.estimate?.interval.lower??null,intervalUpper:result.estimate?.interval.upper??null,unit:result.estimate?.unit??null,sensitivity:result.robustness.sensitivity,providerRefutations:result.robustness.providerRefutations};
-      limitations=[...result.limitations,"A separately reviewed conditional causal interpretation remains advisory evidence, not a measured actual, verified task outcome or choice authorization."];
-      for(const inherited of source.edges){checkTime(deadline);edge(inherited);}
-      expiresAt=new Date(Math.min(expiresAt.getTime(),sourceExpiry.getTime()));
-      evidence.push({key:link.key,source:ref,sourceHash,capturedAt:now.toISOString(),expiresAt:sourceExpiry.toISOString(),facts,limitations,causal:{definition:source.definition,run:source.view,review:source.review}});continue;
-    } else {
-      const source=await inspectBusinessExperimentEvidence(tx,row.companyId,actor,ref,true,deadline);
-      if(definition.sensitivity==="internal" && source.definition.sensitivity==="confidential") throw forbidden("Confidential experiment evidence cannot be downgraded");
-      const result=source.view.result, primary=result.metrics.find(metric=>metric.role==="primary");
-      sourceExpiry=source.expiresAt;sourceHash=source.sourceHash;
-      facts={status:result.status,causalAuthority:source.view.causalAuthority,numericalQualification:result.numericallyQualified?"qualified":"withheld",humanConclusion:source.interpretation.conclusion,executionAuthority:"advisory_only",assignedUnits:result.diagnostics.assigned,reportedExposedUnits:result.diagnostics.exposed,primaryDifference:primary?.effect??null,primaryIntervalLower:primary?.interval?.lower??null,primaryIntervalUpper:primary?.interval?.upper??null,differenceUnit:"fraction_difference",analyzedAt:source.view.analyzedAt,exposureProvenance:source.view.exposureProvenance,outcomeTimeSemantics:source.view.outcomeTimeSemantics};
-      limitations=[...result.limitations,"This native status proxy and human exposure/concurrent-change attestations provide conditional advisory evidence; they do not establish verified intervention, business impact or execution authority.",...result.reasons];
-      for(const inherited of source.edges){checkTime(deadline);edge(inherited);}
-      expiresAt=new Date(Math.min(expiresAt.getTime(),sourceExpiry.getTime()));
-      evidence.push({key:link.key,source:ref,sourceHash,capturedAt:now.toISOString(),expiresAt:sourceExpiry.toISOString(),facts,limitations,experiment:{analysis:source.view,registeredMetrics:{primaryMetric:source.definition.primaryMetric,guardrailMetrics:source.definition.guardrailMetrics,secondaryMetrics:source.definition.secondaryMetrics,diagnostics:source.definition.diagnostics},interpretation:experimentInterpretationView(source.interpretation)}});
-      continue;
-    }
-    const [manifest]=await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,row.companyId),eq(analyticalLineageManifests.id,manifestId))).for("share");
-    const inherited=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,row.companyId),eq(analyticalLineageEdges.manifestId,manifestId))).limit(EDGE_BUDGET+1);
-    if(!manifest || inherited.length>EDGE_BUDGET) throw conflict("Native evidence lineage is unavailable");
-    for(const source of inherited) {checkTime(deadline);edge(source);}
-    expiresAt=new Date(Math.min(expiresAt.getTime(),sourceExpiry.getTime(),manifest.expiresAt.getTime()));
-    evidence.push({key:link.key,source:ref,sourceHash,capturedAt:now.toISOString(),expiresAt:sourceExpiry.toISOString(),facts,limitations});
-  }
+  const captured=await captureAnalyticalEvidence(tx,row.companyId,actor,definition,deadline);
+  const edges=new Map<string,Edge>();
+  for(const source of captured.edges) edges.set(`${source.inputType}:${source.inputRef}`,source);
+  for(const id of [...ancestry.issueIds,...scope.issueIds]) edges.set(`issue:${id}`,{inputType:"issue",inputRef:id,inputHash:nativeSha256({type:"issue",id}),relationship:"source"});
+  for(const id of [...ancestry.projectIds,...scope.projectIds]) edges.set(`project:${id}`,{inputType:"project",inputRef:id,inputHash:nativeSha256({type:"project",id}),relationship:"source"});
+  for(const policy of policies) edges.set(`governance_obligation:${policy.id}`,{inputType:"governance_obligation",inputRef:policy.id,inputHash:policy.obligationHash,relationship:"policy"});
+  if(edges.size>EDGE_BUDGET)throw unprocessable("Decision context exceeds its native source budget");
   const lineage=[...edges.values()].sort((a,b)=>`${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
   await inspectAuthorityEdges(tx,row.companyId,actor,lineage,deadline);
-  return {evidence,edges:lineage,now,expiresAt};
+  return {...captured,edges:lineage};
 }
-async function inspectAuthorityEdges(tx:Db,companyId:string,actor:AuthorizationActor,edges:Edge[],deadline:number) {
-  const objects=edges.flatMap(edge=>edge.inputType==="issue" || edge.inputType==="project"?[{objectType:edge.inputType,objectId:edge.inputRef,qualifier:"related" as const}]:[]);
-  // Reuse the source owner's current hidden-task, project and suppression
-  // admission. Current project ancestry remains separate from recorded facts.
-  const issueIds=new Set<string>(),projectIds=new Set<string>();
-  for(const object of objects) {
-    checkTime(deadline);const current=await authorizeStrategyReference(tx,companyId,actor,{type:object.objectType,id:object.objectId},"confidential");
-    for(const id of current.issueIds) issueIds.add(id);for(const id of current.projectIds) projectIds.add(id);
-  }
-  checkTime(deadline);await assertAnalyticalSourcesNotErased(tx,companyId,[...issueIds],[...projectIds]);
-}
+
 async function inspectRetained(tx:Db,row:Decision,actor:AuthorizationActor,pin:Version) {
   await purpose(tx,row.companyId,actor,pin.definition);await decisionAuthority(tx,row,actor,pin.definition.sensitivity);await scopeAuthority(tx,row.companyId,actor,pin.definition);
   const revalidationRequiredEvidenceKeys:string[]=[];
