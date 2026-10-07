@@ -1,7 +1,7 @@
 import {Router,type Request} from "express";
 import {z} from "zod";
 import type {Db} from "@paperclipai/db";
-import {proposeDecisionContextSchema,prepareDecisionContextSchema,withdrawPreparedDecisionContextSchema,scheduleDecisionOutcomeReviewSchema,transitionDecisionOutcomeReviewSchema,finishDecisionOutcomeReviewSchema} from "@paperclipai/shared";
+import {proposeDecisionContextSchema,prepareDecisionContextSchema,withdrawPreparedDecisionContextSchema,scheduleDecisionOutcomeReviewSchema,transitionDecisionOutcomeReviewSchema,finishDecisionOutcomeReviewSchema,startDecisionReviewLearningSchema} from "@paperclipai/shared";
 import {badRequest,conflict} from "../errors.js";
 import {validate} from "../middleware/validate.js";
 import {assertCompanyAccess} from "./authz.js";
@@ -26,5 +26,6 @@ export function decisionIntelligenceRoutes(db:Db) {
   router.post(`${path}/outcome-review`,validate(scheduleDecisionOutcomeReviewSchema),async(req,res)=>res.status(201).json(await reviews.schedule(company(req),req.actor,id(req.params.decisionId),req.body)));
   router.post(`${path}/outcome-review/transition`,validate(transitionDecisionOutcomeReviewSchema),async(req,res)=>res.json(await reviews.transition(company(req),req.actor,id(req.params.decisionId),req.body)));
   router.post(`${path}/outcome-review/finish`,validate(finishDecisionOutcomeReviewSchema),async(req,res)=>res.json(await reviews.finish(company(req),req.actor,id(req.params.decisionId),req.body)));
+  router.post(`${path}/outcome-review/learning`,validate(startDecisionReviewLearningSchema),async(req,res)=>res.status(201).json(await reviews.startLearning(company(req),req.actor,id(req.params.decisionId),req.body)));
   return router;
 }

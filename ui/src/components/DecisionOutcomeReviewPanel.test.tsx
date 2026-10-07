@@ -6,6 +6,8 @@ import {beforeEach,describe,expect,it,vi} from "vitest";
 import {decisionContextDefinitionSchema,type DecisionContextVersionView,type DecisionOutcomeReviewView} from "@paperclipai/shared";
 import {DecisionOutcomeReviewPanel} from "./DecisionOutcomeReviewPanel";
 import {decisionOutcomeReviewsApi} from "@/api/decision-outcome-reviews";
+vi.mock("@/api/instanceSettings",()=>({instanceSettingsApi:{getExperimental:vi.fn(async()=>({enableFoundationV1:true,enableCollectiveMemoryV1:true,enableContextEngineV1:true,agent_identities_v5:true,agent_provider_bindings_v5:true,agent_runtime_fabric_v5:true,role_packs_v5:true,cognitive_memory_v7:true,learning_engine_v7:true,memory_observations_v7:true,skill_lifecycle_v5:true,playbooks_v5:true}))}}));
+vi.mock("@/lib/router",()=>({Link:({children,to,...props}:{children:React.ReactNode;to:string})=><a href={to} {...props}>{children}</a>}));
 vi.mock("@/api/decision-outcome-reviews",()=>({decisionOutcomeReviewsApi:{detail:vi.fn(),schedule:vi.fn(),transition:vi.fn(),finish:vi.fn()}}));
 (globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
 const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
@@ -49,4 +51,15 @@ describe("Human native outcome review",()=>{
     vi.mocked(decisionOutcomeReviewsApi.detail).mockResolvedValue(review("in_review"));const view=await mount();await click(view.container,"Assess decision outcomes");expect(view.container.querySelector("form")).not.toBeNull();vi.mocked(decisionOutcomeReviewsApi.detail).mockRejectedValue(new Error("Review authority withdrawn"));await act(async()=>window.dispatchEvent(new Event("memory-access-changed")));await flush();expect(view.container.querySelector("form")).toBeNull();expect(view.container.textContent).not.toContain("Private retained human review rationale");await view.render("account-two");expect(decisionOutcomeReviewsApi.detail).toHaveBeenCalledWith(id(1),id(2),"account-two");await view.cleanup();
     const expired=review();expired.receipts[0].expiresAt="2000-01-01T00:00:00Z";vi.mocked(decisionOutcomeReviewsApi.detail).mockResolvedValue(expired);const stale=await mount();expect(stale.container.textContent).not.toContain("Private retained human review rationale");expect(stale.container.textContent).toContain("Retained review evidence is unavailable");await stale.cleanup();
   });
+});
+
+it("offers a bounded Learning handoff only from a current terminal review and links an existing cycle",async()=>{
+ const terminal={...review("inconclusive"),revision:3};vi.mocked(decisionOutcomeReviewsApi.detail).mockResolvedValue(terminal);
+ const app=await mount();try{
+  const link=app.container.querySelector<HTMLAnchorElement>('a[href*="reviewDecisionId"]')!;
+  expect(link?.textContent).toBe("Start Learning from this review");expect(link.href).toContain("reviewRevision=3");expect(link.href).toContain(`reviewCompanyId=${id(1)}`);
+  vi.mocked(decisionOutcomeReviewsApi.detail).mockResolvedValue({...terminal,learningCycleId:id(9)});
+  await act(async()=>{await app.client.invalidateQueries({queryKey:["decision-outcome-review"]});});await flush();
+  expect(app.container.querySelector<HTMLAnchorElement>('a[href*="cycleId"]')?.textContent).toBe("Open Learning cycle");
+ }finally{await app.cleanup();}
 });

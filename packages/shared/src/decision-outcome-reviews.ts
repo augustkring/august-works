@@ -1,4 +1,5 @@
 import {z} from "zod";
+import {learningCycleSchema} from "./learning.js";
 import {decisionEvidenceReferenceSchema,type CapturedDecisionEvidence} from "./decision-intelligence.js";
 
 const prose=z.string().trim().min(10).max(2000),key=z.string().regex(/^[a-z][a-z0-9_-]{1,79}$/);
@@ -24,6 +25,10 @@ export const finishDecisionOutcomeReviewSchema=z.object({
   if(new Set(value.assumptionOutcomes.map(item=>item.key)).size!==value.assumptionOutcomes.length) reject("Assumption outcomes cannot repeat");
   if(value.metricOutcomes.some(item=>!value.actualMetrics.some(actual=>actual.key===item.actualEvidenceKey))) reject("Comparison requires a declared actual observation pin");
 });
+/** The review supplements independently verified outcomes; it supplies no outcome verification. */
+export const startDecisionReviewLearningSchema=learningCycleSchema.omit({scope:true,analyticalSources:true}).extend({expectedRevision:revision}).strict();
+export type StartDecisionReviewLearning=z.input<typeof startDecisionReviewLearningSchema>;
+export interface DecisionReviewLearningResult {review:DecisionOutcomeReviewView;cycleId:string}
 export type ScheduleDecisionOutcomeReview=z.infer<typeof scheduleDecisionOutcomeReviewSchema>;
 export type TransitionDecisionOutcomeReview=z.infer<typeof transitionDecisionOutcomeReviewSchema>;
 export type FinishDecisionOutcomeReview=z.infer<typeof finishDecisionOutcomeReviewSchema>;
@@ -44,5 +49,5 @@ export interface DecisionOutcomeReviewReceipt {
 export interface DecisionOutcomeReviewView {
   id:string;companyId:string;decisionId:string;contextVersionId:string;contextHash:string;optionId:string;revision:number;
   status:DecisionOutcomeReviewState;reviewDueAt:string;reviewedAt:string|null;reviewedByUserId:string|null;
-  receipts:DecisionOutcomeReviewReceipt[];causalClaimRef:null;learningCycleId:null;authorizationCheckedAt:string;
+  receipts:DecisionOutcomeReviewReceipt[];causalClaimRef:null;learningCycleId:string|null;authorizationCheckedAt:string;
 }

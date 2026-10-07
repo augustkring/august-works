@@ -1,5 +1,9 @@
 import {useEffect,useState} from "react";
 import {useMutation,useQuery,useQueryClient} from "@tanstack/react-query";
+import {v7FeatureEnabled} from "@paperclipai/shared";
+import {instanceSettingsApi} from "@/api/instanceSettings";
+import {queryKeys} from "@/lib/queryKeys";
+import {Link} from "@/lib/router";
 import type {DecisionContextVersionView,DecisionOutcomeReviewView,FinishDecisionOutcomeReview} from "@paperclipai/shared";
 import {decisionOutcomeReviewsApi} from "@/api/decision-outcome-reviews";
 import {Button} from "@/components/ui/button";
@@ -23,6 +27,7 @@ export function DecisionOutcomeReviewPanel({companyId,userId,decisionId,version,
   const cache=useQueryClient(),key=["decision-outcome-review",companyId,userId,decisionId],account=userId??undefined;
   const [editing,setEditing]=useState(false),[rationale,setRationale]=useState(""),[now,setNow]=useState(Date.now());
   const detail=useQuery({queryKey:key,queryFn:()=>decisionOutcomeReviewsApi.detail(companyId,decisionId,account),refetchInterval:editing?false:30000,refetchOnWindowFocus:!editing,retry:false});
+  const features=useQuery({queryKey:queryKeys.instance.experimentalSettings,queryFn:()=>instanceSettingsApi.getExperimental()});
   const refresh=()=>{setEditing(false);setRationale("");void cache.invalidateQueries({queryKey:key});};
   const revoked=()=>{setEditing(false);setRationale("");void cache.resetQueries({queryKey:key});};
   const schedule=useMutation({mutationFn:()=>decisionOutcomeReviewsApi.schedule(companyId,decisionId,{contextVersionId:version.id,rationale},account),onSuccess:refresh,onError:revoked});
@@ -41,6 +46,8 @@ export function DecisionOutcomeReviewPanel({companyId,userId,decisionId,version,
     {detail.isFetching&&<p role="status">Rechecking current outcome review authority…</p>}{error&&<div role="alert" className="space-y-2"><p>{error.message}</p><Button variant="outline" onClick={()=>void detail.refetch()}>Recheck outcome review</Button></div>}
     {unavailable&&<p role="status">Retained review evidence is unavailable. Recheck current authority before using it.</p>}
     {review&&<DecisionOutcomeReviewDetails review={review}/>}
+    {review&&["completed","inconclusive"].includes(review.status)&&features.data&&v7FeatureEnabled(features.data,"learning_engine_v7")&&<div className="space-y-2"><p className="text-sm text-muted-foreground">Test this lesson against independently verified Task outcomes. Hypotheses and changes keep their human review gates.</p><Button variant="outline" asChild><Link to={review.learningCycleId?`/memory/learning?${new URLSearchParams({cycleId:review.learningCycleId,cycleCompanyId:companyId})}`:`/memory/learning?${new URLSearchParams({reviewDecisionId:decisionId,reviewRevision:String(review.revision),reviewCompanyId:companyId})}`}>{review.learningCycleId?"Open Learning cycle":"Start Learning from this review"}</Link></Button></div>}
+
     {data===null&&hasBaseline&&<p>No outcome review has been recorded. The review date comes from the frozen expectations.</p>}
     {!error&&!detail.isFetching&&!unavailable&&hasBaseline&&(data===null&&expectations.length>0||review&&["scheduled","due","in_review"].includes(review.status))&&<>
       {editing&&review?.status==="in_review"?<DecisionOutcomeReviewForm key={`${review.id}:${review.revision}`} companyId={companyId} userId={userId} version={version} optionId={optionId} chosenAt={chosenAt} revision={review.revision} busy={busy} onSave={input=>finish.mutate(input)} onCancel={()=>setEditing(false)}/>:<>
