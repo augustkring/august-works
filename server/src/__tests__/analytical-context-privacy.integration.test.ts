@@ -1,3 +1,8 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import {providerTraceStore} from "../services/provider-trace-store.js";
+import {memoryJobService} from "../services/memory/memory-jobs.js";
 import express from "express";
 import request from "supertest";
 import {issueService} from "../services/issues.js";
@@ -5,7 +10,7 @@ import {issueRoutes} from "../routes/issues.js";
 import {errorHandler} from "../middleware/index.js";
 import {randomUUID} from "node:crypto";
 import {and,eq,sql} from "drizzle-orm";
-import {agents,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,createDb} from "@paperclipai/db";
+import {agents,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,providerTraceRecords,memoryJobs,createDb} from "@paperclipai/db";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {instanceSettingsService} from "../services/instance-settings.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
@@ -135,6 +140,35 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  it("closes copied prose when the native result owner is deleted and rejects restored-source recapture",async()=>{const f=await fixture(),result=await f.capture(),[original]=await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.id,result.id));await copied();await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,result.id));expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);expect(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,result.lineageManifestId))).toHaveLength(1);await reapplyMemoryDeletionMarkers(db,companyId);await erased();await db.insert(businessMetricObservations).values(original!);const nextIssue=randomUUID(),nextRun=randomUUID(),nextAgent=randomUUID();await db.insert(agents).values({id:nextAgent,companyId,name:"Independent actual native reader",role:"engineer",status:"active",adapterType:"paperclip_runner"});await db.insert(issues).values({id:nextIssue,companyId,title:"New actual native conversation",assigneeAgentId:nextAgent,conversationAgentId:nextAgent,conversationUserId:userId,conversationState:"active",responsibleUserId:userId});await db.insert(heartbeatRuns).values({id:nextRun,companyId,agentId:nextAgent,nativeIssueId:nextIssue,runtimeMode:"native",status:"running",responsibleUserId:userId,contextSnapshot:{issueId:nextIssue}});await db.update(issues).set({executionRunId:nextRun}).where(eq(issues.id,nextIssue));await contextManifestService(db).create({companyId,agentId:nextAgent,issueId:nextIssue,runId:nextRun,query:"Restore attempt in a new run",policySnapshot:{fixture:true},selected:[]});expect(await heartbeatMemoryPayloadRetained(db,companyId,nextRun)).toBe(true);await expect(withAnalyticalConversationRetention(db,companyId,{...actor(),agentId:nextAgent,runId:nextRun},async()=>({result,sourceManifestIds:[result.lineageManifestId],retentionUntil:new Date(result.expiresAt)}))).rejects.toMatchObject({status:409});});
 
  it("withholds actual HTTP comment history after original source access changes",async()=>{const f=await fixture();await f.capture();await copied();const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor={type:"board",source:"session",userId,companyIds:[companyId]};next();});app.use("/api",issueRoutes(db));app.use(errorHandler);const before=await request(app).get(`/api/issues/${issueId}/comments`);expect(before.status).toBe(200);expect(JSON.stringify(before.body)).toContain("Synthetic analytical answer");await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));const after=await request(app).get(`/api/issues/${issueId}/comments`);expect(after.status).toBe(403);expect(JSON.stringify(after.body)).not.toContain("Synthetic analytical answer");});
+
+ it("erases both original trace sidecars through the native outbox with rollout off and keeps the cleanup after actual company purge",async()=>{
+  const previous=process.env.PROVIDER_TRACE_BASE_PATH,temp=await fs.mkdtemp(path.join(os.tmpdir(),"aw-v8-trace-erasure-"));process.env.PROVIDER_TRACE_BASE_PATH=temp;
+  try{
+   const f=await fixture(),result=await f.capture(),store=providerTraceStore(db),prepared=await store.prepare({companyId,runId,provider:"codex",requestedBy:userId});
+   await fs.writeFile(prepared.path,'{"synthetic":"original private provider payload"}\n');await fs.writeFile(`${prepared.path}.rehydration`,'{"synthetic":"original private rehydration payload"}\n');
+   const foreign=randomUUID(),foreignRun=randomUUID(),foreignAgent=randomUUID();await db.insert(companies).values({id:foreign,name:"Preserved trace tenant",issuePrefix:randomUUID()});await db.insert(agents).values({id:foreignAgent,companyId:foreign,name:"Preserved actual agent",role:"engineer",status:"active",adapterType:"process"});await db.insert(heartbeatRuns).values({id:foreignRun,companyId:foreign,agentId:foreignAgent,status:"succeeded"});const foreignTrace=await store.prepare({companyId:foreign,runId:foreignRun,provider:"codex",requestedBy:"synthetic"});await fs.writeFile(foreignTrace.path,'{"synthetic":"independent tenant"}\n');
+   const files=await fs.readdir(temp);
+   await expect(store.prepare({companyId:foreign,runId,provider:"codex",requestedBy:"Wrong company"})).rejects.toMatchObject({cause:{code:"23514"}});
+   expect(await fs.readdir(temp)).toEqual(files);
+   await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false,enableCollectiveMemoryV1:false,enablePrivateAgentMemoryV1:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+   await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,result.lineageManifestId));
+   const [tombstone]=await db.select().from(providerTraceRecords).where(eq(providerTraceRecords.runId,runId));expect(tombstone).toMatchObject({status:"deleted",reason:"source_erased",frameCount:0,byteCount:0,digest:null});expect(tombstone!.deletedAt).toBeInstanceOf(Date);
+   expect(await store.download(runId,companyId)).toBeNull();await expect(store.prepare({companyId,runId,provider:"codex",requestedBy:userId})).rejects.toThrow("provider_trace_unavailable");
+   // Real filesystem failure: unlink cannot remove a directory. The durable
+   // cleanup must remain retryable with every Memory and V8 feature disabled.
+   await fs.rm(`${prepared.path}.rehydration`);await fs.mkdir(`${prepared.path}.rehydration`);
+   const worker=memoryJobService(db);await worker.tick();
+   expect((await db.select().from(memoryJobs).where(eq(memoryJobs.companyId,companyId)))[0]!.status).toBe("failed");
+   await fs.rmdir(`${prepared.path}.rehydration`);await fs.writeFile(`${prepared.path}.rehydration`,"Synthetic retry payload");
+   await worker.tick({now:new Date(Date.now()+61000)});await expect(fs.readFile(prepared.path)).rejects.toMatchObject({code:"ENOENT"});await expect(fs.readFile(`${prepared.path}.rehydration`)).rejects.toMatchObject({code:"ENOENT"});expect(await fs.readFile(foreignTrace.path,"utf8")).toContain("independent tenant");
+   // A restored/late native capture stays tombstoned and requeues original file identities.
+   await fs.writeFile(prepared.path,"Synthetic late bytes");await fs.writeFile(`${prepared.path}.rehydration`,"Synthetic late rehydration");await db.update(providerTraceRecords).set({status:"capturing",reason:null,deletedAt:null,frameCount:99}).where(eq(providerTraceRecords.runId,runId));
+   expect((await db.select().from(providerTraceRecords).where(eq(providerTraceRecords.runId,runId)))[0]).toMatchObject({status:"deleted",reason:"source_erased",frameCount:0});
+   await purgeCompanyContent(db,companyId);expect(await db.select().from(providerTraceRecords).where(eq(providerTraceRecords.companyId,companyId))).toHaveLength(0);
+   const retained=await db.select().from(memoryJobs).where(eq(memoryJobs.companyId,companyId));expect(retained.length).toBeGreaterThan(0);expect(retained.every(j=>j.operationType==="retention"&&j.sourceRefJson.kind==="provider_trace_erasure"&&j.sourceHeartbeatRunId===null&&j.sourceMemoryRecordId===null)).toBe(true);
+   await worker.tick();await expect(fs.readFile(prepared.path)).rejects.toMatchObject({code:"ENOENT"});await expect(fs.readFile(`${prepared.path}.rehydration`)).rejects.toMatchObject({code:"ENOENT"});expect(await fs.readFile(foreignTrace.path,"utf8")).toContain("independent tenant");
+  }finally{if(previous===undefined)delete process.env.PROVIDER_TRACE_BASE_PATH;else process.env.PROVIDER_TRACE_BASE_PATH=previous;await fs.rm(temp,{recursive:true,force:true});}
+ });
 
  it("recovers the same person's erased conversation atomically without reviving its history or Task outcome",async()=>{
   await instanceSettingsService(db).updateExperimental({enableAgentChat:true});

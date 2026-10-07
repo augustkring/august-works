@@ -9,6 +9,7 @@ import type {
   ProviderTraceMetadata,
 } from "@paperclipai/shared";
 import { resolvePaperclipInstanceRoot } from "../home-paths.js";
+import { heartbeatMemoryPayloadRetained } from "./memory/memory-privacy.js";
 import { logActivity } from "./activity-log.js";
 
 export const PROVIDER_TRACE_MAX_BYTES = 64 * 1024 * 1024;
@@ -369,11 +370,12 @@ export function providerTraceStore(db: Db) {
     provider: string;
     requestedBy: string;
   }) {
+    if (!(await heartbeatMemoryPayloadRetained(db, input.companyId, input.runId))) throw new Error("provider_trace_unavailable");
     await cleanupExpired().catch(() => []);
     const existing = await db
       .select()
       .from(providerTraceRecords)
-      .where(eq(providerTraceRecords.runId, input.runId))
+      .where(and(eq(providerTraceRecords.runId, input.runId),eq(providerTraceRecords.companyId,input.companyId)))
       .limit(1)
       .then((rows) => rows[0] ?? null);
     if (existing) {
@@ -408,8 +410,13 @@ export function providerTraceStore(db: Db) {
         expiresAt,
       })
       .returning()
-      .then((rows) => rows[0]);
+      .then((rows) => rows[0])
+      .catch(async error => { await removeTraceFiles(traceRef); throw error; });
     if (!row) throw new Error("provider_trace_metadata_create_failed");
+    if (row.deletedAt) {
+      await removeTraceFiles(traceRef);
+      throw new Error("provider_trace_unavailable");
+    }
     return { metadata: asMetadata(row), path: filePath };
   }
 
@@ -432,6 +439,12 @@ export function providerTraceStore(db: Db) {
     const row = await getByRun(runId, companyId);
     if (!row) return null;
     const now = new Date();
+    if (!(await heartbeatMemoryPayloadRetained(db, companyId, runId))) {
+      // Requeue the original file identities when a late native finalizer runs.
+      await db.update(providerTraceRecords).set({reason: "source_erased", updatedAt: now})
+        .where(and(eq(providerTraceRecords.id, row.id), eq(providerTraceRecords.companyId, companyId)));
+      return null;
+    }
     if (row.deletedAt) {
       if (
         row.expiresAt.getTime() <= now.getTime()
@@ -605,5 +618,6 @@ export function providerTraceStore(db: Db) {
     getByRun,
     listMetadataForRuns,
     cleanupExpired,
+    eraseSourceFiles: removeTraceFiles,
   };
 }

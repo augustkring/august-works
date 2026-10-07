@@ -1,5 +1,6 @@
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { randomUUID } from "node:crypto";
+import { providerTraceStore } from "../provider-trace-store.js";
 import { getRunLogStore, type RunLogStore } from "../run-log-store.js";
 import { isDeepStrictEqual } from "node:util";
 import { executeMemoryMaintenance, memoryMaintenanceInputSchema, memoryMaintenanceSources } from "./memory-maintenance.js";
@@ -392,6 +393,16 @@ export function memoryJobService(
 
   async function executeRetention(job: MemoryJob, now: Date) {
     const source = record(job.sourceRefJson);
+    if (source.kind === "provider_trace_erasure") {
+      if (typeof source.traceId !== "string" || !/^[a-f0-9-]{36}$/i.test(source.traceId) ||
+        typeof source.runId !== "string" || !/^[a-f0-9-]{36}$/i.test(source.runId) ||
+        typeof source.traceRef !== "string" || !/^[a-f0-9-]{36}\.ndjson$/.test(source.traceRef) ||
+        job.jobKey !== `provider-trace-erasure:v1:${source.traceId}`) {
+        throw unprocessable("Invalid provider trace erasure binding", {code:"memory_trace_erasure_binding_invalid"});
+      }
+      await providerTraceStore(db).eraseSourceFiles(source.traceRef);
+      return {summary:"Erased the application-owned provider trace sidecars.",result:{erasedTraceCount:1}};
+    }
     if (source.kind === "run_log_erasure") {
       if (typeof source.runId !== "string" || typeof source.agentId !== "string" ||
         source.logRef !== `${job.companyId}/${source.agentId}/${source.runId}.ndjson` ||
@@ -574,6 +585,12 @@ export function memoryJobService(
     processed: number;
   }> {
     const now = input.now ?? new Date();
+    // Privacy cleanup survives disabled features, archived tenants and a failed
+    // filesystem attempt. The existing reconciliation tick supplies the retry.
+    await db.update(memoryJobs).set({status:"queued",finishedAt:null,error:null,errorCode:null,updatedAt:now})
+      .where(and(eq(memoryJobs.operationType,"retention"),eq(memoryJobs.status,"failed"),
+        lte(memoryJobs.updatedAt,new Date(now.getTime()-60000)),
+        sql`${memoryJobs.sourceRefJson}->>'kind' in ('provider_trace_erasure','run_log_erasure')`));
     const recovered = await recoverExpiredLeases(now);
     const [backfilled, retentionQueued] = await Promise.all([
       enqueueMissingPostRunCaptures(),

@@ -11,6 +11,7 @@ const mockUnlink = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock("node:fs/promises", () => ({
   default: { unlink: mockUnlink },
 }));
+vi.mock("../services/memory/memory-privacy.js", () => ({ heartbeatMemoryPayloadRetained: vi.fn(async () => true) }));
 vi.mock("../services/activity-log.js", () => ({
   logActivity: vi.fn(async () => undefined),
 }));

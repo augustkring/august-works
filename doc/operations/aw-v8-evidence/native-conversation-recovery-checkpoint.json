@@ -120,5 +120,17 @@
       "sha256": "121f538324ee480bee61fb8f19c29e7610d211c7df515db607ef9a1d02eddd9a",
       "visuallyReviewed": true
     }
-  ]
+  ],
+  "additionalValidation": {
+    "sourceCommit": "e9683a1699516fa9a1e899a0d40eb82beedb4b96",
+    "name": "Final combined PostgreSQL analytical context and ordinary native conversation regression",
+    "tests": 60,
+    "log": "/var/tmp/aw-v8-conversation-recovery-pg-release.log",
+    "exitCode": 0
+  },
+  "wholeBuild": {
+    "sourceCommit": "e9683a1699516fa9a1e899a0d40eb82beedb4b96",
+    "log": "/var/tmp/aw-v8-native-build-conversation-recovery.log",
+    "exitCode": 0
+  }
 }

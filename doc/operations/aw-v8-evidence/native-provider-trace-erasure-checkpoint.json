@@ -1,0 +1,74 @@
+{
+  "checkpoint": "Native C7 provider-trace erasure through the existing Memory outbox",
+  "parentCommit": "e9683a1699516fa9a1e899a0d40eb82beedb4b96",
+  "recordedAt": "2026-10-07T18:14:42.550698+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0417_native_provider_source_erasure.sql",
+      "sha256": "93820a8a598d49ba02bb870cdcbc32816edfeee4207b802f4c4240d38938f6f7"
+    },
+    {
+      "path": "server/src/services/provider-trace-store.ts",
+      "sha256": "d793c0cb2214581f38ed8a6a54eba9d3074cc56005d308e90cfaa59561f96158"
+    },
+    {
+      "path": "server/src/services/memory/memory-jobs.ts",
+      "sha256": "a27e96bd0161e29f63ccf09e2ed47b0bdc20f27dc29582870e350ee988383a27"
+    },
+    {
+      "path": "server/src/services/saas/company-purge.ts",
+      "sha256": "8ffb0631c0ceb92045572a73c90232c7ae9fa574813bd7c5935610d9543d06d1"
+    },
+    {
+      "path": "server/src/__tests__/provider-trace-store.test.ts",
+      "sha256": "8aa9da29909f087482e441ca15e3257b30421e36db1ca2744808b6f99a421fb1"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "4cfa760f3c6d170b6a456ac92265615339a0cb7b32fae752998149a58df95d39"
+    }
+  ],
+  "validation": [
+    {
+      "name": "Actual PostgreSQL source retention, native trace filesystem/queue/retry, trace-store regression, V6/V8 company purge and V7 derived/cognitive Memory",
+      "tests": 55,
+      "log": "/var/tmp/aw-v8-provider-source-erasure-release.log",
+      "exitCode": 0
+    },
+    {
+      "name": "server typecheck",
+      "tests": null,
+      "log": "/var/tmp/aw-v8-provider-source-erasure-types-final.log",
+      "exitCode": 0
+    },
+    {
+      "name": "migration safety",
+      "tests": null,
+      "log": "/var/tmp/aw-v8-provider-source-erasure-safety.log",
+      "exitCode": 0
+    },
+    {
+      "name": "native schema snapshot drift",
+      "tests": 1,
+      "log": "/var/tmp/aw-v8-provider-source-erasure-snapshot.log",
+      "exitCode": 0
+    }
+  ],
+  "qualified": [
+    "Original analytical source deletion atomically tombstones the actual native run trace metadata and commits a content-free cleanup job.",
+    "Both actual trace and rehydration sidecar files are removed by the existing Memory worker, with V8/Memory flags off and company paused.",
+    "A real EISDIR filesystem failure persists as a failed cleanup and retries after the existing reconciliation delay.",
+    "Restored/late native trace metadata stays tombstoned and requeues the original file identities.",
+    "A company purge preserves only the content-free trace/log cleanup jobs, which remove sidecars after all native company content and runs have been deleted.",
+    "A separate real foreign-company trace remains intact; cross-company preparation fails at the native database owner check and removes its temporary empty file."
+  ],
+  "limits": [
+    "No external provider trace, external LLM, hosted R0 or customer trial was exercised.",
+    "Physical removal follows the durable worker; no hard 8-second deletion SLA is claimed.",
+    "A running provider may still emit new sidecar bytes after unlink; a later native metadata/finalization write requeues cleanup, but complete live process cancellation and output-stream admission remain open."
+  ],
+  "open": [
+    "Live source permission-loss admission and fresh conversation recovery without physical source erasure.",
+    "Complete original-manifest graph retention, remaining native typed-tool conformance, Learning, Routines, multi-project Planning and hosted qualification."
+  ]
+}
