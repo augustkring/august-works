@@ -1,3 +1,4 @@
+import {disableV8Rollout} from "./helpers/v8-rollout.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
@@ -180,7 +181,7 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
   it("independent stop metadata remains minimal and human-authorized when rollout is disabled and enrolled source access is unavailable", async () => {
     const d = await running(), unit = await enrolled(d);
     await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, unit.unit.id));
-    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({});
+    await disableV8Rollout(db);
     await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
     const controls = await recording().safetyControls(companyId, actor);
     expect(controls.items).toEqual([{ id: d.experiment.id, companyId, versionId: d.version.id, revision: 4, state: "running" }]);

@@ -3,8 +3,8 @@
 This checkpoint specifies strict human causal questions, model graphs,
 assumptions, exact registered experiment references and conditional interpretation.
 The persistent native owner now admits exact signed experiment analysis and human
-interpretation receipts. Operator UI, downstream consumers and optional provider
-qualification remain open. All qualification fixtures are software evidence only.
+interpretation receipts. The typed operator UI is qualified separately; downstream consumers and optional
+provider qualification remain open. All qualification fixtures are software evidence only.
 
 The declared sequence is question → human model/assumptions → identification →
 estimation or abstention → robustness → conditional interpretation. Graph edges
@@ -53,3 +53,25 @@ causal review → conditional supported result, copying the original primary
 interval. This demonstrates software behavior, not collected trial evidence or
 verified business impact. No independent sensitivity or provider refutation has
 run, and the full V8 release remains open.
+
+The operator workbench supports typed questions, exact native outcome/experiment
+pickers, a bounded node/arrow editor, explicit unknown/assumed/violated human
+conditions, separate acknowledged review, one interpretation, immutable history
+and source revalidation warnings. Revoked claims withhold the dependent result.
+Account/source/Memory changes clear sensitive drafts and source namespaces. The
+independent administrator revocation endpoint discloses only bounded identities,
+revision and status with no source graph, question, metric or result prose.
+
+All 40 Chromium presentation checks pass in light/dark at 390/1200 pixels, including
+WCAG 2.2 AA, keyboard interaction and no horizontal overflow; screenshots are
+synthetic cached presentations with API access aborted, not a visual release
+baseline or operational source qualification. The current workbench/experiment
+UI selection has 23 passing tests.
+
+Qualification correction: earlier test fixtures used an empty experimental
+settings patch when intending to disable rollout. That API preserves existing
+flags. The shared fixture now explicitly writes and verifies all V8 flags false.
+The affected causal/experiment/outcome-review erasure, stopping, revocation and
+purge suites were rerun: 47 PostgreSQL tests and 16 API contracts pass under the
+corrected fixtures. This supersedes earlier flags-off claims for those checks;
+the original logs remain available.

@@ -1,3 +1,4 @@
+import {disableV8Rollout} from "./helpers/v8-rollout.js";
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq,sql} from "drizzle-orm";
@@ -142,7 +143,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   });
   it("erases review prose and descendants with native sources even after rollout rollback",async()=>{
     const {d,review}=await scheduled();await begin(d.id);await reviews().finish(companyId,actor,d.id,final());
-    await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({});
+    await disableV8Rollout(db);
     await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[targetId]);});
     expect(await db.select().from(decisionOutcomeReviews).where(eq(decisionOutcomeReviews.id,review.id))).toHaveLength(0);
     expect(await db.select().from(decisionOutcomeReviewReceipts).where(eq(decisionOutcomeReviewReceipts.reviewId,review.id))).toHaveLength(0);
@@ -153,7 +154,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     const otherCompany=companyId;companyId=foreignId;
     await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"member",status:"active"});
     await db.insert(projects).values({id:randomUUID(),companyId,name:"Unrelated surviving project"});
-    companyId=otherCompany;await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({});
+    companyId=otherCompany;await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await disableV8Rollout(db);
     await eraseExpiredAnalyticalLineage(db,new Date(Date.now()+31*86400000));
     expect(await db.select().from(decisionOutcomeReviews).where(eq(decisionOutcomeReviews.id,review.id))).toHaveLength(0);
     await purgeCompanyContent(db,companyId,{restoreQuarantine:true});
@@ -165,7 +166,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     const laterId=randomUUID();await db.insert(issues).values({id:laterId,companyId,title:"Later source with private details",status:"done",responsibleUserId:"local-board"});
     const actual=await businessMetricService(db).query(companyId,actor,{metricId:baseline.metricId,versionId:baseline.versionId,from:"2026-01-01T00:00:00Z",until:new Date(Date.now()+1000).toISOString(),dimensions:[],maxRows:100});
     const input=final();input.actualMetrics=[{key:"later",source:{type:"metric_observation",id:actual.id,metricId:actual.metricId,metricVersionId:actual.versionId}}];input.assessments.observedOutcome.evidenceKeys=["actual:later"];
-    await reviews().finish(companyId,actor,d.id,input);await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({});
+    await reviews().finish(companyId,actor,d.id,input);await disableV8Rollout(db);
     await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[laterId]);});
     expect(await db.select().from(decisionOutcomeReviews).where(eq(decisionOutcomeReviews.id,review.id))).toHaveLength(0);
     expect(await db.select().from(decisionOutcomeReviewReceipts).where(eq(decisionOutcomeReviewReceipts.reviewId,review.id))).toHaveLength(0);
@@ -174,7 +175,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   });
   it("purges a live frozen review with flags off while preserving another company's content",async()=>{
     const {d,review}=await scheduled();await begin(d.id);await reviews().finish(companyId,actor,d.id,final());
-    await db.insert(projects).values({companyId:foreignId,name:"Other company remains intact"});await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({});
+    await db.insert(projects).values({companyId:foreignId,name:"Other company remains intact"});await disableV8Rollout(db);
     await purgeCompanyContent(db,companyId,{restoreQuarantine:true});
     expect(await db.select().from(decisionOutcomeReviews).where(eq(decisionOutcomeReviews.id,review.id))).toHaveLength(0);
     expect(await db.select().from(decisionOutcomeReviewReceipts).where(eq(decisionOutcomeReviewReceipts.reviewId,review.id))).toHaveLength(0);

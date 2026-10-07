@@ -15,6 +15,7 @@ function companyAccess(req: Request, companyId: string, allowed: string[] = []) 
 export function causalClaimRoutes(db: Db) {
   const router = Router(), service = causalClaimService(db);
   router.use("/companies/:companyId/causal-claims", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+  router.get("/companies/:companyId/causal-claims/controls", async (req, res) => { const companyId = id(req.params.companyId); companyAccess(req, companyId, ["cursor"]); res.json(await service.controls(companyId, req.actor, req.query.cursor === undefined ? undefined : id(req.query.cursor))); });
   router.get("/companies/:companyId/causal-claims", async (req, res) => { const companyId = id(req.params.companyId); companyAccess(req, companyId, ["cursor"]); res.json(await service.list(companyId, req.actor, req.query.cursor === undefined ? undefined : id(req.query.cursor))); });
   router.get("/companies/:companyId/causal-claims/:claimId", async (req, res) => { const companyId = id(req.params.companyId); companyAccess(req, companyId); res.json(await service.detail(companyId, req.actor, id(req.params.claimId))); });
   router.post("/companies/:companyId/causal-claims", validate(createCausalClaimSchema), async (req, res) => { const companyId = id(req.params.companyId); companyAccess(req, companyId); res.status(201).json(await service.create(companyId, req.actor, req.body)); });

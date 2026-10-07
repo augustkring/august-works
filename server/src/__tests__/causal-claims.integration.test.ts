@@ -1,3 +1,4 @@
+import {disableV8Rollout} from "./helpers/v8-rollout.js";
 import {randomUUID} from "node:crypto";
 import express from "express";
 import request from "supertest";
@@ -49,15 +50,23 @@ suite("Native causal model/review/source owner on migrated PostgreSQL",()=>{
  it("erases source-owned causal question, review, run and prose with rollout off and company paused",async()=>{
   const [project]=await db.insert(projects).values({companyId,name:"Causal governed source scope",status:"in_progress"}).returning(),f=await proposal(project.id),d=await create(f.model);
   await service().review(companyId,actor,d.claim.id,{expectedRevision:1,versionId:d.version.id,rationale,graphAndAssumptionsAcknowledged:true});await service().analyze(companyId,actor,d.claim.id,{expectedRevision:2,versionId:d.version.id});
-  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"project",[project.id]);});
+  await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"project",[project.id]);});
   for(const table of [causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns])expect(await db.select().from(table).where(eq(table.companyId,companyId))).toHaveLength(0);
  });
  it("preserves immutable analysis and permits explicit revocation independently of rollout/source disclosure",async()=>{
   const d=await reviewed(),result=await service().analyze(companyId,actor,d.claim.id,{expectedRevision:2,versionId:d.version.id});await expect(db.delete(causalAnalysisRuns).where(eq(causalAnalysisRuns.id,result.run.id))).rejects.toMatchObject({cause:{code:"23514"}});await expect(db.update(causalAnalysisRuns).set({sourceHash:"f".repeat(64)}).where(eq(causalAnalysisRuns.id,result.run.id))).rejects.toMatchObject({cause:{code:"23514"}});
-  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));const revoked=await service().revoke(companyId,actor,d.claim.id,{expectedRevision:3,rationale});expect(revoked).toMatchObject({status:"revoked",revision:4});expect((await db.select().from(causalAnalysisRuns).where(eq(causalAnalysisRuns.id,result.run.id)))[0].result).toEqual(result.run.result);await expect(service().revoke(companyId,actor,d.claim.id,{expectedRevision:4,rationale})).rejects.toMatchObject({status:409});
+  await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));const revoked=await service().revoke(companyId,actor,d.claim.id,{expectedRevision:3,rationale});expect(revoked).toMatchObject({status:"revoked",revision:4});expect((await db.select().from(causalAnalysisRuns).where(eq(causalAnalysisRuns.id,result.run.id)))[0].result).toEqual(result.run.result);await expect(service().revoke(companyId,actor,d.claim.id,{expectedRevision:4,rationale})).rejects.toMatchObject({status:409});
+ });
+ it("returns bounded minimal revocation metadata with flags off and company paused, without source admission",async()=>{
+  const d=await reviewed();await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+  await expect(service().detail(companyId,actor,d.claim.id)).rejects.toMatchObject({status:404});
+  const controls=await service().controls(companyId,actor);expect(controls.items).toEqual([{id:d.claim.id,companyId,revision:2,status:"hypothesis"}]);expect(controls.coverage).toBe("bounded_native_revocation_metadata");
+  const response=await request(app()).get(`/api/companies/${companyId}/causal-claims/controls?expectedUserId=local-board`).expect(200);expect(response.headers["cache-control"]).toBe("no-store");expect(response.body.items).toEqual(controls.items);
+  await request(app()).get(`/api/companies/${companyId}/causal-claims/controls?includeProse=true`).expect(400);await request(app()).get(`/api/companies/${companyId}/causal-claims/controls?expectedUserId=other`).expect(409);
+  await service().revoke(companyId,actor,d.claim.id,{expectedRevision:2,rationale});expect((await service().controls(companyId,actor)).items).toHaveLength(0);
  });
  it("native company purge clears causal descendants with flags off and preserves a foreign tenant",async()=>{
-  const d=await reviewed();await service().analyze(companyId,actor,d.claim.id,{expectedRevision:2,versionId:d.version.id});await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({});await purgeCompanyContent(db,companyId,{operationId:randomUUID()});for(const table of [causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns])expect(await db.select().from(table).where(eq(table.companyId,companyId))).toHaveLength(0);expect(await db.select().from(companies).where(eq(companies.id,otherId))).toHaveLength(1);
+  const d=await reviewed();await service().analyze(companyId,actor,d.claim.id,{expectedRevision:2,versionId:d.version.id});await disableV8Rollout(db);await purgeCompanyContent(db,companyId,{operationId:randomUUID()});for(const table of [causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns])expect(await db.select().from(table).where(eq(table.companyId,companyId))).toHaveLength(0);expect(await db.select().from(companies).where(eq(companies.id,otherId))).toHaveLength(1);
  });
  it("public commands are strict, account-bound and no-store without accepting caller effects or quality flags",async()=>{
   const f=await proposal(),api=app(),base=`/api/companies/${companyId}/causal-claims`;const valid={key:"native_api_claim",definition:f.model};await request(api).post(base).send({...valid,result:{status:"supported",effect:1}}).expect(400);await request(api).post(base).send({...valid,definition:{...f.model,confidence:0.99}}).expect(400);await request(api).post(base+"?expectedUserId=changed-account").send(valid).expect(409);
