@@ -152,7 +152,11 @@ export function projectControlService(db: Db) {
         const status = stale ? "stale" : accept ? "accepted" : "rejected";
         if (status === "accepted") { const inspected = await inspectChanges(tx, actor, companyId, projectId, proposal.patch, roadmapPolicySchema.parse(row.roadmapPolicy ?? {})); for (const change of inspected.prepared) await tx.update(issues).set({ ...change.patch, updatedAt: new Date() }).where(eq(issues.id, change.row.id)); await tx.update(projects).set({ updatedAt: new Date() }).where(eq(projects.id, projectId)); }
         const [reviewed] = await tx.update(projectRoadmapProposals).set({ status, reviewedByUserId: userId, reviewRationale: rationale, updatedAt: new Date() }).where(eq(projectRoadmapProposals.id, proposalId)).returning();
-        await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: `project.roadmap_${status}`, entityType: "project", entityId: projectId, details: { proposalId, changedTaskIds: proposal.patch.changes.map((c) => c.issueId) } }, publications); return reviewed!;
+        await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: `project.roadmap_${status}`, entityType: "project", entityId: projectId, details: { proposalId, changedTaskIds: proposal.patch.changes.map((c) => c.issueId) } }, publications);
+        // Rejection needs planning authority, not inherited analytical disclosure.
+        // Returning the raw row would expose copied evidence through the V5 API.
+        if (reviewed!.planningManifestId) return { id: reviewed!.id, companyId, projectId, status: reviewed!.status, updatedAt: reviewed!.updatedAt };
+        return reviewed!;
       });
     },
     forecast: async (actor: AuthorizationActor, companyId: string, projectId: string, issueId: string, raw: z.infer<typeof taskForecastPatchSchema>) => {

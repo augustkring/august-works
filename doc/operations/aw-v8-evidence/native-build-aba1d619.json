@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "aba1d61934f666848e7446b21a4e32c98abf6b49",
+  "command": "pnpm build",
+  "status": "passed",
+  "exitCode": 0,
+  "logPath": "/var/tmp/aw-v8-native-build-aba1d6193.log",
+  "logSha256": "f1c78ca0a8a4e740d092fdb65e1ce217f1b5fe64f19d6b9116a8eaa8128e9499",
+  "scope": "Exact native project planning source-owner checkpoint; does not qualify subsequent review-disclosure tightening, project UI, other remaining domains, external providers or hosted release."
+}

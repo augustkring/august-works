@@ -76,3 +76,12 @@ while signed API dates use the existing native Date representation.
 Project UI, cross-project prioritization/constraints and their authority owners
 remain open. This checkpoint does not establish a complete V8 build, independent
 external analytical providers or a hosted release.
+
+The canonical Roadmap review response for analytical proposals now returns only
+identity, company/project, status and update time. A general V5 raw-row response
+could disclose inherited analytical prose during rollout-off rejection, which
+requires planning authority but does not require source disclosure. A strict
+account-bound planning review route delegates to the same canonical owner and
+returns this minimal result; it admits project read/assignment authority before
+looking up the control identity. Both public and canonical response boundaries
+are qualified with source-free rejection checks.

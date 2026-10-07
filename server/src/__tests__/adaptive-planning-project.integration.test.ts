@@ -57,6 +57,10 @@ describe.skipIf(!support.supported)("Native project planning source and canonica
     const controls = await request(app()).get(`${endpoint}/controls?expectedUserId=local-board`).expect(200);
     expect(controls.body).toEqual({ proposals: [{ id: created.body.id, status: "pending" }], hasMore: false, nextCursor: null }); expect(JSON.stringify(controls.body)).not.toContain(rationale);
     await request(app()).get(`${endpoint}/proposals/${created.body.id}`).expect(404);
+    await db.update(companies).set({ status: "active" }).where(eq(companies.id, companyId));
+    await request(app()).post(`${endpoint}/proposals/${created.body.id}/review?expectedUserId=foreign-account`).send({ accept: false, rationale }).expect(409);
+    const rejected = await request(app()).post(`${endpoint}/proposals/${created.body.id}/review?expectedUserId=local-board`).send({ accept: false, rationale }).expect(200);
+    expect(Object.keys(rejected.body).sort()).toEqual(["companyId", "id", "projectId", "status", "updatedAt"]); expect(rejected.body.status).toBe("rejected"); expect(JSON.stringify(rejected.body)).not.toContain(rationale);
   });
   it("rejects agent and foreign-session authority before inspecting project source", async () => {
     const f = await fixture(), owner = projectPlanningService(db);
@@ -158,7 +162,8 @@ describe.skipIf(!support.supported)("Native project planning source and canonica
   it("denies cross-company sources and rollout-off new reliance while retaining independent human rejection", async () => {
     const f = await proposal(); await expect(projectPlanningService(db).preview(otherId, f.project.id, actor, f.profile)).rejects.toMatchObject({ status: 409 });
     await disableV8Rollout(db); await expect(projectControlService(db).review(actor, companyId, f.project.id, f.created.id, true, rationale)).rejects.toMatchObject({ status: 404 });
-    expect((await projectControlService(db).review(actor, companyId, f.project.id, f.created.id, false, rationale)).status).toBe("rejected");
+    const rejected = await projectControlService(db).review(actor, companyId, f.project.id, f.created.id, false, rationale);
+    expect(rejected.status).toBe("rejected"); expect(Object.keys(rejected).sort()).toEqual(["companyId", "id", "projectId", "status", "updatedAt"]);
   });
   it("guards immutable source material and forbids accepted metadata before canonical task application", async () => {
     const f = await proposal();

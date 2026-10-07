@@ -9,7 +9,7 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import {
-  projectPlanningProfileSchema, proposeProjectPlanningSchema,
+  projectPlanningProfileSchema, proposeProjectPlanningSchema, reviewRoadmapProposalSchema,
   createStrategyExecutionLinkSchema,
   reviseStrategyExecutionLinkSchema,
   approveStrategyExecutionLinkSchema,
@@ -12041,3 +12041,4 @@ registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/projects/{pr
 registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/preview",tags:["V8"],summary:"Inspect a bounded native constraint solve over the complete authorized project source population",query:z.object({expectedUserId:z.string().optional()}).strict(),body:projectPlanningProfileSchema,responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source or purpose is not ready for reliance"}}});
 registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals",tags:["V8"],summary:"Create a source-pinned pending canonical Roadmap proposal requiring separate human review",query:z.object({expectedUserId:z.string().optional()}).strict(),body:proposeProjectPlanningSchema,responses:{201:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Preview, source, company constraints or authority changed"}}});
 registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}",tags:["V8"],summary:"Inspect signed native planning source and original mathematical result with current source qualification",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Source or purpose needs fresh review"}}});
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/review",tags:["V8"],summary:"Review through canonical human Roadmap authority with current account binding and a metadata-only result",query:z.object({expectedUserId:z.string().optional()}).strict(),body:reviewRoadmapProposalSchema,responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Source, account, native task or planning revision changed"}}});

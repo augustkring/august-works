@@ -112,6 +112,15 @@ export async function inspectCurrentProjectPlanningProposal(tx: Db, actor: Autho
 
 export function projectPlanningService(db: Db) {
   return {
+    async review(companyId: string, projectId: string, actor: AuthorizationActor, id: string, accept: boolean, rationale: string) {
+      v7HumanActorId(actor);
+      await assertV7Authorization(db, actor, companyId, "project:read", { type: "project", companyId, projectId });
+      await assertV7Authorization(db, actor, companyId, "tasks:assign", { type: "project", companyId, projectId });
+      const [marker] = await db.select({ id: projectRoadmapProposals.id }).from(projectRoadmapProposals).where(and(eq(projectRoadmapProposals.companyId, companyId), eq(projectRoadmapProposals.projectId, projectId), eq(projectRoadmapProposals.id, id), sql`${projectRoadmapProposals.planningManifestId} is not null`));
+      if (!marker) throw notFound("Native planning control is unavailable");
+      const { projectControlService } = await import("../project-control.js");
+      return projectControlService(db).review(actor, companyId, projectId, id, accept, rationale);
+    },
     async controls(companyId: string, projectId: string, actor: AuthorizationActor, cursor?: string) {
       return db.transaction(async (rawTx) => {
         const tx = rawTx as unknown as Db; v7HumanActorId(actor);
