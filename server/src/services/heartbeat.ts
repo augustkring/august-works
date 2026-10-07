@@ -6,6 +6,7 @@ import { agentRuntimeFabricService } from "./agent-runtime-fabric.js";
 import { agentProviderBindingService } from "./agent-provider-bindings.js";
 import { workflowDirectAgentPrompt } from "./workflows/workflow-direct-agent.js";
 import { heartbeatMemoryPayloadRetained, heartbeatMemoryPayloadVisible } from "./memory/memory-privacy.js";
+import { assertNativeAnalyticalRunPayloadAccess } from "./analytical-context-authority.js";
 import { applyWorkspaceRestoreFailure } from "@paperclipai/adapter-utils/workspace-restore-result";
 import { hasWorkspaceRestoreFailure } from "@paperclipai/shared";
 import { externalConversationStateSql, nonIdleSlackIssueCondition } from "./slack-conversation-state.js";
@@ -22884,6 +22885,18 @@ export function heartbeatService(
         const currentUserRedactionOptions =
           await getCurrentUserRedactionOptions();
         const onLog = async (stream: "stdout" | "stderr", chunk: string) => {
+          try {
+            await assertNativeAnalyticalRunPayloadAccess(db, run.companyId, run.id);
+          } catch (error) {
+            clearHeartbeatRunRuntimeStatus(run.id);
+            if (error instanceof HttpError && (error.details as {code?:unknown}|undefined)?.code === "analytical_source_access_lost") {
+              // Do not await the existing stop owner inside its output callback:
+              // process settlement can itself be waiting for this callback.
+              void cancelRunInternal(run.id, "Analytical source access lost", { errorCode: "analytical_source_access_lost" })
+                .catch(err => logger.warn({ err, runId: run.id }, "source-loss run cancellation failed"));
+            }
+            throw error;
+          }
           const sanitizedChunk = compactRunLogChunk(
             redactCurrentUserText(chunk, currentUserRedactionOptions),
           );

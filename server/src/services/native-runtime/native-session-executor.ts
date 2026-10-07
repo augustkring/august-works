@@ -152,6 +152,7 @@ import {
   type NativeStatusDecision,
 } from "./status-arbiter.js";
 import { HttpError } from "../../errors.js";
+import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
 import { redactSensitiveText } from "../../redaction.js";
 import { resolvePaperclipRunnerBinary } from "./native-codex-runner.js";
 import {
@@ -7067,7 +7068,10 @@ function startNativeSessionExecutionLeaseRenewal(input: {
   const renew = () => {
     if (leaseLost) return;
     renewal = renewal
-      .then(() => renewNativeSessionExecutionLease(input))
+      .then(async () => {
+        await assertNativeAnalyticalRunPayloadAccess(input.db, input.companyId, input.runId);
+        await renewNativeSessionExecutionLease(input);
+      })
       .then(() => undefined)
       .catch(async (error: unknown) => {
         leaseLost =
@@ -7076,7 +7080,8 @@ function startNativeSessionExecutionLeaseRenewal(input: {
             : new Error("native_session_lease_lost");
         await cancelNativeSession(
           input.runId,
-          "native session execution lease lost",
+          leaseLost instanceof HttpError && (leaseLost.details as {code?:unknown}|undefined)?.code === "analytical_source_access_lost"
+            ? "native analytical source access lost" : "native session execution lease lost",
         ).catch(() => undefined);
       });
   };
@@ -7172,6 +7177,7 @@ export async function executePaperclipNativeSession(input: {
   let ownsSessionScope = false;
   let executionFailure: unknown;
   try {
+    await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
     if (!input.useRunnerd) {
       return await executePaperclipNativeSessionWithinScope(input);
     }
