@@ -6,6 +6,7 @@ import { businessEventBackfillSchema } from "@paperclipai/shared";
 import { businessEventService } from "../services/business-events.js";
 import { businessEventExportService } from "../services/business-event-export.js";
 import { eraseExpiredAnalyticalLineage } from "../services/analytical-retention.js";
+import { processDataReadinessService } from "../services/process-data-readiness.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { analyticalPurpose } from "./helpers/business-metric-fixture.js";
 import { issueService } from "../services/issues.js";
@@ -55,6 +56,32 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
   }
   const service = () => businessEventService(db);
   const stored = () => db.select().from(businessEvents).where(eq(businessEvents.companyId, companyId));
+
+  it("inspects native source coverage before readiness and abstains after Memory erasure or for unqualified external sources", async () => {
+    await source({ status: "todo",projectId },{ action:"issue.created" });
+    await source({ status: "done",projectId },{ createdAt:new Date("2026-01-01T12:01:00Z") });
+    const input={ ...window,analysisKey:"native_task_flow",businessQuestion:"How do native Task activities flow?",requiredSourceProviders:["activity_log"],
+      requiredObjectTypes:["issue" as const],requiredActivities:["issue.created" as const,"issue.updated" as const],minimumCoverageSeconds:3600,
+      requiresOrdering:true,requiresLifecycle:true,requiresArrivalEvidence:false,maxDuplicateRate:0,maxUnknownObjectRate:0,maxLateArrivalRate:0 };
+    const readiness=processDataReadinessService(db);
+    const { limit:_limit,...requirements }=input;
+    await expect(readiness.assess(companyId,actor,requirements)).rejects.toMatchObject({ status:404 });
+    await instanceSettingsService(db,{ runtimeEnv:{} }).updateExperimental({ analytical_lineage_v8:true,process_intelligence_v8:true });
+    try {
+      expect((await readiness.assess(companyId,actor,requirements)).admission).toBe("DATA_NOT_READY");
+      await service().backfill(companyId,actor,window);
+      const ready=await readiness.assess(companyId,actor,requirements);
+      expect(ready).toMatchObject({companyId,admission:"DATA_READY",authorizedEventCount:2,coverage:"current_native_activity_snapshot"});
+      expect((await readiness.assess(companyId,actor,{...requirements,requiredSourceProviders:["activity_log","crm"]})).admission).toBe("DATA_NOT_READY");
+      await db.transaction(async rawTx => {
+        const tx=rawTx as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);
+        await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[issueId]);
+        await eraseBusinessEventObjectUnderMemory(tx,companyId,"issue",issueId);
+      });
+      const erased=await readiness.assess(companyId,actor,requirements);
+      expect(erased).toMatchObject({admission:"DATA_NOT_READY",authorizedEventCount:0,coverage:"bounded_incomplete_snapshot"});
+    } finally { await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({process_intelligence_v8:false}); }
+  });
 
   it("exports only current native business objects with exact time, qualified format and source-erasure lineage", async () => {
     const row = await source({ status: "done", projectId, body: "secret private message" });

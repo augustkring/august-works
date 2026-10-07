@@ -91,3 +91,27 @@ Learning/Context erasure propagates through derived Tasks, documents, metrics,
 events and strategy, independent of rollout. Source guards cover late activity
 identities as well as projections already present at erasure. Real PostgreSQL
 concurrency and actual native Learning/Context tests verify this boundary.
+
+## V8-010 — Native analytical data readiness has compatible source semantics
+
+The existing V7 readiness assessment requires a native agent, action/risk class
+and Context manifest; its findings are FK-bound to that assessment. A human
+process-data inspection cannot invent an agent or reuse an execution-authority
+assessment as analytical coverage proof. The first compatible boundary is a
+stateless, human-authorized native data preview with shared multidimensional
+readiness states and current V7 process-purpose evidence. It creates no parallel
+legal register, persistent finding store, provider or execution permission.
+
+The server inspects exact current native activity identities/hashes and the
+existing authorized event view under company → Memory locks. Required external
+sources, truncated scans, missing projections, source erasure, ambiguous ordered
+paths and unknown arrival/lifecycle evidence cannot earn DATA_READY. It preserves
+separate dimensions/reasons, not a universal score. The covered source is the
+current retained native activity snapshot for six typed Task/Project activities;
+it does not certify all organizational producers, source-log retention/recovery,
+external clocks or event history outside that snapshot.
+
+Versioned process definitions/runs, qualified data-quality finding lifecycle and
+process algorithms must bind their intrinsic data properties to this owner before
+claiming analysis readiness. A preview with caller-declared requirements cannot
+authorize a stronger analysis, native Decision, Planning effect or V7 autonomy.

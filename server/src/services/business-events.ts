@@ -18,7 +18,7 @@ const ACTIONS = new Set(["issue.created", "issue.updated", "issue.checked_out", 
 
 /** Only observed, typed facts enter the projection. No message, identity,
  * credential or current-state enrichment becomes historical evidence. */
-export function projectBusinessEvent(source: ActivitySource, occurredAt = source.createdAt.toISOString()) {
+export function projectBusinessEvent(source: Pick<ActivitySource,"action" | "entityType" | "entityId" | "createdAt" | "details">, occurredAt = source.createdAt.toISOString()) {
   if (!ACTIONS.has(source.action) || !source.action.startsWith(`${source.entityType}.`)) return null;
   const primary = businessEventObjectSchema.safeParse({ objectType: source.entityType, objectId: source.entityId, qualifier: "primary" });
   if (!primary.success) return null;

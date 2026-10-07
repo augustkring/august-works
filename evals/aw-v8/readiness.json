@@ -56,7 +56,8 @@
     "native_strategy_operator_ui_with_separate_human_approval_and_bounded_native_source_selection",
     "native_process_purpose_event_admission_exact_source_integrity_and_retention_reconciliation",
     "bounded_native_JSONL_and_OCEL_2_JSON_SQLite_interchange_with_source_erasure_lineage",
-    "native_analytical_manifest_retention_reconciliation"
+    "native_analytical_manifest_retention_reconciliation",
+    "stateless_native_process_data_readiness_preview_with_separate_dimensions_and_current_source_inspection"
   ],
   "unfinishedWaves": [
     "remaining_domain_owner_reconciliation",
@@ -101,7 +102,8 @@
     "server/src/__tests__/strategy-execution.integration.test.ts",
     "ui/src/pages/StrategyExecution.test.tsx",
     "tests/storybook-visual/strategy-execution.spec.ts",
-    "server/src/__tests__/business-event-export-formats.test.ts"
+    "server/src/__tests__/business-event-export-formats.test.ts",
+    "server/src/__tests__/process-data-readiness-engine.test.ts"
   ],
   "limitations": [
     "Feature configuration does not prove implementation or authorization.",
