@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { analyticalLineageManifests, analyticalLineageEdges, businessExperiments, businessExperimentAssignments, businessExperimentCompletions, businessExperimentExecutions, businessExperimentExposures, businessExperimentTransitions, businessExperimentVersions, type Db } from "@paperclipai/db";
 import { BUSINESS_EXPERIMENT_TRANSITIONS, startBusinessExperimentSchema, assignBusinessExperimentUnitSchema, recordBusinessExperimentExposureSchema, controlBusinessExperimentExecutionSchema, type BusinessExperimentInvariantReceipt, type BusinessExperimentState } from "@paperclipai/shared";
 import { conflict, notFound } from "../../errors.js";
@@ -28,6 +28,16 @@ async function requireNoOtherActiveRecording(tx: Db, companyId: string, experime
  * asserts customer consent, verifies a workflow or grants policy authority. */
 export function businessExperimentRecordingService(db: Db) {
   return {
+    async safetyControls(companyId: string, actor: AuthorizationActor, cursor?: string) {
+      return db.transaction(async raw => {
+        const tx = raw as unknown as Db; await admitBusinessExperiment(tx, companyId, actor, true, false);
+        const rows = await tx.select({ id: businessExperiments.id, companyId: businessExperiments.companyId, versionId: businessExperiments.currentVersionId, revision: businessExperiments.revision, state: businessExperiments.state }).from(businessExperiments)
+          .where(and(eq(businessExperiments.companyId, companyId), inArray(businessExperiments.state, ["running", "paused"]), cursor ? sql`${businessExperiments.id}>${cursor}::uuid` : undefined)).orderBy(asc(businessExperiments.id)).limit(21);
+        // Stop authority needs exact native identities/state, not source prose,
+        // arms, people, measurements or protocol disclosures while flags are off.
+        return { items: rows.slice(0,20), nextCursor: rows.length>20 ? rows[19].id : null, coverage: "bounded_active_recording_control_metadata" as const };
+      });
+    },
     async start(companyId: string, actor: AuthorizationActor, id: string, raw: Parameters<typeof startBusinessExperimentSchema.parse>[0]) {
       const input = startBusinessExperimentSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {

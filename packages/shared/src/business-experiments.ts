@@ -151,9 +151,20 @@ export interface BusinessExperimentInvariantDiagnostic {
 }
 export interface BusinessExperimentAnalysisView {
   id: string; companyId: string; experimentId: string; versionId: string; definitionHash: string;
+  qualityGates: { assignmentReceipts: boolean; exposureReports: boolean; finalOutcomeCapture: "complete" | "incomplete" | "not_required_nonconfirmatory_stop"; identityJoins: boolean; baselineBalance: boolean; concurrentReviewAdmitted: boolean };
   result: NativeBusinessExperimentResult; invariantDiagnostics: BusinessExperimentInvariantDiagnostic[];
   exposureProvenance: "human_attestation"; outcomeTimeSemantics: "created_in_window_current_state_at_common_final_capture";
   concurrentChangeReview: { assessment: "none_identified" | "material_or_unknown"; rationale: string };
   causalAuthority: "conditional_on_registered_randomization_and_human_attestations" | "withheld";
   analyzedAt: string; analyzedBy: string; receiptHash: string; currentQualification: "current" | "needs_revalidation";
 }
+
+export type CreateBusinessExperiment = z.infer<typeof createBusinessExperimentSchema>;
+export type AmendBusinessExperiment = z.infer<typeof amendBusinessExperimentSchema>;
+export type TransitionBusinessExperiment = z.infer<typeof transitionBusinessExperimentSchema>;
+export type StartBusinessExperiment = z.infer<typeof startBusinessExperimentSchema>;
+export type AssignBusinessExperimentUnit = z.infer<typeof assignBusinessExperimentUnitSchema>;
+export type RecordBusinessExperimentExposure = z.infer<typeof recordBusinessExperimentExposureSchema>;
+export type ControlBusinessExperimentExecution = z.infer<typeof controlBusinessExperimentExecutionSchema>;
+export type AnalyzeBusinessExperiment = z.infer<typeof analyzeBusinessExperimentSchema>;
+export type InterpretBusinessExperiment = z.infer<typeof interpretBusinessExperimentSchema>;

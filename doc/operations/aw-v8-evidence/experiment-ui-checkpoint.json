@@ -1,0 +1,443 @@
+{
+  "checkpoint": "Native experiment operator workbench and independent human stopping access",
+  "parentCommit": "4463492093e0f25d8e59aa7f134273c73aabc1d4",
+  "recordedAt": "2026-10-07T08:50:53.897535+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-business-experiments.md",
+      "sha256": "51d92ee7899d742a20020d104d4acc21ae86b684d59337d48a2016acac946138"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-4463492.json",
+      "sha256": "fa8e88482edbf097de4774b9b116be417248c6d5f844871e7ab849aad387f2be"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "eef5b0d68f807310500407831f0c8a9658887c901437b66922ae2f3c04812841"
+    },
+    {
+      "path": "packages/shared/src/business-experiments.ts",
+      "sha256": "b002d64d98fa58be5e4806617c71e3cc070c261e4af4c7340f761d1919136c44"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-recording.integration.test.ts",
+      "sha256": "8d50a42df9893d3dfad935f9ebdbceda0b55189b8a1794217de0d6751d5517ed"
+    },
+    {
+      "path": "server/src/routes/business-experiments.ts",
+      "sha256": "f0da07c2d28bb7b0247357662ebacac8184adbe31a52d2e15b3a7663c0f40a00"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "dbf3102c5e434a80060dfe57b18ad5022e1b1f2fa5b0a7844bd3a2f6c03a0001"
+    },
+    {
+      "path": "server/src/services/business-experiments/recording.ts",
+      "sha256": "810138565ed929b20d0ed30ca0801d48574c699014a29cde78950a4c50e8f726"
+    },
+    {
+      "path": "server/src/services/business-experiments/results.ts",
+      "sha256": "8b36ee876b1aeb6fb56c8552f72c83efb90e9ac9b93f4f0a7ff7dfb41f2be5d3"
+    },
+    {
+      "path": "tests/storybook-visual/business-experiments.config.ts",
+      "sha256": "216bf6c28570ec345eca255169500cfb0b91a6756ec971f7571eef345e3790ab"
+    },
+    {
+      "path": "tests/storybook-visual/business-experiments.spec.ts",
+      "sha256": "6a75f07a03c2e4a408ed54faa1edf5b83f931bf27ea45f914469043ed8b7f314"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "e7527b5c296b6b11f18585e153b9f79750d254d0aa529707f08664e099486ab5"
+    },
+    {
+      "path": "ui/src/api/business-experiments.ts",
+      "sha256": "ed758e130f163583b1b50fc83a29cc552affbd383f3d6f304e85790691b2bd39"
+    },
+    {
+      "path": "ui/src/components/BusinessExperimentDefinitionForm.tsx",
+      "sha256": "b37e7ab38bc1a22d3217dbfdee4a88dd98268564b076968103090be5436a44f6"
+    },
+    {
+      "path": "ui/src/components/BusinessExperimentMetricPicker.tsx",
+      "sha256": "93714f42349dc049d13980fed18ea7b6ddb22032dd206a57d949a14220abed82"
+    },
+    {
+      "path": "ui/src/components/BusinessExperimentRecordingControls.tsx",
+      "sha256": "ebc73aefffa526db2608fd718e4bfffc8e5755e2347181e122cec28039280003"
+    },
+    {
+      "path": "ui/src/components/BusinessExperimentResult.tsx",
+      "sha256": "c1d69da4aeb2f2e2c3953e2c91b84978853d5a6639ebba58c3e03990eaf68549"
+    },
+    {
+      "path": "ui/src/components/BusinessExperimentSafetyControls.tsx",
+      "sha256": "2ef6d3f6413ad9c28a7225feb24077d0fb51ce970868ee17168b180ca968f937"
+    },
+    {
+      "path": "ui/src/components/BusinessExperimentUnitPicker.tsx",
+      "sha256": "95542dd3501c2ecd7d275bfb4d80ee1913f978aad574ffa80263017dc472ba35"
+    },
+    {
+      "path": "ui/src/components/Sidebar.tsx",
+      "sha256": "781d48212d7c2d85e3d838742e43444b19bc7933edf1807a0e636e498b75639d"
+    },
+    {
+      "path": "ui/src/components/business-experiment-draft.ts",
+      "sha256": "a7365295cddb92d23d1cbf49ec9e0e88ec0ce57fe0186131a59678c00af2bcab"
+    },
+    {
+      "path": "ui/src/pages/BusinessExperiments.test.tsx",
+      "sha256": "4102deb5a81bb5379602644470367cfeffb8b57fdad233b231719efbaee13a1e"
+    },
+    {
+      "path": "ui/src/pages/BusinessExperiments.tsx",
+      "sha256": "ebe9a3f0c7ba61f9c4ffee37e5dfa4581b7b8f886348fab8a39e7afb08106a5a"
+    },
+    {
+      "path": "ui/src/pages/BusinessForecasts.test.tsx",
+      "sha256": "05b3915776aa7cd80f52112213c198f0983ec2c061d01a483dbf151bb9d6cb94"
+    },
+    {
+      "path": "ui/src/pages/BusinessScenarios.test.tsx",
+      "sha256": "7aa5e51db19dc1bd96d98df080b1fc218f7ba7a91fd4afbded62ca80b8a5df5a"
+    },
+    {
+      "path": "ui/storybook/stories/business-experiment-fixtures.ts",
+      "sha256": "6cfe1c3cf827068639a28a462aae80d6d22e92f8a1521fa0018a0bce36fa6d55"
+    },
+    {
+      "path": "ui/storybook/stories/business-experiments.stories.tsx",
+      "sha256": "4b60ddd661506bcc94ff48fa503b7664a8c3e83884b96df7baa6f126e94a927d"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native_owner_and_contracts",
+      "status": "passed",
+      "checks": 46,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-ui-owner-tests-final.log",
+      "logSha256": "cd36959838969b9840a866432cf01d28f0b781c25c2cd66c844119e94805a096"
+    },
+    {
+      "name": "operator_and_forecast_scenario_regression",
+      "status": "passed",
+      "checks": 29,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-ui-tests-complete-qualified.log",
+      "logSha256": "b9c817f55cad65a6f1579076a39de425bd101f15e9f322f90926859ee042b391"
+    },
+    {
+      "name": "wcag22_keyboard_responsive",
+      "status": "passed",
+      "checks": 52,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-ui-browser-wcag22.log",
+      "logSha256": "3b8b8d62e16ba8f51ec97242dd0e1146ee37c48be257d63a6d080fc06531e2bd"
+    },
+    {
+      "name": "ui_types",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-ui-types-qualified-complete.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "server_types",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-ui-server-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared_types",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-ui-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "native_tokens",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-ui-token-checks.log",
+      "logSha256": "5e2bd3bc4a49194a297495e1ce2b5363c2a11a3b8fea3bf91a47b231365db94b"
+    },
+    {
+      "name": "compiled_storybook",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-ui-storybook-final.log",
+      "logSha256": "e1be95d3a85b1878ecf109193d4e34f04130a86486b1801f3dbced272ef71c41"
+    }
+  ],
+  "evidenceClass": "Actual migrated PostgreSQL source-owner/API checks, plus explicitly synthetic API-blocked Storybook/browser presentation fixtures. No collected trial, verified intervention, official visual baseline or hosted release claim.",
+  "failedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-ui-types-initial.log",
+      "logSha256": "26c76a38bde6dddd812834e616ac2307f76074b67b37cdfa2df5b51afd7a263b",
+      "resolution": "Public command aliases exported from the native shared schema; no frontend direct zod dependency."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-ui-workspace-types.log",
+      "logSha256": "f1aa786497ce4db6bd3217d7f3caa89d826f06607abb3e3e37541fb8dbdf5a8e",
+      "resolution": "Native wire timestamp adaptation accepts Date and serialized string without casts."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-ui-fixture-types.log",
+      "logSha256": "d21627c1daa0ecb3c38f1ccecf0bbaf17d92f351145d26f1f4eca17a0f5242cb",
+      "resolution": "Corrected fixture closing brace."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-ui-tests.log",
+      "logSha256": "1ac5e12167d7ce711526790e85acacddd014b4a175b173812853b176b73cdee3",
+      "resolution": "Ratio fixture uses canonical ratio unit."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-ui-tests-qualified.log",
+      "logSha256": "0473f3bed95979a20d0c7af6433040eea2a3ce70b56ccc939789780b4a1ea9ce",
+      "resolution": "Renamed shadowed selector variable."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-ui-types-final.log",
+      "logSha256": "78e0c0ad6849519fcc39de2a98d8e8b339dfd922ed1bddb94f731f8112d29797",
+      "resolution": "Canonical native experimental-settings schema supplies all defaults."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-ui-tests-final-qualified.log",
+      "logSha256": "a9e5f772c326429f120d0ec268e10903603347962496e121ed9e24aa1d41acc2",
+      "resolution": "Wait for the exact enabled native option before dispatch; all original assertions retained."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-ui-tests-complete.log",
+      "logSha256": "c5c43ad0cc5f8369a540371cc59a845cc3e2860ea4fee710d777f455498bd595",
+      "resolution": "Same source-option race resolved in all three owner UI suites."
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-013b0-ional-authority-and-quality/experiment-result-failed-dark-1200.png",
+      "sha256": "59994c3cf07663c506e85cdd6c6c62e18ea2345ec27e892fa458fae8346634a7"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-08566-ps-human-lifecycle-explicit/experiment-workspace-ready-light-1200.png",
+      "sha256": "1134b82ff3fe8e9e143c52a8cbe814f6aaea305b8b23d7900ca192c57ed4df4b"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-10c8d-loses-only-control-metadata/experiment-stopping-light-1200.png",
+      "sha256": "6322d602dd4c9b68206a0174aa888a469413148c91a084b353de4881374cfebe"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-11262-ps-human-lifecycle-explicit/experiment-workspace-ready-dark-1200.png",
+      "sha256": "fba8b19abb5de316b60b2686182d2898ed292698d7fde0fa9698f62b673cf87b"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-1c802-ve-pins-and-human-rationale/experiment-preregistration-light-1200.png",
+      "sha256": "7e62acc5f6345a63031f3de4aa342dfb0fbcff5f1d92be24a7d379c79719c1de"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-1db73-ional-authority-and-quality/experiment-result-passed-light-390.png",
+      "sha256": "739dbfc19b8a4a0c1c347f48ef4bc3cea41f2e31f260f4e9016176e7fbd37816"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-1e33e-ps-human-lifecycle-explicit/experiment-workspace-completed-light-390.png",
+      "sha256": "22b5737f5016a31dfe750928efd3280ee29591976c9d0c616e72a3d831a931bb"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-23591-ve-pins-and-human-rationale/experiment-preregistration-light-390.png",
+      "sha256": "5fe767d2176d9dbee4304951948da0488aaf4b111893cd2bce42f288ef640470"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-36b4e-ional-authority-and-quality/experiment-result-stale-dark-390.png",
+      "sha256": "a91f8df30634a7d7621aeab8a5c700885629a908d8770c4d9c0d30fdf5f1a61b"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-38b38-ps-human-lifecycle-explicit/experiment-workspace-analyzing-light-390.png",
+      "sha256": "3e1fc5853c54fe1d3eca72b20e0777beab66dd5608cb497135c9f52ecf34d991"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-3c887-ional-authority-and-quality/experiment-result-invalid-light-390.png",
+      "sha256": "c8d7ffea4f0781b57496ac44ccd8c56e82599db03e087b8c5dad223ba2868483"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-3cf39-ional-authority-and-quality/experiment-result-inconclusive-dark-1200.png",
+      "sha256": "548dc011bfbc800c5bb5da09caf3edadb71110c0d122421f26d16f34b83e9439"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-3ec53-ps-human-lifecycle-explicit/experiment-workspace-completed-dark-390.png",
+      "sha256": "e095852ee46ea32588aa8311510d6cd61c3119c4595ccaf0d68a0912042e706f"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-4214e-ional-authority-and-quality/experiment-result-inconclusive-light-390.png",
+      "sha256": "951ab872c1a28932eff7573387282a08da8e4e2e400ca546d5cb40adce813bed"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-4c87e-ional-authority-and-quality/experiment-result-invalid-light-1200.png",
+      "sha256": "5aa605f6336d8787d736c7c59ffc4ba324ab8dea57d16ed8277428421ae21b89"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-4cb0b-ve-pins-and-human-rationale/experiment-preregistration-dark-1200.png",
+      "sha256": "1f9cb466be4fafccd2529dd1172d5efcf8c499b3b2d06ae7d80ac45948b76ca2"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-4e34c-loses-only-control-metadata/experiment-stopping-dark-390.png",
+      "sha256": "706539397f8e600bc20a2432d6f869430229e99a0fd328195c791afa04ae66d5"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-53ce0-ps-human-lifecycle-explicit/experiment-workspace-ready-dark-390.png",
+      "sha256": "90828735597393fc4019479e1e2607bc30c600df376f5bad03e840c2e788c2d0"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-54c02-ional-authority-and-quality/experiment-result-failed-light-390.png",
+      "sha256": "160b8b4dfca5d9f87e3996e7acc82bb545716c666fa9fbd5d0efca33bc5579ef"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-54f9a-ps-human-lifecycle-explicit/experiment-workspace-draft-light-1200.png",
+      "sha256": "eb8792e0062893316968d70bf12f1a4d7cbc356b3ded21643edb68602ba3a919"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-55bdf-ional-authority-and-quality/experiment-result-safety-stop-dark-390.png",
+      "sha256": "1738285a526196fdc3cb35e25afd32c61f3b03b5ae20d806c8f03d411e98e716"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-57653-ps-human-lifecycle-explicit/experiment-workspace-ready-light-390.png",
+      "sha256": "3fa92b954aa37cbae74eea03bccda3c84139517e4fa2657217531d07db9df045"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-66eee-ional-authority-and-quality/experiment-result-safety-stop-light-390.png",
+      "sha256": "455b7abef50e3d732f16148abd15bdb1ad8caa8587e5e02ebd29be32ec3d0c95"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-6c4fb-ps-human-lifecycle-explicit/experiment-workspace-running-light-390.png",
+      "sha256": "5fc9254b6255182152959bb67a2ae48e9c211e83e7b76fe689a112228d95798b"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-71332-ps-human-lifecycle-explicit/experiment-workspace-draft-dark-1200.png",
+      "sha256": "491e316298e874073a35da535d5b08d45253e61285b8ba441a1566a788af1541"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-7a4f9-loses-only-control-metadata/experiment-stopping-light-390.png",
+      "sha256": "8327ae25a0ab2152a2875ed768fafca03dd2f0a67a53581e85ec49f6570357d9"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-81bbb-ional-authority-and-quality/experiment-result-passed-light-1200.png",
+      "sha256": "9f08c18f82f39618a6c8f06c60fcd209fe3644a9a0e617955704a58e4d46b1a7"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-88e3d-loses-only-control-metadata/experiment-stopping-dark-1200.png",
+      "sha256": "f2b1d4b04b3b6b4e9066abc678f621e7b698087d1405a7cf2df382af791a0f9d"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-94166-ps-human-lifecycle-explicit/experiment-workspace-analyzing-dark-1200.png",
+      "sha256": "caffe790c9c31abaf194b4d670f4cf629fe4c0616f89b9567c0d6c027c9862c1"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-9883b-ional-authority-and-quality/experiment-result-stale-light-390.png",
+      "sha256": "4258bafffae75538136457a0882265382f99cf06446c7baa825ae5f5367310e5"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-a379c-ional-authority-and-quality/experiment-result-failed-light-1200.png",
+      "sha256": "1e9d0cb6e318b9bb39bd190cdaffc01818fdd642ca8e152e2d5536a634f779c7"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-a5d96-ional-authority-and-quality/experiment-result-passed-dark-1200.png",
+      "sha256": "6e93e95b0e4eee4e89693e450584dfb7e0358957db76c2017ea7002e334b02b8"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-a75ea-ps-human-lifecycle-explicit/experiment-workspace-draft-dark-390.png",
+      "sha256": "33ade60af134de2b4c13887a9ef8b3dfeecee01dffd96b773bf92d7d6a274558"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-ac901-ps-human-lifecycle-explicit/experiment-workspace-draft-light-390.png",
+      "sha256": "80436583d71243729edbe3a105f78a76fb247c7835fa974a26d25c9471b849b5"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-acc6b-ps-human-lifecycle-explicit/experiment-workspace-completed-dark-1200.png",
+      "sha256": "9b54c5abd8fc66b7f3228092994f6df9d2a7e7debdb7bdd3724893859f6d71b0"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-bb4c4-ional-authority-and-quality/experiment-result-stale-light-1200.png",
+      "sha256": "52e1c9773d1869839e55ba4080f3e828798af3585f1850252776562b3eb1c0be"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-bc7a1-ional-authority-and-quality/experiment-result-safety-stop-dark-1200.png",
+      "sha256": "f543cf257434643f1e73d714619e0a75aa434bf23869693cddf183ecfb2152a2"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-bcd52-ps-human-lifecycle-explicit/experiment-workspace-running-dark-390.png",
+      "sha256": "6262703883111e1a1ccb11e5d5dab2fbc6a657576cccabcd3792af7320fd5915"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-c1eef-ional-authority-and-quality/experiment-result-stale-dark-1200.png",
+      "sha256": "ff8e45951749c2f0c6a8ad90c1a282d1c9011b4f0b76ab1b99396b4d53684145"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-c3d07-ional-authority-and-quality/experiment-result-invalid-dark-390.png",
+      "sha256": "1ee7622371856ba500219676a7f5b9108d4d18a257d085b10402b70216ca2d8f"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-c6029-ps-human-lifecycle-explicit/experiment-workspace-running-light-1200.png",
+      "sha256": "e9c8f1a931b7726070207cb282a71e00252a8c74e84f547b3e9796f4eff9ef4d"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-ceb37-ve-pins-and-human-rationale/experiment-preregistration-dark-390.png",
+      "sha256": "f4f81e2430ffa0bf354cfc7da7b329f313a09414482d8fab4988989059ff89d6"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-cec63-ional-authority-and-quality/experiment-result-safety-stop-light-1200.png",
+      "sha256": "b57f57ba549ef784b4e1fce96b583415f20ce6c4a3d1ab16a75d9a32d7f0194f"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-cee0f-ps-human-lifecycle-explicit/experiment-workspace-analyzing-dark-390.png",
+      "sha256": "23d28254eeb6c1d9f6f28faea64b689a7e1cfb0d0ce052f351800b243dd15e45"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-d91db-ional-authority-and-quality/experiment-result-invalid-dark-1200.png",
+      "sha256": "96367718999dade8fb602927ab8ab8e7fda818bb4f71115279f7402161e4c074"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-dd9be-ional-authority-and-quality/experiment-result-failed-dark-390.png",
+      "sha256": "b82d79177b313b808348d34a2d17f46a5ec0eb01eb4ad0d01ee037e36fe977f9"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-e374e-ional-authority-and-quality/experiment-result-inconclusive-dark-390.png",
+      "sha256": "4e924824e2cd4f80ffcd2c049be99929b017eb451d6713f590da9bcfd60f4ee6"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-e77b0-ps-human-lifecycle-explicit/experiment-workspace-analyzing-light-1200.png",
+      "sha256": "1d6290dca880250205975f0e1d507b48944b7acbd0b9cfaaf35b3bb338da243d"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-ea56a-ional-authority-and-quality/experiment-result-inconclusive-light-1200.png",
+      "sha256": "133a0dc7ef45df6bb9d135a551ce04103c9948ee7afc22cc2fa1afb53d4e3ef9"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-ee05f-ps-human-lifecycle-explicit/experiment-workspace-completed-light-1200.png",
+      "sha256": "3f503a6219a70fe447db0653b4a57aaf784693e5f48f1f6f8ed76fcd76823ace"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-f16e1-ional-authority-and-quality/experiment-result-passed-dark-390.png",
+      "sha256": "0331b5ce5f359773e1acb3746b7630cdcefc676189d07284afd162c1cf9ec936"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/business-experiments-wcag22/business-experiments-exper-f9c34-ps-human-lifecycle-explicit/experiment-workspace-running-dark-1200.png",
+      "sha256": "0b9ea9f5a023a65713c3f6c870669a2c0ab505c13101a3f8bf8b79dd6a14b849"
+    }
+  ],
+  "visuallyInspected": [
+    "experiment-result-passed-light-390.png",
+    "experiment-workspace-analyzing-dark-1200.png"
+  ],
+  "remaining": [
+    "Experiment Decision/Causal/Learning/Planning bridges",
+    "Causal/planning/management and remaining V8 source domains",
+    "Optional provider and actual hosted qualification"
+  ]
+}

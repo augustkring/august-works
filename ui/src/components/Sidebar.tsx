@@ -8,6 +8,7 @@ import {
   DollarSign,
   History,
   Waypoints,
+  FlaskConical,
   Search,
   SquarePen,
   Network,
@@ -231,6 +232,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           {v8FeatureEnabled(experimentalSettings ?? {}, "process_intelligence_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/process-intelligence" label="Process intelligence" icon={GitBranch} />}
           {v8FeatureEnabled(experimentalSettings ?? {}, "business_forecasting_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/business-forecasts" label="Business forecasts" icon={History} />}
           {v8FeatureEnabled(experimentalSettings ?? {}, "scenario_planning_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/business-scenarios" label="Business scenarios" icon={Waypoints} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "business_experiments_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/business-experiments" label="Business experiments" icon={FlaskConical} />}
           {v8FeatureEnabled(experimentalSettings ?? {}, "business_metrics_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/business-metrics" label="Business metrics" icon={Target} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "ai_use_cases_v7") && <SidebarNavItem to="/ai-governance" label="AI Governance" icon={BookOpen} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "enterprise_identity_v7") && <SidebarNavItem to="/company/settings/enterprise" label="Enterprise" icon={BookOpen} />}

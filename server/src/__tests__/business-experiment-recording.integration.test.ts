@@ -177,4 +177,21 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     expect((await request(server).post(`${base}/assignments`).send({ expectedRevision: 4, versionId: d.version.id, unitId: assignment.unitId, arm: "treatment" })).status).toBe(400);
     expect((await request(server).post(`${base}/exposures`).send({ expectedRevision: 4, versionId: d.version.id, assignmentId: assignment.id, exposure: { status: "not_applied", rationale, verified: true } })).status).toBe(400);
   });
+  it("independent stop metadata remains minimal and human-authorized when rollout is disabled and enrolled source access is unavailable", async () => {
+    const d = await running(), unit = await enrolled(d);
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, unit.unit.id));
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({});
+    await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
+    const controls = await recording().safetyControls(companyId, actor);
+    expect(controls.items).toEqual([{ id: d.experiment.id, companyId, versionId: d.version.id, revision: 4, state: "running" }]);
+    expect(JSON.stringify(controls)).not.toContain(unit.unit.id); expect(JSON.stringify(controls)).not.toContain("hypothesis"); expect(JSON.stringify(controls)).not.toContain("rationale");
+    await expect(recording().safetyControls(companyId, { type: "agent", agentId: randomUUID(), companyId })).rejects.toMatchObject({ status: 403 });
+    const app = express(); app.use(express.json()); app.use((req, _res, next) => { req.actor = actor; next(); }); app.use(businessExperimentRoutes(db)); app.use(errorHandler);
+    const url = `/companies/${companyId}/experiments/recording-controls`;
+    const result = await request(app).get(url); expect(result.status).toBe(200); expect(result.headers["cache-control"]).toBe("no-store"); expect(result.body.items).toEqual(controls.items);
+    expect((await request(app).get(`${url}?expectedUserId=someone-else`)).status).toBe(409);
+    const stopped = await recording().control(companyId, actor, d.experiment.id, { expectedRevision: 4, versionId: d.version.id, state: "cancelled", rationale, completion: null }); expect(stopped.state).toBe("cancelled");
+    expect((await recording().safetyControls(companyId, actor)).items).toEqual([]);
+  });
+
 });

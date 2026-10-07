@@ -215,3 +215,51 @@ balanced synthetic allocation frame tests the positive numerical path and a
 parallel pretreatment-imbalanced frame tests abstention. Neither frame is a
 collected business trial or evidence of actual intervention benefit. Operator UI,
 Decision/Causal/Learning/Planning bridges and remaining V8 qualification follow.
+
+## Native operator workbench and independent stopping access
+
+`/business-experiments` uses native company/account context, experimental settings,
+source APIs and controls. It exposes reasoned typed preregistration, exact current
+native metric pickers, pretreatment invariants, explicit unstarted amendments,
+human readiness, stable allocations, human applied/not-applied exposure, registered
+pause/stop, one final capture and separate human interpretation. It accepts no
+pasted measurement/result JSON or claimed source/causal qualification. Existing
+native issue/project APIs supply authorized units; the owner independently proves
+admission. Metric publication changes cannot silently rebind a retained proposal.
+
+Hypothesis, primary benefit, every guardrail, exposed population and lifecycle stay
+visible. Result cards show exact registered directions, meaningful/safety bounds,
+arm populations/rates, differences in percentage points, conservative intervals
+and explicit uncertainty. Human interpretation follows result inspection.
+Quality gates/balance and source traceability are separately inspectable by
+keyboard. Unknown counts after a numerical integrity gate are withheld rather
+than displayed as measured zeros. Small diagnostic probabilities use scientific
+notation instead of being rounded to zero.
+
+Account verification, native retention expiry, source-read failure, receipt
+identity mismatch or Memory access changes withhold dependent facts/control
+surfaces. Memory changes clear unsaved source-dependent proposals and source
+query namespaces. Native expected-user guards and CAS remain on every command.
+Reviewing input pauses automatic root/receipt polling, preventing silent draft
+replacement. Live source selectors still recheck their own authority.
+
+Human stop authority remains available independently of rollout/source disclosure:
+`GET /companies/:companyId/experiments/recording-controls` returns only bounded
+active native control IDs, version, revision, company and state to the same human
+administration authority that can stop them. It exposes no protocol, units,
+measurements or exposure contents. Paused companies and disabled rollout can
+still cancel an exact recording. The workbench route preserves this minimal
+stopping surface when ordinary experiment functionality is disabled. Normal
+sidebar discovery follows the feature flags.
+
+Qualification includes 46 actual native owner/OpenAPI/contract checks, 29 operator
+and forecast/scenario regression checks, type/token checks, compiled Storybook
+and 52 Chromium keyboard/WCAG 2.2 AA/no-overflow checks across light/dark and 390/1200px.
+Browser evidence uses cached explicitly synthetic presentation fixtures with API
+access blocked; it does not qualify real source execution or collected trials.
+The browser suite waits only for the native addon's explicit concurrent axe scan;
+real violations fail. DOM selector helpers wait for the exact admitted option
+before dispatch, preserving assertions under concurrent compilation. Screenshots
+were visually inspected and record source/log hashes; no official visual baseline
+is claimed. The `446349209` preceding analysis checkpoint production build passes.
+Downstream Decision/Causal/Learning/Planning bridges and remaining V8 waves continue.
