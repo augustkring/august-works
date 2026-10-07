@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflows, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, providerTraceRecords, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
 import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, type LearningChange } from "@paperclipai/shared";
 import { learningService } from "../services/learning/learning-service.js";
+import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
 import {businessMetricObservations,learningAnalyticalDependencies,memoryJobs} from "@paperclipai/db";
 import {metricDefinition} from "./helpers/business-metric-fixture.js";
@@ -255,9 +256,19 @@ const support = await getEmbeddedPostgresTestSupport();
     const [trace]=await db.insert(providerTraceRecords).values({companyId,runId:childRun!.id,provider:"fixture",traceRef:`${randomUUID()}.ndjson`,requestedBy:"fixture",expiresAt:new Date(Date.now()+60_000),status:"complete",frameCount:1,byteCount:24,digest:"a".repeat(64)}).returning();
     const erased=()=>db.execute(sql`select aw_workflow_memory_erased(${companyId}::uuid,${childRun!.id}::uuid,${childTask!.id}::uuid) as erased`);
     expect((await erased())[0]).toMatchObject({erased:false});
+    await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:childTask!.id})).resolves.toBeUndefined();
+    await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{runId:childRun!.id})).resolves.toBeUndefined();
+    await expect(assertAnalyticalContextPayloadAccess(db,companyId,undefined,{runId:childRun!.id})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
     await expect(executor.getRun(companyId,run.run.id,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
     await expect(executor.listRuns(companyId,created.id,20,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    for(const scope of [{issueId:childTask!.id},{runId:childRun!.id}])await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,scope)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:tasks[0]!})).resolves.toBeUndefined();
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
+    await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:childTask!.id})).resolves.toBeUndefined();
+    await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{runId:childRun!.id})).resolves.toBeUndefined();
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+
     await expect(executor.startManualRun(companyId,created.id,{input:{}},principal,null)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
     await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,signal.observation.id));
     // The SQL fence applies before the existing outbox performs physical erasure.
