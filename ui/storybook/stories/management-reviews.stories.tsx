@@ -6,7 +6,7 @@ import { ManagementReviewResult } from "@/components/ManagementReviewResult";
 import { managementFixture } from "./management-review-fixtures";
 function Workspace({ stale = false, published = false, disabled = false }: { stale?: boolean; published?: boolean; disabled?: boolean }) {
   const f = managementFixture(stale, published), [client] = useState(() => { const q = new QueryClient({ defaultOptions: { queries: { enabled: false, retry: false, staleTime: Infinity, refetchOnMount: false, refetchOnWindowFocus: false }, mutations: { retry: false } } });
-    q.setQueryData(["management-review-controls", f.companyId, f.userId], { pages: [f.controls], pageParams: [undefined] }); q.setQueryData(["management-reviews", f.companyId, f.userId, "detail", f.id], f.review); q.setQueryData(["management-definition-sources", f.companyId, f.userId, "purpose"], [f.policy]); q.setQueryData(["strategy-sources", f.companyId, f.userId, "goals"], [f.goal]); return q;
+    q.setQueryData(["management-review-controls", f.companyId, f.userId], { pages: [f.controls], pageParams: [undefined] }); q.setQueryData(["management-reviews", f.companyId, f.userId, "detail", f.id], f.review); q.setQueryData(["management-definition-sources", f.companyId, f.userId, "purpose"], [f.policy]); q.setQueryData(["management-definition-sources", f.companyId, f.userId, "options", "goal", "", ""], { items: [{ source: f.definition.sources[0].source, title: f.goal.title }], coverage: "bounded_authorized_native_choices" }); return q;
   });
   return <QueryClientProvider client={client}><div className="mx-auto w-full max-w-3xl"><ManagementReviewWorkspace companyId={f.companyId} userId={f.userId} enabled={!disabled} /></div></QueryClientProvider>;
 }

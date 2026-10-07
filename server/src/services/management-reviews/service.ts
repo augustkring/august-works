@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { analyticalLineageEdges, analyticalLineageManifests, managementReviewSnapshots, managementReviewSourceLinks, managementReviewManifestDependencies, managementReviewEvents, type Db } from "@paperclipai/db";
-import { managementReviewDefinitionSchema, publishManagementReviewSchema, recordManagementReviewEventSchema, v7FeatureEnabled, v8FeatureEnabled, type ManagementReviewDefinition, type ManagementReviewView } from "@paperclipai/shared";
+import { managementReviewDefinitionSchema, managementSourceOptionsQuerySchema, publishManagementReviewSchema, recordManagementReviewEventSchema, v7FeatureEnabled, v8FeatureEnabled, type ManagementReviewDefinition, type ManagementReviewView, type ManagementSourceOptionsQuery } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { conflict, notFound } from "../../errors.js";
 import { assertV7Authorization, v7HumanActorId } from "../v7-authorization.js";
@@ -14,6 +14,7 @@ import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { captureManagementSources } from "./capture.js";
 import { composeManagementReview } from "./kernel.js";
 import { inspectAnalyticalEvidenceAuthority } from "../analytical-evidence.js";
+import { managementSourceOptions } from "./source-options.js";
 type Row = typeof managementReviewSnapshots.$inferSelect;
 const LIMIT = 20065;
 async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, requireFlags = true) {
@@ -52,6 +53,7 @@ async function retained(tx: Db, companyId: string, actor: AuthorizationActor, ro
 }
 export function managementReviewService(db: Db) {
   return {
+    async sourceOptions(companyId: string, actor: AuthorizationActor, raw: ManagementSourceOptionsQuery) { const query = managementSourceOptionsQuerySchema.parse(raw); return db.transaction(async transaction => { const tx = transaction as unknown as Db; await admit(tx, companyId, actor); return managementSourceOptions(tx, companyId, actor, query); }); },
     async controls(companyId: string, actor: AuthorizationActor, cursor?: string) { return db.transaction(async raw => { const tx = raw as unknown as Db; await admit(tx, companyId, actor, false, false); const rows = await tx.select({ id: managementReviewSnapshots.id, status: managementReviewSnapshots.status, createdAt: managementReviewSnapshots.createdAt, expiresAt: managementReviewSnapshots.expiresAt }).from(managementReviewSnapshots).where(and(eq(managementReviewSnapshots.companyId, companyId), cursor ? sql`${managementReviewSnapshots.id}>${cursor}::uuid` : undefined)).orderBy(asc(managementReviewSnapshots.id)).limit(21); return { items: rows.slice(0, 20).map(row => ({ ...row, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString() })), nextCursor: rows.length > 20 ? rows[19]!.id : null, coverage: "bounded_native_review_metadata" as const }; }); },
     async detail(companyId: string, actor: AuthorizationActor, id: string) { return db.transaction(async raw => { const tx = raw as unknown as Db; await admit(tx, companyId, actor); return retained(tx, companyId, actor, await root(tx, companyId, id)); }); },
     async create(companyId: string, actor: AuthorizationActor, raw: ManagementReviewDefinition) {

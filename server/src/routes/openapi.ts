@@ -9,7 +9,7 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import {
-  managementReviewDefinitionSchema, publishManagementReviewSchema, recordManagementReviewEventSchema,
+  managementReviewDefinitionSchema, managementSourceOptionsQuerySchema, publishManagementReviewSchema, recordManagementReviewEventSchema,
   projectPlanningProfileSchema, proposeProjectPlanningSchema, reviewRoadmapProposalSchema,
   createStrategyExecutionLinkSchema,
   reviseStrategyExecutionLinkSchema,
@@ -12045,6 +12045,7 @@ registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/projects/{pr
 registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/review",tags:["V8"],summary:"Review through canonical human Roadmap authority with current account binding and a metadata-only result",query:z.object({expectedUserId:z.string().optional()}).strict(),body:reviewRoadmapProposalSchema,responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Source, account, native task or planning revision changed"}}});
 registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/source",tags:["V8"],summary:"Read the canonical authorized Roadmap source with current account binding for native planning",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current account or native source is unavailable"}}});
 
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/management-reviews/source-options",tags:["V8"],summary:"Choose bounded currently authorized native review sources with account binding",query:managementSourceOptionsQuerySchema,responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,403:r.forbidden,404:r.notFound,409:{description:"Current account or native source changed"}}});
 registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/management-reviews/controls",tags:["V8"],summary:"List independent bounded native review metadata",query:z.object({expectedUserId:z.string().optional(),cursor:z.string().uuid().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
 
 registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/management-reviews/{reviewId}",tags:["V8"],summary:"Inspect an admitted historical cited management packet",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});

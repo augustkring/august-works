@@ -47,6 +47,12 @@ export const publishManagementReviewSchema = z.object({ expectedContentHash: sha
 export const recordManagementReviewEventSchema = z.object({ expectedContentHash: sha, itemKey: key, event: z.enum(["opened", "ignored", "acted_on", "false_alarm", "correction"]), rationale: z.string().trim().min(10).max(2000) }).strict();
 export type ManagementReviewDefinition = z.infer<typeof managementReviewDefinitionSchema>;
 export type ManagementReviewSource = z.infer<typeof managementReviewSourceSchema>;
+export const managementSourceOptionsQuerySchema = z.object({
+  kind: z.enum(["foundation_section", "goal", "project", "milestone", "issue", "decision", "metric", "metric_target", "metric_observation", "decision_outcome", "learning_cycle"]),
+  q: z.string().trim().max(200).optional(), parentId: z.string().uuid().optional(), expectedUserId: z.string().min(1).max(300).optional(),
+}).strict();
+export type ManagementSourceOptionsQuery = z.infer<typeof managementSourceOptionsQuerySchema>;
+export interface ManagementSourceOptions { items: Array<{ source: ManagementReviewSource; title: string }>; coverage: "bounded_authorized_native_choices" }
 export type ManagementAgendaItem = ManagementReviewDefinition["agenda"][number];
 export type ManagementEvidenceGrade = "native_observation" | "native_current_state" | "predictive" | "conditional_scenario" | "human_interpreted_experiment" | "conditional_causal" | "native_outcome_review" | "native_learning_cycle";
 /** Internal owner capture: public inputs provide pins only. The source owner

@@ -1,0 +1,145 @@
+{
+  "checkpoint": "Account-bound native Management source options",
+  "parentCommit": "9e6f315e21593e1b5ddb886f6d668e573d77f5d0",
+  "recordedAt": "2026-10-07T13:44:02.753346+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/shared/src/management-reviews.ts",
+      "sha256": "f8986214eb8248e2cd2fd6b2c9413fe637a9939b97a2fadcc27b91538d89faa3"
+    },
+    {
+      "path": "server/src/__tests__/management-reviews.integration.test.ts",
+      "sha256": "881a02dc7dd9b44796d58672ceba9d10b68b85abd721500ccfd341e8bd99d12c"
+    },
+    {
+      "path": "server/src/routes/management-reviews.ts",
+      "sha256": "44c80da2e0926354e8c95fb0c8a6c6134c443f05c045213ebcf80b2055045f73"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "5a7204d1a53df52899828641646ef464b2f5ae1752030e8de285eb407ae3bb77"
+    },
+    {
+      "path": "server/src/services/management-reviews/service.ts",
+      "sha256": "75050a4308d2a00ef684e70da721b3f63bbceecb5d2b4fbae6a5373ff61e1d4e"
+    },
+    {
+      "path": "server/src/services/management-reviews/source-options.ts",
+      "sha256": "f6fdbdaf673346747d1fdb8cabf0469313e0d36e5aa8a929e2f54df7ab48cce0"
+    },
+    {
+      "path": "ui/src/api/management-reviews.ts",
+      "sha256": "a432f24a644d08838c950e534b5e4021c5eb0e190630556376fab786e5d9d9ca"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewSourcePicker.tsx",
+      "sha256": "5923d97d73138c1e805e50db7e66253d4d82beb0e415188176acae20fd6a552e"
+    },
+    {
+      "path": "ui/src/pages/ManagementReviews.test.tsx",
+      "sha256": "d2c35a364286ccb94988f173793ec041c80ad18dac4c1ab4a9e5e7c333b68ae5"
+    },
+    {
+      "path": "ui/storybook/stories/management-reviews.stories.tsx",
+      "sha256": "5a5a7c0a455def99bfbccc865f789f0da24719ff35c4235748af43c90545699d"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native-owner-final",
+      "checks": 19,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-menu-final-native.log",
+      "logSha256": "788bec1e5dd405170f48eebef125fbe29a92fd91e4def44b39629b7b7d1f3d68"
+    },
+    {
+      "name": "api-contract",
+      "checks": 16,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-menu-native.log",
+      "logSha256": "410917919afe710a8d81cee691fab1094b1f17423e3c52265931287f67de0078"
+    },
+    {
+      "name": "ui-operator-and-picker",
+      "checks": 19,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-menu-ui.log",
+      "logSha256": "24c3030bfb0a2b3fb243c0b3a4d4d5ee6b9555d572c7d219399431f9f53f2a9c"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-menu-server-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-menu-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-menu-ui-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "token-gates",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-menu-tokens.log",
+      "logSha256": "4ace44276894c22596ef2d7c39115bb12eae33e08d100ee72e060ecd83331f69"
+    },
+    {
+      "name": "storybook",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-menu-storybook.log",
+      "logSha256": "5bcb6ec52a6df473c636130a6677a22c9c17fb654f95b16b1650275582671a05"
+    },
+    {
+      "name": "affected-browser-form",
+      "checks": 4,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-menu-browser.log",
+      "logSha256": "b04e705f1f47de1bc59d6eea9c69533def3b6337656a04edc175a99a2cb4732a"
+    },
+    {
+      "name": "integrated-parent-build",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-build-9e6f315e2.log",
+      "logSha256": "9540b5f0acd1f78aa374f00798d3f08389398a4ad13eff99d8618ca7d5e4272c"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/var/tmp/aw-v8-management-menu-final-screens/management-declarations-light-1200.png",
+      "sha256": "6723a333e172bb92a09bb87e34085eb33a7db5b996c73a05f42f474dbfa7f4a7"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-menu-final-screens/management-declarations-light-390.png",
+      "sha256": "1f4010a255200f6e2ddb5124f0664836a78792157b7279634fe20c2c697c8b22"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-menu-final-screens/management-declarations-dark-1200.png",
+      "sha256": "befe397ce9cf8f36c462f8ed403acc701f1a1c47425a7ff4ccaad9557d9cdf94"
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-menu-final-screens/management-declarations-dark-390.png",
+      "sha256": "1d0d83f5c71c48ed34c6dc8671c23e8fbc463f3e6ac1d12bcfc8986f20d22972"
+    }
+  ],
+  "visuallyInspected": [
+    "management-declarations-light-390.png",
+    "management-declarations-dark-1200.png"
+  ],
+  "limitations": [
+    "Cached synthetic browser fixtures abort all API requests; no operational or official visual-baseline claim.",
+    "Outcome/governance enrichment, Routines/Chat, analytical Learning bridge and whole-brief remaining domains stay open."
+  ]
+}
