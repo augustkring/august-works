@@ -442,6 +442,8 @@ export {
   issueCommentMetadataSectionSchema,
   issueCommentMetadataSchema,
   addIssueCommentSchema,
+  agentChatOpenSchema,
+  type AgentChatOpenInput,
   issueThreadInteractionStatusSchema,
   issueThreadInteractionKindSchema,
   issueThreadInteractionCanonicalResolverPolicySchema,

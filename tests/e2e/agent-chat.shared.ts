@@ -59,8 +59,9 @@ export async function setup(request: APIRequestContext) {
     agent,
     chatPath,
     route,
-    restore: async () => {
+    restore: async (options?: { collectState?: boolean }) => {
       try {
+        if (options?.collectState === false) return;
         const chat = await request.get(chatPath);
         const history = chat.ok() ? await chat.json() : null;
         const tasks = await json(

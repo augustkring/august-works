@@ -1,0 +1,123 @@
+{
+  "checkpoint": "Explicit native-owner recovery after analytical source access is lost",
+  "parentCommit": "447bf7c535048d6ef703e90241414cc7e09d86e2",
+  "recordedAt": "2026-10-07T18:42:52.448454+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/shared/src/validators/issue.ts",
+      "sha256": "988e679c77756a4c968e5b5a0d4aca356f9291c1b4ac3c16451df2e2bb0699b2"
+    },
+    {
+      "path": "packages/shared/src/validators/index.ts",
+      "sha256": "510dd21dd33776866d82528d5e12a3093d52df9534f34352b526e2dc20a362ef"
+    },
+    {
+      "path": "packages/shared/src/index.ts",
+      "sha256": "9091c04074744a710b596239790c2d67e5ce91e1d4a413a6850c7e943b9ddb40"
+    },
+    {
+      "path": "server/src/routes/issues.ts",
+      "sha256": "19448404f2dd5776996121bf89c997b58c3a70d5420bd856d112c3f443338dbb"
+    },
+    {
+      "path": "server/src/services/issues.ts",
+      "sha256": "3e24445f914705d1212911b15d4947a4ae1a82e115ec6489544ac6fae3fd6578"
+    },
+    {
+      "path": "server/src/services/analytical-context-privacy.ts",
+      "sha256": "aa0d6d4a9a6cd0624fc5cba0c336a4d6d656251ed469bc90c8ec5b06584718eb"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "e4ee6326b4d3191362a0dc696860b7216337a32e5359d8350365bf178100f8a2"
+    },
+    {
+      "path": "server/src/__tests__/agent-conversations.test.ts",
+      "sha256": "d3a6aa3641d1bdcf770c6044ad8134ad203eea6838073cfc06aeb35bd06d4e2e"
+    },
+    {
+      "path": "ui/src/pages/AgentChat.tsx",
+      "sha256": "28e368b0f0be6241cbacf266fd84893634beb59b2635cd4874a025fef91303e7"
+    },
+    {
+      "path": "ui/src/api/agentChats.ts",
+      "sha256": "34b1b8af67f1520c8c1ae8b79bb999ee2677899f448f568ac736be42c4cc9987"
+    },
+    {
+      "path": "tests/e2e/agent-chat-sessions.spec.ts",
+      "sha256": "1b466761d46828bef26aa7df6ef9b9daf0c69fff5b61f92a9b57c8768b14e0a8"
+    },
+    {
+      "path": "tests/e2e/agent-chat.shared.ts",
+      "sha256": "aad1f659615789402e1f9a23cad7b8a78410050fbd643beacdf5d1854e617741"
+    }
+  ],
+  "validation": [
+    {
+      "name": "Native PostgreSQL source-access and physical-erasure recovery, actual private SDK, provider trace and ordinary conversation regressions",
+      "tests": 62,
+      "log": "/var/tmp/aw-v8-conversation-access-recovery-pg-final.log",
+      "exitCode": 0
+    },
+    {
+      "name": "TaskDetailSurface and native chat picker/sidebar UI regressions",
+      "tests": 127,
+      "log": "/var/tmp/aw-v8-conversation-access-recovery-ui.log",
+      "exitCode": 0
+    },
+    {
+      "name": "Browser: actual source visibility loss, native recovery API and UI with preserved original observation/definition",
+      "tests": 1,
+      "log": "/var/tmp/aw-v8-conversation-access-recovery-browser-release.log",
+      "exitCode": 0
+    },
+    {
+      "name": "server typecheck",
+      "tests": null,
+      "log": "/var/tmp/aw-v8-conversation-access-recovery-server-types-final.log",
+      "exitCode": 0
+    },
+    {
+      "name": "UI typecheck",
+      "tests": null,
+      "log": "/var/tmp/aw-v8-conversation-access-recovery-ui-types-final.log",
+      "exitCode": 0
+    },
+    {
+      "name": "UI token gate",
+      "tests": null,
+      "log": "/var/tmp/aw-v8-conversation-access-recovery-tokens-final.log",
+      "exitCode": 0
+    }
+  ],
+  "qualified": [
+    "A still-admitted conversation cannot be retired through this recovery action.",
+    "A source-loss response carries only the current native conversation identity and safe error code, with no source facts.",
+    "The actual owner explicitly replaces only their own inaccessible native tuple; six concurrent requests and later retries resolve one fresh conversation.",
+    "Only private analytical retention roots from the old chat are erased; original native observations, definitions and shared/verified Memory are not reset targets.",
+    "The old history stays denied and its native C7 run payload becomes erased; the new conversation gains no source privileges.",
+    "Chat recovery input is strict: spoofed user/company fields are rejected instead of ignored.",
+    "Both reviewed screenshots show the real browser/API flow."
+  ],
+  "fixtureLimits": [
+    "The real browser flow publishes and queries a native metric through its public API, then seeds an exact historical private retention root in the isolated PostgreSQL database. It does not claim that the process-fixture adapter invoked an SDK analytical tool. Actual native SDK dispatch/admission is covered separately by PostgreSQL checks.",
+    "The source visibility change is real native Task visibility; a separate live human-role revocation browser case remains unqualified.",
+    "No external LLM, hosted release gate or customer trial was exercised."
+  ],
+  "open": [
+    "Live provider/context admission, output-stream recipient authorization and process cancellation after source loss.",
+    "Complete native upstream-manifest inheritance, remaining tool conformance, human management-action materialization, Learning, Routines, multi-project Planning and hosted qualification."
+  ],
+  "screenshots": [
+    {
+      "path": "doc/operations/aw-v8-evidence/native-source-access-recovery-screens/source-visibility-lost.png",
+      "sha256": "23702e4322a5fc8a7a4d9ac9f2b3dc5525f0e552873209d39fae4feedde555d1",
+      "visuallyReviewed": true
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-source-access-recovery-screens/source-visibility-fresh-native-chat.png",
+      "sha256": "1d4a2338192628657302f951495cce82fdeb98bd237b23ee34d3717876d2b2f3",
+      "visuallyReviewed": true
+    }
+  ]
+}

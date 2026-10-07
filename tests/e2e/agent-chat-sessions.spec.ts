@@ -1,3 +1,11 @@
+import {randomUUID,createHash} from "node:crypto";
+import {readFile} from "node:fs/promises";
+import path from "node:path";
+import {eq} from "../../server/node_modules/drizzle-orm/index.js";
+import {createDb,issues,memoryBindings,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
+import {contextManifestService} from "../../server/src/services/context/context-manifest.ts";
+import {memoryDeletionKey} from "../../server/src/services/memory/memory-privacy.ts";
+import {analyticalPurpose,metricDefinition} from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
 import { expect, test } from "@playwright/test";
 
 import { createLocalAgentJwt } from "../../server/src/agent-auth-jwt";
@@ -154,6 +162,47 @@ test("source loss refreshes the read-only chat identity and drops cached history
     expect(creations).toBe(0);
     await page.screenshot({ path: test.info().outputPath("source-loss-fresh-draft.png"), fullPage: true });
   } finally { await f.restore(); }
+});
+
+// Actual native source, authorization, recovery API and UI. The historical
+// private retention root is seeded in the isolated DB; this browser case does
+// not claim an external LLM or SDK analytical tool invocation.
+test("an owner can explicitly recover after source visibility is lost while original metric facts survive", async ({page,request}) => {
+  const f=await setup(request);
+  const config=JSON.parse(await readFile(process.env.PAPERCLIP_E2E_SERVER_CONFIG!,"utf8")),pid=await readFile(path.join(config.database.embeddedPostgresDataDir,"postmaster.pid"),"utf8");
+  const db=createDb(`postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`);
+  try{
+    await json(await request.patch("/api/instance/settings/experimental",{data:{analytical_lineage_v8:true,business_metrics_v8:true,management_reviews_v8:true,management_chat_tools_v8:true,enableContextEngineV1:true,ai_use_cases_v7:true,governance_evidence_v7:true}}));
+    const original=await json(await request.post(f.chatPath,{data:{}}));
+    await json(await request.post(`/api/issues/${original.id}/comments`,{data:{body:"Private analytical history before source visibility changes",clientRequestId:randomUUID()}}));await idle(request,f.chatPath,1);
+    const source=await json(await request.post(`/api/companies/${f.company.id}/issues`,{data:{title:"Synthetic original canonical metric population",status:"done"}}));
+    const policy=await json(await request.post(`/api/companies/${f.company.id}/governance-obligations`,{data:analyticalPurpose()}));
+    const definition=metricDefinition(policy.id),metric=await json(await request.post(`/api/companies/${f.company.id}/business-metrics`,{data:{key:"browser_source_recovery",definition}}));
+    await json(await request.post(`/api/companies/${f.company.id}/business-metrics/${metric.metric.id}/publish`,{data:{expectedRevision:1,versionId:metric.version.id}}));
+    const now=new Date(),observation=await json(await request.post(`/api/companies/${f.company.id}/business-metrics/query`,{data:{metricId:metric.metric.id,versionId:metric.version.id,from:new Date(now.getTime()-86400000).toISOString(),until:new Date(now.getTime()+1000).toISOString(),dimensions:[],maxRows:100}}));
+    const runs=await json(await request.get(`/api/companies/${f.company.id}/heartbeat-runs`)),run=runs.find((r:any)=>r.contextSnapshot?.issueId===original.id);expect(run).toBeTruthy();
+    const context=await contextManifestService(db).create({companyId:f.company.id,agentId:f.agent.id,issueId:original.id,runId:run.id,query:"Historical source-retention software fixture",policySnapshot:{softwareFixture:true},selected:[]});
+    const recordId=randomUUID(),bindingId=randomUUID(),expiresAt=new Date(observation.expiresAt),hash=createHash("sha256").update(JSON.stringify(observation)).digest("hex");
+    await db.transaction(async tx=>{
+      await tx.insert(memoryBindings).values({id:bindingId,companyId:f.company.id,key:"browser_retention_fixture",name:"Browser private retention fixture",providerKey:"local"});
+      await tx.insert(memoryRecords).values({id:recordId,companyId:f.company.id,bindingId,providerKey:"local",memoryType:"observation",scopeType:"agent",scopeId:f.agent.id,ownerAgentId:f.agent.id,content:"Private analytical retention root; not verified Task evidence",reviewState:"rejected",verificationState:"unverified",sensitivityLabel:"restricted",confidenceScore:0,importance:0,observedAt:now,expiresAt,createdByActorType:"system",createdByActorId:"browser-retention-fixture"});
+      await tx.insert(analyticalContextRoots).values({companyId:f.company.id,memoryRecordId:recordId,sourceCount:1,contentHash:hash,deletionKey:memoryDeletionKey(f.company.id,"record",recordId),createdAt:now,expiresAt,authorityPins:[{kind:"analytical_evidence",source:{type:"metric_observation",id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}}]});
+      await tx.insert(analyticalContextDependencies).values({companyId:f.company.id,memoryRecordId:recordId,sourceManifestId:observation.lineageManifestId});
+      await tx.insert(contextManifestMemoryRoots).values({companyId:f.company.id,manifestId:context.manifest.id,memoryRecordId:recordId,sourceVersion:hash});
+    });
+    await page.goto(f.route);await expect(page.getByText("Private analytical history before source visibility changes",{exact:true})).toBeVisible();
+    await json(await request.patch(`/api/issues/${source.id}`,{data:{hiddenAt:new Date().toISOString()}}));
+    const denied=await request.get(f.chatPath);expect(denied.status()).toBe(403);expect((await denied.json()).details.conversationIssueId).toBe(original.id);
+    await page.reload();await expect(page.getByRole("button",{name:"Start a new conversation"})).toBeVisible();
+    await expect(page.getByText("Private analytical history before source visibility changes",{exact:true})).toHaveCount(0);
+    await page.screenshot({path:test.info().outputPath("source-visibility-lost.png"),fullPage:true});
+    await page.getByRole("button",{name:"Start a new conversation"}).click();await expect(page.getByTestId("task-chat-composer-input")).toBeVisible();
+    const fresh=await json(await request.get(f.chatPath));expect(fresh.id).not.toBe(original.id);expect((await request.get(`/api/issues/${original.id}/comments`)).status()).toBe(403);
+    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,recordId)))[0]!.deletedAt).not.toBeNull();
+    expect((await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.id,observation.id)))[0]!.id).toBe(observation.id);
+    expect((await db.select().from(businessMetricVersions).where(eq(businessMetricVersions.id,metric.version.id)))[0]!.id).toBe(metric.version.id);
+    await page.screenshot({path:test.info().outputPath("source-visibility-fresh-native-chat.png"),fullPage:true});
+  }finally{await db.$client.end({timeout:0});await f.restore({collectState:false});}
 });
 
 test("feature flag blocks new sends and resets while preserving existing history", async ({

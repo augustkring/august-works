@@ -2135,3 +2135,7 @@ export type UpsertIssueDocument = z.infer<typeof upsertIssueDocumentSchema>;
 export type RestoreIssueDocumentRevision = z.infer<
   typeof restoreIssueDocumentRevisionSchema
 >;
+
+/** Native private-chat recovery pins only the owner's old conversation. */
+export const agentChatOpenSchema = z.object({replaceInaccessibleIssueId:z.string().uuid().optional()}).strict();
+export type AgentChatOpenInput = z.infer<typeof agentChatOpenSchema>;

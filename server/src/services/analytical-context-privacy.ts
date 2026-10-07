@@ -62,3 +62,13 @@ export async function eraseAnalyticalContextSourcesUnderMemory(tx:Db,companyId:s
   .where(and(eq(analyticalContextDependencies.companyId,companyId),inArray(analyticalContextDependencies.sourceManifestId,sourceManifestIds),isNull(memoryRecords.deletedAt)));
  if(roots.length)await purgeMemoryRecords(tx,companyId,[...new Set(roots.map(r=>r.id))],at);
 }
+
+/** Retire only this chat's private analytical retention copies. Original source
+ * manifests and shared/verified Memory never become a chat-reset target. */
+export async function eraseAnalyticalConversationRootsUnderMemory(tx:Db,companyId:string,issueId:string) {
+ const roots=await tx.selectDistinct({id:analyticalContextRoots.memoryRecordId}).from(contextManifests)
+  .innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
+  .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId)))
+  .where(and(eq(contextManifests.companyId,companyId),eq(contextManifests.issueId,issueId)));
+ if(roots.length)await purgeMemoryRecords(tx,companyId,roots.map(r=>r.id));
+}

@@ -60,6 +60,7 @@ import {
 } from "@paperclipai/db";
 import {
   addIssueCommentSchema,
+  agentChatOpenSchema,
   acceptIssueThreadInteractionSchema,
   attachmentArtifactWorkProductMetadataSchema,
   cancelIssueThreadInteractionSchema,
@@ -17289,13 +17290,23 @@ export function issueRoutes(
       if (resolved.ambiguous) throw conflict("Agent reference is ambiguous");
       if (!resolved.agent) throw notFound("Agent not found");
       const agent = resolved.agent;
+      const input = method === "post" ? agentChatOpenSchema.parse(req.body ?? {}) : {};
       const existing = await svc.getConversation(companyId, agent.id, req.actor.userId);
-      if (existing && !(await assertIssueReadAllowed(req, res, existing))) return;
-      if (existing || method === "get") { res.json(existing); return; }
+      let retireConversationId: string | undefined;
+      if (existing) {
+        try { if (!(await assertIssueReadAllowed(req,res,existing))) return; }
+        catch (error) {
+          if (!(error instanceof HttpError) || (error.details as {code?:unknown}|undefined)?.code !== "analytical_source_access_lost") throw error;
+          if (method === "post" && input.replaceInaccessibleIssueId === existing.id) retireConversationId=existing.id;
+          else throw new HttpError(error.status,error.message,{code:"analytical_source_access_lost",conversationIssueId:existing.id});
+        }
+        if (input.replaceInaccessibleIssueId === existing.id && !retireConversationId) throw conflict("The current conversation does not require source recovery");
+      }
+      if ((existing && !retireConversationId) || method === "get") { res.json(existing); return; }
       const issue = await svc.create(companyId, {
         title: `Chat with ${agent.name}`, assigneeAgentId: agent.id,
         conversationAgentId: agent.id, conversationUserId: req.actor.userId,
-        conversationState: "waiting", status: "in_review", createdByUserId: req.actor.userId,
+        conversationState: "waiting", status: "in_review", createdByUserId: req.actor.userId, retireConversationId,
       });
       await logActivity(db, { companyId, actorType: "user", actorId: req.actor.userId,
         action: "issue.conversation_opened", entityType: "issue", entityId: issue.id,

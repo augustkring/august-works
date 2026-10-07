@@ -70,5 +70,10 @@
   "open": [
     "Live source permission-loss admission and fresh conversation recovery without physical source erasure.",
     "Complete original-manifest graph retention, remaining native typed-tool conformance, Learning, Routines, multi-project Planning and hosted qualification."
-  ]
+  ],
+  "wholeBuild": {
+    "sourceCommit": "447bf7c535048d6ef703e90241414cc7e09d86e2",
+    "log": "/var/tmp/aw-v8-native-build-provider-trace-erasure.log",
+    "exitCode": 0
+  }
 }

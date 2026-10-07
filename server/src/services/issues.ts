@@ -1974,6 +1974,7 @@ async function assertExecutionTaskParent(db: Db, companyId: string, parentId?: s
 
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type IssueCreateInput = Omit<typeof issues.$inferInsert, "companyId"> & {
+  retireConversationId?: string;
   initialPlan?: string | null;
   labelIds?: string[];
   blockedByIssueIds?: string[];
@@ -9764,6 +9765,7 @@ export function issueService(db: Db) {
     ) => {
       const {
         initialPlan,
+        retireConversationId,
         labelIds: inputLabelIds,
         blockedByIssueIds,
         inheritExecutionWorkspaceFromIssueId,
@@ -9815,11 +9817,13 @@ export function issueService(db: Db) {
             eq(issues.conversationAgentId, issueData.conversationAgentId), eq(issues.conversationUserId, issueData.conversationUserId)));
           if (existing) {
             const [source] = await tx.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${companyId}::uuid, null, ${existing.id}::uuid) as erased`);
-            if (!source?.erased) {
+            if (!source?.erased && retireConversationId !== existing.id) {
               const [enriched] = await withIssueLabels(tx, [existing]);
               const [withRelations] = await withIssueRelationSummaries(companyId, [enriched], tx);
               return withRelations;
             }
+            const {eraseAnalyticalConversationRootsUnderMemory} = await import("./analytical-context-privacy.js");
+            await eraseAnalyticalConversationRootsUnderMemory(tx as unknown as Db,companyId,existing.id);
             const at = new Date();
             await tx.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null,
               conversationRetiredAt: at, status: "cancelled", cancelledAt: at, hiddenAt: at,

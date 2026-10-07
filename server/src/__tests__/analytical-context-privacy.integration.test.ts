@@ -141,6 +141,29 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
 
  it("withholds actual HTTP comment history after original source access changes",async()=>{const f=await fixture();await f.capture();await copied();const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor={type:"board",source:"session",userId,companyIds:[companyId]};next();});app.use("/api",issueRoutes(db));app.use(errorHandler);const before=await request(app).get(`/api/issues/${issueId}/comments`);expect(before.status).toBe(200);expect(JSON.stringify(before.body)).toContain("Synthetic analytical answer");await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));const after=await request(app).get(`/api/issues/${issueId}/comments`);expect(after.status).toBe(403);expect(JSON.stringify(after.body)).not.toContain("Synthetic analytical answer");});
 
+ it("recovers an inaccessible source conversation only through its actual owner's explicit native request without deleting canonical source facts",async()=>{
+  await instanceSettingsService(db).updateExperimental({enableAgentChat:true});
+  const f=await fixture(),original=await f.capture();await copied();
+  const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor={type:"board",source:"session",userId,companyIds:[companyId]};next();});app.use("/api",issueRoutes(db));app.use(errorHandler);
+  const chatPath=`/api/companies/${companyId}/chats/${agentId}`,input={replaceInaccessibleIssueId:issueId};
+  expect((await request(app).post(chatPath).send(input)).status).toBe(409);
+  expect((await db.select().from(issues).where(eq(issues.id,issueId)))[0]!.conversationRetiredAt).toBeNull();
+  expect((await request(app).post(chatPath).send({...input,companyId})).status).toBe(400);
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+  expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(true);
+  const lost=await request(app).get(chatPath);expect(lost.status).toBe(403);expect(lost.body.details).toEqual({code:"analytical_source_access_lost",conversationIssueId:issueId});expect(JSON.stringify(lost.body)).not.toContain("Synthetic analytical answer");
+  expect((await request(app).post(chatPath)).status).toBe(403);
+  const opened=await Promise.all(Array.from({length:6},()=>request(app).post(chatPath).send(input)));
+  expect(opened.map(r=>r.status)).toEqual(Array(6).fill(200));expect(new Set(opened.map(r=>r.body.id)).size).toBe(1);
+  const nextId=opened[0]!.body.id;expect(nextId).not.toBe(issueId);
+  expect((await request(app).post(chatPath).send(input)).body.id).toBe(nextId);
+  expect((await request(app).get(`/api/issues/${issueId}/comments`)).status).toBe(403);
+  expect((await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.id,original.id)))[0]!.id).toBe(original.id);
+  expect((await db.select().from(businessMetricVersions).where(eq(businessMetricVersions.id,f.query.versionId)))[0]!.id).toBe(f.query.versionId);
+  expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);
+  expect((await db.select().from(memoryRecords).where(eq(memoryRecords.companyId,companyId))).every(r=>r.deletedAt&&r.content==="")).toBe(true);
+ });
+
  it("erases both original trace sidecars through the native outbox with rollout off and keeps the cleanup after actual company purge",async()=>{
   const previous=process.env.PROVIDER_TRACE_BASE_PATH,temp=await fs.mkdtemp(path.join(os.tmpdir(),"aw-v8-trace-erasure-"));process.env.PROVIDER_TRACE_BASE_PATH=temp;
   try{
