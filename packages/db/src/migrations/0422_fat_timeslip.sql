@@ -1,0 +1,4 @@
+ALTER TABLE "decision_outcome_reviews" ADD COLUMN "learning_cycle_id" uuid;--> statement-breakpoint
+ALTER TABLE "decision_outcome_reviews" ADD CONSTRAINT "decision_outcome_reviews_learning_cycle_fk" FOREIGN KEY ("company_id","learning_cycle_id") REFERENCES "public"."learning_cycles"("company_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "decision_outcome_reviews" ADD CONSTRAINT "decision_outcome_reviews_learning_cycle_uq" UNIQUE("company_id","learning_cycle_id");--> statement-breakpoint
+ALTER TABLE "decision_outcome_reviews" ADD CONSTRAINT "decision_outcome_reviews_learning_cycle_check" CHECK ("decision_outcome_reviews"."learning_cycle_id" is null or "decision_outcome_reviews"."status" in ('completed','inconclusive'));

@@ -4,8 +4,10 @@ import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq,sql} from "drizzle-orm";
 import {agents,authUsers,companies,companyMemberships,createDb,decisions,heartbeatRuns,issues,projects,issueComments,
   decisionContexts,decisionContextVersions,decisionContextBindings,decisionContextPreparations,decisionCriteria,decisionAssumptions,decisionExpectedOutcomes,
-  decisionEvidenceLinks,analyticalLineageManifests,analyticalLineageEdges,decisionOutcomeReviews,decisionOutcomeReviewReceipts,managementReviewSnapshots} from "@paperclipai/db";
+  decisionEvidenceLinks,analyticalLineageManifests,analyticalLineageEdges,decisionOutcomeReviews,decisionOutcomeReviewReceipts,managementReviewSnapshots,memoryBindings,memoryRecords,memoryEvidence,learningCycles,learningAnalyticalDependencies,learningEvidence,learningHypotheses,learningDomainCandidates,activityLog} from "@paperclipai/db";
 import {decisionContextDefinitionSchema,type DecisionContextDefinition,type FinishDecisionOutcomeReview} from "@paperclipai/shared";
+import {learningService} from "../services/learning/learning-service.js";
+import {memoryJobService} from "../services/memory/memory-jobs.js";
 import {decisionOutcomeReviewService} from "../services/decision-outcome-reviews.js";
 import {decisionIntelligenceService} from "../services/decision-intelligence.js";
 import {decisionService} from "../services/decisions.js";
@@ -77,6 +79,60 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
       assumptionOutcomes:[{key:"capacity",kind:"human_judgment",assessment:"inconclusive",explanation:"Delivery capacity has not been independently validated",evidenceKeys:[]}]};
   };
   const begin=(id:string)=>reviews().transition(companyId,actor,id,{expectedRevision:1,action:"begin",rationale:"A human begins the separate outcome assessment"});
+  async function verifiedLearningRoot(tenant=companyId) {
+    await instanceSettingsService(db).updateExperimental({enableFoundationV1:true,enableCollectiveMemoryV1:true,enableContextEngineV1:true,agent_identities_v5:true,agent_provider_bindings_v5:true,agent_runtime_fabric_v5:true,role_packs_v5:true,cognitive_memory_v7:true,memory_observations_v7:true,skill_lifecycle_v5:true,playbooks_v5:true,learning_engine_v7:true});
+    const [task]=await db.insert(issues).values({companyId:tenant,title:"Independent verified outcome",status:"done",completedAt:new Date()}).returning();
+    const [binding]=await db.insert(memoryBindings).values({companyId:tenant,key:randomUUID(),name:"Independent verified outcomes",providerKey:"local"}).returning();
+    const [record]=await db.insert(memoryRecords).values({companyId:tenant,bindingId:binding!.id,providerKey:"local",memoryType:"outcome",scopeType:"company",content:"An independently reviewed completed Task outcome",reviewState:"accepted",verificationState:"human_verified",observedAt:new Date(),createdByActorType:"system",createdByActorId:"fixture"}).returning();
+    await db.insert(memoryEvidence).values({companyId:tenant,memoryRecordId:record!.id,sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${task!.id}`,sourceVersion:"1",observedAt:new Date(),excerptHash:"a".repeat(64),citationJson:{label:"Actual reviewed outcome"},trustLevel:"high",supportsOrContradicts:"supports"});
+    return record!;
+  }
+  const startInput=(memoryRecordIds:string[],expectedRevision=3)=>({expectedRevision,purpose:"native_task_execution",trigger:"A human tests a reviewed lesson against independent verified outcomes",memoryRecordIds});
+  it("atomically links one native Learning cycle under concurrent human review conversion without promoting authority",async()=>{
+    const {d,review}=await scheduled();await begin(d.id);await reviews().finish(companyId,actor,d.id,final());
+    const root=await verifiedLearningRoot(),input=startInput([root.id]);
+    const before=await native().get(d.id),results=await Promise.all(Array.from({length:6},()=>reviews().startLearning(companyId,actor,d.id,input)));
+    expect(new Set(results.map(result=>result.cycleId)).size).toBe(1);
+    expect(results[0]!.review).toMatchObject({id:review.id,revision:3,status:"inconclusive",learningCycleId:results[0]!.cycleId});
+    const cycles=await db.select().from(learningCycles).where(eq(learningCycles.companyId,companyId));expect(cycles).toHaveLength(1);
+    expect(cycles[0]).toMatchObject({scopeType:"company",scopeId:null,status:"hypothesizing",createdBy:"local-board",analyticalSourcePins:[{kind:"outcome_review",decisionId:d.id,revision:3}]});
+    const receipts=await db.select().from(decisionOutcomeReviewReceipts).where(eq(decisionOutcomeReviewReceipts.reviewId,review.id));
+    expect((await db.select().from(learningAnalyticalDependencies).where(eq(learningAnalyticalDependencies.cycleId,cycles[0]!.id))).map(edge=>edge.sourceManifestId).sort()).toEqual(receipts.map(receipt=>receipt.lineageManifestId).sort());
+    expect(await db.select().from(learningEvidence).where(eq(learningEvidence.cycleId,cycles[0]!.id))).toHaveLength(1);
+    expect(await db.select().from(learningHypotheses).where(eq(learningHypotheses.companyId,companyId))).toHaveLength(0);
+    expect(await db.select().from(learningDomainCandidates).where(eq(learningDomainCandidates.companyId,companyId))).toHaveLength(0);
+    for(const action of ["learning.cycle_created","decision.outcome_review_learning_started"])expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId,companyId),eq(activityLog.action,action)))).toHaveLength(1);
+    expect((await native().get(d.id))!.chosenOptionId).toBe(before!.chosenOptionId);
+    await expect(reviews().startLearning(companyId,actor,d.id,{...input,trigger:"A different human request cannot silently reuse the previous conversion"})).rejects.toMatchObject({status:409});
+    await expect(db.update(decisionOutcomeReviews).set({learningCycleId:null}).where(eq(decisionOutcomeReviews.id,review.id))).rejects.toBeDefined();
+    await expect(db.update(decisionOutcomeReviews).set({reviewedByUserId:"other"}).where(eq(decisionOutcomeReviews.id,review.id))).rejects.toBeDefined();
+    expect((await learningService(db).get(actor,companyId,cycles[0]!.id)).analyticalSourcePins).toHaveLength(1);
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await db.delete(decisionOutcomeReviews).where(eq(decisionOutcomeReviews.id,review.id));
+    expect((await db.select().from(learningCycles).where(eq(learningCycles.id,cycles[0]!.id)))[0]!.erasedAt).not.toBeNull();
+    await memoryJobService(db).tick({limit:10});
+    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,root.id)))[0]).toMatchObject({deletedAt:null,content:"An independently reviewed completed Task outcome"});
+  });
+  it("rejects premature, unverified, foreign and stale review conversions without leaving a partial cycle",async()=>{
+    const {d,review}=await scheduled(),root=await verifiedLearningRoot(),input=startInput([root.id]);
+    await expect(reviews().startLearning(companyId,actor,d.id,input)).rejects.toMatchObject({status:409});
+    await begin(d.id);await reviews().finish(companyId,actor,d.id,final());
+    await db.update(memoryRecords).set({verificationState:"unverified"}).where(eq(memoryRecords.id,root.id));
+    await expect(reviews().startLearning(companyId,actor,d.id,input)).rejects.toMatchObject({status:409});
+    const foreign=await verifiedLearningRoot(foreignId);
+    await expect(reviews().startLearning(companyId,actor,d.id,startInput([foreign.id]))).rejects.toMatchObject({status:404});
+    await expect(reviews().startLearning(companyId,actor,d.id,startInput([root.id],2))).rejects.toMatchObject({status:409});
+    await expect(reviews().startLearning(companyId,{type:"agent",source:"agent_jwt",companyId,agentId,runId},d.id,input)).rejects.toMatchObject({status:403});
+    expect(await db.select().from(learningCycles).where(eq(learningCycles.companyId,companyId))).toHaveLength(0);
+    expect((await db.select().from(decisionOutcomeReviews).where(eq(decisionOutcomeReviews.id,review.id)))[0]!.learningCycleId).toBeNull();
+    const foreignCycle=await learningService(db).create(actor,foreignId,{scope:{type:"company",id:null},purpose:input.purpose,trigger:input.trigger,memoryRecordIds:[foreign.id]});
+    await expect(db.update(decisionOutcomeReviews).set({learningCycleId:foreignCycle.id}).where(eq(decisionOutcomeReviews.id,review.id))).rejects.toBeDefined();
+    await db.update(memoryRecords).set({verificationState:"human_verified"}).where(eq(memoryRecords.id,root.id));
+    const plainCycle=await learningService(db).create(actor,companyId,{scope:{type:"company",id:null},purpose:input.purpose,trigger:input.trigger,memoryRecordIds:[root.id]});
+    await expect(db.update(decisionOutcomeReviews).set({learningCycleId:plainCycle.id}).where(eq(decisionOutcomeReviews.id,review.id))).rejects.toBeDefined();
+    expect((await db.select().from(decisionOutcomeReviews).where(eq(decisionOutcomeReviews.id,review.id)))[0]!.learningCycleId).toBeNull();
+
+  });
   it("retains a signed management packet after an authorized outcome revision changes and requires a fresh exact pin for publication",async()=>{
     await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({management_reviews_v8:true});const purpose=analyticalPurpose();purpose.citation+=" retained outcome review";purpose.analyticalPurpose!.capabilities=["reviews"];const destination=(await aiGovernanceService(db).obligation(actor,companyId,purpose)).id;
     const {d,review}=await scheduled(),management=managementReviewService(db),now=new Date(),definition={name:"Original scheduled native outcome review",reviewType:"ad_hoc" as const,period:{from:new Date(now.getTime()-86400000).toISOString(),until:now.toISOString()},purpose:"management_intelligence" as const,sensitivity:"internal" as const,retentionDays:1,governanceObligationRefs:[destination],sources:[{key:"outcome",source:{kind:"decision_outcome" as const,decisionId:d.id,reviewId:review.id,revision:review.revision}}],agenda:[{key:"inspect",category:"INVESTIGATE" as const,ownerUserId:"local-board",dueAt:new Date(now.getTime()+86400000).toISOString(),sourceKeys:["outcome"],nextAction:"Human inspects the exact originally scheduled review before publication",hypothesis:null}]};
@@ -202,6 +258,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   });
   it("purges a live frozen review with flags off while preserving another company's content",async()=>{
     const {d,review}=await scheduled();await begin(d.id);await reviews().finish(companyId,actor,d.id,final());
+    const verified=await verifiedLearningRoot();await reviews().startLearning(companyId,actor,d.id,startInput([verified.id]));
     await db.insert(projects).values({companyId:foreignId,name:"Other company remains intact"});await disableV8Rollout(db);
     await purgeCompanyContent(db,companyId,{restoreQuarantine:true});
     expect(await db.select().from(decisionOutcomeReviews).where(eq(decisionOutcomeReviews.id,review.id))).toHaveLength(0);

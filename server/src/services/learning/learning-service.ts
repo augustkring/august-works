@@ -103,6 +103,24 @@ export function learningService(db: Db) {
     await learningRoots(tx, actor, parent); return { row: row as Hypothesis & { evaluationContract: NonNullable<Hypothesis["evaluationContract"]> }, parent };
   }
   const audit = (tx: Db, actor: AuthorizationActor, companyId: string, id: string, action: string, publications: Parameters<typeof logActivity>[2], details?: Record<string, unknown>) => logActivity(tx, { companyId, actorType: actor.type === "agent" ? "agent" : "user", actorId: actor.type === "agent" ? actor.agentId! : v7HumanActorId(actor), action, entityType: "learning_cycle", entityId: id, details }, publications);
+  /** Existing owner, with publications retained by the outer native transaction. */
+  async function createInTransaction(actor:AuthorizationActor,companyId:string,raw:z.input<typeof learningCycleSchema>,publications:Parameters<typeof logActivity>[2]) {
+    const input=learningCycleSchema.parse(raw),tx=db;
+    await admit(actor,companyId,tx,"propose");await assertSaasDomainAdmission(tx,companyId,"memory.use");
+    await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, "propose");
+    const roots = await derivedRoots(tx, actor, companyId, input.scope, input.purpose, input.memoryRecordIds);
+    const sources = await tx.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId, companyId), inArray(memoryEvidence.memoryRecordId, input.memoryRecordIds)));
+    // Reviewed prose alone is not an external outcome. Resolve actual canonical Tasks now.
+    const taskIds = [...new Set(sources.filter((item) => item.sourceClass === "task" && item.trustLevel === "high" && item.supportsOrContradicts === "supports" && ["august_works_tasks", "august_works_issue"].includes(item.sourceProvider))
+      .flatMap((item) => { const match = /^issue:\/\/([a-f0-9-]{36})$/i.exec(item.sourceRef); return match ? [match[1]!] : []; }))];
+    if (!taskIds.length || roots.some((root) => !["human_verified", "system_verified", "corroborated"].includes(root.verificationState) || !sources.some((item) => item.memoryRecordId === root.id && item.sourceClass === "task" && item.trustLevel === "high" && item.supportsOrContradicts === "supports" && ["august_works_tasks", "august_works_issue"].includes(item.sourceProvider) && taskIds.some((taskId) => item.sourceRef === `issue://${taskId}`)))) throw conflict("Learning roots require verified canonical outcome evidence");
+    const tasks = await outcomes(tx, actor, { scopeType: input.scope.type, scopeId: input.scope.id, companyId } as Cycle, taskIds);
+    const analytical = input.analyticalSources?.length ? await inspectAnalyticalContextPins(tx,companyId,actor,input.analyticalSources) : null;
+    const [row] = await tx.insert(learningCycles).values({ analyticalSourcePins: analytical?.pins ?? [], analyticalSourceCount: analytical?.manifestIds.length ?? 0, analyticalSourceExpiresAt: analytical?.expiresAt ?? null, companyId, scopeType: input.scope.type, scopeId: input.scope.id, purpose: input.purpose, trigger: input.trigger, maxHypotheses: input.maxHypotheses, maxEvaluations: input.maxEvaluations, outcomeVersions: Object.fromEntries(tasks.map((task) => [task.id, task.updatedAt.toISOString()])), createdBy: actor.type === "agent" ? `agent:${actor.agentId}` : v7HumanActorId(actor) }).returning();
+    if(analytical) for(let start=0;start<analytical.manifestIds.length;start+=500) await tx.insert(learningAnalyticalDependencies).values(analytical.manifestIds.slice(start,start+500).map(sourceManifestId=>({companyId,cycleId:row!.id,sourceManifestId})));
+    await tx.insert(learningEvidence).values(roots.map((root) => ({ companyId, cycleId: row!.id, memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString() })));
+    await audit(tx, actor, companyId, row!.id, "learning.cycle_created", publications, { roots: roots.length, outcomes: taskIds.length }); return row!;
+  }
   return {
     finish: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof finishLearningCycleSchema>) => {
       const input = finishLearningCycleSchema.parse(raw); await admit(actor, companyId, db, true);
@@ -157,23 +175,10 @@ export function learningService(db: Db) {
       const candidates = hypotheses.length ? await db.select().from(learningDomainCandidates).where(and(eq(learningDomainCandidates.companyId, companyId), inArray(learningDomainCandidates.hypothesisId, hypotheses.map((item) => item.id)))).limit(20) : [];
       return { ...row, hypotheses, evaluations, candidates: await Promise.all(candidates.map(async candidate => ({ ...candidate, promotionReceipt: await learningPromotionReceipt(db, candidate) }))) };
     },
+    createInTransaction,
     create: async (actor: AuthorizationActor, companyId: string, raw: z.input<typeof learningCycleSchema>) => {
-      const input = learningCycleSchema.parse(raw); await admit(actor, companyId, db, "propose"); await assertSaasDomainAdmission(db, companyId, "memory.use");
-      return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, "propose");
-        const roots = await derivedRoots(tx, actor, companyId, input.scope, input.purpose, input.memoryRecordIds);
-        const sources = await tx.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId, companyId), inArray(memoryEvidence.memoryRecordId, input.memoryRecordIds)));
-        // Reviewed prose alone is not an external outcome. Resolve actual canonical Tasks now.
-        const taskIds = [...new Set(sources.filter((item) => item.sourceClass === "task" && item.trustLevel === "high" && item.supportsOrContradicts === "supports" && ["august_works_tasks", "august_works_issue"].includes(item.sourceProvider))
-          .flatMap((item) => { const match = /^issue:\/\/([a-f0-9-]{36})$/i.exec(item.sourceRef); return match ? [match[1]!] : []; }))];
-        if (!taskIds.length || roots.some((root) => !["human_verified", "system_verified", "corroborated"].includes(root.verificationState) || !sources.some((item) => item.memoryRecordId === root.id && item.sourceClass === "task" && item.trustLevel === "high" && item.supportsOrContradicts === "supports" && ["august_works_tasks", "august_works_issue"].includes(item.sourceProvider) && taskIds.some((taskId) => item.sourceRef === `issue://${taskId}`)))) throw conflict("Learning roots require verified canonical outcome evidence");
-        const tasks = await outcomes(tx, actor, { scopeType: input.scope.type, scopeId: input.scope.id, companyId } as Cycle, taskIds);
-        const analytical = input.analyticalSources?.length ? await inspectAnalyticalContextPins(tx,companyId,actor,input.analyticalSources) : null;
-        const [row] = await tx.insert(learningCycles).values({ analyticalSourcePins: analytical?.pins ?? [], analyticalSourceCount: analytical?.manifestIds.length ?? 0, analyticalSourceExpiresAt: analytical?.expiresAt ?? null, companyId, scopeType: input.scope.type, scopeId: input.scope.id, purpose: input.purpose, trigger: input.trigger, maxHypotheses: input.maxHypotheses, maxEvaluations: input.maxEvaluations, outcomeVersions: Object.fromEntries(tasks.map((task) => [task.id, task.updatedAt.toISOString()])), createdBy: actor.type === "agent" ? `agent:${actor.agentId}` : v7HumanActorId(actor) }).returning();
-        if(analytical) for(let start=0;start<analytical.manifestIds.length;start+=500) await tx.insert(learningAnalyticalDependencies).values(analytical.manifestIds.slice(start,start+500).map(sourceManifestId=>({companyId,cycleId:row!.id,sourceManifestId})));
-        await tx.insert(learningEvidence).values(roots.map((root) => ({ companyId, cycleId: row!.id, memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString() })));
-        await audit(tx, actor, companyId, row!.id, "learning.cycle_created", publications, { roots: roots.length, outcomes: taskIds.length }); return row!;
-      });
+      const input=learningCycleSchema.parse(raw);await admit(actor,companyId,db,"propose");await assertSaasDomainAdmission(db,companyId,"memory.use");
+      return withV7ActivityTransaction(db,(tx,publications)=>learningService(tx).createInTransaction(actor,companyId,input,publications));
     },
     addHypothesis: async (actor: AuthorizationActor, companyId: string, cycleId: string, raw: z.infer<typeof learningHypothesisSchema>) => {
       const input = learningHypothesisSchema.parse(raw); await admit(actor, companyId, db, "propose");

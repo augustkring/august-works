@@ -1,0 +1,147 @@
+{
+  "checkpoint": "Human Decision outcome review to the original governed Learning cycle",
+  "parentCommit": "71295d81fb12ad58c0ca53bbfedb8949088af196",
+  "recordedAt": "2026-10-07T21:54:00.454517+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "e267594a739b75ea8dfaf4169d0f570ccfb995f81344b4db993653fac35f5c0e"
+    },
+    {
+      "path": "packages/db/src/schema/decision_outcome_reviews.ts",
+      "sha256": "12d9e5e3ce0d33cf584b945761ce6d147e4ba7e83e821d260c28f44bd6ec1ec5"
+    },
+    {
+      "path": "packages/shared/src/decision-outcome-reviews.ts",
+      "sha256": "389568069505ffb4fdd7e6bb8082ba3d6448a25e50ade4ae439d39eb9da070d5"
+    },
+    {
+      "path": "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
+      "sha256": "0101a71576d21b4348d6ff8a388deb666b4b1d93432ead3ab92320cde9c30fe3"
+    },
+    {
+      "path": "server/src/routes/decision-intelligence.ts",
+      "sha256": "c6ad4a01bdb90793d7d2034df7981fbac67ec684127239e76c6cd99795ad2609"
+    },
+    {
+      "path": "server/src/services/decision-outcome-reviews.ts",
+      "sha256": "b9978b6a273f3fcff93d52b0177ccea129aef6202e5e9b5851579dfa0a847454"
+    },
+    {
+      "path": "server/src/services/learning/learning-service.ts",
+      "sha256": "6958bef2e2be5d87f2c12af396e516b56b32fb4b3d66beb2b3bd3a5e3e464db0"
+    },
+    {
+      "path": "ui/src/api/decision-outcome-reviews.ts",
+      "sha256": "33553b421d13925260939f461506852150f3266918ce8f4f64467fbbbcf64684"
+    },
+    {
+      "path": "ui/src/components/DecisionOutcomeReviewPanel.test.tsx",
+      "sha256": "909dc5851399b04226cf6c26887cae4225e195f86d06cbf344dff67e88346b41"
+    },
+    {
+      "path": "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+      "sha256": "310ddca9ec1e956258392c5793595056821ecbc684b906d219cdf42fae4a684f"
+    },
+    {
+      "path": "ui/src/pages/OrganizationalLearning.test.tsx",
+      "sha256": "7605034a84419b844ae03aa854fe0d06b071ca7e6a34b6e054a7d35297145da0"
+    },
+    {
+      "path": "ui/src/pages/OrganizationalLearning.tsx",
+      "sha256": "6e864d002d45c3cb231b4b527c3f1bda96fc0a828f9ca5b07eeac8cc5415af49"
+    },
+    {
+      "path": "packages/db/src/migrations/0422_fat_timeslip.sql",
+      "sha256": "f8252b42ec711a67c259c0b1024faaf34023c747a9b683e6cd5f14c6dfbafd90"
+    },
+    {
+      "path": "packages/db/src/migrations/0423_decision_review_learning_owner.sql",
+      "sha256": "3654cbbd5b0c06a06fdeda978b72ee1f2cf84f4f7cd83b54a8adda7c56c21620"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0422_snapshot.json",
+      "sha256": "0a816aa694707f093e2dc32a9bba1dccde6c2926c01957efe58a7f5e31acb5a7"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0423_snapshot.json",
+      "sha256": "a85abc8a144293498b8f9a93e4bc0abeebd543fc31c80151a8f1cd310ef41866"
+    },
+    {
+      "path": "tests/e2e/decision-review-learning.spec.ts",
+      "sha256": "a07fa5a770090a29190b8abfd49ab0ddab161c2d96b5f4c7c339fdaeaa2de327"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Native PostgreSQL review/Learning/purge/snapshot owners",
+      "passedTests": 68,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-decision-learning-domain-final.log",
+      "logSha256": "ffbf14bd128384f4369522461eaf5598699ae12b5051acad64b1f84f15ffa599"
+    },
+    {
+      "check": "Final UI response contracts and parent review flows",
+      "passedTests": 38,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-decision-learning-ui-release.log",
+      "logSha256": "114f773f839083a54a0e9bdb695f7c49fd8eb49c8b83fa0d738903c694c72f90"
+    },
+    {
+      "check": "Actual native API/PostgreSQL/Chromium Decision-review handoff",
+      "passedTests": 1,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-decision-learning-browser-final.log",
+      "logSha256": "94d4411cb1586046e7d4292ab876ce904d70fe524509093e5ebb9a648fad9dc2"
+    },
+    {
+      "check": "Final sequential UI and server typechecks",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-decision-learning-final-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "Native migration safety",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-decision-learning-migrations.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "check": "Native UI token gates",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-decision-learning-token-gates.log",
+      "logSha256": "2775e2ddd6039e24980c0946acf228f29d0639d010e7c541765c6fa122bb56d7"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "doc/operations/aw-v8-evidence/decision-learning-review-mobile.png",
+      "sha256": "74659ad9ea2b6587964d40b91a9acfb621a0dcac3732fb7390d983e9a48df1eb",
+      "reviewed": true
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/decision-learning-native-cycle-desktop.png",
+      "sha256": "4ec22057b6e0f34337f5c4f6461763bb180c96ffdf6014ad945872e5783a25e5",
+      "reviewed": true
+    }
+  ],
+  "qualified": [
+    "The existing current Human terminal Decision outcome review starts exactly one original company Learning cycle in the same native transaction and activity publication boundary.",
+    "Independent verified completed Task Memory remains mandatory. The exact review supplement is pinned server-side and does not supply outcomes, create a hypothesis or perform promotion.",
+    "Concurrent retries return the same cycle; changed intent, premature review, stale revision, Agent calls, unverified roots and cross-company roots fail without partial publication.",
+    "Native composite tenant ownership and immutable source linkage reject cross-company, unrelated and rewritten Learning links while preserving original review revision and receipt timestamps.",
+    "The original Source lineage, sensitivity, expiry and C7 erasure follow the review into Learning; flags-off/company-paused native cleanup preserves independent verified Memory.",
+    "Actual Chromium uses real native APIs and PostgreSQL without intercepted responses. It covers mobile source entry, company switch denial, one Human-created cycle, zero hypotheses/candidates and erased-source read denial.",
+    "Permanent source denial or erasure clears cached Learning claims and local drafts without retrying a permanent native 403/404/409 response."
+  ],
+  "limitations": [
+    "Counts overlap. Historical worker and verified Task outcome are explicit software fixtures; no external outcome, trial or provider invocation is claimed.",
+    "The parent Decision panel handoff is covered by UI response contracts; Chromium enters the exact review handoff URL directly.",
+    "No native worker Source-retention bridge, Optimizer promotion, planning outcome or Routine cadence qualification is claimed here.",
+    "Cross-project Planning, remaining Source graph closure, provider conformance and hosted gates remain open. No whole-brief completion is claimed.",
+    "The full production build of this resulting primary commit is queued after checkpoint publication."
+  ]
+}
