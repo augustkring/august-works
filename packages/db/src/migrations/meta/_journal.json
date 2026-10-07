@@ -2787,6 +2787,13 @@
       "when": 1791345078211,
       "tag": "0399_outgoing_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 400,
+      "version": "7",
+      "when": 1791348438480,
+      "tag": "0400_futuristic_the_hunter",
+      "breakpoints": true
     }
   ]
 }

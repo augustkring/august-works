@@ -4,6 +4,8 @@ import {and,eq,sql} from "drizzle-orm";
 import {companies,projects,issues,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,analyticalLineageManifests,analyticalLineageEdges,forecastSpecs,forecastSpecVersions,forecastBacktests,forecastRuns,forecastPublications,createDb} from "@paperclipai/db";
 import {businessForecastDefinitionSchema,businessMetricDefinitionSchema,type BusinessMetricResult} from "@paperclipai/shared";
 import {businessForecastService} from "../services/business-forecasting/service.js";
+import {businessScenarioService} from "../services/business-scenarios/service.js";
+import {scenarioDefinition} from "./helpers/business-scenario-fixture.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
 import {instanceSettingsService} from "../services/instance-settings.js";
 import {aiGovernanceService} from "../services/ai-governance/governance-service.js";
@@ -17,7 +19,7 @@ import {metricDefinition,analyticalPurpose} from "./helpers/business-metric-fixt
 import {getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase} from "./helpers/embedded-postgres.js";
 const support=await getEmbeddedPostgresTestSupport(),suite=support.supported?describe:describe.skip;
 const actor={type:"board" as const,source:"local_implicit" as const};
-const flags={analytical_lineage_v8:true,business_metrics_v8:true,business_forecasting_v8:true,ai_use_cases_v7:true,governance_evidence_v7:true};
+const flags={analytical_lineage_v8:true,business_metrics_v8:true,business_forecasting_v8:true,scenario_planning_v8:true,ai_use_cases_v7:true,governance_evidence_v7:true};
 const DAY=86_400_000;
 suite("Governed native business forecasts on migrated PostgreSQL",()=>{
  let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>,companyId:string,otherId:string,projectId:string,policyId:string;
@@ -27,7 +29,7 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental(flags);companyId=randomUUID();otherId=randomUUID();projectId=randomUUID();
   await db.insert(companies).values([{id:companyId,name:"Native forecasting test",issuePrefix:randomUUID()},{id:otherId,name:"Foreign tenant",issuePrefix:randomUUID()}]);
   await db.insert(projects).values({id:projectId,companyId,name:"Synthetic retained historical fixture",createdAt:new Date(Date.now()-20*DAY)});
-  const policy=analyticalPurpose();policy.analyticalPurpose!.capabilities=["metrics","forecast"];policyId=(await aiGovernanceService(db).obligation(actor,companyId,policy)).id;
+  const policy=analyticalPurpose();policy.analyticalPurpose!.capabilities=["metrics","forecast","scenario"];policyId=(await aiGovernanceService(db).obligation(actor,companyId,policy)).id;
  });
  const service=()=>businessForecastService(db);
  /** Synthetic chronologically coherent fixtures exercise owner/SQL boundaries.
@@ -129,5 +131,18 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental(flags);await db.update(companies).set({status:"active"}).where(eq(companies.id,companyId));const live=await published();
   const foreignProject=(await db.insert(projects).values({companyId:otherId,name:"Foreign canonical survivor"}).returning())[0];await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({business_forecasting_v8:false});await purgeCompanyContent(db,companyId);
   expect(await db.select().from(forecastSpecs).where(eq(forecastSpecs.id,live.spec.id))).toHaveLength(0);expect(await db.select().from(projects).where(eq(projects.id,foreignProject.id))).toHaveLength(1);
+ });
+ it("composes an exact qualified native point and erases dependent scenario prose through the forecast owner",async()=>{
+  const d=await published(),run=await service().run(companyId,actor,d.spec.id,{expectedRevision:d.spec.revision,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()});
+  const scenarios=businessScenarioService(db),definition=scenarioDefinition(policyId,{kind:"forecast_point",key:"forecast",specId:d.spec.id,versionId:d.version.id,runId:run.id,pointIndex:0,unit:{issue:1}});
+  const proposal=await scenarios.create(companyId,actor,{key:"forecast_composition",definition});
+  await scenarios.publish(companyId,actor,proposal.scenario.id,{expectedRevision:1,versionId:proposal.version.id,rationale:"Human approval of an exact forecast point and conditional assumptions"});
+  const result=await scenarios.run(companyId,actor,proposal.scenario.id,{expectedRevision:2,versionId:proposal.version.id,seed:null});
+  expect(result.result.cases[0].outputs[0].nominal).toBe(run.result.points[0].value*2);
+  const forecastRow=(await db.select().from(forecastRuns).where(eq(forecastRuns.id,run.id)))[0];
+  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({scenario_planning_v8:false,business_forecasting_v8:false});
+  await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,forecastRow.lineageManifestId));
+  expect((await db.execute<{n:number}>(sql`select count(*)::integer as n from business_scenarios where id=${proposal.scenario.id}::uuid`))[0].n).toBe(0);
+  expect(await db.select().from(issues).where(eq(issues.id,d.h.sourceIds[0]))).toHaveLength(1);
  });
 });

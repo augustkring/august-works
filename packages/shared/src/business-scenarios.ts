@@ -9,7 +9,8 @@ const finite = z.number().finite();
 export const businessScenarioUnitSchema = z.record(
   z.string().regex(/^(issue|project|person|customer|second|currency_[A-Z]{3})$/),
   z.number().int().min(-6).max(6),
-).refine(value => Object.keys(value).length <= 8, "At most eight unit dimensions");
+).refine(value => Object.keys(value).length <= 8, "At most eight unit dimensions")
+  .transform(value => Object.fromEntries(Object.entries(value).filter(([, exponent]) => exponent !== 0).sort(([a], [b]) => a.localeCompare(b))));
 export type BusinessScenarioUnit = z.infer<typeof businessScenarioUnitSchema>;
 
 export const businessScenarioDistributionSchema = z.discriminatedUnion("kind", [
@@ -163,6 +164,24 @@ export const reviseBusinessScenarioSchema = z.object({ expectedRevision: z.numbe
 export const publishBusinessScenarioSchema = z.object({ expectedRevision: z.number().int().positive(), versionId: id, rationale: prose }).strict();
 export const runBusinessScenarioSchema = z.object({ expectedRevision: z.number().int().positive(), versionId: id, seed: z.number().int().min(0).max(0xffffffff).nullable() }).strict();
 export const retireBusinessScenarioSchema = z.object({ expectedRevision: z.number().int().positive(), rationale: prose }).strict();
+export type CreateBusinessScenario = z.infer<typeof createBusinessScenarioSchema>;
+export type ReviseBusinessScenario = z.infer<typeof reviseBusinessScenarioSchema>;
+export type PublishBusinessScenario = z.infer<typeof publishBusinessScenarioSchema>;
+export type RunBusinessScenario = z.infer<typeof runBusinessScenarioSchema>;
+export type RetireBusinessScenario = z.infer<typeof retireBusinessScenarioSchema>;
+export interface BusinessScenarioView {
+  id: string; companyId: string; key: string; revision: number; status: "draft" | "published" | "retired";
+  publishedVersionId: string | null; createdAt: string; updatedAt: string;
+}
+export interface BusinessScenarioVersionView {
+  id: string; companyId: string; scenarioId: string; revision: number; definition: BusinessScenarioDefinition;
+  contentHash: string; inputHash: string; inputs: BusinessScenarioCapturedInput[]; createdAt: string; expiresAt: string;
+  currentQualification: "current" | "needs_revalidation";
+}
+export interface BusinessScenarioRunView {
+  id: string; companyId: string; scenarioId: string; versionId: string; result: NativeBusinessScenarioResult;
+  contentHash: string; createdAt: string; expiresAt: string; currentQualification: "current" | "needs_revalidation";
+}
 /** Internal source-owner capture; public runs cannot send values or hashes. */
 export interface BusinessScenarioCapturedInput {
   key: string; kind: "metric_observation" | "forecast_point"; sourceId: string; versionId: string;

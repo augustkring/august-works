@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "240ed4cd6ab8e8ba5c205837e071afc5541d5b03",
+  "scope": "Scenario governed owner/API source checkpoint. No operator UI, validated Automation Artifact calculation, operational calibration, deployment or whole V8 release qualification.",
+  "sourceFileSha256": {
+    "packages/shared/src/business-scenarios.ts": "4559be950bdd156ea6e2b18e7560ddc8e27fc3e3025f30ab3ddf2e3f63048723",
+    "packages/db/src/schema/business_scenarios.ts": "cffe870e5073f754c9f20aa930d509102fcb74fcd0c8a32c8d0419adb632e25b",
+    "packages/db/src/schema/index.ts": "3f2ccf8993e756886ad2da00b9c832182281e7e9e95fe8e1346c1507c6784eb9",
+    "packages/db/src/migrations/0400_futuristic_the_hunter.sql": "02ea02b25cdf61e3a23478dba9e3a7a45923969da237f4fecd9d2b403eb1adda",
+    "server/src/services/business-scenarios/kernel.ts": "da2b7ab432c5ba112f07ff4333c8052594e60971b1d7c4adaaf7dd3dd9464e47",
+    "server/src/services/business-scenarios/service.ts": "f788109b73f742422d02ae00e6a54ece4bfc700b57dc904aca657b2f288c5461",
+    "server/src/services/business-forecasting/service.ts": "76d4d6c9085d1ac1d9337e1a4e9ada38fb3815af4573813f5c6705c4e138634f",
+    "server/src/services/saas/company-purge.ts": "50dd2e105878f0f542693f955768bbe764e69439d815c2bf346676d8b9fe55e2",
+    "server/src/routes/business-scenarios.ts": "e39350800a48cdb3373e061f31ed59fd7c3672748d600ddc0718386711f2ea1d",
+    "server/src/routes/openapi.ts": "76734415592b4939cec0aab4d188a39658f1c927d4209c5db04cb5656382763e",
+    "server/src/app.ts": "a200f1a10fbf3ae3c88bebad674e012e7706e3910512bf44806e382b6a539503",
+    "server/src/__tests__/business-scenarios.integration.test.ts": "bfa478cdb05e858f13ae56928016e44acf29e89bf4f482ed00b9d5e5a03d66dd",
+    "server/src/__tests__/business-forecasting.integration.test.ts": "bf93a4b74f34b0f25714b8a20846b5a4dacfbe1eb1d5022e908fb040f53d2b56",
+    "server/src/__tests__/helpers/business-scenario-fixture.ts": "62d2c403bfb367e03f0c0a302b3268bf1eb3e7a82dfbf1aa53db5b35b9cf4cea"
+  },
+  "checks": [
+    {
+      "name": "integrated-server",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 47,
+      "scope": "Scenario/Forecast/PostgreSQL/kernel/OpenAPI selection before the final equivalent-period correction check.",
+      "logPath": "/var/tmp/aw-v8-business-scenario-owner-tests-final.log",
+      "logSha256": "2c571f785bf7f51601885f3a5b28546a453c13a71d9f648b5d3fa15859f36201"
+    },
+    {
+      "name": "final-scenario-postgresql",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 12,
+      "scope": "Final scenario owner source, including equivalent period spellings and deferred source-pin replay proof.",
+      "logPath": "/var/tmp/aw-v8-business-scenario-owner-pg-qualified.log",
+      "logSha256": "a13d19373c85adec3c9d9adc6d0ba99c4c6834fc87c0f96b674bf7ec6e495fc4"
+    },
+    {
+      "name": "shared-contract",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 4,
+      "scope": "Strict public contracts with normalized units.",
+      "logPath": "/var/tmp/aw-v8-business-scenario-contract-tests-checkpoint.log",
+      "logSha256": "362372c74f4dd6303cf01101c964f3cb950602363cb04f6662bf903e199ba29d"
+    },
+    {
+      "name": "migration-snapshot",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 1,
+      "scope": "Native generated schema/snapshot drift.",
+      "logPath": "/var/tmp/aw-v8-business-scenario-snapshot-tests.log",
+      "logSha256": "d741a1b52b22f9e2fbe40387c6179850d6433b5fd1afc4ab46178deb48e105d1"
+    },
+    {
+      "name": "server-typecheck",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "scope": "Final production source; no runtime source change after this compiler invocation.",
+      "logPath": "/var/tmp/aw-v8-business-scenario-owner-typecheck-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared-typecheck",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "scope": "Current strict contracts.",
+      "logPath": "/var/tmp/aw-v8-business-scenario-shared-typecheck-checkpoint.log",
+      "logSha256": "bd335419cc9a82b3d4294bda723bb78582fdcaaa0e86b168fefc19ce9e5558f7"
+    },
+    {
+      "name": "migration-numbering-safety",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "scope": "Native current migration checks.",
+      "logPath": "/var/tmp/aw-v8-business-scenario-migration-checks.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    }
+  ],
+  "earlierFailedChecks": [
+    "Initial owner selection: lineage normalization included database-row-only fields; corrected.",
+    "Correction hardening: raw SQL bound a Date instead of an ISO timestamp; corrected.",
+    "Deferred replay negative test: COMMIT error is native PostgreSQL rather than a statement wrapper; assertion corrected."
+  ]
+}

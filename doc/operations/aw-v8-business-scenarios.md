@@ -1,10 +1,10 @@
 # Native business scenarios — numerical kernel checkpoint
 
-This checkpoint supplies strict shared proposal/run contracts and a pure native
-numerical kernel for brief section 23. It does not complete scenario planning:
-the governed PostgreSQL owner, native API/UI, validated Automation Artifact
-integration and current source-owner capture remain open. The kernel is not
-mounted as a public endpoint and cannot authorize a source or execute a Decision.
+This checkpoint supplies strict shared proposal/run contracts, a pure native
+numerical kernel and a governed PostgreSQL/company API owner for brief section 23.
+It does not complete scenario planning: native operator UI, validated Automation
+Artifact integration and downstream Decision evidence remain open. The numerical
+kernel cannot authorize a source or execute a Decision.
 
 Formula programs have at most 96 typed nodes and may reference only declared
 inputs or earlier nodes. There is no JavaScript evaluation, LLM simulation,
@@ -19,8 +19,8 @@ Dimensional inference preserves issue/project counts, people/customers, seconds
 and distinct currencies. Addition, subtraction, minimum and maximum require
 matching units. Multiplication/division combine dimensions and enforce a bounded
 exponent budget. An output must declare the inferred unit. Unit declarations are
-not source authority: the future owner must derive observed units from the exact
-native metric definition and reject a relabeled issue count or currency mismatch.
+not source authority: the native owner derives observed units from the exact
+native metric definition and rejects a relabeled issue count or currency mismatch.
 
 Every human assumption declares a nominal value, ordered range, numeric type,
 unit, owner, controllability, evidence, qualitative confidence and uncertainty
@@ -67,3 +67,59 @@ not qualify an operational dataset, source-owner integration or hosted release.
 The earlier integrated production build passed at `6426631f2827c82213341d037a9aa1b67d7f91df`;
 it does not qualify this subsequent scenario source. Its log-hashed record is in
 `aw-v8-evidence/native-build-6426631.json`. The whole V8 build remains in progress.
+
+## Governed owner and company API checkpoint
+
+The mounted `business-scenarios` company API admits human proposals, immutable
+revisions, separate human publication, bounded inline runs, retained result reads,
+paged lists and retirement. The independent `scenario` company-purpose capability
+is required; ordinary metric permission is insufficient. Every scenario/assumption
+owner must be a current company human. Default-off rollout and native human
+company permissions gate admission. Rollback does not disable authorized human
+retirement or the native privacy lifecycle.
+
+Observation facts come from the canonical Metric owner. Forecast composition
+uses the canonical Forecast owner's pinned-consumer inspection, including current
+source authorization, exact run/specification version, known history and current
+qualification. It does not replay forecast arithmetic or change its publication.
+Actual native count grain determines issue/project dimensions; ratios are
+dimensionless. Confidential sources cannot be downgraded. Proposed versions capture
+the exact source facts and hashes, preserve complete bounded source lineage, and
+expire no later than source retention/review or scenario purpose review.
+
+Migration 0400 creates roots, immutable versions, typed source-owner FK pins,
+human publication receipts and immutable runs. PostgreSQL requires exact native
+measurement/forecast pins and units, complete source-pin descendants, revision
+proof and separate human publication before a run. Changing a published pointer,
+removing a live source reference or replacing saved definition/result bytes is
+rejected. A source-owner cascade deletes the complete dependent version, including
+its human prose; a published version erasure removes its aggregate. Copied native
+source edges independently inherit issue/project suppression, retention and
+company erasure with rollout off and paused companies. Company purge deletes
+scenario aggregates through their cascade owner before the general FK planner.
+
+Reads reauthorize every exact source and all purpose evidence before disclosing
+retained facts. A changed metric publication, newer/equal-time correction or
+forecast revalidation marks historical scenario arithmetic as needing revalidation;
+its saved result hash and nominal values stay unchanged. Equivalent ISO timestamp
+spellings refer to the same period. New publication/run requires a new proposal
+with current source pins. Lists skip denied/expired candidates and label bounded
+page coverage; an empty page does not establish missing organizational evidence.
+Audit events contain identities, hashes, revisions and calculation status;
+numerical results do not produce native Decision or execution effects.
+
+The integrated server selection passed 47 checks across scenario/forecast
+PostgreSQL ownership, numerical scenarios and mounted OpenAPI coverage. Four
+strict public-contract checks, generated migration snapshot drift and native
+migration numbering/safety passed. The initial owner selection exposed a lineage
+normalization error; a later correction check exposed raw Date binding in SQL.
+Both were fixed and rerun. Source fixtures and human distributions are explicit
+test inputs, not evidence of operational model calibration or hosted acceptance.
+
+The final scenario PostgreSQL suite passes 12 checks, including equivalent period
+spellings and rejection/rollback of an otherwise valid restored proposal whose
+source-owner FK pins were omitted. A test initially expected a statement wrapper
+for the deferred COMMIT error; its assertion now checks the native PostgreSQL
+error directly. Final server/shared type checking passes. Qualification hashes
+and the exact current source files are recorded in
+`aw-v8-evidence/scenario-owner-checkpoint.json`.

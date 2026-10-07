@@ -148,6 +148,16 @@ async function appendArtifact(tx:Db,row:Root,actor:AuthorizationActor,pin:Awaite
  const [value]=await tx.insert(table).values({id,companyId:row.companyId,specId:row.id,versionId:pin.value.id,lineageManifestId,...material,inputHash:result.inputHash,contentHash,createdBy:v7HumanActorId(actor),createdAt,expiresAt:captured.expiresAt}).returning();
  return inspectArtifact(tx,row,actor,pin,value,kind);
 }
+/** Pinned consumers invoke inside their native company/Memory transaction;
+ * owner admission is preserved without nested activity-publication writes. */
+export async function inspectBusinessForecastRun(tx:Db,companyId:string,actor:AuthorizationActor,specId:string,versionId:string,runId:string,requireQualified=true) {
+ await admit(tx,companyId,actor);const row=await root(tx,companyId,specId);
+ const [value]=await tx.select().from(forecastRuns).where(and(eq(forecastRuns.companyId,companyId),eq(forecastRuns.specId,specId),eq(forecastRuns.versionId,versionId),eq(forecastRuns.id,runId))).for("share");
+ if(!value) throw notFound("Pinned native forecast run is unavailable");
+ const pin=await version(tx,row,actor,versionId),view=await inspectArtifact(tx,row,actor,pin,value,"run");
+ if(requireQualified && view.currentQualification!=="qualified") throw conflict("A currently qualified native forecast run is required");
+ return {view,metricDefinition:pin.authority.metric.version.definition,forecastDefinition:pin.value.definition,lineageManifestId:value.lineageManifestId};
+}
 export function businessForecastService(db:Db) {
  const audit=(tx:Db,companyId:string,actor:AuthorizationActor,id:string,action:string,details:Record<string,unknown>,publications:Parameters<typeof logActivity>[2])=>logActivity(tx,{companyId,actorType:"user",actorId:v7HumanActorId(actor),action:`business_forecast.${action}`,entityType:"forecast_spec",entityId:id,details},publications);
  return {

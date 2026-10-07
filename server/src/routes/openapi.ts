@@ -22,6 +22,11 @@ import {
   backtestBusinessForecastSchema,
   publishBusinessForecastSpecSchema,
   retireBusinessForecastSpecSchema,
+  createBusinessScenarioSchema,
+  reviseBusinessScenarioSchema,
+  publishBusinessScenarioSchema,
+  runBusinessScenarioSchema,
+  retireBusinessScenarioSchema,
   createBusinessMetricSchema,
   createBusinessMetricVersionSchema,
   publishBusinessMetricSchema,
@@ -1722,7 +1727,7 @@ function resolveOperationAuthLevel(
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
   if(path.startsWith("/api/companies/{companyId}/decisions/{decisionId}/context")) return "board";
-  if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/business-forecasts") || path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
+  if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/business-scenarios") || path.startsWith("/api/companies/{companyId}/business-forecasts") || path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
   if (
     isBoardOnlyOperation(method, path) ||
     experimentalApiMetadata[`${method.toUpperCase()} ${path}`]?.boardOnly
@@ -11896,6 +11901,16 @@ registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business
 registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}/runs", tags: ["V8"], summary: "List retained forecasts with current source qualification", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
 registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}/backtests/{artifactId}", tags: ["V8"], summary: "Inspect retained backtest facts after current source reauthorization", query: z.object({ expectedUserId: z.string().optional() }).strict() });
 registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}/runs/{artifactId}", tags: ["V8"], summary: "Inspect a retained forecast with explicit current qualification", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-scenarios", tags: ["V8"], summary: "List bounded currently source-authorized scenarios", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}", tags: ["V8"], summary: "Inspect retained conditional scenario versions", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-scenarios", tags: ["V8"], summary: "Propose a governed scenario with exact native source pins", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: createBusinessScenarioSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/versions", tags: ["V8"], summary: "Append an immutable human scenario proposal", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: reviseBusinessScenarioSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/publish", tags: ["V8"], summary: "Publish the latest exact conditional model with human rationale", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: publishBusinessScenarioSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/runs", tags: ["V8"], summary: "Calculate the published conditional scenario without granting execution authority", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: runBusinessScenarioSchema });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/runs", tags: ["V8"], summary: "List retained currently authorized scenario runs", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/runs/{runId}", tags: ["V8"], summary: "Inspect retained scenario arithmetic under current source authority", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/retire", tags: ["V8"], summary: "Retire a scenario with human revision and rationale", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: retireBusinessScenarioSchema });
 
 for (const operation of v7ApiPaths) {
   registry.registerPath({

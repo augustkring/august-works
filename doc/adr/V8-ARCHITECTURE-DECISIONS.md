@@ -186,3 +186,14 @@ canonical runtime gates in a subsequent owner integration.
 must still authorize exact metric/forecast versions, units, purpose, retention and
 lineage. Conditional quantiles cannot become confidence intervals or causal effects;
 constraint satisfaction cannot approve execution or an organizational commitment.
+
+The scenario owner now captures exact observation/forecast facts through their
+canonical owners inside the existing company → Memory transaction. Proposed
+versions preserve frozen facts and normalized source lineage; independent scenario
+purpose, native source units and sensitivity are admitted before storage. Human
+publication is separate from numerical execution. Tenant-scoped source FKs erase
+complete dependent versions and prose when the owning measurement/forecast is
+erased. Current corrections/publications change revalidation status without
+rewriting historical arithmetic. The source wave has bounded company APIs;
+operator UI, validated Automation Artifact integration and downstream Decision
+pins remain open.
