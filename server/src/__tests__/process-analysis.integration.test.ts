@@ -1,8 +1,9 @@
+import {managementAnalyticalFixture} from "./helpers/management-analytical-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, analyticalLineageEdges, analyticalLineageManifests, applyPendingMigrations, businessEventObjects, businessEvents, companies, createDb, governanceObligations, issues, projects,
-  processAnalysisDefinitions, processAnalysisPublications, processAnalysisRuns, processAnalysisVersions, processFindings, processFindingTransitions } from "@paperclipai/db";
+  processAnalysisDefinitions, processAnalysisPublications, processAnalysisRuns, processAnalysisVersions, processFindings, processFindingTransitions, managementReviewSnapshots } from "@paperclipai/db";
 import { processAnalysisDefinitionSchema, type ProcessAnalysisDefinition } from "@paperclipai/shared";
 import { processAnalysisService } from "../services/process-analysis.js";
 import { processFindingService } from "../services/process-findings.js";
@@ -212,6 +213,7 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     expect(finding).toMatchObject({status:"OPEN",version:1,eventSetHash:run.eventSetHash,definitionHash:run.definitionHash,
       facts:{observed:{knownBlockedSeconds:45},semantics:"human_process_interpretation_of_observed_facts"}});
     expect(JSON.stringify(finding)).not.toMatch(/private-person|secret body/);
+    await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({business_metrics_v8:true});const management=await managementAnalyticalFixture(db,companyId,[{type:"process_finding",id:finding.id,definitionId:created.root.id,runId:run.id}]);expect(management.original.sources[0].grade).toBe("native_observation");expect(management.original.sources[0].facts).toMatchObject({findingStatus:"OPEN",findingVersion:1,knownBlockedSeconds:45,interpretation:input.interpretation});expect(management.original.currentQualification).toBe("current");
     const [nativeFinding]=await db.select().from(processFindings).where(eq(processFindings.id,finding.id));
     await expect(db.insert(processFindings).values({...nativeFinding,id:randomUUID(),objectType:null,fingerprint:"9".repeat(64)})).rejects.toThrow();
     expect((await findings.create(companyId,actor,created.root.id,run.id,input)).id).toBe(finding.id);
@@ -235,8 +237,10 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     await expect(findings.transition(companyId,actor,created.root.id,run.id,finding.id,{expectedVersion:4,status:"OPEN",reason:"Attempt to silently reopen frozen resolution"})).rejects.toMatchObject({status:409});
     const detail=await findings.detail(companyId,actor,created.root.id,run.id,finding.id);
     expect(detail.transitions).toHaveLength(4);expect(detail.finding.resolvedAt).not.toBeNull();
+    const history=await management.read();expect(history.currentQualification).toBe("needs_revalidation");expect(history.sources).toEqual(management.original.sources);expect(history.packet).toEqual(management.original.packet);await expect(management.publish()).rejects.toMatchObject({status:409});
     expect((await findings.list(companyId,actor,created.root.id,run.id)).items).toHaveLength(4);
     await db.transaction(async tx=>{await lockMemoryPrivacy(tx as unknown as typeof db,companyId);await eraseBusinessEventObjectUnderMemory(tx as unknown as typeof db,companyId,"issue",issueId);});
+    expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id,management.created.id))).toHaveLength(0);
     expect(await db.select().from(processFindings).where(eq(processFindings.analysisRunId,run.id))).toHaveLength(0);
     expect(await db.select().from(processFindingTransitions).where(eq(processFindingTransitions.findingId,finding.id))).toHaveLength(0);
     expect(await db.select().from(issues).where(eq(issues.id,secondIssueId))).toHaveLength(1);

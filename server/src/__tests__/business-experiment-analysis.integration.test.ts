@@ -1,3 +1,4 @@
+import {managementAnalyticalFixture} from "./helpers/management-analytical-fixture.js";
 import {disableV8Rollout} from "./helpers/v8-rollout.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import express from "express";
@@ -161,9 +162,11 @@ suite("Native experiment final capture and human interpretation on migrated Post
     const d=await running(true);await attested(d);await closure(d);const result=await analyzed(d),native=await nativeDecision(),service=decisionIntelligenceService(db);
     const interpreted=await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"iterate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});
     const definition=context({id:result.analysis.id,experimentId:d.experiment.id,versionId:d.version.id,interpretationId:interpreted.interpretation.id}),proposed=await service.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition}),pin=proposed.versions[0];
+    const management=await managementAnalyticalFixture(db,companyId,[definition.evidence[0].source]);expect(management.original.sources[0].grade).toBe("human_interpreted_experiment");expect(management.original.sources[0].analytical!.experiment!.analysis).toEqual(result.analysis);
     const owner=businessMetricService(db),metric=d.metrics[0],updated=await owner.createVersion(companyId,actor,metric.metric.id,{expectedRevision:2,definition:{...metric.version.definition,name:"New reasoned metric definition"}});await owner.publish(companyId,actor,metric.metric.id,{expectedRevision:3,versionId:updated.id});
     const retained=await service.detail(companyId,actor,native.decision.id);expect(retained.versions[0].contentHash).toBe(pin.contentHash);expect(retained.versions[0].evidence).toEqual(pin.evidence);expect(retained.versions[0].revalidationRequiredEvidenceKeys).toEqual(["trial"]);
     await expect(service.prepare(companyId,actor,native.decision.id,{expectedRevision:1,versionId:pin.id,rationale})).rejects.toMatchObject({status:409});expect((await native.owner.get(native.decision.id))!.status).toBe("open");
+    const history=await management.read();expect(history.currentQualification).toBe("needs_revalidation");expect(history.sources).toEqual(management.original.sources);expect(history.packet).toEqual(management.original.packet);await expect(management.publish()).rejects.toMatchObject({status:409});await expect(management.recapture()).rejects.toMatchObject({status:409});
   });
   it.each([false,true])("actual migrated owner admits registered effect only with balanced pretreatment invariants (imbalance=%s)",async(imbalance)=>{
     const d=await running(false,86400,true);await insideWindow(d);const key=experimentAssignmentKey(companyId,d.version.id), counts={control:0,treatment:0};
@@ -186,6 +189,7 @@ suite("Native experiment final capture and human interpretation on migrated Post
       const source=await owner.detail(companyId,actor,claim.claim.id),native=await nativeDecision(),decisionOwner=decisionIntelligenceService(db),base=context({id:result.analysis.id,experimentId:d.experiment.id,versionId:d.version.id,interpretationId:interpreted.interpretation.id});
       const decisionDefinition=decisionContextDefinitionSchema.parse({...base,evidence:[{...base.evidence[0],key:"causal",source:{type:"causal_analysis",id:causal.run.id,claimId:claim.claim.id,versionId:claim.version.id,reviewId:source.versions[0].review!.id},relationship:"causal_result"}]});
       const captured=await decisionOwner.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition:decisionDefinition});expect(captured.versions[0].evidence[0].causal!.run.result).toEqual(causal.run.result);expect(captured.versions[0].evidence[0].causal!.run.result.estimate!.interval).toEqual(result.analysis.result.metrics.find(m=>m.role==="primary")!.interval);
+      const management=await managementAnalyticalFixture(db,companyId,[base.evidence[0].source,decisionDefinition.evidence[0].source]);expect(management.original.sources.map(source=>source.grade)).toEqual(["human_interpreted_experiment","conditional_causal"]);expect(management.original.sources[1].analytical!.causal!.run.result.estimate!.interval).toEqual(result.analysis.result.metrics.find(m=>m.role==="primary")!.interval);expect(management.original.currentQualification).toBe("current");
       await decisionOwner.prepare(companyId,actor,native.decision.id,{expectedRevision:1,versionId:captured.versions[0].id,rationale});expect((await native.owner.get(native.decision.id))!.status).toBe("open");expect(await db.select().from(issueComments).where(eq(issueComments.issueId,native.target.id))).toHaveLength(0);
 
     }

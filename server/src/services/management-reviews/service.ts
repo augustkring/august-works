@@ -52,7 +52,7 @@ async function retained(tx: Db, companyId: string, actor: AuthorizationActor, ro
   });
   const current = await captureManagementSources(tx, companyId, actor, definition, true);
   const fresh = composeManagementReview(definition, current.sources, current.asOf.toISOString());
-  return { id: row.id, companyId, status: row.status, definition, sources: row.sources, packet: row.packet, createdBy: row.createdBy, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString(), publishedBy: row.publishedBy, publishedAt: row.publishedAt?.toISOString() ?? null, currentQualification: fresh.inputHash === row.packet.inputHash ? "current" : "needs_revalidation", events };
+  return { id: row.id, companyId, status: row.status, definition, sources: row.sources, packet: row.packet, createdBy: row.createdBy, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString(), publishedBy: row.publishedBy, publishedAt: row.publishedAt?.toISOString() ?? null, currentQualification: !current.revalidationRequiredEvidenceKeys.length && fresh.inputHash === row.packet.inputHash ? "current" : "needs_revalidation", events };
 }
 export function managementReviewService(db: Db) {
   return {

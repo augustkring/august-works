@@ -1,7 +1,8 @@
+import {managementAnalyticalFixture} from "./helpers/management-analytical-fixture.js";
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq,sql} from "drizzle-orm";
-import {companies,projects,issues,agents,authUsers,heartbeatRuns,decisions,decisionContexts,decisionContextVersions,decisionContextBindings,decisionCalculationPins,decisionEvidenceLinks,decisionAssumptions,decisionCriteria,decisionExpectedOutcomes,businessScenarioRuns,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,analyticalLineageManifests,analyticalLineageEdges,forecastSpecs,forecastSpecVersions,forecastBacktests,forecastRuns,forecastPublications,createDb} from "@paperclipai/db";
+import {companies,projects,issues,agents,authUsers,heartbeatRuns,decisions,decisionContexts,decisionContextVersions,decisionContextBindings,decisionCalculationPins,managementReviewSnapshots,decisionEvidenceLinks,decisionAssumptions,decisionCriteria,decisionExpectedOutcomes,businessScenarioRuns,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,analyticalLineageManifests,analyticalLineageEdges,forecastSpecs,forecastSpecVersions,forecastBacktests,forecastRuns,forecastPublications,createDb} from "@paperclipai/db";
 import {businessForecastDefinitionSchema,businessMetricDefinitionSchema,decisionContextDefinitionSchema,type DecisionEvidenceReference,type BusinessMetricResult} from "@paperclipai/shared";
 import {businessForecastService} from "../services/business-forecasting/service.js";
 import {businessScenarioService} from "../services/business-scenarios/service.js";
@@ -165,6 +166,7 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
  it("pins an exact native forecast point to prospective context and preserves the chosen historical basis on retirement",async()=>{
   const d=await published(),run=await service().run(companyId,actor,d.spec.id,{expectedRevision:d.spec.revision,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()}),decision=await nativeDecision();
   const ref:DecisionEvidenceReference={type:"forecast_run",id:run.id,specId:d.spec.id,versionId:d.version.id,pointIndex:0},contexts=decisionIntelligenceService(db),prepared=await prepareCalculation(decision.id,ref);
+  const management=await managementAnalyticalFixture(db,companyId,[ref]);expect(management.original.sources[0].grade).toBe("predictive");expect(management.original.sources[0].facts.value).toBe(1);expect(management.original.currentQualification).toBe("current");
   expect(prepared.versions[0].evidence[0].facts).toMatchObject({value:1,intervalLower:null,intervalUpper:null,calibration:"not_assessed"});
   expect((await db.select().from(decisions).where(eq(decisions.id,decision.id)))[0].status).toBe("open");
   expect(await db.select().from(decisionCalculationPins).where(eq(decisionCalculationPins.decisionId,decision.id))).toMatchObject([{forecastRunId:run.id,scenarioRunId:null,sourceHash:prepared.versions[0].evidence[0].sourceHash}]);
@@ -172,12 +174,14 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   await expect(db.update(decisionCalculationPins).set({sourceHash:"f".repeat(64)}).where(eq(decisionCalculationPins.decisionId,decision.id))).rejects.toMatchObject({cause:{code:"23514"}});
   await decisionService(db,{wakeOriginAgent:async()=>{}}).decide({id:decision.id,optionId:"proceed",decidedByUserId:"local-board",userActor:actor});
   await service().retire(companyId,actor,d.spec.id,{expectedRevision:d.spec.revision,rationale:"Human retirement after an earlier exact choice used this forecast"});
+  const managementRetained=await management.read();expect(managementRetained.currentQualification).toBe("needs_revalidation");expect(managementRetained.sources).toEqual(management.original.sources);expect(managementRetained.packet).toEqual(management.original.packet);await expect(management.publish()).rejects.toMatchObject({status:409});await expect(management.recapture()).rejects.toMatchObject({status:409});
   const retained=await contexts.detail(companyId,actor,decision.id);
   expect(retained.versions[0].contentHash).toBe(prepared.versions[0].contentHash);expect(retained.versions[0].revalidationRequiredEvidenceKeys).toEqual(["calculation"]);
   const next=await nativeDecision();await expect(prepareCalculation(next.id,ref)).rejects.toMatchObject({status:409});expect(await db.select().from(decisionContexts).where(eq(decisionContexts.decisionId,next.id))).toHaveLength(0);
   const [source]=await db.select().from(forecastRuns).where(eq(forecastRuns.id,run.id));
   await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({business_forecasting_v8:false,decision_intelligence_v8:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
   await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,source.lineageManifestId));
+  expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id,management.created.id))).toHaveLength(0);
   expect(await db.select().from(decisionContextVersions).where(eq(decisionContextVersions.decisionId,decision.id))).toHaveLength(0);expect(await db.select().from(decisionContextBindings).where(eq(decisionContextBindings.decisionId,decision.id))).toHaveLength(0);
   expect((await db.select().from(decisions).where(eq(decisions.id,decision.id)))[0].chosenOptionId).toBe("proceed");expect(await db.select().from(projects).where(eq(projects.id,projectId))).toHaveLength(1);
  });
@@ -200,12 +204,14 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   const scenarios=businessScenarioService(db),definition=scenarioDefinition(policyId),proposal=await scenarios.create(companyId,actor,{key:"prospective_conditions",definition});
   await scenarios.publish(companyId,actor,proposal.scenario.id,{expectedRevision:1,versionId:proposal.version.id,rationale:"Explicit human review before prospective evidence capture"});
   const run=await scenarios.run(companyId,actor,proposal.scenario.id,{expectedRevision:2,versionId:proposal.version.id,seed:null}),decision=await nativeDecision(),ref:DecisionEvidenceReference={type:"scenario_run",id:run.id,scenarioId:run.scenarioId,versionId:run.versionId,caseKey:"option",outputKey:"capacity"};
+  const management=await managementAnalyticalFixture(db,companyId,[ref]);expect(management.original.sources[0].grade).toBe("conditional_scenario");
   const prepared=await prepareCalculation(decision.id,ref),replacement=await scenarios.revise(companyId,actor,proposal.scenario.id,{expectedRevision:2,definition:{...definition,objective:"A new human proposal changes the currently reviewed conditional model"}});
   // Drafting alone preserves the previous publication. Explicit human
   // publication replaces the currently reviewed source basis.
   await scenarios.publish(companyId,actor,proposal.scenario.id,{expectedRevision:replacement.scenario.revision,versionId:replacement.version.id,rationale:"Human publication replaces the exact formerly admitted scenario basis"});
   await expect(decisionService(db,{wakeOriginAgent:async()=>{}}).decide({id:decision.id,optionId:"proceed",decidedByUserId:"local-board",userActor:actor})).rejects.toMatchObject({status:409});
   expect((await db.select().from(decisions).where(eq(decisions.id,decision.id)))[0].status).toBe("open");expect(await db.select().from(decisionContextBindings).where(eq(decisionContextBindings.decisionId,decision.id))).toHaveLength(0);
+  const managementRetained=await management.read();expect(managementRetained.currentQualification).toBe("needs_revalidation");expect(managementRetained.sources).toEqual(management.original.sources);expect(managementRetained.packet).toEqual(management.original.packet);await expect(management.publish()).rejects.toMatchObject({status:409});await expect(management.recapture()).rejects.toMatchObject({status:409});
   const retained=await decisionIntelligenceService(db).detail(companyId,actor,decision.id);expect(retained.versions[0].contentHash).toBe(prepared.versions[0].contentHash);expect(retained.versions[0].revalidationRequiredEvidenceKeys).toEqual(["calculation"]);
   const policy=analyticalPurpose();policy.citation="Confidential scenario evidence purpose";policy.analyticalPurpose!.capabilities=["metrics","scenario"];policy.analyticalPurpose!.permittedSensitivity=["internal","confidential"];
   const confidentialPolicy=(await aiGovernanceService(db).obligation(actor,companyId,policy)).id,secret=await scenarios.create(companyId,actor,{key:"confidential_conditions",definition:{...scenarioDefinition(confidentialPolicy),sensitivity:"confidential"}});

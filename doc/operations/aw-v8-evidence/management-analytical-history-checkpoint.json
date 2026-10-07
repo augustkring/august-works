@@ -1,0 +1,83 @@
+{
+  "checkpoint": "Authorized original analytical history in native Management reviews",
+  "parentCommit": "855ba76de87f8a02200d81b15dc8a7f1ad18d3ea",
+  "recordedAt": "2026-10-07T14:41:01.208939+00:00",
+  "sourceFiles": [
+    {
+      "path": "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+      "sha256": "4a2ee5719c9c7e0cf043592e256b42ccb20ceec37aec9389dc8685e4415f17c3"
+    },
+    {
+      "path": "server/src/__tests__/business-forecasting.integration.test.ts",
+      "sha256": "ac4b23a1557c2794ee8a34a6f4080673d478988505d38701e9cf00c75f8b81e9"
+    },
+    {
+      "path": "server/src/__tests__/causal-claims.integration.test.ts",
+      "sha256": "4d49078b1b7178d2decc41ffe27f7cfac6d2d98fb6257663e8c15432950a8143"
+    },
+    {
+      "path": "server/src/__tests__/process-analysis.integration.test.ts",
+      "sha256": "961e230330dad5e8f4e8a34fccfe992a0d7b7dfabe33944844d039bb1fda4d12"
+    },
+    {
+      "path": "server/src/services/analytical-evidence.ts",
+      "sha256": "e2aa91e2f165dc16e444bbd8165891e852ea9b62bdf88d904ee572caab2f5d7c"
+    },
+    {
+      "path": "server/src/services/management-reviews/capture.ts",
+      "sha256": "31e37d48633f5fce2f3333620107ab730e01b17d3449fa9ca55be909744c0a19"
+    },
+    {
+      "path": "server/src/services/management-reviews/service.ts",
+      "sha256": "563a6e45d8926c5e30f6c9a74ac67e9ac2404efdb759343ec6e8a5e70ee7311f"
+    },
+    {
+      "path": "server/src/__tests__/helpers/management-analytical-fixture.ts",
+      "sha256": "43e9b2832945648eb8844e0d3541615ab87b77779799ac13a3113c75d214fd94"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "forecast-experiment-causal",
+      "checks": 46,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-analytical-native.log",
+      "logSha256": "c330bf35803f6a86cb8543c29cc9937311316b1b39e000760eac85b96c92bf9c"
+    },
+    {
+      "name": "process-management-decision-outcome",
+      "checks": 63,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-analytical-process-native.log",
+      "logSha256": "82be591145383721a3477db2b276bdad1a7e7e2f9ce5054368a4dc2ffeb08f10"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-analytical-server-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "integrated-parent-build",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-build-855ba76de.log",
+      "logSha256": "89af01bc89604a09ec39f5f0a3dd127706ea19975f4d3523e33ecce499bf0469"
+    }
+  ],
+  "coverage": [
+    "All six analytical source kinds pass native Management capture using actual source owners: observation, process finding, forecast, scenario, interpreted experiment and conditional causal analysis.",
+    "Original signed review sources and packet remain unchanged after forecast retirement, scenario replacement, causal model amendment, experiment metric republication and Process finding resolution.",
+    "Private retained-read qualification rechecks current source authority and returns revalidation separately; creation and publication still require current qualification.",
+    "Actual balanced synthetic native experiment/casual intervals and human interpretations are retained without promoted evidence grades or canonical choice effects.",
+    "Original source manifest erasure closes whole copied review independently of rollout flags; all baseline/actual source inheritance remains required.",
+    "Exact 855ba76de parent production build passes with its source stamp."
+  ],
+  "limits": [
+    "Synthetic PostgreSQL qualification does not establish a collected trial, causal business effect or hosted release.",
+    "The 46 upstream checks completed before the subsequent isolated process-status/hash and outcome-inheritance changes; the final 63 checks and server types cover those changes.",
+    "Integrated production build of this source checkpoint remains pending.",
+    "Chat/Routines, analytical Learning inheritance, optional providers, cross-project planning and final whole-brief qualification remain open."
+  ]
+}
