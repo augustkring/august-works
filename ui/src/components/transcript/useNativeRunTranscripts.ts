@@ -4,6 +4,7 @@ import type { TranscriptEntry } from "@/adapters";
 import { heartbeatsApi } from "@/api/heartbeats";
 import { nativeRunEventsToTranscript } from "./native-run-events";
 import { readTranscriptRequest } from "./read-transcript-request";
+import { isAnalyticalSourceAccessLost } from "@/api/client";
 
 const EVENT_PAGE_SIZE = 1_000;
 const EVENT_POLL_INTERVAL_MS = 2_000;
@@ -17,6 +18,7 @@ export interface NativeRunTranscriptSource {
 export interface NativeRunTranscriptError {
   message: string;
   failedAt: string;
+  sourceAccessLost?: boolean;
 }
 
 function isLive(status: string): boolean {
@@ -99,12 +101,22 @@ export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource
       } catch (error) {
         if (cancelled) return;
         failed = true;
+        const sourceAccessLost = isAnalyticalSourceAccessLost(error);
+        if (sourceAccessLost) {
+          cursorByRunRef.current.delete(run.id);
+          setEventsByRun((previous) => {
+            const next = new Map(previous);
+            next.delete(run.id);
+            return next;
+          });
+        }
         setErrorsByRun((previous) => {
-          if (previous.has(run.id)) return previous;
+          if (previous.has(run.id) && !sourceAccessLost) return previous;
           const next = new Map(previous);
           next.set(run.id, {
             message: error instanceof Error ? error.message : "Native run activity could not be loaded",
             failedAt: new Date().toISOString(),
+            sourceAccessLost,
           });
           return next;
         });

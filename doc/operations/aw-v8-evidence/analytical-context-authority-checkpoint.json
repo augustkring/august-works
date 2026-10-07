@@ -1,0 +1,178 @@
+{
+  "checkpoint": "Actual source-owner authority for retained analytical conversation copies",
+  "parentCommit": "e70d3c6f83c0c9b587c84f6a1bfa9f4694de6e03",
+  "recordedAt": "2026-10-07T16:21:12.003894+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0414_adorable_changeling.sql",
+      "sha256": "4fc7f36532b1114eefd1d997b66e076072145c9ce7233ee66ec91d38e6dc14fc"
+    },
+    {
+      "path": "packages/db/src/schema/analytical_context_roots.ts",
+      "sha256": "b816bcd0637f921104d7112af0a67a640541f688c229c5f2f525afe2c1c2efe5"
+    },
+    {
+      "path": "packages/shared/src/analytical-context.ts",
+      "sha256": "d9f960e400c8630f599917f6bf2f062ead87c43002de1e788b49b1f7ff33d9b4"
+    },
+    {
+      "path": "packages/shared/src/index.ts",
+      "sha256": "031fa7f59ec590aa55138993391bda207fede3aa0c4d6314843ed0ba3a523abb"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "586fa1f2105259b8991dc36cfdc4cfa68865e4f03a6dbcf08655ceba58cf8b54"
+    },
+    {
+      "path": "server/src/__tests__/board-chat-route-feature-flag.test.ts",
+      "sha256": "34da78fbf1c2c96ea121f27a9e9c5ba74985a443daa97ba10ab3072d98968fd9"
+    },
+    {
+      "path": "server/src/routes/agents.ts",
+      "sha256": "ced0d3c2eb015cdc5d92b863b26c5e23a9794b009fd93bbc33d22e6968b4894b"
+    },
+    {
+      "path": "server/src/routes/board-chat.ts",
+      "sha256": "91e77bc50e326d5607cd648be15d86de943e908603206dd6e1fb52dd3e52b01c"
+    },
+    {
+      "path": "server/src/routes/issues.ts",
+      "sha256": "093d6e359ced9d9b3f63516a170e0eca404c9a1dd74e405a05e7c33d6da76979"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "b45939f9a35b9171b5265ef0c3a7edd1b7adf21e1352a2d5d8168da4965fd8b1"
+    },
+    {
+      "path": "server/src/services/analytical-context-privacy.ts",
+      "sha256": "ac6777c3b174ff3e69ede720008d8c0b222ea8268cfe509246a82e34b9b636fa"
+    },
+    {
+      "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "sha256": "eb9d9727d7c5049c106b4bbba50566236849c53da95777bb3fe9281440a94fa3"
+    },
+    {
+      "path": "ui/src/api/client.ts",
+      "sha256": "7abb2b69d489875f51aab4fd49019ece323e28fcece79b5d035bf77d714e449f"
+    },
+    {
+      "path": "ui/src/components/TaskChatThread.test.tsx",
+      "sha256": "9c8527c87ad9b5ec92dc0470e6923d797d2c164fd0eec31c002e1518725b961f"
+    },
+    {
+      "path": "ui/src/components/TaskChatThread.tsx",
+      "sha256": "64571016011c5fed94d60d6a4c46cadfa1e6a475034f7997673e1e9bf40df9ac"
+    },
+    {
+      "path": "ui/src/components/transcript/useLiveRunTranscripts.ts",
+      "sha256": "3135ed9b43ba1d481dbc9c2ca340620d15c6290e6bbb40f49b0a2090685c5391"
+    },
+    {
+      "path": "ui/src/components/transcript/useNativeRunTranscripts.test.tsx",
+      "sha256": "6ee63ecbdf6f3e5968bbd4088542b2d865e0a883e24d847ea2fbf2cac7c1a66e"
+    },
+    {
+      "path": "ui/src/components/transcript/useNativeRunTranscripts.ts",
+      "sha256": "08bab220173cf676487ebf300b13759f37286c8fca777fa6ccd2072624f2931c"
+    },
+    {
+      "path": "ui/src/pages/BoardChat.test.tsx",
+      "sha256": "7d698696e3945e9b460a877b13470029559e530452da080af0432ffbca93bcb9"
+    },
+    {
+      "path": "ui/src/pages/BoardChat.tsx",
+      "sha256": "8c160ae7986015aaab4e2a48d5b69e1bff72ae97b0099587845d2783e20c4bdd"
+    },
+    {
+      "path": "ui/src/pages/IssueDetail.tsx",
+      "sha256": "85a6a27fcb37d78daef4eda57b2cb8059e7328ff704f1a7afa5c0704b4452a2e"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "actual-source-retention-and-comment-http",
+      "checks": 17,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-authority-release-http.log",
+      "logSha256": "19b230d36e2f04a637900e260afc51d6cc0c15de4c58d2867d8c782ae0e4090e"
+    },
+    {
+      "name": "forecast-scenario-experiment-causal-regression",
+      "checks": 58,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-authority-family-regression.log",
+      "logSha256": "bdc744ea66d21e5808d608119bc062d74ede9dd2020870dc82c8ce4161555891"
+    },
+    {
+      "name": "native-source-reader-runner-purge",
+      "checks": 48,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-authority-final-native.log",
+      "logSha256": "b55a6e24bcb24b26b835b9d52ce4f8db67a9a911757562952b6081892301edbc"
+    },
+    {
+      "name": "native-comment-contract-and-board-denial",
+      "checks": 22,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-authority-final-api.log",
+      "logSha256": "11fe4a7f999f1c1e0ae49960a1fe4adc2fb441d253ef4d74b364a16c27a9e28d"
+    },
+    {
+      "name": "cached-history-and-transcript-recovery",
+      "checks": 190,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-authority-ui-cache.log",
+      "logSha256": "2ffd75364c132c1549fb36662ebfa2e578db0309aadc2102934317801adfb81f"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-authority-release-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-authority-ui-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-token-gates",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-authority-ui-tokens.log",
+      "logSha256": "44d37a3d2d776f153783c20b1c6e9f45366ecf0e1c85688ba0cb460408cbc793"
+    },
+    {
+      "name": "migration-safety",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-authority-release-migrations.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "name": "migration-snapshot",
+      "checks": 1,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-authority-snapshot.log",
+      "logSha256": "c30860188dc6813f2ae3f406f7eff1f44ac0bfdb929be9a0027c5d99e8f210ae"
+    }
+  ],
+  "behavior": [
+    "Exact native evidence, Process run, Decision version and outcome revision pins reauthorize every original manifest against the current reader before copied conversation data is returned. An earlier requesting principal or retained result is never a permission.",
+    "Capture binds the existing Context to the exact persisted native conversation Task/run/agent, inherits every original source expiry, and commits the complete retained set before returning results. Historical retention preserves original grades without publishing stale new evidence.",
+    "Source sets permit up to 26200 original manifests, with at most 32 typed source pins and 256 roots per complete read. This bound accommodates full native Experiment provenance and does not qualify a 4000-unit runtime.",
+    "Native manifested source-owner row deletion marks its original source in the content-free C7 source ledger and closes the entire copied payload. Restoring the original source cannot admit it into a new actual native consumer run.",
+    "Native issue/comment, runner binding and run/log/trace routes perform current source checks; board transcript source denial returns before spawning the assistant.",
+    "Comment and native transcript source denial hides cached UI history and log fallback. Native event recovery resets its cursor and requires a successful new read. Transport failures retain the existing native fallback behavior."
+  ],
+  "limitations": [
+    "Final 17 PostgreSQL checks include actual comment HTTP authorization and an independent new native consumer restore attempt; final 190 UI checks include polling denial, cached thread/fallback denial and recovery. Earlier 48 native and 22 API batches preceded the final row-deletion ledger and exact Context changes. The 58 source-family checks cover those source SQL callbacks. Failed intermediate test fixtures and batches are not passing qualification.",
+    "Older roots with empty authority pins fail closed; no fabricated provenance is backfilled.",
+    "SDK typed management tools, private in-process source-read permits, native conversation recovery after erasure, contextual model assembly and output-stream authorization remain open.",
+    "Physical provider trace-file erasure and source rows without their own manifests remain open. No complete provider-file or all-source deletion closure is claimed.",
+    "Analytical Learning inheritance, native Routines, cross-project Planning, provider qualification and hosted operations remain open. This is not whole-brief or R0 qualification."
+  ]
+}

@@ -1,0 +1,11 @@
+import {z} from "zod";
+import {decisionEvidenceReferenceSchema} from "./decision-intelligence.js";
+const id=z.string().uuid();
+/** Internal native provenance. Source identifiers never grant access. */
+export const analyticalContextAuthorityPinSchema=z.discriminatedUnion("kind",[
+ z.object({kind:z.literal("analytical_evidence"),source:decisionEvidenceReferenceSchema}).strict(),
+ z.object({kind:z.literal("process_run"),definitionId:id,runId:id}).strict(),
+ z.object({kind:z.literal("decision_context"),decisionId:id,versionId:id}).strict(),
+ z.object({kind:z.literal("outcome_review"),decisionId:id,revision:z.number().int().positive()}).strict(),
+]);
+export type AnalyticalContextAuthorityPin=z.infer<typeof analyticalContextAuthorityPinSchema>;

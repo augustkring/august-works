@@ -228,6 +228,28 @@ describe("BoardChat staged typing intro", () => {
     expect(hasWelcome(container)).toBe(true);
   });
 
+  it("withholds cached conversation history when its next source read is denied", async () => {
+    mockIssuesApi.listComments.mockResolvedValue([USER_COMMENT]);
+    await render();
+    expect(container.textContent).toContain(USER_COMMENT.body);
+
+    mockIssuesApi.listComments.mockRejectedValue(new Error("Current source access denied"));
+    await act(async () => {
+      await queryClient!.refetchQueries({ queryKey: ["issues"] });
+    });
+    await advance(0);
+    expect(container.textContent).not.toContain(USER_COMMENT.body);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Conversation history is unavailable");
+
+    mockIssuesApi.listComments.mockResolvedValue([USER_COMMENT]);
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[role="alert"] button')!.click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await advance(0);
+    expect(container.textContent).toContain(USER_COMMENT.body);
+  });
+
   it("holds the dots while the onboarding wizard overlay is open (PAP-134)", async () => {
     mockDialogState.onboardingOpen = true;
     await render();

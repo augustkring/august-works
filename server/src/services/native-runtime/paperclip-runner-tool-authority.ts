@@ -1,4 +1,5 @@
 import { publicChatTaskUrl } from "../chat-task-url.js";
+import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
 import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent } from "../orchestration/native-tool-boundary.js";
 import type { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
@@ -682,6 +683,7 @@ export class PaperclipRunnerToolAuthority {
       }
     }
     this.binding.authoritySignal?.throwIfAborted();
+    await assertAnalyticalContextPayloadAccess(this.db,this.binding.companyId,{type:"agent",source:"agent_jwt",companyId:this.binding.companyId,agentId:this.binding.agentId,runId:this.binding.runId,onBehalfOfUserId:row.run.responsibleUserId},{issueId:this.binding.issueId});
     return row;
   }
 

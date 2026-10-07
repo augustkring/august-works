@@ -1,4 +1,5 @@
 import { queuedInteractionId, readQueuedInteractionResponse, hasQueuedInteractionResponse } from "../services/queued-interaction-response.js";
+import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
 import { deliverConversationComments, isConversation } from "../services/agent-conversations.js";
 import { issueRecoveryActionReadModel } from "../services/issue-recovery-actions.js";
 import { getExecutionBlocker } from "../services/execution-blocker.js";
@@ -3510,6 +3511,10 @@ export function issueRoutes(
   const router = Router();
   const svc = issueService(db);
   const runRedactions = createRunSecretRedactionRegistry(db);
+  async function redactIssueResponse<T>(req:Request,companyId:string,issueId:string,value:T) {
+    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{issueId});
+    return runRedactions.redactForIssue(companyId,issueId,value);
+  }
   const access = accessService(db);
   const secretProposals = createSecretProposalsService(db);
   const heartbeat = heartbeatService(db, {
@@ -5117,7 +5122,10 @@ export function issueRoutes(
       decideIssueAccess(req, issue, "issue:read"),
     );
     const decision = await value;
-    if (decision.allowed) return true;
+    if (decision.allowed) {
+      await assertAnalyticalContextPayloadAccess(db,issue.companyId,req.actor,{issueId:issue.id});
+      return true;
+    }
     res
       .status(403)
       .json({ error: "Issue is outside this actor's authorization boundary" });
@@ -8701,7 +8709,7 @@ export function issueRoutes(
       ),
     };
     res.json(
-      await runRedactions.redactForIssue(issue.companyId, issue.id, response),
+      await redactIssueResponse(req, issue.companyId, issue.id, response),
     );
   });
 
@@ -15356,7 +15364,7 @@ export function issueRoutes(
       limit,
     });
     res.json(
-      await runRedactions.redactForIssue(issue.companyId, issue.id, comments),
+      await redactIssueResponse(req, issue.companyId, issue.id, comments),
     );
   });
 
@@ -15412,7 +15420,7 @@ export function issueRoutes(
       actor: getActorInfo(req),
     });
     res.json(
-      await runRedactions.redactForIssue(issue.companyId, issue.id, queue),
+      await redactIssueResponse(req, issue.companyId, issue.id, queue),
     );
   });
 
@@ -15444,7 +15452,7 @@ export function issueRoutes(
         }),
       );
       publishActivity(activityPublication as ActivityPublication);
-      res.json(await runRedactions.redactForIssue(issue.companyId, issue.id, queue));
+      res.json(await redactIssueResponse(req, issue.companyId, issue.id, queue));
     },
   );
 
@@ -15474,7 +15482,7 @@ export function issueRoutes(
         }),
       );
       publishActivity(activityPublication as ActivityPublication);
-      res.json(await runRedactions.redactForIssue(issue.companyId, issue.id, queue));
+      res.json(await redactIssueResponse(req, issue.companyId, issue.id, queue));
     },
   );
 
@@ -15544,7 +15552,7 @@ export function issueRoutes(
         executor: db, issue: currentIssue ?? issue,
         activeRun: await resolveActiveIssueRun(currentIssue ?? issue), actor,
       });
-      res.json(await runRedactions.redactForIssue(issue.companyId, issue.id, queue));
+      res.json(await redactIssueResponse(req, issue.companyId, issue.id, queue));
     },
   );
 
@@ -15814,7 +15822,7 @@ export function issueRoutes(
         },
       });
       res.json(
-        await runRedactions.redactForIssue(issue.companyId, issue.id, queue),
+        await redactIssueResponse(req, issue.companyId, issue.id, queue),
       );
     },
   );
@@ -15852,7 +15860,7 @@ export function issueRoutes(
       if (result.cancelledRun) {
         void emitAgentTaskRunById(db, { runId: result.cancelledRun.id, companyId: issue.companyId });
       }
-      res.json(await runRedactions.redactForIssue(issue.companyId, issue.id, result.queue));
+      res.json(await redactIssueResponse(req, issue.companyId, issue.id, result.queue));
     },
   );
 
@@ -16939,7 +16947,7 @@ export function issueRoutes(
       return;
     }
     res.json(
-      await runRedactions.redactForIssue(issue.companyId, issue.id, comment),
+      await redactIssueResponse(req, issue.companyId, issue.id, comment),
     );
   });
 

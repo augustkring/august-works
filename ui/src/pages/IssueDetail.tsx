@@ -46,7 +46,7 @@ import {
   usePublishSharedQueryData,
   useSharedPollingQuery,
 } from "@/hooks/useSharedPolling";
-import { ApiError } from "../api/client";
+import { ApiError, isAnalyticalSourceAccessLost } from "../api/client";
 import { issuesApi } from "../api/issues";
 import { CommentSubmissionUnknownError } from "../lib/comment-submit-result";
 import { approvalsApi } from "../api/approvals";
@@ -1218,6 +1218,7 @@ type IssueDetailChatTabProps = {
   commentsInitialLoading?: boolean;
   initialHistoryPending?: boolean;
   initialHistoryError?: boolean;
+  sourceAccessLost?: boolean;
   onRetryInitialHistory?: () => void;
   locallyQueuedCommentRunIds: ReadonlyMap<string, string>;
   interactions: IssueThreadInteraction[];
@@ -1358,6 +1359,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
   commentsInitialLoading = false,
   initialHistoryPending = false,
   initialHistoryError = false,
+  sourceAccessLost = false,
   onRetryInitialHistory,
   locallyQueuedCommentRunIds,
   interactions,
@@ -2274,6 +2276,13 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
     [resolvedActivity],
   );
 
+  if (sourceAccessLost) {
+    return <div role="alert" className="p-4 text-sm text-destructive">
+      Conversation source access is unavailable.
+      <Button variant="ghost" size="sm" onClick={onRetryInitialHistory}>Retry</Button>
+    </div>;
+  }
+
   const loadOlderButton = hasOlderComments ? (
     <div className="flex justify-center">
       <Button
@@ -2333,6 +2342,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
               liveRunsError ||
               (activeRunQueryEnabled && activeRunError)
             }
+            {...(!classicTaskInterfaceEnabled ? { sourceAccessLost } : {})}
             onRetryInitialHistory={() => {
               onRetryInitialHistory?.();
               void refetchActivity();
@@ -3114,6 +3124,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     data: commentPages,
     isLoading: commentsLoading,
     isError: commentsError,
+    error: commentsReadError,
     isFetchingNextPage: commentsLoadingOlder,
     hasNextPage: hasOlderComments,
     fetchNextPage: fetchOlderComments,
@@ -7921,6 +7932,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                     attachmentsError ||
                     workProductsError
                   }
+                  sourceAccessLost={isAnalyticalSourceAccessLost(commentsReadError)}
                   onRetryInitialHistory={() => {
                     void refetchComments();
                     void refetchInteractions();

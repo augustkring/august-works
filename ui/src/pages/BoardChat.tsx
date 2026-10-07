@@ -303,14 +303,15 @@ export function BoardChat() {
   }, [issues]);
 
   // Fetch comments for the board issue
-  const { data: comments } = useQuery({
+  const { data: comments, isError: commentsError, refetch: refetchComments } = useQuery({
     queryKey: queryKeys.issues.comments(boardIssueId ?? ""),
     queryFn: () => issuesApi.listComments(boardIssueId!),
     enabled: !!boardIssueId,
     refetchInterval: 3000,
+    retry: false,
   });
 
-  const sortedComments = (comments ?? [])
+  const sortedComments = (commentsError ? [] : comments ?? [])
     .slice()
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
@@ -640,6 +641,17 @@ export function BoardChat() {
   // guard caused "Rendered more hooks than during the previous render" and a
   // blank page once a company was selected.
   const [mobileFeedOpen, setMobileFeedOpen] = useState(false);
+
+  // A failed source read cannot keep a previously authorized conversation on
+  // screen. Polling/retry may recover it only after a successful current read.
+  if (commentsError) {
+    return (
+      <div role="alert" className="p-4 text-sm text-destructive">
+        Conversation history is unavailable.
+        <button type="button" className="ml-2 underline" onClick={() => void refetchComments()}>Retry</button>
+      </div>
+    );
+  }
 
   if (!selectedCompanyId) {
     return (

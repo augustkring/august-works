@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readTranscriptRequest } from "./read-transcript-request";
 import { useQuery } from "@tanstack/react-query";
 import type { LiveEvent } from "@paperclipai/shared";
-import { ApiError } from "../../api/client";
+import { ApiError, isAnalyticalSourceAccessLost } from "../../api/client";
 import { instanceSettingsApi } from "../../api/instanceSettings";
 import { heartbeatsApi } from "../../api/heartbeats";
 import { buildTranscript, getUIAdapter, onAdapterChange, type RunLogChunk, type TranscriptEntry } from "../../adapters";
@@ -336,7 +336,7 @@ export function useLiveRunTranscripts({
         }
       } catch (error) {
         if (cancelled) return;
-        if (error instanceof ApiError && error.status === 404) {
+        if (error instanceof ApiError && error.status === 404 && !isAnalyticalSourceAccessLost(error)) {
           setErrorsByRun((previous) => {
             if (!previous.has(run.id)) return previous;
             const next = new Map(previous);
@@ -347,7 +347,7 @@ export function useLiveRunTranscripts({
           if (isTerminalStatus(run.status)) missingTerminalLogRunIdsRef.current.add(run.id);
         } else {
           setErrorsByRun((previous) => {
-            if (previous.has(run.id)) return previous;
+            if (previous.has(run.id) && !isAnalyticalSourceAccessLost(error)) return previous;
             const next = new Map(previous);
             next.set(run.id, error instanceof Error ? error : new Error("Run history could not be loaded"));
             return next;

@@ -1,3 +1,4 @@
+import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
 import { Router } from "express";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -192,6 +193,14 @@ export function boardChatRoutes(
 
     // Build conversation history from recent comments (oldest first).
     const comments = await issueSvc.listComments(resolvedIssueId, { order: "asc" });
+    try {
+      await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{issueId:resolvedIssueId});
+    } catch(error) {
+      const status=error&&typeof error==="object"&&"status"in error?Number(error.status):0;
+      if(![403,404,409,422].includes(status))throw error;
+      res.status(status).json({error:"The source-dependent conversation is unavailable"});
+      return;
+    }
     const recent = comments.slice(-20);
     const history = recent
       .map((c) => serializeTurn(isConciergeReply(c) ? "assistant" : "user", c.body))

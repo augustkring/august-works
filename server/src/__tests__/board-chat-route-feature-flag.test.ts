@@ -11,6 +11,9 @@ const mockIssueService = vi.hoisted(() => ({
   listComments: vi.fn(),
 }));
 const mockSpawn = vi.hoisted(() => vi.fn());
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+vi.mock("../services/analytical-context-authority.js",()=>({assertAnalyticalContextPayloadAccess:mockAnalyticalPayloadAccess}));
+beforeEach(()=>{mockAnalyticalPayloadAccess.mockResolvedValue(undefined);});
 
 vi.mock("../services/index.js", () => ({
   instanceSettingsService: () => ({ getExperimental: mockGetExperimental }),
@@ -82,6 +85,16 @@ describe("POST /api/board/chat/stream feature flag guard (PAP-137)", () => {
 });
 
 describe("board-chat client disconnect", () => {
+  it("withholds source-dependent history before launching the concierge when source authority is lost",async()=>{
+    mockGetExperimental.mockResolvedValue({enableConferenceRoomChat:true});
+    mockIssueService.list.mockResolvedValue([{id:"issue-1",title:"Board Operations",status:"todo"}]);
+    mockIssueService.addComment.mockResolvedValue({id:"comment-1"});
+    mockIssueService.listComments.mockResolvedValue([{body:"Private analytical source copy"}]);
+    mockAnalyticalPayloadAccess.mockRejectedValue(Object.assign(new Error("Source authority changed"),{status:403}));
+    mockSpawn.mockClear();const app=await createApp();
+    const response=await request(app).post("/api/board/chat/stream").send({companyId:"company-1",message:"hello"});
+    expect(response.status).toBe(403);expect(response.text).not.toContain("Private analytical source copy");expect(mockSpawn).not.toHaveBeenCalled();
+  });
   function makeFakeProc() {
     const proc = new EventEmitter() as any;
     proc.stdout = new EventEmitter();
