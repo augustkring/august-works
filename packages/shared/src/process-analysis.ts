@@ -23,6 +23,10 @@ export const createProcessAnalysisDefinitionSchema=z.object({key:z.string().trim
 export const reviseProcessAnalysisDefinitionSchema=z.object({expectedRevision:revision,definition:processAnalysisDefinitionSchema}).strict();
 export const publishProcessAnalysisDefinitionSchema=z.object({expectedRevision:revision,versionId:z.string().uuid(),rationale:z.string().trim().min(10).max(2000)}).strict();
 export const retireProcessAnalysisDefinitionSchema=z.object({expectedRevision:revision,rationale:z.string().trim().min(10).max(2000)}).strict();
+export type CreateProcessAnalysisDefinition=z.infer<typeof createProcessAnalysisDefinitionSchema>;
+export type ReviseProcessAnalysisDefinition=z.infer<typeof reviseProcessAnalysisDefinitionSchema>;
+export type PublishProcessAnalysisDefinition=z.infer<typeof publishProcessAnalysisDefinitionSchema>;
+export type RetireProcessAnalysisDefinition=z.infer<typeof retireProcessAnalysisDefinitionSchema>;
 export const runProcessAnalysisSchema=z.object({versionId:z.string().uuid(),from:assessProcessDataSchema.shape.from,until:assessProcessDataSchema.shape.until}).strict()
   .refine(value => Date.parse(value.from)<Date.parse(value.until),"A nonempty process window is required")
   .refine(value => Date.parse(value.until)-Date.parse(value.from)<=3650*86400000,"Native process windows are bounded to ten years");
@@ -32,7 +36,11 @@ export interface ProcessAnalysisVersionView {
   createdAt:string;nextReviewAt:string;expiresAt:string;
 }
 export interface ProcessAnalysisDefinitionView {
-  id:string;companyId:string;key:string;revision:number;status:"draft"|"published"|"retired";publishedVersionId:string|null;createdAt:string;updatedAt:string;
+  id:string;companyId:string;key:string;revision:number;status:"draft"|"published"|"retired"|"needs_review";publishedVersionId:string|null;createdAt:string;updatedAt:string;
+}
+export interface ProcessAnalysisDefinitionDetail {
+  root:ProcessAnalysisDefinitionView;effectiveVersion:ProcessAnalysisVersionView;latestVersion:ProcessAnalysisVersionView;
+  versions:ProcessAnalysisVersionView[];hasMoreVersions:boolean;reviewReason:string|null;
 }
 export interface NativeProcessObjectSummary {
   objectType:"issue"|"project";objectCount:number;eventCount:number;closedCompletionCount:number|null;cancelledCount:number|null;censoredCount:number|null;
@@ -47,5 +55,5 @@ export interface NativeProcessAnalysisResult {
 }
 export interface ProcessAnalysisRunView {
   id:string;companyId:string;definitionId:string;versionId:string;lineageManifestId:string;definitionHash:string;eventSetHash:string;
-  from:string;until:string;createdAt:string;expiresAt:string;result:NativeProcessAnalysisResult;
+  from:string;until:string;createdAt:string;expiresAt:string;authorizationCheckedAt:string;result:NativeProcessAnalysisResult;
 }

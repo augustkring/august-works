@@ -6,6 +6,7 @@ import { reconcileGovernanceDeployments, deliverGovernanceStops } from "./servic
 import { supervisionService } from "./services/supervision/supervision-service.js";
 import { strategyExecutionService } from "./services/strategy-execution/service.js";
 import { businessEventService } from "./services/business-events.js";
+import { processAnalysisService } from "./services/process-analysis.js";
 import { eraseExpiredAnalyticalLineage } from "./services/analytical-retention.js";
 import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network-policy.js";
 /// <reference path="./types/express.d.ts" />
@@ -1242,6 +1243,10 @@ async function startServerWithDatabaseTeardown(
     ["business_event_retention", async () => {
       const result = await businessEventService(db).expireDueSources();
       if (result.erasedSources > 0) logger.info(result, "Business Event retention sweep removed source histories");
+    }],
+    ["process_definition_retention", async () => {
+      const result = await processAnalysisService(db).sweepExpired();
+      if (result.erasedDefinitions > 0) logger.info(result, "Process retention sweep removed expired definitions and runs");
     }],
     ["analytical_retention", async () => {
       const result = await eraseExpiredAnalyticalLineage(db);

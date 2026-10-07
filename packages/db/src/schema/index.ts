@@ -280,3 +280,4 @@ export * from "./analytical_lineage.js";
 export * from "./business_metric_targets.js";
 
 export { strategyExecutionLinks, strategyExecutionLinkVersions, strategyExecutionLinkApprovals, strategyExecutionSourceBindings } from "./strategy_execution.js";
+export * from "./process_analysis.js";

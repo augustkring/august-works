@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { analyticalLineageEdges, analyticalLineageManifests, issues, type Db } from "@paperclipai/db";
+import { sql } from "drizzle-orm";
+import { analyticalLineageManifests, type Db } from "@paperclipai/db";
 import { businessEventExportSchema, v7FeatureEnabled, v8FeatureEnabled, type BusinessEventExport, type BusinessEventExportManifest } from "@paperclipai/shared";
 import { conflict, notFound } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -12,6 +12,7 @@ import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { logActivity, withV7ActivityTransaction } from "./v7-mutations.js";
 import { businessEventService } from "./business-events.js";
+import { retainNativeEventLineage } from "./business-event-lineage.js";
 import { BUSINESS_EVENT_EXPORTER_VERSION, OCEL_VERSION, businessEventsToJsonl, businessEventsToOcel2, businessEventsToOcel2Sqlite } from "./business-event-export-formats.js";
 
 export function businessEventExportService(db: Db) {
@@ -43,22 +44,7 @@ export function businessEventExportService(db: Db) {
         await tx.insert(analyticalLineageManifests).values({ id: lineageManifestId, companyId, analysisType: "business_event_export", analysisRef: id,
           engineVersion: BUSINESS_EVENT_EXPORTER_VERSION, inputHash, definitionHash: nativeSha256({ purpose, format: input.format, exporter: BUSINESS_EVENT_EXPORTER_VERSION }),
           requestedBy: human, sourceWatermark, sourceCount: page.items.length, parameters: input, createdAt: now, expiresAt });
-        const edges = new Map<string, typeof analyticalLineageEdges.$inferInsert>();
-        function edge(inputType: typeof analyticalLineageEdges.$inferInsert["inputType"], inputRef: string, inputHash: string, relationship: "source" | "policy" = "source") {
-          edges.set(`${inputType}:${inputRef}`,{ companyId, manifestId: lineageManifestId, inputType, inputRef, inputHash, relationship });
-        }
-        for (const event of page.items) {
-          edge("business_event_source",event.source.ref,event.source.contentHash);
-          for (const object of event.objects) edge(object.objectType,object.objectId,nativeSha256({ objectType: object.objectType, objectId: object.objectId }));
-        }
-        const issueIds = [...new Set(page.items.flatMap(event => event.objects.filter(object => object.objectType === "issue").map(object => object.objectId)))];
-        if (issueIds.length) for (const issue of await tx.select({ projectId: issues.projectId }).from(issues).where(and(eq(issues.companyId,companyId),inArray(issues.id,issueIds)))) {
-          // Retain current privacy ancestry as an erasure edge, without adding it
-          // to OCEL as a fabricated historical relationship.
-          if (issue.projectId) edge("project",issue.projectId,nativeSha256({ projectId: issue.projectId }));
-        }
-        for (const policy of policies) edge("governance_obligation",policy.id,policy.obligationHash,"policy");
-        for (let start=0; start<edges.size; start+=500) await tx.insert(analyticalLineageEdges).values([...edges.values()].slice(start,start+500));
+        await retainNativeEventLineage(tx, companyId, lineageManifestId, page.items, policies);
         const manifest: BusinessEventExportManifest = { id, companyId, format: input.format,
           formatVersion: input.format === "native_jsonl" ? "aw-business-events-jsonl-v2" : OCEL_VERSION,
           exporterVersion: BUSINESS_EVENT_EXPORTER_VERSION, createdAt: now.toISOString(), expiresAt: expiresAt.toISOString(),

@@ -41,8 +41,13 @@ expiry/open periods and Memory erasure after current source projection. The fina
 engine/OpenAPI selection passes 19 after adding duplicate-source identity and
 unsupported timestamp precision coverage. Direct server/UI TypeScript checks pass.
 
-Still open: immutable native process definitions/runs and retained assessment pins,
-quality finding lifecycle, complete producer/coverage contracts, process algorithms
-and conformance, source-log metadata lifecycle, operator UI, Learning/Decision/
+The native process calculation owner now captures this same inspection internally
+and pins readiness with immutable definitions, separate human publication and
+native lineage-backed runs. See [native process engine](aw-v8-native-process-engine.md).
+Ordering requirements apply to the requested object perspectives; simultaneous
+unrequested related Project links do not invent a required Project order.
+
+Still open: quality finding lifecycle, complete producer/coverage contracts,
+conformance, source-log metadata lifecycle, operator UI, Learning/Decision/
 Planning bridges, performance/security and hosted qualification. No process output
 or worker/person score is published by this preview.

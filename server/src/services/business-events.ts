@@ -57,6 +57,7 @@ export function businessEventService(db: Db) {
   }
   async function readable(tx: Db, companyId: string, actor: AuthorizationActor, objects: BusinessEventObject[]) {
     const access = accessService(tx);
+    const deadline = performance.now()+30_000;
     if (!objects.length) return false;
     try {
       await assertAnalyticalSourcesNotErased(tx, companyId, objects.filter(o => o.objectType === "issue").map(o => o.objectId), objects.filter(o => o.objectType === "project").map(o => o.objectId));
@@ -65,6 +66,7 @@ export function businessEventService(db: Db) {
       return false;
     }
     for (const object of objects) {
+      if (performance.now()>=deadline) throw conflict("Native event-object authorization exceeded its bounded budget");
       if (object.objectType === "issue") {
         const [issue] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, object.objectId))).for("share");
         if (!issue || issue.hiddenAt || !(await access.decide({ actor, action: "issue:read", enforceResponsibleUserIntersection: true, resource: {
@@ -87,6 +89,17 @@ export function businessEventService(db: Db) {
       : { actorType: "user" as const, actorId: actor.userId ?? "local-board" };
   }
   return {
+    /** Internal retained-lineage consumers use the same native object owner,
+     * including current Task ancestry. This is not a separate source registry. */
+    async inspectCurrentObjectSources(companyId: string, actor: AuthorizationActor, objects: BusinessEventObject[]) {
+      if (objects.length>8032) throw conflict("Native event lineage exceeds its bounded object inspection");
+      const parsed=objects.map(object=>businessEventObjectSchema.parse(object));
+      return db.transaction(async rawTx=>{
+        const tx=rawTx as unknown as Db;await tx.execute(sql`set local statement_timeout='8s'`);
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await admit(tx,companyId,actor);
+        if(parsed.length && !await readable(tx,companyId,actor,parsed)) throw forbidden("Retained native event sources are outside current authority");
+      });
+    },
     async backfill(companyId: string, actor: AuthorizationActor, input: BusinessEventBackfill) {
       const deadline = performance.now()+30_000;
       await admit(db, companyId, actor, true);

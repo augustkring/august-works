@@ -25,6 +25,11 @@ import {
   businessEventBackfillSchema,
   businessEventExportSchema,
   assessProcessDataSchema,
+  createProcessAnalysisDefinitionSchema,
+  reviseProcessAnalysisDefinitionSchema,
+  publishProcessAnalysisDefinitionSchema,
+  retireProcessAnalysisDefinitionSchema,
+  runProcessAnalysisSchema,
   businessEventCursorSchema,
   businessEventListSchema,
   workerModelCallSchema,
@@ -1703,7 +1708,7 @@ function resolveOperationAuthLevel(
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
-  if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links"))) return "board";
+  if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
   if (
     isBoardOnlyOperation(method, path) ||
     experimentalApiMetadata[`${method.toUpperCase()} ${path}`]?.boardOnly
@@ -11821,6 +11826,14 @@ registerCurrentRoute({
 });
 
 for (const operation of [
+  { method: "get" as const, path: "/api/companies/{companyId}/process-definitions", summary: "List bounded current governed process definitions", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}", summary: "Inspect native immutable process definitions and effective publication" },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions", summary: "Propose a governed native process definition", body: createProcessAnalysisDefinitionSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/versions", summary: "Append a proposed process revision without replacing human publication", body: reviseProcessAnalysisDefinitionSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/publish", summary: "Publish the latest process definition after current human review", body: publishProcessAnalysisDefinitionSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/retire", summary: "Retire a process definition including after rollout rollback", body: retireProcessAnalysisDefinitionSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/runs", summary: "Calculate a bounded current native process snapshot under intrinsic readiness", body: runProcessAnalysisSchema },
+  { method: "get" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/runs/{runId}", summary: "Read a retained process result only after current source and purpose admission" },
   { method: "get" as const, path: "/api/companies/{companyId}/strategy-execution-links", summary: "List a bounded page of current authorized native strategy links", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
   { method: "get" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}", summary: "Inspect immutable strategic pins and current source drift" },
   { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links", summary: "Propose a governed native strategy relationship", body: createStrategyExecutionLinkSchema },

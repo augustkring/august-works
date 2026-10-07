@@ -31,6 +31,48 @@ arrival evidence or unqualified external coverage produce DATA_NOT_READY.
 
 Nine calculation/readiness tests pass, including known durations, blocked time,
 reopening, cancellation, zero/null, reversed input, multi-object paths, changed or
-expired readiness, cross-company inputs and result bounds. Native definitions,
-publication receipts, persisted runs and lineage/erasure, API/UI, conformance,
-finding lifecycle and hosted qualification remain separate open work.
+expired readiness, cross-company inputs and result bounds. Operator UI,
+conformance, finding lifecycle and hosted qualification remain
+separate open work.
+
+## Native publication and retained runs
+
+The default-off `/api/companies/:companyId/process-definitions` owner now stores
+immutable definition versions, separate human publication receipts and bounded
+synchronous runs. Definition writes use existing human permission management;
+running/reading uses current native company authority. The public run request
+accepts only a published version and UTC period, not supplied events/readiness.
+Revisions stay proposed until separate publication with expected revision.
+Retirement remains available after rollout rollback.
+
+One native inspection captures both current authorized events and their readiness.
+The database shares existing source rows and reinspects source identities after
+event authorization: a backdated insert during inspection cannot qualify a subset.
+Windows retain PostgreSQL microseconds. Every run retains a native analytical
+lineage manifest, event source hashes, recorded object links, current privacy
+ancestry and purpose pins. Database admission requires matching publication,
+definition/input hashes, window, engine, lineage owner and expiry. Run/version/
+publication updates are forbidden.
+
+Retained reads reauthorize the current definition owner and purpose, all native
+events and all retained lineage object sources, including ancestry that is not a
+historical event link. Missing lineage edges, hidden/erased sources, changed input
+or unknown current coverage for a formerly successful run deny its payload.
+`authorizationCheckedAt` is separate from historical `createdAt`/readiness time;
+historical readiness is never a new grant. No-store HTTP/client reads also bind an
+optional current account identity.
+
+Native Memory deletion and verified restore-ledger replay delete the manifest and
+cascade the run payload. They acquire no company lock from a Memory-only callback.
+Existing analytical expiry and a native process-definition retention sweep operate
+with flags off and paused companies; expired definition histories remove their
+lineage/runs without deleting canonical Tasks/Projects.
+
+The combined native event, process/readiness, calculation and OpenAPI selection
+passes 56 tests. Ten process PostgreSQL cases additionally cover current policy
+supersession, human publication/CAS, immutable receipts/results, unknown coverage,
+exact windows, source and lineage drift, retention, a reader waiting for Memory,
+backdated arrival during object authorization and replay into a separate migrated
+quarantine database. This copied-row restore proof does not qualify backup archive
+or hosted recovery. The generated 0393 snapshot matches the Drizzle schema. Direct
+server/UI TypeScript checks pass; full monorepo/release checks remain open.
