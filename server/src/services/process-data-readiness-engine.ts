@@ -3,7 +3,7 @@ import { BUSINESS_EVENT_PROJECTOR_VERSION, NATIVE_PROCESS_STATES, PROCESS_DATA_D
   type AssessProcessData, type BusinessEvent, type ProcessDataDimension, type ProcessDataDimensionResult, type ProcessDataReadinessResult } from "@paperclipai/shared";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 
-export const PROCESS_DATA_READINESS_VERSION = "aw-native-process-data-readiness-v2";
+export const PROCESS_DATA_READINESS_VERSION = "aw-native-process-data-readiness-v3";
 /** Internal owner facts, not accepted in the public assessment request. A bounded
  * event page or a customer assertion cannot certify source coverage or deletion. */
 export interface NativeProcessSourceInspection {
@@ -80,11 +80,19 @@ export function assessNativeProcessData(companyId: string, raw: AssessProcessDat
     if(requirements.lifecycleSemantics==="recorded_creation_and_any_terminal") return ordered.some(item=>terminal(item.event.attributes.status));
     const allowed=new Set<string>(NATIVE_PROCESS_STATES[objectType]);
     const states=ordered.flatMap(item=>item.event.attributes.status ? [item.event.attributes.status] : []);
-    return Boolean(ordered[0].event.attributes.status) && states.every(status=>allowed.has(status)) && terminal(states.at(-1));
+    if(!ordered[0].event.attributes.status || !states.every(status=>allowed.has(status)) || !terminal(states.at(-1))) return false;
+    let recordedState=ordered[0].event.attributes.status;
+    for(const {event} of ordered.slice(1)) {
+      // A native row-lock receipt can establish a missing/reordered state fact.
+      // Its contradiction is a data gap, not a deviation from a process model.
+      if(event.attributes.previousStatus!==undefined && event.attributes.previousStatus!==recordedState) return false;
+      if(event.attributes.status!==undefined) recordedState=event.attributes.status;
+    }
+    return true;
   });
   set("lifecycle_completeness",requirements.requiresLifecycle ? lifecycles && !ambiguous && events.length>0 ? "satisfied" : "unknown" : "not_applicable",
     requirements.lifecycleSemantics==="recorded_typed_creation_and_latest_terminal"
-      ? "Complete state paths require a typed native creation, known object states and a latest recorded terminal state; reopened paths remain incomplete"
+      ? "Complete state paths require typed native creation, known states, consistent supplied previous-state receipts and a latest terminal; gaps and reopened paths remain incomplete"
       : "First-completion claims require observed creation and a recorded native terminal state; later reopenings do not erase the first completion",requirements.requiresLifecycle);
   set("late_arrival_rate",requirements.requiresArrivalEvidence ? "unknown" : "not_applicable","Projection observedAt is not a transport-arrival timestamp; no late-arrival rate is fabricated",requirements.requiresArrivalEvidence);
   set("source_deletion_edit_propagation",inspection.nativeSourceLifecycleVerified && coverage ? "satisfied" : "unknown","Current source hash, suppression, retention and native Memory admission must all hold for the inspected snapshot");

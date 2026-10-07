@@ -15,7 +15,7 @@ required states. Repeated status observations and metadata updates are not
 transitions. This is an explicit state-model comparison, not calibrated fitness,
 anomaly probability, process discovery or an employee score. No work is changed.
 
-Readiness V2 derives typed-creation/latest-terminal lifecycle requirements for
+Readiness derives typed-creation/latest-terminal lifecycle requirements for
 conformance, blocked time and reopening. Unknown object states, missing primary
 creation, a latest open state, ties or incomplete current coverage yield
 `DATA_NOT_READY`, rather than a process deviation. Cycle-time-only definitions
@@ -23,6 +23,15 @@ retain their declared first-recorded-completion semantics even if later reopened
 Related objects cannot borrow the primary object's lifecycle. Existing bounded
 source scans, exact UTC microseconds, current Governance/Memory checks, source
 hashes and native lineage still apply before calculation and every retained read.
+
+Readiness V3 additionally checks supplied native previous-state receipts against
+the preceding observed primary state for complete-state families. A mismatch
+marks lifecycle completeness unknown and yields `DATA_NOT_READY`, not a model
+violation. Metadata observations preserve the last known state. Absent legacy
+receipts are not fabricated and do not prove whole-producer completeness.
+Historical run assessments retain their recorded engine version; current access
+is assessed independently. Kernel and native PostgreSQL tests verify that only a
+missing-data finding is admitted for a contradictory receipt.
 
 No new raw-path table or provider store is introduced: the immutable definition
 JSON holds the model and the immutable run JSON holds aggregate comparisons.

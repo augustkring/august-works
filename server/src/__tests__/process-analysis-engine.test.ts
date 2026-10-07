@@ -144,4 +144,17 @@ describe("bounded native object-process calculations", () => {
     expect(calculate(events.map(value=>({...value,objects:value.objects.map(object=>({...object,qualifier:"related" as const}))})),input).errorCode).toBe("DATA_NOT_READY");
     expect(calculate([{...events[0],attributes:{status:"todo"}},events[1]],input).errorCode).toBe("DATA_NOT_READY");
   });
+  it("treats contradictory recorded state receipts as missing data rather than model violations",()=>{
+    const input=processAnalysisDefinitionSchema.parse({...definition,analysisFamilies:["conformance"],conformance:{kind:"explicit_definition",expectations:[{
+      objectType:"issue",initialStates:["todo"],terminalStates:["done"],requiredStates:[],allowedTransitions:[{from:"todo",to:"done"}]}]}});
+    const first=event(2,0,"todo",id(7),true),last={...event(3,10,"done"),attributes:{status:"done",previousStatus:"todo"}};
+    expect(calculate([first,last],input).objectSummaries[0].conformance?.conformingObjectCount).toBe(1);
+    const gap=[first,{...last,attributes:{status:"done",previousStatus:"in_progress"}}];
+    expect(assess(gap,input).dimensions.find(value=>value.dimension==="lifecycle_completeness")?.state).toBe("unknown");
+    expect(calculate(gap,input)).toMatchObject({status:"inconclusive",errorCode:"DATA_NOT_READY",objectSummaries:[]});
+    const metadata={...event(4,5,undefined),attributes:{}};
+    expect(calculate([first,metadata,last],input).status).toBe("succeeded");
+    const blocked={...event(5,7,"blocked"),attributes:{status:"blocked",previousStatus:"todo"}};
+    expect(calculate([first,metadata,blocked,last],input).errorCode).toBe("DATA_NOT_READY");
+  });
 });

@@ -174,6 +174,19 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     expect(await db.select().from(processFindingTransitions).where(eq(processFindingTransitions.findingId,finding.id))).toHaveLength(0);
     expect(await db.select().from(issues).where(eq(issues.id,issueId))).toHaveLength(1);
   });
+  it("keeps contradictory native mutation receipts inconclusive and admits only a missing-data finding",async()=>{
+    await db.update(activityLog).set({details:{status:"done",previousStatus:"in_progress",projectId}})
+      .where(and(eq(activityLog.companyId,companyId),eq(activityLog.action,"issue.updated")));
+    const created=await published({...definition(),analysisFamilies:["conformance"],conformance:{kind:"explicit_definition",expectations:[{
+      objectType:"issue",initialStates:["todo"],terminalStates:["done"],requiredStates:[],allowedTransitions:[{from:"todo",to:"done"}]}]}});await project();
+    const run=await service().run(companyId,actor,created.root.id,{versionId:created.version.id,...period});
+    expect(run.result).toMatchObject({status:"inconclusive",errorCode:"DATA_NOT_READY",objectSummaries:[],readiness:{engineVersion:"aw-native-process-data-readiness-v3",admission:"DATA_NOT_READY"}});
+    expect(run.result.readiness.dimensions.find(value=>value.dimension==="lifecycle_completeness")?.state).toBe("unknown");
+    const findings=processFindingService(db),base={variantHash:null,severity:"medium" as const,interpretation:"Investigate the missing recorded state receipt before comparing the model"};
+    await expect(findings.create(companyId,actor,created.root.id,run.id,{...base,findingType:"conformance_deviation",objectType:"issue"})).rejects.toMatchObject({status:409});
+    const finding=await findings.create(companyId,actor,created.root.id,run.id,{...base,findingType:"missing_process_data",objectType:null});
+    expect(finding.facts.observed.lifecycle_completeness).toBe("unknown");
+  });
   it("keeps external/arrival and incomplete lifecycle data inconclusive without weakening the published definition", async () => {
     await project();
     for (const extra of [{ requiresArrivalEvidence: true }, { requiredSourceProviders: ["activity_log", "crm"] }, { objectTypes: ["issue", "project"] as ProcessAnalysisDefinition["objectTypes"] }]) {
