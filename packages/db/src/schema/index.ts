@@ -288,3 +288,5 @@ export * from "./decision_outcome_reviews.js";
 export * from "./business_forecasting.js";
 export * from "./business_scenarios.js";
 export * from "./business_experiments.js";
+
+export {causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns} from "./causal_claims.js";

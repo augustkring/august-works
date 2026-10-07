@@ -3,8 +3,10 @@ import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { companies, issues, projects, agents, heartbeatRuns, authUsers, companyMemberships, decisions, decisionContexts, decisionContextVersions, decisionExperimentPins, decisionEvidenceLinks, decisionCriteria, decisionExpectedOutcomes, issueComments, businessExperiments, businessExperimentAssignments, businessExperimentExposures, businessExperimentExecutions, businessExperimentCompletions, businessExperimentVersions, businessExperimentTransitions, businessExperimentAnalyses, businessExperimentOutcomes, businessExperimentInterpretations, analyticalLineageManifests, analyticalLineageEdges, createDb } from "@paperclipai/db";
+import { companies, issues, projects, agents, heartbeatRuns, authUsers, companyMemberships, decisions, decisionContexts, decisionContextVersions, decisionExperimentPins, decisionEvidenceLinks, decisionCriteria, decisionExpectedOutcomes, issueComments, causalClaims, causalClaimVersions, causalClaimReviews, causalAnalysisRuns, businessExperiments, businessExperimentAssignments, businessExperimentExposures, businessExperimentExecutions, businessExperimentCompletions, businessExperimentVersions, businessExperimentTransitions, businessExperimentAnalyses, businessExperimentOutcomes, businessExperimentInterpretations, analyticalLineageManifests, analyticalLineageEdges, createDb } from "@paperclipai/db";
 import { ISSUE_STATUSES, businessMetricDefinitionSchema, decisionContextDefinitionSchema } from "@paperclipai/shared";
+import { causalClaimService } from "../services/causal-claims/service.js";
+import { causalClaimFixture } from "./helpers/causal-claim-fixture.js";
 import { decisionService } from "../services/decisions.js";
 import { decisionIntelligenceService } from "../services/decision-intelligence.js";
 import { businessExperimentService } from "../services/business-experiments/service.js";
@@ -25,7 +27,7 @@ import { experimentAssignmentKey } from "../services/business-experiments/receip
 import { assignNativeBusinessExperimentUnit } from "../services/business-experiments/kernel.js";
 const support = await getEmbeddedPostgresTestSupport(), suite = support.supported ? describe : describe.skip;
 const actor = { type: "board" as const, source: "local_implicit" as const }, rationale = "Human source-owner recording of this exact non-personal native protocol";
-const flags = { analytical_lineage_v8: true, business_metrics_v8: true, business_experiments_v8: true, decision_intelligence_v8: true, enableDecisions: true, ai_use_cases_v7: true, governance_evidence_v7: true };
+const flags = { analytical_lineage_v8: true, business_metrics_v8: true, business_experiments_v8: true, causal_claims_v8: true, decision_intelligence_v8: true, enableDecisions: true, ai_use_cases_v7: true, governance_evidence_v7: true };
 suite("Native experiment final capture and human interpretation on migrated PostgreSQL", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, companyId: string, otherId: string, policyId: string;
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v8-experiment-analysis-"); db = createDb(database.connectionString); });
@@ -33,7 +35,7 @@ suite("Native experiment final capture and human interpretation on migrated Post
   beforeEach(async () => {
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental(flags); companyId = randomUUID(); otherId = randomUUID();
     await db.insert(companies).values([{ id: companyId, name: "Recording tenant", issuePrefix: randomUUID() }, { id: otherId, name: "Foreign recording tenant", issuePrefix: randomUUID() }]);
-    const policy = analyticalPurpose(); policy.analyticalPurpose!.capabilities = ["metrics", "experiment", "decision"];
+    const policy = analyticalPurpose(); policy.analyticalPurpose!.capabilities = ["metrics", "experiment", "decision", "causal"];
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, policy)).id;
   });
   const analysis = () => businessExperimentAnalysisService(db);
@@ -84,6 +86,7 @@ suite("Native experiment final capture and human interpretation on migrated Post
     const enrolledUnit=await enrolled(d,status);
     await recording().recordExposure(companyId,actor,d.experiment.id,{expectedRevision:4,versionId:d.version.id,assignmentId:enrolledUnit.assignment.id,exposure:{status:"not_applied",rationale}});return enrolledUnit;
   }
+  function causalModel(d:Awaited<ReturnType<typeof running>>,analysisId:string,interpretationId:string){const seed=causalClaimFixture().definition;return {...seed,outcomeMetricId:d.definition.primaryMetric.metricId,outcomeMetricVersionId:d.definition.primaryMetric.metricVersionId,population:{...seed.population,scope:d.definition.scope,unit:d.definition.population.randomizationUnit},horizon:{from:d.definition.sampleOrDurationPlan.from,until:d.definition.sampleOrDurationPlan.until},experimentEvidence:{type:"experiment_analysis" as const,id:analysisId,experimentId:d.experiment.id,versionId:d.version.id,interpretationId},governanceObligationRefs:[policyId]};}
   const analyzed=(d:Awaited<ReturnType<typeof running>>)=>analysis().analyze(companyId,actor,d.experiment.id,{expectedRevision:5,versionId:d.version.id});
   async function nativeDecision() {
     await db.insert(authUsers).values({id:"local-board",name:"Local fixture human",email:"experiment-decision@example.test",createdAt:new Date(),updatedAt:new Date()}).onConflictDoNothing();
@@ -142,6 +145,17 @@ suite("Native experiment final capture and human interpretation on migrated Post
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,unit.unit.id));await expect(service.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition})).rejects.toMatchObject({status:404});
     expect(await db.select().from(decisionContexts).where(eq(decisionContexts.decisionId,native.decision.id))).toHaveLength(0);expect((await native.owner.get(native.decision.id))!.status).toBe("open");
   });
+  it("inherits current project ancestry at downstream capture without rewriting recorded experiment facts",async()=>{
+    const d=await running(true),unit=await attested(d);await closure(d);const result=await analyzed(d),native=await nativeDecision(),service=decisionIntelligenceService(db);
+    const interpreted=await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"iterate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});
+    const [currentProject]=await db.insert(projects).values({companyId,name:"New downstream current ancestry",status:"in_progress"}).returning();await db.update(issues).set({projectId:currentProject.id}).where(eq(issues.id,unit.unit.id));
+    const definition=context({id:result.analysis.id,experimentId:d.experiment.id,versionId:d.version.id,interpretationId:interpreted.interpretation.id});
+    const proposed=await service.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition});expect(proposed.versions[0].evidence[0].experiment!.analysis.result).toEqual(result.analysis.result);
+    const [stored]=await db.select().from(decisionContextVersions).where(eq(decisionContextVersions.id,proposed.versions[0].id));expect(await db.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.manifestId,stored.lineageManifestId),eq(analyticalLineageEdges.inputType,"project"),eq(analyticalLineageEdges.inputRef,currentProject.id)))).toHaveLength(1);
+    await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"project",[currentProject.id]);});
+    expect(await db.select().from(decisionContextVersions).where(eq(decisionContextVersions.decisionId,native.decision.id))).toHaveLength(0);expect(await db.select().from(decisionExperimentPins).where(eq(decisionExperimentPins.decisionId,native.decision.id))).toHaveLength(0);expect((await db.select().from(decisions).where(eq(decisions.id,native.decision.id)))[0].status).toBe("open");
+    expect((await db.select().from(businessExperimentAnalyses).where(eq(businessExperimentAnalyses.id,result.analysis.id)))[0].result).toEqual(result.analysis.result);
+  });
   it("preserves exact captured experiment results after metric republication and blocks new preparation without rebinding",async()=>{
     const d=await running(true);await attested(d);await closure(d);const result=await analyzed(d),native=await nativeDecision(),service=decisionIntelligenceService(db);
     const interpreted=await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"iterate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});
@@ -164,7 +178,11 @@ suite("Native experiment final capture and human interpretation on migrated Post
     expect(result.analysis.result.status).toBe(imbalance?"invalid":"pass");expect(result.analysis.result.numericallyQualified).toBe(!imbalance);
     expect(result.analysis.result.diagnostics).toMatchObject({assigned:16,exposed:0});
     expect((await recording().receipts(companyId,actor,d.experiment.id,d.version.id)).analysis).toEqual(result.analysis);
-    if(!imbalance){const interpreted=await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"ship_candidate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});expect(interpreted.experiment.state).toBe("decided");expect(interpreted.interpretation.executionAuthority).toBe("advisory_only");}
+    if(!imbalance){const interpreted=await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"ship_candidate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});expect(interpreted.experiment.state).toBe("decided");expect(interpreted.interpretation.executionAuthority).toBe("advisory_only");
+      const seed=causalClaimFixture().definition,owner=causalClaimService(db),definition={...seed,outcomeMetricId:d.definition.primaryMetric.metricId,outcomeMetricVersionId:d.definition.primaryMetric.metricVersionId,population:{...seed.population,scope:d.definition.scope,unit:d.definition.population.randomizationUnit},horizon:{from:d.definition.sampleOrDurationPlan.from,until:d.definition.sampleOrDurationPlan.until},experimentEvidence:{type:"experiment_analysis" as const,id:result.analysis.id,experimentId:d.experiment.id,versionId:d.version.id,interpretationId:interpreted.interpretation.id},governanceObligationRefs:[policyId]};
+      const claim=await owner.create(companyId,actor,{key:`causal_${randomUUID().replaceAll("-","")}`,definition});await owner.review(companyId,actor,claim.claim.id,{expectedRevision:1,versionId:claim.version.id,rationale,graphAndAssumptionsAcknowledged:true});const causal=await owner.analyze(companyId,actor,claim.claim.id,{expectedRevision:2,versionId:claim.version.id});
+      expect(causal.run.result).toMatchObject({status:"supported",evidenceGrade:"randomized_experiment",language:"conditional_assignment_effect_on_native_proxy",robustness:{providerRefutations:"not_run",sensitivity:"unknown"},executionAuthority:"advisory_only"});expect(causal.run.result.estimate!.interval).toEqual(result.analysis.result.metrics.find(m=>m.role==="primary")!.interval);expect((await owner.detail(companyId,actor,claim.claim.id)).versions[0].run).toEqual(causal.run);
+    }
   });
   it("captures all assigned native outcomes at one actual time including unexposed units, signs immutable receipts and permits one advisory interpretation",async()=>{
     const d=await running(true),unit=await attested(d,"done");await closure(d);const result=await analyzed(d);
@@ -193,11 +211,13 @@ suite("Native experiment final capture and human interpretation on migrated Post
   });
   it("erases protocol, result and human prose when the actual final-capture project is erased with flags off",async()=>{
     const d=await running(true),unit=await attested(d),[project]=await db.insert(projects).values({companyId,name:"Final capture ancestry",status:"in_progress"}).returning();await db.update(issues).set({projectId:project.id}).where(eq(issues.id,unit.unit.id));await closure(d);const result=await analyzed(d);
-    await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"iterate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});
+    const interpreted=await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"iterate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});
+    const causalOwner=causalClaimService(db),causal=await causalOwner.create(companyId,actor,{key:`causal_${randomUUID().replaceAll("-","")}`,definition:causalModel(d,result.analysis.id,interpreted.interpretation.id)});await causalOwner.review(companyId,actor,causal.claim.id,{expectedRevision:1,versionId:causal.version.id,rationale,graphAndAssumptionsAcknowledged:true});expect((await causalOwner.analyze(companyId,actor,causal.claim.id,{expectedRevision:2,versionId:causal.version.id})).run.result.estimate).toBeNull();
     await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
     await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"project",[project.id]);});
     for(const table of [businessExperimentVersions,businessExperimentAnalyses,businessExperimentOutcomes,businessExperimentInterpretations])expect(await db.select().from(table).where(eq(table.companyId,companyId))).toEqual([]);
     expect(await db.select().from(issues).where(eq(issues.id,unit.unit.id))).toHaveLength(1);
+    for(const table of [causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns])expect(await db.select().from(table).where(eq(table.companyId,companyId))).toHaveLength(0);
   });
   it("actual native company purge includes saved analyses and interpretations with rollout disabled",async()=>{
     const d=await running(true);await attested(d);await closure(d);const result=await analyzed(d);await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"abstain",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});

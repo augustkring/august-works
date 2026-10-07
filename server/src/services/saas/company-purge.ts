@@ -1,7 +1,7 @@
 import { eq, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, type Db } from "@paperclipai/db";
+import { causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -49,7 +49,7 @@ export async function purgeCompanyContent(
     // Published analytical roots own immutable versions and generated source
     // pins. Delete through those native cascade owners before the generic FK
     // planner, which cannot unlink generated columns or mutate frozen snapshots.
-    for(const table of [businessScenarios,forecastSpecs,decisionContexts,strategyExecutionLinks,businessMetricTargets,processAnalysisDefinitions,businessMetrics]) {
+    for(const table of [causalClaims,businessScenarios,forecastSpecs,decisionContexts,strategyExecutionLinks,businessMetricTargets,processAnalysisDefinitions,businessMetrics]) {
       const config=getTableConfig(table);
       const [found]=await tx.execute<{present:boolean}>(sql`select exists(select 1 from ${table} where company_id=${companyId}::uuid) as present`);
       if(!found?.present) continue;
