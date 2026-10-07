@@ -8,14 +8,15 @@ import type { AuthorizationActor } from "./authorization.js";
 import { logActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { lockBusinessEventSource, suppressBusinessEventSource } from "./business-event-privacy.js";
-import { assertAnalyticalSourcesNotErased } from "./analytical-privacy.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { lockAnalyticalCompany, assertAnalyticalSourcesNotErased } from "./analytical-privacy.js";
 
 type ActivitySource = typeof activityLog.$inferSelect;
 const ACTIONS = new Set(["issue.created", "issue.updated", "issue.checked_out", "issue.released", "project.created", "project.updated"]);
 
 /** Only observed, typed facts enter the projection. No message, identity,
  * credential or current-state enrichment becomes historical evidence. */
-export function projectBusinessEvent(source: ActivitySource) {
+export function projectBusinessEvent(source: ActivitySource, occurredAt = source.createdAt.toISOString()) {
   if (!ACTIONS.has(source.action) || !source.action.startsWith(`${source.entityType}.`)) return null;
   const primary = businessEventObjectSchema.safeParse({ objectType: source.entityType, objectId: source.entityId, qualifier: "primary" });
   if (!primary.success) return null;
@@ -32,38 +33,43 @@ export function projectBusinessEvent(source: ActivitySource) {
     if (related.success) objects.push(related.data);
   }
   const lifecycle = source.action.slice(source.action.indexOf(".") + 1);
-  const content = { eventType: source.action, activity: source.action, lifecycle, occurredAt: source.createdAt.toISOString(), objects, attributes, version: BUSINESS_EVENT_PROJECTOR_VERSION };
+  const content = { eventType: source.action, activity: source.action, lifecycle, occurredAt, objects, attributes, version: BUSINESS_EVENT_PROJECTOR_VERSION };
   const sourceHash = createHash("sha256").update(JSON.stringify(content)).digest("hex");
   return { ...content, sourceHash };
 }
 
 export function businessEventService(db: Db) {
-  const access = accessService(db);
-  async function admit(companyId: string, actor: AuthorizationActor, write = false) {
+  async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, flagsRequired = true) {
+    const access = accessService(tx);
     if (!(await access.decide({ actor, action: "company_scope:read", resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true })).allowed)
       throw forbidden("Business events are outside this actor's authorization boundary");
     if (write && (actor.type !== "board" || !(await access.decide({ actor, action: "audit:view_agent_actions", resource: { type: "company", companyId } })).allowed))
       throw forbidden("Business event projection requires board audit authority");
-    if (!v8FeatureEnabled(await instanceSettingsService(db).getExperimental(), "business_events_v8"))
+    if (flagsRequired && !v8FeatureEnabled(await instanceSettingsService(tx).getExperimental(), "business_events_v8"))
       throw notFound("Business events are not enabled");
   }
-  async function readable(companyId: string, actor: AuthorizationActor, objects: BusinessEventObject[]) {
+  async function readable(tx: Db, companyId: string, actor: AuthorizationActor, objects: BusinessEventObject[]) {
+    const access = accessService(tx);
     if (!objects.length) return false;
     try {
-      await assertAnalyticalSourcesNotErased(db, companyId, objects.filter(o => o.objectType === "issue").map(o => o.objectId), objects.filter(o => o.objectType === "project").map(o => o.objectId));
+      await assertAnalyticalSourcesNotErased(tx, companyId, objects.filter(o => o.objectType === "issue").map(o => o.objectId), objects.filter(o => o.objectType === "project").map(o => o.objectId));
     } catch (error) {
       if (!error || typeof error !== "object" || !("status" in error) || error.status !== 409) throw error;
       return false;
     }
     for (const object of objects) {
       if (object.objectType === "issue") {
-        const [issue] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, object.objectId)));
-        if (!issue || !(await access.decide({ actor, action: "issue:read", enforceResponsibleUserIntersection: true, resource: {
+        const [issue] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, object.objectId))).for("share");
+        if (!issue || issue.hiddenAt || !(await access.decide({ actor, action: "issue:read", enforceResponsibleUserIntersection: true, resource: {
           type: "issue", companyId, issueId: issue.id, projectId: issue.projectId, parentIssueId: issue.parentId,
           assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId, status: issue.status, originKind: issue.originKind, originId: issue.originId,
         } })).allowed) return false;
+        if (issue.projectId) {
+          const [currentProject] = await tx.select({ id: projects.id }).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, issue.projectId))).for("share");
+          if (!currentProject || !(await access.decide({ actor, action: "project:read", enforceResponsibleUserIntersection: true, resource: { type: "project", companyId, projectId: currentProject.id } })).allowed) return false;
+        }
       } else {
-        const [project] = await db.select({ id: projects.id }).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, object.objectId)));
+        const [project] = await tx.select({ id: projects.id }).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, object.objectId))).for("share");
         if (!project || !(await access.decide({ actor, action: "project:read", enforceResponsibleUserIntersection: true, resource: { type: "project", companyId, projectId: project.id } })).allowed) return false;
       }
     }
@@ -75,7 +81,7 @@ export function businessEventService(db: Db) {
   }
   return {
     async backfill(companyId: string, actor: AuthorizationActor, input: BusinessEventBackfill) {
-      await admit(companyId, actor, true);
+      await admit(db, companyId, actor, true);
       const query = businessEventBackfillSchema.parse(input);
       const cursor = query.cursor;
       const rows = await db.select({ id: activityLog.id,
@@ -91,20 +97,23 @@ export function businessEventService(db: Db) {
       for (const row of rows) {
         const publications: ActivityPublication[] = [];
         const result = await db.transaction(async (tx) => {
+          await tx.execute(sql`set local statement_timeout='8s'`);
           await lockBusinessEventSource(tx, companyId, row.id);
+          await admit(tx as unknown as Db, companyId, actor, true);
           const [suppressed] = await tx.select().from(businessEventSuppressions).where(and(eq(businessEventSuppressions.companyId, companyId), eq(businessEventSuppressions.sourceRef, row.id)));
           if (suppressed) return "ignored";
-          const [source] = await tx.select().from(activityLog).where(and(eq(activityLog.companyId, companyId), eq(activityLog.id, row.id))).for("share");
-          if (!source) return "ignored";
-          const event = projectBusinessEvent(source);
-          if (!event || !await readable(companyId, actor, event.objects)) return "ignored";
+          const [record] = await tx.select({ source: activityLog, exactTime: sql<string>`to_char(${activityLog.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` }).from(activityLog).where(and(eq(activityLog.companyId, companyId), eq(activityLog.id, row.id))).for("share");
+          if (!record) return "ignored";
+          const source = record.source;
+          const event = projectBusinessEvent(source, record.exactTime);
+          if (!event || !await readable(tx as unknown as Db, companyId, actor, event.objects)) return "ignored";
           const [previous] = await tx.select().from(businessEvents).where(and(eq(businessEvents.companyId, companyId), eq(businessEvents.sourceRef, source.id))).orderBy(desc(businessEvents.revision)).limit(1);
           if (previous?.sourceHash === event.sourceHash) return "unchanged";
           const now = new Date();
           const [created] = await tx.insert(businessEvents).values({
             ...(previous ? {} : { id: source.id }), companyId,
             eventType: event.eventType, activity: event.activity, lifecycle: event.lifecycle,
-            occurredAt: source.createdAt, observedAt: now, sourceClass: "aw_native", sourceProvider: "activity_log",
+            occurredAt: sql`${record.exactTime}::timestamptz`, observedAt: now, sourceClass: "aw_native", sourceProvider: "activity_log",
             sourceRef: source.id, sourceVersion: BUSINESS_EVENT_PROJECTOR_VERSION, sourceHash: event.sourceHash,
             revision: (previous?.revision ?? 0) + 1, attributes: event.attributes,
             purpose: "process_intelligence", sensitivity: "internal", trustLevel: "observed", supersedesEventId: previous?.id ?? null,
@@ -134,35 +143,43 @@ export function businessEventService(db: Db) {
         coverage: "bounded_source_window" as const };
     },
     async list(companyId: string, actor: AuthorizationActor, input: BusinessEventList) {
-      await admit(companyId, actor);
       const query = businessEventListSchema.parse(input);
-      const rows = await db.select().from(businessEvents).where(and(eq(businessEvents.companyId, companyId), isNull(businessEvents.tombstonedAt),
-        sql`not exists (select 1 from ${businessEventSuppressions} where ${businessEventSuppressions.companyId} = ${businessEvents.companyId} and ${businessEventSuppressions.sourceRef} = ${businessEvents.sourceRef})`,
-        sql`${businessEvents.occurredAt} >= ${query.from}::timestamptz`, sql`${businessEvents.occurredAt} <= ${query.until}::timestamptz`,
-        query.cursor ? sql`(${businessEvents.occurredAt}, ${businessEvents.id}) > (${query.cursor.at}::timestamptz, ${query.cursor.id}::uuid)` : undefined,
-      )).orderBy(asc(businessEvents.occurredAt), asc(businessEvents.id)).limit(query.limit);
-      const items: BusinessEvent[] = [];
-      for (const row of rows) {
-        const [source] = await db.select().from(activityLog).where(and(eq(activityLog.companyId, companyId), eq(activityLog.id, row.sourceRef)));
-        if (!source || projectBusinessEvent(source)?.sourceHash !== row.sourceHash) continue;
-        const objects = await db.select({ objectType: businessEventObjects.objectType, objectId: businessEventObjects.objectId, qualifier: businessEventObjects.qualifier })
-          .from(businessEventObjects).where(and(eq(businessEventObjects.companyId, companyId), eq(businessEventObjects.eventId, row.id))).orderBy(asc(businessEventObjects.qualifier), asc(businessEventObjects.objectType), asc(businessEventObjects.objectId));
-        if (!await readable(companyId, actor, objects)) continue;
-        items.push({ id: row.id, companyId, eventType: row.eventType, activity: row.activity, lifecycle: row.lifecycle,
-          occurredAt: row.occurredAt.toISOString(), observedAt: row.observedAt.toISOString(), sourceUpdatedAt: row.sourceUpdatedAt?.toISOString() ?? null, receivedAt: row.receivedAt?.toISOString() ?? null,
-          source: { class: "aw_native", provider: "activity_log", ref: row.sourceRef, version: row.sourceVersion, contentHash: row.sourceHash },
-          revision: row.revision, objects, attributes: businessEventAttributesSchema.parse(row.attributes), purpose: "process_intelligence", sensitivity: "internal", trustLevel: "observed", supersedesEventId: row.supersedesEventId, tombstonedAt: null });
-      }
-      // The source scan position is operational pagination, never a denominator
-      // or assertion that this page covers the actor's entire event population.
-      const last = rows.at(-1);
-      return { items, nextCursor: rows.length === query.limit && last ? { at: last.occurredAt.toISOString(), id: last.id } : null };
+      return db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db;
+        await tx.execute(sql`set local statement_timeout='8s'`);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+        await admit(tx, companyId, actor);
+        const rows = await tx.select({ event: businessEvents, cursorAt: sql<string>`to_char(${businessEvents.occurredAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` }).from(businessEvents).where(and(eq(businessEvents.companyId, companyId), isNull(businessEvents.tombstonedAt),
+          sql`not exists (select 1 from ${businessEventSuppressions} where ${businessEventSuppressions.companyId} = ${businessEvents.companyId} and ${businessEventSuppressions.sourceRef} = ${businessEvents.sourceRef})`,
+          sql`${businessEvents.occurredAt} >= ${query.from}::timestamptz`, sql`${businessEvents.occurredAt} <= ${query.until}::timestamptz`,
+          query.cursor ? sql`(${businessEvents.occurredAt}, ${businessEvents.id}) > (${query.cursor.at}::timestamptz, ${query.cursor.id}::uuid)` : undefined,
+        )).orderBy(asc(businessEvents.occurredAt), asc(businessEvents.id)).limit(query.limit);
+        const items: BusinessEvent[] = [];
+        for (const scanned of rows) {
+          const row = scanned.event;
+          const [record] = await tx.select({ source: activityLog, exactTime: sql<string>`to_char(${activityLog.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` }).from(activityLog).where(and(eq(activityLog.companyId, companyId), eq(activityLog.id, row.sourceRef))).for("share");
+          if (!record || projectBusinessEvent(record.source, record.exactTime)?.sourceHash !== row.sourceHash) continue;
+          const objects = await tx.select({ objectType: businessEventObjects.objectType, objectId: businessEventObjects.objectId, qualifier: businessEventObjects.qualifier })
+            .from(businessEventObjects).where(and(eq(businessEventObjects.companyId, companyId), eq(businessEventObjects.eventId, row.id))).orderBy(asc(businessEventObjects.qualifier), asc(businessEventObjects.objectType), asc(businessEventObjects.objectId));
+          if (!await readable(tx, companyId, actor, objects)) continue;
+          items.push({ id: row.id, companyId, eventType: row.eventType, activity: row.activity, lifecycle: row.lifecycle,
+            occurredAt: scanned.cursorAt, observedAt: row.observedAt.toISOString(), sourceUpdatedAt: row.sourceUpdatedAt?.toISOString() ?? null, receivedAt: row.receivedAt?.toISOString() ?? null,
+            source: { class: "aw_native", provider: "activity_log", ref: row.sourceRef, version: row.sourceVersion, contentHash: row.sourceHash },
+            revision: row.revision, objects, attributes: businessEventAttributesSchema.parse(row.attributes), purpose: "process_intelligence", sensitivity: "internal", trustLevel: "observed", supersedesEventId: row.supersedesEventId, tombstonedAt: null });
+        }
+        // The source scan position is operational pagination, never a denominator
+        // or assertion that this page covers the actor's entire event population.
+        const last = rows.at(-1);
+        return { items, nextCursor: rows.length === query.limit && last ? { at: last.cursorAt, id: last.event.id } : null };
+      });
     },
     async suppressSource(companyId: string, actor: AuthorizationActor, sourceRef: string) {
-      await admit(companyId, actor, true);
+      await admit(db, companyId, actor, true, false);
       const publications: ActivityPublication[] = [];
       await db.transaction(async (tx) => {
+        await tx.execute(sql`set local statement_timeout='8s'`);
         await suppressBusinessEventSource(tx, companyId, sourceRef);
+        await admit(tx as unknown as Db, companyId, actor, true, false);
         await logActivity(tx as unknown as Db, { companyId, ...auditActor(actor), action: "business_event.source_suppressed", entityType: "business_event_source", entityId: sourceRef, details: { projector: BUSINESS_EVENT_PROJECTOR_VERSION } }, publications);
       });
       publications.forEach(publishActivity);

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const BUSINESS_EVENT_PROJECTOR_VERSION = "aw-activity-v1";
+export const BUSINESS_EVENT_PROJECTOR_VERSION = "aw-activity-v2";
 export const businessEventObjectSchema = z.object({
   objectType: z.enum(["issue", "project"]),
   objectId: z.string().uuid(),

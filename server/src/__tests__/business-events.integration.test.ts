@@ -218,6 +218,58 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
     const end = await service().backfill(companyId, actor, { ...window, limit: 1, cursor: two.nextCursor! });
     expect(end.nextCursor).toBeNull();
     expect(await stored()).toHaveLength(2);
+    const eventsOne = await service().list(companyId, actor, { ...window, limit: 1 });
+    expect(eventsOne.items[0].occurredAt).toBe("2026-01-01T12:00:00.123456Z");
+    expect(eventsOne.nextCursor?.at).toBe("2026-01-01T12:00:00.123456Z");
+    const eventsTwo = await service().list(companyId, actor, { ...window, limit: 1, cursor: eventsOne.nextCursor! });
+    expect(eventsTwo.items).toHaveLength(1);
+    expect(eventsTwo.items[0].id).not.toBe(eventsOne.items[0].id);
+    const exhausted = await service().list(companyId, actor, { ...window, limit: 1, cursor: eventsTwo.nextCursor! });
+    expect(exhausted.items).toHaveLength(0);
+    expect(exhausted.nextCursor).toBeNull();
+    await db.execute(sql`update activity_log set created_at='2026-01-01T12:00:00.123457Z'::timestamptz where id=${first.id}::uuid`);
+    expect((await service().list(companyId, actor, window)).items.map(item => item.source.ref)).not.toContain(first.id);
+  });
+
+  it("hides a retained hidden Task and a Task moved to a foreign current project", async () => {
+    await source(); await service().backfill(companyId, actor, window);
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, issueId));
+    expect((await service().list(companyId, actor, window)).items).toHaveLength(0);
+    const foreignId = randomUUID(); await db.insert(projects).values({ id: foreignId, companyId: otherCompanyId, name: "Foreign current project" });
+    await db.update(issues).set({ hiddenAt: null, projectId: foreignId }).where(eq(issues.id, issueId));
+    expect((await service().list(companyId, actor, window)).items).toHaveLength(0);
+    expect((await service().backfill(companyId, actor, window)).unchanged).toBe(0);
+  });
+
+  it("permits explicit payload suppression after feature rollback", async () => {
+    const row = await source(); await service().backfill(companyId, actor, window);
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ business_events_v8: false });
+    try { await service().suppressSource(companyId, actor, row.id); expect(await stored()).toHaveLength(0); }
+    finally { await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ business_events_v8: true }); }
+  });
+
+  it("waits for native Memory erasure before taking source rows or returning retained events", async () => {
+    await source(); await service().backfill(companyId, actor, window);
+    let releaseMemory!: () => void, signalHeld!: () => void;
+    const held = new Promise<void>(resolve => { signalHeld = resolve; });
+    const release = new Promise<void>(resolve => { releaseMemory = resolve; });
+    const erasure = db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, companyId); signalHeld(); await release;
+      await tx.execute(sql`set local lock_timeout='1s'`);
+      await eraseAnalyticalSourcesUnderMemory(tx, companyId, "issue", [issueId]);
+      await eraseBusinessEventObjectUnderMemory(tx, companyId, "issue", issueId);
+      await tx.update(issues).set({ title: "Erased workflow task", description: null }).where(eq(issues.id, issueId));
+    });
+    await held; const read = service().list(companyId, actor, window);
+    try {
+      let blocked = false; const deadline = performance.now()+5000;
+      while (performance.now()<deadline) {
+        const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_locks where locktype='advisory' and not granted and database=(select oid from pg_database where datname=current_database())) as waiting`);
+        if (row.waiting) { blocked = true; break; } await new Promise(resolve => setTimeout(resolve,20));
+      }
+      expect(blocked).toBe(true); releaseMemory(); await erasure;
+      expect((await read).items).toHaveLength(0);
+    } finally { releaseMemory(); await Promise.allSettled([erasure,read]); }
   });
 
   it("removes deleted source visibility and preserves disabled-feature admission", async () => {
