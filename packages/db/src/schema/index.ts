@@ -279,6 +279,7 @@ export * from "./security_event_exports.js";
 export * from "./business_events.js";
 export * from "./business_metrics.js";
 export * from "./analytical_lineage.js";
+export * from "./analytical_context_roots.js";
 export * from "./business_metric_targets.js";
 
 export { strategyExecutionLinks, strategyExecutionLinkVersions, strategyExecutionLinkApprovals, strategyExecutionSourceBindings } from "./strategy_execution.js";

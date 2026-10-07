@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import { analyticalLineageManifests, type Db } from "@paperclipai/db";
 import { lockAnalyticalCompany } from "./analytical-privacy.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { eraseAnalyticalContextSourcesUnderMemory } from "./analytical-context-privacy.js";
 
 /** Internal native retention; expiry, company and Memory own admission. Disabled
  * features and paused companies cannot preserve expired analytical payloads. */
@@ -20,6 +21,7 @@ export async function eraseExpiredAnalyticalLineage(db: Db, now = new Date()) {
       .where(and(eq(analyticalLineageManifests.companyId,company.companyId),lte(analyticalLineageManifests.expiresAt,now)))
       .orderBy(asc(analyticalLineageManifests.expiresAt),asc(analyticalLineageManifests.id)).limit(100);
     if (!expired.length) return 0;
+    await eraseAnalyticalContextSourcesUnderMemory(tx,company.companyId,expired.map(row=>row.id),now);
     return (await tx.delete(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,company.companyId),
       inArray(analyticalLineageManifests.id,expired.map(row => row.id)))).returning({ id: analyticalLineageManifests.id })).length;
   });

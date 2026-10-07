@@ -1,7 +1,7 @@
 import { eq, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, type Db } from "@paperclipai/db";
+import { projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, issues, memoryRecords, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -46,6 +46,10 @@ export async function purgeCompanyContent(
     // purge rolls it back; normal archival never grants evidence deletion.
     await tx.execute(sql`update ${companies} set status='archived',pause_reason='company_deleted',content_erasure_transaction_id=pg_current_xact_id()::text,updated_at=now() where id=${companyId}::uuid`);
     const deleted: string[] = [];
+    // Native conversation identity is one checked tuple. Clear it atomically
+    // after this transaction's company-erasure receipt; per-FK unlinking would
+    // otherwise leave an invalid half-conversation and roll back the purge.
+    await tx.update(issues).set({conversationAgentId:null,conversationUserId:null,conversationState:null}).where(eq(issues.companyId,companyId));
     // A planning source link is part of frozen canonical proposal material.
     // Erase the owned proposal; generic nullable-FK unlinking cannot rewrite it.
     const planning = await tx.execute(sql`delete from ${projectRoadmapProposals} where company_id=${companyId}::uuid and planning_manifest_id is not null returning id`);
@@ -139,6 +143,13 @@ export async function purgeCompanyContent(
         const ref = fk.reference();
         if (!pending.has(ref.foreignTable) || ref.foreignTable === table)
           continue;
+        // Private Memory's owner is part of its checked scope tuple. Keep the
+        // FK until the record is deleted before its agent; nulling only the
+        // owner would invalidate private records during a company purge.
+        if(table===memoryRecords&&ref.columns.some(column=>column.name==="owner_agent_id")) {
+          parents.add(ref.foreignTable);
+          continue;
+        }
         // Unlink nullable intra-company references before ordering; no outside-company row is changed.
         if (
           ref.columns.some((column) => !column.notNull) &&

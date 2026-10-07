@@ -1,0 +1,95 @@
+{
+  "checkpoint": "Native analytical sources inherit existing C7 Context retention and erasure",
+  "parentCommit": "2c689ca47f6ea9e33aea615eb33218718f418496",
+  "recordedAt": "2026-10-07T15:27:25.088286+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/schema/analytical_context_roots.ts",
+      "sha256": "80b9ccea491e375b1268a9e134e1e707a5a3885740e66f6a85ee2061c8ff8b7b"
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "973ac7edc25ea9730d117e42c45f596d188deeb73795871f83132421a2310e64"
+    },
+    {
+      "path": "packages/db/src/migrations/0413_modern_gamora.sql",
+      "sha256": "8968206a4f0cdf92f1cc3b6f33c0bec730c7b7188067a80e7528c9d156c19be4"
+    },
+    {
+      "path": "server/src/services/analytical-context-privacy.ts",
+      "sha256": "9c372b26fe97f5d47025c5929ff3b3b1e54fe7babdb84e33ce844928fcf59ad4"
+    },
+    {
+      "path": "server/src/services/analytical-reader.ts",
+      "sha256": "9210e7609176e9520b53df5aafc3e596d2975b730567171435f9ddaa2232d488"
+    },
+    {
+      "path": "server/src/services/analytical-source-erasure.ts",
+      "sha256": "1323e21e565aef5b3b7c8e722876a4a4178dc9cea81a9fe51c4b5a3352de5f4e"
+    },
+    {
+      "path": "server/src/services/analytical-retention.ts",
+      "sha256": "a222834d414bcd1f9b4240715b1d67c4f440dc34b2a08eaeb9a77a4bce3e1248"
+    },
+    {
+      "path": "server/src/services/saas/company-purge.ts",
+      "sha256": "c2e0753bd526c2fdf5dd910c4a34bb91559e2229644330da93e17f6d0f98779a"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "ab851b97798579480c27a8b2f481ad9968cac27450305d2323ba01bbbe103dfe"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "final-native-context-and-company-purge",
+      "checks": 13,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-final-qualified.log",
+      "logSha256": "71ab098d55465c90df80fb5ebc8675cfa37466f1a0b9c60935ccb33f1db2b120"
+    },
+    {
+      "name": "native-reader-metric-context",
+      "checks": 42,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-qualified-native.log",
+      "logSha256": "8e9e0514838099c63f4a0a140f48ffc1bc2f398427a1f39ee9538b403bdb5691"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-qualified-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "migration-safety",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-migration-safety.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "name": "migration-snapshot-drift",
+      "checks": 1,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-context-snapshot.log",
+      "logSha256": "a7090ec18cb4a0f125b2183bc8a3001beec1062c7be9d9dc3992074cbde23367"
+    }
+  ],
+  "behavior": [
+    "A private transactional source-owner callback completes before any analytical result is returned; its complete 1\u201332 original manifest set is linked to an existing exact-run Context manifest.",
+    "Private rejected/unverified observation roots contain no analytical facts and cannot become accepted verified Task outcomes. Native immutable provenance and deferred completeness guards cover source sets and original expiry.",
+    "Original result expiry bounds the root in addition to every source manifest expiry. Native C7 payload guards withhold expiry before worker cleanup.",
+    "Deleting any source manifest immediately marks the complete consumed result unavailable, including direct SQL source deletion; existing C7 deletion-marker reapplication physically scrubs copied runtime, comment and Context payloads.",
+    "Native source suppression and analytical retention invoke the existing C7 purge before removing source manifests. Memory-first erasure callbacks never acquire the company boundary; normal admission uses company then Memory.",
+    "Actual native company purge clears a checked conversation identity atomically and retains the checked private Memory owner FK until record deletion. The existing transaction-bound company-erasure receipt authorizes provenance removal."
+  ],
+  "limitations": [
+    "Final 13 PostgreSQL checks qualify the final 11 Context cases and actual V6/V8 company purge. Preceding 42 checks qualified the then-current 8 Context cases plus 11 native-reader and 23 metric cases. Intermediate failed purge tests exposed and corrected the two checked-tuple unlinking defects; these failed runs are not counted as qualification.",
+    "An intermediate 27-check run had 26 passes including 16 unchanged native Process checks, and one company-purge failure; it is not a passing batch.",
+    "Source admission remains the responsibility of the private callback invoking actual source owners; this service is not a public endpoint or source authorization override.",
+    "SDK typed-tool dispatch, source-current authority on historical copied-prose reads, and analytical Learning inheritance remain open. This checkpoint is privacy infrastructure, not completed Chat or whole-brief qualification.",
+    "No external provider, hosted runtime, business trial or R0 release qualification is claimed."
+  ]
+}
