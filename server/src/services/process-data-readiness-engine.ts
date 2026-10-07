@@ -61,7 +61,10 @@ export function assessNativeProcessData(companyId: string, raw: AssessProcessDat
     path.push({ event: events[i], time: times[i] }); paths.set(key,path);
   }
   let ambiguous = false;
-  for (const path of paths.values()) {
+  // Ordering requirements belong to the requested object perspectives. Two
+  // tasks may start together without asserting a Project-level sequence.
+  for (const [objectKey,path] of paths) {
+    if (!requirements.requiredObjectTypes.some(type => objectKey.startsWith(`${type}:`))) continue;
     const counts = new Map<string,Set<string>>();
     for (const item of path) if (item.time!==null) { const key=String(item.time); const ids=counts.get(key) ?? new Set<string>(); ids.add(item.event.id); counts.set(key,ids); }
     if ([...counts.values()].some(ids => ids.size>1)) ambiguous=true;
