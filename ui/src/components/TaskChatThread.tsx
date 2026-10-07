@@ -898,7 +898,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     isInitialHydrating: nativeEventsAreInitiallyHydrating,
     hydratedRunIds: hydratedNativeRunIds,
     retry: retryNativeEvents,
-  } = useNativeRunTranscripts(nativeRuns);
+  } = useNativeRunTranscripts(nativeRuns, { companyId, issueId });
   const fallbackByRunRef = useRef(
     new Map<string, NonNullable<ReturnType<typeof logTranscriptByRun.get>>>(),
   );

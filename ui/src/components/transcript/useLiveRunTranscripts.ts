@@ -142,6 +142,8 @@ export function useLiveRunTranscripts({
   const trimmedSeqFloorByRunRef = useRef(new Map<string, number>());
   const pendingLogRowsByRunRef = useRef(new Map<string, string>());
   const logOffsetByRunRef = useRef(new Map<string, number>());
+  const sourceGenerationByRunRef = useRef(new Map<string, number>());
+  const sourceDeniedRunIdsRef = useRef(new Set<string>());
   const missingTerminalLogRunIdsRef = useRef(new Set<string>());
   // PAP-462 B3: buffered runs that dropped out of the `runs` list, mapped to the
   // wall-clock deadline (ms) after which their buffer may be pruned. A run still
@@ -181,6 +183,18 @@ export function useLiveRunTranscripts({
     () => normalizedRuns.map((run) => run.id).sort((a, b) => a.localeCompare(b)).join(","),
     [normalizedRuns],
   );
+
+  const denySource = (runId: string, error: Error) => {
+    sourceDeniedRunIdsRef.current.add(runId);
+    sourceGenerationByRunRef.current.set(runId, (sourceGenerationByRunRef.current.get(runId) ?? 0) + 1);
+    logOffsetByRunRef.current.set(runId, 0);
+    pendingLogRowsByRunRef.current.delete(`${runId}:records`);
+    trimmedSeqFloorByRunRef.current.delete(runId);
+    missingTerminalLogRunIdsRef.current.delete(runId);
+    for (const key of seenChunkKeysRef.current) if (key.includes(runId)) seenChunkKeysRef.current.delete(key);
+    setChunksByRun(previous => { const next = new Map(previous); next.delete(runId); return next; });
+    setErrorsByRun(previous => new Map(previous).set(runId, error));
+  };
 
   const appendChunks = (runId: string, chunks: Array<RunLogChunk & { dedupeKey: string }>) => {
     if (chunks.length === 0) return;
@@ -270,6 +284,12 @@ export function useLiveRunTranscripts({
         logOffsetByRunRef.current.delete(runId);
       }
     }
+    for (const runId of sourceGenerationByRunRef.current.keys()) {
+      if (!retainedRunIds.has(runId)) {
+        sourceGenerationByRunRef.current.delete(runId);
+        sourceDeniedRunIdsRef.current.delete(runId);
+      }
+    }
     for (const runId of trimmedSeqFloorByRunRef.current.keys()) {
       if (!retainedRunIds.has(runId)) {
         trimmedSeqFloorByRunRef.current.delete(runId);
@@ -311,6 +331,7 @@ export function useLiveRunTranscripts({
         return;
       }
       inFlightRunIds.add(run.id);
+      const sourceGeneration = sourceGenerationByRunRef.current.get(run.id) ?? 0;
       const offset = logOffsetByRunRef.current.get(run.id) ?? resolveInitialLogOffset(run, logReadLimitBytes);
       try {
         const result = await readTranscriptRequest(
@@ -318,6 +339,9 @@ export function useLiveRunTranscripts({
           controller.signal,
         );
         if (cancelled) return;
+
+        if (sourceGeneration !== (sourceGenerationByRunRef.current.get(run.id) ?? 0)) return;
+        sourceDeniedRunIdsRef.current.delete(run.id);
 
         setErrorsByRun((previous) => {
           if (!previous.has(run.id)) return previous;
@@ -336,6 +360,7 @@ export function useLiveRunTranscripts({
         }
       } catch (error) {
         if (cancelled) return;
+        if (isAnalyticalSourceAccessLost(error)) denySource(run.id, error as Error);
         if (error instanceof ApiError && error.status === 404 && !isAnalyticalSourceAccessLost(error)) {
           setErrorsByRun((previous) => {
             if (!previous.has(run.id)) return previous;
@@ -450,6 +475,12 @@ export function useLiveRunTranscripts({
         const runId = readString(payload["runId"]);
         if (!runId || !activeRunIds.has(runId)) return;
         if (!runById.has(runId)) return;
+
+        if (event.type === "analytical.context.access_lost") {
+          denySource(runId, new ApiError("Analytical conversation source access is unavailable", 403, { details: { code: "analytical_source_access_lost" } }));
+          return;
+        }
+        if (sourceDeniedRunIdsRef.current.has(runId)) return;
 
         if (event.type === "heartbeat.run.log") {
           const chunk = readString(payload["chunk"]);

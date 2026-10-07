@@ -13753,12 +13753,6 @@ export function heartbeatService(
         )
       : secretSanitizedPayload;
     const issueId = readRuntimeStatusIssueIdCandidate(run) ?? null;
-    const progress = buildRunEventRuntimeProgress({
-      eventType: event.eventType,
-      message: sanitizedMessage ?? null,
-      payload: sanitizedPayload ?? null,
-      at: eventAt,
-    });
     const persistedEvent = await appendHeartbeatRunEvent(db, {
       companyId: run.companyId,
       runId: run.id,
@@ -13772,7 +13766,16 @@ export function heartbeatService(
       retryExhaustion: event.retryExhaustion,
     });
     if (persistedEvent.disposition === "duplicate") return;
-    const seq = persistedEvent.row.seq;
+    // Native C7 SQL may scrub a late write. Only its committed row may supply
+    // live text or the runtime cache; the original input is no longer authority.
+    const stored = persistedEvent.row;
+    const seq = stored.seq;
+    const progress = buildRunEventRuntimeProgress({
+      eventType: stored.eventType,
+      message: stored.message,
+      payload: stored.payload,
+      at: stored.createdAt,
+    });
 
     publishLiveEvent({
       companyId: run.companyId,
@@ -13782,15 +13785,15 @@ export function heartbeatService(
         agentId: run.agentId,
         issueId,
         seq,
-        eventType: event.eventType,
-        stream: event.stream ?? null,
-        level: event.level ?? null,
-        color: event.color ?? null,
-        message: sanitizedMessage ?? null,
+        eventType: stored.eventType,
+        stream: stored.stream,
+        level: stored.level,
+        color: stored.color,
+        message: stored.message,
         currentToolName: progress?.currentToolName ?? null,
         lastAssistantSnippet: progress?.lastAssistantSnippet ?? null,
         lastEventAt: (progress?.lastEventAt ?? eventAt).toISOString(),
-        payload: sanitizedPayload ?? null,
+        payload: stored.payload,
       },
     });
     if (progress && isHeartbeatRunRuntimeStatusActive(run.status)) {

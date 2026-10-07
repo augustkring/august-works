@@ -167,6 +167,30 @@ test("source loss refreshes the read-only chat identity and drops cached history
 // Actual native source, authorization, recovery API and UI. The historical
 // private retention root is seeded in the isolated DB; this browser case does
 // not claim an external LLM or SDK analytical tool invocation.
+// Live denial is an explicit UI response-contract fixture. Recipient admission
+// and source/IAM changes are independently exercised over real WS + PostgreSQL.
+test("live source denial removes cached chat history without a reload or implicit replacement", async ({page,request}) => {
+  const f=await setup(request);
+  try{
+    const original=await json(await request.post(f.chatPath,{data:{}}));
+    await json(await request.post(`/api/issues/${original.id}/comments`,{data:{body:"Private cached history before live source denial",clientRequestId:randomUUID()}}));await idle(request,f.chatPath,1);
+    const deliveries:Array<(message:string)=>void>=[];
+    await page.routeWebSocket("**/api/companies/*/events/ws",socket=>{
+      const server=socket.connectToServer();server.onMessage(message=>socket.send(message));deliveries.push(message=>socket.send(message));
+    });
+    await page.goto(f.route);await expect(page.getByText("Private cached history before live source denial",{exact:true})).toBeVisible();await expect.poll(()=>deliveries.length).toBeGreaterThan(0);
+    await page.screenshot({path:test.info().outputPath("live-source-admitted-history.png"),fullPage:true});
+    let creations=0;
+    const failure={error:"Analytical conversation source access is unavailable",details:{code:"analytical_source_access_lost",conversationIssueId:original.id}};
+    await page.route(`**${f.chatPath}`,route=>{if(route.request().method()==="POST")creations++;return route.fulfill({status:403,json:failure});});
+    await page.route(`**/api/issues/${original.id}/comments*`,route=>route.fulfill({status:403,json:failure}));
+    for(const deliver of deliveries)deliver(JSON.stringify({id:900001,companyId:f.company.id,type:"analytical.context.access_lost",createdAt:new Date().toISOString(),payload:{issueId:original.id,runId:null,code:"analytical_source_access_lost"}}));
+    await expect(page.getByText("Private cached history before live source denial",{exact:true})).toHaveCount(0);
+    await expect(page.getByRole("button",{name:"Start a new conversation"})).toBeVisible();expect(creations).toBe(0);
+    await page.screenshot({path:test.info().outputPath("live-source-hidden-history.png"),fullPage:true});
+  }finally{await f.restore();}
+});
+
 test("an owner can explicitly recover after source visibility is lost while original metric facts survive", async ({page,request}) => {
   const f=await setup(request);
   const config=JSON.parse(await readFile(process.env.PAPERCLIP_E2E_SERVER_CONFIG!,"utf8")),pid=await readFile(path.join(config.database.embeddedPostgresDataDir,"postmaster.pid"),"utf8");

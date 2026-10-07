@@ -93,6 +93,29 @@ describe("useLiveRunTranscripts", () => {
     vi.useRealTimers();
   });
 
+  it("drops denied live logs, ignores stale output and recovers only through a fresh native API read", async () => {
+    vi.useFakeTimers();
+    const content=JSON.stringify({ts:"2026-10-07T10:00:00Z",stream:"stdout",seq:1,chunk:"Private analytical log fact"})+"\n";
+    let resolveLate!: (value: never) => void;
+    logMock.mockResolvedValueOnce({runId:"run-1",store:"memory",logRef:"log-1",content,nextOffset:42}).mockImplementationOnce(()=>new Promise(resolve=>{resolveLate=resolve;}));
+    let latest!: ReturnType<typeof useLiveRunTranscripts>;
+    function Probe(){latest=useLiveRunTranscripts({companyId:"company-1",runs:[{id:"run-1",status:"running",adapterType:"codex_local"}]});return null;}
+    const container=document.createElement("div"),root=createRoot(container);
+    try{
+      await act(async()=>root.render(<Probe/>));expect(JSON.stringify(latest.transcriptByRun.get("run-1"))).toContain("Private analytical log fact");
+      await act(async()=>vi.advanceTimersByTimeAsync(30000));
+      const socket=FakeWebSocket.instances[0]!;
+      const deliver=(type:string,payload:Record<string,unknown>)=>socket.onmessage?.(new MessageEvent("message",{data:JSON.stringify({id:1,companyId:"company-1",type,createdAt:new Date().toISOString(),payload:{runId:"run-1",...payload}})}));
+      await act(async()=>deliver("analytical.context.access_lost",{}));
+      expect(JSON.stringify(latest.transcriptByRun.get("run-1"))).not.toContain("Private analytical log fact");expect(latest.errorsByRun.get("run-1")).toBeInstanceOf(ApiError);
+      await act(async()=>{resolveLate({runId:"run-1",content,nextOffset:84} as never);deliver("heartbeat.run.log",{chunk:"Late denied analytical text"});});
+      expect(JSON.stringify(latest.transcriptByRun.get("run-1"))).not.toContain("analytical");
+      logMock.mockResolvedValue({runId:"run-1",store:"memory",logRef:"log-1",content,nextOffset:42});
+      await act(async()=>vi.advanceTimersByTimeAsync(30000));
+      expect(logMock).toHaveBeenLastCalledWith("run-1",0,expect.any(Number),expect.objectContaining({signal:expect.any(AbortSignal)}));expect(latest.errorsByRun.has("run-1")).toBe(false);expect(JSON.stringify(latest.transcriptByRun.get("run-1"))).toContain("Private analytical log fact");
+    }finally{act(()=>root.unmount());}
+  });
+
   it("pauses hidden-tab reads and resumes at the retained log offset", async () => {
     vi.useFakeTimers();
     const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");

@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useNativeRunTranscripts } from "./useNativeRunTranscripts";
 import { TRANSCRIPT_REQUEST_TIMEOUT_MS } from "./read-transcript-request";
 import { ApiError } from "@/api/client";
+import { __liveUpdatesTestUtils } from "@/context/LiveUpdatesProvider";
+import type { LiveEvent } from "@paperclipai/shared";
 
 const eventsMock = vi.hoisted(() => vi.fn());
 
@@ -109,6 +111,29 @@ describe("useNativeRunTranscripts", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
     expect(eventsMock.mock.calls.at(-1)?.[1]).toBe(0);
     expect(container.textContent).toContain("Retained analytical fact");
+  });
+  it("immediately hides live-denied history and rejects a pre-denial in-flight response", async () => {
+    const event = { id: 1, runId: "native-run", seq: 1, eventType: "item.delta", createdAt: new Date(), payload: { prpEvent: {
+      schema: "paperclip.prp.event.v1", schemaVersion: 1, runId: "native-run", normalizedSessionId: "session-1",
+      eventType: "item.delta", emittedAt: "2026-10-07T10:00:00Z", payload: { itemId: "answer", kind: "agentMessage", text: "Retained live analytical fact" },
+    } } };
+    let resolveLate!: (rows: unknown[]) => void;
+    let receive!: (event: LiveEvent) => void;
+    eventsMock.mockResolvedValueOnce([event]).mockImplementationOnce(() => new Promise(resolve => { resolveLate = resolve; }));
+    const Context = __liveUpdatesTestUtils.LiveEventSubscriptionContext;
+    const subscription = { subscribe: (handler: typeof receive) => { receive = handler; return () => {}; } };
+    await act(async () => { root.render(<Context.Provider value={subscription}><RetainedProbe /></Context.Provider>); });
+    expect(container.textContent).toContain("Retained live analytical fact");
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => receive({ id: 2, companyId: "company-1", type: "analytical.context.access_lost", createdAt: new Date().toISOString(), payload: { runId: "native-run" } }));
+    expect(container.textContent).not.toContain("Retained live analytical fact");
+    expect(container.textContent).toContain("source denied");
+    await act(async () => { resolveLate([{ ...event, seq: 2 }]); });
+    expect(container.textContent).not.toContain("Retained live analytical fact");
+    eventsMock.mockResolvedValue([event]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(eventsMock.mock.calls.at(-1)?.[1]).toBe(0);
+    expect(container.textContent).toContain("Retained live analytical fact");
   });
 });
 

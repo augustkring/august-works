@@ -4,7 +4,8 @@ import type { TranscriptEntry } from "@/adapters";
 import { heartbeatsApi } from "@/api/heartbeats";
 import { nativeRunEventsToTranscript } from "./native-run-events";
 import { readTranscriptRequest } from "./read-transcript-request";
-import { isAnalyticalSourceAccessLost } from "@/api/client";
+import { ApiError, isAnalyticalSourceAccessLost } from "@/api/client";
+import { useCompanyLiveEvent } from "@/context/LiveUpdatesProvider";
 
 const EVENT_PAGE_SIZE = 1_000;
 const EVENT_POLL_INTERVAL_MS = 2_000;
@@ -25,7 +26,7 @@ function isLive(status: string): boolean {
   return status === "queued" || status === "running";
 }
 
-export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource[]) {
+export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource[], scope?: { companyId: string | null | undefined; issueId: string | null }) {
   const nativeRunsKey = runs
     .filter((run) => run.runtimeMode === "native")
     .map((run) => `${run.id}:${run.status}`)
@@ -44,6 +45,19 @@ export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource
   const retry = useCallback(() => setRetryGeneration((value) => value + 1), []);
   const projectionCacheRef = useRef(new Map<string, { events: HeartbeatRunEvent[]; transcript: TranscriptEntry[] }>());
   const cursorByRunRef = useRef(new Map<string, number>());
+  const sourceGenerationByRunRef = useRef(new Map<string, number>());
+  useCompanyLiveEvent((event) => {
+    if (event.type !== "analytical.context.access_lost" || (scope?.companyId && event.companyId !== scope.companyId)) return;
+    for (const run of nativeRuns) {
+      if (event.payload.runId !== run.id && (!scope?.issueId || event.payload.issueId !== scope.issueId)) continue;
+      sourceGenerationByRunRef.current.set(run.id, (sourceGenerationByRunRef.current.get(run.id) ?? 0) + 1);
+      cursorByRunRef.current.delete(run.id);
+      setEventsByRun(previous => { const next = new Map(previous); next.delete(run.id); return next; });
+      setErrorsByRun(previous => new Map(previous).set(run.id, {
+        message: "Analytical conversation source access is unavailable", failedAt: event.createdAt, sourceAccessLost: true,
+      }));
+    }
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -63,9 +77,13 @@ export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource
     for (const id of cursorByRunRef.current.keys()) {
       if (!retainedIds.has(id)) cursorByRunRef.current.delete(id);
     }
+    for (const id of sourceGenerationByRunRef.current.keys()) {
+      if (!retainedIds.has(id)) sourceGenerationByRunRef.current.delete(id);
+    }
 
     const refreshRun = async (run: NativeRunTranscriptSource) => {
       let failed = false;
+      const sourceGeneration = sourceGenerationByRunRef.current.get(run.id) ?? 0;
       try {
         let cursor = cursorByRunRef.current.get(run.id) ?? 0;
         const incoming: HeartbeatRunEvent[] = [];
@@ -75,6 +93,9 @@ export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource
             controller.signal,
           );
           if (cancelled) return;
+          if (sourceGeneration !== (sourceGenerationByRunRef.current.get(run.id) ?? 0)) {
+            throw new ApiError("Analytical conversation source access is unavailable", 403, { details: { code: "analytical_source_access_lost" } });
+          }
           const last = page.at(-1);
           const nextCursor = last ? Math.max(cursor, last.seq) : cursor;
           incoming.push(...page.filter((event) => event.seq > cursor));

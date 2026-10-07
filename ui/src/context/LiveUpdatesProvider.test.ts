@@ -14,8 +14,29 @@ import { describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import { __liveUpdatesTestUtils } from "./LiveUpdatesProvider";
 import { queryKeys } from "../lib/queryKeys";
+import { isAnalyticalSourceAccessLost } from "../api/client";
 
 describe("LiveUpdatesProvider issue invalidation", () => {
+  it("immediately removes the affected native chat and run payloads while preserving independent cached work", async () => {
+    const client = new QueryClient();
+    const chat = { id: "chat-1", companyId: "company-1", identifier: "PAP-1" };
+    const key = queryKeys.agentChats.detail("company-1", "user-1", "agent-1");
+    client.setQueryData(key, chat);
+    client.setQueryData(queryKeys.issues.detail("chat-1"), chat);
+    client.setQueryData(queryKeys.issues.comments("chat-1"), [{ body: "Retained analytical fact" }]);
+    client.setQueryData(queryKeys.issues.runs("chat-1"), [{ runId: "old-run" }]);
+    client.setQueryData(queryKeys.runDetail("old-run"), { resultJson: { fact: "Retained analytical fact" } });
+    client.setQueryData(queryKeys.issues.comments("independent"), [{ body: "Independent source" }]);
+    __liveUpdatesTestUtils.hideAnalyticalLivePayload(client, { id: 1, companyId: "company-1", type: "analytical.context.access_lost", createdAt: new Date().toISOString(), payload: { issueId: "chat-1", runId: "current-run" } });
+    for (const affected of [key, queryKeys.issues.comments("chat-1"), queryKeys.runDetail("old-run")]) {
+      expect(client.getQueryData(affected)).toBeUndefined();
+      expect(isAnalyticalSourceAccessLost(client.getQueryState(affected)?.error)).toBe(true);
+    }
+    expect(client.getQueryData(queryKeys.issues.comments("independent"))).toEqual([{ body: "Independent source" }]);
+    await client.fetchQuery({ queryKey: key, queryFn: async () => chat });
+    expect(client.getQueryState(key)?.status).toBe("success");
+    client.clear();
+  });
   it.each(["issue.updated", "project.deleted", "memory.source_erased", "resource_membership.removed"])("reauthorizes this company's retained process evidence after %s", action => {
     const client=new QueryClient();const invalidate=vi.spyOn(client,"invalidateQueries");
     __liveUpdatesTestUtils.invalidateActivityQueries(client,"company-1",{entityType:action.split(".")[0],entityId:"source-1",action},{userId:"user-1",agentId:null});

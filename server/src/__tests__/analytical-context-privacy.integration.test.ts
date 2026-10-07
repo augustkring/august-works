@@ -9,6 +9,14 @@ import {issueService} from "../services/issues.js";
 import {issueRoutes} from "../routes/issues.js";
 import {errorHandler} from "../middleware/index.js";
 import {randomUUID} from "node:crypto";
+import {createServer} from "node:http";
+import {once} from "node:events";
+import {WebSocket} from "ws";
+import {setupLiveEventsWebSocketServer} from "../realtime/live-events-ws.js";
+import {publishLiveEvent} from "../services/live-events.js";
+import {analyticalLiveEventForReader} from "../services/analytical-live-events.js";
+import {appendHeartbeatRunEvent} from "../services/heartbeat-run-events.js";
+import type {LiveEvent} from "@paperclipai/shared";
 import {and,eq,sql} from "drizzle-orm";
 import {agents,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,providerTraceRecords,memoryJobs,createDb} from "@paperclipai/db";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
@@ -133,6 +141,51 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
 
  it("reauthorizes copied native prose for the current human after the original run ends",async()=>{const f=await fixture();await f.capture();await copied();const reader={type:"board" as const,source:"session" as const,userId,companyIds:[companyId]};await db.update(heartbeatRuns).set({status:"succeeded"}).where(eq(heartbeatRuns.id,runId));await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId})).resolves.toBeUndefined();await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{runId})).resolves.toBeUndefined();await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId})).rejects.toMatchObject({status:403});});
  it("withholds copied prose when an original contributing task becomes hidden",async()=>{const f=await fixture();await f.capture();await copied();await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId})).rejects.toMatchObject({status:403});expect((await db.select().from(issueComments).where(eq(issueComments.issueId,issueId)))[0]!.body).toBe("Synthetic analytical answer");});
+ it("reauthorizes actual WebSocket output at delivery and exposes only native identities on source loss",async()=>{
+  const f=await fixture();await f.capture();
+  const http=createServer(),wss=setupLiveEventsWebSocketServer(http,db,{deploymentMode:"local_trusted"});
+  http.listen(0,"127.0.0.1");await once(http,"listening");const address=http.address() as {port:number};
+  const socket=new WebSocket(`ws://127.0.0.1:${address.port}/api/companies/${companyId}/events/ws`);
+  const read=()=>new Promise<LiveEvent>((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error("Native live event delivery timed out")),5000);socket.once("message",data=>{clearTimeout(timer);resolve(JSON.parse(data.toString()));});});
+  try{
+   await once(socket,"open");
+   const event={companyId,type:"heartbeat.run.log" as const,payload:{runId,issueId:randomUUID(),chunk:"Synthetic original analytical live fact"}};
+   const before=read();publishLiveEvent(event);expect((await before).payload.chunk).toContain("analytical live fact");
+   await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+   const denied=read();publishLiveEvent(event);const loss=await denied;
+   expect(loss).toMatchObject({type:"analytical.context.access_lost",payload:{runId,issueId,code:"analytical_source_access_lost"}});
+   expect(JSON.stringify(loss)).not.toContain("analytical live fact");expect(Object.keys(loss.payload).sort()).toEqual(["code","issueId","runId"]);
+   await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,f.sourceId));
+   const restored=read();publishLiveEvent(event);expect((await restored).payload.chunk).toContain("analytical live fact");
+  }finally{const closed=once(socket,"close");socket.terminate();await closed;await new Promise<void>(resolve=>wss.close(resolve));await new Promise<void>((resolve,reject)=>http.close(error=>error?reject(error):resolve()));}
+ });
+ it("checks all earlier conversation roots for a later native output and refuses a static agent key without native reader authority",async()=>{
+  const f=await fixture();await f.capture();
+  const laterRun=randomUUID();await db.insert(heartbeatRuns).values({id:laterRun,companyId,agentId,nativeIssueId:issueId,runtimeMode:"native",status:"running",responsibleUserId:userId});
+  const event:LiveEvent={id:1,companyId,type:"heartbeat.run.progress",createdAt:new Date().toISOString(),payload:{runId:laterRun,lastAssistantSnippet:"Synthetic borrowed analytical fact"}};
+  expect(await analyticalLiveEventForReader(db,event,board)).toEqual(event);
+  expect(await analyticalLiveEventForReader(db,event,{type:"agent",source:"agent_key",companyId,agentId,keyId:randomUUID(),onBehalfOfUserId:userId})).toMatchObject({type:"analytical.context.access_lost"});
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+  const denied=await analyticalLiveEventForReader(db,event,board);expect(denied).toMatchObject({type:"analytical.context.access_lost",payload:{runId:laterRun,issueId}});expect(JSON.stringify(denied)).not.toContain("borrowed analytical fact");
+ });
+ it("closes an already connected native browser after its current company membership is revoked",async()=>{
+  const f=await fixture();await f.capture();
+  const http=createServer(),wss=setupLiveEventsWebSocketServer(http,db,{deploymentMode:"authenticated",resolveSessionFromHeaders:async()=>({user:{id:userId},session:{id:randomUUID()}} as never)});
+  http.listen(0,"127.0.0.1");await once(http,"listening");const address=http.address() as {port:number};
+  const socket=new WebSocket(`ws://127.0.0.1:${address.port}/api/companies/${companyId}/events/ws`),received:string[]=[];
+  socket.on("message",data=>received.push(data.toString()));
+  try{
+   await once(socket,"open");
+   await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));
+   const closed=once(socket,"close");publishLiveEvent({companyId,type:"heartbeat.run.log",payload:{runId,chunk:"Revoked human private analytical fact"}});
+   expect((await closed)[0]).toBe(1008);expect(received).toEqual([]);
+  }finally{socket.terminate();await new Promise<void>(resolve=>wss.close(resolve));await new Promise<void>(resolve=>http.close(()=>resolve()));}
+ });
+ it("returns the actually scrubbed C7 row from the common native output allocator",async()=>{
+  const f=await fixture(),original=await f.capture();await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,original.lineageManifestId));
+  const persisted=await appendHeartbeatRunEvent(db,{companyId,agentId,runId,eventType:"item.delta",message:"Late private original analytical text",payload:{text:"Late private original analytical text"}});
+  expect(persisted.disposition).toBe("committed");expect(persisted.row.message).toBeNull();expect(persisted.row.payload).toBeNull();
+ });
  it("requires an actual current reader and explicit source rollout without erasing original canonical facts",async()=>{const f=await fixture();await f.capture();await expect(assertAnalyticalContextPayloadAccess(db,companyId,undefined,{issueId})).rejects.toMatchObject({status:403});await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false});await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId})).rejects.toMatchObject({status:404});expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(1);});
 
  it("rejects another native Task's Context even when it names the same current run and agent",async()=>{const f=await fixture(false),other=randomUUID();await db.insert(issues).values({id:other,companyId,title:"Other admitted native Task"});await contextManifestService(db).create({companyId,agentId,issueId:other,runId,query:"Other task context",policySnapshot:{fixture:true},selected:[]});await expect(f.capture()).rejects.toMatchObject({status:409});expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(0);});

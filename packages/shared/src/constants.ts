@@ -942,6 +942,7 @@ export const RUN_LIVENESS_STATES = [
 export type RunLivenessState = (typeof RUN_LIVENESS_STATES)[number];
 
 export const LIVE_EVENT_TYPES = [
+  "analytical.context.access_lost",
   "heartbeat.run.queued",
   "heartbeat.run.status",
   "heartbeat.run.progress",
