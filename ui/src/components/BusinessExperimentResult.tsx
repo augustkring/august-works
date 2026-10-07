@@ -25,7 +25,7 @@ const reasonLabel:Record<string,string>={
  registered_primary_not_met_or_guardrail_harm_detected:"The registered primary benefit was not met or a guardrail detected harm.",
  registered_effect_or_guardrail_bounds_inconclusive:"Primary benefit or guardrail bounds remain uncertain.",
 };
-export function BusinessExperimentResult({analysis,definition,interpretation}:{analysis:BusinessExperimentAnalysisView;definition:BusinessExperimentDefinition;interpretation?:ExperimentInterpretation|null}){
+export function BusinessExperimentResult({analysis,definition,interpretation}:{analysis:BusinessExperimentAnalysisView;definition:Pick<BusinessExperimentDefinition,"primaryMetric"|"guardrailMetrics"|"secondaryMetrics"|"diagnostics">;interpretation?:ExperimentInterpretation|null}){
  const result=analysis.result,diagnostics=result.diagnostics,countsAvailable=diagnostics.control+diagnostics.treatment===diagnostics.assigned;
  return <section aria-label="Experiment result" className="min-w-0 space-y-4"><Card><CardHeader><h2 className="font-semibold">{resultLabel[result.status]}</h2><p>One final capture · {new Date(analysis.analyzedAt).toLocaleString()}</p></CardHeader><CardContent className="space-y-4">
   {analysis.currentQualification==="needs_revalidation"&&<p role="status">Current source qualification changed. This is the retained original result; new reliance requires source review.</p>}

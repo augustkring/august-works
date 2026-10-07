@@ -134,6 +134,7 @@ export const businessExperimentInterpretations = pgTable("business_experiment_in
   conclusion: text("conclusion").$type<"ship_candidate"|"do_not_ship"|"iterate"|"abstain">().notNull(), rationale: text("rationale").notNull(), receiptHash:text("receipt_hash").notNull(),signature:text("signature").notNull(),
   interpretedBy:text("interpreted_by").notNull(),interpretedAt:timestamp("interpreted_at",{withTimezone:true}).notNull(),
 }, t => ({
+  tenantUq:unique("business_experiment_interpretations_tenant_uq").on(t.companyId,t.experimentId,t.versionId,t.analysisId,t.id),
   analysisUq:unique("business_experiment_interpretations_analysis_uq").on(t.companyId,t.analysisId),
   analysisFk:foreignKey({name:"business_experiment_interpretations_analysis_fk",columns:[t.companyId,t.experimentId,t.versionId,t.analysisId],foreignColumns:[businessExperimentAnalyses.companyId,businessExperimentAnalyses.experimentId,businessExperimentAnalyses.versionId,businessExperimentAnalyses.id]}).onDelete("cascade"),
   contentCheck:check("business_experiment_interpretations_content_check",sql`${t.conclusion} in ('ship_candidate','do_not_ship','iterate','abstain') and length(btrim(${t.rationale})) between 10 and 2000 and ${t.receiptHash} ~ '^[0-9a-f]{64}$' and ${t.signature} ~ '^decision-spec-v1[.][0-9a-f]{64}$'`),

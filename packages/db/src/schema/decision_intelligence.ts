@@ -5,6 +5,7 @@ import { decisions } from "./decisions.js";
 import { analyticalLineageManifests } from "./analytical_lineage.js";
 import { forecastRuns } from "./business_forecasting.js";
 import { businessScenarioRuns } from "./business_scenarios.js";
+import { businessExperimentAnalyses, businessExperimentInterpretations } from "./business_experiments.js";
 
 /** Native Decisions own this aggregate. No alternate choice or effect store. */
 export const decisionContexts = pgTable("decision_contexts", {
@@ -61,6 +62,16 @@ export const decisionCalculationPins = pgTable("decision_calculation_pins", {
   forecastFk: foreignKey({ name: "decision_calculation_pins_forecast_fk", columns: [t.companyId, t.forecastRunId], foreignColumns: [forecastRuns.companyId, forecastRuns.id] }).onDelete("cascade"),
   scenarioFk: foreignKey({ name: "decision_calculation_pins_scenario_fk", columns: [t.companyId, t.scenarioRunId], foreignColumns: [businessScenarioRuns.companyId, businessScenarioRuns.id] }).onDelete("cascade"),
   typeCheck: check("decision_calculation_pins_type_check", sql`(${t.forecastRunId} is null) <> (${t.scenarioRunId} is null) and ${t.sourceHash} ~ '^[0-9a-f]{64}$'`),
+}));
+export const decisionExperimentPins = pgTable("decision_experiment_pins", {
+  ...materialColumns(), experimentId: uuid("experiment_id").notNull(), experimentVersionId: uuid("experiment_version_id").notNull(),
+  analysisId: uuid("analysis_id").notNull(), interpretationId: uuid("interpretation_id").notNull(), sourceHash: text("source_hash").notNull(),
+}, t => ({
+  pinUq: unique("decision_experiment_pins_key_uq").on(t.companyId,t.contextVersionId,t.key),
+  versionFk: foreignKey({name:"decision_experiment_pins_version_fk",columns:[t.companyId,t.decisionId,t.contextVersionId],foreignColumns:[decisionContextVersions.companyId,decisionContextVersions.decisionId,decisionContextVersions.id]}).onDelete("cascade"),
+  analysisFk: foreignKey({name:"decision_experiment_pins_analysis_fk",columns:[t.companyId,t.experimentId,t.experimentVersionId,t.analysisId],foreignColumns:[businessExperimentAnalyses.companyId,businessExperimentAnalyses.experimentId,businessExperimentAnalyses.versionId,businessExperimentAnalyses.id]}).onDelete("cascade"),
+  interpretationFk: foreignKey({name:"decision_experiment_pins_interpretation_fk",columns:[t.companyId,t.experimentId,t.experimentVersionId,t.analysisId,t.interpretationId],foreignColumns:[businessExperimentInterpretations.companyId,businessExperimentInterpretations.experimentId,businessExperimentInterpretations.versionId,businessExperimentInterpretations.analysisId,businessExperimentInterpretations.id]}).onDelete("cascade"),
+  hashCheck: check("decision_experiment_pins_hash_check",sql`${t.sourceHash} ~ '^[0-9a-f]{64}$'`),
 }));
 export const decisionAssumptions=pgTable("decision_assumptions",{...materialColumns(),payload:jsonb("payload_json").$type<DecisionContextDefinition["assumptions"][number]>().notNull()},t=>({
   materialUq:unique("decision_assumptions_material_uq").on(t.companyId,t.contextVersionId,t.key),

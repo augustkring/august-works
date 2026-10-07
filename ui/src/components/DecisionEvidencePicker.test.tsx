@@ -5,11 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { DecisionEvidencePicker } from "./DecisionEvidencePicker";
 import { businessForecastingApi } from "@/api/business-forecasting";
+import { businessExperimentsApi } from "@/api/business-experiments";
+import { experimentFixture } from "../../storybook/stories/business-experiment-fixtures";
 import { businessScenariosApi } from "@/api/business-scenarios";
 import { forecastFixture } from "../../storybook/stories/business-forecast-fixtures";
 import { scenarioFixture } from "../../storybook/stories/business-scenario-fixtures";
 import type { DecisionEvidenceReference } from "@paperclipai/shared";
 vi.mock("@/api/business-forecasting", () => ({ businessForecastingApi: { list: vi.fn(), artifacts: vi.fn() } }));
+vi.mock("@/api/business-experiments", () => ({ businessExperimentsApi: { list: vi.fn(), receipts: vi.fn() } }));
 vi.mock("@/api/business-scenarios", () => ({ businessScenariosApi: { list: vi.fn(), runs: vi.fn() } }));
 const flush = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
 async function mount(value: DecisionEvidenceReference, companyId: string) {
@@ -51,4 +54,15 @@ describe("Native calculation evidence selection", () => {
       const denied = await mount(ref, s.companyId); expect(denied.container.textContent).not.toContain("Capacity option · capacity"); await denied.cleanup();
     }
   });
+  it("pins one exact interpreted experiment without copied effects and withholds cached evidence on denial or mismatched receipt ownership",async()=>{
+    const f=experimentFixture("inconclusive"),interpretation={id:"11111111-1111-4111-8111-111111111111",analysisId:f.analysis.id,conclusion:"iterate" as const,rationale:"Synthetic human presentation only",executionAuthority:"advisory_only" as const,receiptHash:"a".repeat(64),interpretedBy:f.userId,interpretedAt:f.analysis.analyzedAt};
+    const receipts={...f.receipts,interpretation},ref:DecisionEvidenceReference={type:"experiment_analysis",id:f.analysis.id,experimentId:f.experiment.id,versionId:f.version.id,interpretationId:interpretation.id};
+    vi.mocked(businessExperimentsApi.list).mockResolvedValue({items:[{experiment:f.experiment,version:f.version}],nextCursor:null,coverage:"bounded_current_authorized_page"});vi.mocked(businessExperimentsApi.receipts).mockResolvedValue(receipts);
+    const view=await mount(ref,f.companyId);for(let i=0;i<40&&!Array.from(view.pin().options).some(o=>o.text.includes("human iterate"));i++)await flush();
+    expect(businessExperimentsApi.receipts).toHaveBeenCalledWith(f.companyId,f.experiment.id,f.version.id,"current-account");
+    await act(async()=>{view.pin().value=JSON.stringify(ref);view.pin().dispatchEvent(new Event("change",{bubbles:true}));});expect(view.onChange).toHaveBeenLastCalledWith(ref);expect(view.onChange.mock.lastCall![0]).not.toHaveProperty("effect");expect(view.container.textContent).toContain("conditional proxies");
+    let deny!:(error:Error)=>void;vi.mocked(businessExperimentsApi.receipts).mockImplementation(()=>new Promise((_resolve,reject)=>{deny=reject;}));await act(async()=>{void view.client.invalidateQueries({queryKey:["decision-evidence",f.companyId,"current-account","experiment-receipts"]});});await flush();expect(view.container.textContent).not.toContain("human iterate");await act(async()=>deny(new Error("Experiment source authority denied")));await flush();expect(view.container.textContent).not.toContain("human iterate");await view.cleanup();
+    for(const receipt of [{...receipts,currentQualification:"needs_revalidation" as const},{...receipts,interpretation:{...interpretation,analysisId:"11111111-1111-4111-8111-111111111199"}},{...receipts,analysis:{...f.analysis,companyId:"11111111-1111-4111-8111-111111111199"}}]){vi.mocked(businessExperimentsApi.receipts).mockResolvedValue(receipt);const denied=await mount(ref,f.companyId);for(let i=0;i<5;i++)await flush();expect(denied.container.textContent).not.toContain("human iterate");await denied.cleanup();}
+  });
+
 });

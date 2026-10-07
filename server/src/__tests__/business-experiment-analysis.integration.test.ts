@@ -3,8 +3,10 @@ import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { companies, issues, projects, businessExperiments, businessExperimentAssignments, businessExperimentExposures, businessExperimentExecutions, businessExperimentCompletions, businessExperimentVersions, businessExperimentTransitions, businessExperimentAnalyses, businessExperimentOutcomes, businessExperimentInterpretations, analyticalLineageManifests, analyticalLineageEdges, createDb } from "@paperclipai/db";
-import { ISSUE_STATUSES, businessMetricDefinitionSchema } from "@paperclipai/shared";
+import { companies, issues, projects, agents, heartbeatRuns, authUsers, companyMemberships, decisions, decisionContexts, decisionContextVersions, decisionExperimentPins, decisionEvidenceLinks, decisionCriteria, decisionExpectedOutcomes, issueComments, businessExperiments, businessExperimentAssignments, businessExperimentExposures, businessExperimentExecutions, businessExperimentCompletions, businessExperimentVersions, businessExperimentTransitions, businessExperimentAnalyses, businessExperimentOutcomes, businessExperimentInterpretations, analyticalLineageManifests, analyticalLineageEdges, createDb } from "@paperclipai/db";
+import { ISSUE_STATUSES, businessMetricDefinitionSchema, decisionContextDefinitionSchema } from "@paperclipai/shared";
+import { decisionService } from "../services/decisions.js";
+import { decisionIntelligenceService } from "../services/decision-intelligence.js";
 import { businessExperimentService } from "../services/business-experiments/service.js";
 import { businessExperimentRecordingService } from "../services/business-experiments/recording.js";
 import { businessExperimentRoutes } from "../routes/business-experiments.js";
@@ -23,7 +25,7 @@ import { experimentAssignmentKey } from "../services/business-experiments/receip
 import { assignNativeBusinessExperimentUnit } from "../services/business-experiments/kernel.js";
 const support = await getEmbeddedPostgresTestSupport(), suite = support.supported ? describe : describe.skip;
 const actor = { type: "board" as const, source: "local_implicit" as const }, rationale = "Human source-owner recording of this exact non-personal native protocol";
-const flags = { analytical_lineage_v8: true, business_metrics_v8: true, business_experiments_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true };
+const flags = { analytical_lineage_v8: true, business_metrics_v8: true, business_experiments_v8: true, decision_intelligence_v8: true, enableDecisions: true, ai_use_cases_v7: true, governance_evidence_v7: true };
 suite("Native experiment final capture and human interpretation on migrated PostgreSQL", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, companyId: string, otherId: string, policyId: string;
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v8-experiment-analysis-"); db = createDb(database.connectionString); });
@@ -31,7 +33,7 @@ suite("Native experiment final capture and human interpretation on migrated Post
   beforeEach(async () => {
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental(flags); companyId = randomUUID(); otherId = randomUUID();
     await db.insert(companies).values([{ id: companyId, name: "Recording tenant", issuePrefix: randomUUID() }, { id: otherId, name: "Foreign recording tenant", issuePrefix: randomUUID() }]);
-    const policy = analyticalPurpose(); policy.analyticalPurpose!.capabilities = ["metrics", "experiment"];
+    const policy = analyticalPurpose(); policy.analyticalPurpose!.capabilities = ["metrics", "experiment", "decision"];
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, policy)).id;
   });
   const analysis = () => businessExperimentAnalysisService(db);
@@ -83,6 +85,71 @@ suite("Native experiment final capture and human interpretation on migrated Post
     await recording().recordExposure(companyId,actor,d.experiment.id,{expectedRevision:4,versionId:d.version.id,assignmentId:enrolledUnit.assignment.id,exposure:{status:"not_applied",rationale}});return enrolledUnit;
   }
   const analyzed=(d:Awaited<ReturnType<typeof running>>)=>analysis().analyze(companyId,actor,d.experiment.id,{expectedRevision:5,versionId:d.version.id});
+  async function nativeDecision() {
+    await db.insert(authUsers).values({id:"local-board",name:"Local fixture human",email:"experiment-decision@example.test",createdAt:new Date(),updatedAt:new Date()}).onConflictDoNothing();
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"member",status:"active"}).onConflictDoNothing();
+    const [agent]=await db.insert(agents).values({companyId,name:"Native fixture proposer",role:"engineer",status:"active",adapterType:"codex_local"}).returning();
+    const [origin]=await db.insert(issues).values({companyId,title:"Native decision origin",status:"done",responsibleUserId:"local-board"}).returning();
+    const [target]=await db.insert(issues).values({companyId,title:"Native decision target",status:"todo",responsibleUserId:"local-board"}).returning();
+    const [run]=await db.insert(heartbeatRuns).values({companyId,agentId:agent.id,status:"running",responsibleUserId:"local-board",contextSnapshot:{issueId:origin.id}}).returning();
+    const owner=decisionService(db,{wakeOriginAgent:async()=>{}});
+    const decision=await owner.create({companyId,actor,agentId:agent.id,runId:run.id,title:"Consider this exact retained experiment?",body:rationale,options:[{id:"proceed",label:"Proceed",effects:[{type:"comment_on_issue",targetIssueId:target.id,staleness:"lenient",bodyMarkdown:"Separate human native choice"}]},{id:"defer",label:"Defer",effects:[]}]});
+    return {decision,target,owner};
+  }
+  function context(source:{id:string;experimentId:string;versionId:string;interpretationId:string}) {
+    return decisionContextDefinitionSchema.parse({question:"Should this native proxy evidence inform the option?",objective:rationale,ownerUserId:"local-board",scope:{type:"company",id:null},timeHorizon:{from:new Date().toISOString(),until:new Date(Date.now()+86400000).toISOString()},uncertaintySummary:rationale,revisitAt:null,sensitivity:"internal",purpose:"management_intelligence",governanceObligationRefs:[policyId],retentionDays:1,evidence:[{key:"trial",source:{type:"experiment_analysis",...source},relationship:"experiment_result",optionId:null,criterionKey:null,rationale}],assumptions:[],criteria:[{key:"judgment",name:"Human consideration",description:rationale,type:"qualitative",priority:"high",evidenceKey:null}],expectedOutcomes:[{kind:"qualitative",optionId:"proceed",statement:rationale,reviewAt:new Date(Date.now()+2*86400000).toISOString(),uncertaintySummary:rationale}]});
+  }
+  it("binds exact interpreted experiment evidence before a separate canonical choice and erases dependent prose from final-capture ancestry",async()=>{
+    const d=await running(true),unit=await attested(d),[project]=await db.insert(projects).values({companyId,name:"Experiment final-only ancestry",status:"in_progress"}).returning();
+    await db.update(issues).set({projectId:project.id}).where(eq(issues.id,unit.unit.id));await closure(d);const result=await analyzed(d),native=await nativeDecision(),service=decisionIntelligenceService(db);
+    const missing=context({id:result.analysis.id,experimentId:d.experiment.id,versionId:d.version.id,interpretationId:randomUUID()});
+    await expect(service.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition:missing})).rejects.toMatchObject({status:404});
+    const interpreted=await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"iterate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});
+    const definition=context({id:result.analysis.id,experimentId:d.experiment.id,versionId:d.version.id,interpretationId:interpreted.interpretation.id});
+    const proposed=await service.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition}),pin=proposed.versions[0];
+    expect(pin.evidence[0].facts).toMatchObject({status:"inconclusive",humanConclusion:"iterate",executionAuthority:"advisory_only",causalAuthority:"withheld",assignedUnits:1});
+    expect((await native.owner.get(native.decision.id))!.status).toBe("open");expect(await db.select().from(issueComments).where(eq(issueComments.issueId,native.target.id))).toHaveLength(0);
+    const bindings=await db.select().from(decisionExperimentPins).where(eq(decisionExperimentPins.contextVersionId,pin.id));expect(bindings).toHaveLength(1);
+    const [stored]=await db.select().from(decisionContextVersions).where(eq(decisionContextVersions.id,pin.id));
+    const [manifest]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,stored.lineageManifestId));
+    await expect(db.transaction(async raw=>{const tx=raw as unknown as typeof db,versionId=randomUUID(),manifestId=randomUUID();
+      await tx.insert(analyticalLineageManifests).values({...manifest,id:manifestId,analysisRef:versionId});
+      await tx.insert(decisionContextVersions).values({...stored,id:versionId,revision:2,lineageManifestId:manifestId});
+      const fields={companyId,decisionId:native.decision.id,contextVersionId:versionId};
+      await tx.insert(decisionEvidenceLinks).values(definition.evidence.map(payload=>({...fields,key:payload.key,payload})));
+      await tx.insert(decisionCriteria).values(definition.criteria.map(payload=>({...fields,key:payload.key,payload})));
+      await tx.insert(decisionExpectedOutcomes).values(definition.expectedOutcomes.map((payload,i)=>({...fields,key:String(i),payload})));
+      // Every ordinary descendant is complete. Only the exact experiment pin
+      // is absent: the separate deferred proof must reject COMMIT itself.
+    })).rejects.toMatchObject({code:"23514",message:expect.stringContaining("decision_experiment_material_incomplete")});
+    await expect(db.delete(decisionExperimentPins).where(eq(decisionExperimentPins.contextVersionId,pin.id))).rejects.toMatchObject({cause:{code:"23514"}});
+    await db.update(issues).set({status:"done",updatedAt:new Date()}).where(eq(issues.id,unit.unit.id));
+    expect((await service.detail(companyId,actor,native.decision.id)).versions[0].contentHash).toBe(pin.contentHash);
+    await service.prepare(companyId,actor,native.decision.id,{expectedRevision:1,versionId:pin.id,rationale});
+    const chosen=await native.owner.decide({id:native.decision.id,optionId:"proceed",decidedByUserId:"local-board",userActor:actor});expect(chosen.status).toBe("decided");
+    await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"project",[project.id]);});
+    expect(await db.select().from(decisionContextVersions).where(eq(decisionContextVersions.decisionId,native.decision.id))).toHaveLength(0);
+    expect(await db.select().from(decisionExperimentPins).where(eq(decisionExperimentPins.decisionId,native.decision.id))).toHaveLength(0);
+    expect((await db.select().from(decisions).where(eq(decisions.id,native.decision.id)))[0].chosenOptionId).toBe("proceed");expect(await db.select().from(issueComments).where(eq(issueComments.issueId,native.target.id))).toHaveLength(1);
+  });
+  it("rejects cross-tenant/altered interpretations and hidden enrolled sources without admitting a prospective context",async()=>{
+    const d=await running(true),unit=await attested(d);await closure(d);const result=await analyzed(d),native=await nativeDecision(),service=decisionIntelligenceService(db);
+    const interpreted=await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"iterate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});
+    const definition=context({id:result.analysis.id,experimentId:d.experiment.id,versionId:d.version.id,interpretationId:interpreted.interpretation.id});
+    await expect(service.propose(otherId,actor,native.decision.id,{expectedRevision:0,definition})).rejects.toMatchObject({status:404});
+    for(const source of [{...definition.evidence[0].source,id:randomUUID()},{...definition.evidence[0].source,interpretationId:randomUUID()}]) await expect(service.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition:{...definition,evidence:[{...definition.evidence[0],source}]}})).rejects.toMatchObject({status:404});
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,unit.unit.id));await expect(service.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition})).rejects.toMatchObject({status:404});
+    expect(await db.select().from(decisionContexts).where(eq(decisionContexts.decisionId,native.decision.id))).toHaveLength(0);expect((await native.owner.get(native.decision.id))!.status).toBe("open");
+  });
+  it("preserves exact captured experiment results after metric republication and blocks new preparation without rebinding",async()=>{
+    const d=await running(true);await attested(d);await closure(d);const result=await analyzed(d),native=await nativeDecision(),service=decisionIntelligenceService(db);
+    const interpreted=await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"iterate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});
+    const definition=context({id:result.analysis.id,experimentId:d.experiment.id,versionId:d.version.id,interpretationId:interpreted.interpretation.id}),proposed=await service.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition}),pin=proposed.versions[0];
+    const owner=businessMetricService(db),metric=d.metrics[0],updated=await owner.createVersion(companyId,actor,metric.metric.id,{expectedRevision:2,definition:{...metric.version.definition,name:"New reasoned metric definition"}});await owner.publish(companyId,actor,metric.metric.id,{expectedRevision:3,versionId:updated.id});
+    const retained=await service.detail(companyId,actor,native.decision.id);expect(retained.versions[0].contentHash).toBe(pin.contentHash);expect(retained.versions[0].evidence).toEqual(pin.evidence);expect(retained.versions[0].revalidationRequiredEvidenceKeys).toEqual(["trial"]);
+    await expect(service.prepare(companyId,actor,native.decision.id,{expectedRevision:1,versionId:pin.id,rationale})).rejects.toMatchObject({status:409});expect((await native.owner.get(native.decision.id))!.status).toBe("open");
+  });
   it.each([false,true])("actual migrated owner admits registered effect only with balanced pretreatment invariants (imbalance=%s)",async(imbalance)=>{
     const d=await running(false,86400,true);await insideWindow(d);const key=experimentAssignmentKey(companyId,d.version.id), counts={control:0,treatment:0};
     // Deliberately balanced synthetic qualification frame. This uses the private

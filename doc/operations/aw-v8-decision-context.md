@@ -122,3 +122,33 @@ log and screenshot hashes in `aw-v8-evidence/decision-calculation-checkpoint.jso
 Synthetic mathematical history and UI fixtures exercise software contracts,
 not collected business evidence, causal identification, official maintainer
 visual baselines or hosted release readiness. Whole V8 work remains in progress.
+
+## Exact interpreted experiment evidence
+
+Decision context can bind the native `experiment_analysis` ID, experiment/version
+and separate human interpretation ID. The private experiment owner verifies its
+signed receipts, complete intention-to-treat final outcomes, current authority,
+retention and original numerical replay inside the native company/Memory
+transaction. The capture retains the original primary/guardrail/exploratory
+results, intervals, registered thresholds, quality gates, human conclusion and
+limitations. The UI renders the existing native result cards rather than exposing
+serialized calculation data. No copied result, source hash or caller qualification
+is accepted as proposal input. Invalid/inconclusive evidence remains visibly so.
+
+Every source manifest from the protocol, enrolled assignments and final outcomes
+is inherited without dropping subjects. Native source budgets bound admission;
+large populations beyond demonstrated performance are not qualified by this
+checkpoint. Recorded and current project ancestry remain independently admitted.
+An exact tenant-scoped analysis/interpretation FK pin plus a deferred completeness
+proof prevents incomplete context material from committing. Erasure of an
+experiment or any inherited native source removes the whole dependent context,
+preparation/binding and captured human prose with rollout off/company paused.
+The original canonical Decision, choice and already dispatched effects survive.
+
+Changing a metric publication requires review for new preparation/reliance and
+keeps the historical capture/hash unchanged. A native status proxy, human exposure
+or concurrent-change report does not become a verified business/task outcome.
+The causal interpretation remains conditional; experiment evidence cannot supply
+a measured criterion or actual metric expectation baseline. A positive experiment
+or human ship candidate never chooses a Decision or dispatches an intervention.
+Causal, Learning and Planning consumers and full V8 qualification continue.

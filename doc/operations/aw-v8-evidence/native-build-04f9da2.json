@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "04f9da2a5116bc77173e281209169694b67240e1",
+  "command": "pnpm build",
+  "status": "passed",
+  "exitCode": 0,
+  "logPath": "/var/tmp/aw-v8-integrated-04f9da2-build.log",
+  "logSha256": "018b716e203d66ee050e2e08d1870d59131d10afb325fce93966baf2385650b4",
+  "scope": "Integrated production build at the exact experiment workbench checkpoint. Does not qualify subsequent Decision/Causal/Learning/Planning source, optional providers, hosted deployment or complete V8 release."
+}

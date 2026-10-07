@@ -6,6 +6,7 @@ import {useAccountIdentity} from "@/api/companies-query";
 import {instanceSettingsApi} from "@/api/instanceSettings";
 import {decisionIntelligenceApi} from "@/api/decision-intelligence";
 import type {Decision} from "@/api/decisions";
+import {BusinessExperimentResult} from "./BusinessExperimentResult";
 import {DecisionContextForm} from "./DecisionContextForm";
 import {DecisionOutcomeReviewPanel} from "./DecisionOutcomeReviewPanel";
 import {Button} from "@/components/ui/button";
@@ -39,7 +40,7 @@ function VersionDetails({pin,decision}:{pin:DecisionContextVersionView;decision:
       {!pin.evidence.length&&<p className="text-sm text-muted-foreground">No quantitative evidence was declared. This context records qualitative human judgment.</p>}
       {pin.evidence.map(item=><div key={item.key} className="space-y-2 rounded-md border border-border p-3"><p className="font-medium">{item.key.replaceAll("_"," ")}</p><p className="text-sm text-muted-foreground">Captured {new Date(item.capturedAt).toLocaleString()} · {item.source.type.replaceAll("_"," ")}</p>
         {pin.revalidationRequiredEvidenceKeys?.includes(item.key)&&<p role="status" className="text-sm text-muted-foreground">This retained calculation is historical. Its source owner requires revalidation before new use; the captured decision basis remains unchanged.</p>}
-        <dl className="space-y-2 text-sm">{Object.entries(item.facts).filter(([name])=>!/(?:Id|Hash)$/.test(name)).map(([name,value])=><div key={name} className="min-w-0"><dt className="text-muted-foreground">{factLabel(name)}</dt><dd className="break-words">{factValue(name,value)}</dd></div>)}</dl>
+        {item.experiment?<BusinessExperimentResult analysis={item.experiment.analysis} definition={item.experiment.registeredMetrics} interpretation={item.experiment.interpretation}/>:<dl className="space-y-2 text-sm">{Object.entries(item.facts).filter(([name])=>!/(?:Id|Hash)$/.test(name)).map(([name,value])=><div key={name} className="min-w-0"><dt className="text-muted-foreground">{factLabel(name)}</dt><dd className="break-words">{factValue(name,value)}</dd></div>)}</dl>}
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">{item.limitations.map(item=><li key={item}>{item}</li>)}</ul>
         <details><summary className="cursor-pointer text-sm">Inspect evidence provenance</summary><div className="space-y-2 pt-3 text-sm"><p className="break-all">Native source {item.source.id}</p><p className="break-all">Source hash {item.sourceHash}</p>{Object.entries(item.facts).filter(([name])=>/(?:Id|Hash)$/.test(name)).map(([name,value])=><p key={name} className="break-all">{factLabel(name)}: {value}</p>)}</div></details>
       </div>)}

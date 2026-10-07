@@ -6,6 +6,7 @@ import type {Decision} from "@/api/decisions";
 import {DecisionContextWorkspace} from "@/components/DecisionContextPanel";
 import {outcomeFixture} from "./decision-outcome-review-fixtures";
 import {forecastFixture} from "./business-forecast-fixtures";
+import {experimentFixture} from "./business-experiment-fixtures";
 import {scenarioFixture} from "./business-scenario-fixtures";
 const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
 const companyId=id(1),decisionId=id(2),versionId=id(3),policyId=id(4),userId="reviewer",expiresAt="2099-01-01T00:00:00Z",createdAt="2026-10-07T00:00:00Z";
@@ -18,7 +19,7 @@ const definition=decisionContextDefinitionSchema.parse({question:"Should we exte
 const policy=governanceObligationSchema.parse({framework:"company_policy",authority:"Sample board",citation:"Approved advisory decision purpose",jurisdictionOrScope:"Native business objects",applicabilityFacts:"Prospective context for human native choices",applicabilityState:"applicable",effectiveFrom:createdAt,effectiveUntil:null,requiredControl:"Current native source authority",evidenceRequired:["Native evidence pins"],controlRefs:["Human preparation"],nextReviewAt:expiresAt,reviewTrigger:"Purpose or population change",sourceVersionOrDate:"storybook/v1",sourceUrl:"https://example.test/decision-purpose",
   analyticalPurpose:{status:"approved",purpose:"management_intelligence",capabilities:["metrics","decision"],populationUnits:"business_objects",peopleImpact:"none",decisionBoundary:"advisory_only",maxRetentionDays:30,permittedSensitivity:["internal"],prohibitedUses:["Employee ranking"],approvalRationale:"Presentation-only advisory fixture"}});
 const decision:Decision={id:decisionId,companyId,bundleId:null,originAgentId:id(8),originIssueId:id(9),originRunId:id(10),ruleKey:null,title:"Extend delivery review?",body:"The native decision retains its options and effect authority",options:[{id:"extend",label:"Extend the pilot",effects:[]},{id:"defer",label:"Defer and review",effects:[]}],inputs:null,status:"open",executionStatus:null,chosenOptionId:null,inputValues:null,decidedByUserId:null,decidedAt:null,expiresAt,idempotencyKey:null,targetSnapshots:{},continuationPolicy:"none",metadata:{},createdAt,updatedAt:createdAt};
-function Fixture({state,reviewState,historicalCalculation=false}:{state:"empty"|"proposal"|"prepared"|"frozen"|"expired";reviewState?:DecisionOutcomeReviewState;historicalCalculation?:boolean}) {
+function Fixture({state,reviewState,historicalCalculation=false,capturedExperiment=false}:{state:"empty"|"proposal"|"prepared"|"frozen"|"expired";reviewState?:DecisionOutcomeReviewState;historicalCalculation?:boolean;capturedExperiment?:boolean}) {
   const [client]=useState(()=>{
     const query=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity,refetchOnMount:false,refetchOnWindowFocus:false},mutations:{retry:false}}});
     const context:DecisionContextView={companyId,decisionId,revision:state==="empty"?0:state==="proposal"?1:2,preparedVersionId:["prepared","frozen"].includes(state)?versionId:null,
@@ -32,6 +33,11 @@ function Fixture({state,reviewState,historicalCalculation=false}:{state:"empty"|
       context.versions[0].evidence.push({key:"conditional_capacity",source,sourceHash:"d".repeat(64),capturedAt:createdAt,expiresAt,facts:{nominal:3,differenceFromBase:1,status:"calculated",uncertaintyMethod:"deterministic",uncertaintyQualification:"not_assessed",p10:null,p90:null},limitations:["Conditional human assumptions; no observed actual, calibration, causal effect or commitment is asserted."]});
       context.versions[0].revalidationRequiredEvidenceKeys=["conditional_capacity"];
     }
+    if(capturedExperiment){
+      const e=experimentFixture("inconclusive"),interpretation={id:id(705),analysisId:e.analysis.id,conclusion:"iterate" as const,rationale:"Synthetic presentation of separate human interpretation",executionAuthority:"advisory_only" as const,receiptHash:"e".repeat(64),interpretedBy:userId,interpretedAt:createdAt},source={type:"experiment_analysis" as const,id:e.analysis.id,experimentId:e.experiment.id,versionId:e.version.id,interpretationId:interpretation.id};
+      context.versions[0].definition={...definition,evidence:[...definition.evidence,{key:"experiment",source,relationship:"experiment_result",optionId:null,criterionKey:null,rationale:"Synthetic conditional native process result for human review"}]};
+      context.versions[0].evidence.push({key:"experiment",source,sourceHash:"d".repeat(64),capturedAt:createdAt,expiresAt,facts:{status:"inconclusive",executionAuthority:"advisory_only"},limitations:["Synthetic presentation only. Human exposure is unverified and native status is an operational proxy."],experiment:{analysis:e.analysis,registeredMetrics:{primaryMetric:e.version.definition.primaryMetric,guardrailMetrics:e.version.definition.guardrailMetrics,secondaryMetrics:e.version.definition.secondaryMetrics,diagnostics:e.version.definition.diagnostics},interpretation}});
+    }
     query.setQueryData(["decision-context",companyId,userId,decisionId],context);
     query.setQueryData(["decision-outcome-review",companyId,userId,decisionId],reviewState?outcomeFixture(reviewState,definition):null);
     query.setQueryData(["decision-review-observations",companyId,userId,id(6)],{items:[],nextCursor:null,coverage:"bounded_current_authorized_page"});
@@ -43,6 +49,9 @@ function Fixture({state,reviewState,historicalCalculation=false}:{state:"empty"|
     query.setQueryData(["decision-evidence",companyId,userId,"forecast-runs",f.spec.id],{items:[f.run],nextCursor:null});
     query.setQueryData(["decision-evidence",companyId,userId,"scenarios"],{items:[{scenario:s.scenario,version:s.version}],nextCursor:null});
     query.setQueryData(["decision-evidence",companyId,userId,"scenario-runs",s.scenario.id],{items:[s.run],nextCursor:null});
+    const e=experimentFixture("inconclusive"),interpretation={id:id(705),analysisId:e.analysis.id,conclusion:"iterate",rationale:"Synthetic presentation of separate human interpretation",executionAuthority:"advisory_only",receiptHash:"e".repeat(64),interpretedBy:userId,interpretedAt:createdAt};
+    query.setQueryData(["decision-evidence",companyId,userId,"experiments"],{items:[{experiment:e.experiment,version:e.version}],nextCursor:null,coverage:"bounded_current_authorized_page"});
+    query.setQueryData(["decision-evidence",companyId,userId,"experiment-receipts",e.experiment.id,e.version.id],{...e.receipts,interpretation});
     return query;
   });
   const native=state==="frozen"?{...decision,status:"decided" as const,chosenOptionId:"extend",decidedAt:"2026-10-07T01:00:00Z"}:decision;
@@ -63,3 +72,5 @@ export const ReviewCompleted:Story={render:()=> <Fixture state="frozen" reviewSt
 export const ReviewInconclusive:Story={render:()=> <Fixture state="frozen" reviewState="inconclusive"/>};
 export const ReviewCancelled:Story={render:()=> <Fixture state="frozen" reviewState="cancelled"/>};
 export const HistoricalCalculation:Story={render:()=> <Fixture state="frozen" historicalCalculation/>};
+
+export const CapturedExperiment:Story={render:()=> <Fixture state="frozen" capturedExperiment/>};

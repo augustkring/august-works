@@ -304,3 +304,16 @@ conditional assumptions, separate from verified workflow telemetry. Explicit
 human interpretation references the exact analysis and grants advisory authority
 only. Source erasure covers original and final-capture ancestry, removes dependent
 human prose/results, and continues with rollout disabled or company paused.
+
+## V8-028 — Experiment evidence binds both analysis and human interpretation
+
+Decision context binds exact native analysis and interpretation identities,
+retaining original registered result cards and every source edge. The private
+experiment owner verifies signed material, complete outcomes and numerical replay
+before capture or disclosure. A separate tenant-scoped pin indexes the same
+context aggregate, with deferred completeness and whole-context erasure. It is
+not a second decision or experiment store. Inconclusive/invalid evidence remains
+so; native status and human exposure are explicitly conditional proxies, never
+verified task outcomes or measured metric baselines. Canonical choice/effects
+remain under their existing human-authorized path. Source publication changes
+flag historical evidence for review without rewriting the captured bytes.

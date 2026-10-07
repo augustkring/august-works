@@ -6,7 +6,7 @@ async function accessibility(page:Page) {
   const violations=await page.evaluate(async budget=>{
     const w=window as unknown as {axe:{run:(context:string,options:unknown)=>Promise<{violations:unknown[]}>}};
     const deadline=performance.now()+budget;
-    while(true) {try{return (await w.axe.run("#storybook-root",{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa"]}})).violations;}catch(error){if(!(error instanceof Error)||!error.message.includes("Axe is already running")||performance.now()>=deadline) throw error;await new Promise(resolve=>setTimeout(resolve,25));}}
+    while(true) {try{return (await w.axe.run("#storybook-root",{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa","wcag22aa"]}})).violations;}catch(error){if(!(error instanceof Error)||!error.message.includes("Axe is already running")||performance.now()>=deadline) throw error;await new Promise(resolve=>setTimeout(resolve,25));}}
   },5000);expect(violations).toEqual([]);
 }
 for(const theme of ["light","dark"]) for(const width of [390,1200]) {
@@ -27,6 +27,18 @@ for(const theme of ["light","dark"]) for(const width of [390,1200]) {
     await expect(evidence).toContainText("do not become measured outcomes or authorize a choice");
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await accessibility(page);
     await page.screenshot({path:info.outputPath(`decision-calculation-${kind}-${theme}-${width}.png`),fullPage:true,animations:"disabled"});
+  });
+  test(`decision experiment ${theme} ${width}px binds exact human advisory interpretation`,async({page},info)=>{
+    await page.route("**/api/**",route=>route.abort());await page.setViewportSize({width,height:1100});await page.goto(`/iframe.html?id=business-intelligence-decision-intelligence--proposal&viewMode=story&globals=theme:${theme}`);
+    await page.getByRole("button",{name:"Propose a context revision",exact:true}).click();const form=page.getByRole("form",{name:"Decision context proposal"});await form.getByRole("button",{name:"Add native evidence",exact:true}).click();const evidence=form.getByRole("group",{name:"Evidence 2",exact:true});
+    await evidence.getByRole("combobox",{name:"Evidence kind",exact:true}).selectOption("experiment_analysis");await evidence.getByRole("combobox",{name:"Human-interpreted experiment",exact:true}).selectOption("00000000-0000-4000-8000-000000000701");
+    const pin=evidence.getByRole("combobox",{name:"Pinned evidence",exact:true});const value=await pin.locator("option").nth(1).getAttribute("value");await pin.selectOption(value!);const source=JSON.parse(await pin.inputValue());expect(source).toMatchObject({type:"experiment_analysis",id:"00000000-0000-4000-8000-000000000703",interpretationId:"00000000-0000-4000-8000-000000000705"});expect(source).not.toHaveProperty("effect");expect(source).not.toHaveProperty("sourceHash");
+    await evidence.getByRole("textbox",{name:"Evidence rationale",exact:true}).fill("Separate human consideration of this exact interpreted proxy experiment");await expect(form.getByRole("button",{name:"Save context proposal"})).toBeEnabled();await expect(evidence).toContainText("conditional proxies");
+    await pin.focus();await page.keyboard.press("Tab");expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await accessibility(page);await page.screenshot({path:info.outputPath(`decision-experiment-${theme}-${width}.png`),fullPage:true,animations:"disabled"});
+  });
+  test(`decision captured experiment ${theme} ${width}px preserves intervals and every safety gate`,async({page},info)=>{
+    await page.route("**/api/**",route=>route.abort());await page.setViewportSize({width,height:1100});await page.goto(`/iframe.html?id=business-intelligence-decision-intelligence--captured-experiment&viewMode=story&globals=theme:${theme}`);const result=page.getByRole("region",{name:"Experiment result",exact:true});await expect(result).toContainText("Evidence remains inconclusive");await expect(result).toContainText("percentage points");await expect(result).toContainText("Registered acceptable harm");await expect(result).toContainText("Human interpretation");await expect(result).toContainText("Advisory only");
+    const gates=result.getByText("Inspect evidence quality and balance",{exact:true});await gates.focus();await page.keyboard.press("Space");await expect(result).toContainText("Complete native assignment receipts");await expect(result).toContainText("Admitted human concurrent-change review");expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await accessibility(page);await page.screenshot({path:info.outputPath(`decision-captured-experiment-${theme}-${width}.png`),fullPage:true,animations:"disabled"});
   });
   test(`decision historical calculation ${theme} ${width}px preserves frozen basis and revalidation`,async({page},info)=>{
     await page.route("**/api/**",route=>route.abort());await page.setViewportSize({width,height:1100});
