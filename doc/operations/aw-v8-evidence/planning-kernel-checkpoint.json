@@ -1,0 +1,71 @@
+{
+  "checkpoint": "Bounded native mathematical planning provider and independent constraint validation",
+  "parentCommit": "fb28801f8aef0bc19727ce672bc4f3d758c4ed1b",
+  "recordedAt": "2026-10-07T10:41:51.836024+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-adaptive-planning.md",
+      "sha256": "bbe01ab7f48f81c74438f4068505480169a794afa4067b535ddfdd0ce9fa269a"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-fb28801.json",
+      "sha256": "7162ccca660d872fc137d6db6bf4c647b2d9e1b45899a04920e75ef4a9b36a94"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "c3dbd62400c58ad560e55fb50984284b957bbe61f04abb2be1a3493f53383b23"
+    },
+    {
+      "path": "packages/shared/src/adaptive-planning.ts",
+      "sha256": "b0cc61a842837e0b84c82b148967af7dbda7f3144c6a52b9d0b245b48ad8e374"
+    },
+    {
+      "path": "packages/shared/src/index.ts",
+      "sha256": "ceb4f03be05edd5cf8020a9c4551cefa72ab0edd956d4444f9c4c10288ed2ebb"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-kernel.test.ts",
+      "sha256": "12520945e52ae4c004f2f020c40b7b70b60a79ff5effb648783a983a56d60e79"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/kernel.ts",
+      "sha256": "d5746818afe59e37825311f447d429097f858d7dcafb7c9094afe90d43d04d34"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/provider.ts",
+      "sha256": "89def7c4b493e00611c104c8da28aaf13cb1ab679a58c3da9786d63b695dcc08"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "tests-complete",
+      "checks": 12,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-kernel-tests-complete.log",
+      "logSha256": "eddec1426584b673533282c5bcba1bc0ed5d6d8ed523bdc27a2a0824f01d72ef"
+    },
+    {
+      "name": "server-types-complete",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-kernel-server-types-complete.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared-types-complete",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-kernel-shared-types-complete.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "evidenceClass": "Actual native mathematical/provider software qualification; no public native source owner, company/project authority, persisted proposal, execution authority or hosted release.",
+  "remaining": [
+    "Project and cross-project source inheritance, canonical human approval and product UI",
+    "Management/Learning and optional analytical providers",
+    "Complete V8 integration and hosted release qualification"
+  ]
+}

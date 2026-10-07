@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "fb28801f8aef0bc19727ce672bc4f3d758c4ed1b",
+  "command": "pnpm build",
+  "status": "passed",
+  "exitCode": 0,
+  "logPath": "/var/tmp/aw-v8-native-build-fb28801f8.log",
+  "logSha256": "93c3817b7398ea9347d83907a66b8e94c901996074e14b2fb80ee592e8f812ec",
+  "scope": "Exact integrated causal-to-Decision checkpoint. Does not qualify subsequent Planning/Management/Learning, optional providers or hosted release."
+}
