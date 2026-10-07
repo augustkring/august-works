@@ -166,3 +166,52 @@ source authority, strict commands, expected account and no-store are preserved.
 Private signing material/source snapshots are withheld from public receipt views.
 Applied attestation cannot precede assignment, claim future time or pass registered
 stopping/horizon; explicit not-applied receipts keep their assigned subjects.
+
+## One final native analysis and advisory human interpretation
+
+Migration 0406 adds immutable analysis, per-assignment/per-metric outcome and
+human interpretation owners. `/analyze` accepts exact version/revision only;
+callers cannot submit outcomes, arms, quality booleans or numerical conclusions.
+Every enrolled source is authorized and held under native shared row locks before
+one actual PostgreSQL capture time. Each primary/guardrail/exploratory outcome is
+calculated by the existing native ratio engine on that exact unit. All subjects,
+including explicitly not-applied exposure, remain in intention-to-treat.
+Emergency stopping retains an inconclusive non-confirmatory analysis with no
+invented future outcome receipts. Missing exposure logs or material/unknown human
+concurrent-change review invalidate inference.
+
+The explicit registered `finalCaptureMaxDelaySeconds` bounds the final-capture
+window after horizon end to 1–86400 seconds. Late capture retains its actual
+receipts but produces invalid evidence. A protocol lacking this field requires
+an explicit amended version/new readiness review before recording. This does not
+rewrite old hashes. Per-unit outcomes have genuine experiment receipt identities;
+they are not claimed to be company-population metric observations. Common-time
+capture is current native status after the horizon, never reconstructed status
+at horizon end. Status proxies, eligibility and human attestation limitations
+remain explicit in every result.
+
+Registered Fisher exact pretreatment diagnostics use familywise threshold/K.
+Imbalance withholds inference. The result retains exact SRM, sample policy,
+conservative primary/guardrail intervals and exploratory distinction. Protected
+native signatures bind original capture, completion and output. Every retained
+read verifies signatures, complete original material and deterministic numerical
+replay; it separately reauthorizes all sources. Current metric-publication changes
+produce live revalidation metadata without replacing original result/hash.
+
+Analysis advances completed → analyzing; it does not automatically produce a
+human decision. `/interpret` binds the exact analysis/revision, explicit rationale,
+limitations acknowledgment and advisory-only authority. Invalid evidence requires
+abstention; a ship candidate requires the registered positive result and all
+safety bounds. Interpretation advances to decided/inconclusive/invalid and
+retains its own immutable human receipt. It dispatches no work, policy or native
+Decision choice. Final-capture project ancestry inherits complete source lineage;
+erasing it removes the whole dependent protocol, outcomes/result and human prose,
+including with rollout off/company paused. Native company purge includes all
+three owners. Deferred SQL proof prevents analysis-only lifecycle advances and
+incomplete final outcome sets; ordinary receipt deletion/update is rejected.
+
+Software qualification uses explicitly synthetic fixtures. A deliberately
+balanced synthetic allocation frame tests the positive numerical path and a
+parallel pretreatment-imbalanced frame tests abstention. Neither frame is a
+collected business trial or evidence of actual intervention benefit. Operator UI,
+Decision/Causal/Learning/Planning bridges and remaining V8 qualification follow.

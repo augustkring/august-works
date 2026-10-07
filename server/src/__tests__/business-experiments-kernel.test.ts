@@ -17,7 +17,7 @@ function definition(): BusinessExperimentDefinition {
     primaryMetric: { ...metric("primary", 10), beneficialDirection: "increase", minimumMeaningfulEffect: 0.1 },
     secondaryMetrics: [metric("secondary", 20)], guardrailMetrics: [{ ...metric("guardrail", 30), harmfulDirection: "increase", maximumAcceptableHarm: 0.15 }],
     diagnostics: { invariantBalance: { method: "exact_fisher_probability_ordering_v1", familywiseAlpha: 0.001 }, srmAlpha: 0.001, invariantMetricRefs: [id(40)], concurrentExperimentAndInterferencePlan: statement, telemetryAndJoinPlan: statement },
-    analysisPlan: { method: "bonferroni_clopper_pearson_difference_v1", familywiseAlpha: 0.05, estimand: "intention_to_treat", missingOutcomes: "invalidate", multipleComparisonPolicy: "primary_and_guardrails_familywise_secondary_exploratory", noveltySeasonalityCarryoverLimits: statement },
+    analysisPlan: { finalCaptureMaxDelaySeconds: 86400, method: "bonferroni_clopper_pearson_difference_v1", familywiseAlpha: 0.05, estimand: "intention_to_treat", missingOutcomes: "invalidate", multipleComparisonPolicy: "primary_and_guardrails_familywise_secondary_exploratory", noveltySeasonalityCarryoverLimits: statement },
     sampleOrDurationPlan: { kind: "fixed_horizon", from: "2026-01-01T00:00:00Z", until: "2026-02-01T00:00:00Z", minimumAssignedUnits: 20, maximumAssignedUnits: 4000, minimumUnitsPerArm: 2, minimumDetectableEffect: 0.1, powerRationale: statement },
     stopRules: { efficacyLooks: "one_after_fixed_horizon", emergencySafetyStop: statement, shipPolicy: statement, rollbackPolicy: statement },
     ethics: { affectedPopulation: statement, personImpact: "none", legalBasisRationale: statement, requiresConsent: false, consentGovernanceObligationRef: null, darkPatterns: false, hiddenEmploymentManipulation: false, changesMaterialAiDecisions: false, aiUseCaseId: null, fairnessConstraints: statement },
@@ -26,7 +26,7 @@ function definition(): BusinessExperimentDefinition {
 }
 /** Synthetic receipts exercise arithmetic only, never native ownership. */
 function capture(d: BusinessExperimentDefinition, perArm = 500): NativeBusinessExperimentCapture {
-  const observedAt = "2026-02-01T01:00:00Z";
+  const observedAt = "2026-02-01T02:00:00Z";
   return {
     versionId: id(100), definitionHash: nativeSha256(d), registeredAt: "2025-12-01T00:00:00Z", reviewedAt: "2025-12-02T00:00:00Z",
     completedAt: d.sampleOrDurationPlan.until, analyzedAt: "2026-02-01T02:00:00Z", completionReason: "fixed_horizon",
@@ -35,7 +35,7 @@ function capture(d: BusinessExperimentDefinition, perArm = 500): NativeBusinessE
       const arm = i < perArm ? "control" as const : "treatment" as const, position = i % perArm;
       return { unitId: id(1000 + i), unitSourceHash: nativeSha256({ syntheticUnit: i }), arm, assignedAt: "2026-01-01T01:00:00Z", assignmentReceiptHash: nativeSha256({ syntheticAssignment: i }),
         exposure: { arm, exposedAt: "2026-01-01T02:00:00Z", receiptHash: nativeSha256({ syntheticExposure: i }) },
-        outcomes: [d.primaryMetric, ...d.guardrailMetrics, ...d.secondaryMetrics].map((metric, j) => ({ key: metric.key, metricId: metric.metricId, metricVersionId: metric.metricVersionId, observationId: id(100000 + i * 10 + j), sourceHash: nativeSha256({ syntheticOutcome: i, metric: j }), from: d.sampleOrDurationPlan.from, until: d.sampleOrDurationPlan.until, observedAt,
+        outcomes: [d.primaryMetric, ...d.guardrailMetrics, ...d.secondaryMetrics].map((metric, j) => ({ key: metric.key, metricId: metric.metricId, metricVersionId: metric.metricVersionId, outcomeReceiptId: id(100000 + i * 10 + j), sourceHash: nativeSha256({ syntheticOutcome: i, metric: j }), from: d.sampleOrDurationPlan.from, until: d.sampleOrDurationPlan.until, observedAt,
           value: (metric.key === "primary" ? Number(position < perArm * (arm === "control" ? 0.2 : 0.8)) : metric.key === "guardrail" ? 0 : position % 2) as 0 | 1 })),
       };
     }),
@@ -122,7 +122,7 @@ describe("native experiment exact arithmetic", () => {
     invalid(c => { c.units[0].exposure!.arm = "treatment"; });
     invalid(c => { c.units[0].exposure!.receiptHash = c.units[1].exposure!.receiptHash; });
     invalid(c => { c.units[0].outcomes[0].metricVersionId = id(900); });
-    invalid(c => { c.units[0].outcomes[0].observationId = c.units[1].outcomes[0].observationId; });
+    invalid(c => { c.units[0].outcomes[0].outcomeReceiptId = c.units[1].outcomes[0].outcomeReceiptId; });
     invalid(c => { c.units[0].outcomes[0].value = NaN as 0; });
     invalid(c => { c.units[0].outcomes[0].until = "2026-02-02T00:00:00Z"; });
   });
@@ -135,6 +135,8 @@ describe("native experiment exact arithmetic", () => {
     invalid(c => { c.units[0].assignedAt = "2025-12-31T00:00:00Z"; });
     invalid(c => { c.units[0].exposure!.exposedAt = "2026-01-01T00:00:00Z"; });
     invalid(c => { c.units[0].outcomes[0].observedAt = "2026-01-31T00:00:00Z"; });
+    invalid(c => { c.units[0].outcomes[0].observedAt = "2026-02-01T01:00:00Z"; });
+    invalid(c => { c.analyzedAt = "2026-02-03T00:00:00Z"; });
     invalid(c => { c.units[0].outcomes[0].observedAt = "2026-02-02T00:00:00Z"; });
     invalid(c => { c.definitionHash = "a".repeat(64); });
   });

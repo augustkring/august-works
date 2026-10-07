@@ -9,6 +9,7 @@ import { nativeSha256 } from "../native-runtime/canonical.js";
 import { authorizeStrategyReference } from "../strategy-execution/references.js";
 import { inspectDecisionSourceAuthority } from "../decision-intelligence.js";
 import { assertAnalyticalSourcesNotErased } from "../analytical-privacy.js";
+import { inspectBusinessExperimentResults, type ExperimentAnalysis, type ExperimentOutcome, type ExperimentInterpretation } from "./results.js";
 import { assignNativeBusinessExperimentUnit } from "./kernel.js";
 
 export type ExperimentVersion = typeof businessExperimentVersions.$inferSelect;
@@ -38,7 +39,7 @@ export function signedExperimentReceipt(domain: string, material: Record<string,
   const receiptHash = nativeSha256(material);
   return { receiptHash, signature: signDecisionSpec({ domain: `aw-business-experiment:${domain}:v1`, receiptHash }) };
 }
-function verify(domain: string, material: Record<string, unknown>, row: { receiptHash: string; signature: string }) {
+export function verifyExperimentReceipt(domain: string, material: Record<string, unknown>, row: { receiptHash: string; signature: string }) {
   if (nativeSha256(material) !== row.receiptHash || !verifyDecisionSpec({ domain: `aw-business-experiment:${domain}:v1`, receiptHash: row.receiptHash }, row.signature)) throw notFound("Experiment native receipt integrity is unavailable");
 }
 export function experimentReviewHash(row: typeof businessExperimentTransitions.$inferSelect) {
@@ -98,17 +99,17 @@ export async function nativeExperimentUnit(tx: Db, companyId: string, actor: Aut
 export async function inspectBusinessExperimentReceipts(tx: Db, companyId: string, actor: AuthorizationActor, version: ExperimentVersion, deadline: number) {
   const where = and(eq(businessExperimentExecutions.companyId, companyId), eq(businessExperimentExecutions.experimentId, version.experimentId), eq(businessExperimentExecutions.versionId, version.id));
   const [execution] = await tx.select().from(businessExperimentExecutions).where(where).for("share");
-  if (!execution) return { execution: null, assignments: [] as ExperimentAssignment[], exposures: [] as ExperimentExposure[], completion: null as ExperimentCompletion | null };
+  if (!execution) return { execution: null, assignments: [] as ExperimentAssignment[], exposures: [] as ExperimentExposure[], completion: null as ExperimentCompletion | null, analysis: null as ExperimentAnalysis | null, outcomes: [] as ExperimentOutcome[], interpretation: null as ExperimentInterpretation | null };
   const [review] = await tx.select().from(businessExperimentTransitions).where(and(eq(businessExperimentTransitions.companyId, companyId), eq(businessExperimentTransitions.experimentId, version.experimentId), eq(businessExperimentTransitions.versionId, version.id), eq(businessExperimentTransitions.id, execution.reviewTransitionId))).for("share");
   if (!review || review.toState !== "ready" || review.createdAt > execution.startedAt || review.createdAt.getTime() > Date.parse(version.definition.sampleOrDurationPlan.from)) throw notFound("Experiment exact human preregistration review is unavailable");
-  verify("execution", executionMaterial(execution, version.contentHash, experimentReviewHash(review)), execution);
+  verifyExperimentReceipt("execution", executionMaterial(execution, version.contentHash, experimentReviewHash(review)), execution);
   const assignmentKey = experimentAssignmentKey(companyId, version.id);
   if (nativeSha256(assignmentKey.toString("hex")) !== execution.assignmentKeyFingerprint) throw conflict("Experiment signing owner changed; assignment receipts require operator revalidation");
   const assignments = await tx.select().from(businessExperimentAssignments).where(and(eq(businessExperimentAssignments.companyId, companyId), eq(businessExperimentAssignments.experimentId, version.experimentId), eq(businessExperimentAssignments.versionId, version.id))).orderBy(asc(businessExperimentAssignments.id)).limit(version.definition.sampleOrDurationPlan.maximumAssignedUnits + 1).for("share");
   if (assignments.length > version.definition.sampleOrDurationPlan.maximumAssignedUnits) throw unprocessable("Experiment assignment population exceeds preregistered bounds");
   const versionEdges = await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), eq(analyticalLineageEdges.manifestId, version.lineageManifestId))).limit(257);
   for (const assignment of assignments) {
-    experimentBudget(deadline); verify("assignment", assignmentMaterial(assignment, execution.receiptHash, version.contentHash), assignment);
+    experimentBudget(deadline); verifyExperimentReceipt("assignment", assignmentMaterial(assignment, execution.receiptHash, version.contentHash), assignment);
     if (assignment.sourceHash !== nativeSha256({ snapshot: assignment.sourceSnapshot, invariantReceipts: assignment.invariantReceipts })
       || assignment.arm !== assignNativeBusinessExperimentUnit(assignmentKey, companyId, version.id, assignment.unitId, version.definition.assignment.treatmentProbability)) throw notFound("Experiment assignment source or label integrity is unavailable");
     const current = await nativeExperimentUnit(tx, companyId, actor, version, assignment.unitId);
@@ -131,11 +132,13 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
   for (const exposure of exposures) {
     const assignment = assignments.find(item => item.id === exposure.assignmentId);
     if (!assignment || exposure.arm !== assignment.arm || exposure.provenance !== "human_attestation") throw notFound("Experiment exposure receipt has no exact assignment");
-    verify("exposure", exposureMaterial(exposure, assignment.receiptHash), exposure);
+    verifyExperimentReceipt("exposure", exposureMaterial(exposure, assignment.receiptHash), exposure);
   }
   const [completion] = await tx.select().from(businessExperimentCompletions).where(and(eq(businessExperimentCompletions.companyId, companyId), eq(businessExperimentCompletions.experimentId, version.experimentId), eq(businessExperimentCompletions.versionId, version.id))).for("share");
-  if (completion) verify("completion", completionMaterial(completion, execution.receiptHash), completion);
-  experimentBudget(deadline); return { execution, assignments, exposures, completion: completion ?? null };
+  if (completion) verifyExperimentReceipt("completion", completionMaterial(completion, execution.receiptHash), completion);
+  const receipts = { execution, assignments, exposures, completion: completion ?? null };
+  const results = await inspectBusinessExperimentResults(tx, companyId, actor, version, receipts, deadline);
+  experimentBudget(deadline); return { ...receipts, ...results };
 }
 export async function experimentStatementTime(tx: Db) {
   const rows = await tx.execute<{ captured_at: Date }>(sql`select statement_timestamp() as captured_at`);

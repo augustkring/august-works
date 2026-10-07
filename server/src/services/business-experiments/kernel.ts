@@ -97,6 +97,9 @@ export function evaluateNativeBusinessExperiment(raw: BusinessExperimentDefiniti
       "Inference is conditional on the registered individual randomization, complete intention-to-treat outcomes, no interference and valid native receipt provenance.",
       "Primary and guardrail intervals use a conservative Bonferroni family of exact binomial arm bounds; secondary metrics are exploratory and cannot establish confirmatory success.",
       "A single fixed-horizon analysis does not support repeated p-value peeking, efficacy stopping, cluster/switchback designs or retrospective primary-metric changes.",
+      "Applied exposure and absence of external concurrent changes are human attestations, not verified workflow telemetry.",
+      "Native issue/project status is a registered operational proxy measured at one common final capture, not status reconstructed at horizon end or independently verified business impact.",
+      "Eligibility and no-interference assumptions remain conditional; source authority and numerical diagnostics do not prove those causal assumptions.",
       definition.population.externalValidityLimits, definition.analysisPlan.noveltySeasonalityCarryoverLimits,
     ],
   };
@@ -107,7 +110,7 @@ export function evaluateNativeBusinessExperiment(raw: BusinessExperimentDefiniti
   if (integrityKeys.some(key => capture.integrity[key] !== true)) return reject("experiment_assignment_exposure_telemetry_or_interference_untrusted");
   if (capture.units.length > plan.maximumAssignedUnits || new Set(capture.units.map(unit => unit.unitId)).size !== capture.units.length) return reject("experiment_population_budget_or_independence_invalid");
   const metricDefinitions = [definition.primaryMetric, ...definition.guardrailMetrics, ...definition.secondaryMetrics];
-  const assignmentHashes = new Set<string>(), exposureHashes = new Set<string>(), observationIds = new Set<string>();
+  const assignmentHashes = new Set<string>(), exposureHashes = new Set<string>(), outcomeReceiptIds = new Set<string>();
   for (const unit of capture.units) {
     const assigned = instant(unit.assignedAt);
     if (!uuid(unit.unitId) || !hash(unit.unitSourceHash) || !hash(unit.assignmentReceiptHash) || assignmentHashes.has(unit.assignmentReceiptHash) || !["control", "treatment"].includes(unit.arm) || !Number.isFinite(assigned) || assigned < from || assigned >= until || assigned > completed) return reject("experiment_assignment_receipts_invalid");
@@ -124,6 +127,7 @@ export function evaluateNativeBusinessExperiment(raw: BusinessExperimentDefiniti
     result.status = "inconclusive";
     return reject("experiment_safety_stop_or_cancellation_withholds_confirmatory_inference");
   }
+  if (analyzed > until + definition.analysisPlan.finalCaptureMaxDelaySeconds * 1000) return reject("experiment_registered_final_capture_deadline_missed");
   if (completed < until || analyzed < until) return reject("experiment_fixed_horizon_not_elapsed");
   if (capture.units.length) {
     const pValue = exactExperimentSrm(capture.units.length, result.diagnostics.treatment, definition.assignment.treatmentProbability);
@@ -138,8 +142,8 @@ export function evaluateNativeBusinessExperiment(raw: BusinessExperimentDefiniti
     if (unit.outcomes.length !== metricDefinitions.length || new Set(unit.outcomes.map(item => item.key)).size !== metricDefinitions.length) return reject("experiment_intention_to_treat_outcomes_incomplete");
     for (const metric of metricDefinitions) {
       const outcome = unit.outcomes.find(item => item.key === metric.key), observed = instant(outcome?.observedAt);
-      if (!outcome || outcome.metricId !== metric.metricId || outcome.metricVersionId !== metric.metricVersionId || !uuid(outcome.observationId) || observationIds.has(outcome.observationId) || !hash(outcome.sourceHash) || (outcome.value !== 0 && outcome.value !== 1) || instant(outcome.from) !== from || instant(outcome.until) !== until || !Number.isFinite(observed) || observed < until || observed > analyzed) return reject("experiment_exact_outcome_receipts_or_horizon_invalid");
-      observationIds.add(outcome.observationId); counts.get(metric.key)![unit.arm] += outcome.value;
+      if (!outcome || outcome.metricId !== metric.metricId || outcome.metricVersionId !== metric.metricVersionId || !uuid(outcome.outcomeReceiptId) || outcomeReceiptIds.has(outcome.outcomeReceiptId) || !hash(outcome.sourceHash) || (outcome.value !== 0 && outcome.value !== 1) || instant(outcome.from) !== from || instant(outcome.until) !== until || !Number.isFinite(observed) || observed < until || observed !== analyzed) return reject("experiment_exact_outcome_receipts_or_horizon_invalid");
+      outcomeReceiptIds.add(outcome.outcomeReceiptId); counts.get(metric.key)![unit.arm] += outcome.value;
     }
   }
   const familySize = 1 + definition.guardrailMetrics.length, tailAlpha = definition.analysisPlan.familywiseAlpha / (4 * familySize);

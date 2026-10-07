@@ -10,11 +10,12 @@ import { withV7ActivityTransaction } from "../v7-mutations.js";
 import { businessMetricService } from "../business-metrics/service.js";
 import { calculateNativeMetric } from "../business-metrics/native-engine.js";
 import { admitBusinessExperiment, lockBusinessExperimentRoot, inspectBusinessExperimentVersion, businessExperimentRootView, auditBusinessExperiment } from "./service.js";
+import { experimentAnalysisView, experimentInterpretationView } from "./results.js";
 import { assignNativeBusinessExperimentUnit } from "./kernel.js";
 import { EXPERIMENT_OWNER_ENGINE, assignmentMaterial, assignmentView, completionMaterial, executionMaterial, experimentAssignmentKey, experimentBudget, experimentEdges, experimentStatementTime, experimentReviewHash, exposureMaterial, exposureView, nativeExperimentUnit, signedExperimentReceipt,
   type ExperimentAssignment, type ExperimentCompletion, type ExperimentExecution, type ExperimentExposure } from "./receipts.js";
 
-async function transition(tx: Db, companyId: string, actor: AuthorizationActor, row: typeof businessExperiments.$inferSelect, state: BusinessExperimentState, rationale: string, at: Date) {
+export async function transitionExperimentRecording(tx: Db, companyId: string, actor: AuthorizationActor, row: typeof businessExperiments.$inferSelect, state: BusinessExperimentState, rationale: string, at: Date) {
   await tx.insert(businessExperimentTransitions).values({ companyId, experimentId: row.id, versionId: row.currentVersionId!, revision: row.revision + 1, fromState: row.state, toState: state, rationale, createdBy: v7HumanActorId(actor), createdAt: at });
   const [updated] = await tx.update(businessExperiments).set({ state, revision: row.revision + 1, updatedAt: at }).where(and(eq(businessExperiments.companyId, companyId), eq(businessExperiments.id, row.id), eq(businessExperiments.revision, row.revision))).returning();
   return updated;
@@ -42,7 +43,7 @@ export function businessExperimentRecordingService(db: Db) {
         const value: ExperimentExecution = { id: randomUUID(), companyId, experimentId: id, versionId: input.versionId, mode: input.mode, reviewTransitionId: review.id,
           assignmentKeyFingerprint: nativeSha256(experimentAssignmentKey(companyId, input.versionId).toString("hex")), rationale: input.rationale, receiptHash: "", signature: "", startedBy: v7HumanActorId(actor), startedAt: at };
         Object.assign(value, signedExperimentReceipt("execution", executionMaterial(value, pin.value.contentHash, experimentReviewHash(review))));
-        await tx.insert(businessExperimentExecutions).values(value); const updated = await transition(tx, companyId, actor, row, "running", input.rationale, at);
+        await tx.insert(businessExperimentExecutions).values(value); const updated = await transitionExperimentRecording(tx, companyId, actor, row, "running", input.rationale, at);
         await auditBusinessExperiment(tx, publications, companyId, actor, id, "recording_started", { versionId: input.versionId, revision: updated.revision, receiptHash: value.receiptHash, mode: input.mode });
         experimentBudget(deadline); return businessExperimentRootView(updated);
       });
@@ -127,7 +128,7 @@ export function businessExperimentRecordingService(db: Db) {
             concurrentChangeReview: input.completion?.concurrentChangeReview ?? { assessment: "material_or_unknown", rationale: input.rationale }, rationale: input.rationale, receiptHash: "", signature: "", completedBy: v7HumanActorId(actor), completedAt: at };
           Object.assign(value, signedExperimentReceipt("completion", completionMaterial(value, execution.receiptHash))); await tx.insert(businessExperimentCompletions).values(value);
         }
-        const updated = await transition(tx, companyId, actor, row, input.state, input.rationale, at);
+        const updated = await transitionExperimentRecording(tx, companyId, actor, row, input.state, input.rationale, at);
         await auditBusinessExperiment(tx, publications, companyId, actor, id, "recording_controlled", { versionId: input.versionId, revision: updated.revision, from: row.state, to: updated.state, reason: input.completion?.reason ?? null, rationaleHash: nativeSha256(input.rationale) });
         return businessExperimentRootView(updated);
       });
@@ -135,7 +136,7 @@ export function businessExperimentRecordingService(db: Db) {
     async receipts(companyId: string, actor: AuthorizationActor, id: string, versionId: string) {
       return db.transaction(async raw => {
         const tx = raw as unknown as Db; await admitBusinessExperiment(tx, companyId, actor); const row = await lockBusinessExperimentRoot(tx, companyId, id), pin = await inspectBusinessExperimentVersion(tx, row, actor, versionId, false, performance.now() + 30_000);
-        return { versionId, assignments: pin.receipts.assignments.map(assignmentView), exposures: pin.receipts.exposures.map(exposureView),
+        return { versionId, analysis: pin.receipts.analysis ? experimentAnalysisView(pin.receipts.analysis, pin.receipts.completion!, pin.source.current) : null, interpretation: pin.receipts.interpretation ? experimentInterpretationView(pin.receipts.interpretation) : null, assignments: pin.receipts.assignments.map(assignmentView), exposures: pin.receipts.exposures.map(exposureView),
           recording: pin.receipts.execution ? { mode: pin.receipts.execution.mode, startedBy: pin.receipts.execution.startedBy, startedAt: pin.receipts.execution.startedAt.toISOString(), receiptHash: pin.receipts.execution.receiptHash } : null,
           completion: pin.receipts.completion ? { reason: pin.receipts.completion.reason, concurrentChangeReview: pin.receipts.completion.concurrentChangeReview, completedBy: pin.receipts.completion.completedBy, completedAt: pin.receipts.completion.completedAt.toISOString(), receiptHash: pin.receipts.completion.receiptHash } : null,
           exposureProvenance: "human_attestation" as const, currentQualification: pin.source.current ? "current" as const : "needs_revalidation" as const };

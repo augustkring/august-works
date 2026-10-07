@@ -101,3 +101,40 @@ export const businessExperimentCompletions = pgTable("business_experiment_comple
   executionFk: foreignKey({ name: "business_experiment_completions_execution_fk", columns: [t.companyId, t.experimentId, t.versionId], foreignColumns: [businessExperimentExecutions.companyId, businessExperimentExecutions.experimentId, businessExperimentExecutions.versionId] }).onDelete("cascade"),
   contentCheck: check("business_experiment_completions_content_check", sql`${t.reason} in ('fixed_horizon','emergency_safety_stop','cancelled') and jsonb_typeof(${t.concurrentChangeReview})='object' and ${t.concurrentChangeReview}->>'assessment' in ('none_identified','material_or_unknown') and length(btrim(${t.concurrentChangeReview}->>'rationale')) between 10 and 2000 and length(btrim(${t.rationale})) between 10 and 2000 and ${t.receiptHash} ~ '^[0-9a-f]{64}$' and ${t.signature} ~ '^decision-spec-v1[.][0-9a-f]{64}$'`),
 }));
+
+/** One final analysis of the exact protocol. Numerical success grants no work
+ * dispatch, live exposure or policy execution authority. */
+export const businessExperimentAnalyses = pgTable("business_experiment_analyses", {
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), experimentId: uuid("experiment_id").notNull(), versionId: uuid("version_id").notNull(),
+  definitionHash: text("definition_hash").notNull(), capture: jsonb("capture_json").$type<import("@paperclipai/shared").NativeBusinessExperimentCapture>().notNull(),
+  result: jsonb("result_json").$type<import("@paperclipai/shared").NativeBusinessExperimentResult>().notNull(),
+  invariantDiagnostics: jsonb("invariant_diagnostics_json").$type<import("@paperclipai/shared").BusinessExperimentInvariantDiagnostic[]>().notNull(),
+  receiptHash: text("receipt_hash").notNull(), signature: text("signature").notNull(), analyzedBy: text("analyzed_by").notNull(), analyzedAt: timestamp("analyzed_at", { withTimezone: true }).notNull(),
+}, t => ({
+  tenantUq: unique("business_experiment_analyses_tenant_uq").on(t.companyId, t.experimentId, t.versionId, t.id),
+  versionUq: unique("business_experiment_analyses_version_uq").on(t.companyId, t.experimentId, t.versionId),
+  completionFk: foreignKey({ name: "business_experiment_analyses_completion_fk", columns: [t.companyId,t.experimentId,t.versionId], foreignColumns: [businessExperimentCompletions.companyId,businessExperimentCompletions.experimentId,businessExperimentCompletions.versionId] }).onDelete("cascade"),
+  contentCheck: check("business_experiment_analyses_content_check", sql`${t.definitionHash} ~ '^[0-9a-f]{64}$' and ${t.receiptHash} ~ '^[0-9a-f]{64}$' and ${t.signature} ~ '^decision-spec-v1[.][0-9a-f]{64}$' and jsonb_typeof(${t.capture})='object' and jsonb_typeof(${t.result})='object' and jsonb_typeof(${t.invariantDiagnostics})='array'`),
+}));
+export const businessExperimentOutcomes = pgTable("business_experiment_outcomes", {
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), experimentId: uuid("experiment_id").notNull(), versionId: uuid("version_id").notNull(), analysisId: uuid("analysis_id").notNull(), assignmentId: uuid("assignment_id").notNull(),
+  key: text("metric_key").notNull(), metricId: uuid("metric_id").notNull(), metricVersionId: uuid("metric_version_id").notNull(), value: integer("value").$type<0|1>().notNull(),
+  sourceSnapshot: jsonb("source_snapshot_json").$type<BusinessExperimentUnitSnapshot>().notNull(), inputHash: text("input_hash").notNull(), sourceHash: text("source_hash").notNull(), lineageManifestId: uuid("lineage_manifest_id").notNull(),
+  receiptHash: text("receipt_hash").notNull(), signature: text("signature").notNull(), capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+}, t => ({
+  unitKeyUq: unique("business_experiment_outcomes_unit_key_uq").on(t.companyId,t.analysisId,t.assignmentId,t.key),
+  analysisFk: foreignKey({ name: "business_experiment_outcomes_analysis_fk", columns:[t.companyId,t.experimentId,t.versionId,t.analysisId], foreignColumns:[businessExperimentAnalyses.companyId,businessExperimentAnalyses.experimentId,businessExperimentAnalyses.versionId,businessExperimentAnalyses.id] }).onDelete("cascade"),
+  assignmentFk: foreignKey({ name: "business_experiment_outcomes_assignment_fk", columns:[t.companyId,t.experimentId,t.versionId,t.assignmentId], foreignColumns:[businessExperimentAssignments.companyId,businessExperimentAssignments.experimentId,businessExperimentAssignments.versionId,businessExperimentAssignments.id] }).onDelete("cascade"),
+  metricFk: foreignKey({ name: "business_experiment_outcomes_metric_fk", columns:[t.companyId,t.metricId,t.metricVersionId], foreignColumns:[businessMetricVersions.companyId,businessMetricVersions.metricId,businessMetricVersions.id] }).onDelete("cascade"),
+  lineageFk: foreignKey({ name: "business_experiment_outcomes_lineage_fk", columns:[t.companyId,t.lineageManifestId], foreignColumns:[analyticalLineageManifests.companyId,analyticalLineageManifests.id] }).onDelete("cascade"),
+  contentCheck: check("business_experiment_outcomes_content_check",sql`${t.value} in (0,1) and ${t.inputHash} ~ '^[0-9a-f]{64}$' and ${t.sourceHash} ~ '^[0-9a-f]{64}$' and ${t.receiptHash} ~ '^[0-9a-f]{64}$' and ${t.signature} ~ '^decision-spec-v1[.][0-9a-f]{64}$' and jsonb_typeof(${t.sourceSnapshot})='object'`),
+}));
+export const businessExperimentInterpretations = pgTable("business_experiment_interpretations", {
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), experimentId: uuid("experiment_id").notNull(), versionId: uuid("version_id").notNull(), analysisId: uuid("analysis_id").notNull(),
+  conclusion: text("conclusion").$type<"ship_candidate"|"do_not_ship"|"iterate"|"abstain">().notNull(), rationale: text("rationale").notNull(), receiptHash:text("receipt_hash").notNull(),signature:text("signature").notNull(),
+  interpretedBy:text("interpreted_by").notNull(),interpretedAt:timestamp("interpreted_at",{withTimezone:true}).notNull(),
+}, t => ({
+  analysisUq:unique("business_experiment_interpretations_analysis_uq").on(t.companyId,t.analysisId),
+  analysisFk:foreignKey({name:"business_experiment_interpretations_analysis_fk",columns:[t.companyId,t.experimentId,t.versionId,t.analysisId],foreignColumns:[businessExperimentAnalyses.companyId,businessExperimentAnalyses.experimentId,businessExperimentAnalyses.versionId,businessExperimentAnalyses.id]}).onDelete("cascade"),
+  contentCheck:check("business_experiment_interpretations_content_check",sql`${t.conclusion} in ('ship_candidate','do_not_ship','iterate','abstain') and length(btrim(${t.rationale})) between 10 and 2000 and ${t.receiptHash} ~ '^[0-9a-f]{64}$' and ${t.signature} ~ '^decision-spec-v1[.][0-9a-f]{64}$'`),
+}));

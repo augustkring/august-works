@@ -289,3 +289,18 @@ source-dependent protocol if an enrolled subject is erased. Neither restore nor
 ordinary retry can omit a subject FK, switch its arm or silently revise exposure.
 Cancellation remains available with rollout disabled; analysis/interpretation and
 operator UI follow this checkpoint.
+
+### V8-020 — Single final experiment capture, conditional analysis and human interpretation
+
+Reuse actual native ratio semantics on every assigned unit under one common
+PostgreSQL capture time; record genuine signed experiment outcomes. Explicitly
+bound post-horizon capture delay, preserve all intention-to-treat subjects and
+withhold inference for incomplete logs, registered pretreatment imbalance or
+unadmitted concurrent changes. No numerical result authorizes work dispatch.
+
+Retained result reads verify exact immutable material, signatures, complete source
+lineage and numerical replay. Human exposure/concurrent-change attestations remain
+conditional assumptions, separate from verified workflow telemetry. Explicit
+human interpretation references the exact analysis and grants advisory authority
+only. Source erasure covers original and final-capture ancestry, removes dependent
+human prose/results, and continues with rollout disabled or company paused.

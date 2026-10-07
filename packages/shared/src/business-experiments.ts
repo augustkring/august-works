@@ -23,7 +23,7 @@ export const businessExperimentDefinitionSchema = z.object({
   secondaryMetrics: z.array(metric).max(8),
   guardrailMetrics: z.array(metric.extend({ harmfulDirection: z.enum(["increase", "decrease"]), maximumAcceptableHarm: z.number().finite().min(0).max(1) }).strict()).min(1).max(8),
   diagnostics: z.object({ srmAlpha: z.number().finite().min(0.0001).max(0.05), invariantMetricRefs: z.array(id).min(1).max(8), invariantBalance: z.object({ method: z.literal("exact_fisher_probability_ordering_v1"), familywiseAlpha: z.number().finite().min(0.0001).max(0.05) }).strict(), concurrentExperimentAndInterferencePlan: prose, telemetryAndJoinPlan: prose }).strict(),
-  analysisPlan: z.object({ method: z.literal("bonferroni_clopper_pearson_difference_v1"), familywiseAlpha: z.number().finite().min(0.001).max(0.2), estimand: z.literal("intention_to_treat"), missingOutcomes: z.literal("invalidate"), multipleComparisonPolicy: z.literal("primary_and_guardrails_familywise_secondary_exploratory"), noveltySeasonalityCarryoverLimits: prose }).strict(),
+  analysisPlan: z.object({ finalCaptureMaxDelaySeconds: z.number().int().min(1).max(86400), method: z.literal("bonferroni_clopper_pearson_difference_v1"), familywiseAlpha: z.number().finite().min(0.001).max(0.2), estimand: z.literal("intention_to_treat"), missingOutcomes: z.literal("invalidate"), multipleComparisonPolicy: z.literal("primary_and_guardrails_familywise_secondary_exploratory"), noveltySeasonalityCarryoverLimits: prose }).strict(),
   sampleOrDurationPlan: z.object({ kind: z.literal("fixed_horizon"), from: z.iso.datetime(), until: z.iso.datetime(), minimumAssignedUnits: z.number().int().min(4).max(4000), maximumAssignedUnits: z.number().int().min(4).max(4000), minimumUnitsPerArm: z.number().int().min(2).max(2000), minimumDetectableEffect: z.number().finite().positive().max(1), powerRationale: prose }).strict(),
   stopRules: z.object({ efficacyLooks: z.literal("one_after_fixed_horizon"), emergencySafetyStop: prose, shipPolicy: prose, rollbackPolicy: prose }).strict(),
   ethics: z.object({ affectedPopulation: prose, personImpact: z.enum(["none", "customers"]), legalBasisRationale: prose, requiresConsent: z.boolean(), consentGovernanceObligationRef: id.nullable(), darkPatterns: z.literal(false), hiddenEmploymentManipulation: z.literal(false), changesMaterialAiDecisions: z.boolean(), aiUseCaseId: id.nullable(), fairnessConstraints: prose }).strict(),
@@ -122,7 +122,7 @@ export interface NativeBusinessExperimentCapture {
   units: {
     unitId: string; unitSourceHash: string; arm: "control" | "treatment"; assignedAt: string; assignmentReceiptHash: string;
     exposure: { arm: "control" | "treatment"; exposedAt: string; receiptHash: string } | null;
-    outcomes: { key: string; metricId: string; metricVersionId: string; observationId: string; sourceHash: string; from: string; until: string; observedAt: string; value: 0 | 1 }[];
+    outcomes: { key: string; metricId: string; metricVersionId: string; outcomeReceiptId: string; sourceHash: string; from: string; until: string; observedAt: string; value: 0 | 1 }[];
   }[];
 }
 export interface NativeBusinessExperimentMetricResult {
@@ -139,4 +139,21 @@ export interface NativeBusinessExperimentResult {
   reasons: string[];
   diagnostics: { assigned: number; control: number; treatment: number; exposed: number; srm: { method: "exact_binomial_probability_ordering_v1"; expectedTreatmentProbability: number; pValue: number; threshold: number; mismatch: boolean } | null };
   metrics: NativeBusinessExperimentMetricResult[]; limitations: string[];
+}
+
+export const interpretBusinessExperimentSchema = z.object({ expectedRevision: z.number().int().positive(), versionId: id, analysisId: id,
+  conclusion: z.enum(["ship_candidate", "do_not_ship", "iterate", "abstain"]), rationale: prose,
+  limitationsAcknowledged: z.literal(true), executionAuthority: z.literal("advisory_only"),
+}).strict();
+export interface BusinessExperimentInvariantDiagnostic {
+  key: string; controlUnits: number; controlSuccesses: number; treatmentUnits: number; treatmentSuccesses: number;
+  method: "exact_fisher_probability_ordering_v1"; pValue: number; threshold: number; balanced: boolean;
+}
+export interface BusinessExperimentAnalysisView {
+  id: string; companyId: string; experimentId: string; versionId: string; definitionHash: string;
+  result: NativeBusinessExperimentResult; invariantDiagnostics: BusinessExperimentInvariantDiagnostic[];
+  exposureProvenance: "human_attestation"; outcomeTimeSemantics: "created_in_window_current_state_at_common_final_capture";
+  concurrentChangeReview: { assessment: "none_identified" | "material_or_unknown"; rationale: string };
+  causalAuthority: "conditional_on_registered_randomization_and_human_attestations" | "withheld";
+  analyzedAt: string; analyzedBy: string; receiptHash: string; currentQualification: "current" | "needs_revalidation";
 }
