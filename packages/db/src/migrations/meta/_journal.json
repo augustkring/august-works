@@ -2983,6 +2983,13 @@
       "when": 1791414531578,
       "tag": "0427_execution_manifest_source_erasure",
       "breakpoints": true
+    },
+    {
+      "idx": 428,
+      "version": "7",
+      "when": 1791415713939,
+      "tag": "0428_playbook_learning_source_erasure",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,79 @@
+{
+  "checkpoint": "Exact native approved Playbook pin body with actual Context Source retention and fixed-marker native document C7",
+  "parentCommit": "a026d3dd8fbdae6f7f598754b6b4a200d7083db5",
+  "recordedAt": "2026-10-07T23:42:54.853466+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/meta/0423_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "deb366ed944c8eca3e58c91633436bc867a6c28cc8ea90915adb348c73b35714"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "913048457a10bba7ea89e7634d132a2671107980022b763b76753fd01aeef334"
+    },
+    {
+      "path": "server/src/routes/agent-runtime-fabric.ts",
+      "sha256": "3b1583583b2626bb83893db982288ab4da331fe710691f5dceefad5d65bd897f"
+    },
+    {
+      "path": "server/src/services/agent-runtime-fabric.ts",
+      "sha256": "0eab0f69576f94fa4086b02a127dd90314540cedb2c3ea8e3ce410b21f718f85"
+    },
+    {
+      "path": "server/src/services/playbook-resolver.ts",
+      "sha256": "af4768dec9e21912e1248b553e82b8265d14332069cf97a93ade166eb84d8e5c"
+    },
+    {
+      "path": "server/src/services/playbooks.ts",
+      "sha256": "6a41bf02f0523f15f8e816d29e142ace131d94ff3dc1234e848b3090bfef8bce"
+    },
+    {
+      "path": "packages/db/src/migrations/0428_playbook_learning_source_erasure.sql",
+      "sha256": "4d16853cfcc791f9350706748f20d39a921219c295d0c6c1fa5ae925363a0cf1"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0428_snapshot.json",
+      "sha256": "571d14adb868bf2597ddffa1ad7427fa834a92d33a88a0ce9efe9e6567c64ee2"
+    }
+  ],
+  "validation": {
+    "nativePostgresAndSnapshot": {
+      "tests": 83,
+      "files": 6,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-runtime-playbook-source-backfill-release-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-runtime-playbook-source-final-types.log"
+    },
+    "migrationSafety": "passed",
+    "parentWholeNativeProductionBuild": {
+      "commit": "4a4ac046fe2f6a4a3635802e14aec4c8d0ce9944",
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-runtime-rolepack-source.log"
+    }
+  },
+  "qualified": [
+    "actual original Fabric prepare retains only the Playbook cycle signal in the isolated Playbook case, independently of verified outcomes",
+    "exact approved body returned under company -> Memory despite newer unreviewed draft",
+    "current native run, actual manifest pin and retained complete Source coverage; board, wrong-run, unpinned and unretained historical body reads denied",
+    "hidden Source denies manifest/preparation/body; restoration permits manifest disclosure",
+    "flags-off/company-paused C7 scrubs immutable revision, latest canonical cache and runtime inventory",
+    "actual populated native migration reapplication before asynchronous worker; late canonical and revision writes fenced in that interval",
+    "nonterminal native plan and persisted pass receipt fixture still protect ordinary output changes; fixed Source erasure preserves receipt, version number and creation timestamp",
+    "original Orchestration, Playbook/project-control, runtime, purge and snapshot regressions pass"
+  ],
+  "limits": [
+    "body owner is tested directly against actual PostgreSQL and actual identity rows; new HTTP wiring is typechecked, not a new HTTP/JWT/browser fixture",
+    "retained provider checks and pass receipt are explicit software prerequisites; no performed provider/Human trial review is claimed",
+    "populated backfill is qualified on native software fixture data, not hosted historical data",
+    "all copied Orchestration analysis/review payload Source closure remains open beyond this document marker exception",
+    "Skills filesystem snapshots and standalone Artifact runtime copying remain closed pending their original C7 owners",
+    "no maximum-volume, hard latency or whole-brief completion claim"
+  ]
+}
