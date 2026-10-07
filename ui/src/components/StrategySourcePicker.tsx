@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { StrategyExecutionReference } from "@paperclipai/shared";
 import { foundationApi } from "@/api/foundation";
@@ -16,7 +16,7 @@ const selectStyle = "w-full min-w-0 rounded-md border border-input bg-background
 const labels: Record<StrategyExecutionReference["type"], string> = { foundation_section: "Approved Foundation section", goal: "Goal", project: "Project", milestone: "Milestone", issue: "Task", decision: "Decision", metric: "Published metric", metric_target: "Approved metric commitment", metric_observation: "Current metric observation" };
 function nativeId(ref: StrategyExecutionReference) { return ref.type === "foundation_section" ? ref.foundationDocumentId : ref.id; }
 function label(ref: StrategyExecutionReference) { return ref.type === "foundation_section" ? ref.headingPath.join(" / ") || "Document introduction" : labels[ref.type]; }
-export function StrategySourcePicker({ companyId, userId, name, value, onChange, fixed }: { companyId: string; userId: string | null; name: string; value: StrategyExecutionReference | null; onChange: (value: StrategyExecutionReference | null) => void; fixed?: StrategyExecutionReference }) {
+export function StrategySourcePicker({ companyId, userId, name, value, onChange, fixed, onValidity, onAuthorityLost }: { companyId: string; userId: string | null; name: string; value: StrategyExecutionReference | null; onChange: (value: StrategyExecutionReference | null) => void; fixed?: StrategyExecutionReference; onValidity?: (valid: boolean) => void; onAuthorityLost?: () => void }) {
   const [type, setType] = useState<StrategyExecutionReference["type"]>(value?.type ?? "goal");
   const [search, setSearch] = useState(value?.type === "foundation_section" ? value.headingPath.at(-1) ?? "" : "");
   const [projectId, setProjectId] = useState(value?.type === "milestone" ? value.projectId : "");
@@ -45,6 +45,10 @@ export function StrategySourcePicker({ companyId, userId, name, value, onChange,
   const queries = type === "foundation_section" ? search.trim() ? [foundation] : [] : type === "goal" ? [goals] : type === "project" ? [projects] : type === "issue" ? [tasks] : type === "decision" ? [decisions] : type === "metric" ? [metrics] : type === "metric_target" ? [targets] : type === "milestone" ? [projects, ...(projectId ? [milestones] : [])] : [metrics, ...(metricId ? [observations] : [])];
   const error = queries.find(query => query.isError)?.error;
   const current = value ? JSON.stringify(value) : "";
+  const unavailable = queries.some(query => query.isFetching || query.isPending || query.isError);
+  const valid = !unavailable && !!value && visible.some(option => JSON.stringify(option.ref) === current);
+  useEffect(() => { onValidity?.(valid); }, [valid, onValidity]);
+  useEffect(() => { if (error) onAuthorityLost?.(); }, [error, onAuthorityLost]);
   return <fieldset className="min-w-0 space-y-3"><legend className="font-medium">{name}</legend>
     <label className="block space-y-2">Source kind<select aria-label={`${name} source kind`} className={selectStyle} value={type} disabled={!!fixed} onChange={event => { setType(event.target.value as typeof type); setSearch(""); setProjectId(""); setMetricId(""); onChange(null); }}>{Object.entries(labels).map(([id,title]) => <option key={id} value={id}>{title}</option>)}</select></label>
     {type !== "metric_observation" && type !== "milestone" && <label className="block space-y-2">Find source<Input aria-label={`${name} find source`} value={search} onChange={event => setSearch(event.target.value)} placeholder={type === "foundation_section" ? "Search an approved strategy heading or passage" : "Search by name"} /></label>}
