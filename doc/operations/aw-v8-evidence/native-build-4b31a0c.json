@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "4b31a0cc099b4923078567867aea2c1eafd999f9",
+  "command": "pnpm build",
+  "exitCode": 0,
+  "status": "passed",
+  "logPath": "/var/tmp/aw-v8-integrated-4b31a0c-build.log",
+  "logSha256": "b7a775981e81f253771abd6bb4117174dc9cd69b444225302b863f1a842fc24e",
+  "scope": "Native production build for this exact integrated scenario owner source commit. Does not qualify subsequent operator UI, external providers, a deployed runtime or the complete V8 release."
+}

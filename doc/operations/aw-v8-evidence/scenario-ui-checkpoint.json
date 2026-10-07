@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "4b31a0cc099b4923078567867aea2c1eafd999f9",
+  "scope": "Native scenario operator source and synthetic Storybook presentation qualification. No operational calibration, official maintainer baseline, validated Artifact computation, deployment or complete V8 release qualification.",
+  "sourceFileSha256": {
+    "ui/src/App.tsx": "ae9b1f5668212b948cefaae52a3ffc6027efe4985b2273b22f18cf11a92f687a",
+    "ui/src/components/Sidebar.tsx": "cee08d9db9982a71729d610e595216f4486ec97665b540bb13372bc52d11aa58",
+    "ui/src/api/business-scenarios.ts": "3850750b25f4f76bc228d73a491dd2ce27be0c09e9111dbb2836b6b7af85c4fb",
+    "ui/src/components/BusinessScenarioAssumptionFields.tsx": "a8cda5d27276ed6470ccdea5a933e1bd58cf60896e32194728b332477c267422",
+    "ui/src/components/BusinessScenarioDefinitionForm.tsx": "9c4b53e8b44a85da674ee3c2473ddf79131d544d0035a93274486174f1377b86",
+    "ui/src/components/BusinessScenarioResult.tsx": "c265a6dbc5a75c109fab9a0ad8c39072f2778f1b64dc71898c7ebd8d3653ed1e",
+    "ui/src/components/BusinessScenarioSourcePicker.tsx": "c7f4051c2a9dc6e171d9dafd7eaf6683f0547d8fd94736c47893b11d91b1ba33",
+    "ui/src/pages/BusinessScenarios.tsx": "ae1e59e139ae958481d5111b25eed3d6d70730356cf79972ccdb290609fc75e1",
+    "ui/src/pages/BusinessScenarios.test.tsx": "8a120e44ad82d47297a8d8b2b1171802ca730520bd4aa2ccd75c3b181ab796f1",
+    "ui/storybook/stories/business-scenario-fixtures.ts": "7a262eedf4ee844c2fb3466d13c886bfd3291ae6d1671b6af199a5cdd2ddd20a",
+    "ui/storybook/stories/business-scenarios.stories.tsx": "b01c16f2cd4d3cb91c4205d1f88de8668e110e61f9cc2688309b9ca410ce8fa3",
+    "tests/storybook-visual/business-scenarios.config.ts": "5a46a92b864c467af4700ef107deaa059a51cc56ae0f59e31528a1c8616183d4",
+    "tests/storybook-visual/business-scenarios.spec.ts": "3fe811aa8d7f98dca693d6c5835ccb52dc386ce34b66283d5ee37da981f802ad"
+  },
+  "checks": [
+    {
+      "name": "ui-typecheck",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-scenario-ui-typecheck-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-components",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 8,
+      "logPath": "/var/tmp/aw-v8-scenario-ui-tests-qualified.log",
+      "logSha256": "2f947a54af3a287e201238b53cb09054f15984542ecea41c5ccfc05675cf1eca"
+    },
+    {
+      "name": "storybook-build",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-scenario-storybook-qualified.log",
+      "logSha256": "5bb8f6e0a296dded67bb060cb5aa3b79284b3772314e106c456450250899b847"
+    },
+    {
+      "name": "native-token-gates",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-scenario-token-gates-qualified.log",
+      "logSha256": "4701c2268e90272d500a415bfa790a31b9a2e016dfd387a72d12589ee681dc88"
+    },
+    {
+      "name": "chromium",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 41,
+      "logPath": "/var/tmp/aw-v8-scenario-browser-qualified.log",
+      "logSha256": "eda933187e2dc0ee285884b44c2bc3cb8f1eef2a7120c37904e893ae324d5e30"
+    }
+  ],
+  "visuallyInspectedScreenshots": [
+    {
+      "path": "tests/storybook-visual/test-results/business-scenarios/business-scenarios-scenari-b6db7--publication-from-execution/scenario-workspace-published-dark-1200.png",
+      "sha256": "0e996709ccd51a2ee21bad387cd2172b6eccae62127e795b2740a35f674438a1"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/business-scenarios/business-scenarios-scenari-ca9ad-ves-conditional-uncertainty/scenario-deterministic-light-390.png",
+      "sha256": "2938845057862cde6cdb9ce50cb68f967d6bad1325702c9408f5fee04bf2f657"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/business-scenarios/business-scenarios-scenari-554b9-ight-390px-admit-exact-pins/scenario-source-units-light-390.png",
+      "sha256": "af79c9196f7478267076bd54dce201a37aab0d8c560bc30068c38d5772cbb285"
+    }
+  ],
+  "failedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-business-scenario-browser-tests-first.log",
+      "logSha256": "5bfb86d20044210b37e0f9bf973abfb2919e5df8638fb6afbd7a83f02d9ab818",
+      "failed": 12,
+      "passed": 29,
+      "reason": "Mobile result table scroll regions were not keyboard focusable. Added named focusable scroll regions and visible focus; full browser selection rerun passes."
+    }
+  ]
+}

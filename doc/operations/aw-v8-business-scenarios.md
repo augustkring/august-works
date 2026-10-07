@@ -2,8 +2,8 @@
 
 This checkpoint supplies strict shared proposal/run contracts, a pure native
 numerical kernel and a governed PostgreSQL/company API owner for brief section 23.
-It does not complete scenario planning: native operator UI, validated Automation
-Artifact integration and downstream Decision evidence remain open. The numerical
+It does not complete scenario planning: validated Automation Artifact
+integration and downstream Decision evidence remain open. The numerical
 kernel cannot authorize a source or execute a Decision.
 
 Formula programs have at most 96 typed nodes and may reference only declared
@@ -123,3 +123,46 @@ for the deferred COMMIT error; its assertion now checks the native PostgreSQL
 error directly. Final server/shared type checking passes. Qualification hashes
 and the exact current source files are recorded in
 `aw-v8-evidence/scenario-owner-checkpoint.json`.
+
+## Native operator UI checkpoint
+
+The native route/sidebar entry provides typed human proposals and revisions,
+current approved scenario purpose selection, exact observed metric/qualified
+forecast point pickers, numeric assumption evidence/ownership/distributions,
+a bounded prior-reference formula builder, dimensional output contracts,
+base/option/stress changes, numerical constraints and uncertainty limits.
+Caller facts, result JSON and source hashes cannot be pasted into public runs.
+Removing or renaming a reference requires reviewing its dependents; generated
+reference names remain reserved for the draft so later additions cannot silently
+rebind a removed calculation or assumption.
+
+Saving a proposal, human publication of the exact latest version, a seeded run
+and human retirement are separate native actions. Zero is a legitimate Monte
+Carlo seed. Retained read-only comparisons show nominal changes, constraints,
+conditional empirical quantiles and stability abstention, plus exact hashes,
+version, seed and expiry. Historical source corrections remain visibly stale.
+Tables support keyboard scrolling with visible focus on small screens.
+
+Current account/company boundaries key the workspace. Pending, denied, mismatched
+or expired reads hide cached facts. Native Memory events clear private unsaved
+prose and retained results. Parent polling/focus refresh pauses while the human
+reviews an unsaved proposal or publication rationale; source authority is still
+rechecked independently. Paged lists state their bounded coverage and do not
+infer absent organizational evidence from an empty page.
+
+Eight component checks and 41 actual Chromium checks pass, including WCAG
+2/2.1 A/AA, keyboard provenance/table scrolling, global overflow checks, light/dark
+390/1200-pixel presentation, legitimate seed zero/range rejection, unit editing
+and a 31-second unsaved-parent-refresh regression. Final UI type checking,
+Storybook build and native token gates pass. The first browser run exposed 12
+mobile keyboard-accessibility failures; all were fixed and the complete selection
+was rerun. Representative mobile/desktop screenshots were visually inspected.
+Fixtures verify presentation and operator boundaries, not operational calibration
+or the official maintainer visual baseline. Exact source/log/screenshot hashes
+are in `aw-v8-evidence/scenario-ui-checkpoint.json`.
+
+The preceding integrated production build passes at `4b31a0c`; its log-hashed
+record is `aw-v8-evidence/native-build-4b31a0c.json`. This earlier build does not
+qualify the subsequent UI source or the whole V8 release. Validated Automation
+Artifact calculation, downstream Decision evidence, later analytical/management
+waves and actual hosted acceptance remain open.
