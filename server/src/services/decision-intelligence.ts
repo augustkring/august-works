@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { analyticalLineageEdges, analyticalLineageManifests, businessMetricObservations, businessMetricVersions,
   companyMemberships, decisionContexts, decisionContextVersions, decisionContextPreparations, decisionContextBindings,
-  decisionEvidenceLinks, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes, decisions, processAnalysisRuns,
+  decisionEvidenceLinks, decisionCalculationPins, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes, decisions, processAnalysisRuns,
   processAnalysisVersions, type Db } from "@paperclipai/db";
 import { decisionContextDefinitionSchema, proposeDecisionContextSchema, prepareDecisionContextSchema, withdrawPreparedDecisionContextSchema,
   v7FeatureEnabled, v8FeatureEnabled, type CapturedDecisionEvidence, type DecisionContextDefinition, type DecisionContextView,
@@ -19,6 +19,8 @@ import { authorizeStrategyReference } from "./strategy-execution/references.js";
 import { businessMetricService } from "./business-metrics/service.js";
 import { processFindingService } from "./process-findings.js";
 import { processAnalysisService } from "./process-analysis.js";
+import { inspectBusinessForecastRun } from "./business-forecasting/service.js";
+import { inspectBusinessScenarioRun } from "./business-scenarios/service.js";
 import { logActivity, withV7ActivityTransaction } from "./v7-mutations.js";
 
 type Decision = typeof decisions.$inferSelect;
@@ -123,7 +125,7 @@ async function capture(tx:Db,row:Decision,actor:AuthorizationActor,definition:De
       manifestId=observation.lineageManifestId;sourceExpiry=observation.expiresAt;sourceHash=nativeSha256(result);
       facts={value:result.value,status:result.status,unit:metricVersion.definition.unit,from:result.from,until:result.until,asOf:result.asOf};
       limitations=["Frozen measurement of the declared native population and observation window; no causal attribution.","Native population status is observed at capture, not reconstructed at a historical period boundary."];
-    } else {
+    } else if(ref.type==="process_finding") {
       const {finding}=await processFindingService(tx).detail(row.companyId,actor,ref.definitionId,ref.runId,ref.id);
       const [run]=await tx.select().from(processAnalysisRuns).where(and(eq(processAnalysisRuns.companyId,row.companyId),eq(processAnalysisRuns.id,ref.runId),eq(processAnalysisRuns.definitionId,ref.definitionId))).for("share");
       const [version]=run?await tx.select().from(processAnalysisVersions).where(and(eq(processAnalysisVersions.companyId,row.companyId),eq(processAnalysisVersions.id,run.versionId))).for("share"):[];
@@ -131,6 +133,20 @@ async function capture(tx:Db,row:Decision,actor:AuthorizationActor,definition:De
       manifestId=run.lineageManifestId;sourceExpiry=new Date(finding.expiresAt);sourceHash=finding.contentHash;
       facts={findingType:finding.findingType,severity:finding.severity,interpretation:finding.interpretation,summary:finding.summary,...finding.facts.observed};
       limitations=[...finding.facts.limitations,"The human interpretation and admitted facts were captured before the choice; later lifecycle changes do not rewrite them."];
+    } else if(ref.type==="forecast_run") {
+      const source=await inspectBusinessForecastRun(tx,row.companyId,actor,ref.specId,ref.versionId,ref.id,true),point=source.view.result.points[ref.pointIndex];
+      if(!point || source.view.result.status!=="qualified") throw conflict("Exact qualified forecast point is unavailable");
+      if(definition.sensitivity==="internal" && source.forecastDefinition.sensitivity==="confidential") throw forbidden("Confidential forecast evidence cannot be downgraded");
+      manifestId=source.lineageManifestId;sourceExpiry=new Date(source.view.expiresAt);sourceHash=nativeSha256({runContentHash:source.view.contentHash,pointIndex:ref.pointIndex,point});
+      facts={value:point.value,from:point.from,until:point.until,unit:source.metricDefinition.unit,status:source.view.result.status,cutoff:source.view.cutoff,intervalLower:null,intervalUpper:null,calibration:"not_assessed"};
+      limitations=[...source.view.result.limitations,"A forecast estimates a future metric under its time-safe model; it is not an observed outcome or a causal effect."];
+    } else {
+      const source=await inspectBusinessScenarioRun(tx,row.companyId,actor,ref.scenarioId,ref.versionId,ref.id,true),scenarioCase=source.view.result.cases.find(item=>item.key===ref.caseKey),output=scenarioCase?.outputs.find(item=>item.key===ref.outputKey);
+      if(!output || source.view.result.status==="data_not_ready") throw conflict("Exact retained scenario output is unavailable");
+      if(definition.sensitivity==="internal" && source.definition.sensitivity==="confidential") throw forbidden("Confidential scenario evidence cannot be downgraded");
+      manifestId=source.lineageManifestId;sourceExpiry=new Date(source.view.expiresAt);sourceHash=nativeSha256({runContentHash:source.view.contentHash,caseKey:ref.caseKey,outputKey:ref.outputKey,output});
+      facts={nominal:output.nominal,differenceFromBase:output.differenceFromBase,unit:JSON.stringify(output.unit),caseKind:scenarioCase!.kind,status:source.view.result.status,constraint:output.constraint,p10:output.simulation?.p10??null,median:output.simulation?.median??null,p90:output.simulation?.p90??null,uncertaintyMethod:source.view.result.uncertainty.method,uncertaintyQualification:source.view.result.uncertainty.qualification};
+      limitations=[...source.view.result.limitations,"This selected scenario output is conditional on its frozen human assumptions; it is not a measured actual, causal effect or commitment."];
     }
     const [manifest]=await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,row.companyId),eq(analyticalLineageManifests.id,manifestId))).for("share");
     const inherited=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,row.companyId),eq(analyticalLineageEdges.manifestId,manifestId))).limit(EDGE_BUDGET+1);
@@ -156,14 +172,26 @@ async function inspectAuthorityEdges(tx:Db,companyId:string,actor:AuthorizationA
 }
 async function inspectRetained(tx:Db,row:Decision,actor:AuthorizationActor,pin:Version) {
   await purpose(tx,row.companyId,actor,pin.definition);await decisionAuthority(tx,row,actor,pin.definition.sensitivity);await scopeAuthority(tx,row.companyId,actor,pin.definition);
+  const revalidationRequiredEvidenceKeys:string[]=[];
   for(const link of pin.definition.evidence) {
     if(link.source.type==="metric_observation") {
       await authorizeStrategyReference(tx,row.companyId,actor,link.source,pin.definition.sensitivity);
-    } else {
+    } else if(link.source.type==="process_finding") {
       // Inspect current source ownership and approved process use, without
       // recomputing a historical event window or replacing captured findings.
       const source=await processAnalysisService(tx).detail(row.companyId,actor,link.source.definitionId);
       if(source.root.status!=="published" || source.reviewReason) throw conflict("Process evidence owner requires current human review");
+    } else if(link.source.type==="forecast_run") {
+      const ref=link.source,source=await inspectBusinessForecastRun(tx,row.companyId,actor,ref.specId,ref.versionId,ref.id,false);
+      if(pin.definition.sensitivity==="internal" && source.forecastDefinition.sensitivity==="confidential") throw forbidden("Confidential forecast evidence cannot be downgraded");
+      const point=source.view.result.points[ref.pointIndex];
+      if(!point || pin.evidence.find(item=>item.key===link.key)?.sourceHash!==nativeSha256({runContentHash:source.view.contentHash,pointIndex:ref.pointIndex,point})) throw notFound("Exact retained forecast evidence is unavailable");
+      if(source.view.currentQualification!=="qualified") revalidationRequiredEvidenceKeys.push(link.key);
+    } else {
+      const ref=link.source,source=await inspectBusinessScenarioRun(tx,row.companyId,actor,ref.scenarioId,ref.versionId,ref.id,false),output=source.view.result.cases.find(item=>item.key===ref.caseKey)?.outputs.find(item=>item.key===ref.outputKey);
+      if(pin.definition.sensitivity==="internal" && source.definition.sensitivity==="confidential") throw forbidden("Confidential scenario evidence cannot be downgraded");
+      if(!output || pin.evidence.find(item=>item.key===link.key)?.sourceHash!==nativeSha256({runContentHash:source.view.contentHash,caseKey:ref.caseKey,outputKey:ref.outputKey,output})) throw notFound("Exact retained scenario evidence is unavailable");
+      if(source.view.currentQualification!=="current") revalidationRequiredEvidenceKeys.push(link.key);
     }
   }
   const [manifest]=await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,row.companyId),eq(analyticalLineageManifests.id,pin.lineageManifestId))).for("share");
@@ -172,6 +200,10 @@ async function inspectRetained(tx:Db,row:Decision,actor:AuthorizationActor,pin:V
   if(!manifest || manifest.analysisType!=="decision_context" || manifest.analysisRef!==pin.id || manifest.expiresAt<=new Date() || manifest.inputHash!==nativeSha256(pin.evidence)
     || manifest.definitionHash!==pin.contentHash || manifest.sourceCount!==edges.length || edges.length>EDGE_BUDGET || manifest.parameters.lineageHash!==nativeSha256(material)) throw conflict("Decision context source lineage is unavailable");
   await inspectAuthorityEdges(tx,row.companyId,actor,material,performance.now()+30_000);
+  const calculations=await tx.select().from(decisionCalculationPins).where(and(eq(decisionCalculationPins.companyId,row.companyId),eq(decisionCalculationPins.contextVersionId,pin.id))).for("share");
+  const expected=pin.evidence.filter(item=>item.source.type==="forecast_run" || item.source.type==="scenario_run");
+  if(calculations.length!==expected.length || expected.some(item=>!calculations.some(calc=>calc.decisionId===row.id && calc.key===item.key && calc.sourceHash===item.sourceHash && (item.source.type==="forecast_run"?calc.forecastRunId===item.source.id && calc.scenarioRunId===null:calc.scenarioRunId===item.source.id && calc.forecastRunId===null)))) throw notFound("Decision calculation source pins are erased or unavailable");
+  return revalidationRequiredEvidenceKeys;
   // No recomputation with today's metric values, no replacement of January's
   // process interpretation and no retrospective evidence enrichment.
 }
@@ -183,10 +215,10 @@ async function inspect(tx:Db,row:Decision,actor:AuthorizationActor):Promise<Deci
   const selected=rows.slice(0,5);
   if(binding && !selected.some(pin=>pin.id===binding.versionId)) selected.push(await pinnedVersion(tx,row.companyId,row.id,binding.versionId));
   for(const candidate of selected) {
-    checkTime(deadline);const pin=await pinnedVersion(tx,row.companyId,row.id,candidate.id);await inspectRetained(tx,row,actor,pin);
+    checkTime(deadline);const pin=await pinnedVersion(tx,row.companyId,row.id,candidate.id),revalidationRequiredEvidenceKeys=await inspectRetained(tx,row,actor,pin);
     versions.push({id:pin.id,companyId:pin.companyId,decisionId:pin.decisionId,revision:pin.revision,definition:pin.definition,evidence:pin.evidence,contentHash:pin.contentHash,
       decisionSpecHash:pin.decisionSpecHash,createdAt:pin.createdAt.toISOString(),expiresAt:pin.expiresAt.toISOString(),
-      state:binding?.versionId===pin.id?"frozen_for_decision":row.status!=="open" || pin.id!==rows[0]?.id?"superseded":"draft"});
+      state:binding?.versionId===pin.id?"frozen_for_decision":row.status!=="open" || pin.id!==rows[0]?.id?"superseded":"draft",revalidationRequiredEvidenceKeys});
   }
   if(binding && (row.status!=="decided" || row.chosenOptionId!==binding.optionId || !row.decidedAt || row.decidedAt.getTime()!==binding.frozenAt.getTime()
     || versions.find(pin=>pin.id===binding.versionId)?.contentHash!==binding.contextHash)) throw conflict("Frozen context no longer agrees with its native decision receipt");
@@ -228,6 +260,8 @@ export function decisionIntelligenceService(db:Db) {
           createdBy:v7HumanActorId(actor),createdAt:captured.now,expiresAt:captured.expiresAt});
         const fields={companyId,decisionId:id,contextVersionId:versionId};
         if(input.definition.evidence.length) await tx.insert(decisionEvidenceLinks).values(input.definition.evidence.map(payload=>({...fields,key:payload.key,payload})));
+        const calculationEvidence=captured.evidence.filter(item=>item.source.type==="forecast_run" || item.source.type==="scenario_run");
+        if(calculationEvidence.length) await tx.insert(decisionCalculationPins).values(calculationEvidence.map(item=>({...fields,key:item.key,sourceHash:item.sourceHash,forecastRunId:item.source.type==="forecast_run"?item.source.id:null,scenarioRunId:item.source.type==="scenario_run"?item.source.id:null})));
         if(input.definition.assumptions.length) await tx.insert(decisionAssumptions).values(input.definition.assumptions.map(payload=>({...fields,key:payload.key,payload})));
         await tx.insert(decisionCriteria).values(input.definition.criteria.map(payload=>({...fields,key:payload.key,payload})));
         await tx.insert(decisionExpectedOutcomes).values(input.definition.expectedOutcomes.map((payload,index)=>({...fields,key:String(index),payload})));

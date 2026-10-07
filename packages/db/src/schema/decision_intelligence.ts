@@ -3,6 +3,8 @@ import { check, foreignKey, integer, jsonb, pgTable, text, timestamp, unique, uu
 import type { CapturedDecisionEvidence, DecisionContextDefinition } from "@paperclipai/shared";
 import { decisions } from "./decisions.js";
 import { analyticalLineageManifests } from "./analytical_lineage.js";
+import { forecastRuns } from "./business_forecasting.js";
+import { businessScenarioRuns } from "./business_scenarios.js";
 
 /** Native Decisions own this aggregate. No alternate choice or effect store. */
 export const decisionContexts = pgTable("decision_contexts", {
@@ -49,6 +51,16 @@ function materialColumns() { return {companyId:uuid("company_id").notNull(),deci
 export const decisionEvidenceLinks=pgTable("decision_evidence_links",{...materialColumns(),payload:jsonb("payload_json").$type<DecisionContextDefinition["evidence"][number]>().notNull()},t=>({
   materialUq:unique("decision_evidence_links_material_uq").on(t.companyId,t.contextVersionId,t.key),
   versionFk:foreignKey({name:"decision_evidence_links_version_fk",columns:[t.companyId,t.decisionId,t.contextVersionId],foreignColumns:[decisionContextVersions.companyId,decisionContextVersions.decisionId,decisionContextVersions.id]}).onDelete("cascade"),
+}));
+/** Calculation owners erase dependent context prose through exact tenant FKs. */
+export const decisionCalculationPins = pgTable("decision_calculation_pins", {
+  ...materialColumns(), forecastRunId: uuid("forecast_run_id"), scenarioRunId: uuid("scenario_run_id"), sourceHash: text("source_hash").notNull(),
+}, t => ({
+  pinUq: unique("decision_calculation_pins_key_uq").on(t.companyId, t.contextVersionId, t.key),
+  versionFk: foreignKey({ name: "decision_calculation_pins_version_fk", columns: [t.companyId, t.decisionId, t.contextVersionId], foreignColumns: [decisionContextVersions.companyId, decisionContextVersions.decisionId, decisionContextVersions.id] }).onDelete("cascade"),
+  forecastFk: foreignKey({ name: "decision_calculation_pins_forecast_fk", columns: [t.companyId, t.forecastRunId], foreignColumns: [forecastRuns.companyId, forecastRuns.id] }).onDelete("cascade"),
+  scenarioFk: foreignKey({ name: "decision_calculation_pins_scenario_fk", columns: [t.companyId, t.scenarioRunId], foreignColumns: [businessScenarioRuns.companyId, businessScenarioRuns.id] }).onDelete("cascade"),
+  typeCheck: check("decision_calculation_pins_type_check", sql`(${t.forecastRunId} is null) <> (${t.scenarioRunId} is null) and ${t.sourceHash} ~ '^[0-9a-f]{64}$'`),
 }));
 export const decisionAssumptions=pgTable("decision_assumptions",{...materialColumns(),payload:jsonb("payload_json").$type<DecisionContextDefinition["assumptions"][number]>().notNull()},t=>({
   materialUq:unique("decision_assumptions_material_uq").on(t.companyId,t.contextVersionId,t.key),

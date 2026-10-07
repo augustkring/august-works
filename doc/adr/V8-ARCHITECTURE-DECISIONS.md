@@ -233,3 +233,20 @@ stable for company/version/subject but grant no live exposure authority. The
 internal numerical capture cannot substitute for native purpose, immutable
 receipt ownership or source erasure. Native business experiment registry/owner
 and UI follow this checkpoint; V7 software/agent evaluation remains canonical.
+
+
+## V8-017 — Decisions pin source-owned retained calculations without rerunning them
+
+Forecast and scenario evidence references bind exact immutable run/version and
+selected point or case/output identities. Capture uses the existing source owner
+in the native company/Memory transaction; source purpose, sensitivity, expiry
+and current human publication/qualification remain independent gates. Selected
+conditional facts cannot become measured criteria/actual baselines. Native choice
+still commits its exact context binding atomically before canonical effects.
+
+Tenant-scoped immutable calculation FKs and deferred completeness extend native
+context erasure to source-owner deletion, including complete context prose and
+binding. Historical saved bytes remain unchanged after source replacement, with
+current revalidation displayed separately. Native numerical results grant no
+choice, commitment, causal language or policy promotion authority. No alternate
+Decision/Forecast/Scenario store or scheduler is introduced.

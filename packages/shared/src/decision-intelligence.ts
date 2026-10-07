@@ -8,9 +8,11 @@ const scope=z.discriminatedUnion("type",[
 export const decisionEvidenceReferenceSchema=z.discriminatedUnion("type",[
   z.object({type:z.literal("metric_observation"),id,metricId:id,metricVersionId:id}).strict(),
   z.object({type:z.literal("process_finding"),id,definitionId:id,runId:id}).strict(),
+  z.object({type:z.literal("forecast_run"),id,specId:id,versionId:id,pointIndex:z.number().int().min(0).max(59)}).strict(),
+  z.object({type:z.literal("scenario_run"),id,scenarioId:id,versionId:id,caseKey:z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),outputKey:z.string().regex(/^[a-z][a-z0-9_]{0,63}$/)}).strict(),
 ]);
 const evidence=z.object({key,source:decisionEvidenceReferenceSchema,
-  relationship:z.enum(["supports_option","contradicts_option","informs_criterion","establishes_constraint","metric_observation","process_finding","risk"]),
+  relationship:z.enum(["supports_option","contradicts_option","informs_criterion","establishes_constraint","metric_observation","process_finding","forecast_result","scenario_result","risk"]),
   optionId:z.string().trim().min(1).max(120).nullable(),criterionKey:key.nullable(),rationale:prose,
 }).strict().superRefine((value,ctx)=>{
   if(["supports_option","contradicts_option"].includes(value.relationship)!==(value.optionId!==null))
@@ -69,6 +71,7 @@ export interface CapturedDecisionEvidence {
 export interface DecisionContextVersionView {
   id:string;companyId:string;decisionId:string;revision:number;definition:DecisionContextDefinition;contentHash:string;decisionSpecHash:string;
   evidence:CapturedDecisionEvidence[];createdAt:string;expiresAt:string;state:"draft"|"frozen_for_decision"|"superseded";
+  revalidationRequiredEvidenceKeys?:string[];
 }
 export interface DecisionContextBindingView {
   versionId:string;optionId:string;contextHash:string;decisionSpecHash:string;frozenAt:string;

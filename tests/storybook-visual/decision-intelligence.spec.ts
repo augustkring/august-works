@@ -2,11 +2,42 @@ import {expect,test,type Page} from "@playwright/test";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url),axePath=require.resolve("axe-core/axe.min.js");
 async function accessibility(page:Page) {
-  await page.addScriptTag({path:axePath});const deadline=performance.now()+10000;
+  await page.addScriptTag({path:axePath});
   const violations=await page.evaluate(async budget=>{
     const w=window as unknown as {axe:{run:(context:string,options:unknown)=>Promise<{violations:unknown[]}>}};
-    while(true) {try{return (await w.axe.run("#storybook-root",{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa"]}})).violations;}catch(error){if(!(error instanceof Error)||!error.message.includes("Axe is already running")||performance.now()>=budget) throw error;await new Promise(resolve=>setTimeout(resolve,25));}}
-  },deadline);expect(violations).toEqual([]);
+    const deadline=performance.now()+budget;
+    while(true) {try{return (await w.axe.run("#storybook-root",{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa"]}})).violations;}catch(error){if(!(error instanceof Error)||!error.message.includes("Axe is already running")||performance.now()>=deadline) throw error;await new Promise(resolve=>setTimeout(resolve,25));}}
+  },5000);expect(violations).toEqual([]);
+}
+for(const theme of ["light","dark"]) for(const width of [390,1200]) {
+  for(const kind of ["forecast_run","scenario_run"] as const) test(`decision calculation ${kind} ${theme} ${width}px pins exact advisory evidence`,async({page},info)=>{
+    await page.route("**/api/**",route=>route.abort());await page.setViewportSize({width,height:1100});
+    await page.goto(`/iframe.html?id=business-intelligence-decision-intelligence--proposal&viewMode=story&globals=theme:${theme}`);
+    await page.getByRole("button",{name:"Propose a context revision",exact:true}).click();const form=page.getByRole("form",{name:"Decision context proposal"});
+    await form.getByRole("button",{name:"Add native evidence",exact:true}).click();const evidence=form.getByRole("group",{name:"Evidence 2",exact:true});
+    await evidence.getByRole("combobox",{name:"Evidence kind",exact:true}).selectOption(kind);
+    await evidence.getByRole("combobox",{name:kind==="forecast_run"?"Published forecast":"Published scenario",exact:true}).selectOption(kind==="forecast_run"?"00000000-0000-4000-8000-000000000002":"00000000-0000-4000-8000-000000000501");
+    await evidence.getByRole("combobox",{name:"Retained calculation run",exact:true}).selectOption(kind==="forecast_run"?"00000000-0000-4000-8000-000000000008":"00000000-0000-4000-8000-000000000503");
+    const pin=evidence.getByRole("combobox",{name:"Pinned evidence",exact:true});
+    const value=await pin.locator("option").nth(kind==="forecast_run"?1:2).getAttribute("value");await pin.selectOption(value!);
+    await evidence.getByRole("textbox",{name:"Evidence rationale",exact:true}).fill("Human reviews this exact conditional calculation and its evidence limits");
+    await expect(form.getByRole("button",{name:"Save context proposal"})).toBeEnabled();
+    const source=JSON.parse(await pin.inputValue());expect(source.type).toBe(kind);expect(source).not.toHaveProperty("value");expect(source).not.toHaveProperty("contentHash");
+    if(kind==="forecast_run") expect(source.pointIndex).toBe(0);else expect(source).toMatchObject({caseKey:"option",outputKey:"capacity"});
+    await expect(evidence).toContainText("do not become measured outcomes or authorize a choice");
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await accessibility(page);
+    await page.screenshot({path:info.outputPath(`decision-calculation-${kind}-${theme}-${width}.png`),fullPage:true,animations:"disabled"});
+  });
+  test(`decision historical calculation ${theme} ${width}px preserves frozen basis and revalidation`,async({page},info)=>{
+    await page.route("**/api/**",route=>route.abort());await page.setViewportSize({width,height:1100});
+    await page.goto(`/iframe.html?id=business-intelligence-decision-intelligence--historical-calculation&viewMode=story&globals=theme:${theme}`);
+    const evidence=page.getByRole("region",{name:"Captured decision evidence"});
+    await expect(evidence).toContainText("retained calculation is historical");await expect(evidence).toContainText("captured decision basis remains unchanged");
+    await expect(evidence).toContainText("no observed actual, calibration, causal effect or commitment");
+    await expect(page.getByRole("button",{name:"Propose a context revision"})).toHaveCount(0);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await accessibility(page);
+    await page.screenshot({path:info.outputPath(`decision-historical-calculation-${theme}-${width}.png`),fullPage:true,animations:"disabled"});
+  });
 }
 for(const theme of ["light","dark"]) for(const width of [390,1200]) for(const state of ["empty","proposal","prepared","frozen","expired"]) {
   test(`decision context ${state} ${theme} ${width}px preserves prospective human review`,async({page},info)=>{

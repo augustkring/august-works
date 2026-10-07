@@ -4,7 +4,11 @@ const require=createRequire(import.meta.url),axePath=require.resolve("axe-core/a
 async function accessibility(page:Page) {
   await page.addScriptTag({path:axePath});const violations=await page.evaluate(async()=>{
     const w=window as unknown as {axe:{run:(context:string,options:unknown)=>Promise<{violations:unknown[]}>}};
-    return (await w.axe.run("#storybook-root",{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa"]}})).violations;
+    const deadline=performance.now()+5000;
+    while(true) {
+      try {return (await w.axe.run("#storybook-root",{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa"]}})).violations;}
+      catch(error) {if(!(error instanceof Error)||!error.message.includes("Axe is already running")||performance.now()>=deadline) throw error;await new Promise(resolve=>setTimeout(resolve,25));}
+    }
   });expect(violations).toEqual([]);
 }
 const states=["scheduled","due","in-progress","completed","inconclusive","cancelled"];

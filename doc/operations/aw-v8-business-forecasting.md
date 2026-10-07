@@ -128,3 +128,15 @@ are under `/var/tmp/aw-v8-business-forecast-*`.
 An initial pending-state test omitted React Query's render notification wait, and
 one overloaded setup clicked before its control became ready. Bounded waits for
 the actual controls corrected those test races; the final six checks passed.
+
+
+## Downstream exact evidence checkpoint
+
+Native scenarios and prospective Decisions now consume exact retained forecast
+run/version/point identities through the canonical owner. Decision source pins
+preserve native authorization, current qualification before preparation/choice,
+selected point semantics, null intervals, sensitivity and source-owned erasure.
+Historical basis facts stay unchanged on retirement/correction and disclose
+current revalidation separately. See `aw-v8-decision-context.md` and the exact
+checkpoint evidence. Optional statistical providers, asynchronous provider
+lifecycle and actual hosted qualification remain open.

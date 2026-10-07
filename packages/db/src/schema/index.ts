@@ -1,6 +1,6 @@
 export { companies } from "./companies.js";
 export { decisionContexts, decisionContextVersions, decisionContextPreparations, decisionContextBindings,
-  decisionEvidenceLinks, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes } from "./decision_intelligence.js";
+  decisionEvidenceLinks, decisionCalculationPins, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes } from "./decision_intelligence.js";
 export { companyLogos } from "./company_logos.js";
 export { companyTransferRuns } from "./company_transfer_runs.js";
 export { companyOnboardingSeeds } from "./company_onboarding_seeds.js";

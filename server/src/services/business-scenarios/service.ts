@@ -175,6 +175,16 @@ async function runView(tx: Db, row: Root, actor: AuthorizationActor, value: Run,
 async function audit(tx: Db, companyId: string, actor: AuthorizationActor, id: string, action: string, details: Record<string, unknown>, publications: Parameters<typeof logActivity>[2]) {
   await logActivity(tx, { companyId, actorType: "user", actorId: v7HumanActorId(actor), action: `business_scenario.${action}`, entityType: "business_scenario", entityId: id, details }, publications);
 }
+/** Native pinned consumer; caller owns the company/Memory transaction.
+ * Reads admitted retained facts, never reruns arithmetic or publishes effects. */
+export async function inspectBusinessScenarioRun(tx: Db, companyId: string, actor: AuthorizationActor, scenarioId: string, versionId: string, runId: string, requireCurrent = true) {
+  await admit(tx, companyId, actor); const row = await root(tx, companyId, scenarioId), deadline = performance.now() + 30_000;
+  const [value] = await tx.select().from(businessScenarioRuns).where(and(eq(businessScenarioRuns.companyId, companyId), eq(businessScenarioRuns.scenarioId, scenarioId), eq(businessScenarioRuns.versionId, versionId), eq(businessScenarioRuns.id, runId))).for("share");
+  if (!value) throw notFound("Pinned native scenario run is unavailable");
+  const view = await runView(tx, row, actor, value, deadline), pin = await version(tx, row, actor, versionId, requireCurrent, deadline);
+  if (requireCurrent && view.currentQualification !== "current") throw conflict("A currently reviewed native scenario run is required");
+  return { view, definition: pin.value.definition, lineageManifestId: value.lineageManifestId };
+}
 export function businessScenarioService(db: Db) {
   return {
     async create(companyId: string, actor: AuthorizationActor, raw: CreateBusinessScenario) {

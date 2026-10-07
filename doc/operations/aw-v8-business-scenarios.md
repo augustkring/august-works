@@ -235,3 +235,17 @@ The integrated production build also passes at preceding commit `0e98e9e`;
 `aw-v8-evidence/native-build-0e98e9e.json` records that exact build. Subsequent
 artifact source still requires its own integrated build. Whole V8, provider and
 hosted qualification remain in progress.
+
+
+## Downstream exact evidence checkpoint
+
+Prospective Decisions now consume exact scenario run/version/case/output pins
+through the canonical source owner. Conditional nominal values and sample ranges
+retain their assumptions/uncertainty limits and cannot replace actual measured
+baselines. Current source qualification is required before a new prepared choice;
+historical retirement/replacement labels revalidation without rewriting its
+basis. Source-owned calculation FKs erase complete dependent context/prose.
+See `aw-v8-decision-context.md` and the exact qualification evidence. Optimizer
+Memory inheritance, later Planning/Management consumers and hosted acceptance
+remain open. The integrated artifact build passed at `d9dc96c85`, recorded in
+`aw-v8-evidence/native-build-d9dc96c.json`.

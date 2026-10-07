@@ -1,5 +1,5 @@
 import {describe,expect,it} from "vitest";
-import {decisionContextDefinitionSchema,proposeDecisionContextSchema} from "./decision-intelligence.js";
+import {decisionContextDefinitionSchema,decisionEvidenceReferenceSchema,proposeDecisionContextSchema} from "./decision-intelligence.js";
 const uuid="11111111-1111-4111-8111-111111111111";
 const definition=()=>({question:"Should we pursue this option?",objective:"Review useful business outcomes",ownerUserId:"human",scope:{type:"company",id:null},
   timeHorizon:{from:"2026-10-07T00:00:00Z",until:"2027-01-01T00:00:00Z"},uncertaintySummary:"External conditions remain uncertain",revisitAt:null,
@@ -27,5 +27,17 @@ describe("Prospective native decision context contract",()=>{
     expect(decisionContextDefinitionSchema.safeParse({...input,evidence:[{...link,facts:{value:10}}]}).success).toBe(false);
     expect(decisionContextDefinitionSchema.safeParse({...input,expectedOutcomes:[{...input.expectedOutcomes[0],expectedRange:{lower:20,upper:10}}]}).success).toBe(false);
     expect(decisionContextDefinitionSchema.safeParse({...input,evidence:[{...link,relationship:"supports_option"}]}).success).toBe(false);
+  });
+  it("admits exact calculation pins as advisory evidence without relabeling them measured baselines",()=>{
+    const sources=[{type:"forecast_run",id:uuid,specId:uuid,versionId:uuid,pointIndex:0},{type:"scenario_run",id:uuid,scenarioId:uuid,versionId:uuid,caseKey:"option",outputKey:"capacity"}];
+    for(const source of sources) {
+      const link={key:"calculation",source,relationship:"supports_option",optionId:"proceed",criterionKey:null,rationale:"Human interpretation of exact conditional evidence"};
+      expect(decisionContextDefinitionSchema.safeParse({...definition(),evidence:[link]}).success).toBe(true);
+      expect(decisionEvidenceReferenceSchema.safeParse({...source,value:123}).success).toBe(false);
+      expect(decisionEvidenceReferenceSchema.safeParse({...source,contentHash:"f".repeat(64)}).success).toBe(false);
+      expect(decisionContextDefinitionSchema.safeParse({...definition(),evidence:[link],criteria:[{...definition().criteria[0],type:"measured",evidenceKey:"calculation"}]}).success).toBe(false);
+      expect(decisionContextDefinitionSchema.safeParse({...definition(),evidence:[link],expectedOutcomes:[{kind:"metric",optionId:"proceed",evidenceKey:"calculation",expectedRange:{lower:1,upper:3},expectedDirection:"increase",reviewAt:"2027-01-02T00:00:00Z",uncertaintySummary:"A conditional calculation is not a measured baseline"}]}).success).toBe(false);
+    }
+    expect(decisionEvidenceReferenceSchema.safeParse({...sources[0],pointIndex:60}).success).toBe(false);
   });
 });
