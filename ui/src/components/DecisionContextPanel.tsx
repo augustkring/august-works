@@ -7,6 +7,7 @@ import {instanceSettingsApi} from "@/api/instanceSettings";
 import {decisionIntelligenceApi} from "@/api/decision-intelligence";
 import type {Decision} from "@/api/decisions";
 import {DecisionContextForm} from "./DecisionContextForm";
+import {DecisionOutcomeReviewPanel} from "./DecisionOutcomeReviewPanel";
 import {Button} from "@/components/ui/button";
 import {Textarea} from "@/components/ui/textarea";
 import {Card,CardContent,CardHeader} from "@/components/ui/card";
@@ -51,9 +52,10 @@ function VersionDetails({pin,decision}:{pin:DecisionContextVersionView;decision:
 export function DecisionContextWorkspace({decision,userId}:{decision:Decision;userId:string|null}) {
   const cache=useQueryClient(),key=["decision-context",decision.companyId,userId,decision.id],account=userId??undefined;
   const [editing,setEditing]=useState(false),[rationale,setRationale]=useState(""),[now,setNow]=useState(Date.now());
+  const [reviewEditing,setReviewEditing]=useState(false);
   // Background read refresh must not unmount a human's unsaved proposal. Every
   // write still rechecks current authority, and account/privacy events reset it.
-  const detail=useQuery({queryKey:key,queryFn:()=>decisionIntelligenceApi.detail(decision.companyId,decision.id,account),refetchInterval:editing?false:30000,refetchOnWindowFocus:!editing,retry:false});
+  const detail=useQuery({queryKey:key,queryFn:()=>decisionIntelligenceApi.detail(decision.companyId,decision.id,account),refetchInterval:editing||reviewEditing?false:30000,refetchOnWindowFocus:!editing&&!reviewEditing,retry:false});
   const refresh=()=>{void cache.invalidateQueries({queryKey:key});};
   const reauthorize=()=>{setEditing(false);void cache.resetQueries({queryKey:key});};
   const save=useMutation({mutationFn:(definition:DecisionContextVersionView["definition"])=>decisionIntelligenceApi.propose(decision.companyId,decision.id,{expectedRevision:detail.data!.revision,definition},account),onError:reauthorize,onSuccess:()=>{setEditing(false);setRationale("");refresh();}});
@@ -75,6 +77,7 @@ export function DecisionContextWorkspace({decision,userId}:{decision:Decision;us
       {valid.binding&&pin?<p role="status" className="font-medium">Frozen at the native decision · {new Date(valid.binding.frozenAt).toLocaleString()}</p>:pin?<p className="font-medium">{valid.preparedVersionId===pin.id?"Prepared for the next native choice":"Prospective proposal"}</p>:<p>No retained context is available for this decision.</p>}
       {pin&&<VersionDetails pin={pin} decision={decision}/>}
       {pin?.state==="frozen_for_decision"&&<p className="text-sm text-muted-foreground">Captured facts remain as recorded before the choice. Later observations belong in a separate outcome review.</p>}
+      {pin?.state==="frozen_for_decision"&&valid.binding&&<DecisionOutcomeReviewPanel key={`${pin.id}:${userId}`} companyId={decision.companyId} userId={userId} decisionId={decision.id} version={pin} optionId={valid.binding.optionId} chosenAt={valid.binding.frozenAt} onEditingChange={setReviewEditing}/>}
       {valid.hasMoreVersions&&<p className="text-sm text-muted-foreground">Showing bounded recent versions and the frozen binding; this is not a complete-history listing.</p>}
       {retained.length>1&&<details><summary className="cursor-pointer">Earlier context proposals ({retained.length-1})</summary><div className="space-y-5 pt-4">{retained.filter(item=>item.id!==pin?.id).map(item=><section key={item.id} className="space-y-3 border-t border-border pt-4"><h4 className="font-medium">Version {item.revision} · {item.state.replaceAll("_"," ")}</h4><VersionDetails pin={item} decision={decision}/></section>)}</div></details>}
       {open&&<>

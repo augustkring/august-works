@@ -56,7 +56,18 @@ genuine short-horizon measurement chronology and due derivation without writes.
 Three strict shared contract tests, snapshot drift, migration safety and server
 type checking pass. These are local source checks, not integrated or hosted
 acceptance.
-UI, native Routine reminder attachment, Decision-to-Learning conversion,
+The native Decision context panel now includes explicit schedule/begin/cancel
+controls, six human judgments, assumption validation, compatible native metric
+pickers and immutable historical review display. Parent and review polling pause
+while the human edits; account/privacy changes and server errors clear sensitive
+views. Incomplete evidence permits abstention but cannot silently fill values.
+The current UI passes 27 component checks, token gates and the Storybook build.
+All 54 browser checks pass across context/review states, two themes and
+mobile/desktop widths, WCAG axe, keyboard provenance, form boundaries and both
+31-second unsaved-edit regressions. Screenshots were inspected locally; this
+does not qualify the maintainer visual baseline or live full-stack deployment.
+
+Native Routine reminder attachment, Decision-to-Learning conversion,
 templates, AI assistant, other analytical evidence owners and integrated/hosted
 qualification remain open. Existing V7 Learning requires verified Memory roots
 that resolve to actual canonical completed Task outcomes; this review owner does

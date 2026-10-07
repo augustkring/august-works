@@ -12,6 +12,7 @@ vi.mock("@/context/CompanyContext",()=>({useCompany:()=>({selectedCompanyId:stat
 vi.mock("@/api/companies-query",()=>({useAccountIdentity:()=>state}));
 vi.mock("@/api/instanceSettings",()=>({instanceSettingsApi:{getExperimental:vi.fn(async()=>({analytical_lineage_v8:true,business_metrics_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true,decision_intelligence_v8:state.enabled}))}}));
 vi.mock("@/api/decision-intelligence",()=>({decisionIntelligenceApi:{detail:vi.fn(),propose:vi.fn(),prepare:vi.fn(),withdraw:vi.fn()}}));
+vi.mock("@/api/decision-outcome-reviews",()=>({decisionOutcomeReviewsApi:{detail:vi.fn(async()=>null),schedule:vi.fn(),transition:vi.fn(),finish:vi.fn()}}));
 vi.mock("@/api/ai-governance",()=>({aiGovernanceApi:{obligations:vi.fn(async()=>[{id:"00000000-0000-4000-8000-000000000004",obligation:{framework:"company_policy",citation:"Reviewed decision purpose",analyticalPurpose:{status:"approved",purpose:"management_intelligence",capabilities:["decision"]}}}])}}));
 vi.mock("@/api/projects",()=>({projectsApi:{list:vi.fn(async()=>[])}}));
 vi.mock("@/api/issues",()=>({issuesApi:{list:vi.fn(async()=>[])}}));
