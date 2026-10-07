@@ -1,3 +1,4 @@
+import {assertAnalyticalReader,analyticalPrincipalId} from "../analytical-reader.js";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -52,7 +53,7 @@ async function lineage(tx: Db, companyId: string, id: string) {
   return { manifest, edges: mergeEdges([edges]) };
 }
 async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, flagsRequired = true) {
-  v7HumanActorId(actor);
+  if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor);
   await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
   const flags = await instanceSettingsService(tx).getExperimental();
   if (flagsRequired && (!v8FeatureEnabled(flags, "scenario_planning_v8") || !v7FeatureEnabled(flags, "governance_evidence_v7"))) throw notFound("Governed scenario planning is not enabled");
@@ -74,7 +75,7 @@ function metricUnit(definition: BusinessMetricDefinition): BusinessScenarioUnit 
 }
 async function capture(tx: Db, companyId: string, actor: AuthorizationActor, definition: BusinessScenarioDefinition, requireCurrent: boolean, deadline: number) {
   const policies = await currentAnalyticalPurpose(tx, companyId, definition, "scenario");
-  const ownerIds = [...new Set([definition.ownerUserId, ...definition.assumptions.map(item => item.ownerUserId)])].filter(id => id !== v7HumanActorId(actor));
+  const ownerIds = [...new Set([definition.ownerUserId, ...definition.assumptions.map(item => item.ownerUserId)])].filter(id => id !== analyticalPrincipalId(actor));
   if (ownerIds.length) {
     const owners = await tx.select({ id: companyMemberships.principalId }).from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.status, "active"), inArray(companyMemberships.principalId, ownerIds))).for("share");
     if (ownerIds.some(id => !owners.some(owner => owner.id === id))) throw conflict("All scenario and assumption owners must be current company humans");

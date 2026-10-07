@@ -1,3 +1,4 @@
+import {assertAnalyticalReader,analyticalPrincipalId} from "../analytical-reader.js";
 import {randomUUID} from "node:crypto";
 import {and,asc,desc,eq,sql} from "drizzle-orm";
 import {forecastSpecs,forecastSpecVersions,forecastBacktests,forecastPublications,forecastRuns,analyticalLineageEdges,analyticalLineageManifests,businessMetricObservations,businessMetricPublications,companyMemberships,type Db} from "@paperclipai/db";
@@ -43,7 +44,7 @@ async function lineage(tx:Db,companyId:string,id:string) {
  return {manifest,edges:mergeEdges([edges])};
 }
 async function admit(tx:Db,companyId:string,actor:AuthorizationActor,write=false,checkFlags=true) {
- v7HumanActorId(actor);await assertV7Authorization(tx,actor,companyId,write?"users:manage_permissions":"company_scope:read");
+ if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor);await assertV7Authorization(tx,actor,companyId,write?"users:manage_permissions":"company_scope:read");
  const flags=await instanceSettingsService(tx).getExperimental();
  if(checkFlags&&(!v8FeatureEnabled(flags,"business_forecasting_v8") || !v7FeatureEnabled(flags,"governance_evidence_v7"))) throw notFound("Governed business forecasting is not enabled");
  await lockBusinessEventCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await tx.execute(sql`set local statement_timeout='8s'`);
@@ -54,7 +55,7 @@ async function root(tx:Db,companyId:string,id:string) {
 }
 async function definitionAuthority(tx:Db,companyId:string,actor:AuthorizationActor,definition:BusinessForecastDefinition,requireCurrent=false) {
  const policies=await currentAnalyticalPurpose(tx,companyId,definition,"forecast");
- if(definition.ownerUserId!==v7HumanActorId(actor)) {
+ if(definition.ownerUserId!==analyticalPrincipalId(actor)) {
   const [owner]=await tx.select({id:companyMemberships.id}).from(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),eq(companyMemberships.principalId,definition.ownerUserId),eq(companyMemberships.status,"active"))).for("share");
   if(!owner) throw conflict("Forecast owner must be a current company human principal");
  }

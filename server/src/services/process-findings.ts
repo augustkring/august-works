@@ -1,3 +1,4 @@
+import {assertAnalyticalReader} from "./analytical-reader.js";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { processFindings, processFindingTransitions, type Db } from "@paperclipai/db";
 import { createProcessFindingSchema, transitionProcessFindingSchema, processFindingTransitionAllowed,
@@ -74,7 +75,7 @@ function view(row: Finding, run: ProcessAnalysisRunView): ProcessFindingView {
 }
 export function processFindingService(db: Db) {
   async function boundary(tx: Db, companyId: string, actor: AuthorizationActor, definitionId: string, runId: string, write = false) {
-    v7HumanActorId(actor); await tx.execute(sql`set local statement_timeout='8s'`);
+    if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor); await tx.execute(sql`set local statement_timeout='8s'`);
     await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
     await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
     // The native run owner rechecks flags, current purpose/owner, exact source

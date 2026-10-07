@@ -1,3 +1,4 @@
+import {assertAnalyticalReader,analyticalPrincipalId} from "./analytical-reader.js";
 import { randomUUID } from "node:crypto";
 import { captureAnalyticalEvidence, inspectAnalyticalEvidenceAuthority as inspectAuthorityEdges } from "./analytical-evidence.js";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -42,7 +43,7 @@ async function locks(tx:Db,companyId:string) {
   await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
 }
 async function admission(tx:Db,companyId:string,actor:AuthorizationActor,write=false) {
-  v7HumanActorId(actor);
+  if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor);
   await assertV7Authorization(tx,actor,companyId,write?"users:manage_permissions":"company_scope:read");
   const flags=await instanceSettingsService(tx).getExperimental();
   if(!v8FeatureEnabled(flags,"decision_intelligence_v8") || !v7FeatureEnabled(flags,"governance_evidence_v7")) throw notFound("Governed decision context is not enabled");
@@ -81,7 +82,7 @@ async function pinnedVersion(tx:Db,companyId:string,decisionId:string,id:string)
   return row;
 }
 async function purpose(tx:Db,companyId:string,actor:AuthorizationActor,definition:DecisionContextDefinition) {
-  if(definition.ownerUserId!==v7HumanActorId(actor)) {
+  if(definition.ownerUserId!==analyticalPrincipalId(actor)) {
     const [member]=await tx.select({id:companyMemberships.id}).from(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),eq(companyMemberships.principalId,definition.ownerUserId),eq(companyMemberships.status,"active"))).for("share");
     if(!member) throw conflict("Decision context owner must be a current company human");
   }

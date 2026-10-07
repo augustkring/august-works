@@ -1,3 +1,4 @@
+import {assertAnalyticalReader,analyticalPrincipalId} from "../analytical-reader.js";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { analyticalLineageEdges, analyticalLineageManifests, businessExperiments, businessExperimentVersions, businessExperimentMetricPins, businessExperimentTransitions, businessMetrics, companyMemberships, type Db } from "@paperclipai/db";
@@ -33,7 +34,7 @@ function mergeEdges(edges: Edge[]): Edge[] {
   return [...result.values()].sort((a, b) => `${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
 }
 async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, flagsRequired = true) {
-  v7HumanActorId(actor);
+  if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor);
   await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
   const flags = await instanceSettingsService(tx).getExperimental();
   if (flagsRequired && (!v8FeatureEnabled(flags, "business_experiments_v8") || !v7FeatureEnabled(flags, "governance_evidence_v7"))) throw notFound("Governed business experiments are not enabled");
@@ -56,7 +57,7 @@ async function capture(tx: Db, companyId: string, actor: AuthorizationActor, def
   if (definition.ethics.personImpact !== "none" || definition.ethics.requiresConsent || definition.ethics.changesMaterialAiDecisions)
     throw conflict("Native experiment admission currently supports approved business-object analysis without personal impact or material AI deployment changes");
   const policies = await currentAnalyticalPurpose(tx, companyId, definition, "experiment");
-  if (definition.ownerUserId !== v7HumanActorId(actor)) {
+  if (definition.ownerUserId !== analyticalPrincipalId(actor)) {
     const [owner] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, definition.ownerUserId), eq(companyMemberships.status, "active"))).for("share");
     if (!owner) throw conflict("Experiment owner must be a current company human");
   }

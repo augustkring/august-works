@@ -1,3 +1,4 @@
+import {assertAnalyticalReader,analyticalPrincipalId,analyticalRequesterId} from "./analytical-reader.js";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import { analyticalLineageManifests, companyMemberships, processAnalysisDefinitions, processAnalysisPublications,
@@ -36,7 +37,7 @@ function statusError(error: unknown, codes: number[]) {
  * a readiness preview or retained result never grants execution authority. */
 export function processAnalysisService(db: Db) {
   async function boundary(tx: Db, companyId: string, actor: AuthorizationActor, write = false, flagsRequired = true) {
-    v7HumanActorId(actor); await tx.execute(sql`set local statement_timeout='8s'`);
+    if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor); await tx.execute(sql`set local statement_timeout='8s'`);
     await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
     await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
     const flags = await instanceSettingsService(tx).getExperimental();
@@ -55,7 +56,7 @@ export function processAnalysisService(db: Db) {
     return row;
   }
   async function owner(tx: Db, companyId: string, actor: AuthorizationActor, definition: ProcessAnalysisDefinition) {
-    if (definition.ownerUserId === v7HumanActorId(actor)) return;
+    if (definition.ownerUserId === analyticalPrincipalId(actor)) return;
     const [current] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
       eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, definition.ownerUserId), eq(companyMemberships.status, "active"))).for("share");
     if (!current) throw conflict("Process owner must be a current company human");
@@ -99,7 +100,7 @@ export function processAnalysisService(db: Db) {
       latestVersion: versionView(latest), versions: retained.map(versionView), hasMoreVersions: rows.length > 100, reviewReason };
   }
   async function audit(tx: Db, publications: Parameters<typeof logActivity>[2], companyId: string, actor: AuthorizationActor, action: string, id: string, details: Record<string, unknown>) {
-    await logActivity(tx, { companyId, actorType: "user", actorId: v7HumanActorId(actor), action, entityType: "process_analysis_definition", entityId: id, details }, publications);
+    await logActivity(tx, { companyId, actorType: actor.type === "agent" ? "agent" : "user", actorId: actor.type === "agent" ? actor.agentId! : v7HumanActorId(actor), action, entityType: "process_analysis_definition", entityId: id, details }, publications);
   }
   return {
     async create(companyId: string, actor: AuthorizationActor, raw: CreateProcessAnalysisDefinition) {
@@ -178,11 +179,11 @@ export function processAnalysisService(db: Db) {
         if (expiresAt <= now) throw conflict("An input expired during process calculation");
         const runId = randomUUID(), lineageManifestId = randomUUID();
         await tx.insert(analyticalLineageManifests).values({ id: lineageManifestId, companyId, analysisType: "process_analysis", analysisRef: runId,
-          engineVersion: NATIVE_PROCESS_ENGINE_VERSION, inputHash: snapshot.readiness.eventSetHash, definitionHash: pin.contentHash, requestedBy: v7HumanActorId(actor),
+          engineVersion: NATIVE_PROCESS_ENGINE_VERSION, inputHash: snapshot.readiness.eventSetHash, definitionHash: pin.contentHash, requestedBy: analyticalRequesterId(actor),
           sourceWatermark: snapshot.events.at(-1)?.occurredAt ?? "empty_authorized_snapshot", sourceCount: snapshot.events.length, parameters: input, createdAt: now, expiresAt });
         await retainNativeEventLineage(tx, companyId, lineageManifestId, snapshot.events, policies);
         await tx.insert(processAnalysisRuns).values({ id: runId, companyId, definitionId: id, versionId: pin.id, lineageManifestId, definitionHash: pin.contentHash,
-          eventSetHash: snapshot.readiness.eventSetHash, from: sql`${input.from}::timestamptz`, until: sql`${input.until}::timestamptz`, result, createdBy: v7HumanActorId(actor), createdAt: now, expiresAt });
+          eventSetHash: snapshot.readiness.eventSetHash, from: sql`${input.from}::timestamptz`, until: sql`${input.until}::timestamptz`, result, createdBy: analyticalRequesterId(actor), createdAt: now, expiresAt });
         await audit(tx, publications, companyId, actor, "process_analysis.completed", id, { runId, lineageManifestId, status: result.status, errorCode: result.errorCode });
         return { id: runId, companyId, definitionId: id, versionId: pin.id, lineageManifestId, definitionHash: pin.contentHash, eventSetHash: snapshot.readiness.eventSetHash,
           from: input.from, until: input.until, createdAt: now.toISOString(), expiresAt: expiresAt.toISOString(), authorizationCheckedAt: now.toISOString(), result };

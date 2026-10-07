@@ -1,5 +1,6 @@
+import {assertAnalyticalReader,analyticalPrincipalId,analyticalRequesterId} from "../analytical-reader.js";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { analyticalLineageEdges, analyticalLineageManifests, businessMetrics, businessMetricVersions, businessMetricPublications, businessMetricObservations, companyMemberships, issues, projects, type Db } from "@paperclipai/db";
 import { businessMetricDefinitionSchema, createBusinessMetricSchema, createBusinessMetricVersionSchema, publishBusinessMetricSchema, transitionBusinessMetricSchema, queryBusinessMetricSchema, v8FeatureEnabled, v7FeatureEnabled, type BusinessMetricDefinition, type BusinessMetricQuery, type BusinessMetricResult } from "@paperclipai/shared";
 import type { z } from "zod";
@@ -21,7 +22,7 @@ export function businessMetricService(db: Db) {
     if (performance.now() > deadline) throw unprocessable("Metric query time budget exceeded; select a smaller population", { code: "metric_query_time_budget_exceeded" });
   }
   async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, checkFlags = true) {
-    v7HumanActorId(actor);
+    if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor);
     await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
     const flags = await instanceSettingsService(tx).getExperimental();
     if (checkFlags && (!v8FeatureEnabled(flags, "business_metrics_v8") || !v7FeatureEnabled(flags, "governance_evidence_v7"))) throw notFound("Governed business metrics are not enabled");
@@ -32,7 +33,7 @@ export function businessMetricService(db: Db) {
     if (!row) throw notFound("Metric not found"); return row;
   }
   async function definitionAdmission(tx: Db, companyId: string, actor: AuthorizationActor, definition: BusinessMetricDefinition) {
-    if (definition.ownerUserId !== v7HumanActorId(actor)) {
+    if (definition.ownerUserId !== analyticalPrincipalId(actor)) {
       const [membership] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
         eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
         eq(companyMemberships.principalId, definition.ownerUserId), eq(companyMemberships.status, "active"),
@@ -48,7 +49,7 @@ export function businessMetricService(db: Db) {
     return row;
   }
   async function audit(tx: Db, publications: Parameters<typeof logActivity>[2], companyId: string, actor: AuthorizationActor, action: string, id: string, details: Record<string, unknown>) {
-    await logActivity(tx, { companyId, actorType: "user", actorId: v7HumanActorId(actor), action, entityType: "business_metric", entityId: id, details }, publications);
+    await logActivity(tx, { companyId, actorType: actor.type === "agent" ? "agent" : "user", actorId: actor.type === "agent" ? actor.agentId! : v7HumanActorId(actor), action, entityType: "business_metric", entityId: id, details }, publications);
   }
   async function permitted(tx: Db, companyId: string, actor: AuthorizationActor, entity: "issue" | "project", id: string) {
     const access = accessService(tx);
@@ -56,7 +57,7 @@ export function businessMetricService(db: Db) {
       const [project] = await tx.select({ id: projects.id }).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).for("share");
       return !!project && (await access.decide({ actor, action: "project:read", enforceResponsibleUserIntersection: true, resource: { type: "project", companyId, projectId: id } })).allowed;
     }
-    const [issue] = await tx.select({ id: issues.id, projectId: issues.projectId, parentId: issues.parentId, assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId, status: issues.status, originKind: issues.originKind, originId: issues.originId }).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, id))).for("share");
+    const [issue] = await tx.select({ id: issues.id, projectId: issues.projectId, parentId: issues.parentId, assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId, status: issues.status, originKind: issues.originKind, originId: issues.originId }).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, id), isNull(issues.hiddenAt))).for("share");
     return !!issue && (await access.decide({ actor, action: "issue:read", enforceResponsibleUserIntersection: true, resource: {
       type: "issue", companyId, issueId: id, projectId: issue.projectId, parentIssueId: issue.parentId, assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId, status: issue.status, originKind: issue.originKind, originId: issue.originId,
     } })).allowed;
@@ -165,11 +166,13 @@ export function businessMetricService(db: Db) {
       return { metric: row, version: revision };
     },
     async list(companyId: string, actor: AuthorizationActor, cursor?: string) {
+      if(actor.type==="agent")return db.transaction(async raw=>{const tx=raw as unknown as Db;await admit(tx,companyId,actor);await lockBusinessEventCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await tx.execute(sql`set local statement_timeout='8s'`);const rows=await tx.select().from(businessMetrics).where(and(eq(businessMetrics.companyId,companyId),eq(businessMetrics.status,"published"),cursor?sql`${businessMetrics.id}>${cursor}::uuid`:undefined)).orderBy(asc(businessMetrics.id)).limit(21),items:typeof rows=[];for(const row of rows.slice(0,20)){if(!row.publishedVersionId)continue;try{await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,row.id,row.publishedVersionId);items.push(row);}catch(error){if(!(error&&typeof error==="object"&&"status"in error&&[403,404,409].includes(Number(error.status))))throw error;}}return{items,nextCursor:rows.length>20?rows[19]!.id:null};});
       await admit(db, companyId, actor);
       const rows = await db.select().from(businessMetrics).where(and(eq(businessMetrics.companyId, companyId), cursor ? sql`${businessMetrics.id}>${cursor}::uuid` : undefined)).orderBy(asc(businessMetrics.id)).limit(101);
       return { items: rows.slice(0, 100), nextCursor: rows.length > 100 ? rows[99].id : null };
     },
     async detail(companyId: string, actor: AuthorizationActor, id: string) {
+      if(actor.type==="agent")return db.transaction(async raw=>{const tx=raw as unknown as Db;await admit(tx,companyId,actor);await lockBusinessEventCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);const row=await metric(tx,companyId,id);if(!row.publishedVersionId)throw notFound("Current published metric is unavailable");const current=await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,id,row.publishedVersionId);return{metric:row,versions:[current.version]};});
       await admit(db, companyId, actor); const row = await metric(db, companyId, id);
       const versions = await db.select().from(businessMetricVersions).where(and(eq(businessMetricVersions.companyId, companyId), eq(businessMetricVersions.metricId, id))).orderBy(desc(businessMetricVersions.revision)).limit(100);
       return { metric: row, versions };
@@ -245,7 +248,7 @@ export function businessMetricService(db: Db) {
           revision.createdAt.getTime() + revision.definition.reviewFrequencyDays * 86_400_000,
           ...policies.map(p => Math.min(p.nextReviewAt.getTime(), Date.parse(p.obligation.nextReviewAt), p.obligation.effectiveUntil ? Date.parse(p.obligation.effectiveUntil) : Infinity))));
         const result: BusinessMetricResult = { id, companyId, metricId: row.id, versionId: revision.id, from: query.from, until: query.until, asOf: now.toISOString(), expiresAt: expiresAt.toISOString(), ...calculated, engineVersion: NATIVE_METRIC_ENGINE_VERSION, lineageManifestId: manifestId };
-        await tx.insert(analyticalLineageManifests).values({ id: manifestId, companyId, analysisType: "business_metric", analysisRef: id, engineVersion: NATIVE_METRIC_ENGINE_VERSION, inputHash: calculated.inputHash, definitionHash: calculated.definitionHash, requestedBy: v7HumanActorId(actor), sourceWatermark: calculated.sourceWatermark, sourceCount: sources.length, parameters: query, createdAt: now, expiresAt: new Date(now.getTime() + revision.definition.retentionDays * 86_400_000) });
+        await tx.insert(analyticalLineageManifests).values({ id: manifestId, companyId, analysisType: "business_metric", analysisRef: id, engineVersion: NATIVE_METRIC_ENGINE_VERSION, inputHash: calculated.inputHash, definitionHash: calculated.definitionHash, requestedBy: analyticalRequesterId(actor), sourceWatermark: calculated.sourceWatermark, sourceCount: sources.length, parameters: query, createdAt: now, expiresAt: new Date(now.getTime() + revision.definition.retentionDays * 86_400_000) });
         const population = revision.definition.calculation.kind === "native_count" ? revision.definition.calculation.population
           : revision.definition.calculation.kind === "native_ratio" ? revision.definition.calculation.denominator : null;
         const scopedProjectId = population?.entity === "issue" ? population.projectId : null;
@@ -262,7 +265,7 @@ export function businessMetricService(db: Db) {
         }
         await admit(tx, companyId, actor); await definitionAdmission(tx, companyId, actor, revision.definition);
         queryTimeBudget(deadline);
-        await tx.insert(businessMetricObservations).values({ id, companyId, metricId: row.id, versionId: revision.id, result, definitionHash: calculated.definitionHash, inputHash: calculated.inputHash, lineageManifestId: manifestId, requestedBy: v7HumanActorId(actor), observedAt: now, expiresAt });
+        await tx.insert(businessMetricObservations).values({ id, companyId, metricId: row.id, versionId: revision.id, result, definitionHash: calculated.definitionHash, inputHash: calculated.inputHash, lineageManifestId: manifestId, requestedBy: analyticalRequesterId(actor), observedAt: now, expiresAt });
         await audit(tx, publications, companyId, actor, "business_metric.observed", row.id, { observationId: id, versionId: revision.id, lineageManifestId: manifestId, inputHash: calculated.inputHash });
         return result;
       });
