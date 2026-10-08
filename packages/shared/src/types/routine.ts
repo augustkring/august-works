@@ -1,3 +1,4 @@
+import type { RoutineManagementReviewTemplate } from "../management-reviews.js";
 import type { ExecutionPrincipal } from "../august-works-platform.js";
 import type {
   IssueOriginKind,
@@ -95,6 +96,7 @@ export interface Routine {
   executionTargetKind?: RoutineExecutionTargetKind | null;
   executionTargetRef?: string | null;
   workflowExecutionPrincipal?: ExecutionPrincipal | null;
+  managementReviewTemplate?: RoutineManagementReviewTemplate | null;
   priority: string;
   status: string;
   concurrencyPolicy: string;
@@ -143,6 +145,7 @@ export interface RoutineRevisionSnapshotRoutineV1 {
   executionTargetKind?: RoutineExecutionTargetKind | null;
   executionTargetRef?: string | null;
   workflowExecutionPrincipal?: ExecutionPrincipal | null;
+  managementReviewTemplate?: RoutineManagementReviewTemplate | null;
   priority: IssuePriority;
   status: RoutineStatus;
   concurrencyPolicy: RoutineConcurrencyPolicy;
@@ -242,6 +245,7 @@ export interface RoutineRun {
   dispatchFingerprint: string | null;
   linkedIssueId: string | null;
   linkedWorkflowRunId?: string | null;
+  linkedManagementReviewId?: string | null;
   linkedWorkflowId?: string | null;
   linkedWorkflowRunStatus?: WorkflowRunStatus | null;
   coalescedIntoRunId: string | null;

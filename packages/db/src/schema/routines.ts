@@ -22,6 +22,7 @@ import { goals } from "./goals.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
 import { folders } from "./folders.js";
 import type {
+  RoutineManagementReviewTemplate,
   RoutineEnvConfig,
   ExecutionPrincipal,
   RoutineExecutionTargetKind,
@@ -29,6 +30,7 @@ import type {
   RoutineVariable,
   RoutineWebhookDelivery,
 } from "@paperclipai/shared";
+import { managementReviewSnapshots } from "./management_reviews.js";
 import { workflowRuns } from "./workflows.js";
 
 export const routines = pgTable(
@@ -46,6 +48,7 @@ export const routines = pgTable(
     executionTargetKind: text("execution_target_kind").$type<RoutineExecutionTargetKind>(),
     executionTargetRef: uuid("execution_target_ref"),
     workflowExecutionPrincipal: jsonb("workflow_execution_principal").$type<ExecutionPrincipal>(),
+    managementReviewTemplate: jsonb("management_review_template").$type<RoutineManagementReviewTemplate>(),
     priority: text("priority").notNull().default("medium"),
     status: text("status").notNull().default("active"),
     concurrencyPolicy: text("concurrency_policy").notNull().default("coalesce_if_active"),
@@ -181,6 +184,7 @@ export const routineRuns = pgTable(
     dispatchFingerprint: text("dispatch_fingerprint"),
     linkedIssueId: uuid("linked_issue_id").references(() => issues.id, { onDelete: "set null" }),
     linkedWorkflowRunId: uuid("linked_workflow_run_id"),
+    linkedManagementReviewId: uuid("linked_management_review_id").references(() => managementReviewSnapshots.id, { onDelete: "set null" }),
     coalescedIntoRunId: uuid("coalesced_into_run_id"),
     failureReason: text("failure_reason"),
     completedAt: timestamp("completed_at", { withTimezone: true }),

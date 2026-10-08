@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { useInfiniteQuery, useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { v7FeatureEnabled, v8FeatureEnabled, type ManagementReviewDefinition } from "@paperclipai/shared";
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 const selectStyle = "w-full min-w-0 rounded-md border border-input bg-background p-2";
 export function ManagementReviews() {
+  const [search]=useSearchParams();
   const { selectedCompanyId } = useCompany(), { userId, settled, failed } = useAccountIdentity(), { setBreadcrumbs } = useBreadcrumbs(), verifying = useIsFetching({ queryKey: queryKeys.auth.session }) > 0;
   const flags = useQuery({ queryKey: [...queryKeys.instance.experimentalSettings, "management-reviews", userId], queryFn: () => instanceSettingsApi.getExperimental(), enabled: !!selectedCompanyId && settled && !failed && !verifying, retry: false, refetchOnWindowFocus: false });
   useEffect(() => setBreadcrumbs([{ label: "Management reviews" }]), [setBreadcrumbs]);
@@ -21,15 +23,17 @@ export function ManagementReviews() {
   if (!selectedCompanyId) return <p>Select a company to review management evidence.</p>;
   if (flags.isFetching) return <p role="status">Rechecking review availability…</p>;
   const enabled = !!flags.data && !flags.isError && v8FeatureEnabled(flags.data, "management_reviews_v8") && v7FeatureEnabled(flags.data, "governance_evidence_v7");
-  return <ManagementReviewWorkspace key={`${selectedCompanyId}:${userId}:${enabled}`} companyId={selectedCompanyId} userId={userId} enabled={enabled} />;
+  const initialReviewId=search.get("reviewCompanyId")===selectedCompanyId&&/^[a-f0-9-]{36}$/i.test(search.get("reviewId")??"")?search.get("reviewId")!:"";
+  return <ManagementReviewWorkspace initialReviewId={initialReviewId} key={`${selectedCompanyId}:${userId}:${enabled}`} companyId={selectedCompanyId} userId={userId} enabled={enabled} />;
 }
-export function ManagementReviewWorkspace({ companyId, userId, enabled = true }: { companyId: string; userId: string | null; enabled?: boolean }) {
+export function ManagementReviewWorkspace({ companyId, userId, enabled = true, initialReviewId = "" }: { companyId: string; userId: string | null; enabled?: boolean; initialReviewId?: string }) {
   const cache = useQueryClient(), key = ["management-reviews", companyId, userId], controlsKey = ["management-review-controls", companyId, userId];
-  const [id, setId] = useState(""), [editing, setEditing] = useState(false), [lost, setLost] = useState(false), [rationale, setRationale] = useState(""), [ack, setAck] = useState(false), [supersedesId, setSupersedesId] = useState(""), [eventItem, setEventItem] = useState(""), [event, setEvent] = useState<"opened" | "ignored" | "acted_on" | "false_alarm" | "correction">("opened"), [eventRationale, setEventRationale] = useState(""), [now, setNow] = useState(Date.now());
+  const [id, setId] = useState(initialReviewId), [editing, setEditing] = useState(false), [lost, setLost] = useState(false), [rationale, setRationale] = useState(""), [ack, setAck] = useState(false), [supersedesId, setSupersedesId] = useState(""), [eventItem, setEventItem] = useState(""), [event, setEvent] = useState<"opened" | "ignored" | "acted_on" | "false_alarm" | "correction">("opened"), [eventRationale, setEventRationale] = useState(""), [now, setNow] = useState(Date.now());
   const controls = useInfiniteQuery({ queryKey: controlsKey, initialPageParam: undefined as string | undefined, queryFn: ({ pageParam }) => managementReviewsApi.controls(companyId, pageParam, userId), getNextPageParam: page => page.nextCursor ?? undefined, retry: false, refetchInterval: editing || rationale || eventRationale ? false : 30000 });
   const rows = !controls.isFetching && !controls.isError ? controls.data?.pages.flatMap(page => page.items) ?? [] : [], row = rows.find(row => row.id === id);
-  const detail = useQuery({ queryKey: [...key, "detail", id], queryFn: () => managementReviewsApi.detail(companyId, id, userId), enabled: enabled && !lost && !!row && Date.parse(row.expiresAt) > now, retry: false, refetchInterval: editing || rationale || eventRationale ? false : 30000 });
+  const detail = useQuery({ queryKey: [...key, "detail", id], queryFn: () => managementReviewsApi.detail(companyId, id, userId), enabled: enabled && !lost && !!id && (row ? Date.parse(row.expiresAt) > now : id === initialReviewId), retry: false, refetchInterval: editing || rationale || eventRationale ? false : 30000 });
   const review = !lost && enabled && !controls.isFetching && !controls.isError && !detail.isFetching && !detail.isError && detail.data?.companyId === companyId && detail.data.id === id && Date.parse(detail.data.expiresAt) > Math.max(now, Date.now()) ? detail.data : undefined;
+  useEffect(()=>{setId(initialReviewId);setRationale("");setAck(false);},[initialReviewId]);
   const clearAcknowledgement = () => { setRationale(""); setAck(false); setSupersedesId(""); setEventItem(""); setEventRationale(""); };
   const loseAuthority = useCallback(() => {
     setLost(true); setEditing(false); setId(""); setRationale(""); setAck(false); setSupersedesId(""); setEventItem(""); setEventRationale("");
@@ -48,7 +52,7 @@ export function ManagementReviewWorkspace({ companyId, userId, enabled = true }:
     {lost && <p role="alert">Current source authority or revision could not be established. Sensitive reviews and human drafts have been withheld. Refresh before continuing.</p>}
     <div className="flex flex-wrap gap-2">{enabled && <Button variant="outline" disabled={!canEdit || busy} onClick={() => { setId(""); clearAcknowledgement(); setEditing(true); }}>Prepare a cited management review</Button>}<Button variant="ghost" disabled={busy} onClick={refresh}>Refresh review authority</Button></div>
     {controls.isFetching && <p role="status">Rechecking current review controls…</p>}{controls.isError && <p role="alert">Review metadata authority could not be established.</p>}
-    <label className="block space-y-2">Review reference<select aria-label="Review reference" className={selectStyle} value={id} disabled={busy || editing || controls.isFetching} onChange={event => { setId(event.target.value); clearAcknowledgement(); }}><option value="">Choose an exact retained review</option>{rows.map((row, index) => <option key={row.id} value={row.id}>Review {index + 1} · {row.status} · {row.id}</option>)}</select></label>
+    <label className="block space-y-2">Review reference<select aria-label="Review reference" className={selectStyle} value={id} disabled={busy || editing || controls.isFetching} onChange={event => { setId(event.target.value); clearAcknowledgement(); }}><option value="">Choose an exact retained review</option>{id && !row && <option value={id}>Requested review · {id}</option>}{rows.map((row, index) => <option key={row.id} value={row.id}>Review {index + 1} · {row.status} · {row.id}</option>)}</select></label>
     {row && <p>Created {new Date(row.createdAt).toLocaleString()}; retention until {new Date(row.expiresAt).toLocaleString()}.</p>}{controls.hasNextPage && <Button variant="outline" disabled={busy || controls.isFetching} onClick={() => void controls.fetchNextPage()}>Load more review references</Button>}
     {editing && canEdit && <ManagementReviewDefinitionForm companyId={companyId} userId={userId} busy={busy} onSave={definition => create.mutate(definition)} onCancel={() => setEditing(false)} onAuthorityLost={loseAuthority} />}
     {enabled && id && detail.isFetching && <p role="status">Rechecking exact review and source authority…</p>}{row && Date.parse(row.expiresAt) <= now && <p role="status">Review retention expired. Source content is unavailable.</p>}

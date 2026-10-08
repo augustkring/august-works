@@ -1,3 +1,6 @@
+import { lockAnalyticalCompany } from "./analytical-privacy.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { assertRoutineReviewDelegation, draftRoutineManagementReview } from "./management-reviews/routine.js";
 import { verifyAppWebhook } from "./app-webhook.js";
 import { workflowDelegationForActor } from "./workflows/workflow-delegation.js";
 import crypto from "node:crypto";
@@ -640,6 +643,7 @@ function routineRevisionSnapshotRoutine(routine: RoutineRow): RoutineRevisionSna
     executionTargetKind: routine.executionTargetKind,
     executionTargetRef: routine.executionTargetRef,
     workflowExecutionPrincipal: routine.workflowExecutionPrincipal,
+    managementReviewTemplate: routine.managementReviewTemplate,
     priority: routine.priority as RoutineRevisionSnapshotV1["routine"]["priority"],
     status: routine.status as RoutineRevisionSnapshotV1["routine"]["status"],
     concurrencyPolicy: routine.concurrencyPolicy as RoutineRevisionSnapshotV1["routine"]["concurrencyPolicy"],
@@ -1280,6 +1284,7 @@ export function routineService(
         routineRevisionId: routineRuns.routineRevisionId,
         linkedIssueId: routineRuns.linkedIssueId,
         linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
+          linkedManagementReviewId: routineRuns.linkedManagementReviewId,
         linkedWorkflowId: workflowRuns.workflowId,
         linkedWorkflowRunStatus: workflowRuns.status,
         coalescedIntoRunId: routineRuns.coalescedIntoRunId,
@@ -1324,6 +1329,7 @@ export function routineService(
         routineRevisionId: row.routineRevisionId,
         linkedIssueId: row.linkedIssueId,
         linkedWorkflowRunId: row.linkedWorkflowRunId,
+        linkedManagementReviewId: row.linkedManagementReviewId,
         linkedWorkflowId: row.linkedWorkflowId,
         linkedWorkflowRunStatus:
           row.linkedWorkflowRunStatus as RoutineRunSummary["linkedWorkflowRunStatus"],
@@ -2058,9 +2064,16 @@ export function routineService(
     let queuedWorkflowActor: WorkflowRunActor | null = null;
     const run = await db.transaction(async (tx) => {
       const txDb = tx as unknown as Db;
+      if (executionTarget.kind === "workflow") { await lockAnalyticalCompany(txDb, input.routine.companyId); await lockMemoryPrivacy(txDb, input.routine.companyId); }
       await tx.execute(
         sql`select id from ${routines} where ${routines.id} = ${input.routine.id} and ${routines.companyId} = ${input.routine.companyId} for update`,
       );
+
+      if (executionTarget.kind === "workflow") {
+        const [current] = await txDb.select({ revisionId: routines.latestRevisionId }).from(routines).where(and(eq(routines.companyId,input.routine.companyId),eq(routines.id,input.routine.id)));
+        if (!current || current.revisionId !== input.routine.latestRevisionId) throw conflict("Routine configuration changed before dispatch; retry the current revision");
+        assertRoutineReviewDelegation(input.routine.managementReviewTemplate, executionTarget.kind, input.routine.workflowExecutionPrincipal);
+      }
 
       if (input.trigger && (input.source === "webhook" || input.source === "schedule")) {
         const currentTrigger = await txDb.select().from(routineTriggers).where(eq(routineTriggers.id, input.trigger.id)).then((rows) => rows[0]);
@@ -2189,12 +2202,15 @@ export function routineService(
           responsibleUserId,
           input.routine.workflowExecutionPrincipal,
         );
+        const reviewDraft = input.routine.managementReviewTemplate
+          ? await draftRoutineManagementReview(txDb, input.routine.companyId, workflowActor.principal, input.routine.managementReviewTemplate, triggeredAt, workflowPublications) : null;
         const workflowPayload = {
           ...(triggerPayload ?? {}),
           routine: {
             routineId: input.routine.id,
             routineRunId: createdRun.id,
             routineRevisionId: input.routine.latestRevisionId,
+            ...(reviewDraft ? { managementReviewId: reviewDraft.id } : {}),
             triggerId: input.trigger?.id ?? null,
             source: input.source,
           },
@@ -2224,6 +2240,7 @@ export function routineService(
           {
             status: "workflow_started",
             linkedWorkflowRunId: queuedWorkflow.run.id,
+            linkedManagementReviewId: reviewDraft?.id ?? null,
           },
           txDb,
         );
@@ -2517,6 +2534,7 @@ export function routineService(
             routineRevisionId: routineRuns.routineRevisionId,
             linkedIssueId: routineRuns.linkedIssueId,
             linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
+          linkedManagementReviewId: routineRuns.linkedManagementReviewId,
             linkedWorkflowId: workflowRuns.workflowId,
             linkedWorkflowRunStatus: workflowRuns.status,
             coalescedIntoRunId: routineRuns.coalescedIntoRunId,
@@ -2560,6 +2578,7 @@ export function routineService(
               routineRevisionId: run.routineRevisionId,
               linkedIssueId: run.linkedIssueId,
               linkedWorkflowRunId: run.linkedWorkflowRunId,
+              linkedManagementReviewId: run.linkedManagementReviewId,
               linkedWorkflowId: run.linkedWorkflowId,
               linkedWorkflowRunStatus:
                 run.linkedWorkflowRunStatus as RoutineRunSummary["linkedWorkflowRunStatus"],
@@ -2615,6 +2634,7 @@ export function routineService(
       const executionTarget = requestedRoutineExecutionTarget(input);
       const targetStorage = executionTargetStorage(executionTarget);
       const workflowExecutionPrincipal = executionTarget?.kind === "workflow" ? await workflowDelegationForActor(db, companyId, actor) : null;
+      assertRoutineReviewDelegation(input.managementReviewTemplate, executionTarget?.kind ?? null, workflowExecutionPrincipal);
       const status = normalizeDraftRoutineStatus(input.status, executionTarget);
       await assertRoutineExecutionTarget(companyId, executionTarget, {
         requireRunnable: status === "active",
@@ -2652,6 +2672,7 @@ export function routineService(
             executionTargetKind: targetStorage.executionTargetKind,
             executionTargetRef: targetStorage.executionTargetRef,
             workflowExecutionPrincipal,
+            managementReviewTemplate: input.managementReviewTemplate ?? null,
             priority: input.priority,
             status,
             concurrencyPolicy: input.concurrencyPolicy,
@@ -2786,6 +2807,7 @@ export function routineService(
           executionTargetKind: nextTargetStorage.executionTargetKind,
           executionTargetRef: nextTargetStorage.executionTargetRef,
           workflowExecutionPrincipal,
+          managementReviewTemplate: patch.managementReviewTemplate === undefined ? locked.managementReviewTemplate : patch.managementReviewTemplate,
           priority: patch.priority ?? locked.priority,
           status: nextStatus,
           concurrencyPolicy: patch.concurrencyPolicy ?? locked.concurrencyPolicy,
@@ -2799,6 +2821,7 @@ export function routineService(
           updatedByUserId: actor.userId ?? null,
         };
 
+        assertRoutineReviewDelegation(candidate.managementReviewTemplate, candidate.executionTargetKind, candidate.workflowExecutionPrincipal);
         const folderChanged = patch.folderId !== undefined && locked.folderId !== candidate.folderId;
         if (locked.latestRevisionId && routineCurrentFieldsMatch(locked, candidate)) {
           if (!folderChanged) return locked;
@@ -2854,6 +2877,7 @@ export function routineService(
             executionTargetKind: candidate.executionTargetKind,
             executionTargetRef: candidate.executionTargetRef,
             workflowExecutionPrincipal: candidate.workflowExecutionPrincipal,
+            managementReviewTemplate: candidate.managementReviewTemplate,
             priority: candidate.priority,
             status: candidate.status,
             concurrencyPolicy: candidate.concurrencyPolicy,
@@ -3231,6 +3255,7 @@ export function routineService(
             assigneeAgentId: restoredTargetStorage.assigneeAgentId,
             executionTargetKind: restoredTargetStorage.executionTargetKind,
             executionTargetRef: restoredTargetStorage.executionTargetRef,
+            managementReviewTemplate: routineSnapshot.managementReviewTemplate ?? null,
             workflowExecutionPrincipal: restoredTargetStorage.executionTargetKind === "workflow" ? await workflowDelegationForActor(txDb, locked.companyId, actor) : null,
             priority: routineSnapshot.priority,
             status: routineSnapshot.status,
@@ -3246,6 +3271,8 @@ export function routineService(
           })
           .where(eq(routines.id, locked.id))
           .returning();
+
+        assertRoutineReviewDelegation(restoredRoutine.managementReviewTemplate, restoredRoutine.executionTargetKind, restoredRoutine.workflowExecutionPrincipal);
 
         const snapshotTriggerIds = new Set(snapshot.triggers.map((trigger) => trigger.id));
         if (snapshotTriggerIds.size === 0) {
@@ -3589,6 +3616,7 @@ export function routineService(
           routineRevisionId: routineRuns.routineRevisionId,
           linkedIssueId: routineRuns.linkedIssueId,
           linkedWorkflowRunId: routineRuns.linkedWorkflowRunId,
+          linkedManagementReviewId: routineRuns.linkedManagementReviewId,
           linkedWorkflowId: workflowRuns.workflowId,
           linkedWorkflowRunStatus: workflowRuns.status,
           coalescedIntoRunId: routineRuns.coalescedIntoRunId,
@@ -3632,6 +3660,7 @@ export function routineService(
         routineRevisionId: row.routineRevisionId,
         linkedIssueId: row.linkedIssueId,
         linkedWorkflowRunId: row.linkedWorkflowRunId,
+        linkedManagementReviewId: row.linkedManagementReviewId,
         linkedWorkflowId: row.linkedWorkflowId,
         linkedWorkflowRunStatus:
           row.linkedWorkflowRunStatus as RoutineRunSummary["linkedWorkflowRunStatus"],

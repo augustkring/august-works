@@ -1,0 +1,3 @@
+ALTER TABLE "routine_runs" ADD COLUMN "linked_management_review_id" uuid;--> statement-breakpoint
+ALTER TABLE "routines" ADD COLUMN "management_review_template" jsonb;--> statement-breakpoint
+ALTER TABLE "routine_runs" ADD CONSTRAINT "routine_runs_linked_management_review_id_management_review_snapshots_id_fk" FOREIGN KEY ("linked_management_review_id") REFERENCES "public"."management_review_snapshots"("id") ON DELETE set null ON UPDATE no action;

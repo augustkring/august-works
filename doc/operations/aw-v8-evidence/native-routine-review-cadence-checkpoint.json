@@ -1,0 +1,149 @@
+{
+  "checkpoint": "Fresh management review drafts through original native Routine cadence",
+  "parentCommit": "55df5c312bc71bd7c596924ff286fb403954c7a0",
+  "recordedAt": "2026-10-08T06:14:25.370768+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "ccdc6f27f9099271c6c0a2cb38241efdb94802c49ec03f60c592f3c591a68336"
+    },
+    {
+      "path": "packages/db/src/migrations/0440_sour_shiver_man.sql",
+      "sha256": "e4b66224519ef4fea8ec1e8e961215b2cd0e6e31b68c2f6cb3a373727ed130b0"
+    },
+    {
+      "path": "packages/db/src/schema/routines.ts",
+      "sha256": "7bcf965b045220c8c14aada07648c638d22452ff2ef1c09ec3799a149c611d2f"
+    },
+    {
+      "path": "packages/shared/src/management-reviews.ts",
+      "sha256": "9d0773b7751b37098940356ae4d2ea2c3184d459c74519d302f64cef34c6f74b"
+    },
+    {
+      "path": "packages/shared/src/types/routine.ts",
+      "sha256": "1ed0dc2fe450c0c53e9a8f179e738b57cc253f19048faafd060f0f862fcf5892"
+    },
+    {
+      "path": "packages/shared/src/validators/routine.ts",
+      "sha256": "0973a5adcead92e0e92e8dc9d5195b292803233eb6145f271ee0ae0d15efe95d"
+    },
+    {
+      "path": "server/src/__tests__/routine-management-reviews.integration.test.ts",
+      "sha256": "a0c95306696bbe4e0b89ca3870fc9917b577e27a5b51a9d10fff7a75b2e0850c"
+    },
+    {
+      "path": "server/src/services/business-metrics/service.ts",
+      "sha256": "3e198a215fa76377c58c63d4f559df03f0bcd61f18a53f933a2579f4d28a3dda"
+    },
+    {
+      "path": "server/src/services/management-reviews/routine.ts",
+      "sha256": "9f5098cbedb75d161314db6085d46147b224c20222722e7cfebf2b019e343926"
+    },
+    {
+      "path": "server/src/services/management-reviews/service.ts",
+      "sha256": "730830bc08681c419c3cf73a57ea0211ee22055e69e919917d86dd17154b1355"
+    },
+    {
+      "path": "server/src/services/routines.ts",
+      "sha256": "0ac842e4526c7e3b79ca5a2ade3130af7a266667de8c7384930f84509d1f104f"
+    },
+    {
+      "path": "tests/storybook-visual/management-reviews.spec.ts",
+      "sha256": "13ae6fb51d8c0043a96fb035ffbde7760a6c0635b19b187106153bdf67a1e8b7"
+    },
+    {
+      "path": "ui/src/components/RoutineOverview.test.tsx",
+      "sha256": "e0f4a3b35b0ce8c590d6e416ee036d7a0d286027a8ff5c166ef4babec1112b5d"
+    },
+    {
+      "path": "ui/src/components/RoutineOverview.tsx",
+      "sha256": "4092e0fef12cf3c1bd2281cbe7a44b79f0699ca037f56505a281136fd3ab8fd1"
+    },
+    {
+      "path": "ui/src/lib/status-colors.ts",
+      "sha256": "5e307e72cf7cc5d885b9b329e57db1903a227f495842b5bc19a520461b986472"
+    },
+    {
+      "path": "ui/src/pages/ManagementReviews.test.tsx",
+      "sha256": "d4cfa37e5a5bf03a8e57bb906dac2c0d62957ec1dc355fe96aef3abe66925196"
+    },
+    {
+      "path": "ui/src/pages/ManagementReviews.tsx",
+      "sha256": "6d99915d47f9f823bf8e94bf010ba31792dd6c351aac6e72a023abdb9b64af87"
+    },
+    {
+      "path": "ui/storybook/stories/routine-detail-c.stories.tsx",
+      "sha256": "5a40a2a043f12599e9811fc2b44e0d12cf8092cb6d67e6c392d63f8bc5deace1"
+    }
+  ],
+  "validation": {
+    "nativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-review-final-tests.log",
+      "tests": 106,
+      "files": 4,
+      "skipped": 0
+    },
+    "finalHumanCronOwner": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-review-qualified-cron-tests.log",
+      "tests": 5,
+      "files": 1,
+      "skipped": 0
+    },
+    "operatorUI": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-review-ui-tests.log",
+      "tests": 21,
+      "files": 2,
+      "skipped": 0
+    },
+    "browserPresentation": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-review-qualified-browser.log",
+      "tests": 40,
+      "files": 1,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-review-final-types.log"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-review-qualified-ui-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-review-migrations.log"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-review-accessible-token-gates.log"
+    },
+    "storybookBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-review-accessible-storybook.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "ca124659909ffa180f3768b8d0e7096ec2f80592",
+      "log": "/var/tmp/aw-v8-native-build-planning-outcome.log"
+    }
+  },
+  "qualified": [
+    "Actual original scheduler due tick and current server-assigned Human delegation; withdrawal refuses a new packet",
+    "Fresh current published metric queries, native draft capture, original revision binding and idempotent dispatch",
+    "Actual enclosing transaction rollback prevents private metric/review live event publication",
+    "Actual native Task Source erasure clears review body and optional Run link with flags off and company paused, preserving native run/revision identity",
+    "Account/company-bound exact review reference and separate Human publication",
+    "Original shared light green status badge repaired to meet WCAG contrast"
+  ],
+  "limits": [
+    "Human identities, permission grants, forced cron due boundary and synthetic Task changes are explicit software prerequisites, not actual weekly Human or provider trials",
+    "Browser presentation uses synthetic cached data with all API requests aborted; not browser authentication, Source admission or pilot evidence",
+    "Full native regression predates the final additional withdrawn Human due-tick assertion; the final five-case cadence suite qualifies that assertion",
+    "Template configuration UI is next; fresh metric and canonical selectors do not qualify other analytical refresh families",
+    "No maximum-volume, hard-latency, hosted populated backfill or whole-brief acceptance"
+  ]
+}

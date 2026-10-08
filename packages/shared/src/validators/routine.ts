@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { routineManagementReviewTemplateSchema } from "../management-reviews.js";
 import { executionPrincipalSchema } from "../august-works-platform.js";
 import {
   ISSUE_PRIORITIES,
@@ -82,6 +83,7 @@ const routineCreateObjectSchema = z.object({
   parentIssueId: z.string().guid().optional().nullable(),
   title: z.string().trim().min(1).max(200),
   description: z.string().optional().nullable(),
+  managementReviewTemplate: routineManagementReviewTemplateSchema.optional().nullable(),
   assigneeAgentId: z.string().guid().optional().nullable(),
   executionTarget: routineExecutionTargetSchema.optional().nullable(),
   priority: z.enum(ISSUE_PRIORITIES).optional().default("medium"),
@@ -153,6 +155,7 @@ export const routineRevisionSnapshotRoutineV1Schema = z.object({
   executionTargetKind: z.enum(ROUTINE_EXECUTION_TARGET_KINDS).nullable().optional(),
   executionTargetRef: z.string().guid().nullable().optional(),
   workflowExecutionPrincipal: executionPrincipalSchema.nullable().optional(),
+  managementReviewTemplate: routineManagementReviewTemplateSchema.nullable().optional(),
   priority: z.enum(ISSUE_PRIORITIES),
   status: z.enum(ROUTINE_STATUSES),
   concurrencyPolicy: z.enum(ROUTINE_CONCURRENCY_POLICIES),

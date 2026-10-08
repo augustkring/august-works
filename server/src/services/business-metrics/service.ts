@@ -230,9 +230,9 @@ export function businessMetricService(db: Db) {
         return updated;
       });
     },
-    async query(companyId: string, actor: AuthorizationActor, raw: BusinessMetricQuery) {
+    async query(companyId: string, actor: AuthorizationActor, raw: BusinessMetricQuery, retainedPublications?: Parameters<typeof logActivity>[2]) {
       const query = queryBusinessMetricSchema.parse(raw);
-      return withV7ActivityTransaction(db, async (tx, publications) => {
+      const observe = async (tx: Db, publications: Parameters<typeof logActivity>[2]) => {
         const deadline = performance.now() + 30_000;
         await tx.execute(sql`set local statement_timeout = '5s'`);
         await admit(tx, companyId, actor); await lockBusinessEventCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
@@ -270,7 +270,8 @@ export function businessMetricService(db: Db) {
         await tx.insert(businessMetricObservations).values({ id, companyId, metricId: row.id, versionId: revision.id, result, definitionHash: calculated.definitionHash, inputHash: calculated.inputHash, lineageManifestId: manifestId, requestedBy: analyticalRequesterId(actor), observedAt: now, expiresAt });
         await audit(tx, publications, companyId, actor, "business_metric.observed", row.id, { observationId: id, versionId: revision.id, lineageManifestId: manifestId, inputHash: calculated.inputHash });
         return result;
-      });
+      };
+      return retainedPublications ? observe(db, retainedPublications) : withV7ActivityTransaction(db, observe);
     },
   };
 }
