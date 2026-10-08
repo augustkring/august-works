@@ -26,6 +26,7 @@ const mockAgentService = vi.hoisted(() => ({
 }));
 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
 const mockHeartbeatService = vi.hoisted(() => ({
   wakeup: vi.fn(async () => undefined),
   reportRunActivity: vi.fn(async () => undefined),
@@ -77,6 +78,9 @@ const systemDocument = {
 };
 
 function registerModuleMocks() {
+  vi.doMock("../services/analytical-context-authority.js", () => ({
+    assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+  }));
   vi.doMock("../services/access.js", () => ({
     accessService: () => mockAccessService,
   }));
@@ -213,6 +217,7 @@ describe("issue document revision routes", () => {
     vi.doUnmock("../middleware/index.js");
     registerModuleMocks();
     vi.clearAllMocks();
+    mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockAccessService.decide.mockResolvedValue({
       allowed: true,
       action: "issue:read",
@@ -282,6 +287,15 @@ describe("issue document revision routes", () => {
     mockInstanceSettingsService.listCompanyIds.mockResolvedValue([companyId]);
     mockRoutineService.syncRunStatusForIssue.mockResolvedValue(undefined);
     mockLogActivity.mockResolvedValue(undefined);
+  });
+
+  it("withholds historical document revisions when current analytical Source access is denied", async () => {
+    const { HttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
+    const res = await request(await createApp()).get(`/api/issues/${issueId}/documents/plan/revisions`);
+    expect(res.status).toBe(403);
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ type: "board", userId: "board-user" }), { issueId });
+    expect(mockDocumentsService.listIssueDocumentRevisions).not.toHaveBeenCalled();
   });
 
   it("returns revision snapshots including title and format", async () => {
