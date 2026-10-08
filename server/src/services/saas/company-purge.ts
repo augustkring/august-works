@@ -1,3 +1,4 @@
+import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.js";
 import { eq, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
@@ -45,6 +46,7 @@ export async function purgeCompanyContent(
     // Publish the minimal tombstone inside this same transaction. Any failed
     // purge rolls it back; normal archival never grants evidence deletion.
     await tx.execute(sql`update ${companies} set status='archived',pause_reason='company_deleted',content_erasure_transaction_id=pg_current_xact_id()::text,updated_at=now() where id=${companyId}::uuid`);
+    await enqueueSkillVersionFileErasure(tx as unknown as Db, companyId);
     const deleted: string[] = [];
     // Native conversation identity is one checked tuple. Clear it atomically
     // after this transaction's company-erasure receipt; per-FK unlinking would
@@ -78,7 +80,7 @@ export async function purgeCompanyContent(
       const column = config.columns.find((v) => v.name === "company_id");
       if (column && !retained.has(config.name))
         scopes.set(table, config.name==="memory_jobs"
-          ? sql`${column}=${companyId}::uuid and not (operation_type='retention' and coalesce(source_ref_json->>'kind','') in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure'))`
+          ? sql`${column}=${companyId}::uuid and not (operation_type='retention' and coalesce(source_ref_json->>'kind','') in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure'))`
           : sql`${column} = ${companyId}::uuid`);
     }
     // Child records without a company column inherit only an already-owned parent's exact FK scope.

@@ -1,9 +1,12 @@
+import { enqueueSkillVersionFileErasure } from "./learning/skill-file-erasure.js";
+import { lockAnalyticalCompany } from "./analytical-privacy.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import {assertLearnedAssetAnalyticalSources,assertLearningCandidateAnalyticalSources} from "./learning/learning-analytical-sources.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { v5FeatureEnabled } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { logger } from "../middleware/logger.js";
-import { removeRuntimeSkillCache, resolveRuntimeSkillCache, runtimeSkillCacheSpec } from "./runtime-skill-cache.js";
+import { prepareRuntimeSkillVersionDirectory, removeRuntimeSkillCache, resolveRuntimeSkillCache, runtimeSkillCacheSpec } from "./runtime-skill-cache.js";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -5932,31 +5935,45 @@ export function companySkillService(db: Db) {
     return true;
   }
 
-  async function materializeVersionSnapshot(companyId: string, skill: CompanySkill, version: CompanySkillVersion) {
-    const runtimeRoot = path.resolve(resolveManagedSkillsRoot(companyId), "__versions__");
-    const skillDir = path.resolve(runtimeRoot, skill.id, version.id);
-    if (await materializedVersionSnapshotMatches(skillDir, version)) {
-      return skillDir;
-    }
-    await fs.rm(skillDir, { recursive: true, force: true });
-    await fs.mkdir(skillDir, { recursive: true });
-
-    let wroteSkillFile = false;
-    for (const entry of version.fileInventory) {
-      const resolved = resolveVersionSnapshotPath(skillDir, entry.path);
-      if (!resolved) continue;
-      const { normalizedPath, targetPath } = resolved;
-      await fs.mkdir(path.dirname(targetPath), { recursive: true });
-      await fs.writeFile(targetPath, entry.content, "utf8");
-      if (normalizedPath === "SKILL.md") wroteSkillFile = true;
-    }
-
-    if (!wroteSkillFile) {
+  async function materializeVersionSnapshot(companyId: string, skill: CompanySkill, selectedVersion: CompanySkillVersion) {
+    return db.transaction(async rawTx => {
+      const tx = rawTx as unknown as Db;
+      await lockAnalyticalCompany(tx, companyId);
+      await lockMemoryPrivacy(tx, companyId);
+      const [source] = await tx.execute<{ current: boolean }>(sql`select
+        not aw_skill_version_source_erased(${companyId}::uuid,${selectedVersion.id}::uuid)
+        and aw_learning_asset_current(${companyId}::uuid,'skill_version',${selectedVersion.id}::uuid)
+        and not exists(select 1 from learning_domain_candidates l where l.company_id=${companyId}::uuid
+          and l.target_domain='skill' and l.candidate_id=${selectedVersion.id}::uuid
+          and not aw_learning_link_current(l.company_id,l.id)) as current`);
+      if (!source?.current) throw unprocessable("Skill version Source was erased or changed");
+      // Re-read after acquiring privacy locks; pre-lock inventory may be stale.
+      const version = await companySkillService(tx).getVersion(companyId, skill.id, selectedVersion.id);
+      if (!version) throw unprocessable("Skill version no longer exists");
+      const skillDir = await prepareRuntimeSkillVersionDirectory(resolveManagedSkillsRoot(companyId), skill.id, version.id);
+      if (await materializedVersionSnapshotMatches(skillDir, version)) {
+        return skillDir;
+      }
       await fs.rm(skillDir, { recursive: true, force: true });
-      throw unprocessable("Company skill version could not be materialized because its SKILL.md snapshot is missing.");
-    }
+      await prepareRuntimeSkillVersionDirectory(resolveManagedSkillsRoot(companyId), skill.id, version.id);
 
-    return skillDir;
+      let wroteSkillFile = false;
+      for (const entry of version.fileInventory) {
+        const resolved = resolveVersionSnapshotPath(skillDir, entry.path);
+        if (!resolved) continue;
+        const { normalizedPath, targetPath } = resolved;
+        await fs.mkdir(path.dirname(targetPath), { recursive: true });
+        await fs.writeFile(targetPath, entry.content, "utf8");
+        if (normalizedPath === "SKILL.md") wroteSkillFile = true;
+      }
+
+      if (!wroteSkillFile) {
+        await fs.rm(skillDir, { recursive: true, force: true });
+        throw unprocessable("Company skill version could not be materialized because its SKILL.md snapshot is missing.");
+      }
+
+      return skillDir;
+    });
   }
 
   function resolveRuntimeSkillMaterializedPath(companyId: string, skill: Pick<CompanySkill, "key" | "slug">) {
@@ -7167,6 +7184,8 @@ export function companySkillService(db: Db) {
     await removeRuntimeSkillCache(managedRoot, initial.id, async () => {
       try {
         deleted = await db.transaction(async (tx) => {
+          await lockAnalyticalCompany(tx as unknown as Db, companyId);
+          await lockMemoryPrivacy(tx as unknown as Db, companyId);
           // Share creation's name lock and re-read the ID, so a second delete
           // cannot remove a newly recreated skill with the same name.
           await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${initial.slug}`}, 0))`);
@@ -7192,6 +7211,9 @@ export function companySkillService(db: Db) {
                 movedSource = { source, quarantine };
               }
             }
+            const versions = await tx.select({ id: companySkillVersions.id }).from(companySkillVersions)
+              .where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, skillId)));
+            await enqueueSkillVersionFileErasure(tx as unknown as Db, companyId, versions.map(version => version.id));
             await tx.delete(companySkills).where(and(eq(companySkills.id, skillId), eq(companySkills.companyId, companyId)));
           } catch (error) {
             // Restore before releasing the name lock on a failed write.
