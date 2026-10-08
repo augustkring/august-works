@@ -1,7 +1,7 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { managementReviewDefinitionSchema, managementSourceOptionsQuerySchema, publishManagementReviewSchema, recordManagementReviewEventSchema } from "@paperclipai/shared";
+import { createManagementReviewTaskSchema, managementReviewDefinitionSchema, managementSourceOptionsQuerySchema, publishManagementReviewSchema, recordManagementReviewEventSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { assertCompanyAccess } from "./authz.js";
 import { badRequest, conflict } from "../errors.js";
@@ -17,5 +17,6 @@ export function managementReviewRoutes(db: Db) {
   router.post("/companies/:companyId/management-reviews", validate(managementReviewDefinitionSchema), async (req, res) => { const companyId = access(req); res.status(201).json(await service.create(companyId, req.actor, req.body)); });
   router.post("/companies/:companyId/management-reviews/:reviewId/publish", validate(publishManagementReviewSchema), async (req, res) => { const companyId = access(req); res.json(await service.publish(companyId, req.actor, id(req.params.reviewId), req.body)); });
   router.post("/companies/:companyId/management-reviews/:reviewId/events", validate(recordManagementReviewEventSchema), async (req, res) => { const companyId = access(req); res.status(201).json(await service.recordEvent(companyId, req.actor, id(req.params.reviewId), req.body)); });
+  router.post("/companies/:companyId/management-reviews/:reviewId/tasks", validate(createManagementReviewTaskSchema), async (req, res) => { const companyId = access(req); res.status(201).json(await service.createTask(companyId, req.actor, id(req.params.reviewId), req.body)); });
   return router;
 }

@@ -9,6 +9,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { queryKeys } from "@/lib/queryKeys";
 import { ManagementReviewDefinitionForm } from "@/components/ManagementReviewDefinitionForm";
+import { ManagementReviewTaskForm } from "@/components/ManagementReviewTaskForm";
 import { ManagementReviewResult } from "@/components/ManagementReviewResult";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,7 +57,7 @@ export function ManagementReviewWorkspace({ companyId, userId, enabled = true, i
     {row && <p>Created {new Date(row.createdAt).toLocaleString()}; retention until {new Date(row.expiresAt).toLocaleString()}.</p>}{controls.hasNextPage && <Button variant="outline" disabled={busy || controls.isFetching} onClick={() => void controls.fetchNextPage()}>Load more review references</Button>}
     {editing && canEdit && <ManagementReviewDefinitionForm companyId={companyId} userId={userId} busy={busy} onSave={definition => create.mutate(definition)} onCancel={() => setEditing(false)} onAuthorityLost={loseAuthority} />}
     {enabled && id && detail.isFetching && <p role="status">Rechecking exact review and source authority…</p>}{row && Date.parse(row.expiresAt) <= now && <p role="status">Review retention expired. Source content is unavailable.</p>}
-    {review && !editing && <><ManagementReviewResult review={review} />
+    {review && !editing && <><ManagementReviewResult review={review} /><ManagementReviewTaskForm review={review} userId={userId} onAuthorityLost={loseAuthority} />
       {review.status === "draft" && <section aria-label="Separate human review publication" className="space-y-3 rounded-md border p-4"><h2 className="font-semibold">Separate human publication</h2><p>Review the exact evidence, uncertainty and human agenda. Publication records this review and applies no Task, Goal, Project or Decision change.</p>
         <label className="block space-y-2">Publication rationale<Textarea aria-label="Publication rationale" value={rationale} minLength={10} maxLength={2000} onChange={event => setRationale(event.target.value)} /></label>
         <label className="block space-y-2">Explicit previous review to supersede<select className={selectStyle} aria-label="Explicit previous review to supersede" value={supersedesId} onChange={event => { setSupersedesId(event.target.value); setAck(false); }}><option value="">Publish without superseding a previous review</option>{rows.filter(row => row.status === "published" && row.id !== review.id && Date.parse(row.expiresAt) > now).map(row => <option key={row.id} value={row.id}>{row.id} · published</option>)}</select></label>
