@@ -1,9 +1,15 @@
+import { withNativeAnalyticalReader } from "../services/analytical-reader.js";
+import { memoryJobService } from "../services/memory/memory-jobs.js";
+import { learningService } from "../services/learning/learning-service.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { planningOutcomeService } from "../services/adaptive-planning/outcome.js";
+import { inspectAnalyticalContextPins } from "../services/analytical-context-authority.js";
 import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { analyticalLineageEdges, analyticalLineageManifests, companies, createDb, issues, issueRelations, projects, projectRoadmapProposals } from "@paperclipai/db";
+import { agents, authUsers, companyMemberships, principalPermissionGrants, heartbeatRuns, learningDomainCandidates, learningHypotheses, policyChangeProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningAnalyticalDependencies, analyticalLineageEdges, analyticalLineageManifests, companies, createDb, issues, issueRelations, projects, projectRoadmapProposals } from "@paperclipai/db";
 import { roadmapPolicySchema, projectPlanningProfileSchema, type ProjectPlanningProfile } from "@paperclipai/shared";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
@@ -45,6 +51,90 @@ describe.skipIf(!support.supported)("Native project planning source and canonica
     return { ...f, preview, created };
   }
   function app() { const api = express(); api.use(express.json()); api.use((req, _res, next) => { req.actor = { ...actor, userId: "local-board" }; next(); }); api.use("/api", projectControlRoutes(db)); api.use(errorHandler); return api; }
+  it("records only complete actual native completion after approval and fences changed/erased outcome facts",async()=>{
+    const f=await proposal(),outcomes=planningOutcomeService(db);
+    await expect(outcomes.record(companyId,f.project.id,actor,f.created.id,{rationale})).rejects.toMatchObject({status:409});
+    await projectPlanningService(db).review(companyId,f.project.id,actor,f.created.id,true,rationale);
+    await expect(outcomes.record(companyId,f.project.id,actor,f.created.id,{rationale})).rejects.toMatchObject({status:409});
+    for(const task of f.tasks)await db.update(issues).set({status:"done",completedAt:new Date(),updatedAt:new Date()}).where(eq(issues.id,task.id));
+    const recorded=await outcomes.record(companyId,f.project.id,actor,f.created.id,{rationale});
+    expect(recorded.outcome).toMatchObject({authority:"supplemental_descriptive_signal",causalClaimRef:null,recordedBy:"local-board"});
+    expect(recorded.outcome.tasks.map(task=>task.issueId).sort()).toEqual(f.tasks.map(task=>task.id).sort());
+    const pin={kind:"planning_outcome" as const,projectId:f.project.id,proposalId:f.created.id,manifestId:recorded.manifestId};
+    expect((await inspectAnalyticalContextPins(db,companyId,actor,[pin])).manifestIds.sort()).toEqual([recorded.manifestId,(await db.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id,f.created.id)))[0]!.planningManifestId!].sort());
+    await expect(outcomes.detail(otherId,f.project.id,actor,f.created.id,recorded.manifestId)).rejects.toMatchObject({status:404});
+    await request(app()).post(`/api/companies/${companyId}/projects/${f.project.id}/roadmap/planning/proposals/${f.created.id}/outcomes`).send({rationale,causalClaimRef:"invented"}).expect(400);
+    await db.update(issues).set({updatedAt:new Date()}).where(eq(issues.id,f.tasks[0]!.id));
+    await expect(outcomes.detail(companyId,f.project.id,actor,f.created.id,recorded.manifestId)).rejects.toMatchObject({status:409});
+    await expect(outcomes.record(companyId,f.project.id,{type:"agent",source:"agent_jwt",companyId,agentId:randomUUID()},f.created.id,{rationale})).rejects.toMatchObject({status:403});
+    const fresh=await outcomes.record(companyId,f.project.id,actor,f.created.id,{rationale});
+    const [storedReceipt]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,fresh.manifestId));
+    await expect(db.update(analyticalLineageManifests).set({parameters:{...storedReceipt!.parameters,outcome:{...fresh.outcome,rationale:"Tampered descriptive signal"}}}).where(eq(analyticalLineageManifests.id,fresh.manifestId))).rejects.toMatchObject({cause:{code:"23514"}});
+    expect((await outcomes.detail(companyId,f.project.id,actor,f.created.id,fresh.manifestId)).outcome).toEqual(fresh.outcome);
+    expect((await projectPlanningService(db).detail(companyId,f.project.id,actor,f.created.id)).currentQualification).toBe("needs_revalidation");
+    await instanceSettingsService(db).updateExperimental({management_reviews_v8:true,management_chat_tools_v8:true,enableContextEngineV1:true});
+    const userId=randomUUID();await db.insert(authUsers).values({id:userId,name:"Software current native Human",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,status:"active",membershipRole:"admin"});
+    const [agent]=await db.insert(agents).values({companyId,name:"Native planning signal reader",status:"idle",adapterType:"paperclip_runner"}).returning();
+    await db.insert(companyMemberships).values({companyId,principalType:"agent",principalId:agent!.id,status:"active"});
+    await db.insert(principalPermissionGrants).values(["company_scope:read","issue:read","project:read"].map(permissionKey=>({companyId,principalType:"agent",principalId:agent!.id,permissionKey})));
+    const [nativeTask]=await db.insert(issues).values({companyId,title:"Inspect the observed native plan",status:"in_progress",assigneeAgentId:agent!.id,responsibleUserId:userId}).returning();
+    const [run]=await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,nativeIssueId:nativeTask!.id,runtimeMode:"native",status:"running",responsibleUserId:userId,contextSnapshot:{issueId:nativeTask!.id}}).returning();
+    await db.update(issues).set({executionRunId:run!.id}).where(eq(issues.id,nativeTask!.id));
+    const nativeActor={type:"agent" as const,source:"agent_jwt" as const,companyId,agentId:agent!.id,runId:run!.id,onBehalfOfUserId:userId};
+    const nativeRead=()=>withNativeAnalyticalReader(db,companyId,nativeActor,()=>outcomes.detail(companyId,f.project.id,nativeActor,f.created.id,fresh.manifestId),"task");
+    await expect(outcomes.detail(companyId,f.project.id,nativeActor,f.created.id,fresh.manifestId)).rejects.toMatchObject({status:403});
+    expect((await nativeRead()).outcome).toEqual(fresh.outcome);
+    await db.update(companyMemberships).set({status:"inactive"}).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));
+    await expect(nativeRead()).rejects.toMatchObject({status:403});
+    await db.update(companyMemberships).set({status:"active"}).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));
+
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,enableCollectiveMemoryV1:true,enableContextEngineV1:true,cognitive_memory_v7:true,memory_observations_v7:true,skill_lifecycle_v5:true,playbooks_v5:true});
+    const [binding]=await db.insert(memoryBindings).values({companyId,key:"planning_outcomes",name:"Software verified outcomes",providerKey:"local"}).returning();
+    const independent=await db.insert(issues).values([0,1].map(index=>({companyId,title:`Independent comparison outcome ${index}`,status:"done",completedAt:new Date()}))).returning();
+    const outcomeTasks=[...f.tasks,...independent],roots=[];
+    for(const task of outcomeTasks){
+      const [record]=await db.insert(memoryRecords).values({companyId,bindingId:binding!.id,providerKey:"local",memoryType:"outcome",scopeType:"company",content:"Explicit software verified outcome prerequisite",reviewState:"accepted",verificationState:"human_verified",observedAt:new Date(),createdByActorType:"system",createdByActorId:"software-fixture"}).returning();roots.push(record!.id);
+      await db.insert(memoryEvidence).values({companyId,memoryRecordId:record!.id,sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${task.id}`,sourceVersion:"1",observedAt:new Date(),excerptHash:"a".repeat(64),citationJson:{label:"Native completed Task"},trustLevel:"high",supportsOrContradicts:"supports"});
+    }
+    const input={manifestId:fresh.manifestId,purpose:"native_task_execution",trigger:"Review observed native plan completion before proposing a capability change",memoryRecordIds:roots};
+    await db.update(memoryRecords).set({verificationState:"unverified"}).where(eq(memoryRecords.id,roots[0]!));
+    await expect(outcomes.startLearning(companyId,f.project.id,actor,f.created.id,input)).rejects.toMatchObject({status:409});
+    await db.update(memoryRecords).set({verificationState:"human_verified"}).where(eq(memoryRecords.id,roots[0]!));
+    const learningPath=`/api/companies/${companyId}/projects/${f.project.id}/roadmap/planning/proposals/${f.created.id}/outcomes/learning`;
+    await request(app()).post(`${learningPath}?expectedUserId=foreign-account`).send(input).expect(409);
+    const started=(await request(app()).post(`${learningPath}?expectedUserId=local-board`).send(input).expect(201)).body;
+    const receiptPath=`/api/companies/${companyId}/projects/${f.project.id}/roadmap/planning/proposals/${f.created.id}/outcomes/${fresh.manifestId}`;
+    expect((await request(app()).get(`${receiptPath}?expectedUserId=local-board`).expect(200)).headers["cache-control"]).toBe("no-store");
+    await request(app()).get(`${receiptPath}?expectedUserId=foreign-account`).expect(409);
+    const [cycle]=await db.select().from(learningCycles).where(eq(learningCycles.id,started.cycleId));
+    expect(cycle).toMatchObject({scopeType:"company",analyticalSourceCount:2,status:"hypothesizing"});
+    expect(cycle!.analyticalSourcePins).toEqual([{kind:"planning_outcome",projectId:f.project.id,proposalId:f.created.id,manifestId:fresh.manifestId}]);
+    expect(await db.select().from(learningAnalyticalDependencies).where(eq(learningAnalyticalDependencies.cycleId,started.cycleId))).toHaveLength(2);
+
+    const service=learningService(db),[currentProject]=await db.select().from(projects).where(eq(projects.id,f.project.id));
+    const change={targetDomain:"policy" as const,reason:"Review declared capacity before creating the next native plan",proposal:{policyType:"project_roadmap" as const,expectedProjectUpdatedAt:currentProject!.updatedAt.toISOString(),policy:roadmapPolicySchema.parse({})}};
+    const hypothesis=await service.addHypothesis(actor,companyId,started.cycleId,{expectedCycleVersion:1,claim:"Earlier capacity review should improve the next declared plan",predictedEffect:"Reduce plan corrections while retaining separate Human approval",targetDomain:"policy",targetId:f.project.id,riskClass:"material",evaluationContract:{expectedImprovement:"Reduce avoidable corrections before separate approval",protectedInvariants:["Separate human approval remains mandatory"],baselineRef:`policy://project/${f.project.id}/${currentProject!.updatedAt.toISOString()}`,challengerHash:nativeSha256(change),minimumCases:2,minimumQuality:0.8,minimumImprovement:0.05,rollbackPath:"Reject the candidate and retain the existing Roadmap policy"}});
+    const judgment=(businessOutcome:number)=>({correctness:true,safety:true,policy:true,businessOutcome,reliability:1,latencyMs:null,costCents:null});
+    const evaluation=await service.evaluate(actor,companyId,hypothesis.id,{expectedHypothesisVersion:1,method:"manual_review",cases:[0,1].map(index=>({baselineTaskId:outcomeTasks[index*2]!.id,challengerTaskId:outcomeTasks[index*2+1]!.id,baseline:judgment(0.7),challenger:judgment(0.9),invariantResults:[true],rationale:"Explicit software review fixture over four native completed Task outcomes"})),limitations:["Software judgments qualify owner gates, not an actual Human trial or causal business impact"]});
+    expect(evaluation.result).toBe("passed");
+    const candidate=await service.proposeChange(actor,companyId,hypothesis.id,{expectedHypothesisVersion:2,evaluationId:evaluation.id,change});
+    expect((await db.select().from(policyChangeProposals).where(eq(policyChangeProposals.id,candidate.candidateId)))[0]).toMatchObject({status:"pending",reviewedBy:null});
+    expect((await db.select().from(projects).where(eq(projects.id,f.project.id)))[0]!.updatedAt).toEqual(currentProject!.updatedAt);
+    await db.transaction(async tx=>{await lockMemoryPrivacy(tx as unknown as typeof db,companyId);await eraseAnalyticalSourcesUnderMemory(tx as unknown as typeof db,companyId,"issue",[f.tasks[0]!.id]);});
+    await expect(outcomes.detail(companyId,f.project.id,actor,f.created.id,fresh.manifestId)).rejects.toMatchObject({status:404});
+    expect(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,fresh.manifestId))).toHaveLength(0);
+    await expect(service.get(actor,companyId,started.cycleId)).rejects.toMatchObject({status:404});
+    expect((await db.select().from(learningCycles).where(eq(learningCycles.id,started.cycleId)))[0]!.erasedAt).not.toBeNull();
+    expect((await db.select().from(learningHypotheses).where(eq(learningHypotheses.id,hypothesis.id)))[0]!.claim).toBe("");
+    expect((await db.select().from(learningDomainCandidates).where(eq(learningDomainCandidates.id,candidate.id)))[0]!.erasedAt).not.toBeNull();
+    expect(await service.policies(actor,companyId)).toEqual([]);
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,cognitive_memory_v7:false,memory_observations_v7:false,enableCollectiveMemoryV1:false});
+    await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await memoryJobService(db).tick({limit:100});
+    expect((await db.select().from(policyChangeProposals).where(eq(policyChangeProposals.id,candidate.candidateId)))[0]!.proposal).toBeNull();
+    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.companyId,companyId))).every(row=>row.deletedAt===null)).toBe(true);
+  });
   it("qualifies strict account-bound public commands and minimal rollout-independent control metadata", async () => {
     const f = await fixture(), endpoint = `/api/companies/${companyId}/projects/${f.project.id}/roadmap/planning`;
     const source = await request(app()).get(`${endpoint}/source?expectedUserId=local-board`).expect(200); expect(source.body.projectId).toBe(f.project.id); expect(source.headers["cache-control"]).toBe("no-store");

@@ -1,7 +1,8 @@
+import { planningOutcomeService } from "../services/adaptive-planning/outcome.js";
 import { Router, type Request } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { projectPlanningProfileSchema, proposeProjectPlanningSchema, reviewRoadmapProposalSchema, createRoadmapBaselineSchema, updateMilestoneSchema, createMilestoneSchema, roadmapPolicySchema, roadmapProposalSchema, taskForecastPatchSchema } from "@paperclipai/shared";
+import { recordPlanningOutcomeSchema, startPlanningOutcomeLearningSchema, projectPlanningProfileSchema, proposeProjectPlanningSchema, reviewRoadmapProposalSchema, createRoadmapBaselineSchema, updateMilestoneSchema, createMilestoneSchema, roadmapPolicySchema, roadmapProposalSchema, taskForecastPatchSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { assertCompanyAccess } from "./authz.js";
 import { projectControlService } from "../services/project-control.js";
@@ -34,5 +35,9 @@ export function projectControlRoutes(db: Db) {
   router.post(`${base}/proposals`, validate(roadmapProposalSchema), async (req, res) => { res.status(201).json(await svc.propose(req.actor, req.params.companyId as string, req.params.projectId as string, req.body)); });
   router.post(`${base}/proposals/:proposalId/review`, validate(reviewRoadmapProposalSchema), async (req, res) => { res.json(await svc.review(req.actor, req.params.companyId as string, req.params.projectId as string, req.params.proposalId as string, req.body.accept, req.body.rationale)); });
   router.patch(`${base}/tasks/:issueId/forecast`, validate(taskForecastPatchSchema), async (req, res) => { res.json(await svc.forecast(req.actor, req.params.companyId as string, req.params.projectId as string, req.params.issueId as string, req.body)); });
+  const outcomes=planningOutcomeService(db);
+  router.post(`${base}/planning/proposals/:proposalId/outcomes`,validate(recordPlanningOutcomeSchema),async(req,res)=>{const {companyId,projectId}=planningAccess(req);res.status(201).json(await outcomes.record(companyId,projectId,req.actor,planningId(req.params.proposalId),req.body));});
+  router.get(`${base}/planning/proposals/:proposalId/outcomes/:manifestId`,async(req,res)=>{const {companyId,projectId}=planningAccess(req);res.json(await outcomes.detail(companyId,projectId,req.actor,planningId(req.params.proposalId),planningId(req.params.manifestId)));});
+  router.post(`${base}/planning/proposals/:proposalId/outcomes/learning`,validate(startPlanningOutcomeLearningSchema),async(req,res)=>{const {companyId,projectId}=planningAccess(req);res.status(201).json(await outcomes.startLearning(companyId,projectId,req.actor,planningId(req.params.proposalId),req.body));});
   return router;
 }

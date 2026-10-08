@@ -36,3 +36,11 @@ for(const theme of ["light","dark"])for(const width of [390,1200]){
  });
  for(const state of ["inconclusive","infeasible"])test(`planning ${state} ${theme} ${width}px withholds unestablished dates`,async({page},info)=>{await story(page,state,theme,width);const result=page.getByRole("region",{name:"Declared planning constraint result"});await expect(result).toContainText(state==="inconclusive"?"Inconclusive":"Infeasible constraints");await expect(result.getByRole("table")).toHaveCount(0);await expect(result.getByRole("button")).toHaveCount(0);await accessibility(page);await page.screenshot({path:info.outputPath(`planning-${state}-${theme}-${width}.png`),fullPage:true,animations:"disabled"});});
 }
+
+for(const theme of ["light","dark"])for(const width of [390,1200])test(`observed planning outcome ${theme} ${width}px keeps independent review`,async({page},info)=>{
+ await story(page,"accepted",theme,width);await page.getByRole("combobox",{name:"Planning proposal reference",exact:true}).selectOption(proposalId);
+ const outcome=page.getByRole("region",{name:"Observed planning outcome",exact:true}),record=outcome.getByRole("button",{name:"Record observed planning outcome",exact:true});
+ await expect(record).toBeDisabled();await outcome.getByRole("textbox",{name:"Planning outcome review rationale",exact:true}).fill("Human reviews actual completion before testing a separate capability hypothesis");await expect(record).toBeEnabled();
+ await expect(page.getByRole("button",{name:"Approve committed planning dates",exact:true})).toHaveCount(0);await expect(outcome).toContainText("business impact and causation remain unestablished");
+ await accessibility(page);await page.screenshot({path:info.outputPath(`planning-outcome-${theme}-${width}.png`),fullPage:true,animations:"disabled"});
+});

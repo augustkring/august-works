@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { decisionEvidenceReferenceSchema, type CapturedDecisionEvidence } from "./decision-intelligence.js";
+import { learningCycleSchema } from "./learning.js";
 import type { RoadmapPolicy } from "./project-control.js";
 
 // This is a sanitized mathematical contract. Authorization, source capture and
@@ -113,3 +114,16 @@ export interface NativePlanningResult {
   limits: { tasks: 200; dependencies: 2000; horizonDays: 366; pools: 32; paretoCandidates: 32; operations: 5_000_000 };
   limitations: string[];
 }
+
+/** Descriptive native completion facts are supplemental signals, not verified
+ * business impact, causal claims or authority to promote a Learning candidate. */
+export const recordPlanningOutcomeSchema=z.object({rationale:z.string().trim().min(10).max(4000)}).strict();
+export const startPlanningOutcomeLearningSchema=learningCycleSchema.omit({scope:true,analyticalSources:true}).extend({manifestId:z.string().uuid()}).strict();
+export type StartPlanningOutcomeLearning=z.input<typeof startPlanningOutcomeLearningSchema>;
+export const planningOutcomeSchema=z.object({
+  companyId:z.string().uuid(),projectId:z.string().uuid(),proposalId:z.string().uuid(),contextHash:z.string().regex(/^[a-f0-9]{64}$/),
+  recordedBy:z.string().min(1),recordedAt:z.string().datetime({offset:true}),expiresAt:z.string().datetime({offset:true}),rationale:z.string().min(10).max(4000),
+  tasks:z.array(z.object({issueId:z.string().uuid(),updatedAt:z.string().datetime({offset:true}),completedAt:z.string().datetime({offset:true}),plannedEndAt:z.string().datetime({offset:true}),completionDeltaDays:z.number().finite()}).strict()).min(1).max(200),
+  authority:z.literal("supplemental_descriptive_signal"),causalClaimRef:z.null(),
+}).strict();
+export type PlanningOutcome=z.infer<typeof planningOutcomeSchema>;

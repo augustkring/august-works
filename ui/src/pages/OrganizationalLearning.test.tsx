@@ -8,8 +8,9 @@ import {ApiError} from "@/api/client";
 import {OrganizationalLearning} from "./OrganizationalLearning";
 
 // UI response contracts; native source authority is tested on PostgreSQL.
-const state=vi.hoisted(()=>({companyId:"company",search:"",reviews:{detail:vi.fn(),startLearning:vi.fn()},setBreadcrumbs:vi.fn(),learning:{list:vi.fn(),get:vi.fn(),create:vi.fn(),prepare:vi.fn(),hypothesis:vi.fn(),evaluate:vi.fn(),propose:vi.fn(),finish:vi.fn()},memory:{listRecords:vi.fn()},foundation:{list:vi.fn()},issues:{list:vi.fn()}}));
+const state=vi.hoisted(()=>({companyId:"company",search:"",planning:{outcome:vi.fn(),startOutcomeLearning:vi.fn()},reviews:{detail:vi.fn(),startLearning:vi.fn()},setBreadcrumbs:vi.fn(),learning:{list:vi.fn(),get:vi.fn(),create:vi.fn(),prepare:vi.fn(),hypothesis:vi.fn(),evaluate:vi.fn(),propose:vi.fn(),finish:vi.fn()},memory:{listRecords:vi.fn()},foundation:{list:vi.fn()},issues:{list:vi.fn()}}));
 const source={type:"metric_observation" as const,id:"00000000-0000-4000-8000-000000004001",metricId:"00000000-0000-4000-8000-000000004002",metricVersionId:"00000000-0000-4000-8000-000000004003"};
+vi.mock("@/api/adaptive-planning",()=>({adaptivePlanningApi:state.planning}));
 vi.mock("@/api/decision-outcome-reviews",()=>({decisionOutcomeReviewsApi:state.reviews}));
 vi.mock("@/context/V7AccountScope",()=>({withV7AccountScope:(Page:unknown)=>Page,useV7AccountScope:()=>({principalId:"user:current-human",learningApi:state.learning,memoryApi:state.memory,foundationApi:state.foundation,issuesApi:state.issues})}));
 vi.mock("@/context/CompanyContext",()=>({useCompany:()=>({selectedCompanyId:state.companyId})}));
@@ -28,6 +29,28 @@ beforeEach(()=>{vi.clearAllMocks();state.companyId="company";state.search="";sta
 afterEach(async()=>{await act(async()=>root?.unmount());client?.clear();container?.remove();});
 async function mount(){client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity},mutations:{retry:false}}});container=document.createElement("div");document.body.append(container);root=createRoot(container);await render();await flush();}
 async function render(){await act(async()=>root.render(<MemoryRouter initialEntries={[`/memory/learning${state.search}`]}><QueryClientProvider client={client}><OrganizationalLearning/></QueryClientProvider></MemoryRouter>));}
+it("rechecks the exact native planning outcome and keeps verified Memory required",async()=>{
+ const projectId="00000000-0000-4000-8000-000000007001",proposalId="00000000-0000-4000-8000-000000007002",manifestId="00000000-0000-4000-8000-000000007003";
+ state.search=`?planningCompanyId=company&planningProjectId=${projectId}&planningProposalId=${proposalId}&planningManifestId=${manifestId}`;
+ state.planning.outcome.mockResolvedValue({manifestId,outcome:{companyId:"company",projectId,proposalId,rationale:"Software descriptive completion signal",expiresAt:new Date(Date.now()+60000).toISOString()}});
+ state.planning.startOutcomeLearning.mockResolvedValue({cycleId:"cycle"});
+ await mount();expect(container.textContent).toContain("Software descriptive completion signal");expect(button("Start bounded cycle").disabled).toBe(true);
+ await act(async()=>container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+ const input=container.querySelector<HTMLInputElement>('input[minlength="10"]')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(input,"Test capacity review against independently verified outcomes");input.dispatchEvent(new Event("input",{bubbles:true}));});
+ await click("Start bounded cycle");
+ expect(state.planning.startOutcomeLearning).toHaveBeenCalledWith("company",projectId,proposalId,{manifestId,purpose:"native_task_execution",trigger:"Test capacity review against independently verified outcomes",memoryRecordIds:["verified-memory"]},"current-human");
+ expect(state.learning.create).not.toHaveBeenCalled();
+});
+it("withholds retained planning feedback when current access is denied",async()=>{
+ const projectId="00000000-0000-4000-8000-000000007001",proposalId="00000000-0000-4000-8000-000000007002",manifestId="00000000-0000-4000-8000-000000007003";
+ state.search=`?planningCompanyId=company&planningProjectId=${projectId}&planningProposalId=${proposalId}&planningManifestId=${manifestId}`;
+ state.planning.outcome.mockResolvedValue({manifestId,outcome:{companyId:"company",projectId,proposalId,rationale:"Private completion review",expiresAt:new Date(Date.now()+60000).toISOString()}});
+ await mount();expect(container.textContent).toContain("Private completion review");
+ state.planning.outcome.mockRejectedValue(new ApiError("Source access denied",403,null));
+ await act(async()=>window.dispatchEvent(new Event("memory-access-changed")));await flush();
+ expect(container.textContent).not.toContain("Private completion review");expect(button("Start bounded cycle").disabled).toBe(true);
+});
 it("keeps verified outcomes required and sends only the selected native signal pin",async()=>{
  await mount();await click("Add analytical signal");expect(button("Start bounded cycle").disabled).toBe(true);
  await click("Choose current signal");expect(button("Start bounded cycle").disabled).toBe(true);

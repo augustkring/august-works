@@ -1,0 +1,136 @@
+{
+  "checkpoint": "Observed approved native planning outcome through the original Learning candidate owner",
+  "parentCommit": "345899fd763be3e8c999bff071bd53497eb5e028",
+  "recordedAt": "2026-10-08T05:34:47.203961+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "97ebe694ec5cc2c7fd5decd47fbc914d0e7cc7ccb7fb974846f501046720ae12"
+    },
+    {
+      "path": "packages/shared/src/adaptive-planning.ts",
+      "sha256": "08491e6700d52ba7373416aef01bcfe7c066a5efe407b7a464e15fa7ecdf7683"
+    },
+    {
+      "path": "packages/shared/src/analytical-context.ts",
+      "sha256": "840540c37eff7daa50fb0a1ec7e26ad52d2026cbbb81c4db2ada66a4ca758317"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-project.integration.test.ts",
+      "sha256": "4b07ebc7309ca18d43dc0725be054a6c1d7c4751aa75e66e380e393f031f0ca4"
+    },
+    {
+      "path": "server/src/routes/project-control.ts",
+      "sha256": "0bf76e7630785fe36dd9b8f1e962808725343c7dc8e7197f611aeb90b79c678f"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/outcome.ts",
+      "sha256": "adb0f3032c284ed1447b6f05b31b82e6c6c65645d214d9560103b6f5d64b0e70"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/project-owner.ts",
+      "sha256": "faceb0787af42dfb03525a7214ce9524dd67017e06554a7354b5595e4286387e"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "6c0fd88eb85e729bcbb4748153db10b728275bd8d0ae099019c6086b51742e45"
+    },
+    {
+      "path": "tests/storybook-visual/project-planning.spec.ts",
+      "sha256": "23302d8c5da45ac2de55bfffe6649bbe2effaf3d0829575d3303b5e7a10b26d8"
+    },
+    {
+      "path": "ui/src/api/adaptive-planning.ts",
+      "sha256": "d78751f2673dd389568cb9bd561e7916f416f4fa1bc37146575016b2c49180bd"
+    },
+    {
+      "path": "ui/src/components/ProjectAdaptivePlanning.test.tsx",
+      "sha256": "1a694a22a8a91607f65c30d9b01df85f4cd32f8f2d0c30aab02b71515a0178a5"
+    },
+    {
+      "path": "ui/src/components/ProjectAdaptivePlanning.tsx",
+      "sha256": "d40043d0a8508a053cb48df3568b261d7ecba626d982bc3f6e9fcb7c1e0cb8ac"
+    },
+    {
+      "path": "ui/src/components/ProjectPlanningOutcome.tsx",
+      "sha256": "350ccef96c4009258fb9ff96585200a7e16434f3efb6d6e4a12d863019432a61"
+    },
+    {
+      "path": "ui/src/pages/OrganizationalLearning.test.tsx",
+      "sha256": "5dc62d8b7c7d08ce4efff0b1c65d538abbb24da9dfa8976c2b26e7f38a5ef14f"
+    },
+    {
+      "path": "ui/src/pages/OrganizationalLearning.tsx",
+      "sha256": "47414a79bb228e974f1b5aa6fa9646cccb0822493fbc364cc7b8b91a094b1cd5"
+    },
+    {
+      "path": "ui/storybook/stories/project-planning.stories.tsx",
+      "sha256": "49b41793c3ce5d091c9d04ffd8f854ddfaa83cd50825b43afe85f3a00e768271"
+    }
+  ],
+  "validation": {
+    "nativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-planning-outcome-qualified-tests.log",
+      "tests": 123,
+      "files": 4,
+      "skipped": 0
+    },
+    "finalPublicPlanningOwner": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-planning-outcome-public-owner-tests.log",
+      "tests": 17,
+      "files": 1,
+      "skipped": 0
+    },
+    "operatorUI": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-planning-outcome-memory-event-ui-tests.log",
+      "tests": 16,
+      "files": 2,
+      "skipped": 0
+    },
+    "browserPresentation": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-planning-outcome-browser.log",
+      "tests": 28,
+      "files": 1,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-planning-outcome-qualified-types.log"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-planning-outcome-qualified-ui-types.log"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-planning-outcome-token-gates.log"
+    },
+    "storybookBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-planning-outcome-storybook.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-workflow-origin-source.log",
+      "commit": "1f220a28a69661fb4d83ab8dccf7bc14828a1d13"
+    }
+  },
+  "qualified": [
+    "Complete actual approved native Task completion, current approved dates and Task version facts, signed original Source lineage and bounded retention",
+    "Actual native Agent/Task/heartbeat/current Human Source-read fixtures, current Human withdrawal and Human-only write separation",
+    "Original verified Memory -> Learning cycle -> pinned hypothesis -> software paired review -> pending policy candidate without canonical policy rewrite",
+    "Original immediate Source fence and flags-off/paused Memory outbox cleanup preserve independent verified Memory outcomes",
+    "Account-bound HTTP owner and private operator feedback/Learning form disclosure"
+  ],
+  "limits": [
+    "Task completion, Memory verification, paired judgments and native identities are software prerequisites, not performed Human or provider trials",
+    "Browser evidence is synthetic cached presentation with API requests aborted, not authentication or a pilot",
+    "Regression suite predates final stricter approved-start-date comparison; final public owner suite qualifies the final owner",
+    "No maximum-volume, hard latency, hosted backfill or whole-brief acceptance",
+    "Routine cadence, action materialization, remaining Source closure, cross-project Planning, readonly provider conformance and hosted acceptance remain open"
+  ]
+}
