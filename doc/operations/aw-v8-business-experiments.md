@@ -263,3 +263,10 @@ before dispatch, preserving assertions under concurrent compilation. Screenshots
 were visually inspected and record source/log hashes; no official visual baseline
 is claimed. The `446349209` preceding analysis checkpoint production build passes.
 Downstream Decision/Causal/Learning/Planning bridges and remaining V8 waves continue.
+
+
+## Local complete-population volume qualification
+
+Checkpoint `native-experiment-volume-checkpoint.json` qualifies the original reader on 4,000 enrolled native Task Sources and actual final analysis/replay on 8,000 outcome receipts (one primary and one guardrail metric). All enrolled units remain in intention-to-treat, including the explicit not-applied exposure fixtures. Actual preregistration/start, elapsed fixed horizon, current native final capture, original signed receipt checks, full kernel replay and migrated SQL completeness/immutability guards run. Each measured reader/capture/replay command satisfies its local less-than-30-second assertion, including transaction completion.
+
+Bulk original-owner-signed assignments and not-applied reports are explicit software prerequisites; they do not constitute 4,000 performed enrollment commands, Human attestations in an operational trial, external provider execution, verified exposure, causal business impact or authenticated/hosted acceptance. The remaining seventeen-metric maximum family, cold-start/concurrent/hosted p95 and cross-provider conformance are unqualified. Batching changes transport and equivalent database comparisons only; every original Source and receipt is still checked, and no sampling/dropout or public result fallback exists.

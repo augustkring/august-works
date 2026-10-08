@@ -133,6 +133,7 @@ async function version(tx: Db, row: Root, actor: AuthorizationActor, id: string,
     || value.metricPins.some(pin => !pins.some(item => item.key === pin.key && item.metricId === pin.metricId && item.metricVersionId === pin.metricVersionId && item.contentHash === pin.contentHash)))
     throw notFound("Experiment native source ownership is unavailable");
   const receipts = await inspectBusinessExperimentReceipts(tx, row.companyId, actor, value, deadline);
+  if (Math.min(value.expiresAt.getTime(), source.expiresAt.getTime()) <= Date.now()) throw notFound("Experiment current Source expired before inspection completed");
   budget(deadline); return { value, source, receipts };
 }
 async function audit(tx: Db, publications: Parameters<typeof logActivity>[2], companyId: string, actor: AuthorizationActor, id: string, action: string, details: Record<string, unknown>) {
