@@ -3025,6 +3025,13 @@
       "when": 1791423166842,
       "tag": "0433_native_orchestration_source_payload_erasure",
       "breakpoints": true
+    },
+    {
+      "idx": 434,
+      "version": "7",
+      "when": 1791426035483,
+      "tag": "0434_native_artifact_workspace_source_erasure",
+      "breakpoints": true
     }
   ]
 }

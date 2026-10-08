@@ -15,7 +15,7 @@ import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { automationArtifactService, automationArtifactVersionContentHash, type AutomationArtifactMutationActor } from "../automation-artifacts/automation-artifact-service.js";
 import { automationArtifactSecurityService } from "../automation-artifacts/automation-artifact-security.js";
 import { executeAutomationArtifactDeclarativeSource } from "../automation-artifacts/automation-artifact-declarative.js";
-import { executeAutomationArtifactTypeScriptSandbox } from "../automation-artifacts/automation-artifact-code-runtime.js";
+import { executeNativeArtifactCode } from "../automation-artifacts/automation-artifact-workspace.js";
 import { assertMemoryRecordsRetained, lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { persistActivity, publishActivity } from "../activity-log.js";
@@ -38,7 +38,8 @@ export function evaluateCandidateInvariant(expression: string, input: unknown, o
 }
 
 /** Executes only the compiled pure candidate through the existing declarative engine or qualified sandbox. */
-export async function executeCompiledOptimizerCandidate(candidate: OptimizerCompiledCandidate, input: unknown) {
+export async function executeCompiledOptimizerCandidate(candidate: OptimizerCompiledCandidate, input: unknown,
+  owner?: { db: Db; companyId: string; versionId: string; expectedStatus?: string; actor: AutomationArtifactMutationActor }) {
   if (candidate.kind !== "artifact" || candidate.artifact.sideEffectClass !== "pure" || candidate.artifact.riskClass !== "C0") {
     throw forbidden("Live optimizer evaluation requires a pure C0 artifact", { code: "optimizer_candidate_effect_denied" });
   }
@@ -46,8 +47,11 @@ export async function executeCompiledOptimizerCandidate(candidate: OptimizerComp
   validateWorkflowOutput(artifact.inputSchema, input);
   let output: unknown;
   if (artifact.kind === "expression" || artifact.kind === "transform") output = executeAutomationArtifactDeclarativeSource(artifact.kind, artifact.sourceCode, input);
-  else if (artifact.kind === "typescript") output = await executeAutomationArtifactTypeScriptSandbox({ sourceCode: artifact.sourceCode,
-    dependencyManifest: artifact.dependencyManifest as unknown as Record<string, unknown>, value: input, timeoutMs: 2_000 });
+  else if (artifact.kind === "typescript") {
+    if (!owner) throw forbidden("Generated-code Optimizer execution requires its actual native version owner", { code: "optimizer_candidate_runtime_unavailable" });
+    output = await executeNativeArtifactCode(owner.db, owner, owner.actor, { sourceCode: artifact.sourceCode,
+      dependencyManifest: artifact.dependencyManifest as unknown as Record<string, unknown>, value: input, timeoutMs: 2_000 }, false);
+  }
   else throw unprocessable("Candidate runtime is not qualified", { code: "optimizer_candidate_runtime_unavailable" });
   validateWorkflowOutput(artifact.outputSchema, output);
   if (Buffer.byteLength(JSON.stringify(output), "utf8") > 1_000_000) throw unprocessable("Candidate output exceeds its bound");
@@ -242,7 +246,8 @@ export function optimizerEvaluationService(db: Db) {
       });
       const gates = await automationArtifactSecurityService(db).evaluateLatestVersion(companyId, artifact.id, {...SYSTEM,sourceActor});
       const replay = await evaluateOptimizerHistoricalReplay({ compilerResult: compiler, cases, executionMode: "pure" }, {
-        execute: async ({ replayCase }) => { const started = performance.now(); const output = await executeCompiledOptimizerCandidate(candidate, replayCase.input); return { output, durationMs: performance.now() - started, costEstimate: 0 }; },
+        execute: async ({ replayCase }) => { const started = performance.now(); const output = await executeCompiledOptimizerCandidate(candidate, replayCase.input,
+          { db, companyId, versionId: version.id, expectedStatus: "testing", actor: { ...SYSTEM, sourceActor } }); return { output, durationMs: performance.now() - started, costEstimate: 0 }; },
         evaluateInvariant: async ({ invariant, replayCase, candidateOutput }) => ({ passed: evaluateCandidateInvariant(evaluation.invariants.find((item) => item.id === invariant.id)!.expression, replayCase.input, candidateOutput) }),
       });
       const passed = replay.status === "passed" && gates.latestVersion?.validationReport?.status === "passed" && gates.latestVersion?.securityReport?.status === "passed";

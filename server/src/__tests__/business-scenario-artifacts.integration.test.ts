@@ -9,6 +9,14 @@ import { assertScenarioArtifactSchema } from "../services/business-scenarios/art
 import { automationArtifactService } from "../services/automation-artifacts/automation-artifact-service.js";
 import { automationArtifactSecurityService } from "../services/automation-artifacts/automation-artifact-security.js";
 import * as artifactRuntime from "../services/automation-artifacts/automation-artifact-runtime.js";
+import * as codeRuntime from "../services/automation-artifacts/automation-artifact-code-runtime.js";
+import { artifactWorkspaceDirectory, eraseArtifactWorkspace } from "../services/automation-artifacts/automation-artifact-workspace.js";
+import { assertRuntimeStorageDirectories, removeRuntimeStorageTree } from "../services/runtime-skill-cache.js";
+import { resolvePaperclipInstanceRoot } from "../home-paths.js";
+import { memoryJobService } from "../services/memory/memory-jobs.js";
+import { memoryJobs } from "@paperclipai/db";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
@@ -127,6 +135,69 @@ suite("Native scenario consumption of validated Automation Artifacts", () => {
     await instanceSettingsService(db).updateExperimental({ enableAutomationArtifactCodeExecutionV1: false });
     await expect(businessScenarioService(db).run(companyId, actor, d.root.id, { expectedRevision: 2, versionId: d.version.id, seed: null })).rejects.toMatchObject({ status: 404 });
   });
+  it("executes actual sandbox code in its native version directory and clears the copy before returning", async () => {
+    const a = await artifact(companyId, true, {}, "typescript"), versionId = a.latestVersion!.id;
+    const directory = artifactWorkspaceDirectory({ companyId, versionId });
+    expect(artifactWorkspaceDirectory({ companyId: companyId.toUpperCase(), versionId: versionId.toUpperCase() })).toBe(directory);
+    const originalSandbox = codeRuntime.executeAutomationArtifactTypeScriptSandbox;
+    let observed = false;
+    const spy = vi.spyOn(codeRuntime, "executeAutomationArtifactTypeScriptSandbox").mockImplementation(async input => {
+      expect(input.workspaceDirectory).toBe(directory);
+      const output = await originalSandbox(input);
+      expect(await fs.readFile(path.join(directory, "artifact.mjs"), "utf8")).toContain("input.factor * input.factor");
+      observed = true;
+      return output;
+    });
+    try {
+      expect((await artifactRuntime.automationArtifactRuntimeService(db).execute(companyId, a.artifact.id, versionId,
+        { factor: 3 }, artifactActor, { deterministic: true })).output).toEqual({ capacity: 9 });
+      expect(observed).toBe(true);
+      await expect(fs.lstat(directory)).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(eraseArtifactWorkspace(db, { companyId, versionId })).rejects.toThrow("no Source erasure receipt");
+    } finally { spy.mockRestore(); }
+  });
+  it("queues native version cleanup on deletion with flags off and a paused company, preserving another tenant", async () => {
+    const a = await artifact(companyId, true, {}, "typescript"), foreign = await artifact(otherId, true, {}, "typescript");
+    const owner = { companyId, versionId: a.latestVersion!.id }, other = { companyId: otherId, versionId: foreign.latestVersion!.id };
+    const directory = artifactWorkspaceDirectory(owner), foreignDirectory = artifactWorkspaceDirectory(other);
+    for (const target of [directory, foreignDirectory]) {
+      await assertRuntimeStorageDirectories(target, resolvePaperclipInstanceRoot(), true);
+      // Explicit interrupted-process file prerequisite, not a performed crash.
+      await fs.writeFile(path.join(target, "artifact.mjs"), "Retained software crash-copy fixture", { mode: 0o400 });
+      await fs.chmod(target, 0o555);
+    }
+    try {
+      await instanceSettingsService(db).updateExperimental({ enableAutomationArtifactsV1: false, enableAutomationArtifactCodeExecutionV1: false });
+      await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
+      await db.delete(automationArtifacts).where(and(eq(automationArtifacts.companyId, companyId), eq(automationArtifacts.id, a.artifact.id)));
+      const [job] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId), eq(memoryJobs.jobKey, `artifact-workspace-erasure:v1:${owner.versionId}`)));
+      expect(job.sourceRefJson).toEqual({ kind: "artifact_workspace_erasure", versionId: owner.versionId });
+      await memoryJobService(db).tick({ limit: 100 });
+      await expect(fs.lstat(directory)).rejects.toMatchObject({ code: "ENOENT" });
+      expect(await fs.readFile(path.join(foreignDirectory, "artifact.mjs"), "utf8")).toBe("Retained software crash-copy fixture");
+    } finally { await removeRuntimeStorageTree(directory); await removeRuntimeStorageTree(foreignDirectory); }
+  });
+  it("rejects a symlink workspace without touching its target and retries the same content-free owner", async () => {
+    const a = await artifact(), owner = { companyId, versionId: a.latestVersion!.id }, directory = artifactWorkspaceDirectory(owner);
+    const outside = await fs.mkdtemp(path.join(process.env.TMPDIR ?? "/tmp", "aw-artifact-foreign-"));
+    await fs.writeFile(path.join(outside, "owned-by-user.txt"), "Preserve this unrelated file");
+    await assertRuntimeStorageDirectories(path.dirname(directory), resolvePaperclipInstanceRoot(), true);
+    await fs.symlink(outside, directory, "dir");
+    try {
+      await db.delete(automationArtifacts).where(and(eq(automationArtifacts.companyId, companyId), eq(automationArtifacts.id, a.artifact.id)));
+      await memoryJobService(db).tick({ limit: 100 });
+      const [job] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId), eq(memoryJobs.jobKey, `artifact-workspace-erasure:v1:${owner.versionId}`)));
+      expect(job.status).toBe("failed");
+      expect(job.sourceRefJson).toEqual({ kind: "artifact_workspace_erasure", versionId: owner.versionId });
+      await memoryJobService(db).tick({ limit: 100 });
+      expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id, job.id)))[0].status).toBe("failed");
+      expect(await fs.readFile(path.join(outside, "owned-by-user.txt"), "utf8")).toBe("Preserve this unrelated file");
+      await fs.unlink(directory);
+      await db.update(memoryJobs).set({ updatedAt: new Date(Date.now() - 61_000) }).where(eq(memoryJobs.id, job.id));
+      await memoryJobService(db).tick({ limit: 100 });
+      expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id, job.id)))[0].status).toBe("succeeded");
+    } finally { await fs.unlink(directory).catch(() => {}); await fs.rm(outside, { recursive: true, force: true }); }
+  });
   it("rejects unvalidated, foreign, mismatched-hash and incompatible-unit bindings", async () => {
     const valid = await artifact(), candidate = await artifact(companyId, false), foreign = await artifact(otherId), relabeled = await artifact(companyId, true, { currency_EUR: 1 });
     for (const def of [definition(candidate), definition(foreign), definition(relabeled), { ...definition(valid), calculationRef: { ...definition(valid).calculationRef!, contentHash: "a".repeat(64) } }]) {
@@ -172,12 +243,29 @@ suite("Native scenario consumption of validated Automation Artifacts", () => {
     await expect(db.execute(sql`delete from automation_artifact_versions where id=${a.latestVersion!.id}::uuid`)).rejects.toMatchObject({ cause: { code: "23514" } });
   });
   it("purges retained artifact scenarios through existing company ownership and preserves another company", async () => {
-    const a = await artifact(); await published(a); const [otherProject] = await db.insert(projects).values({ companyId: otherId, name: "Foreign canonical project" }).returning();
+    const a = await artifact(companyId, true, {}, "typescript"); await published(a);
+    const foreign = await artifact(otherId, true, {}, "typescript");
+    const directory = artifactWorkspaceDirectory({ companyId, versionId: a.latestVersion!.id });
+    const foreignDirectory = artifactWorkspaceDirectory({ companyId: otherId, versionId: foreign.latestVersion!.id });
+    for (const target of [directory, foreignDirectory]) {
+      await assertRuntimeStorageDirectories(target, resolvePaperclipInstanceRoot(), true);
+      await fs.writeFile(path.join(target, "artifact.mjs"), "Interrupted native code-copy prerequisite", { mode: 0o400 });
+      await fs.chmod(target, 0o555);
+    }
+    const [otherProject] = await db.insert(projects).values({ companyId: otherId, name: "Foreign canonical project" }).returning();
     await instanceSettingsService(db).updateExperimental({ scenario_planning_v8: false, enableAutomationArtifactsV1: false });
     await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
     await db.transaction(async raw => { const tx = raw as unknown as typeof db; await tx.execute(sql`select set_config('aw.company_purge_id',${companyId},true)`); await purgeCompanyContent(tx, companyId); });
     expect(await db.select().from(businessScenarios).where(eq(businessScenarios.companyId, companyId))).toHaveLength(0);
     expect(await db.select().from(businessScenarioCalculationPins).where(eq(businessScenarioCalculationPins.companyId, companyId))).toHaveLength(0);
     expect(await db.select().from(projects).where(eq(projects.id, otherProject.id))).toHaveLength(1);
+    try {
+      const [job] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId),
+        eq(memoryJobs.jobKey, `artifact-workspace-erasure:v1:${a.latestVersion!.id}`)));
+      expect(job.sourceRefJson).toEqual({ kind: "artifact_workspace_erasure", versionId: a.latestVersion!.id });
+      await memoryJobService(db).tick({ limit: 100 });
+      await expect(fs.lstat(directory)).rejects.toMatchObject({ code: "ENOENT" });
+      expect(await fs.readFile(path.join(foreignDirectory, "artifact.mjs"), "utf8")).toBe("Interrupted native code-copy prerequisite");
+    } finally { await removeRuntimeStorageTree(directory); await removeRuntimeStorageTree(foreignDirectory); }
   });
 });

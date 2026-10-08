@@ -25,6 +25,8 @@ import {authUsers,analyticalContextRoots,contextManifests} from "@paperclipai/db
 import {assertNativeAnalyticalRunPayloadAccess} from "../services/analytical-context-authority.js";
 import {automationArtifactService} from "../services/automation-artifacts/automation-artifact-service.js";
 import {automationArtifactRuntimeService} from "../services/automation-artifacts/automation-artifact-runtime.js";
+import {artifactWorkspaceDirectory} from "../services/automation-artifacts/automation-artifact-workspace.js";
+import {assertRuntimeStorageDirectories} from "../services/runtime-skill-cache.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
@@ -273,6 +275,13 @@ const support = await getEmbeddedPostgresTestSupport();
       descendantVersionId=descendant.latestVersion!.id;
       expect(descendantVersionId).not.toBe(replay.artifactVersionId);
 
+      const workspace=artifactWorkspaceDirectory({companyId,versionId:replay.artifactVersionId});
+      await assertRuntimeStorageDirectories(workspace,resolvePaperclipInstanceRoot(),true);
+      // Interrupted file-copy prerequisite on the actual learned native version.
+      // This does not represent a performed generated-code promotion or crash.
+      await fs.writeFile(path.join(workspace,"artifact.mjs"),version.sourceCode,{mode:0o400});
+      await fs.chmod(workspace,0o555);
+
       await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false});
       await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
       await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,signal.observation.id));
@@ -281,6 +290,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId)))[0]).toMatchObject({status:"retired",compilerResult:null,replayEvaluation:null});
       // The current Source owner queues the original cycle outbox; no provider is invoked.
       await memoryJobService(db).tick({limit:10});
+      await expect(fs.lstat(workspace)).rejects.toMatchObject({code:"ENOENT"});
       expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[0]!)))[0]!.deletedAt).toBeNull();
     }else await db.transaction(async tx => purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]));
     if(descendantVersionId)expect((await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id,descendantVersionId)))[0]).toMatchObject({sourceCode:"",inputSchema:{},outputSchema:{},testSpec:{},validationReport:null,securityReport:null});

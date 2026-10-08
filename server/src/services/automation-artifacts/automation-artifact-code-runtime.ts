@@ -119,7 +119,10 @@ function byteLength(value: string): number {
 function assertEmptyDependencyManifest(
   dependencyManifest: Record<string, unknown>,
 ): void {
-  if (Object.keys(dependencyManifest).length > 0) {
+  // The native compiler records empty package/capability lists as provenance.
+  // Their presence grants no imports or runtime capabilities.
+  if (Object.entries(dependencyManifest).some(([key, value]) =>
+    !["packages", "capabilityRefs"].includes(key) || !Array.isArray(value) || value.length !== 0)) {
     throw new AutomationArtifactCodeRuntimeError(
       "automation_artifact_code_dependency_denied",
       "Generated-code artifacts cannot install or declare runtime dependencies.",
@@ -709,6 +712,8 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
   value: unknown;
   timeoutMs?: number;
   deterministic?: boolean;
+  /** Private native owner supplies a checked directory and owns its cleanup. */
+  workspaceDirectory?: string;
 }): Promise<unknown> {
   if (process.platform !== "linux") {
     throw new AutomationArtifactCodeRuntimeError(
@@ -738,7 +743,7 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     Math.min(input.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS),
   );
 
-  const workspaceDir = await fs.mkdtemp(
+  const workspaceDir = input.workspaceDirectory ?? await fs.mkdtemp(
     path.join(os.tmpdir(), "aw-artifact-runtime-"),
   );
   try {
@@ -747,6 +752,7 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     await fs.writeFile(artifactPath, scanned.transpiledSource, {
       encoding: "utf8",
       mode: 0o400,
+      flag: "wx",
     });
     const importMarker = 'try {\n  const module = await import';
     if (input.deterministic && RUNNER_SOURCE.split(importMarker).length !== 2) {
@@ -764,6 +770,7 @@ try {\n  const module = await import`,
     await fs.writeFile(runnerPath, runnerSource, {
       encoding: "utf8",
       mode: 0o400,
+      flag: "wx",
     });
 
     let target: Awaited<ReturnType<typeof buildLocalProcessSandboxSpawnTarget>>;
@@ -876,6 +883,6 @@ try {\n  const module = await import`,
     }
     return (envelope as Record<string, unknown>).output;
   } finally {
-    await fs.rm(workspaceDir, { recursive: true, force: true });
+    if (!input.workspaceDirectory) await fs.rm(workspaceDir, { recursive: true, force: true });
   }
 }
