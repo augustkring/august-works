@@ -49,3 +49,13 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1200]) test(`Ro
  const review = page.getByRole("link", {name:"Open review draft",exact:true});await expect(review).toHaveAttribute("href", /reviewCompanyId=company-storybook/);await expect(page.getByRole("link",{name:"Open Workflow run",exact:true})).toBeVisible();
  await accessibility(page);await page.screenshot({path:info.outputPath(`routine-review-${theme}-${width}.png`),fullPage:true,animations:"disabled"});
 });
+
+for (const theme of ["light", "dark"]) for (const width of [390, 1200]) test(`Routine template ${theme} ${width}px requires fresh selectors and a Human agenda`, async ({ page }, info) => {
+  await story(page, "routine-review-template", theme, width); await page.getByRole("button", { name: "Edit recurring review template", exact: true }).click();
+  const form = page.getByRole("form", { name: "Routine review template", exact: true }), save = form.getByRole("button", { name: "Save Routine review template", exact: true }); await expect(save).toBeDisabled();
+  const kind = form.getByRole("combobox", { name: "Source 1 canonical source kind", exact: true }); await expect(kind.locator('option[value="metric_observation"]')).toHaveCount(0);
+  await kind.selectOption("metric"); await form.getByRole("combobox", { name: "Source 1 canonical native source", exact: true }).selectOption({ index: 1 });
+  await form.getByLabel("Source 1 metric window offset (days)", { exact: true }).fill("7"); await form.getByLabel("Agenda 1 due after capture (days)", { exact: true }).fill("2"); await expect(form.locator('input[type="datetime-local"]')).toHaveCount(0); await expect(save).toBeEnabled();
+  const cite = form.getByRole("checkbox", { name: "source_1", exact: true }); await cite.focus(); await page.keyboard.press("Space"); await expect(save).toBeDisabled(); await page.keyboard.press("Space"); await expect(save).toBeEnabled();
+  await accessibility(page); await page.screenshot({ path: info.outputPath(`routine-template-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
+});

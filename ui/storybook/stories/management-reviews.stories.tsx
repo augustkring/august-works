@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ManagementReviewWorkspace } from "@/pages/ManagementReviews";
 import { ManagementReviewResult } from "@/components/ManagementReviewResult";
-import { managementFixture } from "./management-review-fixtures";
+import { RoutineReviewTemplateWorkspace } from "@/components/RoutineManagementReviewEditor";
+import { managementFixture, routineReviewFixture } from "./management-review-fixtures";
 function Workspace({ stale = false, published = false, disabled = false }: { stale?: boolean; published?: boolean; disabled?: boolean }) {
   const f = managementFixture(stale, published), [client] = useState(() => { const q = new QueryClient({ defaultOptions: { queries: { enabled: false, retry: false, staleTime: Infinity, refetchOnMount: false, refetchOnWindowFocus: false }, mutations: { retry: false } } });
     q.setQueryData(["management-review-controls", f.companyId, f.userId], { pages: [f.controls], pageParams: [undefined] }); q.setQueryData(["management-reviews", f.companyId, f.userId, "detail", f.id], f.review); q.setQueryData(["management-definition-sources", f.companyId, f.userId, "purpose"], [f.policy]); q.setQueryData(["management-definition-sources", f.companyId, f.userId, "options", "goal", "", ""], { items: [{ source: f.definition.sources[0].source, title: f.goal.title }], coverage: "bounded_authorized_native_choices" }); return q;
@@ -45,3 +46,15 @@ export const Prediction: Story = { render: () => <Predictive /> };
 export const CitedComparison: Story = { render: () => <Comparison /> };
 export const DeclaredGovernanceRisk: Story = { render: () => <GovernanceRisk /> };
 export const OriginalOutcomeJudgments: Story = { render: () => <OutcomeJudgments /> };
+
+function RoutineTemplate() {
+  const f = routineReviewFixture(), [client] = useState(() => {
+    const q = new QueryClient({ defaultOptions: { queries: { enabled: false, retry: false, staleTime: Infinity, refetchOnMount: false, refetchOnWindowFocus: false }, mutations: { retry: false } } });
+    q.setQueryData(["management-definition-sources", f.companyId, f.userId, "purpose"], [f.policy]);
+    q.setQueryData(["management-definition-sources", f.companyId, f.userId, "options", "goal", "", ""], { items: [{ source: f.definition.sources[0].source, title: f.goal.title }], coverage: "bounded_authorized_native_choices" });
+    q.setQueryData(["management-definition-sources", f.companyId, f.userId, "options", "metric", "", ""], { items: [{ source: f.metricSource, title: "Current published onboarding metric" }], coverage: "bounded_authorized_native_choices" });
+    return q;
+  });
+  return <QueryClientProvider client={client}><div className="mx-auto w-full max-w-3xl"><RoutineReviewTemplateWorkspace routine={{ ...f.routine, managementReviewTemplate: f.template }} userId={f.userId} /></div></QueryClientProvider>;
+}
+export const RoutineReviewTemplate: Story = { render: () => <RoutineTemplate /> };
