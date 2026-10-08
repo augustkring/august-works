@@ -1,7 +1,7 @@
 # V8 source acceptance crosswalk
 
 Reconciled on 2026-10-08 against build brief V8 V2 section 57. This is a review
-crosswalk, not a passed release claim manifest. Native-owner checkpoint 50 is
+crosswalk, not a passed release claim manifest. Native-owner checkpoint 51 is
 committed on the requested branch. `evals/aw-v8/readiness.json` retains R0,
 `sourceComplete: false`, no release identity, and no accepted risk owner.
 

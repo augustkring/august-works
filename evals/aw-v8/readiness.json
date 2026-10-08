@@ -154,6 +154,7 @@
     "server/src/__tests__/legacy-runtime-assets.integration.test.ts",
     "server/src/__tests__/management-review-kernel.test.ts",
     "server/src/__tests__/management-reviews.integration.test.ts",
+    "server/src/__tests__/native-finalization-migration.test.ts",
     "server/src/__tests__/native-provider-conformance-v5.test.ts",
     "server/src/__tests__/openapi-routes.test.ts",
     "server/src/__tests__/process-analysis.integration.test.ts",
@@ -168,6 +169,7 @@
     "server/src/__tests__/v7-feature-admission.integration.test.ts",
     "server/src/__tests__/v7-learning.integration.test.ts",
     "server/src/__tests__/v7-orchestration.integration.test.ts",
+    "server/src/__tests__/v7-work-signals.integration.test.ts",
     "server/src/services/automation-artifacts/automation-artifact-code-runtime.test.ts",
     "server/src/services/context/context-runtime.test.ts",
     "server/src/services/native-runtime/native-session-executor.test.ts",
@@ -225,8 +227,8 @@
     "All H6/H7 environment-specific predecessor gates remain open. No live cloud/customer/provider/Human trial, deployment or business-impact acceptance is represented by the local receipts."
   ],
   "implementationStatus": "LOCAL_IMPLEMENTATION_IN_PROGRESS",
-  "updatedAt": "2026-10-08T16:19:26.422411+00:00",
-  "statusAsOfCheckpoint": 50,
+  "updatedAt": "2026-10-08T17:54:28.018126+00:00",
+  "statusAsOfCheckpoint": 51,
   "sourceCorpusFullyRead": true,
   "localDevelopmentEvidence": [
     {
@@ -620,6 +622,10 @@
     {
       "path": "doc/operations/aw-v8-evidence/native-statistical-worker-checkpoint.json",
       "sha256": "cc3dd9020b477f10d23c746075dc211f8ee72558a9f4f98702a74fc6e978ba9b"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-whole-regression-fixtures-checkpoint.json",
+      "sha256": "d3b3fc03d0e49f4baaed8db37309941aa1ad6ca789b185c3fad0218460a0ddb4"
     },
     {
       "path": "doc/operations/aw-v8-evidence/native-workflow-artifact-binding-checkpoint.json",

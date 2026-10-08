@@ -1,10 +1,14 @@
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import {
   applyPendingMigrations,
+  closeRegisteredClients,
   createDb,
+  ensurePostgresDatabase,
   heartbeatRunEvents,
   heartbeatRuns,
 } from "@paperclipai/db";
@@ -13,63 +17,30 @@ import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.j
 describe("P6-18 / MIG-01..04 native finalization migration", () => {
   it("repairs only later duplicates and preserves legacy event bytes and cursors", async () => {
     const temporary = await startEmbeddedPostgresTestDatabase("paperclip-native-migration-");
-    const migration = await readFile(
-      new URL("../../../packages/db/src/migrations/0227_modern_pandemic.sql", import.meta.url),
-      "utf8",
-    );
-    const migrationHash = createHash("sha256").update(migration).digest("hex");
-    const sequenceMigration = await readFile(
-      new URL("../../../packages/db/src/migrations/0235_heartbeat_run_event_sequence_uniqueness.sql", import.meta.url),
-      "utf8",
-    );
-    const sequenceMigrationHash = createHash("sha256")
-      .update(sequenceMigration)
-      .digest("hex");
-    const rawDb = createDb(temporary.connectionString);
+    const directory = await mkdtemp(join(tmpdir(), "paperclip-finalization-prior-migrations-"));
+    const legacyUrl = new URL(temporary.connectionString);
+    legacyUrl.pathname = "/native_finalization_legacy";
+    const connectionString = legacyUrl.href;
     try {
+      await ensurePostgresDatabase(temporary.connectionString, "native_finalization_legacy");
+      const rawDb = createDb(connectionString);
+      // Execute the real pre-0227 migrations in an empty database. Removing
+      // columns from today's schema leaves later privacy triggers/functions
+      // behind and does not reconstruct a historical migration boundary.
+      const migrationsRoot = new URL("../../../packages/db/src/migrations/", import.meta.url);
+      const journal = JSON.parse(await readFile(new URL("meta/_journal.json", migrationsRoot), "utf8"));
+      const priorEntries = journal.entries.filter((entry: { idx: number }) => entry.idx < 227);
+      await mkdir(join(directory, "meta"));
+      for (const entry of priorEntries) {
+        await copyFile(new URL(`${entry.tag}.sql`, migrationsRoot), join(directory, `${entry.tag}.sql`));
+      }
+      await writeFile(join(directory, "meta/_journal.json"), JSON.stringify({ ...journal, entries: priorEntries }));
+      await migrate(rawDb, { migrationsFolder: directory });
+      expect(await rawDb.execute(sql`SELECT to_regclass('public.native_run_finalizations') AS native_finalizations`))
+        .toEqual([{ native_finalizations: null }]);
       const companyId = "10000000-0000-4000-8000-000000000001";
       const agentId = "10000000-0000-4000-8000-000000000002";
       const runId = "10000000-0000-4000-8000-000000000003";
-      // Reconstruct the actual pre-0227 shape rather than extracting selected
-      // repair statements from the migration under test.
-      await rawDb.execute(sql.raw(`
-        DROP TABLE IF EXISTS status_decision_effects, status_decisions, work_assessments,
-          native_run_finalizations, native_run_results, completion_contracts CASCADE;
-        DROP TRIGGER IF EXISTS paperclip_issue_status_version_trigger ON issues;
-        DROP FUNCTION IF EXISTS paperclip_bump_issue_status_version();
-        DROP INDEX IF EXISTS heartbeat_run_events_run_seq_uq;
-        CREATE INDEX IF NOT EXISTS heartbeat_run_events_run_seq_idx
-          ON heartbeat_run_events (run_id, seq);
-        DROP INDEX IF EXISTS heartbeat_run_events_run_source_event_uq;
-        DROP INDEX IF EXISTS heartbeat_run_events_run_source_seq_uq;
-        ALTER TABLE heartbeat_run_events
-          DROP COLUMN IF EXISTS source_instance_id,
-          DROP COLUMN IF EXISTS source_event_id,
-          DROP COLUMN IF EXISTS source_seq,
-          DROP COLUMN IF EXISTS source_payload_sha256,
-          DROP COLUMN IF EXISTS protocol_schema_version;
-        ALTER TABLE heartbeat_run_events ALTER COLUMN seq TYPE integer;
-        ALTER TABLE heartbeat_runs
-          DROP COLUMN IF EXISTS runtime_mode,
-          DROP COLUMN IF EXISTS runtime_mode_resolver_version,
-          DROP COLUMN IF EXISTS runtime_mode_reason,
-          DROP COLUMN IF EXISTS runtime_mode_resolved_at,
-          DROP COLUMN IF EXISTS runner_profile_json,
-          DROP COLUMN IF EXISTS runner_instance_id,
-          DROP COLUMN IF EXISTS native_session_id,
-          DROP COLUMN IF EXISTS driver_kind,
-          DROP COLUMN IF EXISTS driver_version,
-          DROP COLUMN IF EXISTS completion_contract_id,
-          DROP COLUMN IF EXISTS completion_contract_sha256,
-          DROP COLUMN IF EXISTS next_event_seq,
-          DROP COLUMN IF EXISTS native_phase,
-          DROP COLUMN IF EXISTS native_phase_updated_at;
-        ALTER TABLE issues
-          DROP COLUMN IF EXISTS status_version,
-          DROP COLUMN IF EXISTS last_status_decision_id;
-      `));
-      await rawDb.execute(sql`DELETE FROM "drizzle"."__drizzle_migrations" WHERE "hash" = ${migrationHash}`);
-      await rawDb.execute(sql`DELETE FROM "drizzle"."__drizzle_migrations" WHERE "hash" = ${sequenceMigrationHash}`);
       await rawDb.execute(sql`
         INSERT INTO companies (id, name, issue_prefix)
         VALUES (${companyId}, 'Migration fixture', 'MIG')
@@ -96,8 +67,8 @@ describe("P6-18 / MIG-01..04 native finalization migration", () => {
       `);
       const before = [...beforeResult] as unknown as Record<string, unknown>[];
 
-      await applyPendingMigrations(temporary.connectionString);
-      const db = createDb(temporary.connectionString);
+      await applyPendingMigrations(connectionString);
+      const db = createDb(connectionString);
 
       const after = await db.select().from(heartbeatRunEvents)
         .where(eq(heartbeatRunEvents.runId, runId)).orderBy(heartbeatRunEvents.id);
@@ -126,7 +97,9 @@ describe("P6-18 / MIG-01..04 native finalization migration", () => {
         companyId, runId, agentId, seq: 5, eventType: "must-conflict",
       })).rejects.toThrow();
     } finally {
+      await closeRegisteredClients(connectionString);
       await temporary.cleanup();
+      await rm(directory, { recursive: true, force: true });
     }
   }, 60_000);
 });
