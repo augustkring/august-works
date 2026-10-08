@@ -73,3 +73,22 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1200]) {
     await expect(inspect).toBeEnabled(); await accessibility(page); await page.screenshot({ path: info.outputPath(`joint-declarations-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
   });
 }
+
+for (const theme of ["light", "dark"]) for (const width of [390, 1200]) for (const state of ["current", "reviewed", "retained", "disabled"]) test(`initiative ${state} ${theme} ${width}px preserves separate Human authority`, async ({ page }, info) => {
+  await page.route("**/api/**", route => route.abort()); await page.setViewportSize({ width, height: 1100 });
+  await page.goto(`/iframe.html?id=business-intelligence-initiative-planning--${state}&viewMode=story&globals=theme:${theme}`);
+  const controls = page.getByRole("region", { name: "Native initiative proposal controls", exact: true });
+  await controls.getByRole("combobox", { name: "Initiative proposal reference", exact: true }).selectOption("00000000-0000-4000-8000-000000002404");
+  await controls.getByRole("textbox", { name: "Initiative review rationale", exact: true }).fill("Human explicitly reviews initiative uncertainty and native project changes");
+  await expect(controls.getByRole("button", { name: "Cancel initiative proposal", exact: true })).toBeEnabled();
+  const action = controls.getByRole("button", { name: state === "reviewed" ? "Approve initiative project changes" : "Begin separate initiative review", exact: true });
+  if (state === "disabled") { await expect(action).toHaveCount(0); await expect(controls.getByLabel("Advisory initiative priority result", { exact: true })).toHaveCount(0); await expect(controls).not.toContainText("First project"); }
+  else {
+    await expect(action).toBeDisabled(); const ack = controls.getByRole("checkbox"); await ack.focus(); await page.keyboard.press("Space");
+    if (state === "retained") { await expect(action).toBeDisabled(); await expect(controls).toContainText("current Sources require reinspection"); } else await expect(action).toBeEnabled();
+    const assumptions = controls.getByText("Declared initiative assumptions", { exact: true }); await assumptions.focus(); await page.keyboard.press("Space");
+    await expect(controls).toContainText("Mandatory commitments considered first"); await expect(controls).toContainText("strategic alignment (maximize)"); await expect(controls).toContainText("declared value: Unknown");
+    await expect(controls).toContainText("Estimated billed runtime cost: 40 cents");
+  }
+  await accessibility(page); await page.screenshot({ path: info.outputPath(`initiative-${state}-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
+});

@@ -1,0 +1,109 @@
+{
+  "checkpoint": "Native initiative proposal and separate Human project review UI",
+  "parentCommit": "0837a719f7437bd13b0073c801051686ce0b9b0d",
+  "primaryParentCommit": "bc9f402761ca6cf3e36189a443a3c7c9adfafa81",
+  "recordedAt": "2026-10-08T09:44:49.064959+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "7f9757cb55eea922eece6afc1c928f869cc784d91338fa196cb01dbe48841c95"
+    },
+    {
+      "path": "tests/e2e/cross-project-planning.spec.ts",
+      "sha256": "827dd21eabc9f75355bfc539d80437a4e6ad9a48696101cf749c79b86c534b50"
+    },
+    {
+      "path": "tests/storybook-visual/project-planning.spec.ts",
+      "sha256": "9d48b8b2f1cf1a0791a845d2bc510f12476311b41ee8097d44d7d2831d3095fe"
+    },
+    {
+      "path": "ui/src/components/PortfolioPlanningPreview.tsx",
+      "sha256": "6e9463a065dcc27d3905320206bfc98ea8fb9cecb853566bc24d5c007e3db5f0"
+    },
+    {
+      "path": "ui/src/components/InitiativePlanningControls.tsx",
+      "sha256": "4ecf9205c07a4fb141d9dcd0628067168eac1079c450e26f0f7aa01fc9a411e7"
+    },
+    {
+      "path": "ui/src/pages/CrossProjectPlanning.test.tsx",
+      "sha256": "168c0c74151f6d0eeebf9bea98c279e6716213396456da263398279a4cb3ff6c"
+    },
+    {
+      "path": "ui/src/pages/CrossProjectPlanning.tsx",
+      "sha256": "968d844c223bb4cd066093a3b414ae545ed9a90fac9fc0f4085b818d05990341"
+    },
+    {
+      "path": "ui/storybook/stories/initiative-planning-fixtures.ts",
+      "sha256": "02cf6b4372359e80da7d4c13f038817c8666c3f10805cc78829f949726e007d1"
+    },
+    {
+      "path": "ui/storybook/stories/initiative-planning.stories.tsx",
+      "sha256": "fead469ffd93f77aae2602e4a21dba76229b4b4f4b6437d6eaf610762760b624"
+    }
+  ],
+  "validation": {
+    "uiRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-ui-reviewed-tests.log",
+      "sha256": "9023cdfc2b0c2bc5777f05e0de64e669d1e2ca6ceffe8e408c3cbaef6baf1d13",
+      "tests": 64,
+      "files": 4,
+      "skipped": 0
+    },
+    "actualNativeBrowser": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-review-reviewed-native-browser.log",
+      "sha256": "06d97f2295047ba996cb584a185d4b12cf142f00e9efd5559d69b9f5996b35c4",
+      "tests": 2,
+      "files": 1,
+      "skipped": 0
+    },
+    "finalInitiativePresentation": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-review-final-story-browser.log",
+      "sha256": "33f495d01f40d8b3aab29c9dfb78381c8642c4f1fbb82918a0437705e19613bf",
+      "tests": 16,
+      "files": 1,
+      "skipped": 0
+    },
+    "priorPlanningPresentationRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-review-story-browser.log",
+      "sha256": "412a001be7b404722e3456ebeb7760a08aee2a36f6f607162f6529b5c53fd114",
+      "tests": 60,
+      "files": 1,
+      "skipped": 0,
+      "scope": "Original 60-case layout suite; final rationale timing effect independently covered by deferred UI regression, rebuilt final 16 cases and actual native browser."
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-ui-reviewed-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "storyBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-review-final-story-build.log",
+      "sha256": "7f1c539c3229bfd43e57de6271c3f031c8eca78d79203d20963c579049270896"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-ui-token-gates.log",
+      "sha256": "1898a9427dcd361ced77ef33872a3b1787486212a3ac87a1cfacd87a3d0252fe"
+    }
+  },
+  "qualified": [
+    "Exact inspected profile/hash and explicit Human proposal reason",
+    "Original current Source names after full page reload; retained facts distinct from current qualification",
+    "Separate revision-bound begin-review and fresh acknowledgement before acceptance",
+    "Metadata-only disabled cancellation, account/Source/Memory withdrawal and private query/mutation cache lifetime",
+    "Deferred current-Source recheck preserves newly typed Human rationale while resetting acknowledgement",
+    "Actual native project start leaves other project/Tasks/dates/Roadmap children unchanged",
+    "Settled native light/dark mobile/desktop accessibility and overflow; rebuilt keyboard review states"
+  ],
+  "limitations": [
+    "Fixture software actors and cached presentation prerequisites do not qualify authenticated Human/provider/pilot/hosted trials",
+    "No new execution authority, budget reservation, active-run cancellation, people-performance inference or business impact",
+    "Failed repeated browser and initial empty grep selector are diagnostics excluded from final qualification",
+    "Whole-brief Source closure, optional analytical providers and hosted acceptance remain in progress"
+  ]
+}

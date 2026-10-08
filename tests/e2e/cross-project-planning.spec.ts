@@ -6,7 +6,7 @@ test.setTimeout(120000);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 // Actual local-trusted API and shipped operator UI. Explicit deterministic native
 // fixtures qualify owner integration; no provider/Human/pilot trial is claimed.
-test("a native operator jointly reviews real cross-project dependencies before canonical dates change", async ({ page, request }, info) => {
+for (const mode of ["joint", "initiative"] as const) test(`a native operator separately reviews real ${mode} planning before canonical changes`, async ({ page, request }, info) => {
   const original = await json(await request.get("/api/instance/settings/experimental"));
   try {
     await json(await request.patch("/api/instance/settings/experimental", { data: { analytical_lineage_v8: true, business_metrics_v8: true, strategy_execution_v8: true, adaptive_planning_v8: true, planning_optimizer_v8: true, enableFoundationV1: true, project_roadmap_v5: true, ai_use_cases_v7: true, governance_evidence_v7: true } }));
@@ -79,6 +79,51 @@ test("a native operator jointly reviews real cross-project dependencies before c
     await page.setViewportSize({ width: 390, height: 844 }); await page.emulateMedia({ colorScheme: "light" });
     for (const project of projectRows) expect((await json(await request.get(`/api/projects/${project.id}`))).status).toBe("backlog");
     for (const task of [first, second]) expect((await json(await request.get(`/api/issues/${task.id}`))).plannedStartAt).toBeNull();
+    if (mode === "initiative") {
+      await priorities.getByRole("textbox", { name: "Initiative proposal reason", exact: true }).fill("Human proposes these exact initiative priorities and constraints for separate review");
+      const proposed = page.waitForResponse(r => r.url().includes(`${endpoint}/initiatives/proposals`) && r.request().method() === "POST");
+      await priorities.getByRole("button", { name: "Create initiative proposal", exact: true }).click();
+      const proposal = await json(await proposed);
+      expect(proposal.status).toBe("proposed"); expect(proposal.appliedProjectRefs).toEqual([]);
+      for (const project of projectRows) expect((await json(await request.get(`/api/projects/${project.id}`))).status).toBe("backlog");
+      const controls = page.getByRole("region", { name: "Native initiative proposal controls", exact: true });
+      // Reopen from metadata after a full page load: current native names and
+      // the immutable assumptions must be read through their original owners.
+      await page.reload();
+      await controls.getByRole("combobox", { name: "Initiative proposal reference", exact: true }).selectOption(proposal.id);
+      await expect(controls.getByLabel("Advisory initiative priority result", { exact: true })).toContainText("First native project · start");
+      await controls.getByText("Declared initiative assumptions", { exact: true }).click();
+      await expect(controls).toContainText("strategic alignment (maximize)");
+      await expect(controls).toContainText("Estimated billed runtime cost: 40 cents");
+      await page.addScriptTag({ path: axePath });
+      for (const theme of ["light", "dark"] as const) for (const width of [390, 1200]) {
+        await page.setViewportSize({ width, height: 844 }); await page.emulateMedia({ colorScheme: theme });
+        await expect.poll(() => page.evaluate(() => document.documentElement.style.colorScheme)).toBe(theme);
+        await page.evaluate(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); await Promise.all(document.getAnimations().filter(animation => Number.isFinite(Number(animation.effect?.getComputedTiming().endTime))).map(animation => animation.finished.catch(() => undefined))); });
+        const violations = await page.evaluate(async () => { const w = window as unknown as { axe: { run: (context: string, options: unknown) => Promise<{ violations: unknown[] }> } }; return (await w.axe.run('[aria-label="Native initiative proposal controls"]', { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] } })).violations; });
+        expect(violations).toEqual([]); expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+        await page.screenshot({ path: info.outputPath(`native-initiative-review-${theme}-${width}.png`), fullPage: true });
+      }
+      const section = controls.getByRole("region", { name: "Separate Human initiative review", exact: true });
+      await section.getByRole("textbox", { name: "Initiative review rationale", exact: true }).fill("Human independently reviews these exact initiative costs, Source and capacity assumptions");
+      await expect(section.getByRole("button", { name: "Begin separate initiative review", exact: true })).toBeDisabled();
+      await section.getByRole("checkbox").check();
+      const begun = page.waitForResponse(r => r.url().includes(`${endpoint}/initiatives/proposals/${proposal.id}/review`) && r.request().method() === "POST");
+      await section.getByRole("button", { name: "Begin separate initiative review", exact: true }).click();
+      expect(await json(await begun)).toMatchObject({ status: "under_review", revision: 2 });
+      await controls.getByRole("combobox", { name: "Initiative proposal reference", exact: true }).selectOption(proposal.id);
+      await section.getByRole("textbox", { name: "Initiative review rationale", exact: true }).fill("Human explicitly approves these exact project changes after independent Source review");
+      const approve = section.getByRole("button", { name: "Approve initiative project changes", exact: true }); await expect(approve).toBeDisabled();
+      await section.getByRole("checkbox").check();
+      const accepted = page.waitForResponse(r => r.url().includes(`${endpoint}/initiatives/proposals/${proposal.id}/review`) && r.request().method() === "POST");
+      await approve.click();
+      const result = await json(await accepted); expect(result).toMatchObject({ status: "accepted", revision: 3 }); expect(result.appliedProjectRefs).toMatchObject([{ projectId: projectRows[0].id, disposition: "start", status: "in_progress", paused: false }]);
+      expect((await json(await request.get(`/api/projects/${projectRows[0].id}`))).status).toBe("in_progress");
+      expect((await json(await request.get(`/api/projects/${projectRows[1].id}`))).status).toBe("backlog");
+      for (const task of [first, second]) { const actual = await json(await request.get(`/api/issues/${task.id}`)); expect(actual.status).toBe("todo"); expect(actual.plannedStartAt).toBeNull(); expect(actual.plannedEndAt).toBeNull(); }
+      for (const project of projectRows) expect((await json(await request.get(`/api/companies/${company.id}/projects/${project.id}/roadmap`))).proposals).toEqual([]);
+      return;
+    }
     await page.getByRole("textbox", { name: "Joint planning proposal reason", exact: true }).fill("Human proposes these exact complete joint assumptions for separate native review");
     const proposed = page.waitForResponse(r => r.url().includes(`${endpoint}/proposals`) && r.request().method() === "POST");
     await page.getByRole("button", { name: "Create joint planning proposal", exact: true }).click(); const proposal = await json(await proposed);
