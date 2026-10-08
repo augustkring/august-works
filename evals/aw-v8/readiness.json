@@ -57,30 +57,40 @@
     "native_process_purpose_event_admission_exact_source_integrity_and_retention_reconciliation",
     "bounded_native_JSONL_and_OCEL_2_JSON_SQLite_interchange_with_source_erasure_lineage",
     "native_analytical_manifest_retention_reconciliation",
-    "stateless_native_process_data_readiness_preview_with_separate_dimensions_and_current_source_inspection"
+    "stateless_native_process_data_readiness_preview_with_separate_dimensions_and_current_source_inspection",
+    "native_deterministic_process_analysis_and_human_findings",
+    "native_prospective_decision_context_and_separate_canonical_choice",
+    "native_six_dimension_human_outcome_reviews_and_reviewed_learning_bridge",
+    "native_time_safe_baseline_forecasting_and_backtesting",
+    "optional_hash_locked_statsforecast_autoets_autoarima_with_native_baseline_conformance",
+    "native_typed_conditional_scenario_equations_and_seeded_bounded_simulation",
+    "native_preregistered_individual_experiment_assignment_exposure_final_capture_and_human_interpretation",
+    "native_registered_primary_itt_interval_srm_and_guardrail_qualification",
+    "native_4000_assignment_two_metric_8000_outcome_volume_qualification",
+    "native_human_causal_graph_assumptions_review_and_conditional_registered_itt",
+    "optional_hash_locked_dowhy_identification_fixed_refutations_and_pure_retained_numerical_replay",
+    "native_single_and_joint_project_roadmap_proposals_and_separate_human_application",
+    "native_goal_and_actual_budget_aware_initiative_proposals_with_human_project_start_continue_pause_stop",
+    "native_bounded_management_reviews_with_explicit_citations_comparisons_and_uncertainty",
+    "native_routine_review_templates_cadence_draft_capture_and_separate_human_publication",
+    "native_human_published_review_item_to_original_task_handoff",
+    "native_descriptive_planning_outcome_to_reviewed_learning_proposal",
+    "native_bound_sdk_metric_metadata_query_comparison_and_four_advisory_action_previews",
+    "native_4000_task_sdk_complete_source_retention_and_eight_source_action_envelope",
+    "native_source_dependent_conversation_history_callback_live_delivery_and_account_recovery",
+    "native_original_memory_c7_runtime_context_profile_inventory_artifact_workflow_skill_playbook_rolepack_retention",
+    "native_nine_learning_domain_source_reconciliation_and_reviewed_original_owner_application",
+    "native_bounded_optimizer_shadow_canary_active_task_source_lifecycle"
   ],
   "unfinishedWaves": [
-    "remaining_domain_owner_reconciliation",
-    "business_events",
-    "metrics",
-    "lineage_and_interchange",
-    "strategy",
-    "process_readiness",
-    "process_analysis",
-    "decision_context",
-    "decision_reviews",
-    "forecasts",
-    "provider_qualification",
-    "scenarios",
-    "experiments",
-    "causal_claims",
-    "adaptive_planning",
-    "management_reviews",
-    "learning_bridges",
-    "privacy_and_security",
-    "ui_and_browser",
-    "full_regression",
-    "hosted_qualification"
+    "remaining_sdk_analytical_owner_dispatch_and_indirect_source_closure",
+    "complete_source_graph_and_historical_orphan_multi_restore_reconciliation",
+    "customer_semantic_provider_optional_research_and_conformance",
+    "native_metric_maximum_and_forecast_source_volume_qualification",
+    "experiment_seventeen_outcome_metric_maximum_volume_qualification",
+    "current_complete_branch_types_tests_build_and_release_claim_manifest",
+    "upcloud_postgres_s3_tls_openshell_environment_specific_predecessor_gates",
+    "hosted_pilot_operations_and_named_risk_owner_acceptance"
   ],
   "localTests": [
     "packages/shared/src/v8-feature-flags.test.ts",
@@ -103,12 +113,512 @@
     "ui/src/pages/StrategyExecution.test.tsx",
     "tests/storybook-visual/strategy-execution.spec.ts",
     "server/src/__tests__/business-event-export-formats.test.ts",
-    "server/src/__tests__/process-data-readiness-engine.test.ts"
+    "server/src/__tests__/process-data-readiness-engine.test.ts",
+    "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+    "server/src/__tests__/board-chat-route-feature-flag.test.ts",
+    "ui/src/components/TaskChatThread.test.tsx",
+    "ui/src/components/transcript/useNativeRunTranscripts.test.tsx",
+    "ui/src/pages/BoardChat.test.tsx",
+    "server/src/__tests__/analytical-reader.integration.test.ts",
+    "packages/shared/src/decision-intelligence.test.ts",
+    "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+    "server/src/__tests__/causal-claims.integration.test.ts",
+    "tests/storybook-visual/decision-intelligence.spec.ts",
+    "ui/src/components/DecisionContextPanel.test.tsx",
+    "ui/src/components/DecisionEvidencePicker.test.tsx",
+    "server/src/__tests__/causal-claims-kernel.test.ts",
+    "server/src/__tests__/business-experiment-recording.integration.test.ts",
+    "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
+    "tests/storybook-visual/causal-claims.spec.ts",
+    "ui/src/pages/CausalClaims.test.tsx",
+    "server/src/__tests__/decision-intelligence.integration.test.ts",
+    "packages/shared/src/business-experiments.test.ts",
+    "server/src/__tests__/business-experiments-kernel.test.ts",
+    "server/src/__tests__/business-experiments.integration.test.ts",
+    "tests/storybook-visual/business-experiments.spec.ts",
+    "ui/src/pages/BusinessExperiments.test.tsx",
+    "ui/src/pages/BusinessForecasts.test.tsx",
+    "ui/src/pages/BusinessScenarios.test.tsx",
+    "server/src/__tests__/business-forecasting.integration.test.ts",
+    "server/src/__tests__/process-analysis.integration.test.ts",
+    "server/src/__tests__/management-review-kernel.test.ts",
+    "server/src/__tests__/management-reviews.integration.test.ts",
+    "tests/storybook-visual/management-reviews.spec.ts",
+    "ui/src/pages/ManagementReviews.test.tsx",
+    "server/src/__tests__/v7-learning.integration.test.ts",
+    "server/src/__tests__/business-scenario-artifacts.integration.test.ts",
+    "server/src/services/automation-artifacts/automation-artifact-code-runtime.test.ts",
+    "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
+    "ui/src/pages/IssueDetail.test.tsx",
+    "tests/e2e/agent-chat-sessions.spec.ts",
+    "server/src/__tests__/adaptive-planning-cross-project.integration.test.ts",
+    "tests/e2e/cross-project-planning.spec.ts",
+    "tests/storybook-visual/project-planning.spec.ts",
+    "ui/src/lib/company-routes.test.ts",
+    "ui/src/pages/CrossProjectPlanning.test.tsx",
+    "ui/src/components/StrategySourceReference.test.tsx",
+    "ui/src/components/DecisionOutcomeReviewPanel.test.tsx",
+    "ui/src/pages/OrganizationalLearning.test.tsx",
+    "tests/e2e/decision-review-learning.spec.ts",
+    "server/src/__tests__/causal-dowhy-provider.test.ts",
+    "tests/e2e/causal-dowhy.spec.ts",
+    "server/src/__tests__/causal-dowhy-worker.integration.test.ts",
+    "server/src/services/context/context-runtime.test.ts",
+    "server/src/__tests__/adaptive-planning-portfolio-kernel.test.ts",
+    "server/src/__tests__/budgets-service.test.ts",
+    "ui/src/pages/AutomationArtifacts.test.tsx",
+    "ui/src/components/transcript/useLiveRunTranscripts.test.tsx",
+    "ui/src/context/LiveUpdatesProvider.test.ts",
+    "server/src/__tests__/auth-routes.test.ts",
+    "ui/src/context/V7AccountScope.test.tsx",
+    "server/src/__tests__/routine-management-reviews.integration.test.ts",
+    "tests/e2e/management-review-task.spec.ts",
+    "server/src/__tests__/v7-orchestration.integration.test.ts",
+    "ui/src/pages/Orchestration.test.tsx",
+    "server/src/__tests__/adaptive-planning-project.integration.test.ts",
+    "ui/src/components/ProjectAdaptivePlanning.test.tsx",
+    "server/src/__tests__/provider-trace-store.test.ts",
+    "server/src/__tests__/v7-agent-packages.integration.test.ts",
+    "ui/src/components/RoutineOverview.test.tsx",
+    "ui/src/components/RoutineManagementReviewEditor.test.tsx",
+    "server/src/__tests__/company-skills-routes.test.ts",
+    "server/src/__tests__/runtime-skill-cache.test.ts",
+    "server/src/__tests__/skill-version-file-erasure.integration.test.ts",
+    "server/src/__tests__/agent-conversations.test.ts",
+    "server/src/services/native-runtime/native-session-executor.test.ts",
+    "packages/shared/src/business-forecasting.test.ts",
+    "tests/e2e/statistical-forecast.spec.ts",
+    "tests/storybook-visual/business-forecasts.spec.ts",
+    "server/src/__tests__/business-forecasting-statistical-worker.integration.test.ts",
+    "server/src/__tests__/adaptive-planning-kernel.test.ts",
+    "ui/src/components/ProjectPlanningResult.test.tsx"
   ],
   "limitations": [
-    "Feature configuration does not prove implementation or authorization.",
-    "The shared assurance helper evaluates supplied claims; it does not certify manifest completeness.",
-    "No live hosting or optional analytical provider is qualified.",
-    "Native Business Events are partial: other producers, remaining lifecycle/governance hooks, exports, incremental projection, process readiness and operator UI are unfinished. Native signed-ledger quarantine replay is locally verified on a copied database; actual archive/remote/hosted recovery remains unqualified."
-  ]
+    "Feature configuration and local software tests do not prove deployed processing authority or hosted acceptance.",
+    "R0 is retained: a complete current source/claim manifest, exact release identity and named acceptance are unfinished. Reading the complete source corpus does not establish implementation or Source-graph completeness.",
+    "Native default-off analytical owners and separately reviewed Human changes are implemented with bounded local evidence. Historical receipts do not qualify a different source, restored environment, authenticated caller or operating profile.",
+    "Actual isolated pinned StatsForecast and DoWhy software conformance is locally qualified. Customer semantic providers, hosted provider availability, general calibration and causal business impact are not qualified. AutoTheta remains unqualified.",
+    "The 4000-unit experiment/two-metric and 4000-Task SDK cases cover their explicit local software envelopes. Seventeen outcome metrics, maximum metric populations, forecast volume, hosted p95 and cold starts remain unqualified.",
+    "General historical orphans outside owned namespaces, full indirect Source closure and archive/remote/multi-restore qualification remain unfinished.",
+    "All H6/H7 environment-specific predecessor gates remain open. No live cloud/customer/provider/Human trial, deployment or business-impact acceptance is represented by the local receipts."
+  ],
+  "implementationStatus": "LOCAL_IMPLEMENTATION_IN_PROGRESS",
+  "updatedAt": "2026-10-08T12:16:04.557315+00:00",
+  "statusAsOfCheckpoint": 41,
+  "sourceCorpusFullyRead": true,
+  "localDevelopmentEvidence": [
+    {
+      "path": "doc/operations/aw-v8-evidence/analytical-context-authority-checkpoint.json",
+      "sha256": "93b5c1f2608b985aa371dfed0011b2d2f9b1238a53c2bdd0335f2d7c6bae33b6"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/analytical-context-retention-checkpoint.json",
+      "sha256": "96e454b6423b1bc4abb58aecdc06163af23c8d766f4f7b839b7cc94d2c1b21da"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/analytical-reader-checkpoint.json",
+      "sha256": "86444dbc36cb798677a134cf0c8d365ca8fb1a2d3a07c7afae9b8ccbf6929c6b"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/causal-decision-checkpoint.json",
+      "sha256": "dc38636e012f599ba3aa17e73d652a50fbbae5ae50ba0f237e285332c3905811"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/causal-kernel-checkpoint.json",
+      "sha256": "b4270147ab0465ec4326b82857c809399604ef320016ba796437019deaef5001"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/causal-owner-checkpoint.json",
+      "sha256": "2642bfd1637520da771670c441cfae43c18942248f774dd99cd18344b279dcc4"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/causal-ui-checkpoint.json",
+      "sha256": "c5371e776e3c05a4208c5c40db1d7976d80b6c32952755fe4b3b5e0c5c4a01c2"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/decision-calculation-checkpoint.json",
+      "sha256": "e087067b5162e59a55955a664954698b961ddb48e11e8a3e5becc04317e948c5"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/decision-templates-checkpoint.json",
+      "sha256": "59ccb2b72a7b407476da63cd018a64b90190d15a39fbe9d12cf3a41a0e5e0529"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/experiment-analysis-checkpoint.json",
+      "sha256": "38486284d50581703eab639a996be9bbfa98c7eaa0edf12c3958dfd1cb399df7"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/experiment-decision-checkpoint.json",
+      "sha256": "fe9b606b56a7159d817c2858d937a148478e51b3c02fffbfc5205a4550253dfd"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/experiment-kernel-checkpoint.json",
+      "sha256": "77f2d958dd4366bf5071ac0ed5a40ab7a7a9824d3daca2308fd2823f1867779e"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/experiment-recording-checkpoint.json",
+      "sha256": "c7d11c270890e2fdf628eb68d827a03f5112e5917878408004846a2788e0d7ce"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/experiment-registry-checkpoint.json",
+      "sha256": "423182bf8909206fadc6feba205239405fbc6d79020a3c6d4cb9106a30aa2424"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/experiment-ui-checkpoint.json",
+      "sha256": "39318b11f0c79cc4461de6f2da2f4ce30b313d1cf144309572d58f5c1c621031"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/management-analytical-history-checkpoint.json",
+      "sha256": "f7f92b868154c0cf85aca2ea314f0004ba98245eb5b39c450346105d266a23bb"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/management-comparison-checkpoint.json",
+      "sha256": "9acbc09847fc38a326f643f18cca96d6ecfe3e5e2b9988035c1b1a718d143907"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/management-outcome-governance-checkpoint.json",
+      "sha256": "e5297d50d876ef653aaee87743efeb19fa98d52e1980df2c62cb9f2047570057"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/management-owner-checkpoint.json",
+      "sha256": "94d06748fcc0144a8707d0e6310cefe6d76eada9eb30621251be14cfb6d68c29"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/management-skeleton-checkpoint.json",
+      "sha256": "432ad7bc264e11c0e17e1a435ecc9a52ca33ade2fe16fb2d62fa759d65adc9a3"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/management-source-menu-checkpoint.json",
+      "sha256": "a3931d8dbdba619f6c16997194250c718918af84897f8246348200d5c543aec0"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/management-ui-checkpoint.json",
+      "sha256": "6c67c06f9e6bdee195e3bf53640848ce0f3841262185a010a4058997e89aacaf"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-artifact-workflow-consumer-source-checkpoint.json",
+      "sha256": "e917d3ef440321ccdfec843fb9a9a1402f959cd2f8847bffaafa442773aeda38"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-artifact-workspace-source-checkpoint.json",
+      "sha256": "1c4a66b71d54737e42d8fbbed295f96666e42626befc764f9a65aef9411971c0"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-04f9da2.json",
+      "sha256": "05ce852bcfab14d67cb2d4ecf0b72db9b5719841cdab717580cd5cb02c434527"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-0e98e9e.json",
+      "sha256": "f79c2f4e89a25fa9e7bb1c95fbc553c814bd8e9703883cce577b0c1805107bf2"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-16c8023.json",
+      "sha256": "99fe3cbedd1ec3eb87e00abb3f424bea0887d4015f28bfaf93a38189326980e1"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-3adc098.json",
+      "sha256": "182a75c6b07965a9da514fb165d3197c834507b169d43dc3adbbf3d9f0046e54"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-3cc6c51e1.json",
+      "sha256": "70e990026c64edee109865924b467aa3a1d311a2ea81798550987f41fa2dc9e5"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-4463492.json",
+      "sha256": "fa8e88482edbf097de4774b9b116be417248c6d5f844871e7ab849aad387f2be"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-4b31a0c.json",
+      "sha256": "4b7a8b5dd7f014d12d4e650e6b5076bcc8833ed1f9f60028f222e5d8c4dbbff9"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-577d6f77.json",
+      "sha256": "9307e61846e2ba923995c50dde46c8227b52882df00e2b90496823edd42e9e40"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-5927fe1.json",
+      "sha256": "595f7abda0bcbc28cc640ca41c8166dc7b31bd767666c650973b4a9792fd8fac"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-6426631.json",
+      "sha256": "e2401aaeda6880f671c8d80121b759f99d89a68249e8a0907b198fa8c8786bab"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-90e6520.json",
+      "sha256": "4c8722b12f6777cf2674ce0123d7829e3471e62c10f7091f1633df6bea4544f9"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-9378e42.json",
+      "sha256": "2c14759672544c90a204a9507d4fea2a96b7e14bb761939c6d9e749d3a749792"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-aba1d619.json",
+      "sha256": "a40725facd02f8c39e041a1054f4a3621c8e38bc746e6bc66bc59664bc1e6584"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-d9dc96c.json",
+      "sha256": "317a700b97c42fc1713fb3ddd25424712648ac9421d786cd35145ce6bed245a4"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-e58453c.json",
+      "sha256": "47d0b75a312ff93a61a15428e16be06ce06a74b53a5b99d6db319f9702eb06a5"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-f77dc24.json",
+      "sha256": "aa9c206b838d2dadcc10f28bf4ede780e7118721f3ae16c2093840884b543a7c"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-fb28801.json",
+      "sha256": "7162ccca660d872fc137d6db6bf4c647b2d9e1b45899a04920e75ef4a9b36a94"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-conversation-recovery-checkpoint.json",
+      "sha256": "32e188af33477c2de36c22953b96198caba8241900c23f15742996bc00f7669b"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-cross-project-planning-checkpoint.json",
+      "sha256": "1d7755525edfafdeec8b0536747ac38ea11f9846fc00ff2017f9a587a699c0c0"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-cross-project-planning-ui-checkpoint.json",
+      "sha256": "71780a80406d7f3c3bd5cec6faf90c3252e293b9508d2f015189745d8e1ea35f"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-decision-citation-checkpoint.json",
+      "sha256": "2fdafd3229212622ca2ca80a758d01ed1c2aa14d1874960a7e2d3b9212fd767f"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-decision-review-learning-checkpoint.json",
+      "sha256": "451bc7e90f866c811e2708bf1042d4a5a9ae7e5e8faf12dca28bd1d85b91306e"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-dowhy-owner-checkpoint.json",
+      "sha256": "f80eca64bfb0e4113b0ac2b9af86523eb1cf8e816cd9bfb86cf146e6ca32e098"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-dowhy-worker-checkpoint.json",
+      "sha256": "47f1977ccf0a5df11a31b3e811b5d00b5bf1cc3456aa55453d5737354a764196"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-execution-manifest-source-retention-checkpoint.json",
+      "sha256": "feac8bc51d8d3f8afa0cec407bed76193a05c73fa709f65191f5a5e70ac825b2"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-experiment-volume-checkpoint.json",
+      "sha256": "282ea0b9e235cfe2a4b7d0864d293d99bed81167bf555fe39bbf43b5237fd94c"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-foundation-context-source-retention-checkpoint.json",
+      "sha256": "e2312f541e8ce8ed08282174d916da20f2bc02991ec34299a5fa1fa7b64bf931"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-initiative-preview-checkpoint.json",
+      "sha256": "b9e37ac37ea5bb42ae8ecbc3b418909c6a50010acf14cbbed3de63b02f090f41"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-initiative-proposal-checkpoint.json",
+      "sha256": "ebc3b117b5ed81a308ccafd83ebc77356317514be76320461892ded698eb9c55"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-initiative-review-ui-checkpoint.json",
+      "sha256": "ca1ff110d50b90536e00b192c4b456f085a58f6e579637066ec3dbce05d084f6"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-initiative-version-hold-checkpoint.json",
+      "sha256": "818bd8466c2142a6dbaf98ae19962afb7a10646c9adda44d55f325d6db3a7e61"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-learning-artifact-source-owner-checkpoint.json",
+      "sha256": "9fe176240baa6d71eb96debbb1393c78f0fcf3e3a2a34b36c1dcd554162c1a2b"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-learning-child-source-readers-checkpoint.json",
+      "sha256": "aebbfaa3643dab5587d10a6c0dc78dc9ca8b7b60eb757bd62adae1c5beed76d0"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-learning-domain-source-checkpoint.json",
+      "sha256": "1cd37c87d1d38340d8142eb9191ed29be3a441261b4eb7228e477b852799d82f"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-learning-optimizer-source-checkpoint.json",
+      "sha256": "7d45705211defb9afb134cf5887a92a9f5ec1d19428a5e5880ad1ab98e05ebb0"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-learning-signals-checkpoint.json",
+      "sha256": "67f3a2592c0ae3d6cbe595e30a8956f2a196565c0e3e9e4fc8ea2fee33dca45c"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-learning-workflow-review-erasure-checkpoint.json",
+      "sha256": "e232268bbb959c3383fecd3687d62854f5da03d459f73a893f9f7efb5eaf6397"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-live-source-checkpoint.json",
+      "sha256": "f9af981fc2af4aaaec35cd5ae1bff99d57f251d35d3be1177b8ac70207a33e8e"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-local-account-provenance-checkpoint.json",
+      "sha256": "b1aa73b8d6ccd450fac6544a1ec954e724379161c67694006b59e4500187626a"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-management-review-task-checkpoint.json",
+      "sha256": "d541d0deed3128609dd53cca7c83263c115ecd6b006b76bbac2fe5f2cb7f9792"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-management-tools-checkpoint.json",
+      "sha256": "75acda215d95e364a57c8a16b83f98dc754ad4ca81ebf0d2d6b9c0ccb4b7ec6a"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-memory-current-clock-checkpoint.json",
+      "sha256": "a6767e21fe7bb6bb6068407a0f553f594ab85571a4c2e89a27a876075bbb2ef8"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-metadata-discovery-checkpoint.json",
+      "sha256": "c74d6834a130dd5d254d8bcac69fd63211342776f93e5e6d9ff5edb8993a0529"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-optimizer-artifact-lifecycle-owner-checkpoint.json",
+      "sha256": "64a0c9a881107a1fc58d04925e19a70b7e3efe7cc4bb32b8f5bfa9b56af3344e"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-optimizer-workflow-source-checkpoint.json",
+      "sha256": "e9f2ceb20900d882126c7ad64002737ec4340f21bf36faa91cf2dc2d4402df23"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-orchestration-source-payload-checkpoint.json",
+      "sha256": "bddd79ac0397a024cf0de89965c7b9296749762743591faa5b643eb4507aef5d"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-planning-outcome-learning-checkpoint.json",
+      "sha256": "1ce99eed928a12a341f8d8b8aa75b78ad6f11e87c0a099f0f9cee4e4a851407e"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-provider-trace-erasure-checkpoint.json",
+      "sha256": "2e6e963a0ab139e151e1260127cd699aad666817ffb4117ea61201ccafe242ad"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-regression-2dd6edb.json",
+      "sha256": "bbeb108bc0a9f992e505c5bc1eaf84f63a8232ae75fc3329689a34b13d59220d"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-remaining-learning-owners-checkpoint.json",
+      "sha256": "b50242538a73877d8e6ec7634e8330c4d297a41524d3ac8d50084d2b07de3a0a"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-routine-review-cadence-checkpoint.json",
+      "sha256": "a702033ddb13431e124eac9b7ec6568f00bbe3c396a3fa153b5326490a161b14"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-routine-review-template-checkpoint.json",
+      "sha256": "8f3883d49d00de9403ac4fe5dd20670c76a4d3640146eaff6bcda2cd7e0a0067"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-runtime-asset-source-erasure-checkpoint.json",
+      "sha256": "35e2d69b2f6a1aa6f9909ddbc14149bca923337b27ee7ccd32e424bd005d4043"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-runtime-playbook-source-retention-checkpoint.json",
+      "sha256": "519a46cc5bc39866a0dbb96b9684da37f033ac2b040d61201ed27ac824a25240"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-runtime-rolepack-source-retention-checkpoint.json",
+      "sha256": "bea81dd799870a038f8b4da40d9619a72ab6943b0b4fdf0e90607d09c148422b"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-runtime-skill-source-retention-checkpoint.json",
+      "sha256": "80ffbac74616afa0a4d15be2f133e013a71bd73274f564d3897f9743aea92aec"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-sdk-action-volume-checkpoint.json",
+      "sha256": "a04d59530406958a5dcc40480dcaa31931cc4ac8c386cf93bf32f2ba8a132ec8"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-skill-harness-source-erasure-checkpoint.json",
+      "sha256": "6de3ee2fcc1f1ef47f93160db4bbd209ea00a229ac4ad135c257c2d3ead25296"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-skill-source-run-erasure-checkpoint.json",
+      "sha256": "ff5b733bca78fa591c5367ea30c1a58c6e68c26f87f6cf02bb9195bf78fbeae5"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-skill-version-file-erasure-checkpoint.json",
+      "sha256": "66de2a0fee3eac9ecc6cb66879f65813399fe57c4ea5e3b15518c1aef9b87118"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-source-access-recovery-checkpoint.json",
+      "sha256": "022ff31d6cc9d6e736df6478460d6cbc05fbbab3a98373e1aec69274db7f7ee5"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-source-continuity-checkpoint.json",
+      "sha256": "3673adac1da0ed3ba347dc730a2b9b2548606c7024db00a97517e728b0ad1df2"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-sourceful-optimizer-agent-checkpoint.json",
+      "sha256": "6e06bb96f1aa114c337fbe2993700b81fc920cd85467072228211e9629d09e6e"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-statistical-forecast-checkpoint.json",
+      "sha256": "9ecb9d578d5200f3a46cc4fd1fad554d43f37500f201a46e85f5a35b2065c378"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-statistical-worker-checkpoint.json",
+      "sha256": "cc3dd9020b477f10d23c746075dc211f8ee72558a9f4f98702a74fc6e978ba9b"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-workflow-artifact-binding-checkpoint.json",
+      "sha256": "15a69ee0156085fdd9aae5711295fca917a0249e43dff192e1984dff9d0ffe2d"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-workflow-artifact-copy-source-checkpoint.json",
+      "sha256": "457a20c27510633b723253670e5ab4e081de5042720c7c6d64901c1db07314b7"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-workflow-origin-source-checkpoint.json",
+      "sha256": "47fb225307c571116a49bec4415d77f9cf58192f60a7958d94615e62089630b5"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/ocel-format-sources.json",
+      "sha256": "c6cf9607ee8c19c1ec9ca551ff5bf9b9313ea51443092420edda2caa262af13d"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/planning-browser-checkpoint.json",
+      "sha256": "bbeccfae1821147ce2aa052097415f5df27eb17a2fe1be2e8e030131355b3b10"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/planning-kernel-checkpoint.json",
+      "sha256": "52c81aa2b60da57d90a6a4332fb983e34f49d93921d11bdc925e9afe6ff10221"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/planning-operator-checkpoint.json",
+      "sha256": "c5ba1ecebbf1d3739069c4d8efc163245d5595562bf862420535dba4e877d718"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/planning-presentation-foundation-checkpoint.json",
+      "sha256": "aaacde3cbc8d9c539ad0608b66d62a768443a2333bf1bc0e74eb45053893ac6c"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/planning-project-owner-checkpoint.json",
+      "sha256": "5ce167dd7c27e64b0f15d3e6a4341b27a9d499e4e222baeeef5537ff0a9c69ef"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/planning-review-disclosure-checkpoint.json",
+      "sha256": "cceb8ae26db2eb342f7e8235cbf87e9fa1b4bea5a09ab1ae0b304349cb3f0127"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/scenario-artifact-checkpoint.json",
+      "sha256": "3b7690e20332495b881af920685f420d1c4efc741a6c64d993566fd1aa88ec25"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/scenario-owner-checkpoint.json",
+      "sha256": "0e69b21b9f912375189cbec9ae48a6296d2e83ced9d5d7fae74bede852e14b7e"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/scenario-ui-checkpoint.json",
+      "sha256": "43801ab9c2b30123313a483c506648cb945a9eb2ca79f360aed00a65cfa1fa93"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/source-corpus.json",
+      "sha256": "0792dc413783b538d111ade10fb1446124b626e7522a4a087e098acd39318652"
+    }
+  ],
+  "localEvidenceBoundary": "Historical local development receipts identify their tested source and limitations. They are not current release-bound AssuranceEvidence. The formal evidence array stays empty until a complete claim manifest and exact release identity are verified."
 }

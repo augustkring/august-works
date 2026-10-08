@@ -1,3 +1,5 @@
+import { disableV8Rollout } from "./helpers/v8-rollout.js";
+import { nativeManagementSdkFixture } from "./helpers/native-management-sdk-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
@@ -61,6 +63,23 @@ suite("Governed native conditional scenarios on migrated PostgreSQL", () => {
     expect((await service().listRuns(companyId, actor, scenario.id)).items.map(item => item.id)).toEqual([run.id]);
     expect((await service().list(companyId, actor)).items.map(item => item.scenario.id)).toContain(scenario.id);
     expect(await service().result(companyId, actor, scenario.id, run.id)).toMatchObject({ contentHash: run.contentHash });
+  });
+  it("compares exact actual scenario outputs through the SDK and erases its dependent answer without creating a commitment", async () => {
+    const d = await published(), sdk = await nativeManagementSdkFixture(db, companyId);
+    const sources = d.run.result.cases.map(item => ({ type: "scenario_run", id: d.run.id, scenarioId: d.scenario.id, versionId: d.version.id, caseKey: item.key, outputKey: item.outputs[0]!.key }));
+    const before = await db.select().from(issues).where(eq(issues.id, d.source!.issue.id));
+    const result = await sdk.read("compare_scenarios", { sources });
+    expect(result).toMatchObject({ tool: "compare_scenarios", result: { grade: "conditional_scenario", sources: [{ facts: { nominal: 2 } }, { facts: { nominal: 3 } }] }, executionAuthority: "read_only_or_advisory" });
+    expect((await sdk.roots())[0]!.authorityPins).toEqual(sources.map(source => ({ kind: "analytical_evidence", source })));
+    await sdk.retainCopy(result); expect(await sdk.retained()).toBe(true);
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, d.source!.issue.id));
+    await expect(sdk.read("compare_scenarios", { sources })).rejects.toMatchObject({ status: 403 });
+    await db.update(issues).set({ hiddenAt: null }).where(eq(issues.id, d.source!.issue.id));
+    await disableV8Rollout(db);
+    await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
+    await db.transaction(async raw => { const tx = raw as unknown as typeof db; await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await eraseAnalyticalSourcesUnderMemory(tx, companyId, "issue", [d.source!.issue.id]); });
+    expect(await sdk.retained()).toBe(false);
+    expect(await db.select().from(issues).where(eq(issues.id, d.source!.issue.id))).toEqual(before);
   });
   it("retains reproducible seeded Monte Carlo and rejects seed policy mismatches", async () => {
     const d = await draft(true); d.definition.calculationType = "bounded_monte_carlo";

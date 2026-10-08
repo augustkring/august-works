@@ -1,3 +1,5 @@
+import { disableV8Rollout } from "./helpers/v8-rollout.js";
+import { nativeManagementSdkFixture } from "./helpers/native-management-sdk-fixture.js";
 import express from "express";
 import request from "supertest";
 import {decisionIntelligenceRoutes} from "../routes/decision-intelligence.js";
@@ -106,6 +108,22 @@ suite("Native prospective decision context on migrated PostgreSQL",()=>{
     const latest=await businessMetricService(db).query(companyId,actor,{metricId:baseline.metricId,versionId:baseline.versionId,from:baseline.from,until:baseline.until,dimensions:[],maxRows:100});
     expect(latest.value).toBe(1);const historical=await service().detail(companyId,actor,d.id);
     expect(historical.versions[0].evidence[0].facts.value).toBe(0.5);expect(historical.versions[0].contentHash).toBe(prepared.versions[0].contentHash);
+  });
+  it("reads an exact prepared Decision through the actual SDK without choosing and erases only its dependent answer",async()=>{
+    const d=await create(),baseline=await observation(),input=definition();
+    input.evidence=[{key:"baseline",source:{type:"metric_observation",id:baseline.id,metricId:baseline.metricId,metricVersionId:baseline.versionId},relationship:"metric_observation",optionId:null,criterionKey:null,rationale:"Human pins the exact native baseline for separate consideration"}];
+    const prepared=await prepare(d.id,input),versionId=prepared.versions[0]!.id,sdk=await nativeManagementSdkFixture(db,companyId),before=await native().get(d.id);
+    const result=await sdk.read("get_decision_context",{decisionId:d.id,versionId});
+    expect(result).toMatchObject({tool:"get_decision_context",citations:[{kind:"decision_context",decisionId:d.id,versionId}],result:{decisionId:d.id,binding:null,version:{id:versionId}},executionAuthority:"read_only_or_advisory"});
+    expect(await native().get(d.id)).toEqual(before);expect(await db.select().from(issueComments).where(eq(issueComments.companyId,companyId))).toHaveLength(0);
+    await sdk.retainCopy(result);expect(await sdk.retained()).toBe(true);
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,targetId));
+    await expect(sdk.read("get_decision_context",{decisionId:d.id,versionId})).rejects.toMatchObject({status:404});
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,targetId));
+    await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[targetId]);});
+    expect(await sdk.retained()).toBe(false);expect(await native().get(d.id)).toEqual(before);
+    expect(await db.select({id:issues.id,status:issues.status}).from(issues).where(eq(issues.id,targetId))).toEqual([{id:targetId,status:"todo"}]);
   });
   it("blocks choice when current source visibility changes and leaves canonical work and binding untouched",async()=>{
     const d=await create();await prepare(d.id);

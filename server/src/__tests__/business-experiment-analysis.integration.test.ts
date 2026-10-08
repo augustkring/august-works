@@ -1,3 +1,4 @@
+import { nativeManagementSdkFixture } from "./helpers/native-management-sdk-fixture.js";
 import {managementAnalyticalFixture} from "./helpers/management-analytical-fixture.js";
 import {disableV8Rollout} from "./helpers/v8-rollout.js";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -137,6 +138,21 @@ suite("Native experiment final capture and human interpretation on migrated Post
     expect(await db.select().from(decisionContextVersions).where(eq(decisionContextVersions.decisionId,native.decision.id))).toHaveLength(0);
     expect(await db.select().from(decisionExperimentPins).where(eq(decisionExperimentPins.decisionId,native.decision.id))).toHaveLength(0);
     expect((await db.select().from(decisions).where(eq(decisions.id,native.decision.id)))[0].chosenOptionId).toBe("proceed");expect(await db.select().from(issueComments).where(eq(issueComments.issueId,native.target.id))).toHaveLength(1);
+  });
+  it("reads a separately interpreted exact Experiment through the actual SDK without upgrading its incomplete trial",async()=>{
+    const d=await running(true),unit=await attested(d);await closure(d);const captured=await analyzed(d);
+    const interpreted=await analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:captured.analysis.id,conclusion:"iterate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"});
+    const source={type:"experiment_analysis",id:captured.analysis.id,experimentId:d.experiment.id,versionId:d.version.id,interpretationId:interpreted.interpretation.id},sdk=await nativeManagementSdkFixture(db,companyId);
+    const before=await db.select().from(businessExperimentInterpretations).where(eq(businessExperimentInterpretations.id,interpreted.interpretation.id));
+    const output=await sdk.read("get_experiment_result",{source});
+    expect(output).toMatchObject({tool:"get_experiment_result",citations:[{kind:"analytical_evidence",source}],result:{grade:"human_interpreted_experiment",evidence:{facts:{status:"inconclusive",humanConclusion:"iterate",causalAuthority:"withheld",assignedUnits:1}}}});
+    expect(await db.select().from(businessExperimentInterpretations).where(eq(businessExperimentInterpretations.id,interpreted.interpretation.id))).toEqual(before);
+    await sdk.retainCopy(output);expect(await sdk.retained()).toBe(true);await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,unit.unit.id));
+    await expect(sdk.read("get_experiment_result",{source})).rejects.toMatchObject({status:404});
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,unit.unit.id));const independent=await db.select().from(issues).where(eq(issues.id,unit.unit.id));
+    await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[unit.unit.id]);});
+    expect(await sdk.retained()).toBe(false);expect(await db.select().from(issues).where(eq(issues.id,unit.unit.id))).toEqual(independent);
   });
   it("rejects cross-tenant/altered interpretations and hidden enrolled sources without admitting a prospective context",async()=>{
     const d=await running(true),unit=await attested(d);await closure(d);const result=await analyzed(d),native=await nativeDecision(),service=decisionIntelligenceService(db);

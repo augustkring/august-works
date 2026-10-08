@@ -1,3 +1,7 @@
+import { nativeProcessRequirements } from "../services/process-analysis-engine.js";
+import { processDataReadinessService } from "../services/process-data-readiness.js";
+import { disableV8Rollout } from "./helpers/v8-rollout.js";
+import { nativeManagementSdkFixture } from "./helpers/native-management-sdk-fixture.js";
 import {managementAnalyticalFixture} from "./helpers/management-analytical-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -77,6 +81,23 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     await expect(service().run(companyId, actor, created.root.id, { versionId: next.id, ...period })).rejects.toMatchObject({ status: 409 });
     await expect(db.update(processAnalysisVersions).set({ contentHash: "f".repeat(64) }).where(eq(processAnalysisVersions.id, next.id))).rejects.toMatchObject({ cause: { code: "23514" } });
     await expect(db.update(processAnalysisPublications).set({ rationale: "Changed review" }).where(eq(processAnalysisPublications.definitionId, created.root.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+  it("runs the original bounded Process owner through the actual SDK and retains the complete run even with no human findings",async()=>{
+    const created=await published();await project();const sdk=await nativeManagementSdkFixture(db,companyId);
+    await expect(processDataReadinessService(db).assess(companyId,{type:"agent",source:"agent_jwt",companyId,agentId:sdk.agentId,runId:sdk.runId,onBehalfOfUserId:sdk.userId},nativeProcessRequirements(definition(),{versionId:created.version.id,...period}))).rejects.toMatchObject({status:403});
+    const output=await sdk.read("analyze_process_scope",{definitionId:created.root.id,analysis:{versionId:created.version.id,...period}}) as {result:{run:{id:string,result:{status:string}}}};
+    expect(output).toMatchObject({tool:"analyze_process_scope",result:{grade:"native_observation",run:{result:{status:"succeeded",objectSummaries:[{objectType:"issue",objectCount:1,medianCycleSeconds:60}]}}}});
+    const runId=output.result.run.id;
+    const findings=await sdk.read("list_process_findings",{definitionId:created.root.id,runId});expect(findings).toMatchObject({result:{items:[]}});
+    expect(await db.select().from(processFindings).where(eq(processFindings.analysisRunId,runId))).toHaveLength(0);
+    expect((await sdk.roots()).every(root=>root.authorityPins.some(pin=>pin.kind==="process_run"&&pin.runId===runId))).toBe(true);
+    await sdk.retainCopy(findings);expect(await sdk.retained()).toBe(true);
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,issueId));
+    await expect(sdk.read("list_process_findings",{definitionId:created.root.id,runId})).rejects.toMatchObject({status:409});
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,issueId));await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[issueId]);});
+    expect(await sdk.retained()).toBe(false);expect(await db.select().from(processAnalysisRuns).where(eq(processAnalysisRuns.id,runId))).toHaveLength(0);
+    expect(await db.select({id:issues.id}).from(issues).where(eq(issues.id,issueId))).toEqual([{id:issueId}]);
   });
   it("requires fresh intrinsic readiness, retains exact microsecond windows and erases dependent result payloads under Memory", async () => {
     const created = await published();
