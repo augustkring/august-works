@@ -86,7 +86,8 @@
     "native_4000_task_source_forecast_history_full_authority_envelope",
     "native_exact_model_specified_forecast_intervals_retained_in_advisory_sdk",
     "native_4000_unit_seventeen_metric_68000_outcome_capture_replay_and_whole_source_erasure",
-    "optional_metricflow_cube_versioned_public_license_capability_research_with_customer_source_conditional_conformance"
+    "optional_metricflow_cube_versioned_public_license_capability_research_with_customer_source_conditional_conformance",
+    "native_run_owned_connector_assignment_copies_and_shared_original_runtime_source_fence"
   ],
   "unfinishedWaves": [
     "complete_source_graph_and_historical_orphan_multi_restore_reconciliation",
@@ -111,6 +112,7 @@
     "server/src/__tests__/adaptive-planning-portfolio-kernel.test.ts",
     "server/src/__tests__/adaptive-planning-project.integration.test.ts",
     "server/src/__tests__/agent-conversations.test.ts",
+    "server/src/__tests__/agent-skills-routes.test.ts",
     "server/src/__tests__/analytical-context-privacy.integration.test.ts",
     "server/src/__tests__/analytical-reader.integration.test.ts",
     "server/src/__tests__/auth-routes.test.ts",
@@ -134,9 +136,17 @@
     "server/src/__tests__/causal-claims.integration.test.ts",
     "server/src/__tests__/causal-dowhy-provider.test.ts",
     "server/src/__tests__/causal-dowhy-worker.integration.test.ts",
+    "server/src/__tests__/chat-channels.integration.test.ts",
+    "server/src/__tests__/codex-local-execute.test.ts",
     "server/src/__tests__/company-skills-routes.test.ts",
     "server/src/__tests__/decision-intelligence.integration.test.ts",
     "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
+    "server/src/__tests__/email-channels.integration.test.ts",
+    "server/src/__tests__/heartbeat-direct-adapter-native-isolation.test.ts",
+    "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
+    "server/src/__tests__/heartbeat-native-runner-selection.test.ts",
+    "server/src/__tests__/heartbeat-native-status-context.test.ts",
+    "server/src/__tests__/heartbeat-runtime-skills.test.ts",
     "server/src/__tests__/issue-remove-cascade.test.ts",
     "server/src/__tests__/management-review-kernel.test.ts",
     "server/src/__tests__/management-reviews.integration.test.ts",
@@ -155,6 +165,7 @@
     "server/src/services/automation-artifacts/automation-artifact-code-runtime.test.ts",
     "server/src/services/context/context-runtime.test.ts",
     "server/src/services/native-runtime/native-session-executor.test.ts",
+    "server/src/services/native-runtime/runtime-context.test.ts",
     "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
     "tests/e2e/agent-chat-sessions.spec.ts",
     "tests/e2e/causal-dowhy.spec.ts",
@@ -208,8 +219,8 @@
     "All H6/H7 environment-specific predecessor gates remain open. No live cloud/customer/provider/Human trial, deployment or business-impact acceptance is represented by the local receipts."
   ],
   "implementationStatus": "LOCAL_IMPLEMENTATION_IN_PROGRESS",
-  "updatedAt": "2026-10-08T15:04:39.186012+00:00",
-  "statusAsOfCheckpoint": 46,
+  "updatedAt": "2026-10-08T15:32:46.686634+00:00",
+  "statusAsOfCheckpoint": 47,
   "sourceCorpusFullyRead": true,
   "localDevelopmentEvidence": [
     {
@@ -375,6 +386,10 @@
     {
       "path": "doc/operations/aw-v8-evidence/native-build-fb28801.json",
       "sha256": "7162ccca660d872fc137d6db6bf4c647b2d9e1b45899a04920e75ef4a9b36a94"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-connector-owned-assets-checkpoint.json",
+      "sha256": "28b098b2dd75fba2c599caba3f7445fdac1c6d0aff1d1398bbdeb93956247f36"
     },
     {
       "path": "doc/operations/aw-v8-evidence/native-conversation-recovery-checkpoint.json",

@@ -2,7 +2,8 @@ import { agentIdentities, agentExecutionManifests, agentExecutionManifestItems, 
 import { agentExecutionManifestSchema, createGovernedSkillSchema } from "@paperclipai/shared";
 import { skillLifecycleService } from "../services/skill-lifecycle.js";
 import { companySkillService } from "../services/company-skills.js";
-import { buildRetainedNativeRuntimeContext, materializeAsset, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
+import { buildRetainedNativeRuntimeContext, withRetainedNativeRuntimeAssets, materializeAsset, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
+import { applyConnectorSkills, prepareRetainedConnectorSkills } from "../services/connector-runtime.js";
 import { nativeRuntimeAssetsRoot, eraseNativeRuntimeAssets } from "../services/native-runtime/runtime-asset-retention.js";
 import {projects,decisions,businessExperiments} from "@paperclipai/db";
 import fs from "node:fs/promises";
@@ -227,11 +228,16 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
    const [agent]=await db.update(agents).set({adapterConfig:{instructionsFilePath:path.join(instructions,"AGENTS.md")}}).where(eq(agents.id,agentId)).returning();
    const key=`company/${companyId}/retained`,input={db,agent:agent!,runId,runtimeConfig:{paperclipSkillSync:{desiredSkills:[key]}},runtimeSkillEntries:[{key,runtimeName:"retained",source:skillSource,sourceStatus:"available" as const,versionId:null}]};
    const context=await buildRetainedNativeRuntimeContext(input),owner={companyId,runId};
+   const binding={companyId,agentId,runId,issueId};
+   const connector=await withRetainedNativeRuntimeAssets({db,...binding},()=>applyConnectorSkills({},[],[{key:"agentmail",label:"AgentMail",skillKey:"paperclipai/paperclip/agentmail",tools:[],resources:[{id:"explicit-software-resource",label:"private-software-resource@example.test",connectionId:"explicit-software-connection"}]}],owner));
+   expect(await fs.readFile(path.join(connector.paperclipRuntimeSkills[0].source,"SKILL.md"),"utf8")).toContain("private-software-resource@example.test");
+   expect((await prepareRetainedConnectorSkills(db,binding,{},[])).assignments).toEqual([]);
    expect(context.skills).toHaveLength(1);expect(await readNativeRuntimeAssetText(context.skills[0]!.bundle,32000,owner)).toEqual([{path:"SKILL.md",text:"Synthetic retained procedure"}]);
    await expect(readNativeRuntimeAssetText(context.skills[0]!.bundle,32000,{companyId,runId:randomUUID()})).rejects.toThrow();
    await expect(eraseNativeRuntimeAssets(db,owner,[])).rejects.toThrow("no Source erasure receipt");
    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
    await expect(buildRetainedNativeRuntimeContext(input)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+   await expect(prepareRetainedConnectorSkills(db,binding,{},[])).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,f.sourceId));
    const legacy=await materializeAsset([{path:"SKILL.md",content:Buffer.from("Independent identical synthetic procedure"),mode:0o444}]);
    const otherCompany=randomUUID(),otherAgent=randomUUID(),otherRun=randomUUID();
@@ -257,6 +263,8 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
    await memoryJobService(db).tick({limit:100});
    expect((await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`))).every(job=>job.status==="succeeded")).toBe(true);
    await expect(fs.stat(runRoot)).rejects.toMatchObject({code:"ENOENT"});
+   await expect(fs.stat(connector.paperclipRuntimeSkills[0].source)).rejects.toMatchObject({code:"ENOENT"});
+   await expect(prepareRetainedConnectorSkills(db,binding,{},[])).rejects.toThrow("native_runtime_asset_source_unavailable");
    await expect(buildRetainedNativeRuntimeContext(input)).rejects.toThrow("native_runtime_asset_source_unavailable");
    expect(await readNativeRuntimeAssetText(legacy,32000,otherOwner)).toHaveLength(1);
    expect(await readNativeRuntimeAssetText(otherBundle,32000,otherOwner)).toHaveLength(1);

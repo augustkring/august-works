@@ -21,7 +21,7 @@ import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopI
 import { legacyControllerBootId, legacyControllerClaim, renewLegacyControllerLease, hasLiveLegacyController, revokeExpiredLegacyController, watchLegacyControllerLease } from "./legacy-controller-lease.js";
 import { completeTerminatedRemoteNativeSessionCleanup } from "../vendor/paperclip-runner/index.js";
 import { hasRemoteTerminationReceipt, remoteExecutionHasStopped, remoteTerminationReceipt, stoppedRemoteCleanupScopes } from "./remote-execution-termination.js";
-import { applyConnectorSkills, prepareConnectorSkillDelivery, resolveConnectorAssignments } from "./connector-runtime.js";
+import { prepareRetainedConnectorSkills, prepareConnectorSkillDelivery } from "./connector-runtime.js";
 import { admitExplicitNativeContinuation, undeliveredLegacyUserCommentIds } from "./explicit-native-continuation.js";
 import { connectionIntentService } from "./connection-intents.js";
 import { managedAiSessionFingerprintConfig, prepareManagedAiRuntime, assertManagedAiProjectAuth, stripAiAuthBindings, isAiConnectionBusy, AI_AUTH_ENV_KEYS } from "./ai-connection-runtime.js";
@@ -21414,8 +21414,8 @@ export function heartbeatService(
         startedAtMs: skillsPrepareStartedAtMs,
         endedAtMs: Date.now(),
       });
-      const connectorAssignments = await resolveConnectorAssignments(db, { companyId: agent.companyId, agentId: agent.id, runId: run.id, issueId: typeof context.issueId === "string" ? context.issueId : undefined });
-      const connectorSkillConfig = await applyConnectorSkills(effectiveResolvedConfig, runtimeSkillEntries, connectorAssignments);
+      const { assignments: connectorAssignments, config: connectorSkillConfig } = await prepareRetainedConnectorSkills(db,
+        { companyId: agent.companyId, agentId: agent.id, runId: run.id, issueId: typeof context.issueId === "string" ? context.issueId : undefined }, effectiveResolvedConfig, runtimeSkillEntries);
       // Both CLI adapters and native context materialization use the same resolved set.
       runtimeSkillEntries.splice(0, runtimeSkillEntries.length, ...connectorSkillConfig.paperclipRuntimeSkills);
       const connectorDelivery = await prepareConnectorSkillDelivery(connectorSkillConfig, agent.adapterType);
