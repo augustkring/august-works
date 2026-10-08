@@ -78,8 +78,7 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
         await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[issueId]);
         await eraseBusinessEventObjectUnderMemory(tx,companyId,"issue",issueId);
       });
-      const erased=await readiness.assess(companyId,actor,requirements);
-      expect(erased).toMatchObject({admission:"DATA_NOT_READY",authorizedEventCount:0,coverage:"bounded_incomplete_snapshot"});
+      await expect(readiness.assess(companyId,actor,requirements)).rejects.toMatchObject({status:403});
     } finally { await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({process_intelligence_v8:false}); }
   });
 
