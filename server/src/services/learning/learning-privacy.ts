@@ -37,7 +37,7 @@ export async function invalidateLearningCycles(tx:Db,companyId:string,cycleIds:s
   if (ids("policy").length) await tx.update(policyChangeProposals).set(erase ? { proposal: null, reason: "", reviewRationale: null, erasedAt: now, updatedAt: now } : { status: "stale", updatedAt: now }).where(and(eq(policyChangeProposals.companyId, companyId), inArray(policyChangeProposals.id, ids("policy"))));
   if (erase && ids("project").length) {
     const rows = await tx.select().from(projectRoadmapProposals).where(and(eq(projectRoadmapProposals.companyId, companyId), inArray(projectRoadmapProposals.id, ids("project"))));
-    for (const row of rows) await tx.update(projectRoadmapProposals).set({ reason: "Erased learning evidence", reviewRationale: null, patch: { ...row.patch, reason: "Erased learning evidence", evidence: [] }, updatedAt: now }).where(eq(projectRoadmapProposals.id, row.id));
+    for (const row of rows) await tx.update(projectRoadmapProposals).set({ reason: "Erased learning evidence", reviewRationale: null, patch: { ...row.patch, reason: "Erased learning evidence", evidence: [], changes: [] }, updatedAt: now }).where(eq(projectRoadmapProposals.id, row.id));
   }
   if (!links.length) return;
   const assets = await tx.select().from(learningRetainedAssets).where(and(eq(learningRetainedAssets.companyId, companyId), inArray(learningRetainedAssets.candidateLinkId, links.map((link) => link.id))));

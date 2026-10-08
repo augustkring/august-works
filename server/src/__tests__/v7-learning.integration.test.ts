@@ -1,3 +1,5 @@
+import {projectControlService} from "../services/project-control.js";
+import {policyChangeProposals} from "@paperclipai/db";
 import * as artifactWorkspace from "../services/automation-artifacts/automation-artifact-workspace.js";
 import { approvalService } from "../services/approvals.js";
 import * as artifactRuntime from "../services/automation-artifacts/automation-artifact-runtime.js";
@@ -1120,6 +1122,54 @@ const support = await getEmbeddedPostgresTestSupport();
     await expect(learningService(db).reviewPolicy(owner, companyId, policy.candidateId, { expectedVersion: 1, decision: "accept", rationale: "Reviewed the effects on approvals and scheduling rules", acknowledgeApprovalOrSecurityChange: false })).rejects.toMatchObject({ status: 403 });
     await learningService(db).reviewPolicy(owner, companyId, policy.candidateId, { expectedVersion: 1, decision: "accept", rationale: "Reviewed the effects on approvals and scheduling rules", acknowledgeApprovalOrSecurityChange: true });
     expect((await db.select().from(projects).where(eq(projects.id, project!.id)))[0]!.roadmapPolicy?.allowLowRiskAgentScheduleUpdates).toBe(false);
+  });
+  it.each(["project","policy"] as const)("rechecks actual analytical signals at native %s review and erases only derived prose after Human acceptance",async(domain)=>{
+    const [project]=await db.insert(projects).values({companyId,name:"Independent native learned planning target"}).returning(),[task]=await db.insert(issues).values({companyId,projectId:project!.id,title:"Independent canonical target Task",status:"todo"}).returning();
+    const signal=await analyticalSignal(),control=projectControlService(db),learning=learningService(db),change=learningChangeSchema.parse(domain==="project"?{targetDomain:"project",proposal:{expectedProjectUpdatedAt:project!.updatedAt.toISOString(),changes:[{issueId:task!.id,expectedUpdatedAt:task!.updatedAt.toISOString(),patch:{estimatedEffortMinutes:60}}],reason:"Current supplemental Source supports this separately reviewed effort declaration",evidence:[]}}:{targetDomain:"policy",reason:"Current supplemental Source supports this separately reviewed governance declaration",proposal:{policyType:"project_roadmap",expectedProjectUpdatedAt:project!.updatedAt.toISOString(),policy:{}}});
+    const link=await domainProposal(project!.id,domain==="project"?`project://${project!.id}/${project!.updatedAt.toISOString()}`:`policy://project/${project!.id}/${project!.updatedAt.toISOString()}`,change,[signal.pin]);
+    const read=()=>domain==="project"?control.get(owner,companyId,project!.id):learning.policies(owner,companyId);
+    const accept=()=>domain==="project"?control.review(owner,companyId,project!.id,link.candidateId,true,"Human independently reviews the exact native planning proposal"):learning.reviewPolicy(owner,companyId,link.candidateId,{expectedVersion:1,decision:"accept",rationale:"Human independently reviews the exact governance effects",acknowledgeApprovalOrSecurityChange:true});
+    await read();await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+    if(domain==="project")await expect(read()).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});else expect(await read()).toEqual([]);
+    await expect(accept()).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});expect((await db.select().from(issues).where(eq(issues.id,task!.id)))[0]!.estimatedEffortMinutes).toBeNull();
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));await accept();
+    const canonicalTask=(await db.select().from(issues).where(eq(issues.id,task!.id)))[0]!,canonicalProject=(await db.select().from(projects).where(eq(projects.id,project!.id)))[0]!;
+    if(domain==="project")expect(canonicalTask.estimatedEffortMinutes).toBe(60);else expect(canonicalProject.roadmapPolicy?.allowLowRiskAgentScheduleUpdates).toBe(false);
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,business_metrics_v8:false,management_reviews_v8:false,analytical_lineage_v8:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,signal.observation.id));await memoryJobService(db).tick({limit:10});
+    if(domain==="project")expect((await db.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id,link.candidateId)))[0]).toMatchObject({reason:"Erased learning evidence",reviewRationale:null,patch:{reason:"Erased learning evidence",evidence:[],changes:[]}});else expect((await db.select().from(policyChangeProposals).where(eq(policyChangeProposals.id,link.candidateId)))[0]).toMatchObject({proposal:null,reason:"",reviewRationale:null});
+    if(domain==="project"){
+      // Exercise an actual transactional upgrade from the original deployed
+      // guard, rather than claiming new-database tests qualify reconciliation.
+      const original=await readFile(new URL("../../../packages/db/src/migrations/0357_chemical_korvac.sql",import.meta.url),"utf8"),start=original.indexOf("CREATE FUNCTION aw_learning_guard_proposal()"),end=original.indexOf("\n--> statement-breakpoint",start),legacy=original.slice(start,end).replace("CREATE FUNCTION","CREATE OR REPLACE FUNCTION"),migration=await readFile(new URL("../../../packages/db/src/migrations/0445_learning_project_proposal_erasure.sql",import.meta.url),"utf8");
+      await db.transaction(async raw=>{
+        const tx=raw as unknown as typeof db;await tx.execute(sql.raw(legacy));await tx.execute(sql`drop trigger aw_learning_project_proposal_insert on project_roadmap_proposals`);await tx.execute(sql`drop trigger aw_learning_policy_proposal_insert on policy_change_proposals`);
+        const erased=(await tx.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id,link.candidateId)))[0]!;
+        await tx.update(projectRoadmapProposals).set({patch:{...erased.patch,changes:[{issueId:task!.id,expectedUpdatedAt:task!.updatedAt.toISOString(),patch:{forecastReason:"Legacy retained private forecast from erased Sources"}}]}}).where(eq(projectRoadmapProposals.id,link.candidateId));
+        expect(JSON.stringify((await tx.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id,link.candidateId)))[0]!.patch)).toContain("Legacy retained private forecast");
+        for(const statement of migration.split("--> statement-breakpoint").map(value=>value.trim()).filter(Boolean))await tx.execute(sql.raw(statement));
+        expect((await tx.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id,link.candidateId)))[0]!.patch.changes).toEqual([]);
+      });
+    }
+    if(domain==="project"){
+      const erased=(await db.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id,link.candidateId)))[0]!;
+      await db.update(projectRoadmapProposals).set({reason:"Late restored private Source prose",reviewRationale:"Late copied private judgment",patch:{...erased.patch,reason:"Late restored private Source prose",changes:[{issueId:task!.id,expectedUpdatedAt:task!.updatedAt.toISOString(),patch:{forecastReason:"Late restored private forecast from erased Sources"}}]}}).where(eq(projectRoadmapProposals.id,link.candidateId));
+      expect((await db.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id,link.candidateId)))[0]).toMatchObject({reason:"Erased learning evidence",reviewRationale:null,patch:{reason:"Erased learning evidence",evidence:[],changes:[]}});
+    }else{
+      await db.update(policyChangeProposals).set({reason:"Late restored private Source prose",reviewRationale:"Late copied private judgment",proposal:change.targetDomain==="policy"?change.proposal:null}).where(eq(policyChangeProposals.id,link.candidateId));
+      expect((await db.select().from(policyChangeProposals).where(eq(policyChangeProposals.id,link.candidateId)))[0]).toMatchObject({proposal:null,reason:"",reviewRationale:null});
+    }
+    if(domain==="project"){
+      const erased=(await db.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id,link.candidateId)))[0]!;await db.delete(projectRoadmapProposals).where(eq(projectRoadmapProposals.id,link.candidateId));
+      await expect(db.insert(projectRoadmapProposals).values({...erased,status:"accepted"})).rejects.toMatchObject({cause:{code:"23514"}});
+      await db.insert(projectRoadmapProposals).values({...erased,status:"pending",reason:"Restored private Source prose",patch:{...erased.patch,reason:"Restored private Source prose",changes:[{issueId:task!.id,expectedUpdatedAt:task!.updatedAt.toISOString(),patch:{forecastReason:"Restored private forecast from erased Sources"}}]}});
+      expect((await db.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id,link.candidateId)))[0]).toMatchObject({reason:"Erased learning evidence",reviewRationale:null,patch:{reason:"Erased learning evidence",evidence:[],changes:[]}});
+    }else{
+      const erased=(await db.select().from(policyChangeProposals).where(eq(policyChangeProposals.id,link.candidateId)))[0]!;await db.delete(policyChangeProposals).where(eq(policyChangeProposals.id,link.candidateId));
+      await expect(db.insert(policyChangeProposals).values({...erased,status:"accepted"})).rejects.toMatchObject({cause:{code:"23514"}});
+      await db.insert(policyChangeProposals).values({...erased,status:"pending",reason:"Restored private Source prose",proposal:change.targetDomain==="policy"?change.proposal:null});
+      expect((await db.select().from(policyChangeProposals).where(eq(policyChangeProposals.id,link.candidateId)))[0]).toMatchObject({proposal:null,reason:"",reviewRationale:null});
+    }
+    expect((await db.select().from(issues).where(eq(issues.id,task!.id)))[0]).toEqual(canonicalTask);expect((await db.select().from(projects).where(eq(projects.id,project!.id)))[0]).toEqual(canonicalProject);expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[0]!)))[0]!.content).toContain("Actual customer outcome");
   });
   it("keeps failed comparisons out of production even when the challenger is cheaper", async () => {
     const service = learningService(db), cycle = await service.create(owner, companyId, cycleInput()), hypothesis = await service.addHypothesis(owner, companyId, cycle.id, hypothesisInput(1));

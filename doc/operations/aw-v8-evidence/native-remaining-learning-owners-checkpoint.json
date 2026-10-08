@@ -1,0 +1,108 @@
+{
+  "checkpoint": "Original remaining Learning domain Source review and whole project proposal erasure",
+  "recordedAt": "2026-10-08T10:52:50.931500+00:00",
+  "parentCommit": "2520e6e2fe8678db97128be3aadf924df3cb2a4c",
+  "primaryParentCommit": "1e47e1068b25e218773dc176112f617edf4c3bc2",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "36503b3ce02abca8ca2a8c81d0c215e5d5a9bb840cd6b991b44d78e8c9fce933",
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/0445_learning_project_proposal_erasure.sql",
+      "sha256": "b4d4216d45d5dff62ae589d3286f3812da20e325f60eaaff24934b6ca85b11bd",
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0440_snapshot.json",
+      "sha256": null,
+      "state": "normal_snapshot_prune"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0445_snapshot.json",
+      "sha256": "6c73cde97569881fa3f4cd28c27caf471076039cf22b10da1110b6bebd486e15",
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "df3fa6a273633533f734b06c5cd94b924588ca88b610ac5fa53f61a73f921d16",
+      "state": "present"
+    },
+    {
+      "path": "server/src/__tests__/v7-agent-packages.integration.test.ts",
+      "sha256": "bf319e840ef77b90b885601cf3f0ae83beb833a68af9b2ea85bfd6012c119e15",
+      "state": "present"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "501a7bfe5dfd16a3559b8238c6deff18bd7bf590f6218d361cbf982ee04eaddc",
+      "state": "present"
+    },
+    {
+      "path": "server/src/services/learning/learning-privacy.ts",
+      "sha256": "717926e29c73560ce2c76a723267a499f19e6b802d101fe47b90de65247861e1",
+      "state": "present"
+    }
+  ],
+  "validation": {
+    "nativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-remaining-learning-owners-final-reviewed-tests.log",
+      "sha256": "80e01a3e8fd6b26ea0274398e2801ead4b6a3aafd06e46955e9ac05cdc20c461",
+      "tests": 96,
+      "skipped": 0,
+      "scope": "Final production code; afterward, the two already-passing erasure cases gained explicit transactional legacy upgrade/restore assertions, independently qualified by their final focused run."
+    },
+    "actualLegacyUpgradeAndLateRestore": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-learning-proposal-erasure-upgrade-reviewed-tests.log",
+      "sha256": "7d5f57e0f0e4eb0a2bd790dd45ade6c32f683c755b0f7a2a5079451375216af3",
+      "tests": 2,
+      "skipped": 39,
+      "excluded": "Other cases intentionally excluded by focused test-name filter; they are qualified by full nativeRegression."
+    },
+    "sourceReviewErasureAndSnapshot": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-remaining-learning-owners-erasure-focused-tests.log",
+      "sha256": "538d5724a5b12c1d743c5f2619bd8a4bd0c1ae94da4deeb73a17044ad9b358cb",
+      "tests": 5,
+      "skipped": 55,
+      "excluded": "Other cases intentionally excluded by focused test-name filter; they are qualified by full nativeRegression."
+    },
+    "finalServerTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-remaining-learning-owners-final-source-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migrations": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-remaining-learning-owners-reviewed-migrations.log",
+      "sha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-statistical-owner.log",
+      "sha256": "820c7a0ebb0f072f30bff27c496aa0ecf6111f400f3f8d0ec88bf1504a403b55",
+      "commit": "1e47e1068b25e218773dc176112f617edf4c3bc2"
+    }
+  },
+  "qualified": [
+    "Existing original project/policy/package current analytical signal disclosure and separate Human review guards",
+    "Actual hidden original metric Source withholds proposal reading and review before any canonical changes",
+    "Separately accepted native Task/project facts and independent verified outcomes preserved",
+    "Flags-off paused-company original outbox erasure removes all project proposal changes/prose",
+    "Original package installation degrades; no implicit activation or canonical package release",
+    "Actual known Source-erased proposal SQL UPDATE clears late prose and whole changes",
+    "Known Source-erased project/policy accepted INSERT refused and pending INSERT scrubbed",
+    "Actual transactional original deployed guard retains legacy private forecast change; exact new migration reconciles it",
+    "Original Learning, package, single/joint planning and snapshot regression"
+  ],
+  "limitations": [
+    "Original review owners already existed; only one original privacy assignment and its original SQL guard are extended",
+    "Native actors, human-verified outcome rows, paired reviews and supplemental metrics are explicit software prerequisites, not performed customer/Human/provider/JWT/commercial/hosted trials",
+    "Transactional legacy upgrade is an isolated native software restore fixture, not an actual hosted backup restore",
+    "Canonical Task/project facts are independently retained through their separate Human native owner acceptance; the new erasure removes dependent proposal payloads",
+    "Historical unowned orphan data, every indirect analytical/SDK source, other providers, cadence, hosted acceptance and whole-brief completion remain open"
+  ]
+}
