@@ -1,7 +1,7 @@
 # V8 source acceptance crosswalk
 
 Reconciled on 2026-10-08 against build brief V8 V2 section 57. This is a review
-crosswalk, not a passed release claim manifest. Native-owner checkpoint 51 is
+crosswalk, not a passed release claim manifest. Native-owner checkpoint 52 is
 committed on the requested branch. `evals/aw-v8/readiness.json` retains R0,
 `sourceComplete: false`, no release identity, and no accepted risk owner.
 
@@ -28,7 +28,7 @@ caller, hosted environment or restored filesystem.
 | 14 | Causal non-identification/abstention | `server/src/services/causal-claims/kernel.ts`; `server/src/__tests__/causal-claims.integration.test.ts` |
 | 15 | Deterministic constraints; planning is proposal-only | `server/src/__tests__/adaptive-planning-kernel.test.ts`; `server/src/__tests__/adaptive-planning-cross-project.integration.test.ts` |
 | 16 | Structured material Review evidence | `server/src/services/management-reviews/capture.ts`; `server/src/__tests__/management-reviews.integration.test.ts` |
-| 17 | Derived-data privacy/export/deletion/retention | `doc/operations/aw-v8-source-and-data-register.md`; `server/src/__tests__/analytical-context-privacy.integration.test.ts`; local archive/restore and orphan receipts 49–50 |
+| 17 | Derived-data privacy/export/deletion/retention | `doc/operations/aw-v8-source-and-data-register.md`; `server/src/__tests__/analytical-context-privacy.integration.test.ts`; local archive/restore, orphan and governed backfill metadata receipts 49–52 |
 | 18 | Cross-company authorization | Original native route/Source admission and the domain integration suites above; current whole regression gate remains separate |
 | 19 | Reject employment/performance scoring | Strict typed dimensions/protocols; `packages/shared/src/business-metrics.test.ts`; `packages/shared/src/business-experiments.test.ts` |
 | 20 | Optional versioned qualified providers | Locked StatsForecast/DoWhy profiles and owner checks; `doc/operations/aw-v8-optional-semantic-provider-decision.md`; customer semantic adapter is conditional on an existing supplied source |

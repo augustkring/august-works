@@ -2,7 +2,7 @@
 
 Date: 2026-10-06. Reconciliation base: master
 `d550aa7ea5ad38b5209d79135cabaa227ab3f902`.
-Status as of native-owner checkpoint 51 (2026-10-08): default-off native
+Status as of native-owner checkpoint 52 (2026-10-08): default-off native
 Events, Metrics/targets, strategy links, Process analysis/findings, Decisions and
 outcome reviews, Forecasts, Scenarios, Experiments, causal analyses, adaptive
 project/initiative planning and Management Reviews are implemented. Separate
@@ -25,7 +25,10 @@ separate quarantined databases; post-backup Source suppression closes both. The 
 limits are recorded in `doc/plans/2026-10-06-aw-v8-build.md` and
 `doc/operations/aw-v8-evidence/`. Full Source-graph completeness, historical and
 indirect paths, current whole-branch release qualification and hosted acceptance
-remain open. This register grants neither access nor processing authority.
+remain open. Native backfill cursor/count metadata now uses the original
+analytical manifest's purpose/Source/expiry and cascading erasure owner; actual
+prior-schema upgrade and local archive/restore are qualified in checkpoint 52.
+This register grants neither access nor processing authority.
 
 ## Canonical owners
 
