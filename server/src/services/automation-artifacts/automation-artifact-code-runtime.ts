@@ -503,7 +503,7 @@ function boundedSandboxDiagnostic(stderr: string): string | null {
     : redacted;
 }
 
-async function resolveSandboxProcessLimit(): Promise<number> {
+export async function resolveSandboxProcessLimit(): Promise<number> {
   const uid = process.getuid?.();
   if (uid === undefined) {
     throw new AutomationArtifactCodeRuntimeError(

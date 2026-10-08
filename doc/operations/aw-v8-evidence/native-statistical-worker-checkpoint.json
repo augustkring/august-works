@@ -1,0 +1,96 @@
+{
+  "checkpoint": "Optional pinned numerical StatsForecast worker in original native sandbox",
+  "recordedAt": "2026-10-08T10:02:04.859916+00:00",
+  "parentCommit": "9644525fd581dee9edce8bbcb6cb5891c63322c6",
+  "primaryParentCommit": "fc41f9048af001f7d9653035cd664f28b27b8e7c",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "c6e9b332129a6a6b9a6a8508a6706b0b9cc2d585dab6089b8caa30ea074935ea"
+    },
+    {
+      "path": "deploy/v8/statistical-worker/Dockerfile",
+      "sha256": "05719a1afac7bddb7bc236e5b5179eb51e4d84958233b0ff3c79fb38e23bcc00"
+    },
+    {
+      "path": "deploy/v8/statistical-worker/README.md",
+      "sha256": "96bdd31968fe9f99c2c60549496e9f0945c7c058ab2800b0cf3b1d57d216c24e"
+    },
+    {
+      "path": "server/src/__tests__/business-forecasting-statistical-worker.integration.test.ts",
+      "sha256": "b23cac3576d9e999ec9093338a00e5f944219da6f6c2238e72ee436e172e458d"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-code-runtime.ts",
+      "sha256": "5989e44bf78d4ea576ce83106a6b4b684db280bb8e3511bd454aa9c7450b43ab"
+    },
+    {
+      "path": "server/src/services/business-forecasting/statistical-worker.ts",
+      "sha256": "e7b7f0be0288142f308b812bd7bf7a80c7773923fcd56f3534bc53a8a5299a49"
+    },
+    {
+      "path": "server/src/services/scripts/statsforecast-worker.py",
+      "sha256": "560858df66b240c32a4e984cb3e03ae9eb627d9ac1fce9c9d840de05ffaa428b"
+    },
+    {
+      "path": "server/src/services/scripts/statsforecast-dependencies.json",
+      "sha256": "ff00c4a4dfa428d7d9654e23a9273e4636a1e2b1b2c349c9d0206c8e17e49e78"
+    },
+    {
+      "path": "server/src/services/scripts/statsforecast-requirements.lock",
+      "sha256": "67ac5b70646ac1d39dda99c19fa47d75a80f5f9f3885033a458c4c1664af53a7"
+    }
+  ],
+  "validation": {
+    "runtimeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statsforecast-worker-final-runtime-reviewed-tests.log",
+      "sha256": "ce8b787868ba05f55f5c783e1554106972fb43f3801dd046d0a2e3bc9fe89e59",
+      "tests": 48,
+      "skipped": 0
+    },
+    "sharedSandbox": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statsforecast-native-sandbox-reviewed-tests.log",
+      "sha256": "0d157820daaec07254573adeeba201f9f555b23707dd7447262f26849d92645e",
+      "tests": 13,
+      "skipped": 2,
+      "excluded": "One non-Linux case and the optional TypeScript confined-build lane. Explicit attempted build lacks system Node inside that launcher; this is a diagnostic failure, not qualification."
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statsforecast-worker-reviewed-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "lockedFreshInstallation": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statsforecast-locked-install.log",
+      "sha256": "eb94935bd03b278125f5147694b11a2d1fe069bf2ad35f90f427a70a275b3cdf"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-initiative-ui-reviewed.log",
+      "sha256": "d4a7c2dd7a7a5e5092a6f5739ca192b0d2ce3e51e2c21e2de30ea8d3e2bd1ae8",
+      "commit": "fc41f9048af001f7d9653035cd664f28b27b8e7c"
+    }
+  },
+  "qualified": [
+    "Fresh actual hash-locked installation: Python 3.12.14, StatsForecast 2.1.1 and 26 binary dependency pins",
+    "Original native denied-network/fresh-filesystem/PID sandbox; deliberately cleared credential environment",
+    "Fixed numeric DTO only; exact per-call runtime versions, finite/nested output and bundle provenance",
+    "Original resource headroom with CPU/address-space/files/output bounds and disabled core dumps",
+    "Actual cancellation/deadline closure and private workspace cleanup; no fallback",
+    "Native naive fold/future parity, time-separated training, synthetic trend improvement and honest constant-series tie",
+    "AutoETS/AutoARIMA actual numerical cases; AutoTheta explicitly withheld on pinned point/interval mismatch",
+    "Actual 1000 numeric values, 100 origins and 60 future-horizon envelope",
+    "Original TypeScript Artifact runtime regression unchanged"
+  ],
+  "limitations": [
+    "Original forecast owner integration and Human publication for statistical profiles are next; no public statistical business object admitted yet",
+    "Numeric synthetic fixtures do not qualify actual customer Source capture, Human/commercial/provider/pilot trials, empirical interval calibration or hosted latency",
+    "Python public base image-index digest retrieved; complete built-image/container/hosted runtime unqualified",
+    "AutoTheta remains unqualified, original values/contracts retained",
+    "Initial health environment-name diagnostic, optional confined TypeScript build lacking system Node and first primary build lacking Cargo PATH excluded from qualification",
+    "Whole brief, Source closure and hosted acceptance remain in progress"
+  ]
+}
