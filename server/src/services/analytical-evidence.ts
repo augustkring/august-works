@@ -7,7 +7,6 @@ import { nativeSha256 } from "./native-runtime/canonical.js";
 import { assertAnalyticalSourcesNotErased } from "./analytical-privacy.js";
 import { authorizeStrategyReference } from "./strategy-execution/references.js";
 import { assertV7Authorization } from "./v7-authorization.js";
-import { businessMetricService } from "./business-metrics/service.js";
 import { processFindingService } from "./process-findings.js";
 import { inspectBusinessForecastRun } from "./business-forecasting/service.js";
 import { inspectBusinessScenarioRun } from "./business-scenarios/service.js";
@@ -29,6 +28,7 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
  const retainSensitivity=(value:string)=>{if(value==="confidential")sourceSensitivity="confidential";};
  const now=new Date(),edges=new Map<string,Edge>(),evidence:CapturedDecisionEvidence[]=[],manifestIds=new Set<string>(),revalidationRequiredEvidenceKeys:string[]=[];
  let expiresAt=new Date(now.getTime()+definition.retentionDays*DAY);
+ const inspectedMetricObjects=new Set<string>();
  function edge(value:Edge) {
   value={inputType:value.inputType,inputRef:value.inputRef,inputHash:value.inputHash,relationship:value.relationship};
   const key=`${value.inputType}:${value.inputRef}`;
@@ -40,8 +40,9 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
     checkTime(deadline);let manifestId:string,facts:CapturedDecisionEvidence["facts"],sourceHash:string,sourceExpiry:Date,limitations:string[];
     const ref=link.source;
     if(ref.type==="metric_observation") {
-      await authorizeStrategyReference(tx,companyId,actor,ref,definition.sensitivity);
-      const result=await businessMetricService(tx).inspectCurrentObservation(companyId,actor,ref.id);
+      const admitted=await authorizeStrategyReference(tx,companyId,actor,ref,definition.sensitivity);
+      const result=admitted.metricObservation;
+      if(!result)throw conflict("The original metric owner did not admit this exact observation");
       const [observation]=await tx.select().from(businessMetricObservations).where(and(eq(businessMetricObservations.companyId,companyId),eq(businessMetricObservations.id,ref.id))).for("share");
       if(!observation || observation.metricId!==ref.metricId || observation.versionId!==ref.metricVersionId) throw conflict("Exact metric observation pins are unavailable");
       const [metricVersion]=await tx.select().from(businessMetricVersions).where(and(eq(businessMetricVersions.companyId,companyId),eq(businessMetricVersions.metricId,ref.metricId),eq(businessMetricVersions.id,ref.metricVersionId))).for("share");
@@ -107,12 +108,18 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
     const [manifest]=await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,companyId),eq(analyticalLineageManifests.id,manifestId))).for("share");
     const inherited=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),eq(analyticalLineageEdges.manifestId,manifestId))).limit(EDGE_BUDGET+1);
     if(!manifest || inherited.length>EDGE_BUDGET) throw conflict("Native evidence lineage is unavailable");
-    for(const source of inherited) {checkTime(deadline);edge(source);}
+    for(const source of inherited) {checkTime(deadline);edge(source);
+      // The original metric owner just reauthorized and share-locked every
+      // complete lineage object and its current project ancestry. Do not scan
+      // those same objects again in this capture. No permission is cached
+      // across captures, transactions, actors or other analytical owners.
+      if(ref.type==="metric_observation"&&(source.inputType==="issue"||source.inputType==="project"))inspectedMetricObjects.add(`${source.inputType}:${source.inputRef}`);
+    }
     expiresAt=new Date(Math.min(expiresAt.getTime(),sourceExpiry.getTime(),manifest.expiresAt.getTime()));
     evidence.push({key:link.key,source:ref,sourceHash,capturedAt:now.toISOString(),expiresAt:sourceExpiry.toISOString(),facts,limitations});
   }
  const lineage=[...edges.values()].sort((a,b)=>`${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
- await inspectAnalyticalEvidenceAuthority(tx,companyId,actor,lineage,deadline);
+ await inspectAnalyticalEvidenceAuthority(tx,companyId,actor,lineage.filter(source=>!inspectedMetricObjects.has(`${source.inputType}:${source.inputRef}`)),deadline);
  return {sourceSensitivity:sourceSensitivity as "internal"|"confidential",evidence,edges:lineage,manifestIds:[...manifestIds].sort(),now,expiresAt,revalidationRequiredEvidenceKeys};
 }
 export async function inspectAnalyticalEvidenceAuthority(tx:Db,companyId:string,actor:AuthorizationActor,edges:Edge[],deadline:number) {

@@ -4,7 +4,7 @@ import { skillLifecycleService } from "../services/skill-lifecycle.js";
 import { companySkillService } from "../services/company-skills.js";
 import { buildRetainedNativeRuntimeContext, materializeAsset, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
 import { nativeRuntimeAssetsRoot, eraseNativeRuntimeAssets } from "../services/native-runtime/runtime-asset-retention.js";
-import {projects} from "@paperclipai/db";
+import {projects,decisions,businessExperiments} from "@paperclipai/db";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -133,13 +133,61 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   expect(compared).toMatchObject({result:{claims:[{grade:"native_observation",facts:{status:count?"observed_change":"unknown",reason:count?null:"observation_unavailable",absoluteChange:count?1:null,relativeChangeFraction:null}}]}});
   expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(3);
  });
- it("returns a source-retained human-review preview without creating or publishing business work",async()=>{
-  const f=await fixture(),observation=await f.capture(),tools=toolAuthority(),count=(await db.select().from(issues).where(eq(issues.companyId,companyId))).length;
-  const preview=await tools.execute({tool:"propose_management_action",callId:randomUUID(),arguments:{action:"investigate",rationale:"Investigate this exact observed native population",sources:[{type:"metric_observation",id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}]}});
-  expect(preview).toMatchObject({result:{kind:"management_action_preview",humanReviewRequired:true,executionAuthority:"advisory_only"}});
-  expect(await db.select().from(issues).where(eq(issues.companyId,companyId))).toHaveLength(count);
+ it.each(["investigate","prepare_decision","propose_experiment","replan_project"] as const)("keeps the actual SDK %s preview advisory and dependent on its current Source",async(action)=>{
+  const f=await fixture(),observation=await f.capture(),tools=toolAuthority();
+  const source={type:"metric_observation" as const,id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId};
+  const facts=async()=>({tasks:await db.select().from(issues).where(and(eq(issues.companyId,companyId),sql`${issues.id}<>${issueId}::uuid`)),projects:await db.select().from(projects).where(eq(projects.companyId,companyId)),decisions:await db.select().from(decisions).where(eq(decisions.companyId,companyId)),experiments:await db.select().from(businessExperiments).where(eq(businessExperiments.companyId,companyId))});
+  const before=await facts(),input={tool:"propose_management_action",callId:randomUUID(),arguments:{action,rationale:"Investigate this exact observed native population",sources:[source]}};
+  const preview=await tools.execute(input);
+  expect(preview).toMatchObject({tool:"propose_management_action",citations:[{kind:"analytical_evidence",source}],result:{kind:"management_action_preview",action,humanReviewRequired:true,executionAuthority:"advisory_only"}});
+  expect(await facts()).toEqual(before);
+  expect((await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).at(-1)!.authorityPins).toEqual([{kind:"analytical_evidence",source}]);
   expect((await db.select().from(memoryRecords).where(eq(memoryRecords.companyId,companyId))).every(r=>r.reviewState==="rejected"&&r.verificationState==="unverified")).toBe(true);
+  const rootCount=(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).length;
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+  await expect(tools.execute({...input,callId:randomUUID()})).rejects.toMatchObject({status:403});
+  expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(rootCount);
+  await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,f.sourceId));await copied();
+  await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false});
+  await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+  await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,observation.id));
+  expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);await reapplyMemoryDeletionMarkers(db,companyId);await erased();await memoryJobService(db).tick({limit:10});
+  expect(await facts()).toEqual(before);
  });
+ it("retains all eight actual SDK proposal Sources and rejects an oversized source set before adding a root",async()=>{
+  const f=await fixture(),tools=toolAuthority(),sources=[];
+  for(let index=0;index<8;index++){
+   const result=await tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:{...f.query,from:new Date(Date.parse(f.query.from)+index).toISOString()}}) as {result:{observation:BusinessMetricResult}};
+   const value=result.result.observation;sources.push({type:"metric_observation" as const,id:value.id,metricId:value.metricId,metricVersionId:value.versionId});
+  }
+  const argumentsValue={action:"prepare_decision",rationale:"Human must separately prepare a Decision from these eight exact Sources",sources};
+  const result=await tools.execute({tool:"propose_management_action",callId:randomUUID(),arguments:argumentsValue});
+  expect(result).toMatchObject({citations:sources.map(source=>({kind:"analytical_evidence",source})),result:{kind:"management_action_preview",humanReviewRequired:true}});
+  const roots=await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId));expect(roots).toHaveLength(9);expect(roots.some(value=>value.sourceCount===8&&value.authorityPins.length===8)).toBe(true);
+  await expect(tools.execute({tool:"propose_management_action",callId:randomUUID(),arguments:{...argumentsValue,sources:[...sources,sources[0]]}})).rejects.toThrow();
+  expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(9);
+  await copied();await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,sources[7]!.id));
+  expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(7);
+  expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);await reapplyMemoryDeletionMarkers(db,companyId);await erased();await memoryJobService(db).tick({limit:10});
+ });
+ it("qualifies a complete four-thousand-Task population through the actual bound SDK without leaking or truncating Source authority",async()=>{
+  const f=await fixture(true,true),at=new Date(Date.now()-1000),rows=Array.from({length:3999},(_,index)=>({id:randomUUID(),companyId,title:`Synthetic SDK volume Task ${index}`,status:"done" as const,responsibleUserId:userId,createdAt:at,updatedAt:at}));
+  // Explicit native software population prerequisites, not 4000 performed Task
+  // executions or a Human/customer/provider trial.
+  for(let start=0;start<rows.length;start+=200)await db.insert(issues).values(rows.slice(start,start+200));
+  const tools=toolAuthority(),input={...f.query,until:new Date(Date.now()+1000).toISOString(),maxRows:4000},started=performance.now();
+  const payload=await tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:input}) as {result:{observation:BusinessMetricResult}};
+  expect(performance.now()-started).toBeLessThan(30000);expect(payload.result.observation.value).toBe(4000);
+  expect(Buffer.byteLength(JSON.stringify(payload),"utf8")).toBeLessThanOrEqual(256000);expect((await root()).authorityPins).toHaveLength(1);
+  const [manifest]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,payload.result.observation.lineageManifestId));expect(manifest!.sourceCount).toBe(4000);
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,rows[3998]!.id));
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{runId})).rejects.toMatchObject({status:403});
+  await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,rows[3998]!.id));await copied();
+  await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+  await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,payload.result.observation.id));
+  expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);await reapplyMemoryDeletionMarkers(db,companyId);await erased();await memoryJobService(db).tick({limit:10});
+  expect(await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),eq(issues.status,"done")))).toHaveLength(4000);
+ },120000);
  it("commits the full source set and conservative expiry before returning a native result",async()=>{const f=await fixture(),result=await f.capture(),r=await root(),[memory]=await db.select().from(memoryRecords).where(eq(memoryRecords.id,r.memoryRecordId));expect(result.lineageManifestId).toBeTruthy();expect(r.sourceCount).toBe(1);expect(r.expiresAt.toISOString()).toBe(result.expiresAt);expect(memory).toMatchObject({reviewState:"rejected",verificationState:"unverified",memoryType:"observation",scopeType:"agent",confidenceScore:0});expect(await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.memoryRecordId,r.memoryRecordId))).toHaveLength(1);await expect(db.update(memoryRecords).set({reviewState:"accepted",verificationState:"human_verified",memoryType:"outcome"}).where(eq(memoryRecords.id,r.memoryRecordId))).rejects.toThrow();});
  it("requires the current native Context and rolls back measurement derivation on failure",async()=>{const f=await fixture(false);await expect(f.capture()).rejects.toMatchObject({status:409});expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(0);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);});
  it("rolls back a derived measurement if the complete source set is unavailable",async()=>{await fixture();await expect(withAnalyticalConversationRetention(db,companyId,actor(),async()=>({result:{copy:"uncommitted"},sourceManifestIds:[randomUUID()],retentionUntil:new Date(Date.now()+60000)}))).rejects.toMatchObject({status:409});expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);});
@@ -287,7 +335,7 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  it("erases native copied prose when its original source is suppressed with rollout disabled",async()=>{const f=await fixture();await f.capture();await copied();await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await db.transaction(tx=>suppressAnalyticalSource(tx,companyId,"issue",f.sourceId));await erased();});
  it("immediately withholds direct source deletion and physically scrubs through the existing C7 worker",async()=>{const f=await fixture(),result=await f.capture();await copied();await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,result.lineageManifestId));expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);await reapplyMemoryDeletionMarkers(db,companyId);await erased();});
  it("keeps source erasure effective against restored Memory and late runtime writes",async()=>{const f=await fixture(),result=await f.capture(),r=await root();await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,result.lineageManifestId));await db.update(memoryRecords).set({deletedAt:null,content:"Restored analytical root"}).where(eq(memoryRecords.id,r.memoryRecordId));await db.update(heartbeatRuns).set({resultJson:{leak:"Late worker"},contextSnapshot:{leak:"Late context"}}).where(eq(heartbeatRuns.id,runId));await db.insert(heartbeatRunEvents).values({companyId,agentId,runId,seq:1,eventType:"stdout",message:"Late output",payload:{leak:"Late output"}});expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId)))[0]!.resultJson).toBeNull();expect((await db.select().from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId,runId)))[0]!.payload).toBeNull();await reapplyMemoryDeletionMarkers(db,companyId);expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,r.memoryRecordId)))[0]!.content).toBe("");});
- it("runs native analytical expiry while rollout is off and scrubs consumed results",async()=>{const f=await fixture();await f.capture();await copied();await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false});await eraseExpiredAnalyticalLineage(db,new Date(Date.now()+31*86400000));await erased();});
+ it("runs native analytical expiry while rollout is off and scrubs consumed results",async()=>{const f=await fixture();await f.capture();await copied();await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false});const now=new Date(Date.now()+31*86400000);let more=true;for(let tick=0;tick<10&&more;tick++)more=(await eraseExpiredAnalyticalLineage(db,now)).hasMoreCompanies;expect(more).toBe(false);await erased();});
  it("rejects mutable provenance and incomplete added source roots",async()=>{const f=await fixture();await f.capture();const r=await root();await expect(db.update(analyticalContextRoots).set({sourceCount:2}).where(eq(analyticalContextRoots.memoryRecordId,r.memoryRecordId))).rejects.toThrow();await expect(db.insert(analyticalContextDependencies).values({companyId,memoryRecordId:r.memoryRecordId,sourceManifestId:randomUUID()})).rejects.toThrow();});
  it("withholds copied payload at the original result expiry before any cleanup worker runs",async()=>{const f=await fixture(),result=await f.capture();const now=new Date();await contextManifestService(db).create({companyId,agentId,issueId,runId,query:"Short result expiry",policySnapshot:{fixture:true},selected:[]});await withAnalyticalConversationRetention(db,companyId,actor(),async tx=>({result:await businessMetricService(tx).inspectCurrentObservation(companyId,actor(),result.id),sourceManifestIds:[result.lineageManifestId],retentionUntil:new Date(now.getTime()+300)}));await new Promise(resolve=>setTimeout(resolve,350));expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);await expect(f.capture()).rejects.toMatchObject({status:403});});
  it("preserves provenance against direct root removal and permits actual native company purge",async()=>{const f=await fixture();await f.capture();await toolAuthority().execute({tool:"list_business_metrics",callId:randomUUID(),arguments:{}});const r=await root();await expect(db.delete(analyticalContextRoots).where(eq(analyticalContextRoots.memoryRecordId,r.memoryRecordId))).rejects.toThrow();const foreign=randomUUID();await db.insert(companies).values({id:foreign,name:"Independent preserved tenant",issuePrefix:randomUUID()});await db.insert(issues).values({companyId:foreign,title:"Independent original source"});const purge=await purgeCompanyContent(db,companyId);expect(purge.companyTombstoneRetained).toBe(true);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);expect(await db.select().from(issues).where(eq(issues.companyId,foreign))).toHaveLength(1);});
