@@ -15,7 +15,7 @@ const company = vi.hoisted(() => ({ selectedCompanyId: "company" }));
 vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => identity }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => company }));
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: () => {} }) }));
-vi.mock("@/api/cross-project-planning", () => ({ crossProjectPlanningApi: { sourceOptions: vi.fn(), preview: vi.fn(), propose: vi.fn(), controls: vi.fn(), detail: vi.fn(), review: vi.fn() } }));
+vi.mock("@/api/cross-project-planning", () => ({ crossProjectPlanningApi: { sourceOptions: vi.fn(), preview: vi.fn(), previewInitiatives: vi.fn(), propose: vi.fn(), controls: vi.fn(), detail: vi.fn(), review: vi.fn() } }));
 vi.mock("@/api/adaptive-planning", () => ({ adaptivePlanningApi: { source: vi.fn() } }));
 vi.mock("@/api/instanceSettings", () => ({ instanceSettingsApi: { getExperimental: vi.fn() } }));
 vi.mock("@/api/ai-governance", () => ({ aiGovernanceApi: { obligations: vi.fn() } }));
@@ -29,6 +29,38 @@ async function field(node: HTMLElement, label: string, value: string) { await ac
 async function declarations(node: HTMLElement) { const f = jointPlanningFixture(); await act(async () => { for (const input of node.querySelectorAll<HTMLInputElement>('[aria-label="Native joint planning project choices"] input[type="checkbox"]')) input.click(); }); await flush(); await click(node, "Declare shared project constraints"); for (const source of f.sources) { const title = `${source.projectName} · ${source.tasks[0].title}`; await field(node, `Demand for ${title}`, "120"); await field(node, `Declaration rationale for ${title}`, "Human explicitly supplies joint native assumptions and uncertainty"); } await field(node, "Approved planning purpose", f.policy.id); }
 beforeEach(() => { vi.resetAllMocks(); const f = jointPlanningFixture(); identity.userId = f.userId; identity.settled = true; identity.failed = false; company.selectedCompanyId = f.companyId; vi.mocked(instanceSettingsApi.getExperimental).mockResolvedValue(f.flags); vi.mocked(aiGovernanceApi.obligations).mockResolvedValue([f.policy]); vi.mocked(crossProjectPlanningApi.sourceOptions).mockResolvedValue(f.options); vi.mocked(adaptivePlanningApi.source).mockImplementation(async (_company, project) => f.sources.find(source => source.projectId === project)!); vi.mocked(crossProjectPlanningApi.controls).mockResolvedValue(f.controls); vi.mocked(crossProjectPlanningApi.detail).mockResolvedValue(f.detail); vi.mocked(crossProjectPlanningApi.preview).mockResolvedValue(f.response); vi.mocked(crossProjectPlanningApi.propose).mockResolvedValue(f.detail); vi.mocked(crossProjectPlanningApi.review).mockResolvedValue({ id: f.id, companyId: f.companyId, status: "under_review", revision: 2, appliedRoadmapRefs: [] }); });
 describe("Native joint planning operator admission", () => {
+  it("preserves unknown Human initiative dimensions and costs and removes advisory facts on amendment", async () => {
+    const f = jointPlanningFixture();
+    vi.mocked(crossProjectPlanningApi.previewInitiatives).mockResolvedValue({ snapshotHash: "3".repeat(64), capturedAt: f.detail.context.capturedAt, expiresAt: f.response.expiresAt, authority: "human_initiative_review_required", currentSources: { projects: [], budgets: [] }, result: { provider: { key: "aw_native_constraints", version: "1" }, optimality: "not_proven", candidates: f.sources.map(source => ({ projectId: source.projectId, disposition: "investigate", reasons: ["unknown_declared_dimension_or_cost"] })), selectedProjectIds: [], schedule: null, resultHash: "4".repeat(64), authority: "human_initiative_review_required", limitations: ["Explicit software presentation fixture"] } });
+    const app = await mount();
+    try {
+      await declarations(app.container); await click(app.container, "Inspect constraints and proposed schedule");
+      for (const source of f.sources) await field(app.container, `Initiative rationale for ${source.projectName}`, "Human retains unknown initiative dimensions and costs");
+      await click(app.container, "Inspect initiative priorities");
+      const profile = vi.mocked(crossProjectPlanningApi.previewInitiatives).mock.calls[0][1];
+      expect(profile.tasks).toEqual(vi.mocked(crossProjectPlanningApi.preview).mock.calls[0][1].tasks);
+      expect(profile.initiatives.every(item => item.estimatedBilledCostCents === null && Object.values(item.dimensions).every(value => value === null))).toBe(true);
+      expect(crossProjectPlanningApi.previewInitiatives).toHaveBeenCalledWith(f.companyId, profile, f.userId);
+      expect(app.container.querySelector('[aria-label="Advisory initiative priority result"]')).not.toBeNull();
+      expect(crossProjectPlanningApi.propose).not.toHaveBeenCalled(); expect(crossProjectPlanningApi.review).not.toHaveBeenCalled();
+      await field(app.container, `Strategic alignment for ${f.sources[0].projectName}`, "9");
+      expect(app.container.querySelector('[aria-label="Advisory initiative priority result"]')).toBeNull();
+    } finally { await app.cleanup(); }
+  });
+  it("removes pending initiative declarations on Memory withdrawal and refuses a denied preview", async () => {
+    const f = jointPlanningFixture(), app = await mount();
+    try {
+      await declarations(app.container); await click(app.container, "Inspect constraints and proposed schedule");
+      for (const source of f.sources) await field(app.container, `Initiative rationale for ${source.projectName}`, "Human private initiative assumptions and uncertainty");
+      vi.mocked(crossProjectPlanningApi.previewInitiatives).mockRejectedValue(new Error("Current Goal source denied"));
+      await click(app.container, "Inspect initiative priorities");
+      expect(app.container.querySelector('[aria-label="Declared initiative prioritization"]')).toBeNull();
+      expect(app.container.textContent).not.toContain("Human private initiative assumptions");
+      expect(crossProjectPlanningApi.propose).not.toHaveBeenCalled();
+      await act(async () => window.dispatchEvent(new Event("memory-access-changed")));
+      expect(app.client.getQueriesData({ queryKey: ["cross-project-planning", f.companyId, f.userId, "source"] })).toHaveLength(0);
+    } finally { await app.cleanup(); }
+  });
   it("uses complete original Roadmap populations and preserves unknown durations and shared capacity", async () => { const f = jointPlanningFixture(); vi.mocked(crossProjectPlanningApi.preview).mockResolvedValue({ ...f.response, result: { ...f.result, status: "inconclusive", schedule: [], criticalPath: null, diagnostics: [{ code: "unknown_duration", taskKeys: [f.taskId], poolKeys: [] }] } }); const app = await mount(); try { await declarations(app.container); await click(app.container, "Inspect constraints and proposed schedule"); const profile = vi.mocked(crossProjectPlanningApi.preview).mock.calls[0][1]; expect(profile.projects).toEqual(f.profile.projects); expect(profile.tasks).toHaveLength(2); expect(profile.tasks.every(task => task.durationDays === null)).toBe(true); expect(profile.pools[0].days.every(day => day.availableMinutes === null && day.committedMinutes === null)).toBe(true); expect(crossProjectPlanningApi.preview).toHaveBeenCalledWith(f.companyId, profile, f.userId); expect(crossProjectPlanningApi.propose).not.toHaveBeenCalled(); expect(crossProjectPlanningApi.review).not.toHaveBeenCalled(); } finally { await app.cleanup(); } });
   it("invalidates a joint preview on Human amendment and proposes only the exact inspected profile", async () => { const f = jointPlanningFixture(), app = await mount(); try { await declarations(app.container); await click(app.container, "Inspect constraints and proposed schedule"); await field(app.container, "Duration for First project · Prepare source evidence", "3"); expect(app.container.querySelector('[aria-label="Declared planning constraint result"]')).toBeNull(); await click(app.container, "Inspect constraints and proposed schedule"); await field(app.container, "Joint planning proposal reason", "Human proposes this exact joint profile for independent review"); await click(app.container, "Create joint planning proposal"); const profile = vi.mocked(crossProjectPlanningApi.preview).mock.calls.at(-1)![1]; expect(crossProjectPlanningApi.propose).toHaveBeenCalledWith(f.companyId, profile, f.response.snapshotHash, expect.any(String), f.userId); expect(crossProjectPlanningApi.review).not.toHaveBeenCalled(); } finally { await app.cleanup(); } });
   it("requires separate exact acknowledgement to begin review and keeps acceptance as another native command", async () => { const f = jointPlanningFixture(), app = await mount(); try { await field(app.container, "Joint proposal reference", f.id); await field(app.container, "Joint planning review rationale", "Human independently reviews the complete Source and joint dates"); expect(button(app.container, "Begin separate joint review").disabled).toBe(true); await act(async () => app.container.querySelector<HTMLInputElement>('[aria-label="Separate Human joint review"] input[type="checkbox"]')!.click()); await click(app.container, "Begin separate joint review"); expect(crossProjectPlanningApi.review).toHaveBeenCalledWith(f.companyId, f.id, 1, "begin_review", expect.any(String), f.userId); expect(vi.mocked(crossProjectPlanningApi.review).mock.calls.some(call => call[3] === "accept")).toBe(false); } finally { await app.cleanup(); } });

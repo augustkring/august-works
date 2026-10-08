@@ -1,4 +1,4 @@
-import type { CrossProjectPlanningContext, CrossProjectPlanningProfile, ManagementSourceOptions, NativePlanningResult } from "@paperclipai/shared";
+import type { CrossProjectPlanningContext, CrossProjectPlanningProfile, ManagementSourceOptions, NativePlanningResult, PortfolioPlanningProfile, PortfolioPlanningPreview } from "@paperclipai/shared";
 import { api } from "./client";
 export type JointPlanningStatus = "proposed" | "under_review" | "accepted" | "rejected" | "cancelled";
 export interface JointPlanningDetail { id: string; companyId: string; status: JointPlanningStatus; revision: number; context: CrossProjectPlanningContext; contextHash: string; reason: string; appliedRoadmapRefs: Array<{ projectId: string; proposalId: string }>; currentQualification: "current" | "needs_revalidation"; }
@@ -9,6 +9,7 @@ const account = (path: string, userId?: string | null) => userId ? `${path}${pat
 export const crossProjectPlanningApi = {
   sourceOptions: (companyId: string, q: string, userId?: string | null) => api.get<ManagementSourceOptions>(account(`${base(companyId)}/source-options?q=${encodeURIComponent(q)}`, userId), { cache: "no-store" }),
   preview: (companyId: string, profile: CrossProjectPlanningProfile, userId?: string | null) => api.post<JointPlanningPreview>(account(`${base(companyId)}/preview`, userId), profile),
+  previewInitiatives: (companyId: string, profile: PortfolioPlanningProfile, userId?: string | null) => api.post<PortfolioPlanningPreview>(account(`${base(companyId)}/initiatives/preview`, userId), profile),
   propose: (companyId: string, profile: CrossProjectPlanningProfile, expectedSnapshotHash: string, reason: string, userId?: string | null) => api.post<Omit<JointPlanningDetail, "currentQualification">>(account(`${base(companyId)}/proposals`, userId), { profile, expectedSnapshotHash, reason }),
   controls: (companyId: string, cursor?: string, userId?: string | null) => api.get<JointPlanningControls>(account(`${base(companyId)}/controls${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, userId), { cache: "no-store" }),
   detail: (companyId: string, id: string, userId?: string | null) => api.get<JointPlanningDetail>(account(`${base(companyId)}/proposals/${encodeURIComponent(id)}`, userId), { cache: "no-store" }),

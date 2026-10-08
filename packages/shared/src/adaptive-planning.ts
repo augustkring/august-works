@@ -149,3 +149,53 @@ export interface CrossProjectPlanningContext {
   expiresAt: string;
   authority: "human_cross_project_roadmap_review_required";
 }
+
+/** Explicit Human inputs for prioritizing the selected native projects. Task
+ * and initiative dimensions remain separate; no combined performance score. */
+export const portfolioPlanningProfileSchema = crossProjectPlanningProfileSchema.safeExtend({
+  initiatives: z.array(z.object({
+    projectId: z.string().uuid(),
+    mandatoryCommitment: z.boolean(),
+    protectedCommitment: z.boolean(),
+    preference: z.enum(["eligible", "stop", "investigate"]),
+    dimensions: planningProblemSchema.shape.tasks.element.shape.dimensions,
+    estimatedBilledCostCents: z.number().int().min(0).max(1_000_000_000).nullable(),
+    rationale: z.string().trim().min(10).max(2000),
+  }).strict()).min(2).max(20),
+  initiativePolicy: z.object({
+    mandatoryCommitmentsFirst: z.boolean(),
+    orderBy: z.array(planningDimensionSchema).max(12),
+    minimumDimensions: z.array(z.object({ key, minimum: finite }).strict()).max(12),
+    requireActiveGoal: z.boolean(),
+    maxSelectedActiveProjects: z.number().int().min(1).max(20),
+  }).strict(),
+}).strict().superRefine((profile, ctx) => {
+  const ids = new Set(profile.initiatives.map(item => item.projectId));
+  if (ids.size !== profile.initiatives.length || ids.size !== profile.projects.length || profile.projects.some(project => !ids.has(project.id))) ctx.addIssue({ code: "custom", message: "Every selected native project requires exactly one explicit initiative input" });
+  for (const dimensions of [profile.initiativePolicy.orderBy, profile.initiativePolicy.minimumDimensions]) if (new Set(dimensions.map(dimension => dimension.key)).size !== dimensions.length) ctx.addIssue({ code: "custom", message: "Initiative policy dimensions must be unique" });
+});
+export type PortfolioPlanningProfile = z.infer<typeof portfolioPlanningProfileSchema>;
+
+/** Sanitized current facts admitted by native owners, never client assertions. */
+export interface PortfolioPlanningSources {
+  projects: Array<{ id: string; status: string; paused: boolean; taskKeys: string[]; activeGoalIds: string[] }>;
+  budgets: Array<{ policyId: string; projectId: string | null; remainingCents: number | null; windowKind: "calendar_month_utc" | "lifetime"; windowEnd: string }>;
+}
+export interface NativePortfolioPlanningResult {
+  provider: { key: "aw_native_constraints"; version: "1" };
+  optimality: "not_proven";
+  candidates: Array<{ projectId: string; disposition: "start" | "continue" | "pause" | "stop" | "investigate"; reasons: string[] }>;
+  selectedProjectIds: string[];
+  schedule: NativePlanningResult | null;
+  resultHash: string;
+  authority: "human_initiative_review_required";
+  limitations: string[];
+}
+export interface PortfolioPlanningPreview {
+  snapshotHash: string;
+  result: NativePortfolioPlanningResult;
+  currentSources: PortfolioPlanningSources;
+  capturedAt: string;
+  expiresAt: string;
+  authority: "human_initiative_review_required";
+}

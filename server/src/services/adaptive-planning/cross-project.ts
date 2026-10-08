@@ -22,20 +22,21 @@ import { nativePlanningProvider } from "./provider.js";
 type Proposal = typeof adaptivePlanningProposals.$inferSelect;
 const DAY = 86400000, EDGE_LIMIT = 20065;
 function budget(deadline: number) { if (performance.now() > deadline) throw unprocessable("Cross-project planning source budget exceeded"); }
-async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, content = true) {
+export async function admitCrossProjectPlanning(tx: Db, companyId: string, actor: AuthorizationActor, write = false, content = true) {
   v7HumanActorId(actor); await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
   const flags = await instanceSettingsService(tx).getExperimental();
   if (content && (!v8FeatureEnabled(flags, "planning_optimizer_v8") || !v7FeatureEnabled(flags, "governance_evidence_v7"))) throw notFound("Governed cross-project planning is not enabled");
   await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
   await tx.execute(sql`set local statement_timeout='8s'`);
 }
+const admit = admitCrossProjectPlanning;
 function math(profile: CrossProjectPlanningProfile, snapshots: CrossProjectPlanningContext["sourceSnapshots"]) {
   return planningProblemSchema.parse({ horizon: profile.horizon, pools: profile.pools, policy: profile.policy, dependencies: snapshots.flatMap(snapshot => snapshot.dependencies), tasks: profile.tasks.map(({ expectedUpdatedAt: _version, rationale: _rationale, ...task }) => task) });
 }
 function sourceHash(profile: CrossProjectPlanningProfile, snapshots: CrossProjectPlanningContext["sourceSnapshots"], evidence: CrossProjectPlanningContext["evidence"], edges: AnalyticalEvidenceEdge[]) {
   return nativeSha256({ profile, snapshots, lineageHash: nativeSha256(edges), evidence: evidence.map(({ key, source, sourceHash }) => ({ key, source, sourceHash })) });
 }
-async function capture(tx: Db, companyId: string, actor: AuthorizationActor, profile: CrossProjectPlanningProfile, versions: boolean) {
+export async function captureCrossProjectPlanning(tx: Db, companyId: string, actor: AuthorizationActor, profile: CrossProjectPlanningProfile, versions: boolean) {
   const deadline = performance.now() + 30000, now = new Date(), selected = new Set(profile.tasks.map(task => task.key));
   const population = await tx.select({ id: issues.id, projectId: issues.projectId }).from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, [...selected]))).orderBy(asc(issues.id));
   if (population.length !== selected.size || population.some(task => !profile.projects.some(project => project.id === task.projectId))) throw conflict("Every selected Task must belong to one selected native project");
@@ -59,6 +60,7 @@ async function capture(tx: Db, companyId: string, actor: AuthorizationActor, pro
   const lineage = [...edges.values()].sort((a, b) => `${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
   return { snapshots, evidence, edges: lineage, expiresAt, now, snapshotHash: sourceHash(profile, snapshots, evidence, lineage) };
 }
+const capture = captureCrossProjectPlanning;
 function proof(row: Pick<Proposal, "id" | "companyId" | "contextHash" | "reason" | "createdByUserId" | "createdAt">, edges: AnalyticalEvidenceEdge[], expiresAt: Date) {
   return { domain: "aw-cross-project-planning:v1", id: row.id, companyId: row.companyId, contextHash: row.contextHash, reasonHash: nativeSha256(row.reason), author: row.createdByUserId, createdAt: row.createdAt.toISOString(), expiresAt: expiresAt.toISOString(), lineageHash: nativeSha256(edges) };
 }

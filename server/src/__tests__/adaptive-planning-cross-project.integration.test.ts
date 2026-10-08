@@ -3,10 +3,11 @@ import request from "supertest";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, beforeEach, afterAll, describe, expect, it } from "vitest";
-import { adaptivePlanningProposals, analyticalLineageManifests, authUsers, companyMemberships, companies, createDb, issues, issueRelations, principalPermissionGrants, projects, projectRoadmapProposals } from "@paperclipai/db";
-import { crossProjectPlanningProfileSchema } from "@paperclipai/shared";
+import { adaptivePlanningProposals, agents, analyticalLineageManifests, analyticalSourceSuppressions, authUsers, budgetPolicies, companyMemberships, companies, costEvents, createDb, goals, issues, issueRelations, principalPermissionGrants, projectGoals, projects, projectRoadmapProposals } from "@paperclipai/db";
+import { crossProjectPlanningProfileSchema, portfolioPlanningProfileSchema } from "@paperclipai/shared";
 import { crossProjectPlanningService } from "../services/adaptive-planning/cross-project.js";
 import { projectPlanningService } from "../services/adaptive-planning/project-owner.js";
+import { portfolioPlanningService } from "../services/adaptive-planning/portfolio.js";
 import { crossProjectPlanningRoutes } from "../routes/cross-project-planning.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
@@ -41,8 +42,61 @@ describe.skipIf(!support.supported)("Native same-company cross-project planning 
     return { projects: projectRows, tasks: taskRows, profile };
   }
   async function proposed() { const f = await fixture(), preview = await owner().preview(companyId, actor(), f.profile), proposal = await owner().propose(companyId, actor(), { profile: f.profile, expectedSnapshotHash: preview.snapshotHash, reason: rationale }); return { ...f, preview, proposal }; }
+  async function portfolioFixture() {
+    const f = await fixture(), [goal] = await db.insert(goals).values({ companyId, title: "Declared software strategic Goal", status: "active" }).returning();
+    await db.insert(projectGoals).values(f.projects.map(project => ({ companyId, projectId: project.id, goalId: goal.id })));
+    const profile = portfolioPlanningProfileSchema.parse({ ...f.profile,
+      initiatives: f.projects.map((project, index) => ({ projectId: project.id, mandatoryCommitment: false, protectedCommitment: false, preference: "eligible", dimensions: { alignment: 10 - index }, estimatedBilledCostCents: 40, rationale })),
+      initiativePolicy: { mandatoryCommitmentsFirst: true, orderBy: [{ key: "alignment", direction: "maximize" }], minimumDimensions: [{ key: "alignment", minimum: 5 }], requireActiveGoal: true, maxSelectedActiveProjects: 2 },
+    });
+    return { ...f, goal, profile };
+  }
   const review = (id: string, revision: number, action: "begin_review" | "accept" | "reject" | "cancel") => owner().review(companyId, actor(), id, { expectedRevision: revision, action, rationale });
   function app() { const api = express(); api.use(express.json()); api.use((req, _res, next) => { req.actor = actor(); next(); }); api.use("/api", crossProjectPlanningRoutes(db)); api.use(errorHandler); return api; }
+  it("admits actual current Goal associations and cumulative native billed-cost bounds without writing projects, Tasks or proposals", async () => {
+    const f = await portfolioFixture(), service = portfolioPlanningService(db);
+    const [budget] = await db.insert(budgetPolicies).values({ companyId, scopeType: "company", scopeId: companyId, windowKind: "lifetime", amount: 60 }).returning();
+    const preview = await service.preview(companyId, actor(), f.profile);
+    expect(preview.currentSources.projects.every(project => project.activeGoalIds.includes(f.goal.id))).toBe(true);
+    expect(preview.currentSources.budgets).toMatchObject([{ policyId: budget.id, projectId: null, remainingCents: 60 }]);
+    expect(preview.result.selectedProjectIds).toEqual([f.projects[0].id]);
+    expect(preview.result.candidates.find(candidate => candidate.projectId === f.projects[1].id)).toMatchObject({ disposition: "investigate", reasons: ["native_hard_budget_bound"] });
+    expect(await db.select().from(adaptivePlanningProposals).where(eq(adaptivePlanningProposals.companyId, companyId))).toHaveLength(0);
+    expect(await db.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.companyId, companyId))).toHaveLength(0);
+    expect((await db.select().from(issues).where(eq(issues.companyId, companyId))).every(task => task.plannedStartAt === null)).toBe(true);
+    expect((await db.select().from(projects).where(eq(projects.companyId, companyId))).every(project => project.status === "backlog")).toBe(true);
+    await db.update(budgetPolicies).set({ amount: 0, updatedAt: new Date() }).where(eq(budgetPolicies.id, budget.id));
+    const unlimited = await service.preview(companyId, actor(), f.profile);
+    expect(unlimited.currentSources.budgets).toEqual([]); expect(unlimited.result.selectedProjectIds).toHaveLength(2); expect(unlimited.snapshotHash).not.toBe(preview.snapshotHash);
+    await db.update(goals).set({ status: "cancelled", updatedAt: new Date() }).where(eq(goals.id, f.goal.id));
+    const withdrawn = await service.preview(companyId, actor(), f.profile); expect(withdrawn.result.selectedProjectIds).toEqual([]); expect(withdrawn.currentSources.projects.every(project => project.activeGoalIds.length === 0)).toBe(true);
+  });
+  it("keeps unknown actual cost events and future budget periods explicit and refuses erased Goal sources", async () => {
+    const f = await portfolioFixture(), service = portfolioPlanningService(db);
+    const [agent] = await db.insert(agents).values({ companyId, name: "Accounting software fixture", adapterType: "process" }).returning();
+    const [budget] = await db.insert(budgetPolicies).values({ companyId, scopeType: "company", scopeId: companyId, windowKind: "calendar_month_utc", amount: 100 }).returning();
+    await db.insert(costEvents).values({ companyId, agentId: agent.id, projectId: f.projects[0].id, provider: "software_fixture", model: "software_fixture", costCents: 0, costStatus: "unknown", occurredAt: new Date() });
+    const unknown = await service.preview(companyId, actor(), f.profile); expect(unknown.currentSources.budgets[0].remainingCents).toBeNull(); expect(unknown.result.selectedProjectIds).toEqual([]);
+    expect(unknown.result.candidates.every(candidate => candidate.disposition === "investigate")).toBe(true);
+    await db.update(costEvents).set({ costStatus: "reported", costCents: 10 }).where(eq(costEvents.companyId, companyId));
+    const period = await service.preview(companyId, actor(), { ...f.profile, horizon: { ...f.profile.horizon, start: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1)).toISOString().slice(0, 10) } });
+    expect(period.currentSources.budgets[0].remainingCents).toBe(90); expect(period.result.selectedProjectIds).toEqual([]);
+    await db.update(budgetPolicies).set({ hardStopEnabled: false }).where(eq(budgetPolicies.id, budget.id));
+    expect((await service.preview(companyId, actor(), f.profile)).currentSources.budgets).toEqual([]);
+    await db.insert(analyticalSourceSuppressions).values({ companyId, inputType: "goal", inputRef: f.goal.id });
+    await expect(service.preview(companyId, actor(), f.profile)).rejects.toMatchObject({ status: 404 });
+  });
+  it("binds the initiative preview API to current Human, company, flags and exact complete native versions", async () => {
+    const f = await portfolioFixture(), endpoint = `/api/companies/${companyId}/adaptive-planning/initiatives/preview`;
+    await request(app()).post(`${endpoint}?expectedUserId=another-human`).send(f.profile).expect(409);
+    await request(app()).post(endpoint).send({ ...f.profile, execute: true }).expect(400);
+    const response = await request(app()).post(`${endpoint}?expectedUserId=${userId}`).send(f.profile).expect(200);
+    expect(response.headers["cache-control"]).toBe("no-store"); expect(response.body.authority).toBe("human_initiative_review_required");
+    await db.update(issues).set({ updatedAt: new Date() }).where(eq(issues.id, f.tasks[0].id));
+    await expect(portfolioPlanningService(db).preview(companyId, actor(), f.profile)).rejects.toMatchObject({ status: 409 });
+    await expect(portfolioPlanningService(db).preview(companyId, { type: "agent", source: "agent_jwt", companyId, agentId: randomUUID() }, f.profile)).rejects.toMatchObject({ status: 403 });
+    await disableV8Rollout(db); await expect(portfolioPlanningService(db).preview(companyId, actor(), f.profile)).rejects.toMatchObject({ status: 404 });
+  });
   it("jointly solves complete cross-project dependencies and applies only through separate native Human Roadmap review", async () => {
     const f = await proposed(), schedule = new Map(f.preview.result.schedule.map(item => [item.taskKey, item]));
     expect(f.preview.result.status).toBe("feasible_best_known"); expect(schedule.get(f.tasks[0].id)!.endDay).toBeLessThanOrEqual(schedule.get(f.tasks[1].id)!.startDay);
