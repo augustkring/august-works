@@ -159,7 +159,9 @@ describe("codex inactivity monitor (integration: real subprocess)", () => {
         // We should have observed exactly one parsed JSONL event before silence.
         expect(monitor.current).not.toBeNull();
         expect(monitor.current!.state().parsedEventCount).toBe(1);
-        expect(elapsedMs).toBeGreaterThanOrEqual(timeoutMs);
+        // Real Node timers and Date.now() can differ by one millisecond;
+        // the fake-clock unit test verifies the exact deadline separately.
+        expect(elapsedMs).toBeGreaterThanOrEqual(timeoutMs - 1);
       } finally {
         processActivityMonitor.current?.stop();
         monitor.current?.stop();
