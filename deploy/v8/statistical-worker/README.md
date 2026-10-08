@@ -52,3 +52,15 @@ a synthetic trend improvement and time-safe folds do not establish performance
 on a customer's real data, business impact, interval calibration or hosted
 availability. Promotion through the original forecast owner requires explicit
 backtesting, current Source admission and a separate Human publication.
+
+The original operator route now exposes the current optional runtime profile only
+when both governed forecasting and `forecast_provider_statsforecast_v8` are
+explicitly enabled. The form binds that profile to the immutable forecast
+version. Creating a version does not backtest, publish or run it. Select exact
+retained native observations, inspect the rolling-origin baseline comparison,
+then separately publish the exact qualified backtest before requesting a run.
+Changed runtime pins require a new reviewed version. Disabling the optional
+provider preserves authorized retained facts with needs-revalidation status;
+new statistical use remains closed. Source erasure, expiry and Human retirement
+remain with the original native owners. No external endpoint or credentials are
+accepted by this numerical provider.

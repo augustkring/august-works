@@ -16,6 +16,8 @@ import {inspectDecisionSourceAuthority} from "../decision-intelligence.js";
 import {businessMetricService} from "../business-metrics/service.js";
 import {nativeSha256} from "../native-runtime/canonical.js";
 import {logActivity,withV7ActivityTransaction} from "../v7-mutations.js";
+import {currentStatisticalForecastProfile,evaluateStatisticalBusinessForecast} from "./statistical-provider.js";
+import {StatisticalWorkerError} from "./statistical-worker.js";
 import {evaluateNativeBusinessForecast} from "./kernel.js";
 
 type Root=typeof forecastSpecs.$inferSelect;
@@ -53,6 +55,15 @@ async function root(tx:Db,companyId:string,id:string) {
  const [row]=await tx.select().from(forecastSpecs).where(and(eq(forecastSpecs.companyId,companyId),eq(forecastSpecs.id,id))).for("update");
  if(!row) throw notFound("Forecast specification is unavailable");return row;
 }
+async function statisticalAuthority(tx:Db,definition:BusinessForecastDefinition,requireCurrent=false) {
+ if(definition.provider!=="statsforecast") return true;
+ const flags=await instanceSettingsService(tx).getExperimental();
+ if(!v8FeatureEnabled(flags,"forecast_provider_statsforecast_v8")) {if(requireCurrent) throw notFound("Statistical forecast provider is not enabled");return false;}
+ try {
+  const profile=await currentStatisticalForecastProfile(),current=nativeSha256(profile)===nativeSha256(definition.providerProfile);
+  if(!current&&requireCurrent) throw conflict("Statistical profile changed; inspect the current profile and create a new forecast version");return current;
+ } catch(error) {if(error instanceof StatisticalWorkerError){if(!requireCurrent)return false;throw unprocessable("The exact qualified statistical runtime is unavailable");}throw error;}
+}
 async function definitionAuthority(tx:Db,companyId:string,actor:AuthorizationActor,definition:BusinessForecastDefinition,requireCurrent=false) {
  const policies=await currentAnalyticalPurpose(tx,companyId,definition,"forecast");
  if(definition.ownerUserId!==analyticalPrincipalId(actor)) {
@@ -73,7 +84,7 @@ async function definitionAuthority(tx:Db,companyId:string,actor:AuthorizationAct
  const edges:Edge[]=[{inputType:"metric_version",inputRef:metric.version.id,inputHash:metric.version.contentHash,relationship:"definition"},
  ...policies.map(policy=>({inputType:"governance_obligation" as const,inputRef:policy.id,inputHash:policy.obligationHash,relationship:"policy" as const})),
  ...[...projectIds].map(id=>({inputType:"project" as const,inputRef:id,inputHash:nativeSha256({type:"project",id}),relationship:"source" as const}))];
- return {metric,publication,edges:mergeEdges([edges]),expiresAt:new Date(Math.min(Date.now()+definition.retentionDays*DAY,metric.version.createdAt.getTime()+metric.version.definition.reviewFrequencyDays*DAY))};
+ return {metric,publication,statisticalProfileCurrent:await statisticalAuthority(tx,definition,requireCurrent),edges:mergeEdges([edges]),expiresAt:new Date(Math.min(Date.now()+definition.retentionDays*DAY,metric.version.createdAt.getTime()+metric.version.definition.reviewFrequencyDays*DAY))};
 }
 async function version(tx:Db,row:Root,actor:AuthorizationActor,id:string,current=false) {
  const [value]=await tx.select().from(forecastSpecVersions).where(and(eq(forecastSpecVersions.companyId,row.companyId),eq(forecastSpecVersions.specId,row.id),eq(forecastSpecVersions.id,id))).for("share");
@@ -133,21 +144,28 @@ async function inspectArtifact(tx:Db,row:Root,actor:AuthorizationActor,pin:Await
   if(nativeSha256(current)!==point.sourceHash) throw conflict("Forecast measurement receipt integrity is unavailable");
  }
  await inspectDecisionSourceAuthority(tx,row.companyId,actor,source.edges,deadline);
- const stale=row.status==="retired" || kind==="run"&&row.publishedVersionId!==value.versionId || pin.authority.metric.metric.publishedVersionId!==pin.value.definition.metricVersionId || await historyChanged(tx,row,pin.value,value.series,value.cutoff);
+ const stale=!pin.authority.statisticalProfileCurrent || row.status==="retired" || kind==="run"&&row.publishedVersionId!==value.versionId || pin.authority.metric.metric.publishedVersionId!==pin.value.definition.metricVersionId || await historyChanged(tx,row,pin.value,value.series,value.cutoff);
  return {id:value.id,companyId:value.companyId,specId:value.specId,versionId:value.versionId,kind,result:value.result,series:value.series,contentHash:value.contentHash,cutoff:value.cutoff.toISOString(),createdAt:value.createdAt.toISOString(),expiresAt:value.expiresAt.toISOString(),currentQualification:stale?"needs_revalidation":value.result.status==="qualified"?"qualified":"inconclusive",reviewReason:stale?"The published metric definition or available measurement history changed; a new backtest and human publication are required.":null};
 }
-async function appendArtifact(tx:Db,row:Root,actor:AuthorizationActor,pin:Awaited<ReturnType<typeof version>>,input:BacktestBusinessForecast,kind:"backtest"|"run") {
+async function appendArtifact(tx:Db,row:Root,actor:AuthorizationActor,pin:Awaited<ReturnType<typeof version>>,input:BacktestBusinessForecast,kind:"backtest"|"run",options:{signal?:AbortSignal}={}) {
  const cutoff=new Date(input.cutoff),captured=await capture(tx,row,actor,pin,input.observationIds,cutoff),createdAt=new Date(),id=randomUUID();
  if(await historyChanged(tx,row,pin.value,captured.series,cutoff)) throw conflict("Forecast history contains a newer measurement or correction; refresh native observation pins");
- const result=evaluateNativeBusinessForecast(pin.value.definition,captured.series,cutoff.toISOString()),valueType=pin.authority.metric.version.definition.valueType;
- if(result.status==="qualified" && result.points.some(point=>point.value<0 || valueType==="ratio"&&point.value>1)) {
+ const result=pin.value.definition.provider==="statsforecast"?await evaluateStatisticalBusinessForecast(pin.value.definition,captured.series,cutoff.toISOString(),options):evaluateNativeBusinessForecast(pin.value.definition,captured.series,cutoff.toISOString()),valueType=pin.authority.metric.version.definition.valueType;
+ if(result.status==="qualified" && result.points.some(point=>point.value<0 || valueType==="ratio"&&point.value>1 || point.interval&&(point.interval.lower<0 || valueType==="ratio"&&point.interval.upper>1))) {
   result.status="not_qualified";result.reasons=["prediction_outside_native_metric_value_domain"];result.points=[];result.selectedReason=null;
  }
+ if(options.signal?.aborted) throw conflict("Statistical forecast was cancelled before persistence");
+ await statisticalAuthority(tx,pin.value.definition,true);
+ await inspectDecisionSourceAuthority(tx,row.companyId,actor,captured.edges,performance.now()+30000);
+ if(captured.expiresAt<=new Date()) throw conflict("Forecast Sources expired before persistence");
+ if(options.signal?.aborted) throw conflict("Statistical forecast was cancelled before persistence");
  const material={series:captured.series,result,cutoff,definitionHash:pin.value.contentHash},contentHash=artifactHash(material);
- const lineageManifestId=await appendManifest(tx,row.companyId,id,`forecast_${kind}`,actor,pin.value.contentHash,result.inputHash,createdAt,captured.expiresAt,captured.edges,{artifactHash:contentHash,metricVersionId:pin.value.definition.metricVersionId,kernelVersion:result.engineVersion});
+ const lineageManifestId=await appendManifest(tx,row.companyId,id,`forecast_${kind}`,actor,pin.value.contentHash,result.inputHash,createdAt,captured.expiresAt,captured.edges,{artifactHash:contentHash,metricVersionId:pin.value.definition.metricVersionId,kernelVersion:result.engineVersion,...(result.providerProvenance?{providerProfile:result.providerProvenance}:{})});
  const table=kind==="backtest"?forecastBacktests:forecastRuns;
  const [value]=await tx.insert(table).values({id,companyId:row.companyId,specId:row.id,versionId:pin.value.id,lineageManifestId,...material,inputHash:result.inputHash,contentHash,createdBy:v7HumanActorId(actor),createdAt,expiresAt:captured.expiresAt}).returning();
- return inspectArtifact(tx,row,actor,pin,value,kind);
+ const inspected=await inspectArtifact(tx,row,actor,pin,value,kind);
+ if(options.signal?.aborted) throw conflict("Statistical forecast was cancelled before persistence");
+ return inspected;
 }
 /** Pinned consumers invoke inside their native company/Memory transaction;
  * owner admission is preserved without nested activity-publication writes. */
@@ -162,6 +180,11 @@ export async function inspectBusinessForecastRun(tx:Db,companyId:string,actor:Au
 export function businessForecastService(db:Db) {
  const audit=(tx:Db,companyId:string,actor:AuthorizationActor,id:string,action:string,details:Record<string,unknown>,publications:Parameters<typeof logActivity>[2])=>logActivity(tx,{companyId,actorType:"user",actorId:v7HumanActorId(actor),action:`business_forecast.${action}`,entityType:"forecast_spec",entityId:id,details},publications);
  return {
+  async statisticalProfile(companyId:string,actor:AuthorizationActor) {
+   return db.transaction(async raw=>{const tx=raw as unknown as Db;await admit(tx,companyId,actor);const flags=await instanceSettingsService(tx).getExperimental();if(!v8FeatureEnabled(flags,"forecast_provider_statsforecast_v8")) throw notFound("Statistical forecast provider is not enabled");
+    try {return {companyId,profile:await currentStatisticalForecastProfile(),models:["auto_ets","auto_arima"] as const,qualification:"synthetic_software_conformance" as const,limitations:["Runtime conformance does not qualify this company's forecast. Exact retained observations, time-safe baseline improvement and separate Human publication are required.","AutoTheta remains unqualified on the pinned point/interval conformance case."]};} catch(error){if(error instanceof StatisticalWorkerError)throw unprocessable("The exact qualified statistical runtime is unavailable");throw error;}
+   });
+  },
   async listPublishedForNativeReader(companyId:string,actor:AuthorizationActor,cursor?:string,limit=5){
    await admit(db,companyId,actor);
    const rows=await db.select({id:forecastSpecs.id,versionId:forecastSpecs.publishedVersionId}).from(forecastSpecs).where(and(eq(forecastSpecs.companyId,companyId),eq(forecastSpecs.status,"published"),cursor?sql`${forecastSpecs.id}>${cursor}::uuid`:undefined)).orderBy(asc(forecastSpecs.id)).limit(limit+1);
@@ -189,8 +212,8 @@ export function businessForecastService(db:Db) {
    const input=reviseBusinessForecastSpecSchema.parse(raw);return withV7ActivityTransaction(db,async(tx,publications)=>{await admit(tx,companyId,actor,true);const prior=await root(tx,companyId,id);if(prior.revision!==input.expectedRevision||prior.status==="retired") throw conflict("Forecast changed or was retired");
     const [row]=await tx.update(forecastSpecs).set({revision:prior.revision+1,updatedAt:new Date()}).where(and(eq(forecastSpecs.companyId,companyId),eq(forecastSpecs.id,id),eq(forecastSpecs.revision,prior.revision))).returning();const pin=await appendVersion(tx,row,actor,input.definition);await audit(tx,companyId,actor,id,"version_created",{versionId:pin.id,definitionHash:pin.contentHash},publications);return {spec:rootView(row),version:versionView(pin)};});
   },
-  async backtest(companyId:string,actor:AuthorizationActor,id:string,raw:BacktestBusinessForecast) {
-   const input=backtestBusinessForecastSchema.parse(raw);return withV7ActivityTransaction(db,async(tx,publications)=>{await admit(tx,companyId,actor,true);const row=await root(tx,companyId,id);if(row.revision!==input.expectedRevision||row.status==="retired") throw conflict("Forecast changed or was retired");const pin=await version(tx,row,actor,input.versionId,true);if(pin.value.revision!==row.revision) throw conflict("Backtest requires the latest proposed definition");const result=await appendArtifact(tx,row,actor,pin,input,"backtest");await audit(tx,companyId,actor,id,"backtested",{backtestId:result.id,contentHash:result.contentHash,status:result.result.status},publications);return result;});
+  async backtest(companyId:string,actor:AuthorizationActor,id:string,raw:BacktestBusinessForecast,options:{signal?:AbortSignal}={}) {
+   const input=backtestBusinessForecastSchema.parse(raw);return withV7ActivityTransaction(db,async(tx,publications)=>{await admit(tx,companyId,actor,true);const row=await root(tx,companyId,id);if(row.revision!==input.expectedRevision||row.status==="retired") throw conflict("Forecast changed or was retired");const pin=await version(tx,row,actor,input.versionId,true);if(pin.value.revision!==row.revision) throw conflict("Backtest requires the latest proposed definition");const result=await appendArtifact(tx,row,actor,pin,input,"backtest",options);await audit(tx,companyId,actor,id,"backtested",{backtestId:result.id,contentHash:result.contentHash,status:result.result.status},publications);return result;});
   },
   async publish(companyId:string,actor:AuthorizationActor,id:string,raw:PublishBusinessForecastSpec) {
    const input=publishBusinessForecastSpecSchema.parse(raw);return withV7ActivityTransaction(db,async(tx,publications)=>{await admit(tx,companyId,actor,true);const prior=await root(tx,companyId,id);if(prior.revision!==input.expectedRevision||prior.status==="retired") throw conflict("Forecast changed or was retired");const pin=await version(tx,prior,actor,input.versionId,true);
@@ -198,12 +221,12 @@ export function businessForecastService(db:Db) {
     if(!backtest||pin.value.revision!==prior.revision) throw conflict("Publication requires the latest exact native backtest");const view=await inspectArtifact(tx,prior,actor,pin,backtest,"backtest");if(view.currentQualification!=="qualified") throw conflict("Forecast publication requires a retained qualified backtest and current history");
     const now=new Date();await tx.insert(forecastPublications).values({companyId,specId:id,versionId:pin.value.id,backtestId:backtest.id,publishedBy:v7HumanActorId(actor),rationale:input.rationale,publishedAt:now});const [row]=await tx.update(forecastSpecs).set({revision:prior.revision+1,status:"published",publishedVersionId:pin.value.id,updatedAt:now}).where(and(eq(forecastSpecs.companyId,companyId),eq(forecastSpecs.id,id),eq(forecastSpecs.revision,prior.revision))).returning();await audit(tx,companyId,actor,id,"published",{versionId:pin.value.id,backtestId:backtest.id,revision:row.revision},publications);return rootView(row);});
   },
-  async run(companyId:string,actor:AuthorizationActor,id:string,raw:BacktestBusinessForecast) {
+  async run(companyId:string,actor:AuthorizationActor,id:string,raw:BacktestBusinessForecast,options:{signal?:AbortSignal}={}) {
    const input=backtestBusinessForecastSchema.parse(raw);return withV7ActivityTransaction(db,async(tx,publications)=>{await admit(tx,companyId,actor,true);const row=await root(tx,companyId,id);if(row.revision!==input.expectedRevision||row.status!=="published"||row.publishedVersionId!==input.versionId) throw conflict("Run requires the current human-published forecast specification");const pin=await version(tx,row,actor,input.versionId,true);
     const [publication]=await tx.select().from(forecastPublications).where(and(eq(forecastPublications.companyId,companyId),eq(forecastPublications.specId,id),eq(forecastPublications.versionId,input.versionId))).for("share");
     const [backtest]=publication?await tx.select().from(forecastBacktests).where(and(eq(forecastBacktests.companyId,companyId),eq(forecastBacktests.id,publication.backtestId))).for("share"):[];
     if(!backtest||(await inspectArtifact(tx,row,actor,pin,backtest,"backtest")).currentQualification!=="qualified") throw conflict("Forecast must be revalidated and human-published against its changed history before running");
-    const result=await appendArtifact(tx,row,actor,pin,input,"run");await audit(tx,companyId,actor,id,"run",{runId:result.id,contentHash:result.contentHash,status:result.result.status},publications);return result;});
+    const result=await appendArtifact(tx,row,actor,pin,input,"run",options);await audit(tx,companyId,actor,id,"run",{runId:result.id,contentHash:result.contentHash,status:result.result.status},publications);return result;});
   },
   async listArtifacts(companyId:string,actor:AuthorizationActor,id:string,kind:"backtest"|"run",cursor?:string) {
    return db.transaction(async raw=>{const tx=raw as unknown as Db;await admit(tx,companyId,actor);const row=await root(tx,companyId,id),table=kind==="backtest"?forecastBacktests:forecastRuns;

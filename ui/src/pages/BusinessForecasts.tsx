@@ -26,9 +26,9 @@ export function BusinessForecasts() {
  if(flags.isFetching) return <p role="status">Rechecking forecast availability…</p>;
  if(flags.isError) return <p role="alert">Forecast availability could not be verified.</p>;
  if(!flags.data||!v8FeatureEnabled(flags.data,"business_forecasting_v8")||!v7FeatureEnabled(flags.data,"governance_evidence_v7")) return <p>Governed business forecasting is not enabled.</p>;
- return <BusinessForecastWorkspace key={`${selectedCompanyId}:${userId??"local"}`} companyId={selectedCompanyId} userId={userId}/>;
+ return <BusinessForecastWorkspace key={`${selectedCompanyId}:${userId??"local"}`} companyId={selectedCompanyId} userId={userId} statisticalEnabled={v8FeatureEnabled(flags.data,"forecast_provider_statsforecast_v8")}/>;
 }
-export function BusinessForecastWorkspace({companyId,userId}:{companyId:string;userId:string|null}) {
+export function BusinessForecastWorkspace({companyId,userId,statisticalEnabled=false}:{companyId:string;userId:string|null;statisticalEnabled?:boolean}) {
  const cache=useQueryClient(),key=["business-forecasts",companyId,userId],account=userId??undefined;
  const [id,setId]=useState(""),[versionId,setVersionId]=useState(""),[backtestId,setBacktestId]=useState(""),[runId,setRunId]=useState("");
  const [editing,setEditing]=useState(false),[historyEditing,setHistoryEditing]=useState(false),[rationale,setRationale]=useState(""),[now,setNow]=useState(Date.now());
@@ -77,7 +77,7 @@ export function BusinessForecastWorkspace({companyId,userId}:{companyId:string;u
    {!editing&&!historyEditing&&root.status!=="retired"&&<section aria-label="Human forecast publication" className="space-y-3"><label className="block space-y-2">Human review rationale<Textarea aria-label="Human review rationale" value={rationale} onChange={event=>setRationale(event.target.value)} minLength={10} maxLength={2000}/></label><div className="flex flex-wrap gap-2"><Button disabled={busy||!reasonValid||!canBacktest||backtest?.versionId!==pin.id||backtest.currentQualification!=="qualified"} onClick={()=>publish.mutate()}>Publish this forecast version</Button><Button variant="outline" disabled={busy||!reasonValid} onClick={()=>retire.mutate()}>Retire forecast</Button></div><p className="text-sm text-muted-foreground">Publication requires the exact current qualified backtest. Corrections or newer history require a revised backtest and human review.</p></section>}
    {historyEditing&&<BusinessForecastHistoryForm key={`${pin.id}:${root.revision}`} companyId={companyId} userId={userId} version={pin} revision={root.revision} busy={busy} canBacktest={canBacktest} canRun={canRun} onBacktest={input=>test.mutate(input)} onRun={input=>execute.mutate(input)} onCancel={()=>setHistoryEditing(false)}/>}
   </CardContent></Card>}
-  {editing&&(!id||root&&pin)&&<BusinessForecastDefinitionForm key={id?pin?.id:"new"} companyId={companyId} userId={userId} initial={id?pin?.definition:undefined} specKey={root?.key} busy={busy} onSave={input=>save.mutate(input)} onCancel={()=>setEditing(false)}/>}
+  {editing&&(!id||root&&pin)&&<BusinessForecastDefinitionForm key={id?pin?.id:"new"} companyId={companyId} userId={userId} initial={id?pin?.definition:undefined} specKey={root?.key} busy={busy} statisticalEnabled={statisticalEnabled} onSave={input=>save.mutate(input)} onCancel={()=>setEditing(false)}/>}
   {root&&selectedBacktest.isFetching&&<p role="status">Rechecking selected backtest authority…</p>}{root&&backtest&&<BusinessForecastResult artifact={backtest}/>}
   {root&&selectedRun.isFetching&&<p role="status">Rechecking selected forecast authority…</p>}{root&&run&&<BusinessForecastResult artifact={run}/>}
   {!list.isFetching&&!rows.length&&!editing&&<p>No authorized forecast specifications were returned on this bounded page. Record a native metric and approved forecast purpose in <Link to="/ai-governance">AI Governance</Link> before proposing a forecast.</p>}

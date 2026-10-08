@@ -1,3 +1,7 @@
+import express from "express";
+import request from "supertest";
+import {businessForecastRoutes} from "../routes/business-forecasting.js";
+import {errorHandler} from "../middleware/index.js";
 import {managementAnalyticalFixture} from "./helpers/management-analytical-fixture.js";
 import {companyMemberships,analyticalContextRoots,analyticalContextDependencies} from "@paperclipai/db";
 import {contextManifestService} from "../services/context/context-manifest.js";
@@ -26,7 +30,7 @@ import {metricDefinition,analyticalPurpose} from "./helpers/business-metric-fixt
 import {getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase} from "./helpers/embedded-postgres.js";
 const support=await getEmbeddedPostgresTestSupport(),suite=support.supported?describe:describe.skip;
 const actor={type:"board" as const,source:"local_implicit" as const};
-const flags={analytical_lineage_v8:true,business_metrics_v8:true,business_forecasting_v8:true,scenario_planning_v8:true,decision_intelligence_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true};
+const flags={analytical_lineage_v8:true,business_metrics_v8:true,business_forecasting_v8:true,forecast_provider_statsforecast_v8:false,scenario_planning_v8:true,decision_intelligence_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true};
 const DAY=86_400_000;
 suite("Governed native business forecasts on migrated PostgreSQL",()=>{
  let nativeOwnerUserId:string|null=null;
@@ -60,7 +64,7 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   * They do not establish an actually collected production history or release qualification. */
  async function history(values=Array(10).fill(1) as number[]) {
   const cutoff=new Date(Math.floor(Date.now()/DAY)*DAY),start=new Date(cutoff.getTime()-values.length*DAY),metricId=randomUUID(),versionId=randomUUID();
-  const definition=businessMetricDefinitionSchema.parse({...metricDefinition(policyId),ownerUserId:nativeOwnerUserId??"local-board",valueType:"count",unit:"objects",freshnessSeconds:20*DAY/1000,calculation:{kind:"native_count",population:{entity:"issue",statuses:["done"],projectId}}});
+  const definition=businessMetricDefinitionSchema.parse({...metricDefinition(policyId),ownerUserId:nativeOwnerUserId??"local-board",valueType:"count",unit:"objects",reviewFrequencyDays:60,freshnessSeconds:20*DAY/1000,calculation:{kind:"native_count",population:{entity:"issue",statuses:["done"],projectId}}});
   const definitionHash=nativeSha256(definition),createdAt=new Date(start.getTime()-DAY);
   await db.insert(businessMetrics).values({id:metricId,companyId,key:`history_${randomUUID().replaceAll("-","")}`,createdBy:"local-board",createdAt,updatedAt:createdAt});
   await db.insert(businessMetricVersions).values({id:versionId,companyId,metricId,revision:1,definition,contentHash:definitionHash,createdBy:"local-board",createdAt});
@@ -85,6 +89,62 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
  async function draft(source?:Awaited<ReturnType<typeof history>>) {const h=source??await history();const created=await service().create(companyId,actor,{key:`forecast_${randomUUID().replaceAll("-","")}`,definition:definition(h)});return {h,...created};}
  const backtest=(d:Awaited<ReturnType<typeof draft>>)=>service().backtest(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()});
  async function published() {const d=await draft(),test=await backtest(d),spec=await service().publish(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,backtestId:test.id,rationale:"Human approval of this exact retained time-safe backtest"});return {...d,test,spec};}
+ async function statisticalDraft(values=Array.from({length:30},(_,index)=>10+index)) {
+  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({...flags,forecast_provider_statsforecast_v8:true});
+  const provider=await service().statisticalProfile(companyId,actor),h=await history(values);
+  const input=businessForecastDefinitionSchema.parse({...definition(h),provider:"statsforecast",providerProfile:provider.profile,candidate:{kind:"auto_ets",seasonLength:1},horizon:3,minimumHistory:30,backtest:{minimumTrainingPoints:20,minimumOrigins:3,gapPeriods:1,maximumMAE:1,minimumRelativeMAEImprovement:0.1}});
+  const created=await service().create(companyId,actor,{key:`statistical_${randomUUID().replaceAll("-","")}`,definition:input});return {h,...created};
+ }
+ it.runIf(!!process.env.PAPERCLIP_STATSFORECAST_PYTHON)("uses the original no-store HTTP company and account boundary for optional profile metadata",async()=>{
+  const app=(source:"local_implicit"|"session"="local_implicit")=>{const api=express();api.use(express.json());api.use((req,_res,next)=>{req.actor={type:"board",source,userId:"local-board",companyIds:[companyId]};next();});api.use("/api",businessForecastRoutes(db));api.use(errorHandler);return api;};
+  const endpoint=`/api/companies/${companyId}/business-forecasts/provider-profile`;
+  await request(app()).get(endpoint).expect(404);await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({forecast_provider_statsforecast_v8:true});
+  await request(app()).get(`${endpoint}?expectedUserId=another-account`).expect(409);await request(app()).get(`${endpoint}?endpoint=https://example.test`).expect(400);
+  await request(app("session")).get(`/api/companies/${otherId}/business-forecasts/provider-profile`).expect(403);
+  const response=await request(app()).get(`${endpoint}?expectedUserId=local-board`).expect(200);expect(response.headers["cache-control"]).toBe("no-store");expect(response.body).toMatchObject({companyId,models:["auto_ets","auto_arima"],qualification:"synthetic_software_conformance",profile:{provider:"statsforecast",version:"2.1.1",python:"3.12.14"}});expect(JSON.stringify(response.body)).not.toContain("Fixture source prose");
+ });
+ it.runIf(!!process.env.PAPERCLIP_STATSFORECAST_PYTHON)("persists exact statistical Sources and intervals with independent Human publication through the original owner",async()=>{
+  const d=await statisticalDraft(),test=await backtest(d);
+  expect(test).toMatchObject({currentQualification:"qualified",result:{status:"qualified",engineVersion:"aw-statsforecast-business-forecast-v1",providerProvenance:d.version.definition.providerProfile,uncertainty:{method:"statsforecast_model",coverageLevel:0.95}}});
+  expect(test.result.points.map(point=>point.value)).toEqual([40,41,42]);expect(test.result.points.every(point=>point.interval?.method==="statsforecast_model")).toBe(true);
+  expect(test.result.comparisons.map(item=>item.model.kind)).toEqual(["auto_ets","naive"]);
+  await expect(service().run(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()})).rejects.toMatchObject({status:409});
+  const root=await service().publish(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,backtestId:test.id,rationale:"Human separately publishes this exact retained statistical comparison"});
+  const run=await service().run(companyId,actor,d.spec.id,{expectedRevision:root.revision,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()});
+  expect(run.result).toEqual(test.result);expect(run.result.definitionHash).toBe(d.version.contentHash);
+  expect(JSON.stringify(run)).not.toContain("Fixture source prose");expect(await db.select().from(forecastPublications).where(eq(forecastPublications.specId,d.spec.id))).toHaveLength(1);
+  expect((await db.select().from(issues).where(eq(issues.id,d.h.sourceIds[0])))[0]).toMatchObject({status:"done",plannedStartAt:null,plannedEndAt:null});
+ },60000);
+ it.runIf(!!process.env.PAPERCLIP_STATSFORECAST_PYTHON)("does not publish a statistical tie or accept an invented profile pin",async()=>{
+  const d=await statisticalDraft(Array(30).fill(10) as number[]),test=await backtest(d);
+  expect(test.result).toMatchObject({status:"not_qualified",reasons:["declared_naive_improvement_not_met"],points:[]});
+  await expect(service().publish(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,backtestId:test.id,rationale:"Attempted publication of a tied complex candidate"})).rejects.toMatchObject({status:409});
+  await expect(service().create(companyId,actor,{key:"invented_statistical_profile",definition:{...d.version.definition,providerProfile:{...d.version.definition.providerProfile!,bundleHash:"a".repeat(64)}}})).rejects.toMatchObject({status:409});
+  expect(await db.select().from(forecastSpecs).where(and(eq(forecastSpecs.companyId,companyId),eq(forecastSpecs.key,"invented_statistical_profile")))).toHaveLength(0);
+ });
+ it.runIf(!!process.env.PAPERCLIP_STATSFORECAST_PYTHON)("preserves retained statistical facts on provider rollback while withholding new qualified use",async()=>{
+  const d=await statisticalDraft(),test=await backtest(d);
+  await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({forecast_provider_statsforecast_v8:false});
+  const retained=await service().artifact(companyId,actor,d.spec.id,test.id,"backtest");
+  expect(retained).toMatchObject({currentQualification:"needs_revalidation",contentHash:test.contentHash,result:test.result});
+  await expect(service().publish(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,backtestId:test.id,rationale:"Attempt publication after optional provider rollback"})).rejects.toMatchObject({status:404});
+  await expect(service().statisticalProfile(companyId,actor)).rejects.toMatchObject({status:404});
+ });
+ it.runIf(!!process.env.PAPERCLIP_STATSFORECAST_PYTHON)("rolls back statistical artifacts and manifests when numerical work is cancelled",async()=>{
+  const d=await statisticalDraft(),controller=new AbortController();controller.abort();
+  const before=await db.select({id:analyticalLineageManifests.id}).from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId,companyId));
+  await expect(service().backtest(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()},{signal:controller.signal})).rejects.toMatchObject({code:"cancelled"});
+  expect(await db.select().from(forecastBacktests).where(eq(forecastBacktests.specId,d.spec.id))).toHaveLength(0);
+  expect(await db.select({id:analyticalLineageManifests.id}).from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId,companyId))).toEqual(before);
+ });
+ it.runIf(!!process.env.PAPERCLIP_STATSFORECAST_PYTHON)("uses original Source erasure for statistical artifacts with rollout off and company paused",async()=>{
+  const d=await statisticalDraft(),test=await backtest(d);
+  await service().publish(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,backtestId:test.id,rationale:"Human publication creates the exact historical Source dependency"});
+  await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({business_forecasting_v8:false,forecast_provider_statsforecast_v8:false});
+  await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[d.h.sourceIds[0]]);});
+  expect(await db.select().from(forecastSpecs).where(eq(forecastSpecs.id,d.spec.id))).toHaveLength(0);expect(await db.select().from(forecastBacktests).where(eq(forecastBacktests.id,test.id))).toHaveLength(0);
+  expect(await db.select().from(issues).where(eq(issues.id,d.h.sourceIds[0]))).toHaveLength(1);
+ });
  it("discovers only original human-published Forecast metadata through a real native consumer and closes on original measurement deletion",async()=>{
   nativeOwnerUserId=randomUUID();const agentId=randomUUID(),issueId=randomUUID(),runId=randomUUID();
   await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({...flags,management_reviews_v8:true,management_chat_tools_v8:true,enableContextEngineV1:true});
