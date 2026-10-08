@@ -7,6 +7,7 @@ import {businessForecastDefinitionSchema,createBusinessForecastSpecSchema,revise
 import {conflict,notFound,unprocessable} from "../../errors.js";
 import type {AuthorizationActor} from "../authorization.js";
 import {assertV7Authorization,v7HumanActorId} from "../v7-authorization.js";
+import {companyService} from "../companies.js";
 import {instanceSettingsService} from "../instance-settings.js";
 import {lockBusinessEventCompany} from "../business-event-privacy.js";
 import {lockMemoryPrivacy} from "../memory/memory-privacy.js";
@@ -47,7 +48,7 @@ async function lineage(tx:Db,companyId:string,id:string) {
 }
 async function admit(tx:Db,companyId:string,actor:AuthorizationActor,write=false,checkFlags=true) {
  if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor);await assertV7Authorization(tx,actor,companyId,write?"users:manage_permissions":"company_scope:read");
- const flags=await instanceSettingsService(tx).getExperimental();
+ if(!await companyService(tx).getById(companyId))throw notFound("Analytical company is unavailable");const flags=await instanceSettingsService(tx).getExperimental();
  if(checkFlags&&(!v8FeatureEnabled(flags,"business_forecasting_v8") || !v7FeatureEnabled(flags,"governance_evidence_v7"))) throw notFound("Governed business forecasting is not enabled");
  await lockBusinessEventCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await tx.execute(sql`set local statement_timeout='8s'`);
 }

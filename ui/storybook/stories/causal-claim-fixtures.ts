@@ -18,3 +18,14 @@ export function causalFixture(state:"draft"|"reviewed"|"supported"|"refuted"|"in
  const receipts={...f.receipts,analysis:f.analysis,interpretation:{id:interpretationId,analysisId:f.analysis.id,conclusion:"ship_candidate" as const,rationale:prose,executionAuthority:"advisory_only" as const,receiptHash:"8".repeat(64),interpretedBy:f.userId,interpretedAt:at}};
  return {...f,policy,claim,causalVersion:version,run,review,causalReceipts:receipts};
 }
+
+export const doWhyPresentationProfile={provider:"dowhy" as const,version:"0.14" as const,python:"3.12.14" as const,bundleHash:"a".repeat(64),conformanceHash:"b".repeat(64)};
+/** Strict synthetic presentation DTOs, not signed native/provider evidence. */
+export function doWhyPresentationRun(status:"passed"|"failed"|"unknown"="passed"){
+ const run=causalFixture("supported").run,profile=doWhyPresentationProfile;
+ run.providerKey="dowhy";run.providerVersion="0.14";run.methodKey="backdoor.linear_regression";
+ run.result.providerAnalysis={profile,nativeResultHash:"c".repeat(64),diagnostics:{provider:"dowhy",version:"0.14",python:"3.12.14",bundleHash:profile.bundleHash,method:"backdoor.linear_regression",identification:"identified_under_registered_randomization",adjustmentSet:[],effect:run.result.estimate!.effect,representation:"anonymous_binary_sufficient_counts",simulations:16,seed:1729,refutations:(["random_common_cause","placebo_treatment_refuter","data_subset_refuter"] as const).map((method,index)=>({method,effect:method==="placebo_treatment_refuter"?0:0.3,pValue:index===1?(status==="unknown"?null:status==="failed"?0.01:0.5):0.5,status:index===1?status:"passed"})),sensitivity:"unknown",uncertainty:"native_registered_interval_required"}};
+ run.result.robustness.providerRefutations=status;run.result.limitations=["Synthetic presentation data; no collected trial, calibrated refutation or verified business impact."];
+ if(status!=="passed"){run.result.status="inconclusive";run.result.language="causal_reliance_withheld";run.result.reasons=["optional_provider_refutations_do_not_admit_causal_reliance"];}
+ return run;
+}
