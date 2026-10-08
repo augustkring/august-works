@@ -1,0 +1,73 @@
+{
+  "recordedAt": "2026-10-08T12:54:32.091449+00:00",
+  "method": "Actual readonly retrieval of version-tagged upstream documentation and license files; no install, command execution, connection, warehouse, authentication or customer trial",
+  "sources": [
+    {
+      "provider": "metricflow",
+      "tag": "v0.213.0",
+      "file": "README.md",
+      "url": "https://raw.githubusercontent.com/dbt-labs/metricflow/v0.213.0/README.md",
+      "sha256": "0bc03f8c21f80e98e0965f777f475fbc292206a1043f1a6fde4efec055986f13",
+      "bytes": 5263
+    },
+    {
+      "provider": "metricflow",
+      "tag": "v0.213.0",
+      "file": "LICENSE",
+      "url": "https://raw.githubusercontent.com/dbt-labs/metricflow/v0.213.0/LICENSE",
+      "sha256": "438b69717fc3020f549d12e262421c57c5b21d38e97a36f8d9b9d68082c09974",
+      "bytes": 11344
+    },
+    {
+      "provider": "cube",
+      "tag": "v1.8.2",
+      "file": "README.md",
+      "url": "https://raw.githubusercontent.com/cube-js/cube/v1.8.2/README.md",
+      "sha256": "501931b17fc2324f42577bbb7e391dd815f54b59698751abd4d53cbfe7e8fd94",
+      "bytes": 7878
+    },
+    {
+      "provider": "cube",
+      "tag": "v1.8.2",
+      "file": "LICENSE",
+      "url": "https://raw.githubusercontent.com/cube-js/cube/v1.8.2/LICENSE",
+      "sha256": "fae0bbc037781c1d4697b700106f50a0a13910778ef8279a657bd61dcaeb5a5f",
+      "bytes": 254
+    },
+    {
+      "provider": "cube",
+      "tag": "v1.8.2",
+      "file": "client/LICENSE",
+      "url": "https://raw.githubusercontent.com/cube-js/cube/v1.8.2/packages/cubejs-client-core/LICENSE",
+      "sha256": "516be1c1c0eb930e4ca37d77b0835972deb6a2b7d66863e08225536e16a900f9",
+      "bytes": 1065
+    },
+    {
+      "provider": "cube",
+      "tag": "v1.8.2",
+      "file": "server/LICENSE",
+      "url": "https://raw.githubusercontent.com/cube-js/cube/v1.8.2/packages/cubejs-server/LICENSE",
+      "sha256": "abcfcdca83be4a1ba4b5fc16d42277e5fafe24c1359e6c29a5152016069ce137",
+      "bytes": 11349
+    }
+  ],
+  "decision": "Retain the existing optional exact external_metric seam and fail closed until an actual customer profile is qualified; do not operate a warehouse or Cube for native AW metrics",
+  "metricflowPrerequisites": [
+    "Existing customer dbt project",
+    "Customer-chosen dbt adapter and readonly warehouse access",
+    "Governed customer semantic definitions with approved metric identity/version/hash",
+    "Exact current user/agent source permission mapping and timezone/time-grain/definition parity"
+  ],
+  "cubePrerequisites": [
+    "Actual customer semantic service and governed model",
+    "Production authentication and tenant-specific readonly credentials outside agent input",
+    "Exact current source/definition permission mapping",
+    "Server-owned allowlisted connection and current qualification profile"
+  ],
+  "blockedQualification": [
+    "No supplied customer dbt project or governed warehouse credentials",
+    "No supplied Cube connection or production authenticated customer profile",
+    "No known-fixture connection/auth, dimensions, timezone/grain, definition/permission parity, credential revocation or hosted provider trial performed"
+  ],
+  "orToolsDecision": "Conditional spike remains demand-driven: current native bounded dependency/initiative planning qualifies locally; no customer optimization-demand evidence supplied. No fabricated CP-SAT qualification."
+}

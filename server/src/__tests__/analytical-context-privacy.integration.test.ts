@@ -26,7 +26,7 @@ import {appendHeartbeatRunEvent} from "../services/heartbeat-run-events.js";
 import type {LiveEvent} from "@paperclipai/shared";
 import {and,eq,sql} from "drizzle-orm";
 import {agents,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,providerTraceRecords,memoryJobs,createDb} from "@paperclipai/db";
-import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
+import {afterAll,beforeAll,beforeEach,describe,expect,it,vi} from "vitest";
 import {instanceSettingsService} from "../services/instance-settings.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
 import {aiGovernanceService} from "../services/ai-governance/governance-service.js";
@@ -179,24 +179,40 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(7);
   expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);await reapplyMemoryDeletionMarkers(db,companyId);await erased();await memoryJobService(db).tick({limit:10});
  });
- it("qualifies a complete four-thousand-Task population through the actual bound SDK without leaking or truncating Source authority",async()=>{
-  const f=await fixture(true,true),at=new Date(Date.now()-1000),rows=Array.from({length:3999},(_,index)=>({id:randomUUID(),companyId,title:`Synthetic SDK volume Task ${index}`,status:"done" as const,responsibleUserId:userId,createdAt:at,updatedAt:at}));
-  // Explicit native software population prerequisites, not 4000 performed Task
+ it.each([5000,10000])("qualifies the complete %s-Task SDK population and rejects oversized lineage without partial retention",async(populationSize)=>{
+  const f=await fixture(true,true),at=new Date(Date.now()-1000),rows=Array.from({length:populationSize-1},(_,index)=>({id:randomUUID(),companyId,title:`Synthetic SDK volume Task ${index}`,status:"done" as const,responsibleUserId:userId,createdAt:at,updatedAt:at}));
+  // Explicit native software population prerequisites, not performed Task
   // executions or a Human/customer/provider trial.
   for(let start=0;start<rows.length;start+=200)await db.insert(issues).values(rows.slice(start,start+200));
-  const tools=toolAuthority(),input={...f.query,until:new Date(Date.now()+1000).toISOString(),maxRows:4000},started=performance.now();
+  const tools=toolAuthority(),input={...f.query,until:new Date(Date.now()+1000).toISOString(),maxRows:populationSize===10000?10000:undefined},started=performance.now();
   const payload=await tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:input}) as {result:{observation:BusinessMetricResult}};
-  expect(performance.now()-started).toBeLessThan(30000);expect(payload.result.observation.value).toBe(4000);
+  expect(performance.now()-started).toBeLessThan(30000);expect(payload.result.observation.value).toBe(populationSize);
   expect(Buffer.byteLength(JSON.stringify(payload),"utf8")).toBeLessThanOrEqual(256000);expect((await root()).authorityPins).toHaveLength(1);
-  const [manifest]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,payload.result.observation.lineageManifestId));expect(manifest!.sourceCount).toBe(4000);
-  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,rows[3998]!.id));
+  const [manifest]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,payload.result.observation.lineageManifestId));expect(manifest!.sourceCount).toBe(populationSize);
+  const observation=payload.result.observation,source={type:"metric_observation",id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId};
+  await expect(tools.execute({tool:"explain_metric_lineage",callId:randomUUID(),arguments:{source}})).rejects.toMatchObject({status:422});
+  expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(1);
+  expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(1);
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,rows.at(-1)!.id));
   await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{runId})).rejects.toMatchObject({status:403});
-  await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,rows[3998]!.id));await copied();
+  await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,rows.at(-1)!.id));await copied();
   await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
   await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,payload.result.observation.id));
   expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);await reapplyMemoryDeletionMarkers(db,companyId);await erased();await memoryJobService(db).tick({limit:10});
-  expect(await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),eq(issues.status,"done")))).toHaveLength(4000);
+  expect(await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),eq(issues.status,"done")))).toHaveLength(populationSize);
  },120000);
+ it("rolls back a valid native measurement when the complete read exceeds the original retention deadline",async()=>{
+  const f=await fixture();let restoreClock:(()=>void)|undefined;
+  try {
+   await expect(withAnalyticalConversationRetention(db,companyId,actor(),async tx=>{
+    const result=await businessMetricService(tx).query(companyId,actor(),f.query),late=performance.now()+31000;
+    const clock=vi.spyOn(performance,"now").mockReturnValue(late);restoreClock=()=>clock.mockRestore();
+    return {result,sourceManifestIds:[result.lineageManifestId],retentionUntil:new Date(result.expiresAt)};
+   })).rejects.toMatchObject({status:409});
+  } finally {restoreClock?.();}
+  expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(0);
+  expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);
+ });
  it("commits the full source set and conservative expiry before returning a native result",async()=>{const f=await fixture(),result=await f.capture(),r=await root(),[memory]=await db.select().from(memoryRecords).where(eq(memoryRecords.id,r.memoryRecordId));expect(result.lineageManifestId).toBeTruthy();expect(r.sourceCount).toBe(1);expect(r.expiresAt.toISOString()).toBe(result.expiresAt);expect(memory).toMatchObject({reviewState:"rejected",verificationState:"unverified",memoryType:"observation",scopeType:"agent",confidenceScore:0});expect(await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.memoryRecordId,r.memoryRecordId))).toHaveLength(1);await expect(db.update(memoryRecords).set({reviewState:"accepted",verificationState:"human_verified",memoryType:"outcome"}).where(eq(memoryRecords.id,r.memoryRecordId))).rejects.toThrow();});
  it("requires the current native Context and rolls back measurement derivation on failure",async()=>{const f=await fixture(false);await expect(f.capture()).rejects.toMatchObject({status:409});expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(0);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);});
  it("rolls back a derived measurement if the complete source set is unavailable",async()=>{await fixture();await expect(withAnalyticalConversationRetention(db,companyId,actor(),async()=>({result:{copy:"uncommitted"},sourceManifestIds:[randomUUID()],retentionUntil:new Date(Date.now()+60000)}))).rejects.toMatchObject({status:409});expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);});

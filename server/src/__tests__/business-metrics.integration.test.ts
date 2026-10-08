@@ -166,10 +166,10 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
     expect(await observations()).toHaveLength(0);
   });
 
-  it("keeps external authoritative metrics unavailable until provider qualification without falling back to native counts", async () => {
+  it.each(["metricflow","cube"] as const)("keeps unqualified %s authority unavailable without falling back to native counts", async (providerKey) => {
     await source("done");
     const external = businessMetricDefinitionSchema.parse({ ...metricDefinition(policyId), authorityMode: "external_authoritative", grain: "external_entity", timeSemantics: "external_provider_defined",
-      calculation: { kind: "external_metric", providerKey: "metricflow", connectionId: randomUUID(), providerMetricRef: "revenue", providerVersion: "test/v1", definitionHash: "a".repeat(64), qualificationHash: "b".repeat(64) } });
+      calculation: { kind: "external_metric", providerKey, connectionId: randomUUID(), providerMetricRef: "revenue", providerVersion: "test/v1", definitionHash: "a".repeat(64), qualificationHash: "b".repeat(64) } });
     const registered = await published(external);
     await expect(service().query(companyId, actor, query(registered.metric.id, registered.version.id))).rejects.toMatchObject({ status: 422, details: { code: "external_metric_provider_unqualified" } });
     expect(await observations()).toHaveLength(0);

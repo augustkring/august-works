@@ -111,9 +111,8 @@ export async function executeManagementAnalyticalTool(db:Db,companyId:string,act
     result={kind:"management_action_preview",action:input.action,rationale:input.rationale,evidence:captured.evidence,humanReviewRequired:true,executionAuthority:"advisory_only",limitations:["Assistant-proposed rationale is not a human decision or validated causal explanation. No business object was created or published."]};break;
    }
   }
-  const {inspectAnalyticalContextPins}=await import("../analytical-context-authority.js"),source=await inspectAnalyticalContextPins(tx,companyId,actor,pins,performance.now()+30000,false);
   const payload={tool:name,citations:pins,result,executionAuthority:"read_only_or_advisory"};
   if(Buffer.byteLength(JSON.stringify(payload),"utf8")>256000)throw unprocessable("The complete management result exceeds its bounded output budget");
-  return {result:payload,sourceManifestIds:source.manifestIds,retentionUntil:source.expiresAt,authorityPins:source.pins};
+  return {result:payload,retentionUntil:new Date(Date.now()+300000),authorityPins:pins};
  });
 }
