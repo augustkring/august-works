@@ -8,6 +8,7 @@ import { strategyExecutionService } from "./services/strategy-execution/service.
 import { businessEventService } from "./services/business-events.js";
 import { processAnalysisService } from "./services/process-analysis.js";
 import { eraseExpiredAnalyticalLineage } from "./services/analytical-retention.js";
+import { reconcileLegacyNativeRuntimeAssets } from "./services/native-runtime/runtime-asset-retention.js";
 import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network-policy.js";
 /// <reference path="./types/express.d.ts" />
 // Kicks off the OTel bootstrap as early as possible (no-op unless
@@ -1251,6 +1252,10 @@ async function startServerWithDatabaseTeardown(
     ["analytical_retention", async () => {
       const result = await eraseExpiredAnalyticalLineage(db);
       if (result.erasedManifests > 0) logger.info(result, "Analytical retention sweep removed expired manifests and dependent payloads");
+    }],
+    ["legacy_runtime_asset_retention", async () => {
+      const result = await reconcileLegacyNativeRuntimeAssets(db);
+      if (result.removed > 0) logger.info(result, "Runtime asset retention removed unreferenced legacy cache entries");
     }],
     ["work_signal_followups", () => workSignalService(db).deliverFollowups(20)],
     ["finalization", () => reconcileAbandonedExecutionControl(db)],
