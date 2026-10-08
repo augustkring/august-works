@@ -1,3 +1,4 @@
+import { disableV8Rollout } from "./helpers/v8-rollout.js";
 import express from "express";
 import request from "supertest";
 import {businessForecastRoutes} from "../routes/business-forecasting.js";
@@ -166,6 +167,24 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,d.h.observations[0]!.id));
   expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);
  });
+ it("retains and reauthorizes four thousand original Task Sources across the complete declared forecast history",async()=>{
+  // Historical observation timestamps and populations are explicit software
+  // prerequisites; this is not a reconstructed or collected customer history.
+  const h=await history(Array(10).fill(400) as number[]),d=await draft(h),started=performance.now(),test=await backtest(d);
+  expect(performance.now()-started).toBeLessThan(30000);expect(test.result).toMatchObject({status:"qualified",points:[{value:400}]});
+  const spec=await service().publish(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,backtestId:test.id,rationale:"Separate exact Human publication of software conformance history"});
+  const runAt=performance.now(),run=await service().run(companyId,actor,d.spec.id,{expectedRevision:spec.revision,versionId:d.version.id,observationIds:h.observations.map(item=>item.id),cutoff:h.cutoff.toISOString()});
+  expect(performance.now()-runAt).toBeLessThan(30000);expect(run.result).toEqual(test.result);
+  expect(h.sourceIds).toHaveLength(4000);
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,h.sourceIds.at(-1)!));
+  await expect(service().artifact(companyId,actor,d.spec.id,run.id,"run")).rejects.toMatchObject({status:403});
+  await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,h.sourceIds.at(-1)!));
+  await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await disableV8Rollout(db);
+  await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[h.sourceIds.at(-1)!]);});
+  expect(await db.select().from(forecastRuns).where(eq(forecastRuns.id,run.id))).toHaveLength(0);
+  expect(await db.select().from(forecastSpecs).where(eq(forecastSpecs.id,d.spec.id))).toHaveLength(0);
+  expect(await db.select({id:issues.id}).from(issues).where(eq(issues.companyId,companyId))).toHaveLength(4000);
+ },120000);
  it("persists separate definitions, native rolling-origin qualification and human publication before a run",async()=>{
   const d=await draft(),test=await backtest(d);expect(test).toMatchObject({kind:"backtest",currentQualification:"qualified",result:{status:"qualified",uncertainty:{method:"unavailable"}}});
   await expect(service().run(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()})).rejects.toMatchObject({status:409});
