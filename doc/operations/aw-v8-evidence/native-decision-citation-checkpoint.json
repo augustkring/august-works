@@ -1,0 +1,45 @@
+{
+  "checkpoint": "Actual company-prefixed original Decision query deep link from retained Source citations",
+  "parentCommit": "804d9e3c578721c05ae61d813a63c1e4dddc2691",
+  "recordedAt": "2026-10-08T07:40:21.365822+00:00",
+  "sourceFiles": [
+    {
+      "path": "ui/src/components/StrategySourceReference.tsx",
+      "sha256": "970d57f793751c4daf5963f4b16d97632ed7a50c8327a95f9bcb5201542ee7ac"
+    },
+    {
+      "path": "ui/src/components/StrategySourceReference.test.tsx",
+      "sha256": "390e8e77f1eca4e971f2fb4e39ec4556f437d891dbea49aff883b63398c56f7c"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "72f8c8856af01034807b213378906ba22dec9ed16835a7356de68fb5350b731b"
+    }
+  ],
+  "validation": {
+    "uiRegression": {
+      "result": "passed",
+      "tests": 41,
+      "files": 3,
+      "log": "/var/tmp/aw-v8-native-decision-citation-final-tests.log"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-decision-citation-final-types.log"
+    },
+    "beforeFixRegression": {
+      "result": "failed_as_expected_unregistered_route",
+      "log": "/var/tmp/aw-v8-native-decision-citation-before.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "0baccf9e7ed6e5ee08852aeaecb2afa7f42da801",
+      "log": "/var/tmp/aw-v8-native-build-cross-project-ui.log"
+    }
+  },
+  "limits": [
+    "Current native Source name is a mocked software prerequisite; routing uses the actual shared company Link and React router",
+    "No new route, Decision author, policy, authentication or Human/provider trial",
+    "The full build, native Source volume qualification and hosted acceptance remain in progress"
+  ]
+}
