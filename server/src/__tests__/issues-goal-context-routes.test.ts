@@ -3,6 +3,12 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
+import { HttpError } from "../errors.js";
+
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+vi.mock("../services/analytical-context-authority.js", () => ({
+  assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+}));
 
 const mockIssueService = vi.hoisted(() => ({
   getById: vi.fn(),
@@ -193,6 +199,7 @@ const projectGoal = {
 describe.sequential("issue goal context routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockAccessService.decide.mockResolvedValue({
       allowed: true,
       action: "issue:read",
@@ -266,6 +273,16 @@ describe.sequential("issue goal context routes", () => {
       id === projectGoal.id ? projectGoal : null,
     );
     mockGoalService.getDefaultCompanyGoal.mockResolvedValue(null);
+  });
+
+  it.each(["", "/heartbeat-context"])("withholds goal and workspace context when current Source access is denied: %s", async (suffix) => {
+    mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
+    const res = await request(createApp()).get(`/api/issues/${legacyProjectLinkedIssue.id}${suffix}`);
+    expect(res.status).toBe(403);
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(mockDb, "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: legacyProjectLinkedIssue.id });
+    expect(mockGoalService.getById).not.toHaveBeenCalled();
+    expect(mockProjectService.getById).not.toHaveBeenCalled();
+    expect(mockDocumentsService.getIssueDocumentPayload).not.toHaveBeenCalled();
   });
 
   it.each(["", "/heartbeat-context"])("reads historical review tasks without computed productivity fields: %s", async (suffix) => {
