@@ -239,6 +239,18 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
     expect(await observations()).toHaveLength(0);
   });
 
+  it("rejects a mixed native Source batch atomically when its later row is unavailable in the tenant",async()=>{
+    const issue=await source("done"),foreign=await source("done",{companyId:otherCompanyId,projectId:null}),registered=await published();
+    const result=await service().query(companyId,actor,query(registered.metric.id,registered.version.id));
+    const [manifest]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,result.lineageManifestId));
+    const id=randomUUID();await db.insert(analyticalLineageManifests).values({...manifest,id,analysisRef:randomUUID()});
+    const edge=(inputRef:string)=>({companyId,manifestId:id,inputType:"issue" as const,inputRef,inputHash:"a".repeat(64),relationship:"source" as const});
+    await expect(db.insert(analyticalLineageEdges).values([edge(issue.id),edge(foreign.id)])).rejects.toMatchObject({cause:{code:"23514"}});
+    expect(await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,id))).toHaveLength(0);
+    await db.insert(analyticalLineageEdges).values(edge(issue.id));
+    expect(await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,id))).toHaveLength(1);
+  });
+
   it("rejects altered evidence snapshots and an observation associated with an inconsistent lineage manifest", async () => {
     await source("done"); const registered = await published();
     const result = await service().query(companyId, actor, query(registered.metric.id, registered.version.id));

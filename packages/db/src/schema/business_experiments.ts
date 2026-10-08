@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, foreignKey, integer, jsonb, pgTable, text, timestamp, unique, uuid, type PgTableExtraConfigValue } from "drizzle-orm/pg-core";
+import { check, foreignKey, index, integer, jsonb, pgTable, text, timestamp, unique, uuid, type PgTableExtraConfigValue } from "drizzle-orm/pg-core";
 import type { BusinessExperimentDefinition, BusinessExperimentMetricPin, BusinessExperimentState, BusinessExperimentInvariantReceipt, BusinessExperimentUnitSnapshot } from "@paperclipai/shared";
 import { companies } from "./companies.js";
 import { analyticalLineageManifests } from "./analytical_lineage.js";
@@ -73,8 +73,9 @@ export const businessExperimentAssignments = pgTable("business_experiment_assign
   invariantReceipts: jsonb("invariant_receipts_json").$type<BusinessExperimentInvariantReceipt[]>().notNull(), lineageManifestId: uuid("lineage_manifest_id").notNull(),
   receiptHash: text("receipt_hash").notNull(), signature: text("signature").notNull(), assignedBy: text("assigned_by").notNull(), assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull(),
 }, t => ({
+  lineageIdx:index("business_experiment_assignments_lineage_idx").on(t.companyId,t.lineageManifestId),
   tenantUq: unique("business_experiment_assignments_tenant_uq").on(t.companyId, t.experimentId, t.versionId, t.id),
-  unitUq: unique("business_experiment_assignments_unit_uq").on(t.companyId, t.versionId, t.unitId),
+  unitUq: unique("business_experiment_assignments_unit_uq").on(t.companyId, t.unitId, t.versionId),
   executionFk: foreignKey({ name: "business_experiment_assignments_execution_fk", columns: [t.companyId, t.experimentId, t.versionId], foreignColumns: [businessExperimentExecutions.companyId, businessExperimentExecutions.experimentId, businessExperimentExecutions.versionId] }).onDelete("cascade"),
   issueFk: foreignKey({ name: "business_experiment_assignments_issue_fk", columns: [t.companyId, t.issueId], foreignColumns: [issues.companyId, issues.id] }).onDelete("cascade"),
   projectFk: foreignKey({ name: "business_experiment_assignments_project_fk", columns: [t.companyId, t.projectId], foreignColumns: [projects.companyId, projects.id] }).onDelete("cascade"),
@@ -122,6 +123,8 @@ export const businessExperimentOutcomes = pgTable("business_experiment_outcomes"
   sourceSnapshot: jsonb("source_snapshot_json").$type<BusinessExperimentUnitSnapshot>().notNull(), inputHash: text("input_hash").notNull(), sourceHash: text("source_hash").notNull(), lineageManifestId: uuid("lineage_manifest_id").notNull(),
   receiptHash: text("receipt_hash").notNull(), signature: text("signature").notNull(), capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
 }, t => ({
+  lineageIdx:index("business_experiment_outcomes_lineage_idx").on(t.companyId,t.lineageManifestId),
+  assignmentIdx:index("business_experiment_outcomes_assignment_idx").on(t.companyId,t.assignmentId),
   unitKeyUq: unique("business_experiment_outcomes_unit_key_uq").on(t.companyId,t.analysisId,t.assignmentId,t.key),
   analysisFk: foreignKey({ name: "business_experiment_outcomes_analysis_fk", columns:[t.companyId,t.experimentId,t.versionId,t.analysisId], foreignColumns:[businessExperimentAnalyses.companyId,businessExperimentAnalyses.experimentId,businessExperimentAnalyses.versionId,businessExperimentAnalyses.id] }).onDelete("cascade"),
   assignmentFk: foreignKey({ name: "business_experiment_outcomes_assignment_fk", columns:[t.companyId,t.experimentId,t.versionId,t.assignmentId], foreignColumns:[businessExperimentAssignments.companyId,businessExperimentAssignments.experimentId,businessExperimentAssignments.versionId,businessExperimentAssignments.id] }).onDelete("cascade"),

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { and,eq } from "drizzle-orm";
-import { analyticalLineageEdges,analyticalLineageManifests,businessExperimentAnalyses,businessExperimentInterpretations,businessExperimentOutcomes,businessExperimentTransitions,type Db } from "@paperclipai/db";
+import { eq,sql } from "drizzle-orm";
+import { businessExperimentAnalyses,businessExperimentInterpretations,businessExperimentOutcomes,businessExperimentTransitions,type Db } from "@paperclipai/db";
 import { analyzeBusinessExperimentSchema,interpretBusinessExperimentSchema } from "@paperclipai/shared";
 import { conflict,notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
@@ -8,7 +8,7 @@ import { v7HumanActorId } from "../v7-authorization.js";
 import { withV7ActivityTransaction } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { businessMetricService } from "../business-metrics/service.js";
-import { calculateNativeMetric } from "../business-metrics/native-engine.js";
+import { prepareNativeMetric } from "../business-metrics/native-engine.js";
 import { admitBusinessExperiment,lockBusinessExperimentRoot,inspectBusinessExperimentVersion,businessExperimentRootView,auditBusinessExperiment } from "./service.js";
 import { transitionExperimentRecording } from "./recording.js";
 import { EXPERIMENT_OWNER_ENGINE,experimentBudget,experimentEdges,experimentStatementTime,signedExperimentReceipt } from "./receipts.js";
@@ -24,9 +24,10 @@ export function businessExperimentAnalysisService(db:Db){return {
       if(row.revision!==input.expectedRevision||row.currentVersionId!==input.versionId||row.state!=="completed")throw conflict("A single final analysis requires the exact completed protocol and revision");
       const pin=await inspectBusinessExperimentVersion(tx,row,actor,input.versionId,true,deadline),receipts=pin.receipts;
       if(!receipts.execution||!receipts.completion||receipts.analysis)throw conflict("An exact recording/completion is required and cannot be analyzed twice");
-      const version=pin.value,plan=version.definition.sampleOrDurationPlan,analysisId=randomUUID(),outcomes:ExperimentOutcome[]=[],pendingEdges=new Map<string,ReturnType<typeof experimentEdges>>();
+      const version=pin.value,plan=version.definition.sampleOrDurationPlan,analysisId=randomUUID(),outcomes:ExperimentOutcome[]=[],pendingEdges=new Map<string,{direct:ReturnType<typeof experimentEdges>;assignmentManifestId:string;assignmentLineageHash:string;completeLineageHash:string;lineageHash:string}>();
       const metrics=version.metricPins.filter(p=>p.role!=="invariant"),definitions=new Map<string,Awaited<ReturnType<ReturnType<typeof businessMetricService>["inspectPublishedDefinition"]>>>();
       for(const metric of metrics)definitions.set(metric.key,await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,metric.metricId,metric.metricVersionId));
+      const calculations=new Map(metrics.map(metric=>[metric.key,prepareNativeMetric(definitions.get(metric.key)!.version.definition,{metricId:metric.metricId,versionId:metric.metricVersionId,from:plan.from,until:plan.until,dimensions:[],maxRows:1})]));
       // Lock all current ITT sources before the common actual database capture
       // time. Never substitute status at horizon end for this current snapshot.
       // The receipt owner just admitted and share-locked every actual current
@@ -38,12 +39,16 @@ export function businessExperimentAnalysisService(db:Db){return {
       if(receipts.completion.reason==="fixed_horizon")for(const assignment of receipts.assignments){
         const source=sources.get(assignment.id), inherited=receipts.assignmentLineage.get(assignment.lineageManifestId);
         if(!source||!inherited)throw notFound("Experiment complete current assignment Source lineage is unavailable");
-        const edges=experimentEdges([...inherited,...source.edges]);
+        // The immutable assignment FK already owns the complete registered
+        // Source lineage. Retain only current final-capture edges here and
+        // bind the inherited manifest/hashes, rather than copying its same
+        // protocol edges into every one of the seventeen outcomes.
+        const direct=experimentEdges(source.edges),lineage={direct,assignmentManifestId:assignment.lineageManifestId,assignmentLineageHash:nativeSha256(experimentEdges(inherited)),completeLineageHash:nativeSha256(experimentEdges([...inherited,...direct])),lineageHash:nativeSha256(direct)};
         for(const metric of metrics){
-          experimentBudget(deadline);const calculated=calculateNativeMetric(definitions.get(metric.key)!.version.definition,{metricId:metric.metricId,versionId:metric.metricVersionId,from:plan.from,until:plan.until,dimensions:[],maxRows:1},[source.snapshot]);
+          experimentBudget(deadline);const calculated=calculations.get(metric.key)!([source.snapshot]);
           if(calculated.status!=="observed"||calculated.value!==0&&calculated.value!==1)throw conflict("Every assigned unit requires exact binary native outcomes; no unit may be dropped");
           const value:ExperimentOutcome={id:randomUUID(),companyId,experimentId:id,versionId:version.id,analysisId,assignmentId:assignment.id,key:metric.key,metricId:metric.metricId,metricVersionId:metric.metricVersionId,value:calculated.value,sourceSnapshot:source.snapshot,inputHash:calculated.inputHash,sourceHash:nativeSha256({snapshot:source.snapshot,metricHash:metric.contentHash,inputHash:calculated.inputHash,value:calculated.value}),lineageManifestId:randomUUID(),receiptHash:"",signature:"",capturedAt:at};
-          Object.assign(value,signedExperimentReceipt("outcome",experimentOutcomeMaterial(value,assignment.receiptHash,version.contentHash)));outcomes.push(value);pendingEdges.set(value.id,edges);
+          Object.assign(value,signedExperimentReceipt("outcome",experimentOutcomeMaterial(value,assignment.receiptHash,version.contentHash)));outcomes.push(value);pendingEdges.set(value.id,lineage);
         }
       }
       const [review]=await tx.select().from(businessExperimentTransitions).where(eq(businessExperimentTransitions.id,receipts.execution.reviewTransitionId)).for("share");
@@ -53,11 +58,17 @@ export function businessExperimentAnalysisService(db:Db){return {
       Object.assign(analysis,signedExperimentReceipt("analysis",experimentAnalysisMaterial(analysis,receipts.completion.receiptHash)));
       const updated=await transitionExperimentRecording(tx,companyId,actor,row,"analyzing","Native immutable fixed-protocol final analysis awaiting explicit human interpretation",at);
       await tx.insert(businessExperimentAnalyses).values(analysis);
-      for(let offset=0;offset<outcomes.length;offset+=100){const group=outcomes.slice(offset,offset+100);experimentBudget(deadline);
-        await tx.insert(analyticalLineageManifests).values(group.map(outcome=>{const edges=pendingEdges.get(outcome.id)!;return {id:outcome.lineageManifestId,companyId,analysisType:"experiment_outcome",analysisRef:outcome.id,engineVersion:EXPERIMENT_OWNER_ENGINE,definitionHash:version.contentHash,inputHash:outcome.sourceHash,requestedBy:v7HumanActorId(actor),sourceWatermark:outcome.sourceSnapshot.updatedAt,sourceCount:edges.length,parameters:{receiptHash:outcome.receiptHash,lineageHash:nativeSha256(edges)},createdAt:at,expiresAt:version.expiresAt};}));
-        const batchEdges=group.flatMap(outcome=>pendingEdges.get(outcome.id)!.map(edge=>({...edge,companyId,manifestId:outcome.lineageManifestId})));
-        for(let edgeOffset=0;edgeOffset<batchEdges.length;edgeOffset+=500)await tx.insert(analyticalLineageEdges).values(batchEdges.slice(edgeOffset,edgeOffset+500));
-        await tx.insert(businessExperimentOutcomes).values(group);
+      for(let offset=0;offset<outcomes.length;offset+=1000){
+        experimentBudget(deadline);const group=outcomes.slice(offset,offset+1000);
+        const manifests=group.map(outcome=>{const lineage=pendingEdges.get(outcome.id)!,edges=lineage.direct;return {id:outcome.lineageManifestId,company_id:companyId,analysis_type:"experiment_outcome",analysis_ref:outcome.id,engine_version:EXPERIMENT_OWNER_ENGINE,definition_hash:version.contentHash,input_hash:outcome.sourceHash,requested_by:v7HumanActorId(actor),source_watermark:outcome.sourceSnapshot.updatedAt,source_count:edges.length,parameters_json:{receiptHash:outcome.receiptHash,lineageHash:lineage.lineageHash,assignmentManifestId:lineage.assignmentManifestId,assignmentLineageHash:lineage.assignmentLineageHash,completeLineageHash:lineage.completeLineageHash},created_at:at,expires_at:version.expiresAt};});
+        await tx.execute(sql`insert into analytical_lineage_manifests select * from json_populate_recordset(null::analytical_lineage_manifests,${JSON.stringify(manifests)}::json)`);
+
+        const batchEdges=group.flatMap(outcome=>pendingEdges.get(outcome.id)!.direct.map(edge=>({company_id:companyId,manifest_id:outcome.lineageManifestId,input_type:edge.inputType,input_ref:edge.inputRef,input_hash:edge.inputHash,relationship:edge.relationship})));
+        await tx.execute(sql`insert into analytical_lineage_edges select * from json_populate_recordset(null::analytical_lineage_edges,${JSON.stringify(batchEdges)}::json)`);
+
+        const rows=group.map(outcome=>({id:outcome.id,company_id:companyId,experiment_id:outcome.experimentId,version_id:outcome.versionId,analysis_id:outcome.analysisId,assignment_id:outcome.assignmentId,metric_key:outcome.key,metric_id:outcome.metricId,metric_version_id:outcome.metricVersionId,value:outcome.value,source_snapshot_json:outcome.sourceSnapshot,input_hash:outcome.inputHash,source_hash:outcome.sourceHash,lineage_manifest_id:outcome.lineageManifestId,receipt_hash:outcome.receiptHash,signature:outcome.signature,captured_at:outcome.capturedAt}));
+        await tx.execute(sql`insert into business_experiment_outcomes select * from json_populate_recordset(null::business_experiment_outcomes,${JSON.stringify(rows)}::json)`);
+
       }
       await auditBusinessExperiment(tx,publications,companyId,actor,id,"analyzed",{versionId:version.id,analysisId,receiptHash:analysis.receiptHash,status:result.status});experimentBudget(deadline);
       if(Math.min(version.expiresAt.getTime(),pin.source.expiresAt.getTime())<=Date.now())throw conflict("Experiment current Source expired before final capture completed");

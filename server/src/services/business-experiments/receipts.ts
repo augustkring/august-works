@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { analyticalLineageEdges, analyticalLineageManifests, businessExperimentAssignments, businessExperimentCompletions, businessExperimentExecutions, businessExperimentExposures, businessExperimentVersions, businessExperimentTransitions, issues, projects, type Db } from "@paperclipai/db";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { analyticalLineageEdges, analyticalLineageManifests, businessExperimentAssignments, businessExperimentCompletions, businessExperimentExecutions, businessExperimentExposures, businessExperimentVersions, businessExperimentTransitions, type Db } from "@paperclipai/db";
 import { ISSUE_STATUSES, PROJECT_STATUSES, type BusinessExperimentAssignmentView, type BusinessExperimentExposureView, type BusinessExperimentUnitSnapshot } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
@@ -86,21 +86,14 @@ export function exposureView(row: ExperimentExposure): BusinessExperimentExposur
   return { id: row.id, companyId: row.companyId, experimentId: row.experimentId, versionId: row.versionId, assignmentId: row.assignmentId, arm: row.arm, status: row.status,
     provenance: row.provenance, assertedAppliedAt: row.assertedAppliedAt?.toISOString() ?? null, rationale: row.rationale, receiptHash: row.receiptHash, recordedBy: row.recordedBy, recordedAt: row.recordedAt.toISOString() };
 }
-export async function nativeExperimentUnit(tx: Db, companyId: string, actor: AuthorizationActor, version: ExperimentVersion, unitId: string) {
+async function inspectNativeExperimentUnit(tx: Db, companyId: string, actor: AuthorizationActor, version: ExperimentVersion, unitId: string, checkErasure:boolean) {
   const entity = version.definition.population.randomizationUnit;
-  const admitted = await authorizeStrategyReference(tx, companyId, actor, { type: entity, id: unitId }, version.definition.sensitivity);
-  await assertAnalyticalSourcesNotErased(tx, companyId, admitted.issueIds, admitted.projectIds);
-  let snapshot: BusinessExperimentUnitSnapshot;
-  if (entity === "issue") {
-    const [row] = await tx.select({ id: issues.id, status: issues.status, projectId: issues.projectId, createdAt: issues.createdAt, updatedAt: issues.updatedAt }).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, unitId), isNull(issues.hiddenAt))).for("share");
-    if (!row) throw notFound("Experiment unit is unavailable");
-    snapshot = { ...row, entity, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() };
-    if (version.definition.scope.type === "project" && row.projectId !== version.definition.scope.id) throw conflict("Experiment unit moved outside its registered project population");
-  } else {
-    const [row] = await tx.select({ id: projects.id, status: projects.status, createdAt: projects.createdAt, updatedAt: projects.updatedAt, archivedAt: projects.archivedAt }).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, unitId))).for("share");
-    if (!row || row.archivedAt) throw notFound("Experiment project is unavailable");
-    snapshot = { id: row.id, entity, status: row.status, projectId: null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() };
-  }
+  const admitted = await authorizeStrategyReference(tx, companyId, actor, { type: entity, id: unitId }, version.definition.sensitivity,true);
+  if(checkErasure)await assertAnalyticalSourcesNotErased(tx, companyId, admitted.issueIds, admitted.projectIds);
+  const current=admitted.nativeObject;
+  if(!current||current.archived)throw notFound("Experiment unit is unavailable");
+  const snapshot:BusinessExperimentUnitSnapshot=current.snapshot;
+  if(entity==="issue"&&version.definition.scope.type==="project"&&snapshot.projectId!==version.definition.scope.id)throw conflict("Experiment unit moved outside its registered project population");
   const plan = version.definition.sampleOrDurationPlan;
   const statuses: readonly string[] = entity === "issue" ? ISSUE_STATUSES : PROJECT_STATUSES;
   if (!statuses.includes(snapshot.status)) throw conflict("Experiment unit has no admitted native status semantics");
@@ -109,6 +102,9 @@ export async function nativeExperimentUnit(tx: Db, companyId: string, actor: Aut
     ...admitted.issueIds.map(id => ({ inputType: "issue" as const, inputRef: id, inputHash: nativeSha256({ type: "issue", id }), relationship: "source" as const })),
     ...admitted.projectIds.map(id => ({ inputType: "project" as const, inputRef: id, inputHash: nativeSha256({ type: "project", id }), relationship: "source" as const })),
   ] };
+}
+export function nativeExperimentUnit(tx:Db,companyId:string,actor:AuthorizationActor,version:ExperimentVersion,unitId:string) {
+  return inspectNativeExperimentUnit(tx,companyId,actor,version,unitId,true);
 }
 /** Registry and recording consumers must authorize every enrolled source before
  * returning any protocol/receipt/aggregate. No recursive registry admission. */
@@ -125,13 +121,14 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
   const assignments = await tx.select().from(businessExperimentAssignments).where(and(eq(businessExperimentAssignments.companyId, companyId), eq(businessExperimentAssignments.experimentId, version.experimentId), eq(businessExperimentAssignments.versionId, version.id))).orderBy(asc(businessExperimentAssignments.id)).limit(version.definition.sampleOrDurationPlan.maximumAssignedUnits + 1).for("share");
   if (assignments.length > version.definition.sampleOrDurationPlan.maximumAssignedUnits) throw unprocessable("Experiment assignment population exceeds preregistered bounds");
   const versionEdges = await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), eq(analyticalLineageEdges.manifestId, version.lineageManifestId))).limit(257);
-  const lineage = await loadExperimentLineage(tx, companyId, assignments.map(assignment => assignment.lineageManifestId), deadline), authorityEdges = new Map<string, ExperimentEdge>();
+  const lineage = await loadExperimentLineage(tx, companyId, assignments.map(assignment => assignment.lineageManifestId), deadline), authorityEdges = new Map<string, ExperimentEdge>(), admittedObjectSourceKeys=new Set<string>();
   for (const assignment of assignments) {
     experimentBudget(deadline); verifyExperimentReceipt("assignment", assignmentMaterial(assignment, execution.receiptHash, version.contentHash), assignment);
     if (assignment.sourceHash !== nativeSha256({ snapshot: assignment.sourceSnapshot, invariantReceipts: assignment.invariantReceipts })
       || assignment.arm !== assignNativeBusinessExperimentUnit(assignmentKey, companyId, version.id, assignment.unitId, version.definition.assignment.treatmentProbability)) throw notFound("Experiment assignment source or label integrity is unavailable");
-    const current = await nativeExperimentUnit(tx, companyId, actor, version, assignment.unitId);
+    const current = await inspectNativeExperimentUnit(tx, companyId, actor, version, assignment.unitId,false);
     currentUnits.set(assignment.id, current);
+    for(const edge of current.edges)admittedObjectSourceKeys.add(`${edge.inputType}:${edge.inputRef}`);
     if (current.snapshot.createdAt !== assignment.sourceSnapshot.createdAt) throw conflict("Experiment enrolled unit identity was corrected");
     const manifest = lineage.manifests.get(assignment.lineageManifestId), edges = lineage.edges.get(assignment.lineageManifestId) ?? [];
     const expectedEdges = experimentEdges([...versionEdges,
@@ -145,9 +142,16 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
       || !edges.some(edge => edge.inputType === assignment.unitType && edge.inputRef === assignment.unitId && edge.inputHash === nativeSha256({ type: assignment.unitType, id: assignment.unitId }))) throw notFound("Experiment enrolled source lineage is erased or unavailable");
     for (const edge of edges) { const key = `${edge.inputType}:${edge.inputRef}`, prior = authorityEdges.get(key); if (prior && prior.inputHash !== edge.inputHash) throw conflict("Experiment enrolled Source pins disagree"); authorityEdges.set(key, edge); }
   }
-  // Identical recorded primitives need one current native authorization here;
-  // every enrolled unit was separately read and admitted above.
-  await inspectDecisionSourceAuthority(tx, companyId, actor, [...authorityEdges.values()], deadline);
+  // Batch only the marker lookup, after every actual current native object
+  // was admitted. The company → Memory locks prevent erasure between reads.
+  const currentIssueRefs:string[]=[],currentProjectRefs:string[]=[];
+  for(const sources of currentUnits.values())for(const edge of sources.edges)(edge.inputType==="issue"?currentIssueRefs:currentProjectRefs).push(edge.inputRef);
+  await assertAnalyticalSourcesNotErased(tx,companyId,currentIssueRefs,currentProjectRefs);
+  // Every current unit/ancestry was just admitted and share-locked above in
+  // this same company → Memory transaction. Inspect remaining recorded
+  // ancestry; keep every original hash/receipt check and every current unit.
+  await inspectDecisionSourceAuthority(tx, companyId, actor, [...authorityEdges.values()].filter(edge=>!admittedObjectSourceKeys.has(`${edge.inputType}:${edge.inputRef}`)), deadline);
+  for(const edge of authorityEdges.values())if(edge.inputType==="issue"||edge.inputType==="project")admittedObjectSourceKeys.add(`${edge.inputType}:${edge.inputRef}`);
   const exposures = await tx.select().from(businessExperimentExposures).where(and(eq(businessExperimentExposures.companyId, companyId), eq(businessExperimentExposures.experimentId, version.experimentId), eq(businessExperimentExposures.versionId, version.id))).limit(assignments.length + 1).for("share");
   if (exposures.length > assignments.length) throw notFound("Experiment exposure join integrity is unavailable");
   const byAssignment = new Map(assignments.map(assignment => [assignment.id, assignment]));
@@ -158,7 +162,7 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
   }
   const [completion] = await tx.select().from(businessExperimentCompletions).where(and(eq(businessExperimentCompletions.companyId, companyId), eq(businessExperimentCompletions.experimentId, version.experimentId), eq(businessExperimentCompletions.versionId, version.id))).for("share");
   if (completion) verifyExperimentReceipt("completion", completionMaterial(completion, execution.receiptHash), completion);
-  const receipts = { execution, assignments, exposures, completion: completion ?? null, assignmentLineage: lineage.edges };
+  const receipts = { execution, assignments, exposures, completion: completion ?? null, assignmentLineage: lineage.edges,admittedObjectSourceKeys };
   const results = await inspectBusinessExperimentResults(tx, companyId, actor, version, receipts, deadline);
   experimentBudget(deadline); return { ...receipts, ...results, currentUnits };
 }

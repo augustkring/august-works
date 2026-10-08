@@ -1,0 +1,196 @@
+{
+  "checkpoint": "Complete 4000-unit/seventeen-metric native experiment capture, replay, current Source denial and flags-off whole erasure",
+  "recordedAt": "2026-10-08T15:04:39.186012+00:00",
+  "parentCommit": "e3210b553909845debfe292a5eb25fd776ddc060",
+  "primaryParentCommit": "36397b608dcde2836d58f9b6f46f48f7ba8ae8f1",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-source-and-data-register.md",
+      "sha256": "07981d984ff8613d29d5eb71d8d9c0e817c25bdc873f8a7aebe3d34e2b174dae"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "9265f63a5315aa1d984de0fe7e01c85775d5f52331e1d82213c720af5b259e4b"
+    },
+    {
+      "path": "packages/db/src/migration-snapshot-drift.test.ts",
+      "sha256": "ce78c65e51186cf7b5cc356ec4f6d9a30ed12962aafd036ebe68a7a798fda345"
+    },
+    {
+      "path": "packages/db/src/migrations/0447_native_experiment_statement_admission.sql",
+      "sha256": "f4c6f32954bb3dfdf8122ffd2c75d4409efbc6030ae943badc51c239c8d8de8e"
+    },
+    {
+      "path": "packages/db/src/migrations/0448_gigantic_ricochet.sql",
+      "sha256": "63e7e974d309b549079b83360b4b253203bfa0277f135b88b244c3dee8e9d952"
+    },
+    {
+      "path": "packages/db/src/migrations/0449_mysterious_tigra.sql",
+      "sha256": "efb4333e9d12df9f9a57ba42ebe0890bde078f4d8729bec9d610b33b2af479cd"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0447_snapshot.json",
+      "sha256": "77e7e39f0341f418f45951ebb101a00907d271994bb4f7f0a022b12b08ea80da"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0448_snapshot.json",
+      "sha256": "c7de23a665b59e9e76741bb5d366c29882ab40123b4b202447726a1062ae4358"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0449_snapshot.json",
+      "sha256": "a1e99a298cea2002c964740a2429a0f43d5774b7d1df66448f8035bc2ae81c13"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "04b7d2e63310d6386b3140456967cfeec886b996da103b686ce2f6a22baf4be5"
+    },
+    {
+      "path": "packages/db/src/schema/business_experiments.ts",
+      "sha256": "dc9eeee4fbf4974c7d891c5cf2b722f3a6cd2a2141bcf11ff80e764b91b93eb5"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-cross-project.integration.test.ts",
+      "sha256": "ca5dfeb1091d8976024d19c016f9917523e9bfe980db0f5988bd0a8cd16a7752"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "898dba219495fe1dca44ebae35e88423a3fe33c06ae9403b641cc40fa21283e0"
+    },
+    {
+      "path": "server/src/__tests__/business-events.integration.test.ts",
+      "sha256": "7ab1075a6536a6d59867034d294487af110c9068044832fcd03525b93656e9ba"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+      "sha256": "50702476269a825ea94aaee15a3fe19cd48073b5e5b35654c6c7ad007768d5ee"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-recording.integration.test.ts",
+      "sha256": "b6ab5630444e442d385b001c4830cc2779d489b6586c96ddfa31dc5c6192d4fd"
+    },
+    {
+      "path": "server/src/__tests__/business-experiments-kernel.test.ts",
+      "sha256": "829a846f09006672995294b53fbd5856a627470fc37d9901ea461eb9f18c1ac5"
+    },
+    {
+      "path": "server/src/__tests__/business-experiments.integration.test.ts",
+      "sha256": "8f0a5262a1a396a88cae893344712c172a77c40b98de8afd4a5d1ea421e5c89a"
+    },
+    {
+      "path": "server/src/__tests__/business-forecasting.integration.test.ts",
+      "sha256": "cb3c6d5ea8dddefe6c47c2804068252a6f132f3f6303edcfc8d5597638136712"
+    },
+    {
+      "path": "server/src/__tests__/business-metric-engine.test.ts",
+      "sha256": "8a78b2d7e7b5e282a6669c0eb17d4738e8337aae41400b113dc5e19a30441416"
+    },
+    {
+      "path": "server/src/__tests__/business-metrics.integration.test.ts",
+      "sha256": "f2babc8850dc0c58dad1ca90c7d26c420c7b1012b873d91f66ff114b4a3ce626"
+    },
+    {
+      "path": "server/src/__tests__/business-scenarios.integration.test.ts",
+      "sha256": "3ff970828d3b7654ee8b27518c8bebb598c7f78c9fa90fe82de8fddef3931db1"
+    },
+    {
+      "path": "server/src/__tests__/causal-claims.integration.test.ts",
+      "sha256": "c8ab67f052006821ee9b9eb3580ab23f87e6c88d17dde05a0eabc9702f6ea3d3"
+    },
+    {
+      "path": "server/src/__tests__/decision-intelligence.integration.test.ts",
+      "sha256": "dfc9b912bb228491fbc899908ec79c7a5fee46c6c1a189ac2a596fef5826c08d"
+    },
+    {
+      "path": "server/src/__tests__/management-reviews.integration.test.ts",
+      "sha256": "2a60da797bd178d7474e475bfaee646cba48f6b0f930f96c29138ad185e0db1e"
+    },
+    {
+      "path": "server/src/__tests__/process-analysis.integration.test.ts",
+      "sha256": "84f8ba69f1c4198c8ecbe51c5aa3a55ab88e24c9217c3d95030667575c9ea0fc"
+    },
+    {
+      "path": "server/src/__tests__/strategy-execution.integration.test.ts",
+      "sha256": "01dbb825674e3ef459b3c444cba27d7950ade3b3c8d0a34fdcd651e51c21634d"
+    },
+    {
+      "path": "server/src/services/business-experiments/analysis.ts",
+      "sha256": "9492d706ec9e8f89691cfb88bd7fdaa33f0a9001cff85a00d469bcc7af44dbf6"
+    },
+    {
+      "path": "server/src/services/business-experiments/receipts.ts",
+      "sha256": "6878356cc58656eadb865c448df4707a8c56f821d1418941dca09c1f722c292b"
+    },
+    {
+      "path": "server/src/services/business-experiments/results.ts",
+      "sha256": "62b0793fe2c8c3a3dc4b1eded1e7a79b71e737e9c943ddb7d5cda0c1dd262ba2"
+    },
+    {
+      "path": "server/src/services/business-metrics/native-engine.ts",
+      "sha256": "d6a9ff7ee45d319e92e2c11a182744cc418271dd065e52f20097d7f9645c9f10"
+    },
+    {
+      "path": "server/src/services/strategy-execution/references.ts",
+      "sha256": "db0afecd17376c18162833cc5f625264d2a726bb9a2a3f718a493f96eea19a83"
+    }
+  ],
+  "generatedSnapshotPruning": [
+    "packages/db/src/migrations/meta/0442_snapshot.json",
+    "packages/db/src/migrations/meta/0443_snapshot.json",
+    "packages/db/src/migrations/meta/0444_snapshot.json"
+  ],
+  "validation": {
+    "completeNativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-maximum-outcome-final-regression-tests.log",
+      "sha256": "02af306166422176ebb1aa8daebef58c8e5d5c5a64d42cf81d2dcc5d7ec4ff1f",
+      "tests": 303,
+      "files": 16,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-maximum-outcome-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migrationNumberingAndSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-maximum-outcome-migration-check.log",
+      "sha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    "generatedSnapshotDrift": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-maximum-outcome-snapshot-check.log",
+      "sha256": "5f6de05a6a1f00080e8d325cb19bd48e1268f48cd1cdae098e6c9d29a1512b18",
+      "tests": 1,
+      "files": 1,
+      "skipped": 0
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "sourceCommit": "36397b608dcde2836d58f9b6f46f48f7ba8ae8f1",
+      "log": "/var/tmp/aw-v8-native-build-statistical-sdk-interval.log",
+      "sha256": "4e9ff435bd4d3d6d384ebe6b6d1945d436aa3ecf4ca45f8898108c23768c1f9d"
+    }
+  },
+  "qualified": [
+    "Every 4000 enrolled native unit and all 17 outcome metrics retained: 68000 actual immutable native outcomes; capture and replay each under the original 30-second command limit",
+    "Current hidden final Source withholds the complete retained result; no unit drop or Source truncation",
+    "All flags off/company paused: one Source withdrawal erases the entire dependent protocol/outcome/manifest population within 30 seconds while preserving all 4000 independent Tasks",
+    "Prepared immutable metric definitions preserve original arithmetic, per-input population/timestamp validation and v1 hash/signature material; no input/actor/result cache",
+    "Within-transaction reuse of original current ACL-admitted share-locked native objects; full recorded and final Source ancestry still admitted and verified",
+    "Compact direct outcome lineage is bound to the exact immutable parent assignment manifest, inherited hash and complete lineage hash; mandatory compound cascading parent FK remains",
+    "Actual PostgreSQL statement transition rows retain original Source, capture identity/time, metric pin, native binary-value, immutable row and deferred complete-analysis guards",
+    "Mixed valid/foreign-Source lineage batch rejected atomically; original all-owner SQL regressions pass",
+    "Normal generated migrations/snapshots reorder logically identical uniqueness and index native cascade lookups; no disabled checks or enlarged native SQL/command budget",
+    "All 303 cases across 16 complete original suites pass without skips, with actual locked StatsForecast and DoWhy interpreters configured"
+  ],
+  "limitations": [
+    "Explicit bulk software Task rows, protected native signatures, current identities/grants, preregistration and not-applied exposure receipts are declared prerequisites, not executed Tasks, delivered interventions or customer/Human/provider trials",
+    "Earlier timing/SQL-plan and missing-pin-column diagnostic failures are excluded; final production source contains no profiling notices, EXPLAIN queries or planner overrides",
+    "Five-minute maximum-case harness includes real fixed-horizon wait and separate 30-second capture/read/erasure operations; native 30-second and SQL 8-second limits remain unchanged",
+    "Legacy full-copy lineage verifier is preserved in source; separate historical archive/multi-restore qualification remains open",
+    "Local maximum envelopes do not establish hosted p95, cold starts, real customer history, causal effects or business impact",
+    "Populated hosted migration lock/rebuild behavior and hosted predecessor gates remain unqualified; no configured UpCloud/customer semantic credentials",
+    "Whole Source/historical orphan reconciliation and current complete branch release qualification continue; no whole-brief completion or release promotion"
+  ]
+}

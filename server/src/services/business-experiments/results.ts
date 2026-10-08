@@ -6,13 +6,13 @@ import { conflict, notFound } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { inspectDecisionSourceAuthority } from "../decision-intelligence.js";
 import { businessMetricService } from "../business-metrics/service.js";
-import { calculateNativeMetric } from "../business-metrics/native-engine.js";
+import { prepareNativeMetric } from "../business-metrics/native-engine.js";
 import { exactExperimentInvariantBalance, evaluateNativeBusinessExperiment } from "./kernel.js";
 import { EXPERIMENT_OWNER_ENGINE, experimentBudget, experimentEdges, loadExperimentLineage, verifyExperimentReceipt, type ExperimentEdge, type ExperimentVersion, type ExperimentAssignment, type ExperimentExposure, type ExperimentExecution, type ExperimentCompletion } from "./receipts.js";
 export type ExperimentAnalysis = typeof businessExperimentAnalyses.$inferSelect;
 export type ExperimentOutcome = typeof businessExperimentOutcomes.$inferSelect;
 export type ExperimentInterpretation = typeof businessExperimentInterpretations.$inferSelect;
-export interface RecordingReceipts { execution: ExperimentExecution|null; assignments: ExperimentAssignment[]; exposures: ExperimentExposure[]; completion: ExperimentCompletion|null; assignmentLineage: Map<string, ExperimentEdge[]> }
+export interface RecordingReceipts { execution: ExperimentExecution|null; assignments: ExperimentAssignment[]; exposures: ExperimentExposure[]; completion: ExperimentCompletion|null; assignmentLineage: Map<string, ExperimentEdge[]>; admittedObjectSourceKeys?:ReadonlySet<string> }
 export function experimentInvariantDiagnostics(version: ExperimentVersion, assignments: ExperimentAssignment[]): BusinessExperimentInvariantDiagnostic[] {
   return version.metricPins.filter(pin => pin.role === "invariant").map(pin => {
     const control = assignments.filter(a=>a.arm==="control"), treatment = assignments.filter(a=>a.arm==="treatment");
@@ -57,20 +57,26 @@ export async function inspectBusinessExperimentResults(tx:Db,companyId:string,ac
   if(outcomes.length!==expected)throw notFound("Experiment intention-to-treat outcome receipt set is unavailable");
   const definitions=new Map<string,Awaited<ReturnType<ReturnType<typeof businessMetricService>["inspectPublishedDefinition"]>>>();
   for(const pin of metrics)definitions.set(pin.key,await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,pin.metricId,pin.metricVersionId));
+  const calculations=new Map(metrics.map(pin=>[pin.key,prepareNativeMetric(definitions.get(pin.key)!.version.definition,{metricId:pin.metricId,versionId:pin.metricVersionId,from:version.definition.sampleOrDurationPlan.from,until:version.definition.sampleOrDurationPlan.until,dimensions:[],maxRows:1})]));
   const lineage=await loadExperimentLineage(tx,companyId,outcomes.map(outcome=>outcome.lineageManifestId),deadline),assignments=new Map(receipts.assignments.map(assignment=>[assignment.id,assignment])),authorityEdges=new Map<string,ExperimentEdge>();
   for(const outcome of outcomes){
     experimentBudget(deadline);const assignment=assignments.get(outcome.assignmentId),metric=definitions.get(outcome.key),pin=metrics.find(p=>p.key===outcome.key);
     if(!assignment||!metric||!pin||outcome.metricId!==pin.metricId||outcome.metricVersionId!==pin.metricVersionId||outcome.capturedAt.getTime()!==analysis.analyzedAt.getTime()||outcome.sourceSnapshot.id!==assignment.unitId||outcome.sourceSnapshot.createdAt!==assignment.sourceSnapshot.createdAt)throw notFound("Experiment outcome exact identity or capture time is unavailable");
     verifyExperimentReceipt("outcome",experimentOutcomeMaterial(outcome,assignment.receiptHash,version.contentHash),outcome);
-    const calculation=calculateNativeMetric(metric.version.definition,{metricId:pin.metricId,versionId:pin.metricVersionId,from:version.definition.sampleOrDurationPlan.from,until:version.definition.sampleOrDurationPlan.until,dimensions:[],maxRows:1},[outcome.sourceSnapshot]);
+    const calculation=calculations.get(outcome.key)!([outcome.sourceSnapshot]);
     if(calculation.status!=="observed"||calculation.value!==outcome.value||calculation.inputHash!==outcome.inputHash||outcome.sourceHash!==nativeSha256({snapshot:outcome.sourceSnapshot,metricHash:pin.contentHash,inputHash:outcome.inputHash,value:outcome.value}))throw notFound("Experiment native outcome material is unavailable");
     const manifest=lineage.manifests.get(outcome.lineageManifestId),edges=lineage.edges.get(outcome.lineageManifestId)??[],inherited=receipts.assignmentLineage.get(assignment.lineageManifestId);
     if(!inherited)throw notFound("Experiment exact assignment lineage is unavailable");
     const expectedEdges=experimentEdges([...inherited,...(outcome.sourceSnapshot.projectId?[{inputType:"project" as const,inputRef:outcome.sourceSnapshot.projectId,inputHash:nativeSha256({type:"project",id:outcome.sourceSnapshot.projectId}),relationship:"source" as const}]:[])]);
-    if(!manifest||manifest.expiresAt<=new Date()||manifest.engineVersion!==EXPERIMENT_OWNER_ENGINE||manifest.analysisType!=="experiment_outcome"||manifest.analysisRef!==outcome.id||manifest.definitionHash!==version.contentHash||manifest.inputHash!==outcome.sourceHash||manifest.parameters.receiptHash!==outcome.receiptHash||manifest.createdAt.getTime()!==outcome.capturedAt.getTime()||manifest.expiresAt.getTime()!==version.expiresAt.getTime()||manifest.sourceCount!==edges.length||manifest.parameters.lineageHash!==nativeSha256(experimentEdges(edges))||nativeSha256(expectedEdges)!==nativeSha256(experimentEdges(edges)))throw notFound("Experiment outcome lineage is erased or unavailable");
-    for(const edge of edges){const key=`${edge.inputType}:${edge.inputRef}`,prior=authorityEdges.get(key);if(prior&&prior.inputHash!==edge.inputHash)throw conflict("Experiment outcome Source pins disagree");authorityEdges.set(key,edge);}
+    const inheritedManifestId=manifest?.parameters.assignmentManifestId;
+    const completeEdges=inheritedManifestId===undefined?experimentEdges(edges):experimentEdges([...inherited,...edges]);
+    if(inheritedManifestId!==undefined&&(inheritedManifestId!==assignment.lineageManifestId||manifest?.parameters.assignmentLineageHash!==nativeSha256(experimentEdges(inherited))||manifest?.parameters.completeLineageHash!==nativeSha256(completeEdges)))throw notFound("Experiment inherited assignment Source lineage is unavailable");
+    if(!manifest||manifest.expiresAt<=new Date()||manifest.engineVersion!==EXPERIMENT_OWNER_ENGINE||manifest.analysisType!=="experiment_outcome"||manifest.analysisRef!==outcome.id||manifest.definitionHash!==version.contentHash||manifest.inputHash!==outcome.sourceHash||manifest.parameters.receiptHash!==outcome.receiptHash||manifest.createdAt.getTime()!==outcome.capturedAt.getTime()||manifest.expiresAt.getTime()!==version.expiresAt.getTime()||manifest.sourceCount!==edges.length||manifest.parameters.lineageHash!==nativeSha256(experimentEdges(edges))||nativeSha256(expectedEdges)!==nativeSha256(completeEdges))throw notFound("Experiment outcome lineage is erased or unavailable");
+    for(const edge of completeEdges){const key=`${edge.inputType}:${edge.inputRef}`,prior=authorityEdges.get(key);if(prior&&prior.inputHash!==edge.inputHash)throw conflict("Experiment outcome Source pins disagree");authorityEdges.set(key,edge);}
   }
-  await inspectDecisionSourceAuthority(tx,companyId,actor,[...authorityEdges.values()],deadline);
+  // Reuse only the actual Source admission performed by the enclosing receipt
+  // owner in this same transaction/actor. Final-only ancestry is still inspected.
+  await inspectDecisionSourceAuthority(tx,companyId,actor,[...authorityEdges.values()].filter(edge=>!receipts.admittedObjectSourceKeys?.has(`${edge.inputType}:${edge.inputRef}`)),deadline);
   const [review]=await tx.select().from(businessExperimentTransitions).where(eq(businessExperimentTransitions.id,receipts.execution.reviewTransitionId)).for("share");
   if(!review)throw notFound("Experiment exact reviewed protocol is unavailable");
   const capture=experimentCapture(version,receipts,review.createdAt,outcomes,analysis.analyzedAt), diagnostics=experimentInvariantDiagnostics(version,receipts.assignments);
