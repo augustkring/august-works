@@ -1,0 +1,123 @@
+{
+  "checkpoint": "Transient current native Goal/budget initiative prioritization preview",
+  "parentCommit": "9d708bef107441fce1a6ac122b8b99668e230092",
+  "primaryParentCommit": "65ff385fcdcd5259dc129d882de184757488e5d8",
+  "recordedAt": "2026-10-08T08:35:41.008197+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "963161def9fd8fdffb489a4a9af0bfcc99962c7bf0c11dd2e8890a01f2edaef9"
+    },
+    {
+      "path": "packages/shared/src/adaptive-planning.ts",
+      "sha256": "2ca041232f0b73a73473ed5c93bf895cb41803830b7d4aed2e208166e98b9a27"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-cross-project.integration.test.ts",
+      "sha256": "d7679a2b74bd4da8b854f6f87c9247d4b7ad5df4e632e59e121c7dc84718cd14"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-portfolio-kernel.test.ts",
+      "sha256": "dd1008eb487efee11e2451d63e59aa8609912be13a87ea17657d797a8d55323c"
+    },
+    {
+      "path": "server/src/routes/cross-project-planning.ts",
+      "sha256": "1f2bf2040813a688f1993ebf83ddd9bb5b8f74e82e21f9030c8f1a427f077c81"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/cross-project.ts",
+      "sha256": "4147a276f9f2347790840d5262c09f9056de5da8ba5f2ce52a5552409379d95d"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/portfolio-kernel.ts",
+      "sha256": "188a715ee4fcf2ea271856cdd2f5bd91216f7d6cb48f56b58d5a3d0222a01b70"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/portfolio.ts",
+      "sha256": "2f7bade927aaa9ab228b770bc8bede0565bb334bfe03f5ffd4ecd5d625b0b73c"
+    },
+    {
+      "path": "server/src/services/budgets.ts",
+      "sha256": "4a4096870c24e8825e6bce24d4828227c30863350f548ab9a4d34d0f44db1d5d"
+    },
+    {
+      "path": "tests/e2e/cross-project-planning.spec.ts",
+      "sha256": "d44a3d8e247fa99b5398e33a995551269953eafe9c80efdf0ccc0006d8231322"
+    },
+    {
+      "path": "ui/src/api/cross-project-planning.ts",
+      "sha256": "b6b5c4e4427d32b79eb5cf7b534afd7f1c39616172f920e88db4cf5110a7ee77"
+    },
+    {
+      "path": "ui/src/components/PortfolioPlanningPreview.tsx",
+      "sha256": "78d02e8c0eeac248dff66574f339e5062cf0f9d11561bb8020f6908dc04ead3a"
+    },
+    {
+      "path": "ui/src/pages/CrossProjectPlanning.test.tsx",
+      "sha256": "26ae0d08b9c9b8cd9bfc135167c5698dd83f0b31e8ab8efc68d51101e1efadd1"
+    },
+    {
+      "path": "ui/src/pages/CrossProjectPlanning.tsx",
+      "sha256": "71dd051eaa9ec0f26ae1b4d039a0b055e5ba6f39af60ca78ed1dbadd9d4cf0e2"
+    }
+  ],
+  "validation": {
+    "nativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-portfolio-final-native-tests.log",
+      "sha256": "75a20aa0b44d36d1669aced5121c25c625e644921935a9f61a7ef8dc60ad0b25",
+      "tests": 80,
+      "files": 8,
+      "skipped": 0
+    },
+    "uiRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-portfolio-final-ui-tests.log",
+      "sha256": "b2a70d77162a2c84a6cf8e427c4a8d57e5524e932349d00826bf115f98a8ee93",
+      "tests": 57,
+      "files": 4,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-portfolio-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-portfolio-qualified-ui-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-portfolio-final-token-gates.log",
+      "sha256": "bf42fbb54a3530e53647800d12a96e695bebba8f7f3337a3da10634c29b23ecf"
+    },
+    "nativeBrowser": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-portfolio-settled-native-browser.log",
+      "sha256": "375fc354d9289162e18ebf89554eacdb9cc28ccb0041dd55b64de6cd612033ba",
+      "tests": 1,
+      "files": 1,
+      "skipped": 0
+    }
+  },
+  "qualified": [
+    "Complete actual selected project/Task Sources and original dependency solver",
+    "Current same-company Goal associations/versions/erasure guards",
+    "Original company/project billed-cost accounting, cumulative hard limits, null unknowns, zero unlimited and explicit monthly period coverage",
+    "No canonical changes during transient preview",
+    "Exact Human dimensions/cost/rationale declarations and amendment/withdrawal UI clearing",
+    "Shipped local-trusted browser with actual native Goal/budget API setup and separate original joint Roadmap approval",
+    "Settled native light/dark 390/1200px WCAG/overflow checks"
+  ],
+  "limitations": [
+    "Advisory bounded greedy calculation; no global portfolio optimality or universal business/productivity score",
+    "Selected group count bound is not a complete company-wide portfolio capacity claim",
+    "Billed runtime policy bounds are not cash runway, general corporate capital constraints, spend permission or reservations",
+    "Separate persisted initiative proposal/Human review/canonical lifecycle application is not yet implemented",
+    "Software Source/Human/purpose/budget declarations are prerequisites, not performed Human/provider/pilot trials or business impact",
+    "Initial forced-class and unsettled-transition browser runs excluded; final settled native browser is authoritative",
+    "Whole brief and hosted acceptance remain in progress"
+  ]
+}
