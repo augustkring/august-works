@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { businessMetrics, businessMetricVersions, businessMetricTargets, businessMetricTargetVersions, businessMetricObservations, decisions, decisionTargetIssues, documentRevisions, foundationDocuments, foundationSections, goals, issues, projects, projectMilestones, type Db } from "@paperclipai/db";
-import { v5FeatureEnabled, type StrategyExecutionReference } from "@paperclipai/shared";
+import { v5FeatureEnabled, type BusinessMetricResult, type StrategyExecutionReference } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization } from "../v7-authorization.js";
@@ -18,6 +18,7 @@ export function strategyReferenceId(ref: StrategyExecutionReference) {
  * stale pin never makes a denied source visible through a review response. */
 export async function authorizeStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential") {
   const issueIds = new Set<string>(), projectIds = new Set<string>();
+  let metricObservation: BusinessMetricResult | undefined;
   async function project(id: string) {
     const [row] = await tx.select().from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).for("share");
     if (!row) throw notFound("Strategy project source is unavailable");
@@ -88,10 +89,10 @@ export async function authorizeStrategyReference(tx: Db, companyId: string, acto
       await metric(ref.metricId, ref.metricVersionId);
       // The measurement owner reauthorizes every retained lineage source, not
       // only the selected project or a copied aggregate.
-      await businessMetricService(tx).inspectCurrentObservation(companyId, actor, ref.id); break;
+      metricObservation = await businessMetricService(tx).inspectCurrentObservation(companyId, actor, ref.id); break;
     }
   }
-  return { issueIds: [...issueIds], projectIds: [...projectIds] };
+  return { issueIds: [...issueIds], projectIds: [...projectIds], ...(metricObservation ? { metricObservation } : {}) };
 }
 
 export async function validateCurrentStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, now = new Date()) {

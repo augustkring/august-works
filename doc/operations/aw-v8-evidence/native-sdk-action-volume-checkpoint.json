@@ -1,0 +1,70 @@
+{
+  "checkpoint": "Actual complete native SDK action previews and four-thousand-Task Source envelope",
+  "recordedAt": "2026-10-08T11:57:54.578194+00:00",
+  "parentCommit": "17369bc463e14d7c7c293f0b6967620bde3db22b",
+  "primaryParentCommit": "5839e35067e19f3ea84af5d4c3c158851621a186",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "854da854ac13db6b5dc5dff371a0076f11e74b15ee492dad33e839a09882cd96"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "c9386207b9987e54f19f1fa456b61597952e7a4077fd57b559196fd6bb5232d9"
+    },
+    {
+      "path": "server/src/services/analytical-evidence.ts",
+      "sha256": "eaf4e411938fcf81da2344cfa02ac09767d3984c93fa9940caeccb7d7317b092"
+    },
+    {
+      "path": "server/src/services/strategy-execution/references.ts",
+      "sha256": "9c2c08caef4e6ae0353b6faa200d175db3c367ceaf576d562c300aa4fcef3e86"
+    }
+  ],
+  "validation": {
+    "completeContextAndSDK": {
+      "result": "passed",
+      "tests": 48,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-sdk-action-volume-final-context-tests.log",
+      "sha256": "276a3256dcad3ca4c96395503f6398be55edf36073d6bf92c24dd59d0b441178"
+    },
+    "remainingOriginalOwners": {
+      "result": "passed",
+      "files": 10,
+      "tests": 162,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-sdk-action-volume-reviewed-tests.log",
+      "sha256": "684b7b1148598e4b9714cb413d54db4b87d7822268b03f10afc97a2930e30077",
+      "scope": "Ten passed files in the broader 210-case run; three Context test-backlog failures were corrected and superseded by the final complete 48-case Context rerun. Production files did not change between runs."
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sdk-action-volume-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "commit": "5839e35067e19f3ea84af5d4c3c158851621a186",
+      "log": "/var/tmp/aw-v8-native-build-dowhy-owner-isolated.log",
+      "sha256": "4987b919f6612bcc588f48aedf2e727151fec848d7cb5abf2ff25b4b2c2f87f2"
+    }
+  },
+  "qualified": [
+    "Actual SDK bound running native conversation, current Human/agent and exact Context/Source retention owners",
+    "Complete 4000 native completed-Task count within original thirty-second SDK assertion and 256000-byte full output, exact complete lineage sourceCount",
+    "Fresh later hidden-Source denial and flags-off paused Source erasure preserve all 4000 independent completed Tasks",
+    "All four advisory action enums retain exact evidence and require separate Human review without creating Task, Project, Decision or Experiment",
+    "Eight actual observations retain eight Source manifests and exact pins; ninth-source parse rejection adds no root; one Source erasure withholds entire copied answer while seven independent observations remain",
+    "Original native maintenance cadence drains bounded ten-job/twenty-company ticks; no production resource-limit increase",
+    "Original metric owner inspection reused only within the same evidence capture; later captures and actors fully reauthorize without a tenant fact/permission cache"
+  ],
+  "limitations": [
+    "Native synthetic actors, grants, approved purpose, Context and bulk Task population are declared software prerequisites, not performed Task executions or commercial/Human/provider/hosted trials",
+    "Qualification covers this local 4000-Task envelope, not default 5000/maximum 10000, all dimensions, authenticated or hosted p95/cold starts",
+    "Advisory SDK preview creates no independently reviewed native action; existing Human owners remain required",
+    "Initial Source time-budget and test dependent-conversation/backlog assumptions are excluded from qualification",
+    "Concurrent parent build exit137 is excluded; isolated same-source build passed",
+    "Other SDK Source owners and indirect Source closure, customer semantic adapters, historical recovery and hosted acceptance remain ongoing; whole brief is not complete"
+  ]
+}
