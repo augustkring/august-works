@@ -1,6 +1,6 @@
 import { admitOrchestrationHeartbeat, hasOrchestrationPlan } from "./orchestration/orchestration-admission.js";
 import { assertV7Enabled } from "./v7-authorization.js";
-import { learningAssetRoots,retainLearnedAssetsInContext } from "./learning/learning-assets.js";
+import { learningAssetRoots,retainLearnedAssetsInContext,assertRuntimeSkillSourceRetained } from "./learning/learning-assets.js";
 import { lockMemoryPrivacy,heartbeatMemoryPayloadRetained } from "./memory/memory-privacy.js";
 import {assertAnalyticalContextPayloadAccess} from "./analytical-context-authority.js";
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
@@ -48,6 +48,23 @@ export function agentRuntimeFabricService(db: Db) {
     return { refs: [{ companyId: scope.primaryCompanyId, contextManifestId: result.packet.manifest.id }], markdown: result.markdown, warnings: [] as string[] };
   }
   return {
+    loadSkill:async(actor:AuthorizationActor,companyId:string,runId:string,skillId:string)=>{
+      if(actor.type!=="agent"||actor.runId!==runId)throw forbidden("Skill loading requires the current authenticated execution");
+      return db.transaction(async rawTx=>{
+        const tx=rawTx as unknown as Db;await tx.execute(sql`set local statement_timeout='8s'`);await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
+        const [run]=await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,runId),eq(heartbeatRuns.agentId,actor.agentId!),eq(heartbeatRuns.status,"running"))).limit(1);
+        if(!run)throw notFound("Active execution not found");
+        await agentProviderBindingService(tx).assertRuntime(companyId,run.agentId);
+        const record=await agentRuntimeFabricService(tx).getManifest(actor,companyId,runId),pin=record.manifest.skills.find(pin=>pin.skillId===skillId);
+        if(!pin)throw forbidden("Skill is outside the pinned execution manifest");
+        const {version}=await assertRuntimeSkillSourceRetained(tx,companyId,actor,pin.skillId,pin.versionId);
+        const body=version.fileInventory.find(file=>file.path==="SKILL.md")?.content;
+        if(!body)throw notFound("Pinned Skill body not found");
+        if(Buffer.byteLength(body,"utf8")>32000)throw unprocessable("This Skill exceeds the on-demand body budget; split it into bounded procedures");
+        await tx.insert(companySkillUsageEvents).values({companyId,runId,agentId:run.agentId,skillId:pin.skillId,skillVersionId:pin.versionId,stage:"loaded",selectionReason:pin.selection}).onConflictDoNothing();
+        return {skillId:pin.skillId,versionId:pin.versionId,markdown:body};
+      });
+    },
     loadPlaybook:async(actor:AuthorizationActor,companyId:string,runId:string,playbookId:string)=>{
       if(actor.type!=="agent"||actor.runId!==runId)throw forbidden("Playbook loading requires the current authenticated execution");
       const [run]=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,runId),eq(heartbeatRuns.agentId,actor.agentId!),eq(heartbeatRuns.status,"running"))).limit(1);
@@ -135,14 +152,14 @@ export function agentRuntimeFabricService(db: Db) {
       // resolver inputs, so negative controls can observe real non-selection.
       if (test) query = test.inputSnapshot.slice(0, 500);
       if (!v5FeatureEnabled(flags, "skill_resolver_v5") && rolePack?.items.some((item) => item.type === "required_skill")) throw conflict("This Role Pack requires the Skill resolver runtime");
-      const resolvedSkills = !stored && v5FeatureEnabled(flags, "skill_resolver_v5") ? await skillResolverService(db).resolve(actor, input.companyId, query, test?.evaluationContext ? [] : rolePack?.items ?? [], test ? { skillId: test.skillId, versionId: test.skillVersionId } : undefined) : { skills: stored?.manifest.skills ?? [], estimatedTokens: stored?.manifest.inventoryEstimatedTokens ?? 0, warnings: [] };
+      const resolvedSkills = !stored && v5FeatureEnabled(flags, "skill_resolver_v5") ? await skillResolverService(db).resolve(actor, input.companyId, query, test?.evaluationContext ? [] : rolePack?.items ?? [], test ? { skillId: test.skillId, versionId: test.skillVersionId } : undefined,"task") : { skills: stored?.manifest.skills ?? [], estimatedTokens: stored?.manifest.inventoryEstimatedTokens ?? 0, warnings: [] };
       const resolvedPlaybooks = !stored && v5FeatureEnabled(flags, "playbooks_v5") ? await playbookResolverService(db).resolve(actor, input.companyId, query, rolePack?.items ?? [],"task") : { pins: stored?.manifest.playbooks ?? [], warnings: [] as string[] };
       if (!v5FeatureEnabled(flags, "playbooks_v5") && rolePack?.items.some((item) => item.type === "required_playbook")) throw conflict("This Role Pack requires the Playbook runtime");
       const capabilities = await capabilityResolverService(db).search(actor, input.companyId, "");
       const context = await freshContext(actor, scope, query, input.runId, input.issueId);
       if (stored) {
         if (stored.agentId !== input.agentId || stored.agentIdentityId !== local.identity.id || hashContextPolicySnapshot(stored.manifest.providers) !== hashContextPolicySnapshot(providers)) throw conflict("Pinned provider identity/profile changed; start a new execution");
-        for (const pin of stored.manifest.skills) await skillResolverService(db).authorizedVersion(actor, input.companyId, pin.skillId, pin.versionId, Boolean(test && pin.skillId === test.skillId && pin.versionId === test.skillVersionId));
+        for (const pin of stored.manifest.skills) await skillResolverService(db).authorizedVersion(actor, input.companyId, pin.skillId, pin.versionId, Boolean(test && pin.skillId === test.skillId && pin.versionId === test.skillVersionId),"task");
         for (const pin of stored.manifest.playbooks) await playbookResolverService(db).validate(actor, input.companyId, pin,"task");
         for (const pin of stored.manifest.capabilities) if (!capabilities.some((c) => c.ref === pin.ref && c.versionHash === pin.versionHash && (pin.access !== "allowed" || c.access === "allowed"))) throw forbidden("A pinned execution capability is no longer authorized/available");
         // Reconstruct current context rather than treating the old manifest as

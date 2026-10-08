@@ -1,3 +1,5 @@
+import {companySkillTestRuns,agentExecutionManifestItems,learningRetainedAssets} from "@paperclipai/db";
+import {skillResolverService} from "../services/skill-resolver.js";
 import { materializeAsset } from "../services/native-runtime/runtime-context.js";
 import { nativeRuntimeAssetsRoot } from "../services/native-runtime/runtime-asset-retention.js";
 import { removeRuntimeStorageTree } from "../services/runtime-skill-cache.js";
@@ -692,6 +694,102 @@ const support = await getEmbeddedPostgresTestSupport();
     expect((await playbooks.get(owner,companyId,created.id)).document.latestBody).toContain("Review analytical evidence");
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
     await expect(playbooks.get(owner,companyId,created.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+  });
+  it.each(["candidate","active"])("retains complete actual Skill %s Source before native body and snapshot consumption",async(mode)=>{
+    const priorHome=process.env.PAPERCLIP_HOME,priorInstance=process.env.PAPERCLIP_INSTANCE_ID,home=await fs.mkdtemp(path.join(os.tmpdir(),"aw-native-skill-admission-"));
+    process.env.PAPERCLIP_HOME=home;process.env.PAPERCLIP_INSTANCE_ID="skill-admission-test";
+    const previous=await instanceSettingsService(db).getExperimental();
+    try{
+      const userId=randomUUID();await db.insert(authUsers).values({id:userId,name:"Native Skill operator",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
+      await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,status:"active",membershipRole:"admin"});
+      await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"user",principalId:userId,permissionKey})));
+      const signal=await analyticalSignal("internal",userId),lifecycle=skillLifecycleService(db),created=await lifecycle.createDraft(owner,companyId,createGovernedSkillSchema.parse({slug:"native-evidence-review",name:"Native evidence review",markdown:"Independent initial draft",sharing:"company_proposed"}));
+      const markdown="Review the complete evidence graph before drafting; require human approval";
+      const candidate=await domainProposal(created.skillId,`skill://${created.skillId}/none`,{targetDomain:"skill",candidate:{baseActiveVersionId:null,markdown,summary:"Current signal supplements independent verified outcomes",dependencies:[],sharing:"company_proposed"}},[signal.pin]);
+      // Explicit retained active-state prerequisite for the native consumer
+      // fixture. This does not claim a performed Skill evaluation/promotion.
+      if(mode==="active"){
+        await db.update(companySkillVersions).set({state:"active",activatedAt:new Date()}).where(eq(companySkillVersions.id,candidate.candidateId));
+        await db.update(companySkills).set({lifecycleState:"active",activeVersionId:candidate.candidateId,currentVersionId:candidate.candidateId,sharingScope:"company",markdown}).where(eq(companySkills.id,created.skillId));
+      }
+      await db.update(companySkills).set({compatibility:"compatible"}).where(eq(companySkills.id,created.skillId));
+      // Candidate lineage has no retained-asset row: retention must use the
+      // actual original candidate owner rather than assuming promotion did it.
+      expect(await db.select().from(learningRetainedAssets).where(and(eq(learningRetainedAssets.companyId,companyId),eq(learningRetainedAssets.assetId,candidate.candidateId)))).toHaveLength(0);
+      const [skill]=await db.select().from(companySkills).where(eq(companySkills.id,created.skillId));
+      const packs=rolePackService(db),pack=await packs.create(owner,companyId,{key:"skill-source-runtime",name:"Skill Source runtime",description:""});
+      const packVersion=await packs.createVersion(owner,companyId,pack.id,{summary:"Source-free mandatory pin",items:[{type:"required_skill",ref:created.skillId,operation:"add",versionId:candidate.candidateId,loadPoint:"always",triggerTerms:[],excludeTerms:[]}]});
+      await packs.publish(owner,companyId,pack.id,packVersion.id,null);
+      const [identity]=await db.insert(agentIdentities).values({name:"Native Skill consumer",homeCompanyId:companyId}).returning();
+      const [agent]=await db.insert(agents).values({companyId,agentIdentityId:identity!.id,name:"Native Skill consumer",status:"idle",adapterType:"paperclip_runner"}).returning();
+      await db.insert(companyMemberships).values({companyId,principalType:"agent",principalId:agent!.id,status:"active"});
+      await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"agent",principalId:agent!.id,permissionKey})));
+      await packs.assign(owner,companyId,{scopeType:"agent",scopeId:agent!.id,rolePackId:pack.id,versionPolicy:"pinned",pinnedVersionId:packVersion.id});
+      const [task]=await db.insert(issues).values({companyId,title:"Apply native evidence review",status:"in_progress",assigneeAgentId:agent!.id,responsibleUserId:userId}).returning();
+      const [run]=await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,responsibleUserId:userId,status:"running",runtimeMode:"native",runtimeModeResolvedAt:new Date(),nativeIssueId:task!.id,contextSnapshot:{issueId:task!.id}}).returning();
+      await db.update(issues).set({executionRunId:run!.id}).where(eq(issues.id,task!.id));
+      // Actual native test/task binding is a software preparation fixture;
+      // no provider or trial is performed and no passing score is synthesized.
+      const [test]=mode==="candidate"?await db.insert(companySkillTestRuns).values({companyId,skillId:created.skillId,skillVersionId:candidate.candidateId,agentId:agent!.id,issueId:task!.id,inputSnapshot:"native evidence review",status:"running"}).returning():[];
+      const actor={type:"agent" as const,source:"agent_jwt" as const,companyId,agentId:agent!.id,runId:run!.id,onBehalfOfUserId:userId};
+      const original=companySkillService(db),resolver=skillResolverService(db),fabric=agentRuntimeFabricService(db),input={companyId,agentId:agent!.id,runId:run!.id,issueId:task!.id,responsibleUserId:userId,query:"native evidence review"};
+      expect(await original.canReadSkill(companyId,created.skillId,actor,undefined,candidate.candidateId)).toBe(false);
+      await expect(original.getVersion(companyId,created.skillId,candidate.candidateId,actor)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await expect(original.getVersion(companyId,created.skillId,candidate.candidateId)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      const providers=agentProviderBindingService(db),binding=await providers.create(owner,companyId,agent!.id,{providerType:"paperclip_native",providerAgentRef:agent!.id,providerEndpointRef:null,isolationMode:"isolated_per_presence"});
+      await providers.attach(owner,companyId,agent!.id,{providerBindingId:binding.id,providerProfileRef:agent!.id});
+      await providers.recordDiscovery(companyId,agent!.id,await discoverNativeCapabilities({companyId,adapterType:agent!.adapterType,config:agent!.adapterConfig}),{connect:true,identity:true,start:true,stream:true,wait:true,cancel:true,resume:true,memoryScoping:true});
+      await instanceSettingsService(db).updateExperimental({skill_resolver_v5:true});
+      const prepared=await fabric.prepare(input);expect(prepared!.manifest.skills).toMatchObject([{skillId:created.skillId,versionId:candidate.candidateId,selection:"required"}]);
+      const retained=await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId));expect(retained).toHaveLength(1);expect(retained[0]!.authorityPins).toEqual([signal.pin]);
+      expect((await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,prepared!.record.contextManifestId))).map(r=>r.memoryRecordId).sort()).toEqual([...roots,retained[0]!.memoryRecordId].sort());
+      await expect(fabric.loadSkill(actor,companyId,run!.id,created.skillId)).resolves.toEqual({skillId:created.skillId,versionId:candidate.candidateId,markdown});
+      await expect(fabric.loadSkill(owner,companyId,run!.id,created.skillId)).rejects.toMatchObject({status:403});
+      await expect(fabric.loadSkill({...actor,runId:randomUUID()},companyId,run!.id,created.skillId)).rejects.toMatchObject({status:403});
+      await expect(fabric.loadSkill(actor,companyId,run!.id,randomUUID())).rejects.toMatchObject({status:403});
+      const options={actor,readScope:"task" as const,selectedSkillKeys:new Set([skill!.key]),versionSelections:new Map([[skill!.key,candidate.candidateId]]),allowCandidateVersionsForTest:mode==="candidate"};
+      const [entry]=await original.listRuntimeSkillEntries(companyId,options);expect(entry).toMatchObject({sourceStatus:"available",versionId:candidate.candidateId});expect(await fs.readFile(path.join(entry!.source,"SKILL.md"),"utf8")).toBe(markdown);
+      if(mode==="active"){
+        const privateDraft=await lifecycle.propose(owner,companyId,created.skillId,{baseActiveVersionId:candidate.candidateId,markdown:"PRIVATE NEXT VERSION MUST NOT REPLACE THE PIN",summary:"Unreviewed follow-up",dependencies:[],sharing:"private_draft"});
+        expect(await original.getVersion(companyId,created.skillId,privateDraft.id,actor,"task")).toBeNull();
+        await expect(fabric.loadSkill(actor,companyId,run!.id,created.skillId)).resolves.toMatchObject({versionId:candidate.candidateId,markdown});
+        expect(await fs.readFile(path.join((await original.listRuntimeSkillEntries(companyId,options))[0]!.source,"SKILL.md"),"utf8")).toBe(markdown);
+      }
+      if(test){
+        await db.update(companySkillTestRuns).set({supersededAt:new Date()}).where(eq(companySkillTestRuns.id,test.id));
+        await expect(fabric.loadSkill(actor,companyId,run!.id,created.skillId)).rejects.toMatchObject({status:409});
+        expect((await original.listRuntimeSkillEntries(companyId,options))[0]!.sourceStatus).toBe("missing");
+        await db.update(companySkillTestRuns).set({supersededAt:null}).where(eq(companySkillTestRuns.id,test.id));
+      }
+      const [unretainedTask]=await db.insert(issues).values({companyId,title:"Unretained historical procedure",status:"in_progress",assigneeAgentId:agent!.id,responsibleUserId:userId}).returning();
+      const [unretainedRun]=await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,responsibleUserId:userId,status:"running",runtimeMode:"native",runtimeModeResolvedAt:new Date(),nativeIssueId:unretainedTask!.id,contextSnapshot:{issueId:unretainedTask!.id}}).returning();
+      await db.update(issues).set({executionRunId:unretainedRun!.id}).where(eq(issues.id,unretainedTask!.id));
+      if(mode==="candidate")await db.insert(companySkillTestRuns).values({companyId,skillId:created.skillId,skillVersionId:candidate.candidateId,agentId:agent!.id,issueId:unretainedTask!.id,inputSnapshot:"native evidence review",status:"running"});
+      const unretainedContext=await contextEngineService(db).assemble({...input,runId:unretainedRun!.id,issueId:unretainedTask!.id,intent:"native_task_execution",enforceResponsibleUserIntersection:true});
+      const [historic]=await db.insert(agentExecutionManifests).values({companyId,runId:unretainedRun!.id,agentId:agent!.id,agentIdentityId:identity!.id,contextManifestId:unretainedContext.packet.manifest!.id,manifest:{...prepared!.manifest,runId:unretainedRun!.id,contextManifests:[{companyId,contextManifestId:unretainedContext.packet.manifest!.id}]},policySnapshotHash:"historical-fixture",hash:"historical-fixture"}).returning();
+      await db.insert(agentExecutionManifestItems).values({companyId,manifestId:historic!.id,type:"skill",ref:created.skillId,versionRef:candidate.candidateId});
+      await expect(fabric.loadSkill({...actor,runId:unretainedRun!.id},companyId,unretainedRun!.id,created.skillId)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      expect((await original.listRuntimeSkillEntries(companyId,{...options,actor:{...actor,runId:unretainedRun!.id}}))[0]!.sourceStatus).toBe("missing");
+      await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+      await expect(resolver.authorizedVersion(actor,companyId,created.skillId,candidate.candidateId,mode==="candidate","task")).rejects.toMatchObject({status:404});
+      await expect(fabric.prepare(input)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await expect(fabric.loadSkill(actor,companyId,run!.id,created.skillId)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
+      await expect(fabric.loadSkill(actor,companyId,run!.id,created.skillId)).resolves.toMatchObject({markdown});
+      const bundleOwner={companyId,runId:run!.id},bundle=await materializeAsset([{path:"SKILL.md",content:Buffer.from(markdown),mode:0o444}],bundleOwner);
+      await db.update(heartbeatRuns).set({runnerProfileJson:{nativeExecutionInput:{runtimeContext:{skills:[{versionId:candidate.candidateId,bundle}]}}}}).where(eq(heartbeatRuns.id,run!.id));
+      await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,cognitive_memory_v7:false,memory_observations_v7:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false,enableCollectiveMemoryV1:false,enablePrivateAgentMemoryV1:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+      await db.delete(issues).where(eq(issues.id,signal.sourceId));await memoryJobService(db).tick({limit:100});
+      expect((await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.id,prepared!.record.id)))[0]!.manifest).toEqual({payloadDeleted:true});
+      expect((await db.select().from(companySkillVersions).where(eq(companySkillVersions.id,candidate.candidateId)))[0]!.fileInventory).toEqual([]);
+      await expect(fs.stat(entry!.source)).rejects.toMatchObject({code:"ENOENT"});await expect(fs.stat(nativeRuntimeAssetsRoot(bundleOwner))).rejects.toMatchObject({code:"ENOENT"});
+      for(const rootId of roots)expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,rootId)))[0]!.deletedAt).toBeNull();
+    }finally{
+      await instanceSettingsService(db).updateExperimental(previous);
+      if(priorHome===undefined)delete process.env.PAPERCLIP_HOME;else process.env.PAPERCLIP_HOME=priorHome;
+      if(priorInstance===undefined)delete process.env.PAPERCLIP_INSTANCE_ID;else process.env.PAPERCLIP_INSTANCE_ID=priorInstance;
+      await fs.rm(home,{recursive:true,force:true});
+    }
   });
   it("checks analytical source admission before native Skill payload reads and promotion",async()=>{
     const signal=await analyticalSignal(),skills=skillLifecycleService(db),created=await skills.createDraft(owner,companyId,createGovernedSkillSchema.parse({slug:"analytical-learning-procedure",name:"Procedure",markdown:"Keep human approval before changing systems"}));

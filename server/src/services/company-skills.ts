@@ -1,3 +1,5 @@
+import type {NativeReadScope} from "./analytical-reader.js";
+import {assertRuntimeSkillSourceRetained} from "./learning/learning-assets.js";
 import { enqueueSkillVersionFileErasure } from "./learning/skill-file-erasure.js";
 import { lockAnalyticalCompany } from "./analytical-privacy.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
@@ -378,6 +380,8 @@ export type ProjectSkillScanTarget = {
 };
 
 type RuntimeSkillEntryOptions = {
+  actor?: AuthorizationActor;
+  readScope?: NativeReadScope;
   selectedSkillKeys?: Set<string>;
   allowCandidateVersionsForTest?: boolean;
   materializeMissing?: boolean;
@@ -3240,11 +3244,11 @@ export function companySkillService(db: Db) {
     return and(sql`coalesce(${companySkills.metadata}->>'sensitivity', 'internal') in ('public', 'internal')`, or(ne(companySkills.sharingScope, "private"), !v5Enabled ? isNull(companySkills.headVersionId) : undefined, ownership));
   }
 
-  async function canReadSkill(companyId: string, skillId: string, actor: AuthorizationActor) {
+  async function canReadSkill(companyId: string, skillId: string, actor: AuthorizationActor,readScope?:NativeReadScope,pinnedVersionId?:string) {
     const condition = await privateSkillCondition(companyId, actor);
     const [row] = await db.select({ id: companySkills.id,activeVersionId:companySkills.activeVersionId,currentVersionId:companySkills.currentVersionId }).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId), condition)).limit(1);
-    if(row)for(const id of new Set([row.activeVersionId,row.currentVersionId].filter((id):id is string=>Boolean(id)))){
-      try{await assertLearningCandidateAnalyticalSources(db,companyId,"skill",id,actor);await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",id,actor);}
+    if(row)for(const id of new Set((pinnedVersionId?[pinnedVersionId]:[row.activeVersionId,row.currentVersionId]).filter((id):id is string=>Boolean(id)))){
+      try{await assertLearningCandidateAnalyticalSources(db,companyId,"skill",id,actor,readScope);await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",id,actor,readScope);}
       catch(error){if(error instanceof Error&&"status" in error&&error.status===403)return false;throw error;}
     }
     return Boolean(row);
@@ -3438,8 +3442,12 @@ export function companySkillService(db: Db) {
     return (await authorizationService(db).decide({ actor, action: "users:manage_permissions", resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true })).allowed;
   }
 
-  async function getVersion(companyId: string, skillId: string, versionId: string, actor?: AuthorizationActor): Promise<CompanySkillVersion | null> {
-    if (actor && !(await canReadSkill(companyId, skillId, actor))) return null;
+  async function getVersion(companyId: string, skillId: string, versionId: string, actor?: AuthorizationActor,readScope?:NativeReadScope): Promise<CompanySkillVersion | null> {
+    if(actor){
+      const condition=await privateSkillCondition(companyId,actor);
+      const [visible]=await db.select({id:companySkills.id}).from(companySkills).where(and(eq(companySkills.companyId,companyId),eq(companySkills.id,skillId),condition)).limit(1);
+      if(!visible)return null;
+    }
     const row = await db
       .select()
       .from(companySkillVersions)
@@ -3450,7 +3458,7 @@ export function companySkillService(db: Db) {
       ))
       .then((rows) => rows[0] ?? null);
     if (row && actor && !(await canReadPrivateVersion(companyId, row, actor))) return null;
-    if(row){await assertLearningCandidateAnalyticalSources(db,companyId,"skill",row.id,actor);await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",row.id,actor);}
+    if(row){await assertLearningCandidateAnalyticalSources(db,companyId,"skill",row.id,actor,readScope);await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",row.id,actor,readScope);}
     return row ? toCompanySkillVersion(row) : null;
   }
 
@@ -5935,7 +5943,7 @@ export function companySkillService(db: Db) {
     return true;
   }
 
-  async function materializeVersionSnapshot(companyId: string, skill: CompanySkill, selectedVersion: CompanySkillVersion) {
+  async function materializeVersionSnapshot(companyId: string, skill: CompanySkill, selectedVersion: CompanySkillVersion,options:RuntimeSkillEntryOptions) {
     return db.transaction(async rawTx => {
       const tx = rawTx as unknown as Db;
       await lockAnalyticalCompany(tx, companyId);
@@ -5948,7 +5956,8 @@ export function companySkillService(db: Db) {
           and not aw_learning_link_current(l.company_id,l.id)) as current`);
       if (!source?.current) throw unprocessable("Skill version Source was erased or changed");
       // Re-read after acquiring privacy locks; pre-lock inventory may be stale.
-      const version = await companySkillService(tx).getVersion(companyId, skill.id, selectedVersion.id);
+      if(options.actor&&options.readScope==="task")await assertRuntimeSkillSourceRetained(tx,companyId,options.actor,skill.id,selectedVersion.id);
+      const version = await companySkillService(tx).getVersion(companyId, skill.id, selectedVersion.id,options.actor,options.readScope);
       if (!version) throw unprocessable("Skill version no longer exists");
       const skillDir = await prepareRuntimeSkillVersionDirectory(resolveManagedSkillsRoot(companyId), skill.id, version.id);
       if (await materializedVersionSnapshotMatches(skillDir, version)) {
@@ -5989,7 +5998,7 @@ export function companySkillService(db: Db) {
     const selectedVersionId = options.versionSelections?.get(skill.key) ?? null;
     if (selectedVersionId) {
       const versionPath = path.resolve(resolveManagedSkillsRoot(companyId), "__versions__", skill.id, selectedVersionId);
-      const version = await getVersion(companyId, skill.id, selectedVersionId);
+      const version = await getVersion(companyId, skill.id, selectedVersionId,options.actor,options.readScope);
       if (!version) {
         return {
           status: "missing",
@@ -6001,7 +6010,7 @@ export function companySkillService(db: Db) {
       // with the real cause — a silent drop makes the skill vanish from the
       // runtime while the library still shows it installed.
       try {
-        const versionSource = await materializeVersionSnapshot(companyId, skill, version);
+        const versionSource = await materializeVersionSnapshot(companyId, skill, version,options);
         if (versionSource) return { status: "available", source: versionSource };
         return { status: "missing", source: versionPath, detail: "The selected skill version produced no files." };
       } catch (error) {
@@ -6069,6 +6078,7 @@ export function companySkillService(db: Db) {
     companyId: string,
     options: RuntimeSkillEntryOptions = {},
   ): Promise<PaperclipSkillEntry[]> {
+    if(options.selectedSkillKeys?.size===0)return [];
     const skills = await listFull(companyId);
 
     const lifecycleEnabled = v5FeatureEnabled(await instanceSettingsService(db).getExperimental(), "skill_lifecycle_v5");
@@ -6078,7 +6088,7 @@ export function companySkillService(db: Db) {
       const selectedVersionId = options.versionSelections?.get(skill.key) ?? (lifecycleEnabled ? skill.activeVersionId : null);
       if (lifecycleEnabled) {
         if (!selectedVersionId) continue;
-        const selected = await getVersion(companyId, skill.id, selectedVersionId);
+        const selected = await getVersion(companyId, skill.id, selectedVersionId,options.actor,options.readScope);
         if (!selected || selected.visibility === "private") continue;
         if (!options.allowCandidateVersionsForTest && (skill.lifecycleState !== "active" || selected.state !== "active" || selectedVersionId !== skill.activeVersionId)) continue;
       }
