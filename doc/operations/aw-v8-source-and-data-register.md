@@ -143,3 +143,5 @@ customer dbt/warehouse or Cube authenticated source is supplied; both provider
 identities remain unqualified and cannot silently fall back to native truth.
 The explicit local volume cases do not establish hosted p95, cold-start latency,
 customer history, empirical interval coverage or business-impact acceptance.
+
+The source acceptance review crosswalk is `doc/operations/aw-v8-source-acceptance.md`. It maps the brief's 28 section-57 criteria without declaring passed release claims or closing current regression/Source/hosted gates.

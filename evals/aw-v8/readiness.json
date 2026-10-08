@@ -682,5 +682,6 @@
       "sha256": "0792dc413783b538d111ade10fb1446124b626e7522a4a087e098acd39318652"
     }
   ],
-  "localEvidenceBoundary": "Historical local development receipts identify their tested source and limitations. They are not current release-bound AssuranceEvidence. The formal evidence array stays empty until a complete claim manifest and exact release identity are verified."
+  "localEvidenceBoundary": "Historical local development receipts identify their tested source and limitations. They are not current release-bound AssuranceEvidence. The formal evidence array stays empty until a complete claim manifest and exact release identity are verified.",
+  "sourceAcceptanceCrosswalk": "doc/operations/aw-v8-source-acceptance.md"
 }
