@@ -5,6 +5,7 @@ COPY --chmod=0444 server/src/services/scripts/statsforecast-requirements.lock /o
 RUN python -m venv /opt/aw/venv && /opt/aw/venv/bin/pip install --no-cache-dir --only-binary=:all: --require-hashes -r /opt/aw/requirements.lock
 COPY --chmod=0444 server/src/services/scripts/statsforecast-worker.py /opt/aw/worker.py
 COPY --chmod=0444 server/src/services/scripts/statsforecast-dependencies.json /opt/aw/statsforecast-dependencies.json
+RUN chmod 0755 /opt/aw
 ENV OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 USER 65532:65532
 WORKDIR /tmp
