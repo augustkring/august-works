@@ -1,4 +1,4 @@
-import type { NativePlanningResult, ProjectPlanningContext, ProjectPlanningProfile, ProjectRoadmap, ProposeProjectPlanning } from "@paperclipai/shared";
+import type { PlanningOutcome, StartPlanningOutcomeLearning, NativePlanningResult, ProjectPlanningContext, ProjectPlanningProfile, ProjectRoadmap, ProposeProjectPlanning } from "@paperclipai/shared";
 import { api } from "./client";
 
 const base = (companyId: string, projectId: string) => `/companies/${encodeURIComponent(companyId)}/projects/${encodeURIComponent(projectId)}/roadmap/planning`;
@@ -26,7 +26,11 @@ export interface ProjectPlanningControls {
   hasMore: boolean;
   nextCursor: string | null;
 }
+export interface PlanningOutcomeDetail { manifestId: string; outcome: PlanningOutcome; }
 export const adaptivePlanningApi = {
+  recordOutcome: (companyId: string, projectId: string, proposalId: string, rationale: string, userId?: string | null) => api.post<PlanningOutcomeDetail>(account(`${base(companyId, projectId)}/proposals/${encodeURIComponent(proposalId)}/outcomes`, userId), { rationale }),
+  outcome: (companyId: string, projectId: string, proposalId: string, manifestId: string, userId?: string | null) => api.get<PlanningOutcomeDetail>(account(`${base(companyId, projectId)}/proposals/${encodeURIComponent(proposalId)}/outcomes/${encodeURIComponent(manifestId)}`, userId), { cache: "no-store" }),
+  startOutcomeLearning: (companyId: string, projectId: string, proposalId: string, input: StartPlanningOutcomeLearning, userId?: string | null) => api.post<{ cycleId: string }>(account(`${base(companyId, projectId)}/proposals/${encodeURIComponent(proposalId)}/outcomes/learning`, userId), input),
   source: (companyId: string, projectId: string, userId?: string | null) => api.get<ProjectRoadmap>(account(`${base(companyId, projectId)}/source`, userId), { cache: "no-store" }),
   preview: (companyId: string, projectId: string, profile: ProjectPlanningProfile, userId?: string | null) => api.post<ProjectPlanningPreview>(account(`${base(companyId, projectId)}/preview`, userId), profile),
   propose: (companyId: string, projectId: string, input: ProposeProjectPlanning, userId?: string | null) => api.post<Omit<ProjectPlanningDetail, "currentQualification">>(account(`${base(companyId, projectId)}/proposals`, userId), input),

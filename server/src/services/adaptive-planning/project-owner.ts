@@ -86,7 +86,7 @@ async function capture(tx: Db, companyId: string, projectId: string, actor: Auth
 function proofMaterial(proposal: Proposal, contextHash: string, edges: AnalyticalEvidenceEdge[], expiresAt: Date) {
   return { companyId: proposal.companyId, projectId: proposal.projectId, proposalId: proposal.id, contextHash, patchHash: nativeSha256(proposal.patch), reasonHash: nativeSha256(proposal.reason), author: proposal.createdByUserId, createdAt: proposal.createdAt.toISOString(), expiresAt: expiresAt.toISOString(), lineageHash: nativeSha256(edges) };
 }
-async function retained(tx: Db, companyId: string, projectId: string, actor: AuthorizationActor, id: string) {
+export async function inspectRetainedProjectPlanningProposal(tx: Db, companyId: string, projectId: string, actor: AuthorizationActor, id: string) {
   const [proposal] = await tx.select().from(projectRoadmapProposals).where(and(eq(projectRoadmapProposals.companyId, companyId), eq(projectRoadmapProposals.projectId, projectId), eq(projectRoadmapProposals.id, id))).for("share");
   if (!proposal?.planningContext || !proposal.planningManifestId || !proposal.planningContextHash) throw notFound("Native planning proposal is unavailable");
   const context = proposal.planningContext;
@@ -106,7 +106,7 @@ export async function inspectCurrentProjectPlanningProposal(tx: Db, actor: Autho
   const [marker] = await tx.select({ planningManifestId: projectRoadmapProposals.planningManifestId }).from(projectRoadmapProposals).where(and(eq(projectRoadmapProposals.companyId, companyId), eq(projectRoadmapProposals.projectId, projectId), eq(projectRoadmapProposals.id, id)));
   if (!marker?.planningManifestId) return;
   await admit(tx, companyId, actor, true);
-  const original = await retained(tx, companyId, projectId, actor, id), current = await capture(tx, companyId, projectId, actor, original.context.profile, true);
+  const original = await inspectRetainedProjectPlanningProposal(tx, companyId, projectId, actor, id), current = await capture(tx, companyId, projectId, actor, original.context.profile, true);
   if (current.snapshotHash !== original.context.snapshotHash || current.expiresAt <= new Date()) throw conflict("Planning constraints or source evidence changed; create and review a fresh proposal");
 }
 
@@ -170,8 +170,9 @@ export function projectPlanningService(db: Db) {
     async detail(companyId: string, projectId: string, actor: AuthorizationActor, id: string) {
       return db.transaction(async (rawTx) => {
         const tx = rawTx as unknown as Db; await admit(tx, companyId, actor);
-        const original = await retained(tx, companyId, projectId, actor, id), current = await capture(tx, companyId, projectId, actor, original.context.profile, false);
-        return { id: original.proposal.id, companyId, projectId, status: original.proposal.status, reason: original.proposal.reason, context: original.context, contextHash: original.proposal.planningContextHash!, currentQualification: current.snapshotHash === original.context.snapshotHash ? "current" as const : "needs_revalidation" as const };
+        const original = await inspectRetainedProjectPlanningProposal(tx, companyId, projectId, actor, id);
+        const current = original.proposal.status === "pending" ? await capture(tx, companyId, projectId, actor, original.context.profile, false) : null;
+        return { id: original.proposal.id, companyId, projectId, status: original.proposal.status, reason: original.proposal.reason, context: original.context, contextHash: original.proposal.planningContextHash!, currentQualification: current?.snapshotHash === original.context.snapshotHash ? "current" as const : "needs_revalidation" as const };
       });
     },
   };
