@@ -1,0 +1,48 @@
+{
+  "checkpoint": "Source-bound native promotion and Agent \u00d7 Human Workflow consumers",
+  "parentCommit": "d867418aa6a904a33962b0c94bd8a970fe9efcd9",
+  "recordedAt": "2026-10-08T04:22:01.655080+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "9df263f2d6e4206792312446584d211364346c8460390097f7a656bb42207254"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "e067a70c06a482b5e50f28f8fa58170d81ad69294a6f456e6833ca12766819c2"
+    },
+    {
+      "path": "server/src/services/workflows/workflow-executor.ts",
+      "sha256": "3bc4f6890a0b2c3204460efbce09bc6e5e49486b361c946dfd6504413fcb0fd0"
+    }
+  ],
+  "validation": {
+    "nativeOwners": {
+      "tests": 215,
+      "files": 9,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-sourceful-optimizer-agent-final-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sourceful-optimizer-agent-final-types.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "f4a2189ea9b51246f149366185e2d40ea64540e2",
+      "log": "/var/tmp/aw-v8-native-build-optimizer-workflow-source.log"
+    }
+  },
+  "qualified": [
+    "Original Source-bound generated-code shadow, exact bound Human approval, canary and active promotion without direct active status writes in the new case",
+    "Hidden Source denies canary preparation despite already approved exact version; Source restoration permits original lifecycle",
+    "Actual persisted assigned Task/heartbeat/Agent \u00d7 current Human executes both Optimizer and ordinary Artifact; current Human membership loss denies ordinary Artifact and uses trusted fallback without candidate observation",
+    "Original C7 flags-off/paused cleanup erases actual Agent consumer copies and observations while retaining native provenance and independent verified Memory outcomes",
+    "Native Task scope used for original shared completion and five command-result reads; public standalone read boundary unchanged"
+  ],
+  "limits": [
+    "TypeScript classification, local identity/member/auth-user and Task/heartbeat fixtures are software prerequisites, not performed model/provider/browser/JWT/Human/pilot trials",
+    "No-wait Workflow revision/Memory C7 and post-execution Memory expiry remain next; planning/Routine/action/Source/provider/hosted work stays open",
+    "No hard latency, maximum-volume, hosted backfill or whole-brief acceptance"
+  ]
+}
