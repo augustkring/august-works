@@ -1,8 +1,9 @@
+import { assertAnalyticalReader } from "./analytical-reader.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { activityLog, type Db } from "@paperclipai/db";
 import { NATIVE_PROCESS_ACTIVITIES, assessProcessDataSchema, v7FeatureEnabled, v8FeatureEnabled, type AssessProcessData, type BusinessEvent } from "@paperclipai/shared";
 import { conflict, notFound } from "../errors.js";
-import { assertV7Authorization, v7HumanActorId } from "./v7-authorization.js";
+import { assertV7Authorization } from "./v7-authorization.js";
 import type { AuthorizationActor } from "./authorization.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { lockAnalyticalCompany } from "./analytical-privacy.js";
@@ -14,7 +15,7 @@ import { assessNativeProcessData } from "./process-data-readiness-engine.js";
 /** Current native data inspection, independent of V7 agent/action readiness.
  * This read-only preview grants no execution permission or process-analysis claim. */
 export async function captureNativeProcessSnapshot(tx: Db, companyId: string, actor: AuthorizationActor, raw: AssessProcessData) {
-  const input = assessProcessDataSchema.parse(raw); v7HumanActorId(actor);
+  const input = assessProcessDataSchema.parse(raw); await assertAnalyticalReader(tx,companyId,actor);
   const deadline=performance.now()+30_000;
   await tx.execute(sql`set local statement_timeout='8s'`);
   await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
@@ -51,6 +52,7 @@ export async function captureNativeProcessSnapshot(tx: Db, companyId: string, ac
     inArray(activityLog.action,[...NATIVE_PROCESS_ACTIVITIES]),sql`${activityLog.createdAt}>=${input.from}::timestamptz`,sql`${activityLog.createdAt}<=${input.until}::timestamptz`))
     .orderBy(asc(activityLog.createdAt),asc(activityLog.id)).limit(2001);
   const sourceIdentitiesStable=finalSources.length===sources.length && finalSources.every((row,index)=>row.id===sources[index].id);
+  await assertAnalyticalReader(tx,companyId,actor);
   const now=new Date(); await currentAnalyticalPurpose(tx,companyId,purpose,"process",now);
   const readiness=assessNativeProcessData(companyId,input,events,{ sourceScanExhausted: sources.length<=2000 && sourceIdentitiesStable, eventScanExhausted,
     expectedNativeSources,nativeSourceLifecycleVerified: sources.every(source => projectBusinessEvent(source,source.exactTime)!==null) },now);

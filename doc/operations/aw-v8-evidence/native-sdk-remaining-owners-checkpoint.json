@@ -1,0 +1,92 @@
+{
+  "checkpoint": "Actual native SDK dispatch for original Process, Scenario, Decision, outcome Review and Experiment owners",
+  "recordedAt": "2026-10-08T12:19:44.012696+00:00",
+  "parentCommit": "db44b464bd6674fb7a9ddd608615a63525514606",
+  "primaryParentCommit": "6f0bbf12f2adcbb744fc47218f7774f2ec27179a",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-source-and-data-register.md",
+      "sha256": "f97f3b4a244abc289371acfbeb1cd49607def55cede338bff353fcbea9af236c"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "06bf340bebea05fc13c101b33c8205ea35b1e38f9f19c7fa844bbbee0bfb8f75"
+    },
+    {
+      "path": "evals/aw-v8/readiness.json",
+      "sha256": "62e3d907f16b65d1f1b2024a6cb4657c443d5ecabf7674e06c3fc5a3192dd328"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+      "sha256": "50702476269a825ea94aaee15a3fe19cd48073b5e5b35654c6c7ad007768d5ee"
+    },
+    {
+      "path": "server/src/__tests__/business-scenarios.integration.test.ts",
+      "sha256": "3ff970828d3b7654ee8b27518c8bebb598c7f78c9fa90fe82de8fddef3931db1"
+    },
+    {
+      "path": "server/src/__tests__/decision-intelligence.integration.test.ts",
+      "sha256": "dfc9b912bb228491fbc899908ec79c7a5fee46c6c1a189ac2a596fef5826c08d"
+    },
+    {
+      "path": "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
+      "sha256": "381cb651501ff00a13fb119ef34f13822eeac5e5d19565e6bde5129908970258"
+    },
+    {
+      "path": "server/src/__tests__/helpers/native-management-sdk-fixture.ts",
+      "sha256": "f4c99607b89553724dfa94a73a7cd2901ad5350df972195b075f8d69068a8ad2"
+    },
+    {
+      "path": "server/src/__tests__/process-analysis.integration.test.ts",
+      "sha256": "ce7ddc2799c8facfaf6aae6b6f833d1422190a5273d40b0a0e1d8dd912f9878f"
+    },
+    {
+      "path": "server/src/services/process-data-readiness.ts",
+      "sha256": "58e017cb81f4ae6f73bde4ad5eb6e5188d8c907863f7bb733450fc1611df77e4"
+    }
+  ],
+  "validation": {
+    "actualOwnerRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sdk-remaining-owner-reviewed-tests.log",
+      "sha256": "6eafe1f96afb3519f7287bb2fcd7ea3d70dcd8dc216313df43bb44d5d715aadc",
+      "tests": 74,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sdk-remaining-owner-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "existingLocalRegisterReferences": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-readiness-register-validation.log",
+      "sha256": "05d6aa6fb6fa0bbef92ec365775504bbe279a5766120662130067921caff93e6"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "commit": "6f0bbf12f2adcbb744fc47218f7774f2ec27179a",
+      "log": "/var/tmp/aw-v8-native-build-sdk-action-volume.log",
+      "sha256": "46cb8ba0444e7edd452be418c4f121ed2b73f84291712b8c0540cebad5e993a6"
+    }
+  },
+  "qualified": [
+    "Actual running native agent \u00d7 current Human, persisted membership, private Task/Run binding and original Context before the actual SDK dispatcher reads analytical facts",
+    "Original Process readiness uses the existing native analytical reader at entry and before snapshot return; ordinary direct agent calls outside that boundary are denied",
+    "Actual Process derivation and empty original finding list retain exact original Process run Source; no fabricated Human finding",
+    "Two exact original conditional Scenario outputs remain side-by-side facts without commitment, optimization or outcome authority",
+    "Exact prepared prospective Decision is read without making a choice; exact independently finished outcome review is read without adding judgments or rewriting six independent assessments",
+    "Actual incomplete interpreted Experiment remains inconclusive with withheld causal authority and exact interpretation pins",
+    "Current source changes withhold calls; whole source erasure with rollout disabled and company paused clears dependent answer while original independent Task/Decision/effect facts remain",
+    "Existing native Source/retention/immutable/proposal/Human and actual optional DoWhy owner regressions",
+    "103 existing local development receipt hashes and 99 test paths reconcile current local progress; R0 and incomplete formal source/release/hosted acceptance stay explicit"
+  ],
+  "limitations": [
+    "Current source-denial uses each original owner response: Scenario403, Decision/Review/Experiment404, Process409. Tests preserve those real responses instead of altering them.",
+    "Native synthetic Human/agent/membership/purpose/Context and original source-owner fixture actions are software prerequisites, not performed authenticated Human/provider/customer/commercial/hosted trials",
+    "Initial missing feature dependencies, guessed DTO/column fields and denial-status assertions are diagnostics and excluded; final full 74-case suite passes without skips",
+    "Other SDK lineage/Forecast/metadata paths, indirect Source closure, complete maximum-volume/cadence/historical recovery and current whole-branch acceptance remain ongoing",
+    "Local progress receipt inventory is through checkpoint41; historical receipts do not substitute for release-bound AssuranceEvidence",
+    "No whole-brief completion, hosted qualification, release promotion, business impact or causal calibration claim"
+  ]
+}

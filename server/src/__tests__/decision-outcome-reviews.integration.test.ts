@@ -1,3 +1,4 @@
+import { nativeManagementSdkFixture } from "./helpers/native-management-sdk-fixture.js";
 import {disableV8Rollout} from "./helpers/v8-rollout.js";
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
@@ -88,6 +89,20 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     return record!;
   }
   const startInput=(memoryRecordIds:string[],expectedRevision=3)=>({expectedRevision,purpose:"native_task_execution",trigger:"A human tests a reviewed lesson against independent verified outcomes",memoryRecordIds});
+  it("reads an exact independently finished outcome review through the actual SDK without recording new judgments",async()=>{
+    const {d,review}=await scheduled();await begin(d.id);const completed=await reviews().finish(companyId,actor,d.id,final());
+    const sdk=await nativeManagementSdkFixture(db,companyId),before=await db.select().from(decisionOutcomeReviewReceipts).where(eq(decisionOutcomeReviewReceipts.reviewId,review.id));
+    const output=await sdk.read("review_decision_outcome",{decisionId:d.id,revision:completed.revision});
+    expect(output).toMatchObject({tool:"review_decision_outcome",citations:[{kind:"outcome_review",decisionId:d.id,revision:3}],result:{grade:"native_outcome_review",review:{id:review.id,revision:3,status:"inconclusive"}},executionAuthority:"read_only_or_advisory"});
+    expect(JSON.stringify(output)).toContain("not_assessed");expect(await db.select().from(decisionOutcomeReviewReceipts).where(eq(decisionOutcomeReviewReceipts.reviewId,review.id))).toEqual(before);
+    await expect(sdk.read("review_decision_outcome",{decisionId:d.id,revision:2})).rejects.toMatchObject({status:409});
+    await sdk.retainCopy(output);expect(await sdk.retained()).toBe(true);
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,targetId));await expect(sdk.read("review_decision_outcome",{decisionId:d.id,revision:3})).rejects.toMatchObject({status:404});
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,targetId));const canonical=await db.select().from(decisions).where(eq(decisions.id,d.id)),comments=await db.select().from(issueComments).where(eq(issueComments.issueId,targetId));
+    await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[targetId]);});
+    expect(await sdk.retained()).toBe(false);expect(await db.select().from(decisions).where(eq(decisions.id,d.id))).toEqual(canonical);expect(await db.select().from(issueComments).where(eq(issueComments.issueId,targetId))).toEqual(comments);
+  });
   it("atomically links one native Learning cycle under concurrent human review conversion without promoting authority",async()=>{
     const {d,review}=await scheduled();await begin(d.id);await reviews().finish(companyId,actor,d.id,final());
     const root=await verifiedLearningRoot(),input=startInput([root.id]);
