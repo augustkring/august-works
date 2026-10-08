@@ -2,7 +2,7 @@
 
 Date: 2026-10-06. Reconciliation base: master
 `d550aa7ea5ad38b5209d79135cabaa227ab3f902`.
-Status as of native-owner checkpoint 50 (2026-10-08): default-off native
+Status as of native-owner checkpoint 51 (2026-10-08): default-off native
 Events, Metrics/targets, strategy links, Process analysis/findings, Decisions and
 outcome reviews, Forecasts, Scenarios, Experiments, causal analyses, adaptive
 project/initiative planning and Management Reviews are implemented. Separate

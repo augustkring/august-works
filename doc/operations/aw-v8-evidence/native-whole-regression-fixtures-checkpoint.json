@@ -1,0 +1,56 @@
+{
+  "checkpoint": "Current native V4 finalization and V7 Work Signals regression fixture repair",
+  "recordedAt": "2026-10-08T17:54:28.018126+00:00",
+  "parentCommit": "600a070b004c997a6cfcdf799bbdbc7ea6248f89",
+  "primaryTestedCommit": "2281522670a52668140ab23c5b294cd23b287b85",
+  "sourceFiles": [
+    {
+      "path": "server/src/__tests__/native-finalization-migration.test.ts",
+      "sha256": "963637acb3df6f0ec8ca1e6aafb0eac86b61863d190222f08517149d35b8bdf8"
+    },
+    {
+      "path": "server/src/__tests__/v7-work-signals.integration.test.ts",
+      "sha256": "628cbafc64bad185571c21caf602b38a924b715cdea8a2a1d32475a9fb80dd74"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "757d6f7d44da33c042c91e4892e7b7d5a2dc66549911e3d4e90376aea5b31699"
+    },
+    {
+      "path": "doc/operations/aw-v8-source-and-data-register.md",
+      "sha256": "d8c950878d1bb68f7c6df35fbca8914ea51653abec0da54c045993ca48106d97"
+    }
+  ],
+  "validation": {
+    "initialCompleteServerGroup": {
+      "result": "failed_not_qualified",
+      "passed": 15987,
+      "failed": 2,
+      "skipped": 65,
+      "filesPassed": 845,
+      "filesFailed": 2,
+      "filesSkipped": 7,
+      "log": "/var/tmp/aw-v8-whole-current-tests.log",
+      "sha256": "c1a7e37ddc8bf478e8bfb564e23565b0ce42e56a433256333c2a2c58109627ed",
+      "remainingStableGroups": "not run after native wrapper stopped on failure"
+    },
+    "completeRepairedSuites": {
+      "result": "passed",
+      "tests": 13,
+      "files": 2,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-whole-regression-fixtures.log",
+      "sha256": "ec39e788b1ef76b65f350c54350c62431485da1f0bcb5f44bd714ab1ff925301"
+    }
+  },
+  "qualified": [
+    "Actual empty pre-0227 schema upgrades through the original complete production migration owner while preserving legacy events and repairing duplicate cursors",
+    "Actual V7 Work Signals/Human Roadmap/source-lifecycle fixture retains real Slack exports with only software tool responses mocked",
+    "No production code, migration, journal or privacy trigger changes"
+  ],
+  "limitations": [
+    "The first whole workflow failed and did not run remaining workspace/serialized groups; a green current complete workflow remains pending",
+    "Explicit isolated software fixtures do not establish hosted/provider/customer/Human trial or Source-graph completeness",
+    "No Source/release/CI/Greptile/hosted acceptance promotion"
+  ]
+}
