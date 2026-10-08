@@ -159,6 +159,12 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
             inArray(memoryJobs.status, ["succeeded", "failed", "cancelled"])));
       }
     }
+    // Preserve erasure after a preparation run loses its copied Task context.
+    // IDs only, selected by the original current-erasure predicate above.
+    for (let offset = 0; offset < children.length; offset += 500) {
+      await db.insert(memoryDeletionMarkers).values(children.slice(offset, offset + 500).map(child => ({ companyId, kind: "source" as const,
+        key: `memory-run-source-erasure:v1:${child.id}`, deletedAt: now }))).onConflictDoNothing();
+    }
     // Native trace guards scrub metadata and enqueue the existing file outbox.
     await db.update(agentExecutionManifests).set({manifest:sql`'{"payloadDeleted":true}'::jsonb`}).where(and(eq(agentExecutionManifests.companyId,companyId),inArray(agentExecutionManifests.runId,childIds)));
     await db.update(providerTraceRecords).set({reason:"source_erased",updatedAt:now}).where(and(eq(providerTraceRecords.companyId,companyId),inArray(providerTraceRecords.runId,childIds)));
@@ -191,10 +197,10 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
     .where(and(eq(agentExecutionManifests.companyId, companyId), inArray(agentExecutionManifests.runId, sourceAssets.runIds))) : [];
   const sourceRunIssues = sourceAssets?.runIds?.length ? children.filter(child => sourceAssets.runIds!.includes(child.id)).flatMap(child => child.nativeIssueId ? [child.nativeIssueId] : []) : [];
   const skillHarnessTasks=sourceAssets?.skillVersionIds?.length?await db.execute<{issue_id:string}>(sql`select distinct t.issue_id from company_skill_test_runs t where t.company_id=${companyId}::uuid and t.skill_version_id in (${sql.join(sourceAssets.skillVersionIds.map(id=>sql`${id}::uuid`),sql`, `)}) and aw_skill_harness_source_erased(t.company_id,t.skill_version_id,t.issue_id)`):[];
-  const artifactWorkflowTasks = sourceAssets?.artifactVersionIds.length && affected.length ? await db.select({ id: issues.id }).from(issues)
+  const originWorkflowTasks = affected.length ? await db.select({ id: issues.id }).from(issues)
     .where(and(eq(issues.companyId, companyId), eq(issues.originKind, "workflow_task"),
       inArray(issues.originRunId, [...new Set(affected.map(step => step.workflowRunId))]))) : [];
-  const issueIds = [...new Set([...artifactWorkflowTasks.map(task => task.id),...skillHarnessTasks.map(task=>task.issue_id),...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : []),
+  const issueIds = [...new Set([...originWorkflowTasks.map(task => task.id),...skillHarnessTasks.map(task=>task.issue_id),...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : []),
     ...sourceRunContexts.flatMap(context => context.issueId ? [context.issueId] : []), ...sourceRunIssues])];
   if (issueIds.length) {
     await eraseAnalyticalSourcesUnderMemory(db, companyId, "issue", issueIds, now);
