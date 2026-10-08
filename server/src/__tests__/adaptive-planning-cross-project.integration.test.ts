@@ -8,6 +8,9 @@ import { crossProjectPlanningProfileSchema, portfolioPlanningProfileSchema } fro
 import { crossProjectPlanningService } from "../services/adaptive-planning/cross-project.js";
 import { projectPlanningService } from "../services/adaptive-planning/project-owner.js";
 import { portfolioPlanningService } from "../services/adaptive-planning/portfolio.js";
+import { initiativePlanningService } from "../services/adaptive-planning/initiative-owner.js";
+import { goalService } from "../services/goals.js";
+import { budgetService } from "../services/budgets.js";
 import { crossProjectPlanningRoutes } from "../routes/cross-project-planning.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
@@ -53,6 +56,110 @@ describe.skipIf(!support.supported)("Native same-company cross-project planning 
   }
   const review = (id: string, revision: number, action: "begin_review" | "accept" | "reject" | "cancel") => owner().review(companyId, actor(), id, { expectedRevision: revision, action, rationale });
   function app() { const api = express(); api.use(express.json()); api.use((req, _res, next) => { req.actor = actor(); next(); }); api.use("/api", crossProjectPlanningRoutes(db)); api.use(errorHandler); return api; }
+  async function initiativeProposed() { const f = await portfolioFixture(), preview = await portfolioPlanningService(db).preview(companyId, actor(), f.profile), proposal = await initiativePlanningService(db).propose(companyId, actor(), { profile: f.profile, expectedSnapshotHash: preview.snapshotHash, reason: rationale }); return { ...f, preview, proposal }; }
+  const initiativeReview = (id: string, revision: number, action: "begin_review" | "accept" | "reject" | "cancel") => initiativePlanningService(db).review(companyId, actor(), id, { expectedRevision: revision, action, rationale });
+  it("separately reviews a low-alignment initiative, an infeasible initiative and a feasible start through original project owners", async () => {
+    const f = await portfolioFixture(); await db.delete(issueRelations).where(eq(issueRelations.companyId, companyId));
+    const existing = await db.update(projects).set({ status: "in_progress", updatedAt: new Date() }).where(eq(projects.companyId, companyId)).returning();
+    f.profile.projects = existing.map(project => ({ id: project.id, expectedUpdatedAt: project.updatedAt.toISOString() }));
+    const [third] = await db.insert(projects).values({ companyId, name: "Feasible third initiative" }).returning();
+    const [task] = await db.insert(issues).values({ companyId, projectId: third.id, title: "Feasible native third Task", status: "todo", responsibleUserId: userId }).returning();
+    await db.insert(projectGoals).values({ companyId, projectId: third.id, goalId: f.goal.id });
+    f.profile.projects.push({ id: third.id, expectedUpdatedAt: third.updatedAt.toISOString() });
+    f.profile.tasks.push({ ...f.profile.tasks[0], key: task.id, expectedUpdatedAt: task.updatedAt.toISOString() });
+    f.profile.initiatives.push({ ...f.profile.initiatives[0], projectId: third.id, dimensions: { alignment: 8 } });
+    f.profile.initiatives[0].dimensions.alignment = 1; f.profile.tasks[1].durationDays = 6;
+    await db.insert(budgetPolicies).values({ companyId, scopeType: "company", scopeId: companyId, windowKind: "lifetime", amount: 50 });
+    const preview = await portfolioPlanningService(db).preview(companyId, actor(), f.profile), service = initiativePlanningService(db);
+    expect(preview.result.candidates).toEqual(expect.arrayContaining([{ projectId: f.projects[0].id, disposition: "pause", reasons: ["below_explicit_company_dimension_minimum"] }, expect.objectContaining({ projectId: f.projects[1].id, disposition: "pause", reasons: expect.arrayContaining(["native_capacity_or_deadline_infeasible"]) }), { projectId: third.id, disposition: "start", reasons: ["feasible_under_declared_selected_scope_constraints"] }]));
+    const proposal = await service.propose(companyId, actor(), { profile: f.profile, expectedSnapshotHash: preview.snapshotHash, reason: rationale });
+    expect(proposal.context.result.status).toBe("infeasible"); expect(proposal.initiativeContext!.result.selectedProjectIds).toEqual([third.id]);
+    expect((await owner().controls(companyId, actor())).items).toEqual([]);
+    await expect(owner().detail(companyId, actor(), proposal.id)).rejects.toMatchObject({ status: 404 });
+    await expect(initiativeReview(proposal.id, 1, "accept")).rejects.toMatchObject({ status: 409 });
+    expect((await db.select().from(projects).where(eq(projects.companyId, companyId))).every(project => project.pausedAt === null)).toBe(true);
+    expect(await initiativeReview(proposal.id, 1, "begin_review")).toMatchObject({ status: "under_review", revision: 2 });
+    const accepted = await initiativeReview(proposal.id, 2, "accept"); expect(accepted).toMatchObject({ status: "accepted", revision: 3 }); expect(accepted.appliedProjectRefs).toHaveLength(3);
+    const applied = await db.select().from(projects).where(eq(projects.companyId, companyId));
+    expect(applied.filter(project => project.id !== third.id).every(project => project.status === "in_progress" && project.pauseReason === "manual" && project.pausedAt !== null)).toBe(true);
+    expect(applied.find(project => project.id === third.id)).toMatchObject({ status: "in_progress", pauseReason: null, pausedAt: null });
+    const [agent] = await db.insert(agents).values({ companyId, name: "Native invocation gate software fixture", adapterType: "process" }).returning();
+    expect(await budgetService(db).getInvocationBlock(companyId, agent.id, { projectId: f.projects[0].id })).toMatchObject({ reason: "Project is paused and cannot start new work." });
+    expect(await budgetService(db).getInvocationBlock(companyId, agent.id, { projectId: third.id })).toBeNull();
+    expect((await db.select().from(issues).where(eq(issues.companyId, companyId))).every(task => task.status === "todo" && task.plannedStartAt === null)).toBe(true);
+    expect(await db.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.companyId, companyId))).toHaveLength(0);
+    expect((await service.detail(companyId, actor(), proposal.id)).initiativeContext).toEqual(proposal.initiativeContext);
+  });
+  it("refuses changed Goal versions and permits rollout-independent Human cancellation", async () => {
+    const f = await initiativeProposed(); await initiativeReview(f.proposal.id, 1, "begin_review");
+    await goalService(db).update(f.goal.id, { description: "Current Human Goal changed after inspection" });
+    expect((await initiativePlanningService(db).detail(companyId, actor(), f.proposal.id)).currentQualification).toBe("needs_revalidation");
+    await expect(initiativeReview(f.proposal.id, 2, "accept")).rejects.toMatchObject({ status: 409 });
+    await disableV8Rollout(db);
+    expect((await initiativePlanningService(db).controls(companyId, actor())).items).toEqual([{ id: f.proposal.id, status: "under_review", revision: 2 }]);
+    expect(await initiativeReview(f.proposal.id, 2, "cancel")).toMatchObject({ status: "cancelled", revision: 3 });
+    expect((await db.select().from(projects).where(eq(projects.companyId, companyId))).every(project => project.status === "backlog")).toBe(true);
+  });
+  it("requires exact immutable material and a separate Human review for an explicit native stop", async () => {
+    const f = await portfolioFixture(); f.profile.initiatives[0].preference = "stop";
+    const preview = await portfolioPlanningService(db).preview(companyId, actor(), f.profile), service = initiativePlanningService(db);
+    const proposal = await service.propose(companyId, actor(), { profile: f.profile, expectedSnapshotHash: preview.snapshotHash, reason: rationale });
+    await expect(db.update(adaptivePlanningProposals).set({ reason: "Changed frozen Human intent" }).where(eq(adaptivePlanningProposals.id, proposal.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.update(adaptivePlanningProposals).set({ status: "accepted", revision: 2, reviewedByUserId: userId, reviewRationale: rationale }).where(eq(adaptivePlanningProposals.id, proposal.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await initiativeReview(proposal.id, 1, "begin_review");
+    const applied = await initiativeReview(proposal.id, 2, "accept"); expect(applied.appliedProjectRefs).toMatchObject([{ projectId: f.projects[0].id, disposition: "stop", status: "cancelled", paused: true }]);
+    expect((await db.select().from(projects).where(eq(projects.id, f.projects[1].id)))[0]).toMatchObject({ status: "backlog", pausedAt: null });
+    expect((await db.select().from(issues).where(eq(issues.companyId, companyId))).every(task => task.status === "todo")).toBe(true);
+  });
+  it("retains canonical project versions for reviewed continuations and refuses stale budget or withdrawn mutation authority", async () => {
+    const f = await portfolioFixture(), rows = await db.update(projects).set({ status: "in_progress" }).where(eq(projects.companyId, companyId)).returning();
+    f.profile.projects = rows.map(project => ({ id: project.id, expectedUpdatedAt: project.updatedAt.toISOString() }));
+    const service = initiativePlanningService(db), preview = await portfolioPlanningService(db).preview(companyId, actor(), f.profile);
+    const proposal = await service.propose(companyId, actor(), { profile: f.profile, expectedSnapshotHash: preview.snapshotHash, reason: rationale });
+    await initiativeReview(proposal.id, 1, "begin_review"); const accepted = await initiativeReview(proposal.id, 2, "accept");
+    expect(accepted.appliedProjectRefs.every(ref => ref.disposition === "continue")).toBe(true);
+    for (const project of await db.select().from(projects).where(eq(projects.companyId, companyId))) expect(project.updatedAt.toISOString()).toBe(rows.find(row => row.id === project.id)!.updatedAt.toISOString());
+    const another = await initiativeProposed(); await initiativeReview(another.proposal.id, 1, "begin_review");
+    await db.insert(budgetPolicies).values({ companyId, scopeType: "company", scopeId: companyId, windowKind: "lifetime", amount: 1 });
+    await expect(initiativeReview(another.proposal.id, 2, "accept")).rejects.toMatchObject({ status: 409 });
+    await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, userId)));
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalId, userId), eq(principalPermissionGrants.permissionKey, "tasks:assign")));
+    await expect(initiativeReview(another.proposal.id, 2, "reject")).rejects.toMatchObject({ status: 403 });
+  });
+  it("erases a native initiative root and manifest through original Goal deletion with rollout off and company paused", async () => {
+    const f = await initiativeProposed(); await disableV8Rollout(db); await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
+    await goalService(db).remove(f.goal.id);
+    expect(await db.select().from(adaptivePlanningProposals).where(eq(adaptivePlanningProposals.id, f.proposal.id))).toHaveLength(0);
+    expect(await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id, f.proposal.manifestId))).toHaveLength(0);
+    expect(await db.select().from(projects).where(eq(projects.companyId, companyId))).toHaveLength(2);
+    expect(await db.select().from(issues).where(eq(issues.companyId, companyId))).toHaveLength(2);
+  });
+  it("binds native initiative HTTP proposals and controls to the current account and keeps withdrawal metadata private", async () => {
+    const f = await portfolioFixture(), preview = await portfolioPlanningService(db).preview(companyId, actor(), f.profile), base = `/api/companies/${companyId}/adaptive-planning/initiatives`;
+    const input = { profile: f.profile, expectedSnapshotHash: preview.snapshotHash, reason: rationale };
+    await request(app()).post(`${base}/proposals?expectedUserId=another-human`).send(input).expect(409);
+    await request(app()).post(`${base}/proposals`).send({ ...input, execute: true }).expect(400);
+    const response = await request(app()).post(`${base}/proposals?expectedUserId=${userId}`).send(input).expect(201);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    await request(app()).get(`${base}/proposals/${response.body.id}?expectedUserId=another-human`).expect(409);
+    await request(app()).post(`${base}/proposals/${response.body.id}/review`).send({ expectedRevision: 1, action: "accept", rationale }).expect(409);
+    await disableV8Rollout(db);
+    await request(app()).get(`${base}/proposals/${response.body.id}`).expect(404);
+    const controls = await request(app()).get(`${base}/controls?expectedUserId=${userId}`).expect(200);
+    expect(controls.body.items).toEqual([{ id: response.body.id, status: "proposed", revision: 1 }]); expect(JSON.stringify(controls.body)).not.toContain(rationale);
+    await request(app()).post(`${base}/proposals/${response.body.id}/review`).send({ expectedRevision: 1, action: "cancel", rationale }).expect(200);
+  });
+  it("rolls back earlier canonical project changes and private publications when a later native mutation fails", async () => {
+    const f = await initiativeProposed(); await initiativeReview(f.proposal.id, 1, "begin_review");
+    const last = f.proposal.initiativeContext!.result.candidates.at(-1)!.projectId;
+    await db.execute(sql.raw(`CREATE FUNCTION aw_test_initiative_late_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.id='${last}'::uuid AND NEW.status='in_progress' THEN RAISE EXCEPTION 'software_late_project_failure' USING ERRCODE='23514'; END IF; RETURN NEW; END $$`));
+    await db.execute(sql.raw("CREATE TRIGGER aw_test_initiative_late_failure BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION aw_test_initiative_late_failure()"));
+    const events: unknown[] = [], unsubscribe = subscribeCompanyLiveEvents(companyId, event => events.push(event));
+    try { await expect(initiativeReview(f.proposal.id, 2, "accept")).rejects.toThrow(); expect(events).toEqual([]); }
+    finally { unsubscribe(); await db.execute(sql.raw("DROP TRIGGER aw_test_initiative_late_failure ON projects")); await db.execute(sql.raw("DROP FUNCTION aw_test_initiative_late_failure()")); }
+    expect((await db.select().from(projects).where(eq(projects.companyId, companyId))).every(project => project.status === "backlog")).toBe(true);
+    expect((await db.select().from(adaptivePlanningProposals).where(eq(adaptivePlanningProposals.id, f.proposal.id)))[0]).toMatchObject({ status: "under_review", appliedProjectRefs: [] });
+  });
   it("admits actual current Goal associations and cumulative native billed-cost bounds without writing projects, Tasks or proposals", async () => {
     const f = await portfolioFixture(), service = portfolioPlanningService(db);
     const [budget] = await db.insert(budgetPolicies).values({ companyId, scopeType: "company", scopeId: companyId, windowKind: "lifetime", amount: 60 }).returning();

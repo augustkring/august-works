@@ -199,3 +199,22 @@ export interface PortfolioPlanningPreview {
   expiresAt: string;
   authority: "human_initiative_review_required";
 }
+export const proposeInitiativePlanningSchema = z.object({ profile: portfolioPlanningProfileSchema, expectedSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/), reason: z.string().trim().min(20).max(4000) }).strict();
+export interface InitiativePlanningContext {
+  profile: PortfolioPlanningProfile;
+  currentSources: PortfolioPlanningSources;
+  sourcePins: { goalIds: string[]; goalsHash: string; associationsHash: string; accountingHash: string };
+  jointSnapshotHash: string;
+  snapshotHash: string;
+  result: NativePortfolioPlanningResult;
+  capturedAt: string;
+  expiresAt: string;
+  authority: "human_initiative_review_required";
+}
+export interface AppliedInitiativeProjectRef {
+  projectId: string;
+  disposition: "start" | "continue" | "pause" | "stop";
+  status: string;
+  paused: boolean;
+  updatedAt: string;
+}
