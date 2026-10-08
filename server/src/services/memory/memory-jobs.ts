@@ -393,6 +393,20 @@ export function memoryJobService(
 
   async function executeRetention(job: MemoryJob, now: Date) {
     const source = record(job.sourceRefJson);
+    if (source.kind === "workflow_artifact_source_erasure") {
+      if (typeof source.versionId !== "string" || !/^[a-f0-9-]{36}$/i.test(source.versionId) ||
+        job.jobKey !== `workflow-artifact-source-erasure:v1:${source.versionId}`) throw unprocessable("Invalid native Workflow Artifact erasure binding");
+      const { lockAnalyticalCompany } = await import("../analytical-privacy.js");
+      const { lockMemoryPrivacy, purgeDerivedWorkflowMemory } = await import("./memory-privacy.js");
+      await db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db;
+        await lockAnalyticalCompany(tx, job.companyId); await lockMemoryPrivacy(tx, job.companyId);
+        const [receipt] = await tx.execute<{ erased: boolean }>(sql`select aw_artifact_version_source_erased(${job.companyId}::uuid,${source.versionId as string}::uuid) as erased`);
+        if (!receipt?.erased) throw unprocessable("Native Workflow Artifact has no Source erasure receipt");
+        await purgeDerivedWorkflowMemory(tx, job.companyId, [], now, { workflowRevisionIds: [], artifactVersionIds: [source.versionId as string] });
+      });
+      return { summary: "Erased the native Artifact's Workflow copies.", result: { processedVersionCount: 1 } };
+    }
     if (source.kind === "artifact_workspace_erasure") {
       if (typeof source.versionId !== "string" || job.jobKey !== `artifact-workspace-erasure:v1:${source.versionId}`) {
         throw unprocessable("Invalid native Artifact workspace erasure binding");
@@ -632,7 +646,7 @@ export function memoryJobService(
     await db.update(memoryJobs).set({status:"queued",finishedAt:null,error:null,errorCode:null,updatedAt:now})
       .where(and(eq(memoryJobs.operationType,"retention"),eq(memoryJobs.status,"failed"),
         lte(memoryJobs.updatedAt,new Date(now.getTime()-60000)),
-        sql`(${memoryJobs.sourceRefJson}->>'kind' in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure','runtime_skill_source_erasure','artifact_workspace_erasure') or (${memoryJobs.sourceRefJson}->>'kind'='retention_sweep' and ${memoryJobs.jobKey} like 'analytical-context-erasure:v1:%'))`));
+        sql`(${memoryJobs.sourceRefJson}->>'kind' in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure','runtime_skill_source_erasure','artifact_workspace_erasure','workflow_artifact_source_erasure') or (${memoryJobs.sourceRefJson}->>'kind'='retention_sweep' and ${memoryJobs.jobKey} like 'analytical-context-erasure:v1:%'))`));
     const recovered = await recoverExpiredLeases(now);
     const [backfilled, retentionQueued] = await Promise.all([
       enqueueMissingPostRunCaptures(),

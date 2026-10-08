@@ -134,7 +134,9 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   const affected = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId),
     or(recordIds.length?sql`${workflowStepRuns.memoryRecordIds} ?| ARRAY[${sql.join(recordIds.map((id) => sql`${id}`), sql`, `)}]::text[]`:undefined,
       sourceAssets?.workflowRevisionIds.length?sql`exists(select 1 from ${workflowRuns} w where w.company_id=${companyId}::uuid and w.id=${workflowStepRuns.workflowRunId} and w.workflow_revision_id in (${sql.join(sourceAssets.workflowRevisionIds.map(id=>sql`${id}::uuid`),sql`, `)}))`:undefined,
-      sourceAssets?.artifactVersionIds.length?inArray(workflowStepRuns.automationArtifactVersionId,sourceAssets.artifactVersionIds):undefined,
+      sourceAssets?.artifactVersionIds.length?sql`exists(select 1 from workflow_step_runs source_step
+        where source_step.company_id=${companyId}::uuid and source_step.workflow_run_id=${workflowStepRuns.workflowRunId}
+          and source_step.automation_artifact_version_id in (${sql.join(sourceAssets.artifactVersionIds.map(id=>sql`${id}::uuid`),sql`, `)}))`:undefined,
       sourceAssets?.runIds?.length?inArray(workflowStepRuns.heartbeatRunId,sourceAssets.runIds):undefined)??sql`false`));
   const contextRoots = await db.select({ runId: contextManifests.runId, issueId: contextManifests.issueId }).from(contextManifestMemoryRoots)
     .innerJoin(contextManifests, and(eq(contextManifests.companyId, contextManifestMemoryRoots.companyId), eq(contextManifests.id, contextManifestMemoryRoots.manifestId)))
@@ -189,7 +191,10 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
     .where(and(eq(agentExecutionManifests.companyId, companyId), inArray(agentExecutionManifests.runId, sourceAssets.runIds))) : [];
   const sourceRunIssues = sourceAssets?.runIds?.length ? children.filter(child => sourceAssets.runIds!.includes(child.id)).flatMap(child => child.nativeIssueId ? [child.nativeIssueId] : []) : [];
   const skillHarnessTasks=sourceAssets?.skillVersionIds?.length?await db.execute<{issue_id:string}>(sql`select distinct t.issue_id from company_skill_test_runs t where t.company_id=${companyId}::uuid and t.skill_version_id in (${sql.join(sourceAssets.skillVersionIds.map(id=>sql`${id}::uuid`),sql`, `)}) and aw_skill_harness_source_erased(t.company_id,t.skill_version_id,t.issue_id)`):[];
-  const issueIds = [...new Set([...skillHarnessTasks.map(task=>task.issue_id),...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : []),
+  const artifactWorkflowTasks = sourceAssets?.artifactVersionIds.length && affected.length ? await db.select({ id: issues.id }).from(issues)
+    .where(and(eq(issues.companyId, companyId), eq(issues.originKind, "workflow_task"),
+      inArray(issues.originRunId, [...new Set(affected.map(step => step.workflowRunId))]))) : [];
+  const issueIds = [...new Set([...artifactWorkflowTasks.map(task => task.id),...skillHarnessTasks.map(task=>task.issue_id),...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : []),
     ...sourceRunContexts.flatMap(context => context.issueId ? [context.issueId] : []), ...sourceRunIssues])];
   if (issueIds.length) {
     await eraseAnalyticalSourcesUnderMemory(db, companyId, "issue", issueIds, now);
@@ -216,7 +221,8 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   await db.update(workflowStepRuns).set({ inputJson: null, outputJson: null, taskResultJson: null, errorMessage: null, updatedAt: now })
     .where(and(eq(workflowStepRuns.companyId, companyId), inArray(workflowStepRuns.id, affected.map((row) => row.id))));
   await db.update(workflowRuns).set({ triggerPayload: {}, updatedAt: now }).where(and(eq(workflowRuns.companyId, companyId),
-    or(recordIds.length?sql`${workflowRuns.memoryRecordIds} ?| ARRAY[${sql.join(recordIds.map((id) => sql`${id}`), sql`, `)}]::text[]`:undefined,sourceAssets?.workflowRevisionIds.length?inArray(workflowRuns.workflowRevisionId,sourceAssets.workflowRevisionIds):undefined)??sql`false`));
+    or(recordIds.length?sql`${workflowRuns.memoryRecordIds} ?| ARRAY[${sql.join(recordIds.map((id) => sql`${id}`), sql`, `)}]::text[]`:undefined,sourceAssets?.workflowRevisionIds.length?inArray(workflowRuns.workflowRevisionId,sourceAssets.workflowRevisionIds):undefined,
+      sourceAssets?.artifactVersionIds.length?inArray(workflowRuns.id,[...new Set(affected.map(step=>step.workflowRunId))]):undefined)??sql`false`));
   await db.update(workflowWaits).set({ resolutionJson: null, updatedAt: now }).where(and(eq(workflowWaits.companyId, companyId),
     or(...affected.map((row) => and(eq(workflowWaits.workflowRunId, row.workflowRunId), eq(workflowWaits.nodeId, row.nodeId))))));
   const receiptIds = await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId),

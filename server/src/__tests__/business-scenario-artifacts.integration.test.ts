@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { companies, projects, automationArtifacts, businessScenarios, businessScenarioVersions, businessScenarioCalculationPins, businessScenarioRuns, analyticalLineageManifests, createDb } from "@paperclipai/db";
+import { companies, projects, issues, companyMemberships, workflowRuns, workflowStepRuns, workflowWaits, automationArtifacts, businessScenarios, businessScenarioVersions, businessScenarioCalculationPins, businessScenarioRuns, analyticalLineageManifests, createDb } from "@paperclipai/db";
 import { businessScenarioService } from "../services/business-scenarios/service.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
@@ -64,21 +64,24 @@ suite("Native scenario consumption of validated Automation Artifacts", () => {
     const root = await businessScenarioService(db).publish(companyId, actor, d.scenario.id, { expectedRevision: 1, versionId: d.version.id, rationale: "Human publication of the exact validated numeric artifact and unit contract" });
     const run = await businessScenarioService(db).run(companyId, actor, root.id, { expectedRevision: 2, versionId: d.version.id, seed: null }); return { ...d, root, run };
   }
-  async function artifactWorkflow(a: Awaited<ReturnType<typeof artifact>>) {
+  async function artifactWorkflow(a: Awaited<ReturnType<typeof artifact>>, task?: { actor: typeof artifactActor | { principal: { type: "user"; userId: string } }; wait: boolean }) {
     const workflows = workflowService(db);
-    const created = await workflows.create(companyId, { name: "Exact Artifact consumer" }, artifactActor);
+    const workflowActor = task?.actor ?? artifactActor;
+    const created = await workflows.create(companyId, { name: "Exact Artifact consumer" }, workflowActor);
     const draft = await workflows.updateDraft(companyId, created.id, {
       expectedRevisionId: created.draftRevisionId!, graph: {
         version: 1, nodes: [
           { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
           { id: "calculate", type: "automation.artifact", name: "Capacity", position: { x: 100, y: 0 },
             config: { artifactId: a.artifact.id, artifactVersionId: a.latestVersion!.id } },
-        ], edges: [{ id: "flow", source: "start", target: "calculate" }], variables: [], settings: {},
+          ...(task ? [{ id: "copy", type: "core.transform", name: "Copy capacity", position: { x: 150, y: 0 }, config: { mapping: { capacity: "{{input.capacity}}" } } }, { id: "task", type: "work.create_task", name: "Review capacity", position: { x: 200, y: 0 },
+            config: { title: "Review computed capacity", description: "Review the native calculation before applying it.", projectId: null, assigneeAgentId: null, assigneeUserId: null, waitForCompletion: task.wait } }] : []),
+        ], edges: [{ id: "flow", source: "start", target: "calculate" }, ...(task ? [{ id: "copy-flow", source: "calculate", target: "copy" }, { id: "review", source: "copy", target: "task" }] : [])], variables: [], settings: {},
       },
-    }, artifactActor);
+    }, workflowActor);
     await workflows.publish(companyId, created.id, {
       expectedDraftRevisionId: draft.draftRevisionId!, expectedPublishedRevisionId: null, approvalId: null,
-    }, artifactActor);
+    }, workflowActor);
     return created;
   }
   it("retains the actual Artifact version on the original Workflow step before publishing its result", async () => {
@@ -96,6 +99,44 @@ suite("Native scenario consumption of validated Automation Artifacts", () => {
     const denied = await executor.startManualRun(companyId, created.id, { input: { factor: 9 } }, artifactActor, "revoked-artifact-consumer");
     expect(denied.run.status).toBe("failed");
     expect(denied.steps.find(step => step.nodeId === "calculate")?.outputJson).toBeNull();
+  });
+  it.each([false, true])("erases original downstream Task copies with wait=%s and fences late writes", async wait => {
+    const userId = `artifact-reader-${companyId}`;
+    // Software Human identity prerequisite; the original Task executor is used.
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "owner" });
+    const workflowActor = { principal: { type: "user" as const, userId } };
+    const a = await artifact(), foreign = await artifact(otherId), created = await artifactWorkflow(a, { actor: workflowActor, wait });
+    const executor = workflowExecutorService(db), completed = await executor.startManualRun(companyId, created.id, { input: { factor: 7 } }, workflowActor, null);
+    expect(completed.run.status).toBe(wait ? "waiting" : "succeeded");
+    const step = completed.steps.find(step => step.nodeId === "task")!, source = completed.steps.find(step => step.nodeId === "calculate")!;
+    const [task] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.originRunId, completed.run.id)));
+    expect(task).toBeDefined(); expect(step.inputJson).toMatchObject({ title: "Review computed capacity" });
+    expect(completed.steps.find(step => step.nodeId === "copy")).toMatchObject({ inputJson: { input: { capacity: 7 } }, outputJson: { capacity: 7 } });
+    await expect(db.update(workflowStepRuns).set({ automationArtifactVersionId: foreign.latestVersion!.id }).where(eq(workflowStepRuns.id, source.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.update(workflowStepRuns).set({ automationArtifactVersionId: foreign.latestVersion!.id }).where(eq(workflowStepRuns.id, step.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await instanceSettingsService(db).updateExperimental({ enableAutomationArtifactsV1: false, learning_engine_v7: false });
+    await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
+    await db.delete(automationArtifacts).where(eq(automationArtifacts.id, a.artifact.id));
+    const [job] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId), eq(memoryJobs.jobKey, `workflow-artifact-source-erasure:v1:${a.latestVersion!.id}`)));
+    expect(job.sourceRefJson).toEqual({ kind: "workflow_artifact_source_erasure", versionId: a.latestVersion!.id });
+    expect((await db.execute(sql`select aw_workflow_memory_erased(${companyId}::uuid,NULL::uuid,${task!.id}::uuid) as erased`))[0]).toMatchObject({ erased: true });
+    await expect(executor.getRun(companyId, completed.run.id, { type: "board", userId, companyIds: [companyId], source: "session" })).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
+    await db.update(workflowStepRuns).set({ outputJson: { restored: "Late Source copy" } }).where(eq(workflowStepRuns.id, step.id));
+    await db.update(issues).set({ description: "Late Source copy" }).where(eq(issues.id, task!.id));
+    expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]!.description).toBeNull();
+    await memoryJobService(db).tick({ limit: 100 });
+    const steps = await db.select().from(workflowStepRuns).where(eq(workflowStepRuns.workflowRunId, completed.run.id));
+    expect(steps.every(step => step.inputJson === null && step.outputJson === null && step.taskResultJson === null)).toBe(true);
+    expect(steps.find(step => step.id === source.id)!.automationArtifactVersionId).toBe(a.latestVersion!.id);
+    expect((await db.select().from(workflowRuns).where(eq(workflowRuns.id, completed.run.id)))[0]!.triggerPayload).toEqual({});
+    expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]).toMatchObject({ title: "Erased workflow task", description: null });
+    expect((await db.select().from(automationArtifacts).where(eq(automationArtifacts.id, foreign.artifact.id)))[0]).toBeDefined();
+    if (wait) {
+      const [nativeWait] = await db.select().from(workflowWaits).where(eq(workflowWaits.workflowRunId, completed.run.id));
+      await db.update(workflowWaits).set({ resolutionJson: { restored: "Late Source copy" } }).where(eq(workflowWaits.id, nativeWait!.id));
+      expect((await db.select().from(workflowWaits).where(eq(workflowWaits.id, nativeWait!.id)))[0]!.resolutionJson).toBeNull();
+    }
+    expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id, job.id)))[0]!.status).toBe("succeeded");
   });
   it("withholds a computed result when the original Artifact is revoked before checkpoint publication", async () => {
     const a = await artifact(), created = await artifactWorkflow(a);
