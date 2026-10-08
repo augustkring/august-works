@@ -1,7 +1,11 @@
-# V8 native Business Events checkpoint
+# V8 native Business Events owner and historical checkpoints
 
-This is a partial source implementation, behind default-off
-`business_events_v8`. It does not qualify the complete V8 Business Events wave.
+Current local reconciliation is recorded through native-owner checkpoint 52 in
+`doc/plans/2026-10-06-aw-v8-build.md` and the section-57 source acceptance crosswalk.
+The owner remains behind default-off `business_events_v8`; R0/source/hosted acceptance
+is not promoted by local development receipts. The initial checkpoint sections
+below retain historical validation counts/open-work statements; later Process,
+lineage, UI and native producer work is indexed in the current plan.
 
 The first projector reuses `activity_log` for `issue.created`, `issue.updated`,
 `issue.checked_out`, `issue.released`, `project.created` and `project.updated`.
@@ -172,3 +176,34 @@ event's pre-backup export lineage and retains unrelated export lineage. Schema
 snapshot drift and server/UI TypeScript checks pass. These are local source
 checks: external-consumer interoperability, complete event producers, whole-window
 coverage, OCEL 2.1 additions and actual hosted/archive recovery remain open.
+
+
+## Governed backfill metadata (native-owner checkpoint 52)
+
+Backfill operational metadata now belongs to its original native analytical
+manifest, using a required same-company cascading FK. The original current event
+reader re-admits every contributing Source before the metadata publication.
+Complete retained lineage includes original event Sources/objects, current Task
+project ancestry and the current process-purpose policies. Metadata and its
+Source pins expire at the earliest requested/event/cursor retention boundary.
+Original Source erasure, expiry and restore quarantine remove dependent metadata
+with rollout off and companies paused. Changed or expired contributing Sources
+refuse metadata publication; earlier per-Source projection commits remain safely
+replayable. Ignored/unreadable/unknown cursor identities are not persisted in
+metadata; the existing public bounded scan pagination remains unchanged.
+
+Normal migrations 0450–0451 erase ungoverned historical backfill metadata rather
+than inventing purpose or retention, remove redundant audit counters while
+preserving the original audit action/actor/time, and introduce the mandatory
+lineage FK. New audit publications retain only the projector version. Minimal
+suppression markers remain under their original replay/backup/company lifecycle;
+they are not expired while historical replay remains possible. Actual backup
+retirement and named retention acceptance still require operating facts.
+
+All 45 checks across complete native event, format, Process and snapshot suites
+pass without skips. The original fixture now exercises a real local gzip archive
+and the existing database restore/quarantine owners. An actual pre-0450 schema
+upgrade checks legacy metadata removal, audit minimization and late-copy refusal.
+Exact source/log hashes are recorded in
+`aw-v8-evidence/native-backfill-metadata-retention-checkpoint.json`. Current whole
+checks and the remaining complete Source/claim/hosted acceptance remain separate.

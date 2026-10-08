@@ -227,8 +227,8 @@
     "All H6/H7 environment-specific predecessor gates remain open. No live cloud/customer/provider/Human trial, deployment or business-impact acceptance is represented by the local receipts."
   ],
   "implementationStatus": "LOCAL_IMPLEMENTATION_IN_PROGRESS",
-  "updatedAt": "2026-10-08T17:54:28.018126+00:00",
-  "statusAsOfCheckpoint": 51,
+  "updatedAt": "2026-10-08T18:25:59.361175+00:00",
+  "statusAsOfCheckpoint": 52,
   "sourceCorpusFullyRead": true,
   "localDevelopmentEvidence": [
     {
@@ -326,6 +326,10 @@
     {
       "path": "doc/operations/aw-v8-evidence/native-artifact-workspace-source-checkpoint.json",
       "sha256": "1c4a66b71d54737e42d8fbbed295f96666e42626befc764f9a65aef9411971c0"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-backfill-metadata-retention-checkpoint.json",
+      "sha256": "57e3d86ce6c917e27e1efc000b325bb0fdcd4853272aec627ed3984686c6f4cb"
     },
     {
       "path": "doc/operations/aw-v8-evidence/native-build-04f9da2.json",
