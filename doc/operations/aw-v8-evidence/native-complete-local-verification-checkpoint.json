@@ -1,0 +1,1210 @@
+{
+  "checkpoint": "54 \u2014 complete local native regression, current application types/build and actual optional container smoke",
+  "recordedAt": "2026-10-08T22:09:14.790047+00:00",
+  "primaryImplementationCommit": "9a3237e3c48cb5a40370aeddc00676a1d7b34a1d",
+  "formalSourceComplete": false,
+  "releaseStage": "R0_SPECIFIED",
+  "localNativeVitest": {
+    "result": "passed_complete_native_groups_with_source_continuity",
+    "testsPassed": 30042,
+    "testsSkipped": 77,
+    "generalServer": {
+      "sourceCommit": "5e6b6701e878a10909398f89172f9c7c883971a7",
+      "filesPassed": 847,
+      "filesSkipped": 7,
+      "testsPassed": 15991,
+      "testsSkipped": 65,
+      "originalWholeLogSha256": "cf1b90679af201a5f1827d9cee4fb3d206f2d337ae3e4d3d34814436293282c8"
+    },
+    "ui": {
+      "filesPassed": 684,
+      "testsPassed": 7002
+    },
+    "cli": {
+      "filesPassed": 63,
+      "testsPassed": 502
+    },
+    "completeWorkspaceB": {
+      "sourceCommit": "fe080f9cefc25087d1c4d9f5e533d3e1cf9be2ef",
+      "projects": 12,
+      "filesPassed": 295,
+      "filesSkipped": 2,
+      "testsPassed": 3732,
+      "testsSkipped": 12,
+      "logSha256": "a5631bea41295066498221b3afcf43d8a0f8f9a1fc20e5a42f65e36956c16480"
+    },
+    "serialized": {
+      "verifiedAtCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+      "result": "passed_full_native_serialized_selection",
+      "nativeSuites": 155,
+      "testsPassed": 2815,
+      "testsSkipped": 0,
+      "qualification": "Complete native sixteen-shard selection with unchanged-file byte verification and full repaired shard reruns; initial failed logs remain diagnostic, no single original whole-command exit of zero is inferred",
+      "shards": [
+        {
+          "shardIndex": 0,
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "result": "passed",
+          "files": 1,
+          "testsPassed": 305,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-shard-0.log",
+          "logSha256": "003a925cf0ec9c78078a76e781ca6787c94097b526f5680342871001db17eebf"
+        },
+        {
+          "shardIndex": 1,
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "result": "passed",
+          "files": 8,
+          "testsPassed": 240,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-shard-1.log",
+          "logSha256": "471e45badc6959a537a27cffbb700c749e5c71d24368ed7d40e54378f4c3f114"
+        },
+        {
+          "shardIndex": 2,
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "result": "passed",
+          "files": 9,
+          "testsPassed": 211,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-repaired-shard-2.log",
+          "logSha256": "3ca7db69c9ad4251af25a06bf5fa7c58826c458e4583c7c3cdffe6a37dccaf20"
+        },
+        {
+          "shardIndex": 3,
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "result": "passed",
+          "files": 10,
+          "testsPassed": 216,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-repaired-shard-3.log",
+          "logSha256": "eb52d11c753c96bf753eb3481d7d81059a122bf953cd1aaa935ac6144dc8ff9d"
+        },
+        {
+          "shardIndex": 4,
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "result": "passed",
+          "files": 11,
+          "testsPassed": 146,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-shard-4.log",
+          "logSha256": "f1d3145d401977c713aa164324528a52dffb8720ffdb77c66ea3c4355c994760"
+        },
+        {
+          "shardIndex": 5,
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "result": "passed",
+          "files": 10,
+          "testsPassed": 152,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-shard-5.log",
+          "logSha256": "e1b5582df232629e6335621915a759424274124b116b0560c18d27d2cf376eb9"
+        },
+        {
+          "shardIndex": 6,
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "result": "passed",
+          "files": 10,
+          "testsPassed": 88,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-repaired-shard-6.log",
+          "logSha256": "469e31dd9d76a6d034dda435064d30fd3a2a5dec6c3960670ba342cb19d53a2f"
+        },
+        {
+          "shardIndex": 7,
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "result": "passed",
+          "files": 10,
+          "testsPassed": 234,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-repaired-shard-7.log",
+          "logSha256": "a01e285b4afb50723abe6adc45153e09d4324fe32377a5d08a9e36c3fa1dc64b"
+        },
+        {
+          "shardIndex": 8,
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "result": "passed",
+          "files": 11,
+          "testsPassed": 201,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-repaired-shard-8.log",
+          "logSha256": "ae522003df804da6a7f7e74c0a62cdca24510c90b51ddedfee8e71a9558027d1"
+        },
+        {
+          "shardIndex": 9,
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "result": "passed",
+          "files": 11,
+          "testsPassed": 191,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-shard-9.log",
+          "logSha256": "b1317e28c5dac48cb6871c6494e4298bd92fc60309bcb1d92f86a90dc75353c3"
+        },
+        {
+          "shardIndex": 10,
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "result": "passed",
+          "files": 11,
+          "testsPassed": 145,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-shard-10-final.log",
+          "logSha256": "9dd42e789a676de87b0cd1f5c4277cf5479c4901ff9a0509cb208021da42fe6a"
+        },
+        {
+          "shardIndex": 11,
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "result": "passed",
+          "files": 11,
+          "testsPassed": 73,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-repaired-shard-11.log",
+          "logSha256": "6b4f4cfd91aafc3432d152b43b6f6cc4b53536865549f29c602b7b29633c80a1"
+        },
+        {
+          "shardIndex": 12,
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "result": "passed",
+          "files": 11,
+          "testsPassed": 102,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-shard-12.log",
+          "logSha256": "4b88553bbdb8dc116952552ac45d79069cf31f8d5fdce70830f5804f5c42f46a"
+        },
+        {
+          "shardIndex": 13,
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "result": "passed",
+          "files": 11,
+          "testsPassed": 143,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-shard-13.log",
+          "logSha256": "0eee5cdaadb19323bc225c744130454e91bd661731f124b255c83cf5a38eca1e"
+        },
+        {
+          "shardIndex": 14,
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "result": "passed",
+          "files": 10,
+          "testsPassed": 148,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-shard-14.log",
+          "logSha256": "da412e355a97f4b78c42ed4e6858ff72c260aabdaab553f42f3c0c61f87de648"
+        },
+        {
+          "shardIndex": 15,
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "result": "passed",
+          "files": 10,
+          "testsPassed": 220,
+          "testsSkipped": 0,
+          "log": "/var/tmp/aw-v8-serialized-shard-15.log",
+          "logSha256": "f18075449b49a1302e694ee62ec00622c15be679353dedea8d1596f3d1664bc1"
+        }
+      ],
+      "testFiles": [
+        {
+          "path": "server/src/__tests__/access-routes-hidden-floor.test.ts",
+          "sha256": "29e9ac2be10f6cb71f371efd06c9b9d0baa3038472161d813a3da20e6a6b84cd",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/access-routes-permissions-upgrade.test.ts",
+          "sha256": "78b0cec0336d90a010d0989065ad85f30c216264278d93e7ec0545c8d2c3e520",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/activity-routes.test.ts",
+          "sha256": "c0ef4432fa7c2f1de2eae6fe61f234720f1cc55d7d66364bb1a70dea019d0fe7",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 5
+        },
+        {
+          "path": "server/src/__tests__/adapter-auth-signal-routes.test.ts",
+          "sha256": "e04c5520c9daf21b5ed1c33fddd923290f6a63aa2304c789ec6329492bed90ea",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/adapter-model-refresh-routes.test.ts",
+          "sha256": "ca145bf51f1cee0da073075b2f4fed6e366197b5da228fe426721e6b542ce9d6",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/adapter-routes-authz.test.ts",
+          "sha256": "6cb4cd94d1b1e676511b3616e3b10955f6ef00e7ed7d25d47ad15c987244df83",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/adapter-routes.test.ts",
+          "sha256": "706dc37a1dcd756a66f5203897ff0f8b14f786b7516bbc829cfc74718485e941",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/agent-action-audit-routes.test.ts",
+          "sha256": "4bfa5092386d4fc1e2d5321194feabfefcbf71d47788da8ed8b6ac5263527761",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 5
+        },
+        {
+          "path": "server/src/__tests__/agent-adapter-validation-routes.test.ts",
+          "sha256": "0fd4131efc0c341540c45849421eb9ba9fa69e54aa3ca582070b1556bb2b42ff",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/agent-cross-tenant-authz-routes.test.ts",
+          "sha256": "d482e5e38edcb1930b635028285b93805eaacdd61156c1b9a49a48023edd9f07",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 1
+        },
+        {
+          "path": "server/src/__tests__/agent-device-login-routes.test.ts",
+          "sha256": "0bdb4d2624980eae2b39cd84b60badbdfd9daf0eae3bf8c1dc22e10a68544fb8",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/agent-hire-auth-inheritance-routes.test.ts",
+          "sha256": "44847902d8311f4bf76c6a5b692d9e009465bf721497d4826999d170fbfe657b",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 3
+        },
+        {
+          "path": "server/src/__tests__/agent-hire-idempotency-routes.test.ts",
+          "sha256": "6fa33c94aa8a1564e14dc9e2ccf5a2f812b476ee5df5751852247cf204f6ca1d",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/agent-instructions-routes.test.ts",
+          "sha256": "d4a0c3bc480006e1128119ca565f41b36e65c788023d5497603da0895080623d",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/agent-live-run-routes.test.ts",
+          "sha256": "7a8f9f881198e74670f1825bf3384bf4f7f9786a9b676f97a2cb355e9691e4c7",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/agent-permissions-routes.test.ts",
+          "sha256": "6b19fdab703e83dbb7b9aa7e880d7e8f54510e25152d07565f16e197613196df",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 14
+        },
+        {
+          "path": "server/src/__tests__/agent-secrets-routes.test.ts",
+          "sha256": "652523450e0f2b0e2c72bc3fb99bc95608fa880a1c55a5af0275d4d4883a74a2",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 15
+        },
+        {
+          "path": "server/src/__tests__/agent-skills-routes.test.ts",
+          "sha256": "6673df6f14d9347f0b4356b9254ec343b527ab55c808c55d473c4d6b8683659a",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/agent-test-environment-routes.test.ts",
+          "sha256": "a300b54f47568f9346a462bb9860e6acc61d42f02219d67340849f88b83aacd6",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 15
+        },
+        {
+          "path": "server/src/__tests__/announcements-routes.test.ts",
+          "sha256": "e1b123b8dbd874cbea95c302e841448c9d8d39bcc21c39d34f07461e3fce5d13",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/approval-routes-idempotency.test.ts",
+          "sha256": "68132f873b9cdff690fb31a709945926de59c9ee53c50a9046fc8bbd923f58aa",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 14
+        },
+        {
+          "path": "server/src/__tests__/artifact-review-document-routes.test.ts",
+          "sha256": "8c7c310912ad801f0726db517695e94f621a3f4400f81aac93a2ba042f9d2c49",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/assets.test.ts",
+          "sha256": "83a2b6bd6a2550f9c74a53e86d36302d2e4a08ee1d5aff06b871120cf99cecf4",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/auth-routes.test.ts",
+          "sha256": "05adfa68f9d30a87d4e25821be68a59180097d09ba0bec5297422b171958c8c2",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/auth-session-route.test.ts",
+          "sha256": "a2226382b6058024548c0da0a74f53bdf6b79966145c2f3d268c09a656fe2a0c",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 5
+        },
+        {
+          "path": "server/src/__tests__/authz-company-access.test.ts",
+          "sha256": "49adf855879778504f08a24d27724db8ae9fe09090a94bf447bdcb8f1860ee4e",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/authz-existence-oracle-guard.test.ts",
+          "sha256": "fc220450c9c23f72a6576da075d91ff585387a846594b24f8a8d9241a55b6402",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 1
+        },
+        {
+          "path": "server/src/__tests__/authz-secret-context.test.ts",
+          "sha256": "1ca846de81e99843f8acf07a47726ab66875ca367f051ccea4ceacc948ea6472",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 6
+        },
+        {
+          "path": "server/src/__tests__/automation-artifact-account-routes.test.ts",
+          "sha256": "74e8b1cc10484efbae7b7e2d2cdbd1f03d49c3334463960f1f8819c47ae770a6",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/board-chat-route-feature-flag.test.ts",
+          "sha256": "34da78fbf1c2c96ea121f27a9e9c5ba74985a443daa97ba10ab3072d98968fd9",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/bootstrap-claim-routes.test.ts",
+          "sha256": "b9b4eb5e3ae5cda5efeae8a28e64c8a24e0c1bf2fbbc767074294005f5fdf8d1",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 1
+        },
+        {
+          "path": "server/src/__tests__/built-in-agent-routes.test.ts",
+          "sha256": "96f6dddba9845a079365f6c57db7df2e8ae35d71c2a0d08e6674b7f01ba6c054",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 1
+        },
+        {
+          "path": "server/src/__tests__/cases-routes.test.ts",
+          "sha256": "2aeef54575c7a705d1325028adbe6cc59a697834b4d746ae1d2a85fdaee74bc7",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/cli-auth-routes.test.ts",
+          "sha256": "6ded6d80c08c46b3060f98029f4bb22e14b911cdb8b621a7fe353392f7ccb521",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/cloud-routes.test.ts",
+          "sha256": "96054e835d6363311ea03e4303e1397b4aec2ba459b426f1a3962bede130a35b",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/companies-route-cross-company-authz.test.ts",
+          "sha256": "9c760edd623f0fd010431043f5c8fd95975e185e5c871da6779c7173b08ba00c",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 1
+        },
+        {
+          "path": "server/src/__tests__/companies-route-path-guard.test.ts",
+          "sha256": "25f5e082d723028973bae720e05a5af046408d0cd34d933f90bbb6849184937c",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/company-branding-route.test.ts",
+          "sha256": "cfbf6536e80630cc81c114b479ecb7d049c7f5b2697f7bc0307265ef7b1d29ae",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 15
+        },
+        {
+          "path": "server/src/__tests__/company-import-transfer-routes.test.ts",
+          "sha256": "d5e5be4a14211dec375da61dd77f7e4a28d255a3977dd29615b3a10a1ab3918d",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 7
+        },
+        {
+          "path": "server/src/__tests__/company-portability-routes.test.ts",
+          "sha256": "fff13134e9a301c6b1654cf815562f80c1346a5035e9336da401111b8e5c4ae0",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 2
+        },
+        {
+          "path": "server/src/__tests__/company-portability.test.ts",
+          "sha256": "d0fe42c4cbd0a08a3f740b10a2cdf9b26198376f84526102da03857ac1f6d975",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 7
+        },
+        {
+          "path": "server/src/__tests__/company-search-extract-routes.test.ts",
+          "sha256": "eae777e4fa079c38d1621f023b1bc5313997c372e6de88db64ad3ef7607b0739",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/company-search-rate-limit-routes.test.ts",
+          "sha256": "e854d33dc55af43c99adf9dc2bc477986fc328c8b98524157a0805fc91508aa8",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/company-skill-policy-routes.test.ts",
+          "sha256": "7f3496354ec7b42f42986506f0a8578a01bd6934734242c6ec974ea57fafa514",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/company-skills-import-authz-routes.test.ts",
+          "sha256": "ee06d80af7b2862619e393a41a4c05abf41e7080899559c9683b72ffbd0334e4",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 2
+        },
+        {
+          "path": "server/src/__tests__/company-skills-routes.test.ts",
+          "sha256": "2b3cbe3c789a3a0ba1616ad4f129cdd4a24720cecd1df8cd2f7b68575df803bb",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 7
+        },
+        {
+          "path": "server/src/__tests__/company-user-directory-route.test.ts",
+          "sha256": "c6818b8e6098dec5156573fed7b2f067d0ba24fe50e0edb30f601ed36aa87a5a",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/costs-service.test.ts",
+          "sha256": "9eff37aca3d34e03aa5e3a6768227cf4ce10dab2c87aa49e2d505dcd7e8ad2a1",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 2
+        },
+        {
+          "path": "server/src/__tests__/decision-queues-routes.test.ts",
+          "sha256": "f863d57606dd27f6c3f5ded536b5660d3798a818f5d40b6f50fe8fa861839c04",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/document-annotation-routes.test.ts",
+          "sha256": "080092f943ade415eaf49b3ef6bfadab6899bfd292201716d6e22a2215045ec1",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 6
+        },
+        {
+          "path": "server/src/__tests__/environment-custom-image-routes.test.ts",
+          "sha256": "2a01bc84e0d6d6e6c7e732b3645458467560d49d8526ee1cc8e5a765e2b88243",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/environment-instance-routes.test.ts",
+          "sha256": "4b54b0235235333909025a5302bfeae53f3c177da284200cc00c8e63ed210ab2",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 3
+        },
+        {
+          "path": "server/src/__tests__/environment-routes.test.ts",
+          "sha256": "8993233f12a3b646f7a9755b817bac68916fda31753c2ffb30c4eba9fbcc9fe8",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/environment-selection-route-guards.test.ts",
+          "sha256": "6295a6db31726168a185664f107ba083dc9c0d2a17f387204afe13398ea51334",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/execution-workspace-runtime-lease-route.test.ts",
+          "sha256": "ee81998bb6fdfa6575d4fabe87e5ce1e9370d1d501c087bd8389fdccc139dbe0",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 2
+        },
+        {
+          "path": "server/src/__tests__/execution-workspaces-routes.test.ts",
+          "sha256": "2ca369ad8042a12d3b3a8fe58db96b713c6bc4890b10777400d01fb68f0f8f89",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/express5-auth-wildcard.test.ts",
+          "sha256": "470228612c2961f214c478f0dd9912fc0f2da87d5b6ac6fad92e8158882859a1",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/external-object-routes.test.ts",
+          "sha256": "981c0762224f137658630e93777d0761c28a0c03dd9d33c7575ed4ed07dbd86f",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/folders-routes.test.ts",
+          "sha256": "55ccf4ca4bef83fe69daa88631980123ec399a5ccdd3a03bad941561cfe54825",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/foundation-routes.test.ts",
+          "sha256": "df70dfffdd18884afd4cf08d15bee8d958b3833283e7af5207ab60e39aabb655",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 14
+        },
+        {
+          "path": "server/src/__tests__/health-dev-server-token.test.ts",
+          "sha256": "885e6be58d4621be621d4de24233bada416487d6e1218de23b88b03e0c3e9154",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 1
+        },
+        {
+          "path": "server/src/__tests__/health.test.ts",
+          "sha256": "3b2b2fd6095ec73c207035c52ea0449937ddacadaee92422d5e1c6526aad7f4a",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
+          "sha256": "d067615c0cf618e21a0def498d8099e6322e4aa82ee694b439d81265335b39ed",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-issue-liveness-escalation.test.ts",
+          "sha256": "2dfa0cbf863622885913c5c2533fc8bb38aefdcbb58d0e3bb94391acc7815fa4",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 7
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+          "sha256": "ef7f9128f9a9afca8ded503a188a1fe66ad33274b36bff265b5fdcb14c3cce45",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 0
+        },
+        {
+          "path": "server/src/__tests__/inbox-agent-policy-routes.test.ts",
+          "sha256": "df7eb149d290948127b76f37654e64381450552b900cfc82ebd1e596f462ee69",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/inbox-archive-routes.test.ts",
+          "sha256": "c16dcddd789c6cf4e05a3f979dcaed41c52c5eb1f44adc21efde26f48170bda0",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/instance-database-backups-routes.test.ts",
+          "sha256": "a2928440169df27ddd9a67cfbfab8f8ef4ed9cd8053eabfe8a6a3a7f00ead3a4",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/instance-settings-routes.test.ts",
+          "sha256": "691229544941d4227754c04beabdbcbb075c4fc4fc11ebc42633e0b042263d69",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 3
+        },
+        {
+          "path": "server/src/__tests__/invite-accept-existing-member.test.ts",
+          "sha256": "3f07739a29fe8a622f37ce13e7ac6705160ff53575c7d9bc0c15dc2381ed51f4",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/invite-accept-gateway-defaults.test.ts",
+          "sha256": "a5ae1e2a9d1f45dc10c0021a74d7a10df163de8c4e50141cbda8d4043f6b2d29",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 14
+        },
+        {
+          "path": "server/src/__tests__/invite-accept-replay.test.ts",
+          "sha256": "012b04cfd683ed79c9de4e55f4d7f3a902f73cd3bba8866bf3b0916c84a6a08a",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 3
+        },
+        {
+          "path": "server/src/__tests__/invite-create-route.test.ts",
+          "sha256": "a7b7250782578148c5725ac1babdae06daf0a7979c0c582fcc0f0c9a0e643208",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/invite-expiry.test.ts",
+          "sha256": "0dbe9f9d312a18ab9aa422258048b5cfb3ddea1845066d902cdc1049422ee1ed",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/invite-join-manager.test.ts",
+          "sha256": "aaadfbba4784d1ffa213faa66483ed8aaba69c72601a0424da7976466c4b8754",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 2
+        },
+        {
+          "path": "server/src/__tests__/invite-list-route.test.ts",
+          "sha256": "7b2c75db0976aedc0355ee87c8063d956af06fc81a0f3a03d63c5e1bdc2ef18e",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 6
+        },
+        {
+          "path": "server/src/__tests__/invite-logo-route.test.ts",
+          "sha256": "7910694f39846779d0be14a666be027493ca8536fa58689ba2fb7f492d1ae15b",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 5
+        },
+        {
+          "path": "server/src/__tests__/invite-onboarding-text.test.ts",
+          "sha256": "29a80a0048c301e2405b283b0023e93dc316bc03e898daaede1a60c26762da63",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 3
+        },
+        {
+          "path": "server/src/__tests__/invite-rate-limit-route.test.ts",
+          "sha256": "57c9b9052ce85c1c68ea7bfa17269132de1553b5b7142190412d6fbcfdafd8fb",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 14
+        },
+        {
+          "path": "server/src/__tests__/invite-summary-route.test.ts",
+          "sha256": "71dab5ef03adbecb13c2a7740954c4a4b817f062c0bf143720b55f9fc433a70c",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/invite-test-resolution-route.test.ts",
+          "sha256": "0300cb46ced5df4079489bfdb98faed0d716b8516bb2b7edf84c80fdc44ef134",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/invite-url-public-base-url.test.ts",
+          "sha256": "d817b207a512dfeac640eb855e21665a9680c7569106fef45cb1d7f1f847db48",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/issue-activity-events-routes.test.ts",
+          "sha256": "88b3ca41940ccc0d8de2890e78eaaadc3179a2c5a3b5da32ef435f98774dea4b",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 7
+        },
+        {
+          "path": "server/src/__tests__/issue-agent-mutation-ownership-routes.test.ts",
+          "sha256": "0a804b4e13e98379a0a9408f2dafef7f9a806644a296f6182d69348fc3c71871",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 2
+        },
+        {
+          "path": "server/src/__tests__/issue-assigned-backlog-contract-routes.test.ts",
+          "sha256": "9bca78218f726935cfdc52446981a2fc8300b65e1dfe974a5892a908b6859fba",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/issue-assignee-invokability-routes.test.ts",
+          "sha256": "d569fea3264dfe9114fa32494de4bcfef9fa8aa97c252f5e508e3377fbc00554",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 7
+        },
+        {
+          "path": "server/src/__tests__/issue-attachment-routes.test.ts",
+          "sha256": "ec04a4552f68d57c2fba8a0bb97604d59eec1bb5d61c32c9e7f78a8a0518d30b",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/issue-blocker-diagnostics-routes.test.ts",
+          "sha256": "36c1e7d6f32b88c27a968be42d889ce66686ad7284f2dd409479d57439c5e399",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 7
+        },
+        {
+          "path": "server/src/__tests__/issue-closed-workspace-routes.test.ts",
+          "sha256": "04fb229c46e152c69f083cd8e304c37bc39828d6ef54e27ac0f11ec6da40cf1a",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 6
+        },
+        {
+          "path": "server/src/__tests__/issue-comment-attribution-audit-routes.test.ts",
+          "sha256": "b643d45cd61f15134e1e5ca10250388a0ab6976a8ca3e9aff9e2e1bbf7880563",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 3
+        },
+        {
+          "path": "server/src/__tests__/issue-comment-cancel-routes.test.ts",
+          "sha256": "1efa854d849e762bfb21c86c5c6a6e33281deaa8a3f81eeb6ac17af243a3ae3d",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 2
+        },
+        {
+          "path": "server/src/__tests__/issue-comment-reopen-routes.test.ts",
+          "sha256": "3a58f79dd42fed1c6886244836c020c7bd304816c29ad5a341dff86c6709d5a7",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 15
+        },
+        {
+          "path": "server/src/__tests__/issue-create-deduplication-routes.test.ts",
+          "sha256": "05d2ce3f84082ed9822b57fbf33742a148bb8616cb6e10931618fd3a82b91a86",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 7
+        },
+        {
+          "path": "server/src/__tests__/issue-created-from-routes.test.ts",
+          "sha256": "70e952eccb4aec95f4b9b7c00a35d427e74928f455cf7f8aca787cf6a7d077fd",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 6
+        },
+        {
+          "path": "server/src/__tests__/issue-dependency-wakeups-routes.test.ts",
+          "sha256": "5b0cf7cbd94a5b94da76cce6fd374dcb28457c9644fab385a25a3042c8fa3f12",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 5
+        },
+        {
+          "path": "server/src/__tests__/issue-document-restore-routes.test.ts",
+          "sha256": "18ce497a742db4599677de8565d1da71c3b4710da83cb8b514cdedd0ce4c5631",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/issue-execution-policy-routes.test.ts",
+          "sha256": "846ab71ae095e3aa124491910687b424923dc6888a5f71ce62583930cac81891",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/issue-feedback-routes.test.ts",
+          "sha256": "c435b1cb4fac4c68017312daefab946a7f34667388326bf0864ec6bd85923693",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/issue-identifier-routes.test.ts",
+          "sha256": "09d19e9979be8d6eaefaa21f9253e0649a876182a9f8391915cb955906bbf403",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/issue-list-assignee-filter-routes.test.ts",
+          "sha256": "93657593d086ee539a13319a460cdf3693af9c9c8f1175d3e1f6f717d7906db0",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/issue-list-updatedsince-filter-routes.test.ts",
+          "sha256": "f039c4e5c8d852bba0f47b60187408625a9fb8cfd4f9f046e380bd043687f5d5",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/issue-onboarding-first-task-routes.test.ts",
+          "sha256": "7f3b52c17aa4187ae95479abdaef6f27d39e55646fc2ff9923506fb93604161b",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 14
+        },
+        {
+          "path": "server/src/__tests__/issue-queued-comments-routes.test.ts",
+          "sha256": "8a5e0bb69f72ef06859ed9bb37289cfa04d06122b79497a9cccd21efbdfb32b6",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 5
+        },
+        {
+          "path": "server/src/__tests__/issue-scheduled-retry-routes.test.ts",
+          "sha256": "6534d8e889e5f159efe8398523a3388154ab35bdeb4ba6e2c2daeee25b2ddee8",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 15
+        },
+        {
+          "path": "server/src/__tests__/issue-stale-execution-lock-routes.test.ts",
+          "sha256": "c381ddd5ca0db72e1d718160a9115f08c22c29df0c122b0bf2ef93ae47cd48e7",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 6
+        },
+        {
+          "path": "server/src/__tests__/issue-stalled-review-decision-routes.test.ts",
+          "sha256": "349ea308add209293fb00ce5596540c1b45661434065d6eaf9cd8e8f00ceec63",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 11
+        },
+        {
+          "path": "server/src/__tests__/issue-subtree-diagnostics-routes.test.ts",
+          "sha256": "bbb76427aa8b4d68a3b2fd5fa01e7574f2babe9955c3d1202f660c9a0d61ad28",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/issue-telemetry-routes.test.ts",
+          "sha256": "5c5f9d402b733a39ab5f89d40bfa6ab8d37f8a65d2992086359eac1a739d5792",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/issue-thread-interaction-routes.test.ts",
+          "sha256": "bd414027243e68f4561018ce3d12a2448cf4d9162a84ef2a47e514f248c7c48f",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 3
+        },
+        {
+          "path": "server/src/__tests__/issue-tree-control-routes.test.ts",
+          "sha256": "bb10a2fb5e917c4d3f4cfb8f61b96ca76852bae798ebaa7ad3b98cebc7d00a54",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 3
+        },
+        {
+          "path": "server/src/__tests__/issue-update-comment-wakeup-routes.test.ts",
+          "sha256": "71f4e807ab1b8ac585655c649df5bcbed5f69d5d751fdfed9224a09fac95770c",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/issue-wake-diagnostics-routes.test.ts",
+          "sha256": "adcbfea575ce147f602d84ef3487589d11aaebb735c6e771838f8ad2fb30f160",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/issue-watchdogs-routes.test.ts",
+          "sha256": "f210cba9af5cc89bbf83527b814e25a0ac4ba5555569c566dc96e438b01c2bdd",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/issue-workspace-command-authz.test.ts",
+          "sha256": "a0f8411d86eacb33cee30562546134d424124225bb09b462fd4f6028d396f3b4",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 5
+        },
+        {
+          "path": "server/src/__tests__/issues-checkout-wakeup.test.ts",
+          "sha256": "f3deeddfcaa9aa54e4c7f0b0f3297f1b72c66fc555b3ba1a0146c7a35760dbeb",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/issues-goal-context-routes.test.ts",
+          "sha256": "379c33fc96041b8edcd379154163d85d74761a3e3d4f32deeaa6cdb77ee697be",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/issues-service.test.ts",
+          "sha256": "228d4eccba8452ba6de54eb29d32f978af496ca4a6c303892f39a8e216800365",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 1
+        },
+        {
+          "path": "server/src/__tests__/llms-routes.test.ts",
+          "sha256": "dea242a9f601358b75458a168a4e0ada162a5c9b83e916491542d999f8be61f3",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 2
+        },
+        {
+          "path": "server/src/__tests__/low-trust-red-team-routes.test.ts",
+          "sha256": "9c38016158b0d3aeeacb4b238358e25eaef68ea0240a918263c9f75f770840b7",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 6
+        },
+        {
+          "path": "server/src/__tests__/managed-agent-profile-routes-authz.test.ts",
+          "sha256": "30acd1d0ba21af31c7fe0d9ca7912ec5ede39743b27c30810d9d93012f6fb741",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/memory-routes.test.ts",
+          "sha256": "785c70c2706e3fdc6edcaf636741b6423b136ca27fce58e7b89796b21808c30b",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/multilingual-issues-routes.test.ts",
+          "sha256": "ccb223fd27d270dc82ba2ec48a848dd0f536d7afc865b55699e28e20ee42f486",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 14
+        },
+        {
+          "path": "server/src/__tests__/onboarding-seed-route.test.ts",
+          "sha256": "fa2764eaec5cd6c92ff7714cc383a719b5cea543a46891e148167648e8d2cb6b",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/openapi-routes.test.ts",
+          "sha256": "81bc7eca78bef95f80e9d5e20fcd222d12c70f4170524af3e7df2ec5bcf06b55",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 7
+        },
+        {
+          "path": "server/src/__tests__/openclaw-invite-prompt-route.test.ts",
+          "sha256": "2cff6164f7be296fc739e0a1d61c36a3f7a2bacd3a0c9a9093b078973b39c138",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 3
+        },
+        {
+          "path": "server/src/__tests__/opencode-local-adapter-environment.test.ts",
+          "sha256": "4a503a1b917886f1a26ace001b943d2e6f10ff6ba063bd6c9ba816c0369e10ef",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/permissions-upgrade-boundary-routes.test.ts",
+          "sha256": "c4d6583fab1062f82b8ea935f18ab7f00ed49f517e19b0daca7dcf5845f1ad7d",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 5
+        },
+        {
+          "path": "server/src/__tests__/pipelines-routes.test.ts",
+          "sha256": "52c102b30a1f79531a20b5bba767424802792f81cdb146e984b5bc408440ba65",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 14
+        },
+        {
+          "path": "server/src/__tests__/plugin-install-route-security.test.ts",
+          "sha256": "28918e41fe95b3e2a22cde2c5c7c7605fdc820762aa817396e8d866151982a55",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/plugin-routes-authz.test.ts",
+          "sha256": "eb3dcdb40ac0b5012f25c60143cc5a3d39dcaf1c5ffbe3f3c3a4b58702b6bdce",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/plugin-scoped-api-routes.test.ts",
+          "sha256": "410b4b236771fc34865f67ff902c6c6d7378ace4c75e587e71ba92c177312297",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 6
+        },
+        {
+          "path": "server/src/__tests__/project-goal-telemetry-routes.test.ts",
+          "sha256": "34f22de299c6ac5637a9b4dac99276e1e5c42a6a2708c3457b96a772f400ad1e",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 5
+        },
+        {
+          "path": "server/src/__tests__/project-routes-env.test.ts",
+          "sha256": "82325a20ab68e6b426e254b2c22a3392220d8f485100195697e6ae6735e1ef6d",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/project-workspace-managed-sandbox-routes.test.ts",
+          "sha256": "e93a34aba923eef13c1ad2f6ffbf80cf3bafa5a033179d8836c0713254584485",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 14
+        },
+        {
+          "path": "server/src/__tests__/projects-list-archived-routes.test.ts",
+          "sha256": "67d4ff4110d956d04fc95119c40e7fb3bf26620b9e530df706edf6cc36be51d2",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "sha256": "a36460dabe2ae11975a8ebe4448a3fb365c2b2d0e7b912d61c14b0cf82aaadbb",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/resource-memberships-routes.test.ts",
+          "sha256": "c391c7056eaa91b9e1fa109ffa55ce63fdc16aaa2f80d4a3a6f82b6e0b3a1af2",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 3
+        },
+        {
+          "path": "server/src/__tests__/routine-document-annotation-routes.test.ts",
+          "sha256": "cb5b1658866650692b7c9220d46f356953fa93adfae5aea35124b6228d6df276",
+          "qualifiedSourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+          "shardIndex": 10
+        },
+        {
+          "path": "server/src/__tests__/routines-e2e.test.ts",
+          "sha256": "9fb1a6fb4aa64346b8abd0200056168e12afdcaca966743129a9ceddb0e3245e",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 15
+        },
+        {
+          "path": "server/src/__tests__/routines-routes.test.ts",
+          "sha256": "61deffe7561298eee9c392b5f5809a7ec70d8bbe1ff23b8e46523c9da1faa8c6",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 6
+        },
+        {
+          "path": "server/src/__tests__/secret-proposals-routes.test.ts",
+          "sha256": "c0d910b901f402a8a80f2afbb36ebae9b62545bc3f825528999ebe69ecff51a6",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 13
+        },
+        {
+          "path": "server/src/__tests__/secrets-routes-claude-oauth-service.test.ts",
+          "sha256": "85652f50a750b7d47524958e3decc90228303607321bdd74a689e85657b28806",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 15
+        },
+        {
+          "path": "server/src/__tests__/secrets-routes.test.ts",
+          "sha256": "46ae43b9c4d5451dad7b4c40eb2d6ddc3e5c29d6216077caef6af1cc60141958",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 1
+        },
+        {
+          "path": "server/src/__tests__/sidebar-preferences-routes.test.ts",
+          "sha256": "14a9af23e0f2a0f9e8484ff3973bb29a512d49a0c333ba90a847caa3c42c7e17",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 14
+        },
+        {
+          "path": "server/src/__tests__/summary-slot-routes.test.ts",
+          "sha256": "22f258fe28edef98ae93825c71b8c35775eb84de69ee737a516b1f137fd4408b",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 2
+        },
+        {
+          "path": "server/src/__tests__/task-connector-read-routes.test.ts",
+          "sha256": "22104e377077859206881b78ced2483681b3d8227eeab291094f1d8c3064362e",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 15
+        },
+        {
+          "path": "server/src/__tests__/teams-catalog-routes.test.ts",
+          "sha256": "158d1d179f567a539a415b3e22d13cd10630df8372b922d8dda7babeb798d0a8",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 15
+        },
+        {
+          "path": "server/src/__tests__/user-preferences-routes.test.ts",
+          "sha256": "6f6a68fb62ef5f15ba22919dd1bbd158b8af625d75ab3cfc16759c4278157ce5",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 9
+        },
+        {
+          "path": "server/src/__tests__/user-profile-routes.test.ts",
+          "sha256": "b16085e0e0daba7763cbe5237c33010ab1addb53c6e4e337db3d5069d57b4e7e",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 4
+        },
+        {
+          "path": "server/src/__tests__/workflow-routes.test.ts",
+          "sha256": "15efcfad4ff3a4e17d78a5cc92dfaed34f1125a7837180e7cbd4abf27598b4f3",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 8
+        },
+        {
+          "path": "server/src/__tests__/workspace-command-authz.test.ts",
+          "sha256": "cc3020cbbbbf3bf28c84c9a22e62c048065ccf06ae5634ecb2316b2df5cf4c6c",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 12
+        },
+        {
+          "path": "server/src/__tests__/workspace-runtime-routes-authz.test.ts",
+          "sha256": "af95588432775b0fbb700fd3e728e4ad37a64c23f9443c499fb4eee78974ba77",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 15
+        },
+        {
+          "path": "server/src/__tests__/workspace-runtime-service-authz.test.ts",
+          "sha256": "d04fe9db039eb3dbfceeb1e1bc392003726e260492a7811889d488f751431c5b",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 6
+        },
+        {
+          "path": "server/src/routes/setup-token-route.test.ts",
+          "sha256": "f2e5a0c6a3d3ae989534db5cceb5f8379758a2654dc3822866d9199dcd2b418c",
+          "qualifiedSourceCommit": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+          "shardIndex": 5
+        },
+        {
+          "path": "server/src/services/openrouter-models.test.ts",
+          "sha256": "e03e60a7ca8e0d7753c84086269f58c7248b42a3b27ca16672f11c3633f946da",
+          "qualifiedSourceCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+          "shardIndex": 7
+        }
+      ]
+    },
+    "singleOriginalWholeCommandExitZero": false,
+    "initialFailures": "Original complete command and initial route shards stopped on the recorded timer/legacy-fixture/catalog failures. Complete default project groups and all 155 native serialized suites are qualified separately; earlier failures are preserved."
+  },
+  "validation": {
+    "wholeWorkspaceTypes": {
+      "result": "passed",
+      "sourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+      "log": "/var/tmp/aw-v8-final-types-after-fixture-cleanup.log",
+      "logSha256": "2eeb6614d0f6cd857b78b99f2877bbe64a07020dcfba0ce8a212f3720e19cd47"
+    },
+    "productionBuild": {
+      "result": "passed",
+      "sourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+      "log": "/var/tmp/aw-v8-final-build.log",
+      "logSha256": "2388cd31b770a85a5a52eb585ba78cb22d4214c9c80aece2d410d1a3d9a0ffa4"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "sourceCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+      "log": "/var/tmp/aw-v8-final-token-gates.log",
+      "logSha256": "7e400b459182ab2b0294fe6f3be5362687f4d44e5b5a18781f3db513760e3c2c"
+    },
+    "maximumNativeExperimentRecording": {
+      "result": "passed",
+      "sourceCommit": "5e6b6701e878a10909398f89172f9c7c883971a7",
+      "log": "/var/tmp/aw-v8-current-maximum-recording.log",
+      "logSha256": "a164be6bd56eebae9a1cdb1611af5d8be36a806a1eb2bcedb2430038bad118e2"
+    }
+  },
+  "applicationSourceContinuity": {
+    "applicationBuildCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+    "currentPrimaryImplementationCommit": "9a3237e3c48cb5a40370aeddc00676a1d7b34a1d",
+    "onlyChangesAfterApplicationChecks": [
+      "deploy/v8/statistical-worker/Dockerfile",
+      "deploy/v8/statistical-worker/README.md"
+    ],
+    "applicationCodeAndTestsUnchanged": true,
+    "dockerPackagingQualifiedSeparately": true,
+    "onlyRuntimeApplicationChangeAfterFullGeneralServerGroup": "server/src/routes/openapi.ts \u2014 documentation registry; complete 17-case catalog and full native serialized group 7 passed"
+  },
+  "resourceDiagnostic": {
+    "initialWholeTypesExit": 137,
+    "initialLogSha256": "2069bba33cadd618cd0c5c79565128bffe73dec7c0538d9870baa481dfb4e185",
+    "result": "failed_not_qualified",
+    "reason": "Completed synthetic native test roots occupied 6.8 GiB of RAM-backed /tmp; server compiler was OOM-killed with no reported TypeScript diagnostic",
+    "cleanup": {
+      "reason": "Completed native test fixtures retained 6.8 GiB in tmpfs and caused server typecheck OOM",
+      "specificCompletedHttpFixturePids": [
+        56303,
+        78486,
+        693131,
+        742264,
+        752511
+      ],
+      "removedCompletedNativeRoots": [
+        "pv-P0aLag",
+        "pv-k5p309",
+        "pv-KlgJbt",
+        "pv-9SCAPC",
+        "pv-yC4olE",
+        "pv-cZ7E4m"
+      ],
+      "preservedLogsAndReceipts": "/var/tmp; only completed synthetic native test fixtures removed; no repository or customer data changed"
+    },
+    "qualifiedRerun": "wholeWorkspaceTypes above; same original command, heap allowance, native Rust/migration/protocol checks, no compiler/validation reduction"
+  },
+  "limitations": [
+    "Native project groups qualify their exact recorded sources and unchanged file bytes; the first original whole command did not exit zero",
+    "No complete historical operator/provider/workspace/home/remote-storage Source inventory, claim manifest or named acceptance is established",
+    "Actual PR/CI/Greptile, release identity, H6/H7/UpCloud/private PostgreSQL/S3/TLS/OpenShell, credentials/legal/provider/customer/pilot/independent review and hosted calibration/COGS acceptance remain open",
+    "No cloud resource creation, deployment, image push, customer message, intervention or release promotion"
+  ]
+}

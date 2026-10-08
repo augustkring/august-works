@@ -91,12 +91,13 @@
     "native_original_public_conformance_assets_owned_by_existing_company_run",
     "native_instance_idle_bounded_global_legacy_runtime_cache_reconciliation_with_all_tenant_reference_retention",
     "native_historical_copied_experiment_lineage_and_actual_two_target_local_database_archive_restore_quarantine",
-    "native_openapi_complete_mounted_outcomes_joint_planning_and_execution_bound_playbook_contracts"
+    "native_openapi_complete_mounted_outcomes_joint_planning_and_execution_bound_playbook_contracts",
+    "actual_local_statsforecast_image_build_and_nonroot_readonly_no_network_synthetic_smoke"
   ],
   "unfinishedWaves": [
-    "complete_source_graph_and_historical_orphan_multi_restore_reconciliation",
+    "operator_owned_complete_source_inventory_historical_copy_and_restore_reconciliation",
     "customer_semantic_provider_adapter_conformance_conditional_on_existing_customer_source",
-    "current_complete_branch_types_tests_build_and_release_claim_manifest",
+    "complete_release_claim_manifest_pr_ci_greptile_and_named_source_acceptance",
     "upcloud_postgres_s3_tls_openshell_environment_specific_predecessor_gates",
     "hosted_pilot_operations_and_named_risk_owner_acceptance"
   ],
@@ -157,6 +158,7 @@
     "server/src/__tests__/heartbeat-runtime-skills.test.ts",
     "server/src/__tests__/issue-agent-mutation-ownership-routes.test.ts",
     "server/src/__tests__/issue-attachment-routes.test.ts",
+    "server/src/__tests__/issue-document-restore-routes.test.ts",
     "server/src/__tests__/issue-remove-cascade.test.ts",
     "server/src/__tests__/issue-thread-interaction-routes.test.ts",
     "server/src/__tests__/issues-goal-context-routes.test.ts",
@@ -235,9 +237,9 @@
     "General historical orphans outside owned namespaces, full indirect Source closure and archive/remote/multi-restore qualification remain unfinished.",
     "All H6/H7 environment-specific predecessor gates remain open. No live cloud/customer/provider/Human trial, deployment or business-impact acceptance is represented by the local receipts."
   ],
-  "implementationStatus": "LOCAL_IMPLEMENTATION_IN_PROGRESS",
-  "updatedAt": "2026-10-08T21:33:08.049562+00:00",
-  "statusAsOfCheckpoint": 53,
+  "implementationStatus": "LOCAL_VERIFICATION_COMPLETE_WITH_OPEN_ACCEPTANCE",
+  "updatedAt": "2026-10-08T22:09:14.790047+00:00",
+  "statusAsOfCheckpoint": 54,
   "sourceCorpusFullyRead": true,
   "localDevelopmentEvidence": [
     {
@@ -407,6 +409,10 @@
     {
       "path": "doc/operations/aw-v8-evidence/native-build-fb28801.json",
       "sha256": "7162ccca660d872fc137d6db6bf4c647b2d9e1b45899a04920e75ef4a9b36a94"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-complete-local-verification-checkpoint.json",
+      "sha256": "1286208c1f3a170a25370c8df0cb7f42f38725204b87d355eccbcfd31b0a937a"
     },
     {
       "path": "doc/operations/aw-v8-evidence/native-connector-owned-assets-checkpoint.json",
@@ -629,6 +635,10 @@
       "sha256": "6e06bb96f1aa114c337fbe2993700b81fc920cd85467072228211e9629d09e6e"
     },
     {
+      "path": "doc/operations/aw-v8-evidence/native-statistical-container-checkpoint.json",
+      "sha256": "f26c026b4dc9fba65a2f8917c19db355937fb92c9a4e6272adbb30f75fd5f077"
+    },
+    {
       "path": "doc/operations/aw-v8-evidence/native-statistical-forecast-checkpoint.json",
       "sha256": "9ecb9d578d5200f3a46cc4fd1fad554d43f37500f201a46e85f5a35b2065c378"
     },
@@ -706,5 +716,17 @@
     }
   ],
   "localEvidenceBoundary": "Historical local development receipts identify their tested source and limitations. They are not current release-bound AssuranceEvidence. The formal evidence array stays empty until a complete claim manifest and exact release identity are verified.",
-  "sourceAcceptanceCrosswalk": "doc/operations/aw-v8-source-acceptance.md"
+  "sourceAcceptanceCrosswalk": "doc/operations/aw-v8-source-acceptance.md",
+  "localVerification": {
+    "checkpoint": 54,
+    "applicationCheckedCommit": "20b668fc267e1c3fef8a4e4f5de95e490ead3bce",
+    "nativeVitestChecksPassed": 30042,
+    "existingSkips": 77,
+    "nativeSerializedFiles": 155,
+    "fullTypes": "passed",
+    "productionBuild": "passed",
+    "tokenGates": "passed",
+    "optionalContainerSmoke": "passed_local_synthetic",
+    "formalAcceptance": "open"
+  }
 }
