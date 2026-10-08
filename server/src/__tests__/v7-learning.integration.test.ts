@@ -1,3 +1,4 @@
+import * as artifactWorkspace from "../services/automation-artifacts/automation-artifact-workspace.js";
 import { approvalService } from "../services/approvals.js";
 import * as artifactRuntime from "../services/automation-artifacts/automation-artifact-runtime.js";
 import {companySkillTestRunCreateSchema} from "@paperclipai/shared";
@@ -194,8 +195,8 @@ const support = await getEmbeddedPostgresTestSupport();
     const [edge]=await db.select().from(learningAnalyticalDependencies).where(eq(learningAnalyticalDependencies.cycleId,cycle.id));
     await expect(db.update(learningAnalyticalDependencies).set({sourceManifestId:edge!.sourceManifestId}).where(eq(learningAnalyticalDependencies.cycleId,cycle.id))).rejects.toMatchObject({cause:{code:"23514"}});
   });
-  it.each(["verified_memory","artifact_signal","workflow_signal","promoted_artifact_signal"] as const)("retains current Optimizer source authority and erases native compiler copies: %s", async sourceKind => {
-    const generated=sourceKind==="artifact_signal"||sourceKind==="promoted_artifact_signal";
+  it.each(["verified_memory","artifact_signal","workflow_signal","promoted_artifact_signal","expired_artifact_signal"] as const)("retains current Optimizer source authority and erases native compiler copies: %s", async sourceKind => {
+    const generated=sourceKind==="artifact_signal"||sourceKind==="promoted_artifact_signal"||sourceKind==="expired_artifact_signal";
     const signal=sourceKind==="verified_memory"?null:await analyticalSignal();
     const service = workflowService(db), created = await service.create(companyId, { name: "Reviewed pure transform" }, principal);
     const draft = await service.updateDraft(companyId, created.id, { expectedRevisionId: created.draftRevisionId!, graph: {
@@ -282,7 +283,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
       expect((await executor.getRun(companyId, consumer!.id, owner))!.steps.find(step => step.nodeId === "copy")!.outputJson).toEqual({ value: expect.any(Number) });
       await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:artifactChildTaskId!})).resolves.toBeUndefined();
-      if (sourceKind === "artifact_signal") {
+      if (sourceKind === "artifact_signal" || sourceKind === "expired_artifact_signal") {
         // Active lifecycle is an explicit software prerequisite for isolating
         // runtime admission. This is not an Optimizer promotion/approval proof.
         await db.update(automationArtifacts).set({ status: "active" }).where(eq(automationArtifacts.id,replay.artifactId));
@@ -331,6 +332,41 @@ const support = await getEmbeddedPostgresTestSupport();
           await expect(executor.startManualRun(companyId,ordinary.id,{input:{value:9}},human,null)).resolves.toMatchObject({run:{status:"failed"}});
           await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
           expect((await executor.getRun(companyId,completed.run.id,owner))!.steps.find(step=>step.nodeId==="copy")!.outputJson).toEqual({value:7});
+          if(sourceKind==="expired_artifact_signal"){
+            const execute=artifactWorkspace.executeNativeArtifactCode;
+            // Actual sandbox execution finishes first. This software temporal
+            // boundary expires the retained Memory root in the same transaction
+            // before the native consumer's post-computation Source check.
+            const expiry=vi.spyOn(artifactWorkspace,"executeNativeArtifactCode").mockImplementation(async(...args)=>{
+              const output=await execute(...args);
+              await args[0].update(memoryRecords).set({expiresAt:sql`clock_timestamp()`}).where(eq(memoryRecords.id,roots[0]!));
+              return output;
+            });
+            const factory=artifactRuntime.automationArtifactRuntimeService;
+            let returnedExpiredCopy=false;
+            const consumer=vi.spyOn(artifactRuntime,"automationArtifactRuntimeService").mockImplementation(scopedDb=>{
+              const runtime=factory(scopedDb);
+              return {...runtime,execute:async(...args)=>{
+                const result=await runtime.execute(...args);returnedExpiredCopy=true;return result;
+              }};
+            });
+            const before=new Set((await db.select({id:workflowRuns.id}).from(workflowRuns).where(eq(workflowRuns.workflowId,ordinary.id))).map(run=>run.id));
+            try {
+              // Inspect the persisted native owner even if the command's final
+              // body reader already denies a Source that incorrectly committed.
+              await executor.startManualRun(companyId,ordinary.id,{input:{value:10}},human,null).catch(error=>{
+                if(error?.details?.code!=="analytical_source_access_lost")throw error;
+              });
+              const admitted=(await db.select().from(workflowRuns).where(eq(workflowRuns.workflowId,ordinary.id))).filter(run=>!before.has(run.id));
+              expect(admitted).toHaveLength(1);
+              expect(admitted[0]!.status).toBe("failed");
+              const [step]=await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.workflowRunId,admitted[0]!.id),eq(workflowStepRuns.nodeId,"artifact")));
+              expect(step!.outputJson).toBeNull();
+            } finally {expiry.mockRestore();consumer.mockRestore();}
+            expect(returnedExpiredCopy).toBe(false);
+            await expect(fs.lstat(artifactWorkspaceDirectory({companyId,versionId:replay.artifactVersionId}))).rejects.toMatchObject({code:"ENOENT"});
+            expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[0]!)))[0]!.expiresAt).toBeNull();
+          }
         } finally {
           await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
           await db.update(automationArtifacts).set({status:"testing"}).where(eq(automationArtifacts.id,replay.artifactId));
@@ -421,7 +457,7 @@ const support = await getEmbeddedPostgresTestSupport();
       const version=detail.latestVersion!;
       if(sourceKind!=="promoted_artifact_signal"){
         await artifacts.transitionStatus(companyId,replay.artifactId,{expectedStatus:"shadow",expectedLatestVersionId:replay.artifactVersionId,status:"candidate"},principal);
-        const descendant=await artifacts.appendVersion(companyId,replay.artifactId,{expectedLatestVersionId:version.id,sourceCode:sourceKind==="artifact_signal"?"export default (input: { value: number }) => ({ value: input.value, reviewed: true });":'{"value":"{{input.value}}","reviewed":"true"}',inputSchema:version.inputSchema,outputSchema:version.outputSchema,dependencyManifest:version.dependencyManifest,testSpec:version.testSpec},principal);
+        const descendant=await artifacts.appendVersion(companyId,replay.artifactId,{expectedLatestVersionId:version.id,sourceCode:generated?"export default (input: { value: number }) => ({ value: input.value, reviewed: true });":'{"value":"{{input.value}}","reviewed":"true"}',inputSchema:version.inputSchema,outputSchema:version.outputSchema,dependencyManifest:version.dependencyManifest,testSpec:version.testSpec},principal);
         descendantVersionId=descendant.latestVersion!.id;
         expect(descendantVersionId).not.toBe(replay.artifactVersionId);
       }
