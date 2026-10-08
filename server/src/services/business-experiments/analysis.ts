@@ -11,7 +11,7 @@ import { businessMetricService } from "../business-metrics/service.js";
 import { calculateNativeMetric } from "../business-metrics/native-engine.js";
 import { admitBusinessExperiment,lockBusinessExperimentRoot,inspectBusinessExperimentVersion,businessExperimentRootView,auditBusinessExperiment } from "./service.js";
 import { transitionExperimentRecording } from "./recording.js";
-import { EXPERIMENT_OWNER_ENGINE,experimentBudget,experimentEdges,experimentStatementTime,nativeExperimentUnit,signedExperimentReceipt } from "./receipts.js";
+import { EXPERIMENT_OWNER_ENGINE,experimentBudget,experimentEdges,experimentStatementTime,signedExperimentReceipt } from "./receipts.js";
 import { evaluateNativeBusinessExperiment } from "./kernel.js";
 import { experimentCapture,experimentInvariantDiagnostics,experimentAnalysisMaterial,experimentOutcomeMaterial,experimentInterpretationMaterial,experimentAnalysisView,experimentInterpretationView,type ExperimentAnalysis,type ExperimentOutcome,type ExperimentInterpretation } from "./results.js";
 /** Sole final native capture owner. Commands supply identities/CAS only; never
@@ -29,12 +29,15 @@ export function businessExperimentAnalysisService(db:Db){return {
       for(const metric of metrics)definitions.set(metric.key,await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,metric.metricId,metric.metricVersionId));
       // Lock all current ITT sources before the common actual database capture
       // time. Never substitute status at horizon end for this current snapshot.
-      const sources=new Map<string,Awaited<ReturnType<typeof nativeExperimentUnit>>>();
-      for(const assignment of receipts.assignments){experimentBudget(deadline);sources.set(assignment.id,await nativeExperimentUnit(tx,companyId,actor,version,assignment.unitId));}
+      // The receipt owner just admitted and share-locked every actual current
+      // unit in this same transaction. Reuse those current native rows, never
+      // the historical assignment snapshot or a caller-supplied measurement.
+      const sources=receipts.currentUnits;
       const at=await experimentStatementTime(tx);
       if(receipts.completion.reason==="fixed_horizon"&&at.getTime()<Date.parse(plan.until))throw conflict("The preregistered fixed horizon has not elapsed");
       if(receipts.completion.reason==="fixed_horizon")for(const assignment of receipts.assignments){
-        const source=sources.get(assignment.id)!, inherited=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),eq(analyticalLineageEdges.manifestId,assignment.lineageManifestId))).limit(261);
+        const source=sources.get(assignment.id), inherited=receipts.assignmentLineage.get(assignment.lineageManifestId);
+        if(!source||!inherited)throw notFound("Experiment complete current assignment Source lineage is unavailable");
         const edges=experimentEdges([...inherited,...source.edges]);
         for(const metric of metrics){
           experimentBudget(deadline);const calculated=calculateNativeMetric(definitions.get(metric.key)!.version.definition,{metricId:metric.metricId,versionId:metric.metricVersionId,from:plan.from,until:plan.until,dimensions:[],maxRows:1},[source.snapshot]);
@@ -50,11 +53,14 @@ export function businessExperimentAnalysisService(db:Db){return {
       Object.assign(analysis,signedExperimentReceipt("analysis",experimentAnalysisMaterial(analysis,receipts.completion.receiptHash)));
       const updated=await transitionExperimentRecording(tx,companyId,actor,row,"analyzing","Native immutable fixed-protocol final analysis awaiting explicit human interpretation",at);
       await tx.insert(businessExperimentAnalyses).values(analysis);
-      for(const outcome of outcomes){const edges=pendingEdges.get(outcome.id)!;
-        await tx.insert(analyticalLineageManifests).values({id:outcome.lineageManifestId,companyId,analysisType:"experiment_outcome",analysisRef:outcome.id,engineVersion:EXPERIMENT_OWNER_ENGINE,definitionHash:version.contentHash,inputHash:outcome.sourceHash,requestedBy:v7HumanActorId(actor),sourceWatermark:outcome.sourceSnapshot.updatedAt,sourceCount:edges.length,parameters:{receiptHash:outcome.receiptHash,lineageHash:nativeSha256(edges)},createdAt:at,expiresAt:version.expiresAt});
-        await tx.insert(analyticalLineageEdges).values(edges.map(edge=>({...edge,companyId,manifestId:outcome.lineageManifestId})));await tx.insert(businessExperimentOutcomes).values(outcome);
+      for(let offset=0;offset<outcomes.length;offset+=100){const group=outcomes.slice(offset,offset+100);experimentBudget(deadline);
+        await tx.insert(analyticalLineageManifests).values(group.map(outcome=>{const edges=pendingEdges.get(outcome.id)!;return {id:outcome.lineageManifestId,companyId,analysisType:"experiment_outcome",analysisRef:outcome.id,engineVersion:EXPERIMENT_OWNER_ENGINE,definitionHash:version.contentHash,inputHash:outcome.sourceHash,requestedBy:v7HumanActorId(actor),sourceWatermark:outcome.sourceSnapshot.updatedAt,sourceCount:edges.length,parameters:{receiptHash:outcome.receiptHash,lineageHash:nativeSha256(edges)},createdAt:at,expiresAt:version.expiresAt};}));
+        const batchEdges=group.flatMap(outcome=>pendingEdges.get(outcome.id)!.map(edge=>({...edge,companyId,manifestId:outcome.lineageManifestId})));
+        for(let edgeOffset=0;edgeOffset<batchEdges.length;edgeOffset+=500)await tx.insert(analyticalLineageEdges).values(batchEdges.slice(edgeOffset,edgeOffset+500));
+        await tx.insert(businessExperimentOutcomes).values(group);
       }
       await auditBusinessExperiment(tx,publications,companyId,actor,id,"analyzed",{versionId:version.id,analysisId,receiptHash:analysis.receiptHash,status:result.status});experimentBudget(deadline);
+      if(Math.min(version.expiresAt.getTime(),pin.source.expiresAt.getTime())<=Date.now())throw conflict("Experiment current Source expired before final capture completed");
       return {experiment:businessExperimentRootView(updated),analysis:experimentAnalysisView(analysis,receipts.completion,true)};
     });
   },

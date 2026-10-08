@@ -1,18 +1,18 @@
 import { and, eq } from "drizzle-orm";
-import { analyticalLineageEdges, analyticalLineageManifests, businessExperimentAnalyses, businessExperimentInterpretations, businessExperimentOutcomes, businessExperimentTransitions, type Db } from "@paperclipai/db";
+import { businessExperimentAnalyses, businessExperimentInterpretations, businessExperimentOutcomes, businessExperimentTransitions, type Db } from "@paperclipai/db";
 import type { BusinessExperimentAnalysisView, BusinessExperimentInvariantDiagnostic, NativeBusinessExperimentCapture } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
-import { notFound } from "../../errors.js";
+import { conflict, notFound } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { inspectDecisionSourceAuthority } from "../decision-intelligence.js";
 import { businessMetricService } from "../business-metrics/service.js";
 import { calculateNativeMetric } from "../business-metrics/native-engine.js";
 import { exactExperimentInvariantBalance, evaluateNativeBusinessExperiment } from "./kernel.js";
-import { EXPERIMENT_OWNER_ENGINE, experimentBudget, experimentEdges, verifyExperimentReceipt, type ExperimentVersion, type ExperimentAssignment, type ExperimentExposure, type ExperimentExecution, type ExperimentCompletion } from "./receipts.js";
+import { EXPERIMENT_OWNER_ENGINE, experimentBudget, experimentEdges, loadExperimentLineage, verifyExperimentReceipt, type ExperimentEdge, type ExperimentVersion, type ExperimentAssignment, type ExperimentExposure, type ExperimentExecution, type ExperimentCompletion } from "./receipts.js";
 export type ExperimentAnalysis = typeof businessExperimentAnalyses.$inferSelect;
 export type ExperimentOutcome = typeof businessExperimentOutcomes.$inferSelect;
 export type ExperimentInterpretation = typeof businessExperimentInterpretations.$inferSelect;
-export interface RecordingReceipts { execution: ExperimentExecution|null; assignments: ExperimentAssignment[]; exposures: ExperimentExposure[]; completion: ExperimentCompletion|null }
+export interface RecordingReceipts { execution: ExperimentExecution|null; assignments: ExperimentAssignment[]; exposures: ExperimentExposure[]; completion: ExperimentCompletion|null; assignmentLineage: Map<string, ExperimentEdge[]> }
 export function experimentInvariantDiagnostics(version: ExperimentVersion, assignments: ExperimentAssignment[]): BusinessExperimentInvariantDiagnostic[] {
   return version.metricPins.filter(pin => pin.role === "invariant").map(pin => {
     const control = assignments.filter(a=>a.arm==="control"), treatment = assignments.filter(a=>a.arm==="treatment");
@@ -24,10 +24,12 @@ export function experimentInvariantDiagnostics(version: ExperimentVersion, assig
 export function experimentCapture(version:ExperimentVersion, receipts:RecordingReceipts, reviewedAt:Date, outcomes:ExperimentOutcome[], at:Date):NativeBusinessExperimentCapture {
   const completion=receipts.completion!, diagnostics=experimentInvariantDiagnostics(version,receipts.assignments), plan=version.definition.sampleOrDurationPlan;
   const metrics=version.metricPins.filter(p=>p.role!=="invariant");
+  const exposures=new Map(receipts.exposures.map(exposure=>[exposure.assignmentId,exposure])),byAssignment=new Map<string,ExperimentOutcome[]>();
+  for(const outcome of outcomes){const group=byAssignment.get(outcome.assignmentId)??[];group.push(outcome);byAssignment.set(outcome.assignmentId,group);}
   return {versionId:version.id,definitionHash:version.contentHash,registeredAt:version.createdAt.toISOString(),reviewedAt:reviewedAt.toISOString(),completedAt:completion.completedAt.toISOString(),analyzedAt:at.toISOString(),completionReason:completion.reason,
-    integrity:{assignmentLogComplete:!!receipts.execution,exposureLogComplete:receipts.exposures.length===receipts.assignments.length&&receipts.assignments.every(a=>receipts.exposures.some(e=>e.assignmentId===a.id)),telemetryComplete:completion.reason!=="fixed_horizon"||outcomes.length===receipts.assignments.length*metrics.length,joinIntegrity:true,invariantsPassed:diagnostics.every(d=>d.balanced),interferenceAdmitted:completion.concurrentChangeReview.assessment==="none_identified"},
-    units:receipts.assignments.map(a=>{const exposure=receipts.exposures.find(e=>e.assignmentId===a.id);return {unitId:a.unitId,unitSourceHash:a.sourceHash,arm:a.arm,assignedAt:a.assignedAt.toISOString(),assignmentReceiptHash:a.receiptHash,exposure:exposure?.status==="applied"?{arm:exposure.arm,exposedAt:exposure.assertedAppliedAt!.toISOString(),receiptHash:exposure.receiptHash}:null,
-      outcomes:outcomes.filter(o=>o.assignmentId===a.id).map(o=>({key:o.key,metricId:o.metricId,metricVersionId:o.metricVersionId,outcomeReceiptId:o.id,sourceHash:o.sourceHash,from:plan.from,until:plan.until,observedAt:o.capturedAt.toISOString(),value:o.value})).sort((a,b)=>a.key.localeCompare(b.key))};})};
+    integrity:{assignmentLogComplete:!!receipts.execution,exposureLogComplete:receipts.exposures.length===receipts.assignments.length&&receipts.assignments.every(a=>exposures.has(a.id)),telemetryComplete:completion.reason!=="fixed_horizon"||outcomes.length===receipts.assignments.length*metrics.length,joinIntegrity:true,invariantsPassed:diagnostics.every(d=>d.balanced),interferenceAdmitted:completion.concurrentChangeReview.assessment==="none_identified"},
+    units:receipts.assignments.map(a=>{const exposure=exposures.get(a.id);return {unitId:a.unitId,unitSourceHash:a.sourceHash,arm:a.arm,assignedAt:a.assignedAt.toISOString(),assignmentReceiptHash:a.receiptHash,exposure:exposure?.status==="applied"?{arm:exposure.arm,exposedAt:exposure.assertedAppliedAt!.toISOString(),receiptHash:exposure.receiptHash}:null,
+      outcomes:(byAssignment.get(a.id)??[]).map(o=>({key:o.key,metricId:o.metricId,metricVersionId:o.metricVersionId,outcomeReceiptId:o.id,sourceHash:o.sourceHash,from:plan.from,until:plan.until,observedAt:o.capturedAt.toISOString(),value:o.value})).sort((a,b)=>a.key.localeCompare(b.key))};})};
 }
 export function experimentAnalysisMaterial(row:ExperimentAnalysis,completionHash:string) {
   return {id:row.id,companyId:row.companyId,experimentId:row.experimentId,versionId:row.versionId,definitionHash:row.definitionHash,completionHash,capture:row.capture,result:row.result,invariantDiagnostics:row.invariantDiagnostics,analyzedBy:row.analyzedBy,analyzedAt:row.analyzedAt.toISOString()};
@@ -55,19 +57,20 @@ export async function inspectBusinessExperimentResults(tx:Db,companyId:string,ac
   if(outcomes.length!==expected)throw notFound("Experiment intention-to-treat outcome receipt set is unavailable");
   const definitions=new Map<string,Awaited<ReturnType<ReturnType<typeof businessMetricService>["inspectPublishedDefinition"]>>>();
   for(const pin of metrics)definitions.set(pin.key,await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,pin.metricId,pin.metricVersionId));
+  const lineage=await loadExperimentLineage(tx,companyId,outcomes.map(outcome=>outcome.lineageManifestId),deadline),assignments=new Map(receipts.assignments.map(assignment=>[assignment.id,assignment])),authorityEdges=new Map<string,ExperimentEdge>();
   for(const outcome of outcomes){
-    experimentBudget(deadline);const assignment=receipts.assignments.find(a=>a.id===outcome.assignmentId),metric=definitions.get(outcome.key),pin=metrics.find(p=>p.key===outcome.key);
+    experimentBudget(deadline);const assignment=assignments.get(outcome.assignmentId),metric=definitions.get(outcome.key),pin=metrics.find(p=>p.key===outcome.key);
     if(!assignment||!metric||!pin||outcome.metricId!==pin.metricId||outcome.metricVersionId!==pin.metricVersionId||outcome.capturedAt.getTime()!==analysis.analyzedAt.getTime()||outcome.sourceSnapshot.id!==assignment.unitId||outcome.sourceSnapshot.createdAt!==assignment.sourceSnapshot.createdAt)throw notFound("Experiment outcome exact identity or capture time is unavailable");
     verifyExperimentReceipt("outcome",experimentOutcomeMaterial(outcome,assignment.receiptHash,version.contentHash),outcome);
     const calculation=calculateNativeMetric(metric.version.definition,{metricId:pin.metricId,versionId:pin.metricVersionId,from:version.definition.sampleOrDurationPlan.from,until:version.definition.sampleOrDurationPlan.until,dimensions:[],maxRows:1},[outcome.sourceSnapshot]);
     if(calculation.status!=="observed"||calculation.value!==outcome.value||calculation.inputHash!==outcome.inputHash||outcome.sourceHash!==nativeSha256({snapshot:outcome.sourceSnapshot,metricHash:pin.contentHash,inputHash:outcome.inputHash,value:outcome.value}))throw notFound("Experiment native outcome material is unavailable");
-    const [manifest]=await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,companyId),eq(analyticalLineageManifests.id,outcome.lineageManifestId))).for("share");
-    const edges=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),eq(analyticalLineageEdges.manifestId,outcome.lineageManifestId))).limit(262);
-    const inherited=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),eq(analyticalLineageEdges.manifestId,assignment.lineageManifestId))).limit(261);
+    const manifest=lineage.manifests.get(outcome.lineageManifestId),edges=lineage.edges.get(outcome.lineageManifestId)??[],inherited=receipts.assignmentLineage.get(assignment.lineageManifestId);
+    if(!inherited)throw notFound("Experiment exact assignment lineage is unavailable");
     const expectedEdges=experimentEdges([...inherited,...(outcome.sourceSnapshot.projectId?[{inputType:"project" as const,inputRef:outcome.sourceSnapshot.projectId,inputHash:nativeSha256({type:"project",id:outcome.sourceSnapshot.projectId}),relationship:"source" as const}]:[])]);
     if(!manifest||manifest.expiresAt<=new Date()||manifest.engineVersion!==EXPERIMENT_OWNER_ENGINE||manifest.analysisType!=="experiment_outcome"||manifest.analysisRef!==outcome.id||manifest.definitionHash!==version.contentHash||manifest.inputHash!==outcome.sourceHash||manifest.parameters.receiptHash!==outcome.receiptHash||manifest.createdAt.getTime()!==outcome.capturedAt.getTime()||manifest.expiresAt.getTime()!==version.expiresAt.getTime()||manifest.sourceCount!==edges.length||manifest.parameters.lineageHash!==nativeSha256(experimentEdges(edges))||nativeSha256(expectedEdges)!==nativeSha256(experimentEdges(edges)))throw notFound("Experiment outcome lineage is erased or unavailable");
-    await inspectDecisionSourceAuthority(tx,companyId,actor,edges,deadline);
+    for(const edge of edges){const key=`${edge.inputType}:${edge.inputRef}`,prior=authorityEdges.get(key);if(prior&&prior.inputHash!==edge.inputHash)throw conflict("Experiment outcome Source pins disagree");authorityEdges.set(key,edge);}
   }
+  await inspectDecisionSourceAuthority(tx,companyId,actor,[...authorityEdges.values()],deadline);
   const [review]=await tx.select().from(businessExperimentTransitions).where(eq(businessExperimentTransitions.id,receipts.execution.reviewTransitionId)).for("share");
   if(!review)throw notFound("Experiment exact reviewed protocol is unavailable");
   const capture=experimentCapture(version,receipts,review.createdAt,outcomes,analysis.analyzedAt), diagnostics=experimentInvariantDiagnostics(version,receipts.assignments);

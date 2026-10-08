@@ -8,6 +8,7 @@ import { companies, issues, projects, businessExperiments, businessExperimentAss
 import { ISSUE_STATUSES, businessMetricDefinitionSchema } from "@paperclipai/shared";
 import { businessExperimentService } from "../services/business-experiments/service.js";
 import { businessExperimentRecordingService } from "../services/business-experiments/recording.js";
+import { businessExperimentAnalysisService } from "../services/business-experiments/analysis.js";
 import { businessExperimentRoutes } from "../routes/business-experiments.js";
 import { errorHandler } from "../middleware/index.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
@@ -18,6 +19,7 @@ import { eraseAnalyticalSourcesUnderMemory } from "../services/analytical-source
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
 import { metricDefinition, analyticalPurpose } from "./helpers/business-metric-fixture.js";
 import { experimentDefinition } from "./helpers/business-experiment-fixture.js";
+import { experimentVolumeFixture } from "./helpers/business-experiment-volume-fixture.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 const support = await getEmbeddedPostgresTestSupport(), suite = support.supported ? describe : describe.skip;
 const actor = { type: "board" as const, source: "local_implicit" as const }, rationale = "Human source-owner recording of this exact non-personal native protocol";
@@ -33,7 +35,7 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, policy)).id;
   });
   const registry = () => businessExperimentService(db), recording = () => businessExperimentRecordingService(db);
-  async function reviewed(short = false) {
+  async function reviewed(short = false, maximumAssignedUnits = 100) {
     const metrics = [];
     for (const status of ["done", "cancelled", "in_progress"] as const) {
       const definition = businessMetricDefinitionSchema.parse({ ...metricDefinition(policyId), calculation: { kind: "native_ratio", numerator: { entity: "issue", statuses: [status], projectId: null }, denominator: { entity: "issue", statuses: [...ISSUE_STATUSES], projectId: null } } });
@@ -45,13 +47,14 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     // enrolled after the real preregistered start; no mocked database clock.
     definition.sampleOrDurationPlan.from = new Date(Date.now() + 1500).toISOString();
     definition.sampleOrDurationPlan.until = new Date(Date.parse(definition.sampleOrDurationPlan.from) + (short ? 1000 : 60000)).toISOString();
+    definition.sampleOrDurationPlan.maximumAssignedUnits = maximumAssignedUnits;
     const d = await registry().create(companyId, actor, { key: `recording_${randomUUID().replaceAll("-", "")}`, definition });
     await registry().transition(companyId, actor, d.experiment.id, { expectedRevision: 1, versionId: d.version.id, state: "in_review", rationale });
     const experiment = await registry().transition(companyId, actor, d.experiment.id, { expectedRevision: 2, versionId: d.version.id, state: "ready", rationale });
     return { ...d, experiment, definition, metrics };
   }
-  async function running(short = false) {
-    const d = await reviewed(short), experiment = await recording().start(companyId, actor, d.experiment.id, { expectedRevision: 3, versionId: d.version.id, mode: "recording_only_human_attested_native_process", rationale });
+  async function running(short = false, maximumAssignedUnits = 100) {
+    const d = await reviewed(short, maximumAssignedUnits), experiment = await recording().start(companyId, actor, d.experiment.id, { expectedRevision: 3, versionId: d.version.id, mode: "recording_only_human_attested_native_process", rationale });
     return { ...d, experiment };
   }
   async function insideWindow(d: Awaited<ReturnType<typeof running>>) {
@@ -195,4 +198,39 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     expect((await recording().safetyControls(companyId, actor)).items).toEqual([]);
   });
 
+  it("reauthorizes the complete 4,000-unit software population within the native budget and refuses a hidden final Source", async () => {
+    const d = await running(false, 4000); await insideWindow(d);
+    const units = await experimentVolumeFixture(db, companyId, d.version.id, 4000);
+    const started = performance.now(), receipts = await recording().receipts(companyId, actor, d.experiment.id, d.version.id), elapsed = performance.now() - started;
+    expect(receipts.assignments).toHaveLength(4000); expect(elapsed).toBeLessThan(30000);
+    expect(new Set(receipts.assignments.map(row => row.unitId)).size).toBe(4000);
+    console.info("Maximum-population native receipt reader", { units: 4000, elapsedMs: Math.round(elapsed), fixture: "explicit_bulk_software_prerequisites" });
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, units[units.length - 1].id));
+    await expect(recording().receipts(companyId, actor, d.experiment.id, d.version.id)).rejects.toMatchObject({ status: 404 });
+    await db.update(issues).set({ hiddenAt: null }).where(eq(issues.id, units[units.length - 1].id));
+    await disableV8Rollout(db); await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
+    await db.transaction(async raw => { const tx = raw as unknown as typeof db; await lockMemoryPrivacy(tx, companyId); await eraseAnalyticalSourcesUnderMemory(tx, companyId, "issue", [units[units.length - 1].id]); });
+    expect(await db.select().from(businessExperiments).where(eq(businessExperiments.id, d.experiment.id))).toHaveLength(0);
+    expect(await db.select().from(businessExperimentAssignments).where(eq(businessExperimentAssignments.versionId, d.version.id))).toHaveLength(0);
+    expect(await db.select({ id: issues.id }).from(issues).where(eq(issues.companyId, companyId))).toHaveLength(4000);
+  }, 180000);
+  it("captures all 8,000 native outcomes for the complete 4,000-unit population and replays its actual result within budget", async () => {
+    const d = await running(false, 4000); await insideWindow(d);
+    await experimentVolumeFixture(db, companyId, d.version.id, 4000, true);
+    const remaining = Date.parse(d.definition.sampleOrDurationPlan.until) - Date.now() + 10;
+    if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+    await recording().control(companyId, actor, d.experiment.id, { expectedRevision: 4, versionId: d.version.id, state: "completed", rationale, completion: { reason: "fixed_horizon", concurrentChangeReview: { assessment: "none_identified", rationale } } });
+    const started = performance.now();
+    const result = await businessExperimentAnalysisService(db).analyze(companyId, actor, d.experiment.id, { expectedRevision: 5, versionId: d.version.id });
+    expect(performance.now() - started).toBeLessThan(30000);
+    expect(result.analysis.qualityGates.finalOutcomeCapture).toBe("complete");
+    expect(result.analysis.qualityGates.exposureReports).toBe(true);
+    expect(result.analysis.result.diagnostics.assigned).toBe(4000);
+    expect(result.analysis.result.diagnostics.exposed).toBe(0);
+    const readAt = performance.now(), replay = await recording().receipts(companyId, actor, d.experiment.id, d.version.id);
+    expect(performance.now() - readAt).toBeLessThan(30000);
+    expect(replay.assignments).toHaveLength(4000); expect(replay.exposures).toHaveLength(4000);
+    expect(replay.analysis!.receiptHash).toBe(result.analysis.receiptHash);
+    expect(replay.analysis!.result).toEqual(result.analysis.result);
+  }, 180000);
 });
