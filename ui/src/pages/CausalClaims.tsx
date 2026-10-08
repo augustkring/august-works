@@ -34,9 +34,9 @@ export function CausalClaims(){
  if(!selectedCompanyId)return <p>Select a company to review causal claims.</p>;
  if(flags.isFetching)return <p role="status">Rechecking causal availability…</p>;
  if(flags.isError||!flags.data||!v8FeatureEnabled(flags.data,"causal_claims_v8")||!v7FeatureEnabled(flags.data,"governance_evidence_v7"))return <div className="space-y-6"><p role={flags.isError?"alert":"status"}>{flags.isError?"Causal availability could not be established.":"Governed causal analysis is not enabled."}</p><CausalClaimSafetyControls key={`${selectedCompanyId}:${userId}`} companyId={selectedCompanyId} userId={userId}/></div>;
- return <CausalClaimWorkspace key={`${selectedCompanyId}:${userId}`} companyId={selectedCompanyId} userId={userId}/>;
+ return <CausalClaimWorkspace key={`${selectedCompanyId}:${userId}`} companyId={selectedCompanyId} userId={userId} doWhyEnabled={v8FeatureEnabled(flags.data,"causal_provider_dowhy_v8")}/>;
 }
-export function CausalClaimWorkspace({companyId,userId}:{companyId:string;userId:string|null}){
+export function CausalClaimWorkspace({companyId,userId,doWhyEnabled=false}:{companyId:string;userId:string|null;doWhyEnabled?:boolean}){
  const cache=useQueryClient(),key=["causal-claims",companyId,userId],account=userId??undefined;
  const [authorityLost,setAuthorityLost]=useState(false),[id,setId]=useState(""),[versionId,setVersionId]=useState(""),[editing,setEditing]=useState(false),[rationale,setRationale]=useState(""),[ack,setAck]=useState(false),[now,setNow]=useState(Date.now());
  const reviewing=editing||!!rationale||ack,interval=reviewing?false:30000;
@@ -65,7 +65,7 @@ export function CausalClaimWorkspace({companyId,userId}:{companyId:string;userId
  {root&&pin&&<CausalModelCard root={root} pin={pin} pins={pins} busy={busy} editing={editing} current={current} setVersionId={v=>{setVersionId(v);setRationale("");setAck(false);}} onEdit={()=>setEditing(true)}/>}
  {root&&pin&&current&&!editing&&root.status==="hypothesis"&&pin.version.currentQualification==="current"&&!root.reviewedVersionId&&<Card><CardContent className="space-y-3 pt-6"><h2 className="font-semibold">Separate human model review</h2><label className="block space-y-2">Human review rationale<Textarea aria-label="Human review rationale" value={rationale} minLength={10} maxLength={2000} onChange={e=>setRationale(e.target.value)}/></label><label className="flex items-start gap-2"><input type="checkbox" checked={ack} onChange={e=>setAck(e.target.checked)}/>I reviewed this exact graph, assumptions, source and conditional interpretation boundary.</label><Button disabled={busy||!ack||rationale.trim().length<10||rationale.trim().length>2000} onClick={()=>review.mutate()}>Record human model review</Button></CardContent></Card>}
  {root&&pin&&current&&!editing&&root.status==="hypothesis"&&pin.version.currentQualification==="current"&&root.reviewedVersionId===pin.version.id&&pin.review&&!pin.run&&<Button disabled={busy} onClick={()=>analyze.mutate()}>Interpret registered evidence once</Button>}
- {editing&&(!id||root&&pin)&&<CausalClaimDefinitionForm key={id?pin?.version.id:"new"} companyId={companyId} userId={userId} initial={id?pin?.version.definition:undefined} claimKey={root?.key} busy={busy} onSave={v=>save.mutate(v)} onCancel={()=>setEditing(false)} onAuthorityLost={lost}/>}
+ {editing&&(!id||root&&pin)&&<CausalClaimDefinitionForm key={id?pin?.version.id:"new"} companyId={companyId} userId={userId} initial={id?pin?.version.definition:undefined} claimKey={root?.key} busy={busy} onSave={v=>save.mutate(v)} onCancel={()=>setEditing(false)} onAuthorityLost={lost} doWhyEnabled={doWhyEnabled}/>}
  {!editing&&root?.status!=="revoked"&&pin?.run&&<CausalClaimResult run={pin.run}/>}
  {root?.status==="revoked"&&<p role="status">This claim is revoked. Retained model history grants no current causal reliance.</p>}
  {!list.isFetching&&!list.isError&&!rows.length&&!editing&&<p>No authorized causal claims were returned on this bounded page. Review a causal analytical purpose in AI Governance before recording a model.</p>}

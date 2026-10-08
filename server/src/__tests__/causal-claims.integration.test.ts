@@ -23,7 +23,7 @@ import {causalClaimFixture} from "./helpers/causal-claim-fixture.js";
 import {getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase} from "./helpers/embedded-postgres.js";
 const support=await getEmbeddedPostgresTestSupport(),suite=support.supported?describe:describe.skip;
 const actor={type:"board" as const,source:"local_implicit" as const},rationale="Explicit synthetic human model review, not collected causal or business evidence";
-const flags={analytical_lineage_v8:true,business_metrics_v8:true,business_experiments_v8:true,causal_claims_v8:true,decision_intelligence_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true};
+const flags={analytical_lineage_v8:true,business_metrics_v8:true,business_experiments_v8:true,causal_claims_v8:true,decision_intelligence_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true,causal_provider_dowhy_v8:false};
 suite("Native causal model/review/source owner on migrated PostgreSQL",()=>{
  let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>,companyId:string,otherId:string,policyId:string;
  beforeAll(async()=>{process.env.PAPERCLIP_DECISION_SIGNING_SECRET="0123456789abcdef0123456789abcdef";database=await startEmbeddedPostgresTestDatabase("aw-v8-causal-owner-");db=createDb(database.connectionString);});afterAll(async()=>database?.cleanup());
@@ -116,6 +116,12 @@ suite("Native causal model/review/source owner on migrated PostgreSQL",()=>{
  });
  it("native company purge clears causal descendants with flags off and preserves a foreign tenant",async()=>{
   const d=await reviewed();await service().analyze(companyId,actor,d.claim.id,{expectedRevision:2,versionId:d.version.id});await disableV8Rollout(db);await purgeCompanyContent(db,companyId,{operationId:randomUUID()});for(const table of [causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns])expect(await db.select().from(table).where(eq(table.companyId,companyId))).toHaveLength(0);expect(await db.select().from(companies).where(eq(companies.id,otherId))).toHaveLength(1);
+ });
+ it.runIf(!!process.env.PAPERCLIP_DOWHY_PYTHON)("optional provider metadata is current-account/company-bound, strict and disabled by default",async()=>{
+  const base=`/api/companies/${companyId}/causal-claims/provider-profile`;
+  await request(app()).get(base).expect(404);await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({...flags,causal_provider_dowhy_v8:true});
+  const response=await request(app()).get(base+"?expectedUserId=local-board").expect(200);expect(response.headers["cache-control"]).toBe("no-store");expect(response.body).toMatchObject({provider:"dowhy",version:"0.14",python:"3.12.14",bundleHash:expect.stringMatching(/^[0-9a-f]{64}$/),conformanceHash:expect.stringMatching(/^[0-9a-f]{64}$/)});
+  await request(app()).get(base+"?expectedUserId=changed-account").expect(409);await request(app()).get(base+"?graph=arbitrary").expect(400);await expect(service().providerProfile(randomUUID(),actor)).rejects.toMatchObject({status:404});
  });
  it("public commands are strict, account-bound and no-store without accepting caller effects or quality flags",async()=>{
   const f=await proposal(),api=app(),base=`/api/companies/${companyId}/causal-claims`;const valid={key:"native_api_claim",definition:f.model};await request(api).post(base).send({...valid,result:{status:"supported",effect:1}}).expect(400);await request(api).post(base).send({...valid,definition:{...f.model,confidence:0.99}}).expect(400);await request(api).post(base+"?expectedUserId=changed-account").send(valid).expect(409);

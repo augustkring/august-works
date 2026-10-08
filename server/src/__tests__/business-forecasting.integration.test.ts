@@ -101,6 +101,7 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   await request(app()).get(endpoint).expect(404);await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({forecast_provider_statsforecast_v8:true});
   await request(app()).get(`${endpoint}?expectedUserId=another-account`).expect(409);await request(app()).get(`${endpoint}?endpoint=https://example.test`).expect(400);
   await request(app("session")).get(`/api/companies/${otherId}/business-forecasts/provider-profile`).expect(403);
+  await request(app()).get(`/api/companies/${randomUUID()}/business-forecasts/provider-profile`).expect(404);
   const response=await request(app()).get(`${endpoint}?expectedUserId=local-board`).expect(200);expect(response.headers["cache-control"]).toBe("no-store");expect(response.body).toMatchObject({companyId,models:["auto_ets","auto_arima"],qualification:"synthetic_software_conformance",profile:{provider:"statsforecast",version:"2.1.1",python:"3.12.14"}});expect(JSON.stringify(response.body)).not.toContain("Fixture source prose");
  });
  it.runIf(!!process.env.PAPERCLIP_STATSFORECAST_PYTHON)("persists exact statistical Sources and intervals with independent Human publication through the original owner",async()=>{

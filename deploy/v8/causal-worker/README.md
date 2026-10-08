@@ -47,3 +47,24 @@ and determine conclusion wording. Numerical qualification uses public synthetic
 software fixtures. It does not qualify customer trials, hosted availability,
 observational adjustment, clustering, heterogeneous treatment effects or a
 built container image. Public-owner integration is a separate checkpoint.
+
+The original causal owner now offers the exact current software profile through
+its account-bound, no-store operator metadata route when `causal_claims_v8`,
+governance evidence and `causal_provider_dowhy_v8` are enabled. The original form
+binds an explicit provider choice to the immutable Human model. Only the fixed
+two-node assignment-to-outcome graph with an exact interpreted registered
+experiment is eligible; observational questions retain the native abstention
+path. Profile drift or unavailable runtime prevents new optional use.
+
+Creating a model does not review or analyze it. The original separate Human
+review, registered Source/design/assumption gates and exact native interval remain
+mandatory. The original owner repeats Source/profile/expiry/cancellation checks
+before retaining a signed result. Failed or unknown provider diagnostics retain
+the registered numerical interval but withhold causal reliance as inconclusive.
+Provider pins, native result hash and diagnostics form part of the original
+signed run. Retained replay validates the native calculation plus those frozen
+diagnostics without rerunning the tenant analysis. Fixed public profile/health checks
+establish current qualification separately. Rollout rollback preserves authorized
+historical facts as needing revalidation; Source erasure remains mandatory with
+flags disabled and company paused. No Task, Decision choice or commitment is
+changed by model creation/review/analysis.
