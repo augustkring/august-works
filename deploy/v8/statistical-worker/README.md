@@ -34,10 +34,10 @@ fallback. The default maximum worker wall time is 15 seconds; models that cannot
 finish in the declared envelope remain unavailable/inconclusive.
 
 The Dockerfile pins the published Python image index and installs the same
-hashed wheels. Build from the repository root for Linux amd64. Running that image
-uses explicit read-only asset modes, so a restrictive checkout/build umask cannot
-make the fixed worker or dependency manifest unreadable by UID 65532. Running it
-requires a read-only root, no network or credentials, an ephemeral private tmpfs,
+hashed wheels. Build from the repository root for Linux amd64. The copied runtime
+assets have explicit read-only file modes and a traversable directory, so a
+restrictive checkout/build umask cannot make them unreadable by UID 65532. Running
+the image requires a read-only root, no network or credentials, an ephemeral private tmpfs,
 a non-root identity and explicit memory/CPU/PID/output/deadline limits. The image
 is an optional packaging path, not a runtime qualification claim. Record and
 qualify the **built** image digest before deployment; the published Python base
@@ -66,3 +66,16 @@ provider preserves authorized retained facts with needs-revalidation status;
 new statistical use remains closed. Source erasure, expiry and Human retirement
 remain with the original native owners. No external endpoint or credentials are
 accepted by this numerical provider.
+
+
+Actual local packaging verification is recorded in
+`doc/operations/aw-v8-evidence/native-statistical-container-checkpoint.json`.
+The Linux amd64 image was built and run as UID 65532 with read-only root, no
+network, no capabilities, no-new-privileges, private tmpfs and explicit resource
+limits. Health verified all 26 package versions and absence of ambient worker
+authority. AutoETS returned the known synthetic trend `[41, 42, 43]` with finite
+nested nominal intervals; invalid input returned only the fixed generic error.
+Each exact named test container was removed. The recorded local image ID binds
+its config/rootfs; no registry manifest, image push or hosted qualification is
+claimed. The original native numerical transport continues to own streaming
+output bounds, current Source/Human authority and runtime admission.

@@ -148,3 +148,16 @@ The explicit local volume cases do not establish hosted p95, cold-start latency,
 customer history, empirical interval coverage or business-impact acceptance.
 
 The source acceptance review crosswalk is `doc/operations/aw-v8-source-acceptance.md`. It maps the brief's 28 section-57 criteria without declaring passed release claims or closing current regression/Source/hosted gates.
+
+
+Checkpoint-54 local verification is complete in
+`aw-v8-evidence/native-complete-local-verification-checkpoint.json`: all original
+native project groups and every serialized suite, current full types/application
+build and token gates pass with recorded source continuity. Optional statistical
+packaging is independently built and checked in
+`aw-v8-evidence/native-statistical-container-checkpoint.json`; the numerical
+worker still receives only anonymous bounded values, with no ambient credentials
+or network. The Docker asset-mode fix adds no Source owner or execution fallback.
+These receipts do not establish a complete operator-owned historical/copy/restore
+inventory, claim manifest, PR/CI/Greptile review, named acceptance or hosted
+qualification. R0 and `sourceComplete: false` remain explicit.

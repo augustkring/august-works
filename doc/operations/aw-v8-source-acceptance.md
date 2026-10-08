@@ -1,7 +1,7 @@
 # V8 source acceptance crosswalk
 
 Reconciled on 2026-10-08 against build brief V8 V2 section 57. This is a review
-crosswalk, not a passed release claim manifest. Native-owner checkpoint 53 is
+crosswalk, not a passed release claim manifest. Native-owner checkpoint 54 is
 committed on the requested branch. `evals/aw-v8/readiness.json` retains R0,
 `sourceComplete: false`, no release identity, and no accepted risk owner.
 
@@ -13,7 +13,7 @@ caller, hosted environment or restored filesystem.
 | §57 | Required behavior | Existing implementation / inspectable verification |
 | --- | --- | --- |
 | 1 | Current master base | Branch base above; remote master checked on 2026-10-08 |
-| 2 | V4–V7 regressions/security remain green | Current `pnpm test:run` verification; previous local receipts do not clear this gate |
+| 2 | V4–V7 regressions/security remain green | Complete native local project groups: 30,042 passing checks, 77 existing skips; all 155 serialized suites pass without skips, exact source/file continuity in `aw-v8-evidence/native-complete-local-verification-checkpoint.json`; actual CI/independent review remains open |
 | 3 | No stale V8 merge | New requested branch and incremental Git history from the declared master base |
 | 4 | Governed versioned metrics and lineage | `server/src/services/business-metrics/service.ts`; `server/src/__tests__/business-metrics.integration.test.ts` |
 | 5 | Known-answer metric evaluation | `server/src/__tests__/business-metric-engine.test.ts` |
@@ -29,7 +29,7 @@ caller, hosted environment or restored filesystem.
 | 15 | Deterministic constraints; planning is proposal-only | `server/src/__tests__/adaptive-planning-kernel.test.ts`; `server/src/__tests__/adaptive-planning-cross-project.integration.test.ts` |
 | 16 | Structured material Review evidence | `server/src/services/management-reviews/capture.ts`; `server/src/__tests__/management-reviews.integration.test.ts` |
 | 17 | Derived-data privacy/export/deletion/retention | `doc/operations/aw-v8-source-and-data-register.md`; `server/src/__tests__/analytical-context-privacy.integration.test.ts`; local archive/restore, orphan and governed backfill metadata receipts 49–52 |
-| 18 | Cross-company authorization | Original native route/Source admission and the domain integration suites above; current whole regression gate remains separate |
+| 18 | Cross-company authorization | Original native route/Source admission and the domain integration suites above; exact local whole-group verification recorded in checkpoint 54; hosted regression remains separate |
 | 19 | Reject employment/performance scoring | Strict typed dimensions/protocols; `packages/shared/src/business-metrics.test.ts`; `packages/shared/src/business-experiments.test.ts` |
 | 20 | Optional versioned qualified providers | Locked StatsForecast/DoWhy profiles and owner checks; `doc/operations/aw-v8-optional-semantic-provider-decision.md`; customer semantic adapter is conditional on an existing supplied source |
 | 21 | Python has no ambient database/secret authority | `server/src/services/native-runtime/numerical-worker.ts`; actual isolated worker regression receipts; hosted image/profile qualification remains separate |
@@ -46,8 +46,11 @@ Local implementation receipts are indexed with checked SHA-256 values in
 `doc/plans/2026-10-06-aw-v8-build.md`. Source ownership and data surfaces remain
 in the original data register, rather than creating another authority store.
 
-Remaining source acceptance includes current full checks and complete claim/Source
-reconciliation. The local historical cache and database restore fixtures do not
+Current local whole-workspace types/build/token gates and complete native test
+groups pass, including byte continuity and separately qualified Docker packaging.
+The initially failed original command is not recorded as a single green exit.
+Remaining formal source acceptance includes complete claim/Source reconciliation,
+actual PR/CI/Greptile review and named acceptance. The local historical cache and database restore fixtures do not
 establish provider/workspace/home/remote-storage erasure, every historical
 publisher combination or a complete privacy graph. Those limits remain explicit.
 

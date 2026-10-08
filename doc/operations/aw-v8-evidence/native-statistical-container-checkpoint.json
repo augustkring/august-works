@@ -1,0 +1,162 @@
+{
+  "checkpoint": "54 \u2014 actual optional StatsForecast Linux amd64 image build and isolated anonymous smoke",
+  "recordedAt": "2026-10-08T22:09:14.790047+00:00",
+  "qualifiedBuildCommit": "ac6e5fb7283fd1f14ac2c084a14c6bd90b01013f",
+  "primaryEquivalentCommit": "9a3237e3c48cb5a40370aeddc00676a1d7b34a1d",
+  "localImageId": "sha256:40dc7f1477fda577cf481a71ffa7cf9e882725a540bc6b162a66fe0676a93624",
+  "registryManifestDigest": null,
+  "imagePushed": false,
+  "platform": "linux/amd64",
+  "virtualImageSizeBytes": 661129395,
+  "baseImageIndexDigest": "sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e",
+  "sourceFiles": [
+    {
+      "path": "deploy/v8/statistical-worker/Dockerfile",
+      "sha256": "5606a6d2359deea086bc7b4ce6b6329cb7bfb0991b5f5bd9f6352642260decbf"
+    },
+    {
+      "path": "server/src/services/scripts/statsforecast-worker.py",
+      "sha256": "560858df66b240c32a4e984cb3e03ae9eb627d9ac1fce9c9d840de05ffaa428b"
+    },
+    {
+      "path": "server/src/services/scripts/statsforecast-requirements.lock",
+      "sha256": "67ac5b70646ac1d39dda99c19fa47d75a80f5f9f3885033a458c4c1664af53a7"
+    },
+    {
+      "path": "server/src/services/scripts/statsforecast-dependencies.json",
+      "sha256": "ff00c4a4dfa428d7d9654e23a9273e4636a1e2b1b2c349c9d0206c8e17e49e78"
+    }
+  ],
+  "build": {
+    "result": "passed",
+    "logSha256": "550c45d32dfb920d4e65f4421272b5112a579a8d03460f41eb481527fe83e9b2",
+    "transportDockerfileSha256": "7fe241fb955dfd248f31e6bb986397fde4ca390649efe5e1cc9bbf24aa4d2d62",
+    "sessionTransportOnly": "Original Dockerfile with pip HTTPS combined public CA supplied through one BuildKit secret mount; proxy/registry configuration and TLS verification preserved. CA absent from final layers."
+  },
+  "checks": [
+    {
+      "case": "health",
+      "result": "passed",
+      "exitCode": 0,
+      "wallSeconds": 0.2444134459947236,
+      "stdoutSha256": "95acd82195c0395e90f3541fffe26290e15456582043b83ca57a1a225c452567",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "network": "none",
+      "readOnlyRoot": true,
+      "uid": "65532:65532",
+      "memoryBytes": 2147483648,
+      "pids": 32,
+      "noNewPrivileges": true,
+      "capabilitiesDropped": "ALL",
+      "observedOutputBytes": 809
+    },
+    {
+      "case": "forecast",
+      "result": "passed",
+      "exitCode": 0,
+      "wallSeconds": 1.687851415015757,
+      "stdoutSha256": "778ae5cba6cd690f7a5b157a36b2509d86b02385bee532983adba59b1262d7a4",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "network": "none",
+      "readOnlyRoot": true,
+      "uid": "65532:65532",
+      "memoryBytes": 2147483648,
+      "pids": 32,
+      "noNewPrivileges": true,
+      "capabilitiesDropped": "ALL",
+      "observedOutputBytes": 331
+    },
+    {
+      "case": "invalid",
+      "result": "passed",
+      "exitCode": 1,
+      "wallSeconds": 0.19031161902239546,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "1efc1b838f67c616f5e8d9b3f1dcb42335c4d04f30df31c6645da98fbb7179da",
+      "network": "none",
+      "readOnlyRoot": true,
+      "uid": "65532:65532",
+      "memoryBytes": 2147483648,
+      "pids": 32,
+      "noNewPrivileges": true,
+      "capabilitiesDropped": "ALL",
+      "observedOutputBytes": 0
+    }
+  ],
+  "syntheticKnownAnswer": {
+    "input": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39
+    ],
+    "model": "auto_ets",
+    "origins": [
+      20,
+      21,
+      22
+    ],
+    "horizon": 3,
+    "gapPeriods": 1,
+    "futureGapPeriods": 1,
+    "futureMean": [
+      41,
+      42,
+      43
+    ],
+    "nestedNominal80And95Intervals": "checked finite and contain the point; not customer coverage calibration"
+  },
+  "closure": {
+    "containersRemoved": true,
+    "invalidInputExitCode": 1,
+    "invalidInputStdoutBytes": 0,
+    "invalidInputStderr": "statistical_worker_failed\n",
+    "workerEnvironment": "Cleared before Python; only private HOME, fixed locale/TZ and single-thread settings retained",
+    "boundedContainer": "UID 65532, no network, read-only root, all capabilities dropped, no-new-privileges, 2 GiB memory, 1 CPU, 32 PIDs, private 64 MiB tmpfs, CPU/nofile/core/file-size limits and 15-second parent timeout with exact named-container removal",
+    "outputLimit": "Observed stdout <=256000 bytes and stderr <=4096; original native numerical transport independently enforces streaming output limits"
+  },
+  "diagnosticsExcludedFromQualification": [
+    {
+      "imageId": "sha256:758499b6524908fe65928f80b47cdae9d11713e77fb7f11da9e8c5a09a7b4b92",
+      "reason": "Source files inherited 0600 host permissions; fixed UID could not read worker",
+      "logSha256": "e915dd0410d17bc2b577482703c585a3eccb93a94bf9ca905524c1848dcd5679"
+    },
+    {
+      "imageId": "sha256:bf4f9332f366dd62f1ce87bcfc84f15b0fe1d61ae6b02c000ee0eac641ecb937",
+      "reason": "COPY explicit file mode also affected destination directory; missing traversal denied interpreter access; final runtime directory explicitly set to 0755",
+      "logSha256": "f5c967fcdbf9539e29ea5bc1fb34eb0e6fb642e69277b36288e9ec6a20b13248"
+    }
+  ],
+  "limitations": [
+    "Local immutable image config/rootfs identity, not a pushed registry manifest, signed release or deployed digest",
+    "Synthetic health/AutoETS/invalid-input packaging smoke only; native owner, bound Source/purpose/Human authority, customer data, empirical interval calibration and hosted runtime qualification remain separate",
+    "Original bwrap numerical transport stays the production owner; no Docker fallback/runtime authority is introduced",
+    "AutoTheta remains unqualified; DoWhy packaging unchanged; no cloud deployment, image push or R0 promotion"
+  ]
+}
