@@ -127,3 +127,25 @@ export const planningOutcomeSchema=z.object({
   authority:z.literal("supplemental_descriptive_signal"),causalClaimRef:z.null(),
 }).strict();
 export type PlanningOutcome=z.infer<typeof planningOutcomeSchema>;
+
+/** One governed mathematical problem across explicitly selected same-company
+ * projects. Each project contributes its complete current active Task population. */
+export const crossProjectPlanningProfileSchema = projectPlanningProfileSchema.safeExtend({
+  projects: z.array(z.object({ id: z.string().uuid(), expectedUpdatedAt: z.string().datetime({ offset: true }) }).strict()).min(2).max(20),
+}).strict().superRefine((profile, ctx) => {
+  for (const values of [profile.projects.map(project => project.id), profile.governanceObligationRefs, profile.tasks.map(task => task.key), profile.evidence.map(item => item.key)])
+    if (new Set(values).size !== values.length) ctx.addIssue({ code: "custom", message: "Cross-project native identities must be unique" });
+});
+export const proposeCrossProjectPlanningSchema = z.object({ profile: crossProjectPlanningProfileSchema, expectedSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/), reason: z.string().trim().min(20).max(4000) }).strict();
+export const reviewCrossProjectPlanningSchema = z.object({ expectedRevision: z.number().int().positive(), action: z.enum(["begin_review", "accept", "reject", "cancel"]), rationale: z.string().trim().min(10).max(4000) }).strict();
+export type CrossProjectPlanningProfile = z.infer<typeof crossProjectPlanningProfileSchema>;
+export interface CrossProjectPlanningContext {
+  profile: CrossProjectPlanningProfile;
+  sourceSnapshots: ProjectPlanningSourceSnapshot[];
+  evidence: CapturedDecisionEvidence[];
+  snapshotHash: string;
+  result: NativePlanningResult;
+  capturedAt: string;
+  expiresAt: string;
+  authority: "human_cross_project_roadmap_review_required";
+}

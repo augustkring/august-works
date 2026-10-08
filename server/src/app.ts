@@ -12,6 +12,7 @@ import { saasRoutes } from "./routes/saas.js";
 import { saasWebhookRoutes } from "./routes/saas-webhooks.js";
 import { runtimeHostRoutes } from "./routes/runtime-hosts.js";
 import { portfolioRoutes } from "./routes/portfolio.js";
+import { crossProjectPlanningRoutes } from "./routes/cross-project-planning.js";
 import { projectControlRoutes } from "./routes/project-control.js";
 import { playbookRoutes } from "./routes/playbooks.js";
 import { agentRuntimeFabricRoutes } from "./routes/agent-runtime-fabric.js";
@@ -728,6 +729,7 @@ export async function createApp(
   api.use(skillLifecycleRoutes(db));
   api.use(portfolioRoutes(db));
   api.use(projectControlRoutes(db));
+  api.use(crossProjectPlanningRoutes(db));
   api.use(playbookRoutes(db));
   api.use(rolePackRoutes(db));
   api.use(agentRuntimeFabricRoutes(db));
