@@ -19,6 +19,7 @@ import {
   v7HumanActorId,
 } from "../v7-authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { conflict, forbidden, notFound } from "../../errors.js";
@@ -227,7 +228,7 @@ export function modelReservationService(
       const input = requestSchema.parse(raw),
         quote = await freshQuote(input, now);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, input.companyId);
+        await lockAnalyticalCompany(tx, input.companyId); await lockMemoryPrivacy(tx, input.companyId);
         const { plan, userId } = await authority(
           tx,
           actor,
@@ -337,7 +338,7 @@ export function modelReservationService(
       now = new Date(),
     ): Promise<Reservation> {
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const [initial] = await tx
           .select()
           .from(orchestrationModelReservations)

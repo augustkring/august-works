@@ -1,0 +1,115 @@
+{
+  "checkpoint": "Original native Orchestration current Source, supplemental Signals, control projections and copied payload C7",
+  "parentCommit": "6b69bff94322f6afa138a392d9fbeba0d33a39eb",
+  "recordedAt": "2026-10-08T01:52:15.727510+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "dcdc93ee16610d533aec3feb9703b3ed48ba8fdda6f611d9583f3fb86139a087"
+    },
+    {
+      "path": "packages/db/src/migrations/0433_native_orchestration_source_payload_erasure.sql",
+      "sha256": "9393d89116e57a191b85d1d41301aff4a535d592b8dce6227936eb299aa98c9e"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0428_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0433_snapshot.json",
+      "sha256": "0f04dd7b50ab7b6fb57debafce6d8bd57fe58127c6460afefa932047f9fd71ee"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "2c50ec8605bbd0f01589f08a1c14bf9927df20cbbbe34bafd800546d659a00fa"
+    },
+    {
+      "path": "server/src/__tests__/v7-orchestration.integration.test.ts",
+      "sha256": "c12385304f657cffb886afe444cc6260dcc809139ccd322580beefd5dafd313e"
+    },
+    {
+      "path": "server/src/routes/orchestration.ts",
+      "sha256": "c730d0cb2f33e7fea586002b86e54693db5c54cbcdd8bc1ddb7750c4f5c56de4"
+    },
+    {
+      "path": "server/src/services/agent-packages/specialist-evaluation.ts",
+      "sha256": "da2d8ddaf8e56ebc3a39219ca45ed734b5c27ad82c66f9af4c7afbdc39262b9c"
+    },
+    {
+      "path": "server/src/services/orchestration/model-reservations.ts",
+      "sha256": "82c5b10850713b6f35b22b87964de7fb97beddec63c4c005374cc775f97936cb"
+    },
+    {
+      "path": "server/src/services/orchestration/orchestration-service.ts",
+      "sha256": "c57571b931ad5fb4b84c4abd59a4aca98efdc6f53bc9f12a7e90c74a153c8946"
+    },
+    {
+      "path": "server/src/services/supervision/read-only-model-verifier.ts",
+      "sha256": "2d5e33e77ff26bccbafd86317619df3bebbf0c8d13a503a0bafcd916f8699cf8"
+    },
+    {
+      "path": "server/src/services/supervision/supervision-service.ts",
+      "sha256": "943b10a3d2d2504f91819ccace4a13cda7a2300439c24973c3738e85a34cf3fd"
+    },
+    {
+      "path": "server/src/services/supervision/verification-service.ts",
+      "sha256": "a5355820c6c108406b7eb2d20476fbc8e5f6d9142b0d9c0083df47fe7ef07605"
+    },
+    {
+      "path": "ui/src/components/OrchestrationVerification.tsx",
+      "sha256": "9382b95886614b06ea9bfcd40668a157f7db878dcf8074fcfd6121485b8fb5f8"
+    },
+    {
+      "path": "ui/src/pages/Orchestration.test.tsx",
+      "sha256": "d1fd58ed8baa68bad6052ec31e4e981bd7cd902f76ffb4dc5d658d7788d3e234"
+    },
+    {
+      "path": "ui/src/pages/Orchestration.tsx",
+      "sha256": "b0930d4eb0c39e73507381f3080877699c47ed0ec3ea57f2a4930887ed6b9851"
+    }
+  ],
+  "validation": {
+    "nativePostgresRuntimeAndUi": {
+      "tests": 178,
+      "files": 12,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-orchestration-source-final-tests-verified.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-orchestration-source-final-server-types.log"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-orchestration-source-closed-ui-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-orchestration-source-final-migrations.log"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-orchestration-source-final-tokens.log"
+    },
+    "parentWholeNativeProductionBuild": {
+      "commit": "951c3d86d3d37613205b7671642d46bf838b3f14",
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-skill-harness.log"
+    }
+  },
+  "qualified": [
+    "Original plan/review/supervision Source admission follows actual native Task/run bindings under company -> Memory locks",
+    "Live worker Agent x Human Source checks repeat before continuation",
+    "Private analytical Signal roots remain unverified and supplemental; independently verified Memory evidence remains",
+    "Control metadata and original HTTP route preserve Pause/Stop with unavailable Source and no-store responses",
+    "Existing native C7 triggers erase copied signals/failed invariants and fence late writes while preserving receipt identities/hashes/verdicts/times",
+    "Original protected passed leaf output is erased by the actual Source owner without changing its receipt",
+    "Audit metadata guard/selective backfill removes duplicate Source prose; UI clears cached verification on Source loss"
+  ],
+  "limits": [
+    "Human/Agent/provider and HTTP authentication prerequisites are software fixtures, not performed Human/provider trials or new browser/JWT authentication",
+    "Historical populated/hosted migration backfill, maximum volume and hard latency remain unqualified",
+    "Standalone Artifact consumers, planning outcome pins, Routine cadence, action materialization, remaining Source graphs, cross-project Planning and readonly provider conformance remain open",
+    "No whole-brief completion claim"
+  ]
+}

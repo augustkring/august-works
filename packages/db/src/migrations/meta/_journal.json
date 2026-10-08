@@ -3018,6 +3018,13 @@
       "when": 1791421621550,
       "tag": "0432_native_skill_harness_source_erasure",
       "breakpoints": true
+    },
+    {
+      "idx": 433,
+      "version": "7",
+      "when": 1791423166842,
+      "tag": "0433_native_orchestration_source_payload_erasure",
+      "breakpoints": true
     }
   ]
 }

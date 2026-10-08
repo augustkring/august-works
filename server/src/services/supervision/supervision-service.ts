@@ -1,17 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { agentExecutionManifests, contextManifestMemoryRoots, memoryRecords, issuePlanDecompositions, agents, completionContracts, documents, heartbeatRuns, issueDocuments, issueThreadInteractions, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSessions, supervisionSignals, supervisionInterventions, toolInvocations, type Db } from "@paperclipai/db";
+import { agentExecutionManifests, analyticalContextRoots, contextManifestMemoryRoots, memoryRecords, issuePlanDecompositions, agents, completionContracts, documents, heartbeatRuns, issueDocuments, issueThreadInteractions, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSessions, supervisionSignals, supervisionInterventions, toolInvocations, type Db } from "@paperclipai/db";
 import { supervisionInterventionSchema, v7FeatureEnabled, type SupervisionInterventionInput, type SupervisionSignalType, type ReadinessAction } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { assertDerivedManager } from "../memory/derived-memory.js";
+import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { readinessService } from "../readiness/readiness-service.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
-import { orchestrationService } from "../orchestration/orchestration-service.js";
+import { orchestrationService, assertOrchestrationSources } from "../orchestration/orchestration-service.js";
 import { orchestrationRuntimeControl } from "../orchestration/orchestration-runtime-control.js";
 import { reconcileOrchestrationAttempts } from "../orchestration/orchestration-admission.js";
 import { issueService, executeIssuePostCommitActions, type IssuePostCommitAction } from "../issues.js";
@@ -34,7 +36,7 @@ export function supervisionService(db: Db, options: {
   async function observe(companyId: string, id: string, human?: { actor: AuthorizationActor; input: SupervisionInterventionInput }) {
     const postCommitActions: IssuePostCommitAction[] = [];
     const outcome = await withV7ActivityTransaction(db, async (tx, publications) => {
-      await lockMemoryPrivacy(tx, companyId);
+      await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
       const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, id))).for("update");
       if (!plan) throw notFound("Orchestration plan not found");
       const input = human ? supervisionInterventionSchema.parse(human.input) : null;
@@ -53,9 +55,14 @@ export function supervisionService(db: Db, options: {
       const attempts = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, id))).orderBy(desc(orchestrationWorkerAttempts.createdAt),orchestrationWorkerAttempts.id);
       const tasks = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, [...new Set([plan.issueId, ...workers.map(w => w.issueId)])]))).for("share");
       const contracts = await tx.select().from(completionContracts).where(and(eq(completionContracts.companyId, companyId), inArray(completionContracts.id, [plan.completionContractId, ...workers.map(w => w.completionContractId)])));
-      const sourceCurrent = !plan.erasedAt && contracts.length === new Set([plan.completionContractId, ...workers.map(w => w.completionContractId)]).size && contracts.every(c => c.contractJson.payloadDeleted !== true);
+      let sourceCurrent = !plan.erasedAt && contracts.length === new Set([plan.completionContractId, ...workers.map(w => w.completionContractId)]).size && contracts.every(c => c.contractJson.payloadDeleted !== true);
       const principal = plan.executionPrincipal;
       const actor: AuthorizationActor | null = principal?.type === "user" ? { type: "board", source: "session", userId: principal.userId } : principal?.type === "system" && principal.service === "local-board" ? { type: "board", source: "local_implicit" } : null;
+      if (sourceCurrent) {
+        try { await assertOrchestrationSources(tx, actor ?? undefined, companyId, plan); }
+        catch (error) { if (error && typeof error === "object" && "status" in error && [403,404,409,422].includes(Number(error.status))) sourceCurrent = false; else throw error; }
+      }
+      if (human && !sourceCurrent && !["PAUSE","STOP","ESCALATE_HUMAN"].includes(input!.action)) throw conflict("Source access must be current before continuing Orchestration");
       let authorityCurrent = Boolean(actor), readinessAllows = true;
       const live = attempts.filter(a => a.status === "running");
       if (plan.mode === "planned_parallel") {
@@ -64,7 +71,7 @@ export function supervisionService(db: Db, options: {
         const [confirmation] = accepted?.acceptedInteractionId ? await tx.select({ status: issueThreadInteractions.status }).from(issueThreadInteractions).where(and(eq(issueThreadInteractions.companyId,companyId),eq(issueThreadInteractions.id,accepted.acceptedInteractionId))) : [];
         if (currentPlan?.revision !== plan.acceptedPlanRevisionId || accepted?.status !== "completed" || confirmation?.status !== "accepted") authorityCurrent = false;
       }
-      const authorizationFailure = (error: unknown) => error && typeof error === "object" && "status" in error && [403,404,409].includes(Number(error.status));
+      const authorizationFailure = (error: unknown) => error && typeof error === "object" && "status" in error && [403,404,409,422].includes(Number(error.status));
       for (const worker of workers) {
         const task = tasks.find(t => t.id === worker.issueId), root = tasks.find(t => t.id === plan.issueId);
         if (!task || !root || task.assigneeAgentId !== worker.agentId || (plan.mode === "planned_parallel" && (task.parentId !== root.id || task.projectId !== root.projectId))) { authorityCurrent = false; continue; }
@@ -78,12 +85,17 @@ export function supervisionService(db: Db, options: {
             if (!run) { authorityCurrent = false; continue; }
             const workerActor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId, agentId: worker.agentId!, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
             await assertV7Authorization(tx,workerActor,companyId,"issue:mutate",resource);
+            await assertAnalyticalContextPayloadAccess(tx,companyId,workerActor,{runId:run.id},"task");
             if (attempt.executionManifestId) {
               const [manifest] = await tx.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId,companyId),eq(agentExecutionManifests.id,attempt.executionManifestId),eq(agentExecutionManifests.runId,run.id)));
               if (!manifest) { authorityCurrent = false; continue; }
               const roots = await tx.select({ pin: contextManifestMemoryRoots,root: memoryRecords }).from(contextManifestMemoryRoots).innerJoin(memoryRecords,and(eq(memoryRecords.companyId,contextManifestMemoryRoots.companyId),eq(memoryRecords.id,contextManifestMemoryRoots.memoryRecordId))).where(and(eq(contextManifestMemoryRoots.companyId,companyId),eq(contextManifestMemoryRoots.manifestId,manifest.contextManifestId))).limit(129);
               if (roots.length>128) authorityCurrent = false;
+              const analytical = roots.length ? await tx.select({ id: analyticalContextRoots.memoryRecordId }).from(analyticalContextRoots).where(and(eq(analyticalContextRoots.companyId,companyId),inArray(analyticalContextRoots.memoryRecordId,roots.map(({ root }) => root.id)))) : [];
+              const signalRoots = new Set(analytical.map(root => root.id));
               for (const { pin,root } of roots) {
+                // Supplemental Signal roots use their native content hash, not a verified outcome timestamp.
+                if (signalRoots.has(root.id)) continue;
                 if (root.deletedAt || root.revokedAt || root.retentionState !== "active" || root.updatedAt.toISOString() !== pin.sourceVersion || (root.expiresAt && root.expiresAt.getTime()<=Date.now()) || (root.scopeType === "agent" && root.ownerAgentId !== worker.agentId)) authorityCurrent = false;
                 if (root.scopeType === "project") await assertV7Authorization(tx,workerActor,companyId,"project:read",{ type: "project",companyId,projectId: root.scopeId });
               }
@@ -202,7 +214,7 @@ export function supervisionService(db: Db, options: {
   }
   async function fenceUnavailableSemanticJob(job: typeof supervisionInterventions.$inferSelect) {
               await withV7ActivityTransaction(db, async (tx, publications) => {
-                await lockMemoryPrivacy(tx, job.companyId);
+                await lockAnalyticalCompany(tx, job.companyId); await lockMemoryPrivacy(tx, job.companyId);
                 const [current] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId))).for("update");
                 if (!current || current.erasedAt || ["completed","cancelled","failed"].includes(current.status)) return;
                 const changed = current.status !== "paused";
@@ -292,7 +304,7 @@ export function supervisionService(db: Db, options: {
           if (!outcomes.length || outcomes.some(o => !o.runId || o.error)) throw conflict("Canonical retry was not dispatched");
         } else await orchestrationRuntimeControl(db).stopFencedPlan(job.companyId, job.planId, `Supervision: ${job.reasonCode}`);
         await withV7ActivityTransaction(db, async (tx, publications) => {
-          await lockMemoryPrivacy(tx, job.companyId);
+          await lockAnalyticalCompany(tx, job.companyId); await lockMemoryPrivacy(tx, job.companyId);
           const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,job.companyId),eq(orchestrationPlans.id,job.planId))).for("update");
           await reconcileOrchestrationAttempts(tx, plan!);
           const [updated] = await tx.update(supervisionInterventions).set({ status: "applied", leaseOwner: null, leaseExpiresAt: null, completedAt: new Date(), lastErrorCode: null }).where(and(eq(supervisionInterventions.id,job.id),eq(supervisionInterventions.leaseOwner,owner))).returning();
@@ -308,13 +320,14 @@ export function supervisionService(db: Db, options: {
   return {
     observe,
     intervene: async (actor: AuthorizationActor, companyId: string, id: string, input: SupervisionInterventionInput) => { await orchestrationService(db).get(actor,companyId,id,true); return observe(companyId,id,{ actor,input }); },
-    get: async (actor: AuthorizationActor, companyId: string, id: string) => {
-      await orchestrationService(db).get(actor,companyId,id,true);
-      const sessions = await db.select().from(supervisionSessions).where(and(eq(supervisionSessions.companyId,companyId),eq(supervisionSessions.planId,id))).orderBy(desc(supervisionSessions.createdAt)).limit(20);
-      const signals = await db.select().from(supervisionSignals).where(and(eq(supervisionSignals.companyId,companyId),eq(supervisionSignals.planId,id))).orderBy(desc(supervisionSignals.observedAt)).limit(100);
-      const interventions = await db.select().from(supervisionInterventions).where(and(eq(supervisionInterventions.companyId,companyId),eq(supervisionInterventions.planId,id))).orderBy(desc(supervisionInterventions.createdAt)).limit(100);
-      return { sessions, signals, interventions };
-    }, deliverStops,
+    get: async (actor: AuthorizationActor, companyId: string, id: string) => withV7ActivityTransaction(db, async tx => {
+      await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
+      const control = await orchestrationService(tx).get(actor,companyId,id,true);
+      const sessions = await tx.select().from(supervisionSessions).where(and(eq(supervisionSessions.companyId,companyId),eq(supervisionSessions.planId,id))).orderBy(desc(supervisionSessions.createdAt)).limit(20);
+      const signals = await tx.select().from(supervisionSignals).where(and(eq(supervisionSignals.companyId,companyId),eq(supervisionSignals.planId,id))).orderBy(desc(supervisionSignals.observedAt)).limit(100);
+      const interventions = await tx.select().from(supervisionInterventions).where(and(eq(supervisionInterventions.companyId,companyId),eq(supervisionInterventions.planId,id))).orderBy(desc(supervisionInterventions.createdAt)).limit(100);
+      return { sessions, signals: control.completionContract ? signals : signals.map(signal => ({ ...signal, facts: { erased: true, completionCertified: false, runtimeContinuationAuthorized: false } })), interventions: control.completionContract ? interventions : interventions.map(intervention => ({ ...intervention, rationale: null })) };
+    }), deliverStops,
     tick: async (limit = 20) => {
       const plans = await db.select().from(orchestrationPlans).where(sql`${orchestrationPlans.status}='running' or exists(select 1 from orchestration_worker_attempts a where a.company_id=${orchestrationPlans.companyId} and a.plan_id=${orchestrationPlans.id} and a.status='running')`).orderBy(orchestrationPlans.updatedAt).limit(limit);
       let observed = 0, failedObservations = 0;
