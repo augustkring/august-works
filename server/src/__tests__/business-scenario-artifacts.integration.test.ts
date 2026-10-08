@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { companies, projects, automationArtifacts, businessScenarios, businessScenarioVersions, businessScenarioCalculationPins, businessScenarioRuns, analyticalLineageManifests, createDb } from "@paperclipai/db";
 import { businessScenarioService } from "../services/business-scenarios/service.js";
+import { workflowService } from "../services/workflows/workflow-service.js";
+import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
 import { assertScenarioArtifactSchema } from "../services/business-scenarios/artifacts.js";
 import { automationArtifactService } from "../services/automation-artifacts/automation-artifact-service.js";
 import { automationArtifactSecurityService } from "../services/automation-artifacts/automation-artifact-security.js";
+import * as artifactRuntime from "../services/automation-artifacts/automation-artifact-runtime.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
@@ -53,6 +56,61 @@ suite("Native scenario consumption of validated Automation Artifacts", () => {
     const root = await businessScenarioService(db).publish(companyId, actor, d.scenario.id, { expectedRevision: 1, versionId: d.version.id, rationale: "Human publication of the exact validated numeric artifact and unit contract" });
     const run = await businessScenarioService(db).run(companyId, actor, root.id, { expectedRevision: 2, versionId: d.version.id, seed: null }); return { ...d, root, run };
   }
+  async function artifactWorkflow(a: Awaited<ReturnType<typeof artifact>>) {
+    const workflows = workflowService(db);
+    const created = await workflows.create(companyId, { name: "Exact Artifact consumer" }, artifactActor);
+    const draft = await workflows.updateDraft(companyId, created.id, {
+      expectedRevisionId: created.draftRevisionId!, graph: {
+        version: 1, nodes: [
+          { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+          { id: "calculate", type: "automation.artifact", name: "Capacity", position: { x: 100, y: 0 },
+            config: { artifactId: a.artifact.id, artifactVersionId: a.latestVersion!.id } },
+        ], edges: [{ id: "flow", source: "start", target: "calculate" }], variables: [], settings: {},
+      },
+    }, artifactActor);
+    await workflows.publish(companyId, created.id, {
+      expectedDraftRevisionId: draft.draftRevisionId!, expectedPublishedRevisionId: null, approvalId: null,
+    }, artifactActor);
+    return created;
+  }
+  it("retains the actual Artifact version on the original Workflow step before publishing its result", async () => {
+    const a = await artifact(), created = await artifactWorkflow(a), executor = workflowExecutorService(db);
+    const completed = await executor.startManualRun(companyId, created.id, { input: { factor: 7 } }, artifactActor, "exact-artifact-consumer");
+    expect(completed.run.status).toBe("succeeded");
+    expect(completed.steps.find(step => step.nodeId === "calculate")).toMatchObject({
+      status: "succeeded", automationArtifactVersionId: a.latestVersion!.id, outputJson: { capacity: 7 },
+    });
+    const replay = await executor.startManualRun(companyId, created.id, { input: { factor: 7 } }, artifactActor, "exact-artifact-consumer");
+    expect(replay.steps.map(step => step.id)).toEqual(completed.steps.map(step => step.id));
+    await automationArtifactService(db).transitionStatus(companyId, a.artifact.id, {
+      expectedStatus: "active", expectedLatestVersionId: a.latestVersion!.id, status: "revoked",
+    }, artifactActor);
+    const denied = await executor.startManualRun(companyId, created.id, { input: { factor: 9 } }, artifactActor, "revoked-artifact-consumer");
+    expect(denied.run.status).toBe("failed");
+    expect(denied.steps.find(step => step.nodeId === "calculate")?.outputJson).toBeNull();
+  });
+  it("withholds a computed result when the original Artifact is revoked before checkpoint publication", async () => {
+    const a = await artifact(), created = await artifactWorkflow(a);
+    const originalRuntime = artifactRuntime.automationArtifactRuntimeService;
+    const spy = vi.spyOn(artifactRuntime, "automationArtifactRuntimeService").mockImplementation(scopedDb => {
+      const runtime = originalRuntime(scopedDb);
+      return { ...runtime, execute: async (...args) => {
+        const result = await runtime.execute(...args);
+        await automationArtifactService(db).transitionStatus(companyId, a.artifact.id, {
+          expectedStatus: "active", expectedLatestVersionId: a.latestVersion!.id, status: "revoked",
+        }, artifactActor);
+        return result;
+      } };
+    });
+    try {
+      const denied = await workflowExecutorService(db).startManualRun(companyId, created.id,
+        { input: { factor: 11 } }, artifactActor, "revoked-after-computation");
+      expect(denied.run.status).toBe("failed");
+      expect(denied.steps.find(step => step.nodeId === "calculate")).toMatchObject({
+        automationArtifactVersionId: a.latestVersion!.id, outputJson: null,
+      });
+    } finally { spy.mockRestore(); }
+  });
   it("executes actual native hash-gated transforms only after separate human publication", async () => {
     const a = await artifact(), d = await published(a);
     expect(d.run.result).toMatchObject({ status: "calculated", calculationArtifact: definition(a).calculationRef, uncertainty: { coverageLevel: null } });

@@ -54,10 +54,10 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
  * remain authoritative after an original run has finished or roles change. */
 /** Follow only persisted native child relationships. A copied Task/run ID or
  * initiating principal is never an analytical reader grant. */
-async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope) {
+export async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string}|{workflowRunId:string},readScope?:NativeReadScope) {
  const deadline=performance.now()+30000;
  const budget=()=>{if(performance.now()>deadline)throw new HttpError(403,"Complete analytical Workflow source review exceeded its budget",{code:"analytical_source_access_lost"});};
- const match="issueId" in scope?sql`exists(select 1 from workflow_waits w where w.company_id=${companyId}::uuid and w.workflow_run_id=${workflowStepRuns.workflowRunId} and w.node_id=${workflowStepRuns.nodeId} and w.reference_type='issue' and w.reference_id=${scope.issueId})`:
+ const match="workflowRunId" in scope?eq(workflowStepRuns.workflowRunId,scope.workflowRunId):"issueId" in scope?sql`exists(select 1 from workflow_waits w where w.company_id=${companyId}::uuid and w.workflow_run_id=${workflowStepRuns.workflowRunId} and w.node_id=${workflowStepRuns.nodeId} and w.reference_type='issue' and w.reference_id=${scope.issueId})`:
   sql`(${workflowStepRuns.heartbeatRunId}=${scope.runId}::uuid or exists(select 1 from heartbeat_runs h left join agent_wakeup_requests a on a.company_id=h.company_id and a.id=h.wakeup_request_id where h.company_id=${companyId}::uuid and h.id=${scope.runId}::uuid and (a.idempotency_key='workflow-direct-agent:'||${workflowStepRuns.id}::text or exists(select 1 from workflow_waits w where w.company_id=h.company_id and w.workflow_run_id=${workflowStepRuns.workflowRunId} and w.node_id=${workflowStepRuns.nodeId} and w.reference_type='issue' and (w.reference_id=a.payload->>'issueId' or (h.runtime_mode='native' and w.reference_id=h.native_issue_id::text))))))`;
  const assets=await db.selectDistinct({revisionId:workflowRuns.workflowRevisionId,artifactVersionId:workflowStepRuns.automationArtifactVersionId}).from(workflowStepRuns)
   .innerJoin(workflowRuns,and(eq(workflowRuns.companyId,workflowStepRuns.companyId),eq(workflowRuns.id,workflowStepRuns.workflowRunId)))

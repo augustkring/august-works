@@ -1,0 +1,65 @@
+{
+  "checkpoint": "Original Workflow Artifact exact native binding, checkpoint publication and complete copied Source reads",
+  "parentCommit": "a6b40968ff9b69e60453d95e8ff36a02dcb7e799",
+  "recordedAt": "2026-10-08T02:14:08.078310+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "d412eda76a71e0bbf7462300edfd0ec259ceb2a4e597156c22eef225fb13cdb7"
+    },
+    {
+      "path": "server/src/services/workflows/workflow-executor.ts",
+      "sha256": "e4ab1a2c1fca4be2cb8808c972070ffc366fbbd4aaca6abfee50c364e889ecb6"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "e45955ef07249e8444bf996eca6b0e2fe8ac6804411e79c6d932fc6d48046b39"
+    },
+    {
+      "path": "server/src/__tests__/business-scenario-artifacts.integration.test.ts",
+      "sha256": "0113976e5b63a55d8d7a9ab87d225e7bd0f20ca2e6c3d247f9a2f42a00177e20"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "be56791b42e36f4140ba6528d46da56c9ef072ca8551c6e47d72ee74cea02440"
+    }
+  ],
+  "validation": {
+    "nativeOwners": {
+      "tests": 101,
+      "files": 4,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-artifact-step-locked-tests.log"
+    },
+    "sharedAnalyticalReaderPrivacy": {
+      "tests": 67,
+      "files": 2,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-artifact-step-source-regression.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-artifact-step-locked-types.log"
+    },
+    "parentWholeNativeProductionBuild": {
+      "result": "passed",
+      "commit": "8b6061676dd78c6685b9bf8143a93d84286e2abc",
+      "log": "/var/tmp/aw-v8-native-build-orchestration-source.log"
+    }
+  },
+  "qualified": [
+    "Ordinary Artifact step records exact native version before execution using existing Learning lineage guards",
+    "Actual persisted version Source admission repeats before checkpoint under company -> Memory locks",
+    "Real computed declarative result withheld on original owner revocation before publication",
+    "Original complete Source helper covers Workflow Run detail/list with actual current reader under original privacy locks",
+    "Missing reader/current Source loss denies copied results; Source restoration admits actual native run"
+  ],
+  "limits": [
+    "Native version UUID binding is not a database FK; ordinary history immutability and version deletion propagation remain to qualify",
+    "Learning consumer association is an explicit software provenance prerequisite, not performed promotion/execution/trial",
+    "Source-derived standalone runtime remains closed pending complete downstream retention and generated-code temporary workspace C7 qualification",
+    "No new Chromium/JWT/provider/Human trial, hard latency, maximum volume or hosted backfill qualification",
+    "Planning outcomes, Routine cadence, action materialization, remaining Source closure, cross-project Planning and readonly provider conformance remain open",
+    "No whole-brief completion claim"
+  ]
+}

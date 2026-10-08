@@ -230,6 +230,13 @@ const support = await getEmbeddedPostgresTestSupport();
     await expect(optimizer.startShadow(companyId,replay.evaluationId,{principal:{type:"user",userId:"unrelated-unadmitted-reviewer"}})).rejects.toMatchObject({status:403});
     let descendantVersionId:string|null=null;
     if(signal){
+      const [consumer] = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, created.id)));
+      // Actual native owner IDs; the association is a software provenance
+      // prerequisite, not a performed promoted Artifact execution or trial.
+      await db.update(workflowStepRuns).set({ automationArtifactVersionId: replay.artifactVersionId })
+        .where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, consumer!.id), eq(workflowStepRuns.nodeId, "copy")));
+      expect((await executor.getRun(companyId, consumer!.id, owner))!.steps.find(step => step.nodeId === "copy")!.automationArtifactVersionId).toBe(replay.artifactVersionId);
+      await expect(executor.getRun(companyId, consumer!.id)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
       expect((await artifacts.getDetail(companyId,replay.artifactId,principal))!.latestVersion!.sourceCode).not.toBe("");
       expect(await artifacts.list(companyId,principal)).toHaveLength(1);
       expect(await optimizer.list(companyId,created.id,owner)).toHaveLength(1);
@@ -244,6 +251,8 @@ const support = await getEmbeddedPostgresTestSupport();
       }
       expect(await artifacts.list(companyId,principal)).toEqual([]);
       await expect(artifacts.getDetail(companyId,replay.artifactId,principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      await expect(executor.getRun(companyId, consumer!.id, owner)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
+      await expect(executor.listRuns(companyId, created.id, 10, owner)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
       await expect(artifacts.transitionStatus(companyId,replay.artifactId,{expectedStatus:"testing",expectedLatestVersionId:replay.artifactVersionId,status:"candidate"},principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       await expect(artifacts.archive(companyId,replay.artifactId,{expectedLatestVersionId:replay.artifactVersionId},principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       const promotion={companyId,suggestionId:suggestion.id,artifactId:replay.artifactId,expectedArtifactVersionId:replay.artifactVersionId,actor:{principal:{type:"system" as const,service:"workflow-optimizer"}},sourceActor:owner,policy:{allowLowRiskAutoPromotion:false,fallbackKind:"published_workflow" as const},evidence:{replayEvaluation:replay.replayEvaluation,shadowEvaluation:optimizerShadowSummary([]),rollbackAvailable:true,driftGuardAvailable:true,humanApproved:false,canaryPassed:false}};
@@ -251,6 +260,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(optimizerPromotionService(db).activate(promotion)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId)))[0]!.status).toBe("testing");
       await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
+      expect((await executor.getRun(companyId, consumer!.id, owner))!.steps.find(step => step.nodeId === "copy")!.outputJson).toEqual({ value: expect.any(Number) });
     }
     await optimizer.startShadow(companyId, replay.evaluationId, principal);
     if(signal){
