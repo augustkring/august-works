@@ -1742,7 +1742,7 @@ function resolveOperationAuthLevel(
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
-  if (path.startsWith("/api/companies/{companyId}/adaptive-planning/")) return "board";
+  if (path.startsWith("/api/companies/{companyId}/adaptive-planning/") || path.startsWith("/api/companies/{companyId}/management-reviews") || path.startsWith("/api/companies/{companyId}/projects/{projectId}/roadmap/planning/")) return "board";
   if(path.startsWith("/api/companies/{companyId}/decisions/{decisionId}/context")) return "board";
   if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/experiments") || path.startsWith("/api/companies/{companyId}/business-scenarios") || path.startsWith("/api/companies/{companyId}/business-forecasts") || path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
   if (
