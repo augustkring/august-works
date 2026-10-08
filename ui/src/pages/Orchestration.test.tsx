@@ -16,12 +16,13 @@ vi.mock("@/api/workflows", () => { const workflowsApi = { list: vi.fn(async () =
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root | undefined, container: HTMLDivElement | undefined;
 afterEach(async () => { await act(async () => root?.unmount()); container?.remove(); vi.clearAllMocks(); });
-async function render() {
+async function render(saved: unknown[] = []) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  client.setQueryData(["orchestration-plans", fixture.company, "user:fixture-user"], []);
+  client.setQueryData(["orchestration-plans", fixture.company, "user:fixture-user"], saved);
   client.setQueryData(["orchestration-tasks", fixture.company, "user:fixture-user"], [{ id: fixture.task, title: "Prepare the launch draft", identifier: "T-1", updatedAt: "2026-10-05T00:00:00.000Z" }]);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   await act(async () => root!.render(<QueryClientProvider client={client}><Orchestration /></QueryClientProvider>));
+  return client;
 }
 async function setField(label: string, value: string) {
   const element = Array.from(container!.querySelectorAll("label")).find(row => row.textContent?.startsWith(label))!.querySelector("input,select")!;
@@ -47,4 +48,24 @@ it("raises material assurance and binds an external action to its approved exact
   vi.mocked(orchestrationApi.create).mockRejectedValue(new Error("Server fixture stops before dispatch"));
   await act(async () => Array.from(container!.querySelectorAll("button")).find(button => button.textContent === "Save plan")!.click());
   expect(orchestrationApi.create).toHaveBeenCalledWith(fixture.company, expect.objectContaining({ actionClass: "external_communication", riskClass: "C2", completionContract: expect.objectContaining({ requiredPostconditions: [{ kind: "tool_receipt", toolName: "send_email", argumentsHash: "a".repeat(64), requireApproval: true }] }) }));
+});
+
+it("keeps native Stop available without showing unavailable Source or restoring cached verification", async () => {
+  const plan = {id:"source-plan",version:3,issueId:fixture.task,status:"paused",mode:"single_worker",riskClass:"C0",completionContract:null,workers:[],attempts:[],budgets:{maxParallelWorkers:1,maxRetries:1,maxWallClockSeconds:900,maxToolActions:100}};
+  vi.mocked(orchestrationApi.get).mockResolvedValue(plan as unknown as Awaited<ReturnType<typeof orchestrationApi.get>>);
+  const client = await render([plan]);
+  const cacheKey=["verification-packet",fixture.company,"user:fixture-user",plan.id,plan.version,null];
+  client.setQueryData(cacheKey,{private:"Cached private Source contract"});
+  await act(async()=>Array.from(container!.querySelectorAll("button")).find(button=>button.textContent?.includes("single_worker"))!.click());
+  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,10));});
+  expect(container!.textContent).toContain("Source content is unavailable");
+  expect(container!.textContent).not.toContain("Independent review");
+  expect(client.getQueryData(cacheKey)).toBeUndefined();
+  await setField("Decision rationale","Stop this plan while its original Source is unavailable");
+  const button=(text:string)=>Array.from(container!.querySelectorAll("button")).find(button=>button.textContent===text)!;
+  expect(button("Start / resume").disabled).toBe(true); expect(button("Retry within limits").disabled).toBe(true); expect(button("Request verification").disabled).toBe(true);
+  expect(button("Pause").disabled).toBe(false); expect(button("Stop workers").disabled).toBe(false);
+  vi.mocked(orchestrationApi.intervene).mockResolvedValue({});
+  await act(async()=>button("Stop workers").click());
+  expect(orchestrationApi.intervene).toHaveBeenCalledWith(fixture.company,plan.id,expect.objectContaining({expectedPlanVersion:3,action:"STOP"}));
 });

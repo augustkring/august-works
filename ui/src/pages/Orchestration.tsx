@@ -1,7 +1,7 @@
 import { withV7AccountScope, useV7AccountScope } from "@/context/V7AccountScope";
 import { OrchestrationVerification } from "@/components/OrchestrationVerification";
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Link } from "@/lib/router";
 import { READINESS_ACTIONS, type ReadinessAction, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 
 function OrchestrationContent() {
+  const queryClient = useQueryClient();
   const { principalId, orchestrationApi, workflowsApi, issuesApi } = useV7AccountScope();
   const { selectedCompanyId: companyId } = useCompany(), { setBreadcrumbs } = useBreadcrumbs();
   const [selected, setSelected] = useState(""), [taskId, setTaskId] = useState(""), [objective, setObjective] = useState(""), [output, setOutput] = useState("result"), [invariant, setInvariant] = useState(""), [rationale, setRationale] = useState("");
@@ -28,6 +29,12 @@ function OrchestrationContent() {
   const decompositions = useQuery({ queryKey: ["orchestration-decompositions", companyId, principalId, taskId], queryFn: () => issuesApi.listAcceptedPlanDecompositions(taskId), enabled: Boolean(companyId && taskId && workload === "decomposable") });
   const workflows = useQuery({ queryKey: ["orchestration-workflows", companyId, principalId], queryFn: () => workflowsApi.list(companyId!), enabled: Boolean(companyId && workload === "deterministic") });
   const detail = useQuery({ queryKey: ["orchestration-plan", companyId, principalId, selected], queryFn: () => orchestrationApi.get(companyId!, selected), enabled: Boolean(companyId && selected), refetchInterval: selected ? 10000 : false });
+  useEffect(() => {
+    if (detail.error || (detail.data && !detail.data.completionContract)) {
+      setRationale(""); setRuntimeOutcome("");
+      queryClient.removeQueries({ predicate: query => ["verification-packet", "verification-history"].includes(String(query.queryKey[0])) && query.queryKey[1] === companyId && query.queryKey[2] === principalId && query.queryKey[3] === selected });
+    }
+  }, [detail.data?.completionContract, detail.error, companyId, principalId, selected, queryClient]);
   const supervision = useQuery({ queryKey: ["orchestration-supervision", companyId, principalId,selected], queryFn: () => orchestrationApi.supervision(companyId!,selected), enabled: Boolean(companyId && selected), refetchInterval: selected ? 10000 : false });
   const intervention = useMutation({ mutationFn: (action: "STOP" | "RETRY" | "START_VERIFIER" | "STEER") => orchestrationApi.intervene(companyId!,selected,{ expectedPlanVersion: detail.data!.version, action, rationale }), onSuccess: () => { refresh(); setRationale(""); } });
   const refresh = () => { void plans.refetch(); void detail.refetch(); if (selected) void supervision.refetch(); };
@@ -79,10 +86,11 @@ function OrchestrationContent() {
       <div className="flex items-center justify-between"><Button variant="outline" onClick={() => { setTaskId(""); setWorkers([]); setDecompositionId(""); }}>Cancel</Button><Button disabled={!taskId || create.isPending} onClick={() => create.mutate()}>Save plan</Button></div>
     </section>
     <section className="space-y-2"><h2 className="font-medium">Saved plans</h2>{plans.isPending ? <p role="status">Loading…</p> : plans.data?.length === 0 ? <p className="text-sm text-muted-foreground">No plans yet.</p> : plans.data?.map(plan => <Button key={plan.id} variant={selected === plan.id ? "secondary" : "outline"} onClick={() => { setSelected(plan.id); setRationale(""); setRuntimeOutcome(""); }}>{plan.mode} · {plan.riskClass} · {plan.status}</Button>)}</section>
-    {detail.data?.completionContract && <section className="space-y-3 rounded-lg border border-border p-4"><div className="flex items-center gap-2"><h2 className="font-medium">{detail.data.completionContract.objective}</h2><Badge variant="outline">{detail.data.status}</Badge></div>
+    {detail.data && !detail.error && <section className="space-y-3 rounded-lg border border-border p-4"><div className="flex items-center gap-2"><h2 className="font-medium">{detail.data.completionContract?.objective ?? "Source content is unavailable"}</h2><Badge variant="outline">{detail.data.status}</Badge></div>
       <Link to={`/issues/${detail.data.issueId}`}>Open coordinator Task</Link>
       <p className="text-sm">Limits: {detail.data.budgets.maxParallelWorkers} simultaneous workers, {detail.data.budgets.maxRetries} total retries, {detail.data.budgets.maxWallClockSeconds} seconds from first start, {detail.data.budgets.maxToolActions} platform tool actions.</p>
-      {detail.data.completionContract.businessInvariants.map((value, index) => <p key={index} className="text-sm">Invariant: {value}</p>)}
+      {!detail.data.completionContract && <p role="status" className="text-sm text-muted-foreground">Review current source access before continuing. You can still pause or stop this plan.</p>}
+      {detail.data.completionContract?.businessInvariants.map((value, index) => <p key={index} className="text-sm">Invariant: {value}</p>)}
       {detail.data.workers.map(worker => <div key={worker.id} className="rounded-md border border-border p-3"><Link to={`/issues/${worker.issueId}`}>{worker.workerKey}</Link><p className="text-sm text-muted-foreground">{worker.status} · {worker.attemptCount} attempts · waits for {worker.dependsOn.join(", ") || "no dependencies"}</p>{detail.data!.attempts.filter(attempt => attempt.workerId === worker.id).map(attempt => <p key={attempt.id} className="text-xs">Attempt {attempt.attempt}: {attempt.status} · {attempt.runId ?? attempt.workflowRunId}</p>)}</div>)}
       <div className="space-y-2"><h3 className="font-medium">Supervision</h3><p className="text-sm text-muted-foreground">Signals reference saved outputs, execution receipts and current permissions. A successful worker run still needs verification.</p>
         {supervision.data?.sessions.map(session => <p key={session.id} className="text-sm">{session.status} · failure threshold {session.policy.repeatedFailureThreshold} · no-progress limit {session.policy.noProgressSeconds === null ? "not configured" : `${session.policy.noProgressSeconds} seconds`}</p>)}
@@ -90,9 +98,9 @@ function OrchestrationContent() {
         {supervision.data?.interventions.map(row => <p key={row.id} className="text-sm">{row.recommendation} → {row.decisionAction} · {row.status} · {row.reasonCode.replaceAll("_"," ")}</p>)}
       </div>
       <label className="block text-sm">Decision rationale<Input value={rationale} onChange={event => setRationale(event.target.value)} /></label>
-      <div className="flex items-center justify-between"><div className="flex gap-2"><Button variant="outline" disabled={decision.isPending || rationale.trim().length < 20} onClick={() => decision.mutate("cancel")}>Cancel plan</Button><Button variant="outline" disabled={decision.isPending || rationale.trim().length < 20} onClick={() => decision.mutate("pause")}>Pause</Button></div><Button disabled={decision.isPending || rationale.trim().length < 20 || !["draft", "ready", "paused"].includes(detail.data.status)} onClick={() => decision.mutate("start")}>Start / resume</Button></div>
-      <div className="flex flex-wrap gap-2">{(["STOP","RETRY","START_VERIFIER","STEER"] as const).map(action => <Button key={action} variant="outline" disabled={intervention.isPending || rationale.trim().length < 20} onClick={() => intervention.mutate(action)}>{action === "STEER" ? "Pause for guidance" : action === "START_VERIFIER" ? "Request verification" : action === "RETRY" ? "Retry within limits" : "Stop workers"}</Button>)}</div>
-      <OrchestrationVerification key={`${companyId}:${selected}:${detail.data.version}`} companyId={companyId} plan={detail.data} onReviewed={refresh} />
+      <div className="flex items-center justify-between"><div className="flex gap-2"><Button variant="outline" disabled={decision.isPending || rationale.trim().length < 20} onClick={() => decision.mutate("cancel")}>Cancel plan</Button><Button variant="outline" disabled={decision.isPending || rationale.trim().length < 20} onClick={() => decision.mutate("pause")}>Pause</Button></div><Button disabled={!detail.data.completionContract || decision.isPending || rationale.trim().length < 20 || !["draft", "ready", "paused"].includes(detail.data.status)} onClick={() => decision.mutate("start")}>Start / resume</Button></div>
+      <div className="flex flex-wrap gap-2">{(["STOP","RETRY","START_VERIFIER","STEER"] as const).map(action => <Button key={action} variant="outline" disabled={intervention.isPending || rationale.trim().length < 20 || (!detail.data.completionContract && !["STOP", "STEER"].includes(action))} onClick={() => intervention.mutate(action)}>{action === "STEER" ? "Pause for guidance" : action === "START_VERIFIER" ? "Request verification" : action === "RETRY" ? "Retry within limits" : "Stop workers"}</Button>)}</div>
+      {detail.data.completionContract && <OrchestrationVerification key={`${companyId}:${selected}:${detail.data.version}`} companyId={companyId} plan={detail.data} onReviewed={refresh} />}
       {runtimeOutcome && <div role="status"><p className="text-sm">Runtime dispatch / Stop result</p><pre className="overflow-auto rounded-md bg-muted p-3 text-xs">{runtimeOutcome}</pre></div>}
     </section>}
   </div>;

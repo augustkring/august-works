@@ -28,6 +28,7 @@ import {
 import { aiConnectionService } from "../ai-connections.js";
 import { memoryService } from "../memory/memory-service.js";
 import { cognitiveMemoryActor } from "../memory/cognitive-memory.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
@@ -406,7 +407,7 @@ function readOnlyModelConsumer(
   }
   async function verify(actor: AuthorizationActor, input: Input) {
     const prepared = await withV7ActivityTransaction(db, async (tx) => {
-      await lockMemoryPrivacy(tx, input.companyId);
+      await lockAnalyticalCompany(tx, input.companyId); await lockMemoryPrivacy(tx, input.companyId);
       const state = await current(tx, actor, input);
       if (
         (input.expectedPlanVersion !== undefined &&
@@ -523,7 +524,7 @@ function readOnlyModelConsumer(
     let check: Promise<void> | null = null;
     const checkAuthority = async () => {
       const state = await withV7ActivityTransaction(db, async (tx) => {
-        await lockMemoryPrivacy(tx, input.companyId);
+        await lockAnalyticalCompany(tx, input.companyId); await lockMemoryPrivacy(tx, input.companyId);
         return current(tx, actor, input);
       });
       if (state.authorityHash !== prepared.authorityHash)
@@ -601,7 +602,7 @@ function readOnlyModelConsumer(
         });
         unsettled = false;
         return await withV7ActivityTransaction(db, async (tx, publications) => {
-          await lockMemoryPrivacy(tx, input.companyId);
+          await lockAnalyticalCompany(tx, input.companyId); await lockMemoryPrivacy(tx, input.companyId);
           const state = await current(tx, actor, input);
           if (
             state.authorityHash !== prepared.authorityHash ||
@@ -777,7 +778,7 @@ function readOnlyModelConsumer(
       });
       unsettled = false;
       return await withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, input.companyId);
+        await lockAnalyticalCompany(tx, input.companyId); await lockMemoryPrivacy(tx, input.companyId);
         const state = await current(tx, actor, input);
         if (
           state.authorityHash !== prepared.authorityHash ||
@@ -883,7 +884,7 @@ function readOnlyModelConsumer(
           })
           .catch(() => {});
       await withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, input.companyId);
+        await lockAnalyticalCompany(tx, input.companyId); await lockMemoryPrivacy(tx, input.companyId);
         await fenceForReview(
           tx,
           input.companyId,

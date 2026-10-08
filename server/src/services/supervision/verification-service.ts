@@ -1,17 +1,18 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { agentExecutionManifests, completionContracts, contextManifestMemoryRoots, documentRevisions, documents, issueDocuments, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSignals, toolInvocations, verificationRuns, type Db } from "@paperclipai/db";
+import { agentExecutionManifests, analyticalContextRoots, completionContracts, contextManifestMemoryRoots, documentRevisions, documents, issueDocuments, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSignals, toolInvocations, verificationRuns, type Db } from "@paperclipai/db";
 import { orchestrationCompletionSchema, verificationReviewSchema, trajectoryReviewSchema, type TrajectoryReviewInput, type VerificationPacket, type VerificationEvidenceRef, type VerificationReviewInput } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { assertDerivedManager } from "../memory/derived-memory.js";
 import { memoryService } from "../memory/memory-service.js";
 import { cognitiveMemoryActor } from "../memory/cognitive-memory.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { validateWorkflowOutput } from "../workflows/workflow-output-schema.js";
 import { reconcileOrchestrationAttempts } from "../orchestration/orchestration-admission.js";
-import { orchestrationService } from "../orchestration/orchestration-service.js";
+import { orchestrationService, assertOrchestrationSources } from "../orchestration/orchestration-service.js";
 import { issueService, executeIssuePostCommitActions, type IssuePostCommitAction } from "../issues.js";
 import { enqueueSupervisionStop, ensureSupervisionSession } from "./supervision-outbox.js";
 import { conflict, notFound } from "../../errors.js";
@@ -22,6 +23,7 @@ export function verificationService(db: Db) {
     await assertV7Authorization(tx,actor,companyId,"company_scope:read");
     const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,companyId),eq(orchestrationPlans.id,id)));
     if (!plan || plan.erasedAt) throw notFound("Retained verification packet not found");
+    await assertOrchestrationSources(tx, actor, companyId, plan);
     const workers = await tx.select().from(orchestrationWorkers).where(and(eq(orchestrationWorkers.companyId,companyId),eq(orchestrationWorkers.planId,id))).orderBy(orchestrationWorkers.workerKey);
     const worker = workerId ? workers.find(w => w.id === workerId) : null;
     if (workerId && !worker) throw notFound("Canonical worker not found");
@@ -71,8 +73,13 @@ export function verificationService(db: Db) {
     const manifests = subjectAttempts.flatMap(a => a.executionManifestId ? [a.executionManifestId] : []);
     if (manifests.length) {
       const pins = await tx.select({ contextId: agentExecutionManifests.contextManifestId }).from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId,companyId),inArray(agentExecutionManifests.id,manifests)));
-      const roots = pins.length ? await tx.select().from(contextManifestMemoryRoots).where(and(eq(contextManifestMemoryRoots.companyId,companyId),inArray(contextManifestMemoryRoots.manifestId,pins.map(p => p.contextId)))).limit(128) : [];
+      const roots = pins.length ? await tx.select().from(contextManifestMemoryRoots).where(and(eq(contextManifestMemoryRoots.companyId,companyId),inArray(contextManifestMemoryRoots.manifestId,pins.map(p => p.contextId)))).limit(257) : [];
+      if (roots.length > 256) throw conflict("The complete verification source set exceeds its budget");
+      const analytical = roots.length ? await tx.select({ id: analyticalContextRoots.memoryRecordId }).from(analyticalContextRoots).where(and(eq(analyticalContextRoots.companyId,companyId),inArray(analyticalContextRoots.memoryRecordId,roots.map(root => root.memoryRecordId)))) : [];
+      const signalRoots = new Set(analytical.map(root => root.id));
       for (const root of roots) {
+        // Source admission above covers supplemental Signals. They never certify an outcome.
+        if (signalRoots.has(root.memoryRecordId)) continue;
         const detail = await memoryService(tx).get(companyId,root.memoryRecordId,cognitiveMemoryActor(actor));
         const record = detail?.record;
         if (!record || record.deletedAt || record.revokedAt || record.retentionState !== "active" || record.updatedAt.toISOString() !== root.sourceVersion || record.reviewState !== "accepted" || record.verificationState === "unverified" || record.supersededByRecordId || (record.validFrom && record.validFrom.getTime()>Date.now()) || (record.validUntil && record.validUntil.getTime()<=Date.now()) || (record.expiresAt && record.expiresAt.getTime() <= Date.now())) { failures.push(`source_no_longer_current:${root.memoryRecordId}`); continue; }
@@ -88,20 +95,21 @@ export function verificationService(db: Db) {
     // Internal projections use their caller's privacy lock and snapshot without
     // reconciling attempts or publishing events before the outer commit.
     currentPacket: (actor: AuthorizationActor, companyId: string, id: string, workerId: string|null = null) => packet(db, actor, companyId, id, workerId),
-    packet: async (actor: AuthorizationActor,companyId: string,id: string,workerId: string|null = null) => withV7ActivityTransaction(db, async tx => { await lockMemoryPrivacy(tx,companyId);
+    packet: async (actor: AuthorizationActor,companyId: string,id: string,workerId: string|null = null) => withV7ActivityTransaction(db, async tx => { await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
       const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,companyId),eq(orchestrationPlans.id,id))).for("update");
       if (plan) await reconcileOrchestrationAttempts(tx,plan);
       return packet(tx,actor,companyId,id,workerId); }),
-    list: async (actor: AuthorizationActor,companyId: string,id: string) => {
-      await orchestrationService(db).get(actor,companyId,id,true);
-      const rows = await db.select().from(verificationRuns).where(and(eq(verificationRuns.companyId,companyId),eq(verificationRuns.planId,id))).orderBy(desc(verificationRuns.createdAt)).limit(100);
-      return rows.map(row => ({ modelReservationId: row.modelReservationId,id: row.id,planId: row.planId,workerId: row.workerId,result: row.result,resultHash: row.resultHash,reviewerType: row.reviewerType,reviewerId: row.reviewerId,failedInvariants: row.failedInvariants,uncertainties: row.uncertainties.map(() => "material_uncertainty"),createdAt: row.createdAt,erasedAt: row.erasedAt }));
-    },
+    list: async (actor: AuthorizationActor,companyId: string,id: string) => withV7ActivityTransaction(db, async tx => {
+      await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
+      const control = await orchestrationService(tx).get(actor,companyId,id,true);
+      const rows = await tx.select().from(verificationRuns).where(and(eq(verificationRuns.companyId,companyId),eq(verificationRuns.planId,id))).orderBy(desc(verificationRuns.createdAt)).limit(100);
+      return rows.map(row => ({ modelReservationId: row.modelReservationId,id: row.id,planId: row.planId,workerId: row.workerId,result: row.result,resultHash: row.resultHash,reviewerType: row.reviewerType,reviewerId: row.reviewerId,failedInvariants: control.completionContract ? row.failedInvariants : [],uncertainties: (control.completionContract ? row.uncertainties : []).map(() => "material_uncertainty"),createdAt: row.createdAt,erasedAt: row.erasedAt }));
+    }),
     trajectory: async (actor: AuthorizationActor,companyId: string,id: string,raw: TrajectoryReviewInput) => {
       const input = trajectoryReviewSchema.parse(raw);
       await assertDerivedManager(db,actor,companyId); await assertV7Enabled(db,"supervision_v7");
       const reviewed = await withV7ActivityTransaction(db,async (tx,publications) => {
-        await lockMemoryPrivacy(tx,companyId); await assertDerivedManager(tx,actor,companyId); await assertV7Enabled(tx,"supervision_v7");
+        await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId); await assertDerivedManager(tx,actor,companyId); await assertV7Enabled(tx,"supervision_v7");
         const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,companyId),eq(orchestrationPlans.id,id))).for("update");
         if (!plan || plan.erasedAt) throw notFound("Plan not found");
         if (plan.version !== input.expectedPlanVersion || !["running","paused","verifying"].includes(plan.status)) throw conflict("Review requires the current nonterminal plan");
@@ -126,7 +134,7 @@ export function verificationService(db: Db) {
       const input = verificationReviewSchema.parse(raw), postCommitActions: IssuePostCommitAction[] = [];
       await assertDerivedManager(db,actor,companyId); await assertV7Enabled(db,"verifier_v7");
       const result = await withV7ActivityTransaction(db,async (tx,publications) => {
-        await lockMemoryPrivacy(tx,companyId); await assertDerivedManager(tx,actor,companyId); await assertV7Enabled(tx,"verifier_v7");
+        await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId); await assertDerivedManager(tx,actor,companyId); await assertV7Enabled(tx,"verifier_v7");
         const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,companyId),eq(orchestrationPlans.id,id))).for("update");
         if (!plan || plan.erasedAt) throw notFound("Plan not found");
         if (plan.version !== input.expectedPlanVersion || !["running","paused","verifying"].includes(plan.status)) throw conflict("Review requires the current nonterminal plan version");
@@ -170,7 +178,7 @@ export function verificationService(db: Db) {
           await tx.update(orchestrationPlans).set({ status: terminal ? "completed" : plan.status,version: plan.version+1,completedAt: terminal ? new Date() : plan.completedAt,updatedAt: new Date() }).where(eq(orchestrationPlans.id,id));
           await issueService(tx).update(current.issueId,{ status: "done",actorUserId: v7HumanActorId(actor),companyGuard: companyId },tx,publications,postCommitActions);
         }
-        await logActivity(tx,{ companyId,actorType: "user",actorId: v7HumanActorId(actor),action: "verification.reviewed",entityType: "orchestration_plan",entityId: id,details: { verificationRunId: review!.id,workerId: input.workerId,result: verdict,resultHash: current.resultHash,failedInvariants: failed } },publications);
+        await logActivity(tx,{ companyId,actorType: "user",actorId: v7HumanActorId(actor),action: "verification.reviewed",entityType: "orchestration_plan",entityId: id,details: { verificationRunId: review!.id,workerId: input.workerId,result: verdict,resultHash: current.resultHash,failedInvariantCount: failed.length } },publications);
         return review!;
       });
       await executeIssuePostCommitActions(db,postCommitActions);
