@@ -15,6 +15,7 @@ import { nativeSha256 } from "../native-runtime/canonical.js";
 import { withV5ActivityTransaction } from "../v5-mutations.js";
 import { logActivity } from "../activity-log.js";
 import { projectControlService } from "../project-control.js";
+import { managementSourceOptions } from "../management-reviews/source-options.js";
 import { capturePlanningProject } from "./project-owner.js";
 import { nativePlanningProvider } from "./provider.js";
 
@@ -77,6 +78,9 @@ async function retained(tx: Db, actor: AuthorizationActor, row: Proposal) {
 }
 export function crossProjectPlanningService(db: Db) {
   return {
+    async sourceOptions(companyId: string, actor: AuthorizationActor, q?: string) {
+      return db.transaction(async rawTx => { const tx = rawTx as unknown as Db; await admit(tx, companyId, actor); return managementSourceOptions(tx, companyId, actor, { kind: "project", q }); });
+    },
     async preview(companyId: string, actor: AuthorizationActor, raw: unknown) {
       const profile = crossProjectPlanningProfileSchema.parse(raw);
       return db.transaction(async rawTx => { const tx = rawTx as unknown as Db; await admit(tx, companyId, actor); if (Date.parse(`${profile.horizon.start}T00:00:00Z`) < Math.floor(Date.now() / DAY) * DAY) throw conflict("A prospective joint horizon cannot begin in the past"); const source = await capture(tx, companyId, actor, profile, true), solved = await nativePlanningProvider.solve(math(profile, source.snapshots)); return { snapshotHash: source.snapshotHash, result: solved.result, runtimeMs: solved.runtimeMs, expiresAt: source.expiresAt.toISOString(), authority: "human_cross_project_roadmap_review_required" as const }; });

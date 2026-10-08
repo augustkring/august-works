@@ -191,6 +191,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           {v5FeatureEnabled(experimentalSettings ?? {}, "org_units_v5") && <SidebarNavItem to="/org-units" label="Organization units" icon={Users} />}
           {v5FeatureEnabled(experimentalSettings ?? {}, "company_relationships_v5") && <SidebarNavItem to="/relationships" label="Company relationships" icon={GitBranch} />}
           {v5FeatureEnabled(experimentalSettings ?? {}, "role_packs_v5") && <SidebarNavItem to="/role-packs" label="Role Packs" icon={Layers} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "planning_optimizer_v8") && <SidebarNavItem to="/adaptive-planning" label="Cross-project planning" icon={GanttChartSquare} />}
           {v5FeatureEnabled(experimentalSettings ?? {}, "portfolio_view_v5") && <SidebarNavItem to="/portfolio" label="August OS" icon={LayoutGrid} />}
           {v5FeatureEnabled(experimentalSettings ?? {}, "portfolio_skill_sharing_v5") && <SidebarNavItem to="/portfolio-capabilities" label="Shared capabilities" icon={Package} />}
           {streamlinedUiEnabled ? (

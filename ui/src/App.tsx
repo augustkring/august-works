@@ -62,6 +62,7 @@ import { BusinessMetrics } from "./pages/BusinessMetrics";
 import { BusinessForecasts } from "./pages/BusinessForecasts";
 import { BusinessExperiments } from "./pages/BusinessExperiments";
 import { CausalClaims } from "./pages/CausalClaims";
+import { CrossProjectPlanning } from "./pages/CrossProjectPlanning";
 import { ManagementReviews } from "./pages/ManagementReviews";
 import { BusinessScenarios } from "./pages/BusinessScenarios";
 import { V8FeatureGate } from "./components/V8FeatureGate";
@@ -389,6 +390,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="business-experiments" element={<BusinessExperiments />} />
       <Route path="causal-claims" element={<CausalClaims />} />
       <Route path="management-reviews" element={<ManagementReviews />} />
+      <Route path="adaptive-planning" element={<CrossProjectPlanning />} />
       <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessMetrics /></V7FeatureGate></V8FeatureGate>} />
       <Route path="readiness" element={<V7FeatureGate feature="readiness_engine_v7"><Readiness /></V7FeatureGate>} />
       <Route
@@ -912,6 +914,7 @@ export function App() {
           <Route path="business-experiments" element={<BusinessExperiments />} />
       <Route path="causal-claims" element={<CausalClaims />} />
       <Route path="management-reviews" element={<ManagementReviews />} />
+      <Route path="adaptive-planning" element={<CrossProjectPlanning />} />
       <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessMetrics /></V7FeatureGate></V8FeatureGate>} />
       <Route path="readiness" element={<UnprefixedBoardRedirect />} />
           <Route path="orchestration" element={<UnprefixedBoardRedirect />} />

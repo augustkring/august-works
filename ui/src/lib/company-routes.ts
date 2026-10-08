@@ -24,6 +24,7 @@ const BOARD_ROUTE_ROOTS = new Set([
   "orchestration",
   "ai-governance",
   "work-signals",
+  "adaptive-planning",
   "strategy-execution",
   "process-intelligence",
   "business-forecasts",

@@ -112,6 +112,11 @@ describe.skipIf(!support.supported)("Native same-company cross-project planning 
   });
   it("enforces native immutable signed material, public account binding and Human withdrawal", async () => {
     const f = await proposed(), endpoint = `/api/companies/${companyId}/adaptive-planning/proposals/${f.proposal.id}`;
+    const choices = `/api/companies/${companyId}/adaptive-planning/source-options`;
+    await request(app()).get(`${choices}?expectedUserId=another-human`).expect(409);
+    const menu = (await request(app()).get(`${choices}?expectedUserId=${userId}&q=First`).expect(200)).body;
+    expect(menu.items).toHaveLength(1); expect(menu.items[0]).toMatchObject({ title: "First", source: { kind: "canonical", reference: { type: "project", id: f.projects[0].id } } });
+    await request(app()).get(`${choices}?q=${"x".repeat(121)}`).expect(400);
     await request(app()).get(`${endpoint}?expectedUserId=another-human`).expect(409);
     expect((await request(app()).get(`${endpoint}?expectedUserId=${userId}`).expect(200)).headers["cache-control"]).toBe("no-store");
     await request(app()).post(`${endpoint}/review?expectedUserId=${userId}`).send({ expectedRevision: 1, action: "begin_review", rationale, copiedAuthority: true }).expect(400);

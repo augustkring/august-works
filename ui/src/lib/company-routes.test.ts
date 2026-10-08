@@ -7,7 +7,7 @@ import {
 } from "./company-routes";
 
 describe("company routes", () => {
-  it.each(["strategy-execution", "process-intelligence", "business-forecasts", "business-scenarios", "business-experiments", "causal-claims", "management-reviews", "business-metrics"])(
+  it.each(["adaptive-planning", "strategy-execution", "process-intelligence", "business-forecasts", "business-scenarios", "business-experiments", "causal-claims", "management-reviews", "business-metrics"])(
     "keeps V8 %s citations and navigation attached to the current company",
     (root) => {
       const reference = `/${root}?reviewId=retained&reviewCompanyId=current#source`;
