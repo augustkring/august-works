@@ -48,6 +48,13 @@ export const managementReviewDefinitionSchema = z.object({
 });
 export const publishManagementReviewSchema = z.object({ expectedContentHash: sha, rationale: z.string().trim().min(10).max(2000), evidenceAndUncertaintyAcknowledged: z.literal(true), supersedesId: z.string().uuid().nullable().default(null) }).strict();
 export const recordManagementReviewEventSchema = z.object({ expectedContentHash: sha, itemKey: key, event: z.enum(["opened", "ignored", "acted_on", "false_alarm", "correction"]), rationale: z.string().trim().min(10).max(2000) }).strict();
+export const createManagementReviewTaskSchema = z.object({
+  expectedContentHash: sha, itemKey: key, idempotencyKey: z.string().uuid(),
+  title: z.string().trim().min(3).max(200), description: z.string().trim().min(10).max(4000),
+  priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  humanReviewAcknowledged: z.literal(true),
+}).strict();
+export type CreateManagementReviewTask = z.infer<typeof createManagementReviewTaskSchema>;
 export type ManagementReviewDefinition = z.infer<typeof managementReviewDefinitionSchema>;
 /** Stored on a native Routine revision; observations are resolved afresh per run. */
 export const routineManagementReviewTemplateSchema = z.object({

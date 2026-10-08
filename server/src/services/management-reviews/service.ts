@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { analyticalLineageEdges, analyticalLineageManifests, managementReviewSnapshots, managementReviewSourceLinks, managementReviewManifestDependencies, managementReviewGovernanceDependencies, managementReviewEvents, type Db } from "@paperclipai/db";
-import { managementReviewDefinitionSchema, managementSourceOptionsQuerySchema, publishManagementReviewSchema, recordManagementReviewEventSchema, v7FeatureEnabled, v8FeatureEnabled, type ManagementReviewDefinition, type ManagementReviewView, type ManagementSourceOptionsQuery } from "@paperclipai/shared";
+import { createManagementReviewTaskSchema, managementReviewDefinitionSchema, managementSourceOptionsQuerySchema, publishManagementReviewSchema, recordManagementReviewEventSchema, v7FeatureEnabled, v8FeatureEnabled, type ManagementReviewDefinition, type ManagementReviewView, type ManagementSourceOptionsQuery } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { conflict, notFound } from "../../errors.js";
 import { assertV7Authorization, v7HumanActorId } from "../v7-authorization.js";
@@ -15,6 +15,7 @@ import { captureManagementSources } from "./capture.js";
 import { composeManagementReview } from "./kernel.js";
 import { inspectAnalyticalEvidenceAuthority } from "../analytical-evidence.js";
 import { managementSourceOptions } from "./source-options.js";
+import { issueService } from "../issues.js";
 type Row = typeof managementReviewSnapshots.$inferSelect;
 const LIMIT = 20065;
 function governanceRoots(definition: ManagementReviewDefinition) { return [...new Set([...definition.governanceObligationRefs, ...definition.sources.flatMap(item => item.source.kind === "governance_obligation" ? [item.source.id] : [])])].sort(); }
@@ -59,6 +60,25 @@ export function managementReviewService(db: Db) {
     async sourceOptions(companyId: string, actor: AuthorizationActor, raw: ManagementSourceOptionsQuery) { const query = managementSourceOptionsQuerySchema.parse(raw); return db.transaction(async transaction => { const tx = transaction as unknown as Db; await admit(tx, companyId, actor); return managementSourceOptions(tx, companyId, actor, query); }); },
     async controls(companyId: string, actor: AuthorizationActor, cursor?: string) { return db.transaction(async raw => { const tx = raw as unknown as Db; await admit(tx, companyId, actor, false, false); const rows = await tx.select({ id: managementReviewSnapshots.id, status: managementReviewSnapshots.status, createdAt: managementReviewSnapshots.createdAt, expiresAt: managementReviewSnapshots.expiresAt }).from(managementReviewSnapshots).where(and(eq(managementReviewSnapshots.companyId, companyId), cursor ? sql`${managementReviewSnapshots.id}>${cursor}::uuid` : undefined)).orderBy(asc(managementReviewSnapshots.id)).limit(21); return { items: rows.slice(0, 20).map(row => ({ ...row, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString() })), nextCursor: rows.length > 20 ? rows[19]!.id : null, coverage: "bounded_native_review_metadata" as const }; }); },
     async detail(companyId: string, actor: AuthorizationActor, id: string) { return db.transaction(async raw => { const tx = raw as unknown as Db; await admit(tx, companyId, actor); return retained(tx, companyId, actor, await root(tx, companyId, id)); }); },
+    async createTask(companyId: string, actor: AuthorizationActor, id: string, raw: unknown) {
+      const input = createManagementReviewTaskSchema.parse(raw);
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        await admit(tx, companyId, actor, true); await assertV7Authorization(tx, actor, companyId, "tasks:assign");
+        const row = await root(tx, companyId, id, true), view = await retained(tx, companyId, actor, row);
+        if (row.status !== "published" || row.contentHash !== input.expectedContentHash || view.currentQualification !== "current" || !view.packet.agenda.some(item => item.key === input.itemKey && item.category !== "NO_ACTION")) throw conflict("Task follow-up requires the exact current published Human agenda");
+        const userId = v7HumanActorId(actor), description = `${input.description}\n\nManagement review reference: /management-reviews?reviewId=${id}&reviewCompanyId=${companyId}\nAgenda reference: ${input.itemKey}\nReviewed packet: ${row.contentHash}`;
+        let reused = false;
+        const issue = await issueService(tx).create(companyId, { title: input.title, description, priority: input.priority, status: "todo", createdByUserId: userId,
+          idempotencyKey: `management-review:${nativeSha256({ companyId, reviewId: id, userId, key: input.idempotencyKey })}`, onDeduplicated: () => { reused = true; } });
+        if (row.expiresAt <= new Date()) throw conflict("The reviewed Source expired before Task creation completed");
+        if (issue.title !== input.title || issue.description !== description || issue.priority !== input.priority || issue.createdByUserId !== userId) throw conflict("The original native Task request changed; use a new explicit follow-up request");
+        if (!reused) {
+          await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: "issue.created", entityType: "issue", entityId: issue.id, details: { managementReviewId: id, itemKey: input.itemKey } }, publications);
+          await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: "management_review.task_created", entityType: "management_review", entityId: id, details: { issueId: issue.id, itemKey: input.itemKey, contentHash: row.contentHash } }, publications);
+        }
+        return { issueId: issue.id, reviewId: id, itemKey: input.itemKey, reused };
+      });
+    },
     async create(companyId: string, actor: AuthorizationActor, raw: ManagementReviewDefinition, retainedPublications?: Parameters<typeof logActivity>[2]) {
       const definition = managementReviewDefinitionSchema.parse(raw);
       const draft = async (tx: Db, publications: Parameters<typeof logActivity>[2]) => {

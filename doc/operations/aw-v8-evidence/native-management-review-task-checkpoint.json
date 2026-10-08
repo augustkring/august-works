@@ -1,0 +1,127 @@
+{
+  "checkpoint": "Exact current published Human review creates a canonical native Task through the existing owner",
+  "parentCommit": "5c550ddbdb0993905261572f9c786f771fcbccfa",
+  "recordedAt": "2026-10-08T06:53:38.550948+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "e8bf12e09768a083645b287f1586c9f05592f723a423e1a94f47271b036ed389"
+    },
+    {
+      "path": "packages/shared/src/management-reviews.ts",
+      "sha256": "cd49b0fd1970874e6c00b46d7872d30d65301d1268652962f361cf5bce8cbf49"
+    },
+    {
+      "path": "server/src/__tests__/routine-management-reviews.integration.test.ts",
+      "sha256": "95c7e818ee2ef877104db2f7e8df112048ec31fa49d7fa8568bff86415dece50"
+    },
+    {
+      "path": "server/src/routes/management-reviews.ts",
+      "sha256": "b78a4fb5c16237f26ab8172cd730fc36ae324cf343b4bc7bb59ede38ce332cc6"
+    },
+    {
+      "path": "server/src/services/management-reviews/service.ts",
+      "sha256": "f0d5fa62bff3a6feabf44fba1d057bb311ec9464cb00648ba124d80e0fedf048"
+    },
+    {
+      "path": "tests/e2e/management-review-task.spec.ts",
+      "sha256": "b48d19d9a2217869b39c7318cc9c2fb22221f5026f0eedac36286b6a6d4e4077"
+    },
+    {
+      "path": "tests/storybook-visual/management-reviews.spec.ts",
+      "sha256": "116772656b41c36ed253eaf0ddae450c4524e20164b0d0a6dc3499568937ef14"
+    },
+    {
+      "path": "ui/src/api/management-reviews.ts",
+      "sha256": "95fddec885a0e62abc5acfb3ac08d0353f37c6d1252d93883af773ee1c3665c6"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewTaskForm.tsx",
+      "sha256": "8af82b93f2dd6e16eba63e992f68d682593ab995eb8c82b64a39736102da68a7"
+    },
+    {
+      "path": "ui/src/lib/company-routes.test.ts",
+      "sha256": "bf6fd28e1c0bf8eac0ecdfc7f278ed365b1ce664a343f28858a134a43d0ba41a"
+    },
+    {
+      "path": "ui/src/lib/company-routes.ts",
+      "sha256": "9a62dbee129105b91970ef1298980e12ecffbe246c7cbfd143e5c23f91759d1d"
+    },
+    {
+      "path": "ui/src/pages/ManagementReviews.test.tsx",
+      "sha256": "6eb091fe8cc8a9ca42ff1dca10bb2d3118a3ff1288602d4bcd0154b83e063d75"
+    },
+    {
+      "path": "ui/src/pages/ManagementReviews.tsx",
+      "sha256": "c03645abdcbc8b94a04eb45b1541cf776b1480f2cab49322048063999169f585"
+    }
+  ],
+  "validation": {
+    "nativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-review-task-qualified-native-tests.log",
+      "tests": 128,
+      "files": 5,
+      "skipped": 0
+    },
+    "operatorUI": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-review-task-qualified-ui-tests.log",
+      "tests": 61,
+      "files": 3,
+      "skipped": 0
+    },
+    "browserPresentation": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-review-task-browser.log",
+      "tests": 48,
+      "files": 1,
+      "skipped": 0
+    },
+    "nativeLocalBrowser": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-review-task-qualified-native-browser.log",
+      "tests": 1,
+      "files": 1,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-review-task-qualified-server-types.log"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-review-task-ui-types.log"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-review-task-token-gates.log"
+    },
+    "storybookBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-review-task-storybook.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "e361afdc84889e5776f69d2ae4485e7617bdad34",
+      "log": "/var/tmp/aw-v8-native-build-routine-template.log"
+    }
+  },
+  "qualified": [
+    "Exact published current Source packet and non-NO_ACTION agenda, native current Human and Task policy, account-bound commands",
+    "Actual concurrent identical commands resolve to one native Task through its original seven-day idempotency owner; mismatched replay denied",
+    "Native unassigned todo Task carries only Human-authored text and review/agenda/hash metadata; no execution, event report or verified effect",
+    "Agent commands, account mismatch, draft, wrong hash, viewer without Task rights and withdrawn Human rejected",
+    "Flags-off paused native Source deletion removes review and fences new commands; independent Human Task persists",
+    "All eight V8 roots preserve native company scope, query/hash and deliberate cross-company links",
+    "Actual local-trusted API, native published review, shipped mobile UI command and native readable Task detail navigation",
+    "48 synthetic presentation checks include keyboard acknowledgement, light/dark 390/1200px WCAG and overflow; mobile form inspected"
+  ],
+  "limits": [
+    "Local-trusted current operator, grants and deterministic business-object fixtures are software prerequisites, not authenticated remote multi-user, performed Human/provider/pilot trials or business-impact evidence",
+    "Storybook presentation uses synthetic cached metadata with all API requests aborted",
+    "Completion-time expiry admission is implemented; an actual timer race is not qualified",
+    "Native Task idempotency retention is seven days; no perpetual deduplication claim",
+    "Remaining Source closure, cross-project Planning, readonly analytical provider conformance, maximum volume/hard latency and hosted acceptance remain open; no whole-brief completion claim"
+  ]
+}

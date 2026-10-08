@@ -1,4 +1,4 @@
-import type { ManagementReviewDefinition, ManagementReviewView, ManagementSourceOptions, ManagementSourceOptionsQuery, publishManagementReviewSchema, recordManagementReviewEventSchema } from "@paperclipai/shared";
+import type { CreateManagementReviewTask, ManagementReviewDefinition, ManagementReviewView, ManagementSourceOptions, ManagementSourceOptionsQuery, publishManagementReviewSchema, recordManagementReviewEventSchema } from "@paperclipai/shared";
 import { api } from "./client";
 const base = (companyId: string) => `/companies/${encodeURIComponent(companyId)}/management-reviews`;
 const account = (path: string, userId?: string | null) => userId ? `${path}${path.includes("?") ? "&" : "?"}expectedUserId=${encodeURIComponent(userId)}` : path;
@@ -14,4 +14,5 @@ export const managementReviewsApi = {
   create: (companyId: string, definition: ManagementReviewDefinition, userId?: string | null) => api.post<{ id: string; companyId: string; status: "draft"; contentHash: string }>(account(base(companyId), userId), definition),
   publish: (companyId: string, id: string, input: ReturnType<typeof publishManagementReviewSchema.parse>, userId?: string | null) => api.post<{ id: string; companyId: string; status: "published"; contentHash: string }>(account(`${base(companyId)}/${encodeURIComponent(id)}/publish`, userId), input),
   event: (companyId: string, id: string, input: ReturnType<typeof recordManagementReviewEventSchema.parse>, userId?: string | null) => api.post<{ id: string; reviewId: string; ordinal: number; event: string; interpretation: "human_reported_event" }>(account(`${base(companyId)}/${encodeURIComponent(id)}/events`, userId), input),
+  createTask: (companyId: string, id: string, input: CreateManagementReviewTask, userId?: string | null) => api.post<{ issueId: string; reviewId: string; itemKey: string; reused: boolean }>(account(`${base(companyId)}/${encodeURIComponent(id)}/tasks`, userId), input),
 };

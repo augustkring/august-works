@@ -1,5 +1,6 @@
 import express from "express";
 import request from "supertest";
+import { managementReviewRoutes } from "../routes/management-reviews.js";
 import { routineRoutes } from "../routes/routines.js";
 import { errorHandler } from "../middleware/index.js";
 import { randomUUID } from "node:crypto";
@@ -46,7 +47,7 @@ describe.skipIf(!support.supported)("Native Routine fresh management review cade
     const service = routineService(db), routine = await service.create(companyId, createRoutineSchema.parse({ title: "Weekly review draft", executionTarget: { kind: "workflow", workflowId: created.id }, concurrencyPolicy: "always_enqueue", managementReviewTemplate: template }), { userId });
     return { service, routine, metric, task: task!, template };
   }
-  function app() { const api = express(); api.use(express.json()); api.use((req, _res, next) => { req.actor = actor(); next(); }); api.use("/api", routineRoutes(db)); api.use(errorHandler); return api; }
+  function app() { const api = express(); api.use(express.json()); api.use((req, _res, next) => { req.actor = actor(); next(); }); api.use("/api", routineRoutes(db)); api.use("/api", managementReviewRoutes(db)); api.use(errorHandler); return api; }
   it("binds the public template update to the current account and native revision without invoking or publishing", async () => {
     const f = await fixture(), endpoint = `/api/routines/${f.routine.id}`, patch = { baseRevisionId: f.routine.latestRevisionId, managementReviewTemplate: { ...f.template, periodDays: 30, reviewType: "monthly_business" } };
     await request(app()).patch(`${endpoint}?expectedUserId=another-account`).send(patch).expect(409);
@@ -80,6 +81,53 @@ describe.skipIf(!support.supported)("Native Routine fresh management review cade
     expect(first.sources[0]!.source).toMatchObject({ kind: "analytical", reference: { type: "metric_observation", metricVersionId: f.metric.version.id } });
     expect(second.sources[0]!.source).toMatchObject({ kind: "analytical", reference: { type: "metric_observation", metricVersionId: changed.id } });
     expect(second.id).not.toBe(first.id); expect(second.publishedBy).toBeNull();
+  });
+  async function publishedReview(taskGrant = true) {
+    const f = await fixture(), run = await f.service.runRoutine(f.routine.id, { source: "api", idempotencyKey: randomUUID() }), owner = managementReviewService(db), view = await owner.detail(companyId, actor(), run.linkedManagementReviewId!);
+    await owner.publish(companyId, actor(), view.id, { expectedContentHash: view.packet.contentHash, rationale: "Current Human explicitly reviews the exact source packet and uncertainty", evidenceAndUncertaintyAcknowledged: true });
+    if (taskGrant) await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: userId, permissionKey: "tasks:assign" });
+    const input = { expectedContentHash: view.packet.contentHash, itemKey: f.template.agenda[0]!.key, idempotencyKey: randomUUID(), title: "Explicit independent Human follow-up", description: "Human requests an investigation before proposing a canonical change", priority: "medium" as const, humanReviewAcknowledged: true as const };
+    return { ...f, view, owner, input };
+  }
+  it("creates one actual native Human Task under concurrent idempotent review commands without copying measurements or executing work", async () => {
+    const f = await publishedReview(), [first, repeated] = await Promise.all([f.owner.createTask(companyId, actor(), f.view.id, f.input), f.owner.createTask(companyId, actor(), f.view.id, f.input)]);
+    expect(first.issueId).toBe(repeated.issueId); expect([first.reused, repeated.reused].sort()).toEqual([false, true]);
+    const task = await issueService(db).getById(first.issueId);
+    expect(task).toMatchObject({ companyId, title: f.input.title, createdByUserId: userId, responsibleUserId: userId, status: "todo", assigneeAgentId: null, assigneeUserId: null, executionRunId: null });
+    expect(task!.description).toContain(f.input.description); expect(task!.description).toContain(`reviewId=${f.view.id}`);
+    expect(task!.description).not.toContain("measuredEffect"); expect(task!.description).not.toContain("metric_observation");
+    expect((await f.owner.detail(companyId, actor(), f.view.id)).events).toHaveLength(0);
+    await expect(f.owner.createTask(companyId, actor(), f.view.id, { ...f.input, description: "Changed Human command under the same existing native idempotency key" })).rejects.toMatchObject({ status: 409 });
+    expect(await db.select().from(issues).where(eq(issues.companyId, companyId))).toHaveLength(2);
+  });
+  it("requires independent Task permission and the current exact published Source for a public review action", async () => {
+    const f = await publishedReview(false), endpoint = `/api/companies/${companyId}/management-reviews/${f.view.id}/tasks`;
+    await request(app()).post(`${endpoint}?expectedUserId=another-account`).send(f.input).expect(409);
+    await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, userId)));
+    await request(app()).post(`${endpoint}?expectedUserId=${userId}`).send(f.input).expect(403);
+    await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: userId, permissionKey: "tasks:assign" });
+    await request(app()).post(`${endpoint}?expectedUserId=${userId}`).send({ ...f.input, observedValue: 0.75 }).expect(400);
+    await request(app()).post(`${endpoint}?expectedUserId=${userId}`).send({ ...f.input, expectedContentHash: "0".repeat(64) }).expect(409);
+    const created = (await request(app()).post(`${endpoint}?expectedUserId=${userId}`).send(f.input).expect(201)).body;
+    expect(created).toMatchObject({ reviewId: f.view.id, itemKey: f.input.itemKey, reused: false });
+    expect(await db.select().from(issues).where(eq(issues.id, created.issueId))).toHaveLength(1);
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, userId)));
+    await request(app()).post(`${endpoint}?expectedUserId=${userId}`).send({ ...f.input, idempotencyKey: randomUUID() }).expect(403);
+    expect(await db.select().from(issues).where(eq(issues.companyId, companyId))).toHaveLength(2);
+  });
+  it("refuses unpublished or Agent review actions and preserves the independent Human Task after native Source erasure", async () => {
+    const f = await fixture(), run = await f.service.runRoutine(f.routine.id, { source: "api", idempotencyKey: randomUUID() }), owner = managementReviewService(db), view = await owner.detail(companyId, actor(), run.linkedManagementReviewId!);
+    await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: userId, permissionKey: "tasks:assign" });
+    const input = { expectedContentHash: view.packet.contentHash, itemKey: f.template.agenda[0]!.key, idempotencyKey: randomUUID(), title: "Independent Human Task content", description: "Human investigates before proposing a material canonical change", humanReviewAcknowledged: true };
+    await expect(owner.createTask(companyId, actor(), view.id, input)).rejects.toMatchObject({ status: 409 });
+    await expect(owner.createTask(companyId, { type: "agent", source: "agent_jwt", companyId, agentId: randomUUID() }, view.id, input)).rejects.toMatchObject({ status: 403 });
+    await owner.publish(companyId, actor(), view.id, { expectedContentHash: view.packet.contentHash, rationale: "Human reviews this exact source and the independent Task proposal", evidenceAndUncertaintyAcknowledged: true });
+    const created = await owner.createTask(companyId, actor(), view.id, input);
+    await instanceSettingsService(db).updateExperimental({ management_reviews_v8: false, business_metrics_v8: false, analytical_lineage_v8: false }); await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId)); await issueService(db).remove(f.task.id);
+    expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id, view.id))).toHaveLength(0);
+    expect((await issueService(db).getById(created.issueId))!.description).toContain(input.description);
+    await expect(owner.createTask(companyId, actor(), view.id, { ...input, idempotencyKey: randomUUID() })).rejects.toBeDefined();
+    expect(await db.select().from(issues).where(eq(issues.companyId, companyId))).toHaveLength(1);
   });
   it("refuses an Agent-configured Human review template under the original server-assigned delegation", async () => {
     const f = await fixture(), [agent] = await db.insert(agents).values({ companyId, name: "Software Routine configuration Agent", status: "idle", adapterType: "paperclip_runner" }).returning();
