@@ -31,8 +31,12 @@ const mockExternalObjectsService = vi.hoisted(() => ({
 const mockInstanceSettingsService = vi.hoisted(() => ({
   getExperimental: vi.fn(),
 }));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
 
 function registerRouteMocks() {
+  vi.doMock("../services/analytical-context-authority.js", () => ({
+    assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+  }));
   vi.doMock("../services/external-objects.js", () => ({
     externalObjectService: () => mockExternalObjectsService,
   }));
@@ -174,6 +178,7 @@ describe("external object routes", () => {
     vi.doUnmock("../services/external-objects.js");
     registerRouteMocks();
     vi.resetAllMocks();
+    mockAnalyticalPayloadAccess.mockResolvedValue(undefined);
     mockIssueService.getById.mockResolvedValue(makeIssue());
     mockIssueService.assertCheckoutOwner.mockResolvedValue({ adoptedFromRunId: null });
     mockAccessService.hasPermission.mockResolvedValue(false);
@@ -206,6 +211,15 @@ describe("external object routes", () => {
     // Uniform 404 so cross-tenant ids are indistinguishable from missing ones.
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("Issue not found");
+    expect(mockExternalObjectsService.getIssueSummary).not.toHaveBeenCalled();
+  });
+
+  it("withholds external object summaries after current analytical Source denial", async () => {
+    const { HttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
+    const res = await request(await createApp(boardActor())).get(`/api/issues/${issueId}/external-object-summary`);
+    expect(res.status).toBe(403);
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ type: "board", userId: "board-user" }), { issueId });
     expect(mockExternalObjectsService.getIssueSummary).not.toHaveBeenCalled();
   });
 

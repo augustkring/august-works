@@ -29,8 +29,12 @@ const mockAccessService = vi.hoisted(() => ({
 }));
 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
 
 function registerRouteMocks() {
+  vi.doMock("../services/analytical-context-authority.js", () => ({
+    assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+  }));
   vi.doMock("@paperclipai/shared/telemetry", () => ({
     trackAgentTaskCompleted: vi.fn(),
     trackErrorHandlerCrash: vi.fn(),
@@ -236,6 +240,7 @@ describe("issue attachment routes", () => {
     vi.doUnmock("../middleware/index.js");
     registerRouteMocks();
     vi.clearAllMocks();
+    mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockAccessService.decide.mockResolvedValue({
       allowed: true,
       explanation: "Allowed by test mock",
@@ -509,6 +514,18 @@ describe("issue attachment routes", () => {
     // The deployment cap is the only limit left. The route no longer reads a
     // per-company override, so it never loads the company to size an upload.
     expect(mockCompanyService.getById).not.toHaveBeenCalled();
+  });
+
+  it("does not open attachment storage after current analytical Source denial", async () => {
+    const { HttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
+    const storage = createStorageService();
+    const attachment = makeAttachment("text/markdown", "private.md");
+    mockIssueService.getAttachmentById.mockResolvedValue(attachment);
+    const res = await request(await createApp(storage)).get("/api/attachments/attachment-1/content");
+    expect(res.status).toBe(403);
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: attachment.issueId });
+    expect(storage.getObject).not.toHaveBeenCalled();
   });
 
   it("serves html attachments as downloads with nosniff", async () => {
