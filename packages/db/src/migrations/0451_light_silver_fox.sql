@@ -1,0 +1,2 @@
+ALTER TABLE "business_event_backfill_runs" ADD COLUMN "lineage_manifest_id" uuid NOT NULL;--> statement-breakpoint
+ALTER TABLE "business_event_backfill_runs" ADD CONSTRAINT "business_event_backfill_runs_manifest_fk" FOREIGN KEY ("company_id","lineage_manifest_id") REFERENCES "public"."analytical_lineage_manifests"("company_id","id") ON DELETE cascade ON UPDATE no action;

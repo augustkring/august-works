@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
-import { and, asc, desc, eq, isNull, lte, or, sql } from "drizzle-orm";
-import { activityLog, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, issues, projects, type Db } from "@paperclipai/db";
+import { createHash, randomUUID } from "node:crypto";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { activityLog, analyticalLineageManifests, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, issues, projects, type Db } from "@paperclipai/db";
 import { BUSINESS_EVENT_PROJECTOR_VERSION, businessEventAttributesSchema, businessEventBackfillSchema, businessEventListSchema, businessEventObjectSchema, businessEventPurposeSchema, v7FeatureEnabled, v8FeatureEnabled, type BusinessEvent, type BusinessEventAttributes, type BusinessEventBackfill, type BusinessEventList, type BusinessEventObject } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../errors.js";
 import { currentAnalyticalPurpose } from "./analytical-purpose.js";
@@ -12,6 +12,7 @@ import { instanceSettingsService } from "./instance-settings.js";
 import { lockBusinessEventSource, suppressBusinessEventSource } from "./business-event-privacy.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockAnalyticalCompany, assertAnalyticalSourcesNotErased } from "./analytical-privacy.js";
+import { retainNativeEventLineage } from "./business-event-lineage.js";
 
 type ActivitySource = typeof activityLog.$inferSelect;
 const ACTIONS = new Set(["issue.created", "issue.updated", "issue.checked_out", "issue.released", "project.created", "project.updated"]);
@@ -53,7 +54,7 @@ export function businessEventService(db: Db) {
   }
   async function purpose(tx: Db, companyId: string, input: { governanceObligationRefs: string[]; retentionDays: number }) {
     const parsed = businessEventPurposeSchema.parse({ governanceObligationRefs: input.governanceObligationRefs, retentionDays: input.retentionDays });
-    await currentAnalyticalPurpose(tx, companyId, { ...parsed, sensitivity: "internal", purpose: "process_intelligence" }, "process");
+    return currentAnalyticalPurpose(tx, companyId, { ...parsed, sensitivity: "internal", purpose: "process_intelligence" }, "process");
   }
   async function readable(tx: Db, companyId: string, actor: AuthorizationActor, objects: BusinessEventObject[]) {
     const access = accessService(tx);
@@ -122,6 +123,7 @@ export function businessEventService(db: Db) {
       let projected = 0;
       let unchanged = 0;
       let scanned = 0;
+      const contributedSources: string[] = [];
       for (const row of rows) {
         // Always process one row so a budget-limited batch has a resumable cursor.
         if (scanned > 0 && performance.now() >= deadline) break;
@@ -163,6 +165,7 @@ export function businessEventService(db: Db) {
         publications.forEach(publishActivity);
         if (result === "projected") projected++;
         if (result === "unchanged") unchanged++;
+        if (result === "projected" || result === "unchanged") contributedSources.push(row.id);
         scanned++;
       }
       const last = rows[scanned-1];
@@ -172,11 +175,34 @@ export function businessEventService(db: Db) {
       const run = await db.transaction(async (tx) => {
         await tx.execute(sql`set local statement_timeout='8s'`);
         await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx as unknown as Db, companyId);
-        await admit(tx as unknown as Db, companyId, actor, true); await purpose(tx as unknown as Db, companyId, query);
-        const [record] = await tx.insert(businessEventBackfillRuns).values({ companyId, projectorVersion: BUSINESS_EVENT_PROJECTOR_VERSION,
-          windowFrom: new Date(query.from), windowUntil: new Date(query.until), startCursor: query.cursor ?? null, lastSourceCursor,
+        await admit(tx as unknown as Db, companyId, actor, true);
+        const policies = await purpose(tx as unknown as Db, companyId, query);
+        // Re-enter the original current reader. The earlier projection commits
+        // confer no authority on a later metadata publication.
+        const events = contributedSources.length ? (await businessEventService(tx as unknown as Db).list(companyId, actor,
+          { from: query.from, until: query.until, limit: 200 }, contributedSources)).items : [];
+        if (events.length !== contributedSources.length) throw conflict("Backfill Sources changed before metadata publication; retry the bounded window");
+        const cursorEvent = query.cursor ? (await businessEventService(tx as unknown as Db).list(companyId, actor,
+          { from: query.cursor.at, until: query.cursor.at, limit: 1 }, [query.cursor.id])).items[0] : undefined;
+        const retainedEvents = cursorEvent && !events.some(event => event.source.ref === cursorEvent.source.ref) ? [...events, cursorEvent] : events;
+        const now = new Date();
+        const expiresAt = new Date(Math.min(now.getTime() + query.retentionDays * 86400000, ...retainedEvents.map(event => Date.parse(event.expiresAt))));
+        if (expiresAt <= now || performance.now() >= deadline) throw conflict("Backfill metadata exceeded its bounded retention or work budget; retry a smaller window");
+        const id = randomUUID(), lineageManifestId = randomUUID();
+        const parameters = { from: query.from, until: query.until, limit: query.limit, projected, unchanged,
+          governanceObligationRefs: query.governanceObligationRefs, retentionDays: query.retentionDays };
+        await tx.insert(analyticalLineageManifests).values({ id: lineageManifestId, companyId, analysisType: "business_event_backfill", analysisRef: id,
+          engineVersion: BUSINESS_EVENT_PROJECTOR_VERSION, inputHash: nativeSha256({ events: retainedEvents, parameters }), definitionHash: nativeSha256({ projector: BUSINESS_EVENT_PROJECTOR_VERSION, parameters }),
+          requestedBy: auditActor(actor).actorId, sourceWatermark: events.at(-1)?.occurredAt ?? "empty_authorized_batch", sourceCount: retainedEvents.length,
+          parameters, createdAt: now, expiresAt });
+        await retainNativeEventLineage(tx as unknown as Db, companyId, lineageManifestId, retainedEvents, policies);
+        const [record] = await tx.insert(businessEventBackfillRuns).values({ id, companyId, lineageManifestId, projectorVersion: BUSINESS_EVENT_PROJECTOR_VERSION,
+          windowFrom: new Date(query.from), windowUntil: new Date(query.until), startCursor: cursorEvent ? query.cursor : null,
+          lastSourceCursor: lastSourceCursor && events.some(event => event.source.ref === lastSourceCursor.id) ? lastSourceCursor : null,
           batchLimit: query.limit, projected, unchanged, status: hasMore ? "batch_limit_reached" : "window_scan_exhausted" }).returning({ id: businessEventBackfillRuns.id });
-        await logActivity(tx as unknown as Db, { companyId, ...auditActor(actor), action: "business_event.backfill_recorded", entityType: "business_event_backfill", entityId: record.id, details: { projector: BUSINESS_EVENT_PROJECTOR_VERSION, projected, unchanged } }, publications);
+        await logActivity(tx as unknown as Db, { companyId, ...auditActor(actor), action: "business_event.backfill_recorded", entityType: "business_event_backfill", entityId: record.id, details: { projector: BUSINESS_EVENT_PROJECTOR_VERSION } }, publications);
+        await purpose(tx as unknown as Db, companyId, query);
+        if (expiresAt <= new Date() || performance.now() >= deadline) throw conflict("Backfill metadata expired before publication; retry a smaller window");
         return record;
       });
       publications.forEach(publishActivity);
@@ -184,7 +210,7 @@ export function businessEventService(db: Db) {
         nextCursor: hasMore ? lastSourceCursor : null,
         coverage: "bounded_source_window" as const };
     },
-    async list(companyId: string, actor: AuthorizationActor, input: BusinessEventList) {
+    async list(companyId: string, actor: AuthorizationActor, input: BusinessEventList, onlySourceRefs?: readonly string[]) {
       const query = businessEventListSchema.parse(input);
       return db.transaction(async rawTx => {
         const deadline = performance.now()+30_000;
@@ -193,6 +219,7 @@ export function businessEventService(db: Db) {
         await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         await admit(tx, companyId, actor);
         const rows = await tx.select({ event: businessEvents, cursorAt: sql<string>`to_char(${businessEvents.occurredAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` }).from(businessEvents).where(and(eq(businessEvents.companyId, companyId), isNull(businessEvents.tombstonedAt),
+          onlySourceRefs ? inArray(businessEvents.sourceRef, [...onlySourceRefs]) : undefined,
           sql`${businessEvents.expiresAt}>now()`,
           sql`not exists (select 1 from ${businessEventSuppressions} where ${businessEventSuppressions.companyId} = ${businessEvents.companyId} and ${businessEventSuppressions.sourceRef} = ${businessEvents.sourceRef})`,
           sql`${businessEvents.occurredAt} >= ${query.from}::timestamptz`, sql`${businessEvents.occurredAt} <= ${query.until}::timestamptz`,

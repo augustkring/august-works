@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { check, foreignKey, index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import type { BusinessEventAttributes } from "@paperclipai/shared";
 import { companies } from "./companies.js";
+import { analyticalLineageManifests } from "./analytical_lineage.js";
 
 export const businessEvents = pgTable("business_events", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -76,6 +77,7 @@ export const businessEventSuppressions = pgTable("business_event_suppressions", 
 export const businessEventBackfillRuns = pgTable("business_event_backfill_runs", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  lineageManifestId: uuid("lineage_manifest_id").notNull(),
   projectorVersion: text("projector_version").notNull(),
   windowFrom: timestamp("window_from", { withTimezone: true }).notNull(),
   windowUntil: timestamp("window_until", { withTimezone: true }).notNull(),
@@ -87,6 +89,8 @@ export const businessEventBackfillRuns = pgTable("business_event_backfill_runs",
   status: text("status").$type<"batch_limit_reached" | "window_scan_exhausted">().notNull(),
   recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
+  manifestFk: foreignKey({ name: "business_event_backfill_runs_manifest_fk", columns: [t.companyId, t.lineageManifestId],
+    foreignColumns: [analyticalLineageManifests.companyId, analyticalLineageManifests.id] }).onDelete("cascade"),
   companyTimeIdx: index("business_event_backfill_runs_company_time_idx").on(t.companyId, t.recordedAt),
   windowCheck: check("business_event_backfill_runs_window_check", sql`${t.windowUntil} >= ${t.windowFrom}`),
   boundsCheck: check("business_event_backfill_runs_bounds_check", sql`${t.batchLimit} between 1 and 200 and ${t.projected} >= 0 and ${t.unchanged} >= 0 and ${t.projected} + ${t.unchanged} <= ${t.batchLimit}`),
