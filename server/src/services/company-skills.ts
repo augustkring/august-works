@@ -1,3 +1,4 @@
+import {assertAnalyticalContextPayloadAccess} from "./analytical-context-authority.js";
 import type {NativeReadScope} from "./analytical-reader.js";
 import {assertRuntimeSkillSourceRetained} from "./learning/learning-assets.js";
 import { enqueueSkillVersionFileErasure } from "./learning/skill-file-erasure.js";
@@ -6652,7 +6653,26 @@ export function companySkillService(db: Db) {
       : []));
   }
 
-  async function hydrateTestRuns(companyId: string, rows: CompanySkillTestRunRow[]): Promise<CompanySkillTestRun[]> {
+  async function testRunSourceAvailable(companyId:string,row:CompanySkillTestRunRow,actor?:AuthorizationActor){
+    const [source]=await db.execute<{erased:boolean}>(sql`select aw_skill_harness_source_erased(${companyId}::uuid,${row.skillVersionId}::uuid,${row.issueId}::uuid) as erased`);
+    if(source?.erased)return false;
+    try{
+      if(!await getVersion(companyId,row.skillId,row.skillVersionId,actor))return false;
+      if(actor)await assertAnalyticalContextPayloadAccess(db,companyId,actor,{issueId:row.issueId});
+      return true;
+    }catch(error){if(error instanceof Error&&"status" in error&&[403,404,409,422].includes(error.status as number))return false;throw error;}
+  }
+
+  async function hydrateTestRuns(companyId: string, rows: CompanySkillTestRunRow[],actor?:AuthorizationActor): Promise<CompanySkillTestRun[]> {
+    // Internal completion callbacks need status/identity; missing Source authority
+    // never returns the learned body they have just persisted.
+    const admitted:CompanySkillTestRunRow[]=[];
+    for(const row of rows){
+      if(await testRunSourceAvailable(companyId,row,actor))admitted.push(row);
+      else if(actor)throw forbidden("Skill test Source access is unavailable",{code:"analytical_source_access_lost"});
+      else admitted.push({...row,inputSnapshot:"",agentConfigSnapshot:{},templateName:null,templateBody:null,renderedTemplateBody:null,harnessIssueDescription:"",outputSnapshot:"",error:"Source payload erased"});
+    }
+    rows=admitted;
     const costByIssueId = await testRunCostByIssueIds(companyId, rows.map((row) => row.issueId));
     return rows.map((row) => toCompanySkillTestRun(
       row,
@@ -6682,6 +6702,7 @@ export function companySkillService(db: Db) {
       wakeHarnessIssue: (issueId: string, agentId: string) => Promise<unknown>;
       cleanupHarnessIssue?: (issueId: string) => Promise<unknown>;
       retentionDays?: number;
+      sourceActor?:AuthorizationActor;
     },
   ): Promise<CompanySkillTestRun> {
     const skill = await getById(companyId, skillId);
@@ -6709,7 +6730,7 @@ export function companySkillService(db: Db) {
     // Re-run pins the viewed run's version so the new run reproduces the same
     // snapshots; a plain run auto-snapshots the live head.
     const version = input.skillVersionId
-      ? await getVersion(companyId, skillId, input.skillVersionId)
+      ? await getVersion(companyId, skillId, input.skillVersionId,deps.sourceActor)
       : await ensureRunSkillVersion(companyId, skill, actor);
     if (!version) throw notFound("Skill version not found");
     if (version.visibility === "private") throw forbidden("Submit this private candidate for company review before running a shared test harness");
@@ -6819,13 +6840,14 @@ export function companySkillService(db: Db) {
       throw notFound("Failed to persist skill test run");
     }
     await deps.wakeHarnessIssue(issueId, agent.id);
-    return (await hydrateTestRuns(companyId, [row]))[0]!;
+    return (await hydrateTestRuns(companyId, [row],deps.sourceActor))[0]!;
   }
 
   async function listTestRuns(
     companyId: string,
     skillId: string,
     query: CompanySkillTestRunListQuery = {},
+    actor?:AuthorizationActor,
   ): Promise<CompanySkillTestRun[]> {
     const skill = await getById(companyId, skillId);
     if (!skill) throw notFound("Skill not found");
@@ -6840,10 +6862,17 @@ export function companySkillService(db: Db) {
       .from(companySkillTestRuns)
       .where(and(...conditions))
       .orderBy(desc(companySkillTestRuns.createdAt), desc(companySkillTestRuns.id));
-    return hydrateTestRuns(companyId, rows);
+    return hydrateTestRuns(companyId, rows,actor);
   }
 
-  async function getTestRunDetail(companyId: string, skillId: string, runId: string): Promise<CompanySkillTestRunDetail | null> {
+  // Cancellation/deletion authorize native assignment metadata without loading
+  // a private or erased harness body merely to learn its Task identity.
+  async function getTestRunAssignmentScope(companyId:string,skillId:string,runId:string){
+    const [row]=await db.select({issueId:companySkillTestRuns.issueId,agentId:companySkillTestRuns.agentId}).from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId,companyId),eq(companySkillTestRuns.skillId,skillId),eq(companySkillTestRuns.id,runId))).limit(1);
+    return row??null;
+  }
+
+  async function getTestRunDetail(companyId: string, skillId: string, runId: string,actor?:AuthorizationActor): Promise<CompanySkillTestRunDetail | null> {
     const row = await db
       .select()
       .from(companySkillTestRuns)
@@ -6855,11 +6884,11 @@ export function companySkillService(db: Db) {
       ))
       .then((rows) => rows[0] ?? null);
     if (!row) return null;
-    const [run] = await hydrateTestRuns(companyId, [row]);
+    const [run] = await hydrateTestRuns(companyId, [row],actor);
     if (!run) return null;
     const harnessIssueGone = Boolean(row.harnessIssueDeletedAt);
     const [version, issue, documentRows, interactionRows, attachmentRows, workProductRows] = await Promise.all([
-      getVersion(companyId, skillId, row.skillVersionId),
+      getVersion(companyId, skillId, row.skillVersionId,actor),
       harnessIssueGone
         ? Promise.resolve(null)
         : db
@@ -7296,6 +7325,7 @@ export function companySkillService(db: Db) {
     deleteTestRunTemplate,
     createTestRun,
     listTestRuns,
+    getTestRunAssignmentScope,
     getTestRunDetail,
     completeTestRunForIssue,
     markTestRunRunning,
