@@ -30,6 +30,8 @@ vi.mock("../tool-access.js", () => ({
 
 import { createHash } from "node:crypto";
 import { buildNativeRuntimeContext, materializeAsset, readNativeRuntimeAssetText, resolveNativeRuntimeMcpSnapshot } from "./runtime-context.js";
+import { applyConnectorSkills, type ConnectorAssignment } from "../connector-runtime.js";
+import { nativeRuntimeAssetsRoot } from "./runtime-asset-retention.js";
 
 const temporaryRoots: string[] = [];
 let previousPaperclipHome: string | undefined;
@@ -87,6 +89,28 @@ afterEach(async () => {
     await makeTreeWritable(root);
     await rm(root, { recursive: true, force: true });
   }
+});
+
+describe("connector assignment file ownership", () => {
+  const assignment: ConnectorAssignment = { key: "agentmail", label: "AgentMail", skillKey: "paperclipai/paperclip/agentmail", tools: [],
+    resources: [{ id: "software-private-inbox", label: "private-assignment@example.test", connectionId: "software-connection" }] };
+  it("uses the public bundled skill for configuration previews without writing private assignments", async () => {
+    const preview = await applyConnectorSkills({}, [], [assignment]);
+    expect(await readFile(path.join(preview.paperclipRuntimeSkills[0].source, "SKILL.md"), "utf8")).not.toContain(assignment.resources[0].label);
+    await expect(stat(nativeRuntimeAssetsRoot())).rejects.toMatchObject({ code: "ENOENT" });
+  });
+  it("keeps private bundles under their separate run owners while preserving a stable resource revision", async () => {
+    const firstOwner = { companyId: "company-one", runId: "run-one" }, secondOwner = { companyId: "company-two", runId: "run-two" };
+    const first = await applyConnectorSkills({}, [], [assignment], firstOwner), second = await applyConnectorSkills({}, [], [assignment], secondOwner);
+    expect(first.paperclipRuntimeSkills[0].source.startsWith(nativeRuntimeAssetsRoot(firstOwner) + path.sep)).toBe(true);
+    expect(second.paperclipRuntimeSkills[0].source.startsWith(nativeRuntimeAssetsRoot(secondOwner) + path.sep)).toBe(true);
+    expect(first.paperclipRuntimeSkills[0].source).not.toBe(second.paperclipRuntimeSkills[0].source);
+    expect(await readFile(path.join(first.paperclipRuntimeSkills[0].source, "SKILL.md"), "utf8")).toContain(assignment.resources[0].label);
+    expect(second.paperclipConnectorSkillDigest).toBe(first.paperclipConnectorSkillDigest);
+    const changed = await applyConnectorSkills({}, [], [{ ...assignment, resources: [{ ...assignment.resources[0], label: "changed-assignment@example.test" }] }], firstOwner);
+    expect(changed.paperclipConnectorSkillDigest).not.toBe(first.paperclipConnectorSkillDigest);
+    await expect(stat(path.join(nativeRuntimeAssetsRoot(), "bundles"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
 });
 
 describe("bounded Native draft asset projection", () => {

@@ -339,16 +339,23 @@ export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeA
 
 /** Production publication uses the native run owner and keeps C7 excluded until all copies exist. */
 export async function buildRetainedNativeRuntimeContext(input: Parameters<typeof buildNativeRuntimeContext>[0]) {
+  return withRetainedNativeRuntimeAssets({ db: input.db, companyId: input.agent.companyId, agentId: input.agent.id, runId: input.runId },
+    db => buildNativeRuntimeContext({ ...input, db }));
+}
+
+/** Both original runtime context and connector preparation share the native
+ * run/Source fence. A constructor's run path alone never grants publication. */
+export async function withRetainedNativeRuntimeAssets<T>(input: { db: Db; companyId: string; agentId: string; runId: string }, build: (db: Db) => Promise<T>) {
   return input.db.transaction(async rawTx => {
     const db = rawTx as unknown as Db;
-    await lockAnalyticalCompany(db, input.agent.companyId); await lockMemoryPrivacy(db, input.agent.companyId);
-    const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.agent.companyId),
-      eq(heartbeatRuns.agentId, input.agent.id), eq(heartbeatRuns.id, input.runId)));
-    const [source] = await db.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${input.agent.companyId}::uuid,${input.runId}::uuid,NULL) as erased`);
+    await lockAnalyticalCompany(db, input.companyId); await lockMemoryPrivacy(db, input.companyId);
+    const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.id, input.runId)));
+    const [source] = await db.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${input.companyId}::uuid,${input.runId}::uuid,NULL) as erased`);
     if (!run || run.status !== "running" || source?.erased) throw new Error("native_runtime_asset_source_unavailable");
-    await assertNativeAnalyticalRunPayloadAccess(db, input.agent.companyId, input.runId);
-    const context = await buildNativeRuntimeContext({ ...input, db });
-    await assertNativeAnalyticalRunPayloadAccess(db, input.agent.companyId, input.runId);
-    return context;
+    await assertNativeAnalyticalRunPayloadAccess(db, input.companyId, input.runId);
+    const result = await build(db);
+    await assertNativeAnalyticalRunPayloadAccess(db, input.companyId, input.runId);
+    return result;
   });
 }
