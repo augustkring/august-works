@@ -1,5 +1,5 @@
 import { automationArtifactService } from "../automation-artifacts/automation-artifact-service.js";
-import { withNativeAnalyticalReader } from "../analytical-reader.js";
+import { withNativeAnalyticalReader, type NativeReadScope } from "../analytical-reader.js";
 import {assertLearnedAssetAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
@@ -252,6 +252,7 @@ async function getRunDetail(
   companyId: string,
   runId: string,
   reader?:AuthorizationActor,
+  readScope?:NativeReadScope,
 ): Promise<WorkflowRunDetail | null> {
   return connection.transaction(async rawTx => {
     const db = rawTx as unknown as Db;
@@ -263,8 +264,8 @@ async function getRunDetail(
       .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)))
       .then((rows) => rows[0] ?? null);
     if (!run) return null;
-    await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",run.workflowRevisionId,reader);
-    await assertLearnedWorkflowPayloadAccess(db, companyId, reader, { workflowRunId: run.id });
+    await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",run.workflowRevisionId,reader,readScope);
+    await assertLearnedWorkflowPayloadAccess(db, companyId, reader, { workflowRunId: run.id },readScope);
     const [steps, waits] = await Promise.all([
       db
         .select()
@@ -741,12 +742,6 @@ async function completeRunningStep(
     if (!retainedStep) throw conflict("Workflow step changed before checkpoint", { code: "workflow_step_completion_conflict" });
     await assertLearnedWorkflowPayloadAccess(scopedDb, run.companyId, learningActorFromPrincipal(run.companyId, actor.principal, actor.runId),
       { workflowRunId: run.id }, "task");
-    await assertLearnedAssetAnalyticalSources(scopedDb, run.companyId, "workflow_revision", run.workflowRevisionId,
-      learningActorFromPrincipal(run.companyId, actor.principal, actor.runId));
-    if (retainedStep.automationArtifactVersionId) {
-      await assertLearnedAssetAnalyticalSources(scopedDb, run.companyId, "automation_artifact_version",
-        retainedStep.automationArtifactVersionId, learningActorFromPrincipal(run.companyId, actor.principal, actor.runId));
-    }
     if (artifactBinding) {
       if (retainedStep.automationArtifactVersionId !== artifactBinding.versionId) {
         throw conflict("Workflow artifact retention changed before checkpoint", { code: "workflow_step_claim_conflict" });
@@ -8214,7 +8209,7 @@ export function workflowExecutorService(
         );
       }
 
-      const detail = await getRunDetail(db, companyId, runId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
+      const detail = await getRunDetail(db, companyId, runId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
       if (!detail) throw new Error("Workflow run disappeared during cancellation");
       return detail;
     },
@@ -8349,7 +8344,7 @@ export function workflowExecutorService(
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
+      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
       if (!detail) throw new Error("Workflow retry disappeared after execution");
       return detail;
     },
@@ -8431,7 +8426,7 @@ export function workflowExecutorService(
         }
       }
 
-      const detail = await getRunDetail(db, companyId, runId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
+      const detail = await getRunDetail(db, companyId, runId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
       if (!detail) throw new Error("Workflow run disappeared after execution");
       return detail;
     },
@@ -8487,7 +8482,7 @@ export function workflowExecutorService(
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
+      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
       if (!detail) throw new Error("Workflow run disappeared after execution");
       return detail;
     },
@@ -8592,7 +8587,7 @@ export function workflowExecutorService(
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
+      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
       if (!detail) throw new Error("Workflow run disappeared after task invocation");
       return detail;
     },
