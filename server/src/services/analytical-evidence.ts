@@ -1,11 +1,12 @@
 import { and, eq } from "drizzle-orm";
-import { analyticalLineageEdges, analyticalLineageManifests, businessMetricObservations, businessMetricVersions, processAnalysisRuns, processAnalysisVersions, type Db } from "@paperclipai/db";
+import { analyticalLineageEdges, analyticalLineageManifests, analyticalSourceSuppressions, businessMetricObservations, businessMetricVersions, processAnalysisRuns, processAnalysisVersions, type Db } from "@paperclipai/db";
 import type { CapturedDecisionEvidence, DecisionEvidenceReference } from "@paperclipai/shared";
 import type { AuthorizationActor } from "./authorization.js";
 import { conflict, forbidden, unprocessable } from "../errors.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { assertAnalyticalSourcesNotErased } from "./analytical-privacy.js";
 import { authorizeStrategyReference } from "./strategy-execution/references.js";
+import { assertV7Authorization } from "./v7-authorization.js";
 import { businessMetricService } from "./business-metrics/service.js";
 import { processFindingService } from "./process-findings.js";
 import { inspectBusinessForecastRun } from "./business-forecasting/service.js";
@@ -115,6 +116,11 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
  return {sourceSensitivity:sourceSensitivity as "internal"|"confidential",evidence,edges:lineage,manifestIds:[...manifestIds].sort(),now,expiresAt,revalidationRequiredEvidenceKeys};
 }
 export async function inspectAnalyticalEvidenceAuthority(tx:Db,companyId:string,actor:AuthorizationActor,edges:Edge[],deadline:number) {
+  for (const edge of edges.filter(edge => edge.inputType === "goal")) {
+    checkTime(deadline); await assertV7Authorization(tx, actor, companyId, "company_scope:read");
+    await authorizeStrategyReference(tx, companyId, actor, { type: "goal", id: edge.inputRef }, "confidential");
+    if ((await tx.select({ id: analyticalSourceSuppressions.inputRef }).from(analyticalSourceSuppressions).where(and(eq(analyticalSourceSuppressions.companyId, companyId), eq(analyticalSourceSuppressions.inputType, "goal"), eq(analyticalSourceSuppressions.inputRef, edge.inputRef))).limit(1)).length) throw conflict("An analytical Goal source was erased");
+  }
   const objects=edges.flatMap(edge=>edge.inputType==="issue" || edge.inputType==="project"?[{objectType:edge.inputType,objectId:edge.inputRef,qualifier:"related" as const}]:[]);
   // Reuse the source owner's current hidden-task, project and suppression
   // admission. Current project ancestry remains separate from recorded facts.

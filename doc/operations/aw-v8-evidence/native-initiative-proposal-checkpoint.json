@@ -1,0 +1,110 @@
+{
+  "checkpoint": "Native initiative proposals, Goal lineage and separate canonical project review",
+  "parentCommit": "a07ace23ea4148c7c565a6ee04a64a620a73b0b8",
+  "primaryParentCommit": "8d98bd80149b5e197c0d5d513093925378165710",
+  "recordedAt": "2026-10-08T09:11:13.868516+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "7626d8962968734a3e4c3778ff285569a5061b860a65d4f358a34fdf138c5454"
+    },
+    {
+      "path": "packages/db/src/migrations/0443_complete_rick_jones.sql",
+      "sha256": "d4830defd31660042f2a5820066f0aaf19e942de485723349db1c74b0921a015"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0438_snapshot.json",
+      "change": "normal generated snapshot pruning"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0443_snapshot.json",
+      "sha256": "a61710f48e3ec9abb579f28e59d2970840e99aa713aae29a123e662701c031f6"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "299eacb7ad006795947c2f421409887e048d9850b7edde5c3204f7d72409419d"
+    },
+    {
+      "path": "packages/db/src/schema/adaptive_planning.ts",
+      "sha256": "2578e9d3f14e97480a653add615af0c89c721f87e9815f0934eae2c5964c3854"
+    },
+    {
+      "path": "packages/db/src/schema/analytical_lineage.ts",
+      "sha256": "6e78a79cb219638371c9059d4cbf402031dd3721c233f39eb6635bb627e59f0a"
+    },
+    {
+      "path": "packages/shared/src/adaptive-planning.ts",
+      "sha256": "056170a648dcc89a0f85b3ea05fd74f091d2431ffd4f69f722fc867207633b7f"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-cross-project.integration.test.ts",
+      "sha256": "ca5dfeb1091d8976024d19c016f9917523e9bfe980db0f5988bd0a8cd16a7752"
+    },
+    {
+      "path": "server/src/routes/cross-project-planning.ts",
+      "sha256": "999adace5d58e34d27878e853b64338e7c1f65e0df4d42d4fd73728bd9eb5414"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/cross-project.ts",
+      "sha256": "366e08163d72c2fa3d7f923f08730f48f95e4955ed81fd9c53c321572f7ca4a5"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/initiative-owner.ts",
+      "sha256": "5312a32fbc4baeae70ec3c816f2fbcc340a0fc7e55e5c9c017ca9b51d9027efc"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/portfolio.ts",
+      "sha256": "167fb8e9ec5e804d0f00731af13c85dbd8746ff08deb103e35ca4412a2e9aac6"
+    },
+    {
+      "path": "server/src/services/analytical-evidence.ts",
+      "sha256": "9134ae90c723371790ac8135aa719e6bde0ee0f69db5c52160e6f8dabfb6e3af"
+    },
+    {
+      "path": "ui/src/api/cross-project-planning.ts",
+      "sha256": "e4b1869c5eac3577f02c5a9135229fae0d1eb6a7012ed79e83fde38242068f40"
+    }
+  ],
+  "validation": {
+    "nativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-proposal-final-native-tests.log",
+      "sha256": "e5bfa48e6d651dbf69234cc39021f93600a0488df611e6d13adddeabe4ab900b",
+      "tests": 132,
+      "files": 9,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-proposal-final-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-proposal-ui-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-proposal-final-migration-checks.log",
+      "sha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    }
+  },
+  "qualified": [
+    "Generated original cross-project proposal extension with unchanged old signed contexts/type filtering",
+    "Signed immutable complete native Goal/project/Task/purpose/accounting Sources and independent full/selected math replay",
+    "Separate current Human review and original project-owner start/continue/pause/stop application",
+    "Unknown/investigate leaves canonical projects unchanged; no Task dates/statuses, Roadmap children, new dispatch or budget reservation",
+    "Actual low-alignment/capacity-infeasible/feasible three-project owner case",
+    "Current Goal/accounting/version/permission fences; native strict HTTP account/body/no-store and rollout-independent metadata cancellation",
+    "Original Goal deletion erases root/manifest with flags off and company paused, preserving canonical projects/Tasks",
+    "Late canonical project fault rolls back earlier original changes and all private publications"
+  ],
+  "limitations": [
+    "UI proposal/review operator controls and actual browser qualification are next",
+    "Native software/fixture HTTP actors do not qualify authenticated JWT, real Human/provider/pilot or hosted trials",
+    "No active-run cancellation, new execution permission, reservation, global optimization or business impact",
+    "Initial missing Goal admission and SQL operator precedence diagnostics excluded",
+    "Whole brief and hosted acceptance remain in progress"
+  ]
+}

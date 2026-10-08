@@ -11,10 +11,10 @@ import { solveNativePortfolioPlanning } from "./portfolio-kernel.js";
 
 /** Current native capture under the same company -> Memory privacy fence as
  * joint planning. Preview is transient: it creates no second project ledger. */
-export async function capturePortfolioPlanning(tx: Db, companyId: string, actor: AuthorizationActor, profile: PortfolioPlanningProfile) {
+export async function capturePortfolioPlanning(tx: Db, companyId: string, actor: AuthorizationActor, profile: PortfolioPlanningProfile, checkVersions = true) {
   const deadline = performance.now() + 30000;
   const { initiatives: _initiatives, initiativePolicy: _initiativePolicy, ...jointProfile } = profile;
-  const joint = await captureCrossProjectPlanning(tx, companyId, actor, jointProfile, true), ids = profile.projects.map(project => project.id);
+  const joint = await captureCrossProjectPlanning(tx, companyId, actor, jointProfile, checkVersions), ids = profile.projects.map(project => project.id);
   const rows = await tx.select().from(projects).where(and(eq(projects.companyId, companyId), inArray(projects.id, ids))).orderBy(asc(projects.id)).for("share");
   const associations = await tx.select().from(projectGoals).where(and(eq(projectGoals.companyId, companyId), inArray(projectGoals.projectId, ids))).orderBy(asc(projectGoals.projectId), asc(projectGoals.goalId)).limit(321).for("share");
   if (associations.length > 320) throw unprocessable("Selected initiative Goal coverage exceeds its bounded budget");
@@ -46,10 +46,11 @@ export async function capturePortfolioPlanning(tx: Db, companyId: string, actor:
   const result = await solveNativePortfolioPlanning(profile, sources, joint.snapshots.flatMap(snapshot => snapshot.dependencies));
   if (performance.now() > deadline) throw unprocessable("Native initiative source inspection exceeded its bounded budget");
   if (joint.expiresAt <= new Date()) throw conflict("Initiative Sources expired during calculation");
-  return { joint, sources, goalRows, associations, accounting, result,
-    // The original canonical hash accepts JSON data, not Date objects. Native
-    // version and UTC window timestamps must be pinned as their wire strings.
-    snapshotHash: nativeSha256({ profile, jointSnapshotHash: joint.snapshotHash, sources, goals: JSON.parse(JSON.stringify(goalRows)), associations: JSON.parse(JSON.stringify(associations)), accounting: JSON.parse(JSON.stringify(accounting)) }),
+  // The original canonical hash accepts JSON data, not Date objects. Native
+  // version and UTC window timestamps must be pinned as their wire strings.
+  const sourcePins = { goalIds, goalsHash: nativeSha256(JSON.parse(JSON.stringify(goalRows))), associationsHash: nativeSha256(JSON.parse(JSON.stringify(associations))), accountingHash: nativeSha256(JSON.parse(JSON.stringify(accounting))) };
+  return { joint, sources, sourcePins, goalRows, associations, accounting, result,
+    snapshotHash: nativeSha256({ profile, jointSnapshotHash: joint.snapshotHash, sources, sourcePins }),
   };
 }
 

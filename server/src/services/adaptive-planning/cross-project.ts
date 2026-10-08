@@ -65,7 +65,7 @@ function proof(row: Pick<Proposal, "id" | "companyId" | "contextHash" | "reason"
   return { domain: "aw-cross-project-planning:v1", id: row.id, companyId: row.companyId, contextHash: row.contextHash, reasonHash: nativeSha256(row.reason), author: row.createdByUserId, createdAt: row.createdAt.toISOString(), expiresAt: expiresAt.toISOString(), lineageHash: nativeSha256(edges) };
 }
 async function root(tx: Db, companyId: string, id: string) {
-  const [row] = await tx.select().from(adaptivePlanningProposals).where(and(eq(adaptivePlanningProposals.companyId, companyId), eq(adaptivePlanningProposals.id, id))).for("update");
+  const [row] = await tx.select().from(adaptivePlanningProposals).where(and(eq(adaptivePlanningProposals.companyId, companyId), eq(adaptivePlanningProposals.id, id), eq(adaptivePlanningProposals.proposalType, "change_schedule"))).for("update");
   if (!row) throw notFound("Cross-project planning proposal is unavailable"); return row;
 }
 async function retained(tx: Db, actor: AuthorizationActor, row: Proposal) {
@@ -103,7 +103,7 @@ export function crossProjectPlanningService(db: Db) {
       });
     },
     async controls(companyId: string, actor: AuthorizationActor, cursor?: string) {
-      return db.transaction(async rawTx => { const tx = rawTx as unknown as Db; await admit(tx, companyId, actor, false, false); const rows = await tx.select({ id: adaptivePlanningProposals.id, status: adaptivePlanningProposals.status, revision: adaptivePlanningProposals.revision }).from(adaptivePlanningProposals).where(and(eq(adaptivePlanningProposals.companyId, companyId), cursor ? sql`${adaptivePlanningProposals.id}>${cursor}::uuid` : undefined)).orderBy(asc(adaptivePlanningProposals.id)).limit(21); return { items: rows.slice(0, 20), nextCursor: rows.length > 20 ? rows[19].id : null, coverage: "bounded_native_joint_proposal_metadata" as const }; });
+      return db.transaction(async rawTx => { const tx = rawTx as unknown as Db; await admit(tx, companyId, actor, false, false); const rows = await tx.select({ id: adaptivePlanningProposals.id, status: adaptivePlanningProposals.status, revision: adaptivePlanningProposals.revision }).from(adaptivePlanningProposals).where(and(eq(adaptivePlanningProposals.companyId, companyId), eq(adaptivePlanningProposals.proposalType, "change_schedule"), cursor ? sql`${adaptivePlanningProposals.id}>${cursor}::uuid` : undefined)).orderBy(asc(adaptivePlanningProposals.id)).limit(21); return { items: rows.slice(0, 20), nextCursor: rows.length > 20 ? rows[19].id : null, coverage: "bounded_native_joint_proposal_metadata" as const }; });
     },
     async detail(companyId: string, actor: AuthorizationActor, id: string) {
       return db.transaction(async rawTx => { const tx = rawTx as unknown as Db; await admit(tx, companyId, actor); const row = await root(tx, companyId, id); await retained(tx, actor, row); const current = ["proposed", "under_review"].includes(row.status) ? await capture(tx, companyId, actor, row.context.profile, false) : null; return { ...row, currentQualification: current?.snapshotHash === row.context.snapshotHash ? "current" as const : "needs_revalidation" as const }; });
