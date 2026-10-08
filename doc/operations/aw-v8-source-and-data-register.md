@@ -2,7 +2,7 @@
 
 Date: 2026-10-06. Reconciliation base: master
 `d550aa7ea5ad38b5209d79135cabaa227ab3f902`.
-Status as of native-owner checkpoint 48 (2026-10-08): default-off native
+Status as of native-owner checkpoint 49 (2026-10-08): default-off native
 Events, Metrics/targets, strategy links, Process analysis/findings, Decisions and
 outcome reviews, Forecasts, Scenarios, Experiments, causal analyses, adaptive
 project/initiative planning and Management Reviews are implemented. Separate
@@ -13,6 +13,8 @@ privacy/erasure evidence. Connector assignment copies now use the original
 company/run owner and Source fence; configuration previews publish no private
 assignment files. The fixed public conformance instruction also uses its
 existing run owner; every original server runtime asset publisher is run-owned.
+Instance maintenance also reclaims unreferenced legacy global cache copies while
+idle, preserving all persisted tenant references and the owned run namespace.
 All twelve original analytical SDK paths have actual
 native dispatcher qualification. Native metrics cover the explicit 10,000-Source
 maximum, Forecasts cover 4,000 underlying Task Sources, and Experiments cover
@@ -123,7 +125,7 @@ a verified Task outcome, business impact or authority to execute.
 | Planning/initiative | Current complete selected project populations, actual Goals/accounting, signed proposal, independent review and original canonical application | `aw-v8-evidence/native-initiative-review-ui-checkpoint.json` |
 | Reviews/recurrence | Native Routine capture produces drafts; separate publication and explicit original Task handoff | `aw-v8-evidence/native-management-review-task-checkpoint.json` |
 | SDK Sources | Actual running native agent × current Human; all 12 analytical tool paths; complete Context retention before return; 10000-Source metric envelope; exact advisory Source pins | `aw-v8-evidence/native-sdk-remaining-owners-checkpoint.json`, `aw-v8-evidence/native-sdk-process-source-checkpoint.json`, `aw-v8-evidence/native-sdk-maximum-source-checkpoint.json` |
-| Runtime/Learning copies | Original Memory C7, Source fences, run-owned runtime/connector files and original reviewed Learning owners | `aw-v8-evidence/native-remaining-learning-owners-checkpoint.json`, `aw-v8-evidence/native-connector-owned-assets-checkpoint.json` |
+| Runtime/Learning copies | Original Memory C7, Source fences, run-owned runtime/connector files and original reviewed Learning owners | `aw-v8-evidence/native-remaining-learning-owners-checkpoint.json`, `aw-v8-evidence/native-connector-owned-assets-checkpoint.json`, `aw-v8-evidence/native-legacy-runtime-assets-checkpoint.json` |
 
 These receipts describe local source-specific development checks. They do not
 supply release-bound AssuranceEvidence or clear R0/H6/H7 acceptance. All 36

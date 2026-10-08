@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs/promises";
+import type { Dir } from "node:fs";
 import { and, eq, sql } from "drizzle-orm";
 import { heartbeatRuns, memoryJobs, type Db } from "@paperclipai/db";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
@@ -48,24 +49,77 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
     // ponytail: scan original persisted profiles for each of at most 256 legacy digests;
     // use a native expression index if historical profile volume needs it.
     for (const digest of new Set(legacyDigests)) {
-      const root = nativeRuntimeAssetsRoot(), bundle = path.join(root, "bundles", digest), manifest = path.join(root, "manifests", `${digest}.json`);
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'native-runtime-asset:'+digest},0))`);
-      const [retained] = await tx.execute<{ present: boolean }>(sql`select exists(select 1 from heartbeat_runs h where
-        (h.runner_profile_json #> '{nativeExecutionInput,runtimeContext,instructions,bundle}') @> ${JSON.stringify({ digest, rootPath: bundle })}::jsonb
-        or exists(select 1 from jsonb_array_elements(case when jsonb_typeof(h.runner_profile_json #> '{nativeExecutionInput,runtimeContext,skills}')='array'
-          then h.runner_profile_json #> '{nativeExecutionInput,runtimeContext,skills}' else '[]'::jsonb end) s
-          where (s->'bundle') @> ${JSON.stringify({ digest, rootPath: bundle })}::jsonb)) as present`);
-      if (retained?.present) continue;
-      try {
-        await assertRuntimeStorageDirectories(bundle, storageRoot);
-        await removeRuntimeStorageTree(bundle);
-      } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-      try {
-        await assertRuntimeStorageDirectories(path.dirname(manifest), storageRoot);
-        const stat = await fs.lstat(manifest);
-        if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Unsafe native runtime manifest erasure path");
-        await fs.unlink(manifest);
-      } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+      await eraseUnreferencedLegacyAsset(tx, digest);
     }
+  });
+}
+
+async function eraseUnreferencedLegacyAsset(tx: Db, digest: string) {
+  const storageRoot = resolvePaperclipInstanceRoot();
+  const root = nativeRuntimeAssetsRoot(), bundle = path.join(root, "bundles", digest), manifest = path.join(root, "manifests", `${digest}.json`);
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'native-runtime-asset:'+digest},0))`);
+  const [retained] = await tx.execute<{ present: boolean }>(sql`select exists(select 1 from heartbeat_runs h where
+    (h.runner_profile_json #> '{nativeExecutionInput,runtimeContext,instructions,bundle}') @> ${JSON.stringify({ digest, rootPath: bundle })}::jsonb
+    or exists(select 1 from jsonb_array_elements(case when jsonb_typeof(h.runner_profile_json #> '{nativeExecutionInput,runtimeContext,skills}')='array'
+      then h.runner_profile_json #> '{nativeExecutionInput,runtimeContext,skills}' else '[]'::jsonb end) s
+      where (s->'bundle') @> ${JSON.stringify({ digest, rootPath: bundle })}::jsonb)) as present`);
+  if (retained?.present) return false;
+  let removed = false;
+  try {
+    await assertRuntimeStorageDirectories(bundle, storageRoot);
+    await removeRuntimeStorageTree(bundle); removed = true;
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  try {
+    await assertRuntimeStorageDirectories(path.dirname(manifest), storageRoot);
+    const stat = await fs.lstat(manifest);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Unsafe native runtime manifest erasure path");
+    await fs.unlink(manifest); removed = true;
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  return removed;
+}
+
+/** Instance-owned cache maintenance; no caller paths, payload reads or tenant authority. */
+export async function reconcileLegacyNativeRuntimeAssets(db: Db) {
+  const result = { removed: 0, deferredActiveRuns: false, deferredConcurrentSweep: false };
+  const deadline = Date.now() + 30_000;
+  return db.transaction(async rawTx => {
+    const tx = rawTx as unknown as Db;
+    await tx.execute(sql`set local statement_timeout='8s'`);
+    const [lock] = await tx.execute<{ acquired: boolean }>(sql`select pg_try_advisory_xact_lock(hashtextextended('native-runtime-asset-reconciliation',0)) as acquired`);
+    if (!lock?.acquired) return { ...result, deferredConcurrentSweep: true };
+    const [active] = await tx.execute<{ present: boolean }>(sql`select exists(select 1 from heartbeat_runs where status in ('queued','running','scheduled_retry')) as present`);
+    // ponytail: legacy publication has no owner. Wait for an idle instance;
+    // continuous activity requires an operator maintenance window on a single-version fleet.
+    if (active?.present) return { ...result, deferredActiveRuns: true };
+    const root = nativeRuntimeAssetsRoot(), storageRoot = resolvePaperclipInstanceRoot();
+    for (const namespace of ["bundles", "manifests", ".staging"] as const) {
+      const directory = path.join(root, namespace);
+      let entries: Dir;
+      try {
+        await assertRuntimeStorageDirectories(directory, storageRoot);
+        entries = await fs.opendir(directory);
+      } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
+      // Streaming directory iteration bounds memory. Retained entries do not consume
+      // the removal budget; the next tick can reach remaining orphans without a cursor.
+      for await (const entry of entries) {
+        if (Date.now() >= deadline) throw new Error("Legacy runtime asset reconciliation exceeded its bound");
+        if (entry.isSymbolicLink()) throw new Error("Unsafe legacy runtime asset reconciliation path");
+        if (namespace === ".staging") {
+          if (!uuidPattern.test(entry.name) || !entry.isDirectory()) throw new Error("Unsafe legacy runtime staging entry");
+          const candidate = path.join(directory, entry.name);
+          try {
+            await assertRuntimeStorageDirectories(candidate, storageRoot);
+            await removeRuntimeStorageTree(candidate); result.removed++;
+          } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+        } else {
+          const digest = namespace === "manifests" ? entry.name.replace(/\.json$/, "") : entry.name;
+          if (!digestPattern.test(digest) || (namespace === "manifests" ? entry.name !== `${digest}.json` || !entry.isFile() : !entry.isDirectory()))
+            throw new Error("Unsafe legacy runtime asset entry");
+          if (await eraseUnreferencedLegacyAsset(tx, digest)) result.removed++;
+        }
+        if (result.removed >= 16) return result;
+      }
+    }
+    return result;
   });
 }
