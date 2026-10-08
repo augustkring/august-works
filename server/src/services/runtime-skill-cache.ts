@@ -170,6 +170,8 @@ async function removeTree(directory: string): Promise<void> {
   await fs.rm(directory, { recursive: true, force: true });
 }
 
+export { assertDirectories as assertRuntimeStorageDirectories, removeTree as removeRuntimeStorageTree };
+
 export async function resolveRuntimeSkillCache(
   spec: CacheSpec, read: (relativePath: string) => Promise<string>, materialize = true,
   stillInstalled: () => Promise<boolean> = async () => true,

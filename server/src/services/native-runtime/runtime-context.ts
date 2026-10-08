@@ -1,3 +1,9 @@
+import { sql } from "drizzle-orm";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
+import { assertRuntimeStorageDirectories } from "../runtime-skill-cache.js";
+import { nativeRuntimeAssetsRoot, type NativeRuntimeAssetOwner } from "./runtime-asset-retention.js";
 import { githubBotConnectionIdsForRun } from "../chat-github-tools.js";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
@@ -92,7 +98,7 @@ async function verifyMaterializedAsset(
   return actual;
 }
 
-export async function materializeAsset(files: AssetFile[]): Promise<NativeRuntimeAssetReference> {
+export async function materializeAsset(files: AssetFile[], owner?: NativeRuntimeAssetOwner): Promise<NativeRuntimeAssetReference> {
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
   const manifestFiles = sorted.map((file) => ({ path: safeRelativePath(file.path, "runtime context path"), sha256: sha256(file.content), mode: file.mode & 0o555, size: file.content.byteLength }));
   const totalBytes = manifestFiles.reduce((sum, file) => sum + file.size, 0);
@@ -100,12 +106,15 @@ export async function materializeAsset(files: AssetFile[]): Promise<NativeRuntim
   const assetDigest = sha256(JSON.stringify(manifestFiles));
   const manifestText = `${JSON.stringify({ schema: "paperclip.runtime-asset-manifest.v1", digest: assetDigest, fileCount: manifestFiles.length, totalBytes, files: manifestFiles })}\n`;
   const manifestDigest = sha256(manifestText);
-  const assetsRoot = path.join(resolvePaperclipInstanceRoot(), "runtime-context-assets");
+  const assetsRoot = nativeRuntimeAssetsRoot(owner);
+  await assertRuntimeStorageDirectories(path.join(assetsRoot, "bundles"), resolvePaperclipInstanceRoot(), true);
+  await assertRuntimeStorageDirectories(path.join(assetsRoot, "manifests"), resolvePaperclipInstanceRoot(), true);
+  await assertRuntimeStorageDirectories(path.join(assetsRoot, ".staging"), resolvePaperclipInstanceRoot(), true);
   const rootPath = path.join(assetsRoot, "bundles", assetDigest);
   const manifestPath = path.join(assetsRoot, "manifests", `${assetDigest}.json`);
   const existing = await fs.readFile(manifestPath, "utf8").catch(() => null);
   if (existing !== null) {
-    if (sha256(existing) !== manifestDigest || !(await fs.stat(rootPath).catch(() => null))?.isDirectory()) throw new Error(`runtime context asset verification failed: ${assetDigest}`);
+    if (sha256(existing) !== manifestDigest || !(await fs.lstat(rootPath).catch(() => null))?.isDirectory()) throw new Error(`runtime context asset verification failed: ${assetDigest}`);
     await verifyMaterializedAsset(rootPath, manifestFiles);
     return { schema: NATIVE_RUNTIME_ASSET_SCHEMA, digest: assetDigest, manifestDigest, rootPath, fileCount: manifestFiles.length, totalBytes };
   }
@@ -155,6 +164,7 @@ export async function materializeAsset(files: AssetFile[]): Promise<NativeRuntim
 export async function readNativeRuntimeAssetText(
   reference: NativeRuntimeAssetReference,
   maximumBytes: number,
+  owner?: NativeRuntimeAssetOwner,
 ) {
   if (
     !Number.isSafeInteger(maximumBytes) ||
@@ -164,10 +174,12 @@ export async function readNativeRuntimeAssetText(
     reference.fileCount > 256
   )
     throw new Error("native_text_asset_envelope_exceeded");
-  const assetsRoot = path.join(
-    resolvePaperclipInstanceRoot(),
-    "runtime-context-assets",
-  );
+  if (!/^[a-f0-9]{64}$/.test(reference.digest) || !/^[a-f0-9]{64}$/.test(reference.manifestDigest)) throw new Error("native_text_asset_identity_changed");
+  const ownedRoot = nativeRuntimeAssetsRoot(owner);
+  const legacyRoot = nativeRuntimeAssetsRoot();
+  const assetsRoot = path.resolve(reference.rootPath) === path.join(legacyRoot, "bundles", reference.digest) ? legacyRoot : ownedRoot;
+  await assertRuntimeStorageDirectories(path.join(assetsRoot, "bundles"), resolvePaperclipInstanceRoot());
+  await assertRuntimeStorageDirectories(path.join(assetsRoot, "manifests"), resolvePaperclipInstanceRoot());
   const rootPath = path.join(assetsRoot, "bundles", reference.digest);
   const manifestPath = path.join(
     assetsRoot,
@@ -238,15 +250,15 @@ export async function readNativeRuntimeAssetText(
   }));
 }
 
-async function materializeInstructionBundle(agent: RuntimeAgent) {
+async function materializeInstructionBundle(agent: RuntimeAgent, owner: NativeRuntimeAssetOwner) {
   const exported = await agentInstructionsService().exportFiles(agent, { rejectSymlinks: true });
   const entryPath = safeRelativePath(exported.entryFile, "instruction entry path");
   if (!(entryPath in exported.files)) throw new Error(`configured instruction entry is missing: ${entryPath}`);
   const files = Object.entries(exported.files).map(([relativePath, content]) => ({ path: safeRelativePath(relativePath, "instruction path"), content: Buffer.from(content, "utf8"), mode: 0o444 }));
-  return { entryPath, bundle: await materializeAsset(files) };
+  return { entryPath, bundle: await materializeAsset(files, owner) };
 }
 
-async function materializeSelectedSkills(runtimeConfig: Record<string, unknown>, entries: PaperclipSkillEntry[], omitLegacy: boolean) {
+async function materializeSelectedSkills(runtimeConfig: Record<string, unknown>, entries: PaperclipSkillEntry[], omitLegacy: boolean, owner: NativeRuntimeAssetOwner) {
   const desiredKeys = resolvePaperclipDesiredSkillNames(runtimeConfig, entries).filter(
     (key) => !omitLegacy || key !== PAPERCLIP_OPERATIONAL_SKILL_KEY,
   );
@@ -255,7 +267,7 @@ async function materializeSelectedSkills(runtimeConfig: Record<string, unknown>,
     const entry = byKey.get(key);
     if (!entry) throw new Error(`assigned runtime skill is missing from the company library: ${key}`);
     if (entry.sourceStatus === "missing") throw new Error(entry.missingDetail ?? `assigned runtime skill source is missing: ${key}`);
-    return { key: entry.key, runtimeName: safeRelativePath(entry.runtimeName, `runtime name for ${key}`), versionId: entry.versionId ?? entry.currentVersionId ?? null, bundle: await materializeAsset(await collectDirectoryFiles(entry.source)) };
+    return { key: entry.key, runtimeName: safeRelativePath(entry.runtimeName, `runtime name for ${key}`), versionId: entry.versionId ?? entry.currentVersionId ?? null, bundle: await materializeAsset(await collectDirectoryFiles(entry.source), owner) };
   }));
 }
 
@@ -317,10 +329,26 @@ export async function resolveNativeRuntimeMcpSnapshot(input: { db: Db; agent: Pi
 
 export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeAgent; runId: string; runtimeConfig: Record<string, unknown>; runtimeSkillEntries: PaperclipSkillEntry[] }): Promise<NativeRuntimeContextSnapshot> {
   const [instructions, skills, mcp] = await Promise.all([
-    materializeInstructionBundle(input.agent),
-    materializeSelectedSkills(input.runtimeConfig, input.runtimeSkillEntries, input.agent.adapterType === "paperclip_runner"),
+    materializeInstructionBundle(input.agent, { companyId: input.agent.companyId, runId: input.runId }),
+    materializeSelectedSkills(input.runtimeConfig, input.runtimeSkillEntries, input.agent.adapterType === "paperclip_runner", { companyId: input.agent.companyId, runId: input.runId }),
     resolveNativeRuntimeMcpSnapshot({ db: input.db, agent: input.agent, runId: input.runId }),
   ]);
   const snapshot = { prompt: { revision: PAPERCLIP_EXECUTION_PROMPT_REVISION, text: PAPERCLIP_EXECUTION_PROMPT, digest: nativeRuntimePromptDigest() }, instructions, skills, mcp };
   return parseNativeRuntimeContext({ ...snapshot, aggregateDigest: canonicalNativeRuntimeContextDigest(snapshot) });
+}
+
+/** Production publication uses the native run owner and keeps C7 excluded until all copies exist. */
+export async function buildRetainedNativeRuntimeContext(input: Parameters<typeof buildNativeRuntimeContext>[0]) {
+  return input.db.transaction(async rawTx => {
+    const db = rawTx as unknown as Db;
+    await lockAnalyticalCompany(db, input.agent.companyId); await lockMemoryPrivacy(db, input.agent.companyId);
+    const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.agent.companyId),
+      eq(heartbeatRuns.agentId, input.agent.id), eq(heartbeatRuns.id, input.runId)));
+    const [source] = await db.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${input.agent.companyId}::uuid,${input.runId}::uuid,NULL) as erased`);
+    if (!run || run.status !== "running" || source?.erased) throw new Error("native_runtime_asset_source_unavailable");
+    await assertNativeAnalyticalRunPayloadAccess(db, input.agent.companyId, input.runId);
+    const context = await buildNativeRuntimeContext({ ...input, db });
+    await assertNativeAnalyticalRunPayloadAccess(db, input.agent.companyId, input.runId);
+    return context;
+  });
 }
