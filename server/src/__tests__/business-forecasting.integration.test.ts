@@ -1,3 +1,4 @@
+import { nativeManagementSdkFixture } from "./helpers/native-management-sdk-fixture.js";
 import { disableV8Rollout } from "./helpers/v8-rollout.js";
 import express from "express";
 import request from "supertest";
@@ -117,6 +118,19 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
   expect(JSON.stringify(run)).not.toContain("Fixture source prose");expect(await db.select().from(forecastPublications).where(eq(forecastPublications.specId,d.spec.id))).toHaveLength(1);
   expect((await db.select().from(issues).where(eq(issues.id,d.h.sourceIds[0])))[0]).toMatchObject({status:"done",plannedStartAt:null,plannedEndAt:null});
  },60000);
+ it.runIf(!!process.env.PAPERCLIP_STATSFORECAST_PYTHON)("preserves exact model-specified forecast intervals through the actual advisory SDK without asserting calibration",async()=>{
+  const sdk=await nativeManagementSdkFixture(db,companyId),d=await statisticalDraft(),test=await backtest(d);
+  const spec=await service().publish(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,backtestId:test.id,rationale:"Separate Human publication of the exact original statistical profile and backtest"});
+  const run=await service().run(companyId,actor,d.spec.id,{expectedRevision:spec.revision,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()}),point=run.result.points[0];
+  expect(point.interval).not.toBeNull();
+  const source={type:"forecast_run",id:run.id,specId:d.spec.id,versionId:d.version.id,pointIndex:0};
+  const output=await sdk.read("propose_management_action",{action:"prepare_decision",rationale:"Review this exact conditional forecast and its model-specified uncertainty",sources:[source]});
+  expect(output).toMatchObject({result:{humanReviewRequired:true,executionAuthority:"advisory_only",evidence:[{facts:{value:point.value,intervalLower:point.interval!.lower,intervalUpper:point.interval!.upper,intervalMethod:"statsforecast_model",intervalLevel:0.95,intervalLower80:point.interval!.level80.lower,intervalUpper80:point.interval!.level80.upper,calibration:"not_assessed"}}]}});
+  expect(await db.select().from(decisions).where(eq(decisions.companyId,companyId))).toHaveLength(0);
+  await sdk.retainCopy(output);await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+  await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[d.h.sourceIds[0]]);});
+  expect(await sdk.retained()).toBe(false);expect(await db.select().from(issues).where(eq(issues.id,d.h.sourceIds[0]))).toHaveLength(1);
+ },120000);
  it.runIf(!!process.env.PAPERCLIP_STATSFORECAST_PYTHON)("does not publish a statistical tie or accept an invented profile pin",async()=>{
   const d=await statisticalDraft(Array(30).fill(10) as number[]),test=await backtest(d);
   expect(test.result).toMatchObject({status:"not_qualified",reasons:["declared_naive_improvement_not_met"],points:[]});
