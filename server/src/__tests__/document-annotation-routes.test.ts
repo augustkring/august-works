@@ -45,6 +45,7 @@ const mockIssueThreadInteractionService = vi.hoisted(() => ({
   expireStaleRequestConfirmationsForIssueDocument: vi.fn(async () => []),
 }));
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
 
 const documentPayload = {
   id: "document-1",
@@ -113,6 +114,11 @@ const annotationComment = {
 };
 
 function registerModuleMocks() {
+  // The annotation route stub has no PostgreSQL Source graph; control and
+  // deny-test its current Source admission independently of annotation data.
+  vi.doMock("../services/analytical-context-authority.js", () => ({
+    assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+  }));
   vi.doMock("../services/index.js", () => ({
     accessService: () => ({
       canUser: vi.fn(),
@@ -193,6 +199,7 @@ describe("document annotation routes", () => {
     vi.doUnmock("../middleware/index.js");
     registerModuleMocks();
     vi.clearAllMocks();
+    mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockIssueService.getById.mockResolvedValue({
       id: issueId,
       companyId,
@@ -251,6 +258,17 @@ describe("document annotation routes", () => {
       status: "open",
       includeComments: true,
     });
+  });
+
+  it("withholds document and annotation bodies when current analytical Source access is denied", async () => {
+    const { HttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
+    const response = await request(await createApp("agent"))
+      .get(`/api/issues/${issueId}/documents/plan?includeAnnotationComments=true`);
+    expect(response.status).toBe(403);
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ type: "agent", companyId }), { issueId });
+    expect(mockDocumentService.getIssueDocumentByKey).not.toHaveBeenCalled();
+    expect(mockAnnotationService.listThreadsForIssueDocument).not.toHaveBeenCalled();
   });
 
   it("updates issue documents without waking the assignee through the issue-comment path", async () => {
