@@ -1,4 +1,4 @@
-import { instanceExperimentalSettingsSchema, type ManagementReviewDefinition, type ManagementReviewView, type CapturedManagementSource, type Goal } from "@paperclipai/shared";
+import { instanceExperimentalSettingsSchema, routineManagementReviewTemplateSchema, type Routine, type ManagementReviewDefinition, type ManagementReviewView, type CapturedManagementSource, type Goal } from "@paperclipai/shared";
 import { causalFixture } from "./causal-claim-fixtures";
 /** Cached synthetic presentation only. These hashes and facts are not owner
  * receipts, collected management evidence or a business-impact qualification. */
@@ -12,4 +12,12 @@ export function managementFixture(stale = false, published = false) {
   const controls = { items: [{ id, status: review.status, createdAt: at, expiresAt: expiry }], nextCursor: null, coverage: "bounded_native_review_metadata" as const };
   const flags = instanceExperimentalSettingsSchema.parse({ enableFoundationV1: true, analytical_lineage_v8: true, business_metrics_v8: true, management_reviews_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true });
   return { companyId: f.companyId, userId: f.userId, id, goal, policy, definition, review, controls, flags };
+}
+
+/** Synthetic Routine metadata for configuration presentation, not an executed cadence. */
+export function routineReviewFixture() {
+  const f = managementFixture(), metricId = "00000000-0000-4000-8000-000000002320", versionId = "00000000-0000-4000-8000-000000002321", metricSource = { kind: "canonical" as const, reference: { type: "metric" as const, id: metricId, versionId } };
+  const template = routineManagementReviewTemplateSchema.parse({ name: f.definition.name, reviewType: "weekly_leadership", purpose: f.definition.purpose, sensitivity: f.definition.sensitivity, retentionDays: f.definition.retentionDays, governanceObligationRefs: f.definition.governanceObligationRefs, periodDays: 7, sources: [{ key: "source_1", selector: { kind: "metric_query", metricId } }], agenda: f.definition.agenda.map(({ dueAt: _due, ...item }) => ({ ...item, dueAfterDays: 1 })) });
+  const routine: Routine = { id: "00000000-0000-4000-8000-000000002322", companyId: f.companyId, projectId: null, goalId: null, parentIssueId: null, title: "Weekly cited leadership review", description: null, assigneeAgentId: null, executionTargetKind: "workflow", executionTargetRef: "00000000-0000-4000-8000-000000002323", workflowExecutionPrincipal: { type: "user", userId: f.userId }, priority: "medium", status: "paused", concurrencyPolicy: "always_enqueue", catchUpPolicy: "skip_missed", activityGatePolicy: "always", activityGateScope: "company", variables: [], latestRevisionId: "00000000-0000-4000-8000-000000002324", latestRevisionNumber: 1, createdByAgentId: null, createdByUserId: f.userId, responsibleUserId: f.userId, updatedByAgentId: null, updatedByUserId: f.userId, lastTriggeredAt: null, lastEnqueuedAt: null, createdAt: new Date(f.review.createdAt), updatedAt: new Date(f.review.createdAt) };
+  return { ...f, metricId, versionId, metricSource, template, routine };
 }

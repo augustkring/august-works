@@ -44,7 +44,7 @@ export const routinesApi = {
   create: (companyId: string, data: Record<string, unknown>) =>
     api.post<Routine>(`/companies/${companyId}/routines`, data),
   get: (id: string) => api.get<RoutineDetail>(`/routines/${id}`),
-  update: (id: string, data: Record<string, unknown>) => api.patch<Routine>(`/routines/${id}`, data),
+  update: (id: string, data: Record<string, unknown>, expectedUserId?: string) => api.patch<Routine>(`/routines/${id}${expectedUserId ? `?expectedUserId=${encodeURIComponent(expectedUserId)}` : ""}`, data),
   listRevisions: (id: string) => api.get<RoutineRevision[]>(`/routines/${id}/revisions`),
   restoreRevision: (
     id: string,

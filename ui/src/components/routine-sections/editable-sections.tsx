@@ -29,6 +29,7 @@ import { EmptyState } from "../EmptyState";
 import { InlineEntitySelector } from "../InlineEntitySelector";
 import { DocumentAnnotationsCountChip, IssueDocumentAnnotations } from "../IssueDocumentAnnotations";
 import { MarkdownEditor } from "../MarkdownEditor";
+import { RoutineManagementReviewEditor } from "../RoutineManagementReviewEditor";
 import { RoutineVariablesEditor, RoutineVariablesHint } from "../RoutineVariablesEditor";
 import { EnvironmentVariablesEditor } from "../environment-variables-editor";
 import { useRoutineDetail } from "./context";
@@ -138,6 +139,7 @@ export function OverviewSection({
 
   return (
     <div className="space-y-6">
+      <RoutineManagementReviewEditor routine={routine} otherChangesPending={ctx.isEditDirty || saveRoutine.isPending} />
       {/* Execution target + project row */}
       <div className="overflow-x-auto overscroll-x-contain">
         <div className="inline-flex min-w-full flex-wrap items-center gap-2 text-sm text-muted-foreground sm:min-w-max sm:flex-nowrap">

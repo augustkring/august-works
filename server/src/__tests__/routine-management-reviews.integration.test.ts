@@ -1,3 +1,7 @@
+import express from "express";
+import request from "supertest";
+import { routineRoutes } from "../routes/routines.js";
+import { errorHandler } from "../middleware/index.js";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -42,6 +46,41 @@ describe.skipIf(!support.supported)("Native Routine fresh management review cade
     const service = routineService(db), routine = await service.create(companyId, createRoutineSchema.parse({ title: "Weekly review draft", executionTarget: { kind: "workflow", workflowId: created.id }, concurrencyPolicy: "always_enqueue", managementReviewTemplate: template }), { userId });
     return { service, routine, metric, task: task!, template };
   }
+  function app() { const api = express(); api.use(express.json()); api.use((req, _res, next) => { req.actor = actor(); next(); }); api.use("/api", routineRoutes(db)); api.use(errorHandler); return api; }
+  it("binds the public template update to the current account and native revision without invoking or publishing", async () => {
+    const f = await fixture(), endpoint = `/api/routines/${f.routine.id}`, patch = { baseRevisionId: f.routine.latestRevisionId, managementReviewTemplate: { ...f.template, periodDays: 30, reviewType: "monthly_business" } };
+    await request(app()).patch(`${endpoint}?expectedUserId=another-account`).send(patch).expect(409);
+    expect((await f.service.get(f.routine.id))!.managementReviewTemplate).toEqual(f.template);
+    await request(app()).patch(`${endpoint}?expectedUserId=${userId}`).send({ ...patch, managementReviewTemplate: { ...patch.managementReviewTemplate, copiedObservation: { value: 0.75 } } }).expect(400);
+    const saved = (await request(app()).patch(`${endpoint}?expectedUserId=${userId}`).send(patch).expect(200)).body;
+    expect(saved.managementReviewTemplate).toMatchObject({ periodDays: 30, reviewType: "monthly_business" });
+    expect(saved.latestRevisionId).not.toBe(f.routine.latestRevisionId);
+    await request(app()).patch(`${endpoint}?expectedUserId=${userId}`).send(patch).expect(409);
+    expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.companyId, companyId))).toHaveLength(0);
+    expect(await db.select().from(routineRuns).where(eq(routineRuns.companyId, companyId))).toHaveLength(0);
+  });
+  it("restores the original template through the native revision owner and admits the restoring Human afresh", async () => {
+    const f = await fixture();
+    const removed = await f.service.update(f.routine.id, { baseRevisionId: f.routine.latestRevisionId, managementReviewTemplate: null }, { userId });
+    expect(removed!.managementReviewTemplate).toBeNull();
+    const restored = await f.service.restoreRevision(f.routine.id, f.routine.latestRevisionId!, { userId });
+    expect(restored.routine.managementReviewTemplate).toEqual(f.template);
+    expect(restored.routine.latestRevisionId).not.toBe(f.routine.latestRevisionId);
+    const run = await f.service.runRoutine(f.routine.id, { source: "api", idempotencyKey: "restored-template" });
+    expect(run.routineRevisionId).toBe(restored.routine.latestRevisionId); expect(run.linkedManagementReviewId).toBeTruthy();
+  });
+  it("resolves a newly published metric version rather than retaining the template's earlier observation", async () => {
+    const f = await fixture(), owner = businessMetricService(db);
+    const before = await f.service.runRoutine(f.routine.id, { source: "api", idempotencyKey: "original-current-version" });
+    const current = await owner.detail(companyId, actor(), f.metric.metric.id);
+    const changed = await owner.createVersion(companyId, actor(), f.metric.metric.id, { expectedRevision: current.metric.revision, definition: { ...f.metric.version.definition, description: "Human republishes the current native definition for a subsequent review" } });
+    await owner.publish(companyId, actor(), f.metric.metric.id, { expectedRevision: changed.revision, versionId: changed.id });
+    const after = await f.service.runRoutine(f.routine.id, { source: "api", idempotencyKey: "new-current-version" });
+    const first = await managementReviewService(db).detail(companyId, actor(), before.linkedManagementReviewId!), second = await managementReviewService(db).detail(companyId, actor(), after.linkedManagementReviewId!);
+    expect(first.sources[0]!.source).toMatchObject({ kind: "analytical", reference: { type: "metric_observation", metricVersionId: f.metric.version.id } });
+    expect(second.sources[0]!.source).toMatchObject({ kind: "analytical", reference: { type: "metric_observation", metricVersionId: changed.id } });
+    expect(second.id).not.toBe(first.id); expect(second.publishedBy).toBeNull();
+  });
   it("refuses an Agent-configured Human review template under the original server-assigned delegation", async () => {
     const f = await fixture(), [agent] = await db.insert(agents).values({ companyId, name: "Software Routine configuration Agent", status: "idle", adapterType: "paperclip_runner" }).returning();
     await db.insert(principalPermissionGrants).values({ companyId, principalType: "agent", principalId: agent!.id, permissionKey: "workflows:run" });

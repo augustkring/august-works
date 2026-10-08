@@ -1,0 +1,113 @@
+{
+  "checkpoint": "Current Human configuration of review templates through original Routine revision and management composer",
+  "parentCommit": "2d634a614d195d1a36035f6b4371c12ed4a74d5b",
+  "recordedAt": "2026-10-08T06:28:56.915514+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "498ff5a35b3e58f4be86dfb290d6ff2d19eb9647a4c1d2869087104507a89905"
+    },
+    {
+      "path": "server/src/__tests__/routine-management-reviews.integration.test.ts",
+      "sha256": "8305e01855f8df3e5f27ea193d88d18921fe06702b3aa727b9743dcadb633834"
+    },
+    {
+      "path": "server/src/routes/routines.ts",
+      "sha256": "39f9174f09d7d209344edbc6251f10e8a3fe3bddf8646023bc8469318fbe26d6"
+    },
+    {
+      "path": "tests/storybook-visual/management-reviews.spec.ts",
+      "sha256": "fe4e0d01bece9a2318fe478e11d568b1af7e790af5dba8c242b31b52cc859769"
+    },
+    {
+      "path": "ui/src/api/routines.ts",
+      "sha256": "b01e84a4483369bebfa1cd3cf7622a951e814b9784b9d898c9008788c6e9bb71"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewDefinitionForm.tsx",
+      "sha256": "13693050bc3f4a27cffd46b2f9b660bd09b6e34cbbbc599f93d26ad5e7ff16cd"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewSourcePicker.tsx",
+      "sha256": "ef53ae522ee5cfa462e90756de03cb6005c4c81cafad0639041770fec234a339"
+    },
+    {
+      "path": "ui/src/components/RoutineManagementReviewEditor.test.tsx",
+      "sha256": "3e3fb27e608f829664ce5acbe3374e9d4520f30dc0f86c3b981f0c7e63b776c6"
+    },
+    {
+      "path": "ui/src/components/RoutineManagementReviewEditor.tsx",
+      "sha256": "3d1f899d1f7f3bdbd09c3428098ed242d216a795e8382fc004761d7a0ad79ef0"
+    },
+    {
+      "path": "ui/src/components/routine-sections/editable-sections.tsx",
+      "sha256": "c51dd392eae73a4f73a0245f9a11e12d91561d2332b0b735d756eefb003c44c9"
+    },
+    {
+      "path": "ui/storybook/stories/management-review-fixtures.ts",
+      "sha256": "6089d88e9b7b2978d94050a2c4cae720a5dc5134bb33c12fc2463275544a8dec"
+    },
+    {
+      "path": "ui/storybook/stories/management-reviews.stories.tsx",
+      "sha256": "2a6be3807e1c7f1f568ef1858f77c1c4196a1257996b32e1378c6669ecde5c20"
+    }
+  ],
+  "validation": {
+    "nativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-template-final-native-tests.log",
+      "tests": 125,
+      "files": 5,
+      "skipped": 0
+    },
+    "operatorUI": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-template-final-ui-tests.log",
+      "tests": 41,
+      "files": 4,
+      "skipped": 0
+    },
+    "browserPresentation": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-template-browser.log",
+      "tests": 44,
+      "files": 1,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-template-server-types.log"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-template-final-ui-types.log"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-template-token-gates.log"
+    },
+    "storybookBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-routine-template-final-storybook.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "51c41c08660288924d1630497296d876d3b05a66",
+      "log": "/var/tmp/aw-v8-native-build-routine-cadence.log"
+    }
+  },
+  "qualified": [
+    "Current actual native public Routine update account binding and CAS; configuration creates no review or run",
+    "Original revision restoration re-admits the actual restoring Human and retains the exact template",
+    "Actual next native cadence uses a newly published metric version",
+    "Human-only account-bound current-source template form, original approved purpose and explicit relative windows/deadlines",
+    "Source menu denial, access withdrawal, rejected write and account switch clear private configuration forms/caches",
+    "Original review composer retains ordinary ad hoc capture behavior; original Routine UI regression remains qualified"
+  ],
+  "limits": [
+    "Native Human identities, grants, due-time and deterministic Workflow prerequisites are software fixtures, not performed Human/provider trials",
+    "Browser evidence is synthetic cached presentation with all API requests aborted, not authentication or business impact",
+    "Cadence supports fresh native metric and canonical selectors; other analytical refresh families are not qualified",
+    "No maximum-volume, hard-latency, hosted populated backfill, pilot/GA or whole-brief acceptance"
+  ]
+}
