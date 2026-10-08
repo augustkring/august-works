@@ -1,3 +1,4 @@
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { isNull, and, desc, eq, inArray } from "drizzle-orm";
 import { automationArtifacts, workflowOptimizerEvaluations, workflowOptimizerObservations, workflowOptimizerSuggestions,
   workflowRunReviews, workflowRuns, workflowStepRuns, workflows, type Db } from "@paperclipai/db";
@@ -17,6 +18,7 @@ const POLICY: OptimizerDriftPolicy = { minimumExecutions: 1,
 /** Derives drift only from committed runtime observations and authoritative run reviews. */
 export async function evaluateLiveOptimizerDrift(db: Db, companyId: string, evaluationId: string) {
   const applied = await db.transaction(async (tx) => {
+    await lockAnalyticalCompany(tx as unknown as Db, companyId);
     await lockMemoryPrivacy(tx as unknown as Db, companyId);
     const [binding] = await tx.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId),
       eq(workflowOptimizerEvaluations.id, evaluationId))).for("update");

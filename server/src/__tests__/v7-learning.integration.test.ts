@@ -31,7 +31,7 @@ import {assertRuntimeStorageDirectories} from "../services/runtime-skill-cache.j
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflowOptimizerSuggestions, workflows, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, providerTraceRecords, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
+import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflowOptimizerObservations, workflowOptimizerSuggestions, workflows, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, providerTraceRecords, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
 import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, type LearningChange } from "@paperclipai/shared";
 import { learningService } from "../services/learning/learning-service.js";
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
@@ -336,6 +336,16 @@ const support = await getEmbeddedPostgresTestSupport();
 
     }
     await optimizer.startShadow(companyId, replay.evaluationId, principal);
+    // Real native Shadow execution, including Source-derived generated code.
+    // Candidate output is retained as a Source-bound observation, not used as
+    // a canonical outcome or evidence of a performed Human/provider pilot.
+    const shadowRun = await executor.startManualRun(companyId,created.id,{input:{value:8}},principal,null);
+    expect(shadowRun.run.status).toBe("succeeded");
+    expect(shadowRun.steps.find(step=>step.nodeId==="copy")).toMatchObject({outputJson:{value:8},automationArtifactVersionId:replay.artifactVersionId});
+    const [shadowObservation] = await db.select().from(workflowOptimizerObservations).where(and(eq(workflowOptimizerObservations.companyId,companyId),eq(workflowOptimizerObservations.workflowRunId,shadowRun.run.id)));
+    expect(shadowObservation).toMatchObject({evaluationId:replay.evaluationId,mode:"shadow",candidateUsed:false,passed:true});
+    expect(shadowObservation!.shadowResult).not.toBeNull();
+    await expect(db.update(workflowOptimizerObservations).set({workflowRunId:evaluation!.sourceRunIds[0]!}).where(eq(workflowOptimizerObservations.id,shadowObservation!.id))).rejects.toMatchObject({cause:{code:"23514"}});
     if(signal){
       // Current read identity is insufficient for an unqualified runtime copy.
       await expect(automationArtifactRuntimeService(db).inspectPinnedBinding(companyId,replay.artifactId,replay.artifactVersionId,principal,false)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
@@ -375,6 +385,10 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[0]!)))[0]!.deletedAt).toBeNull();
     }else await db.transaction(async tx => purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]));
     if(descendantVersionId)expect((await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id,descendantVersionId)))[0]).toMatchObject({sourceCode:"",inputSchema:{},outputSchema:{},testSpec:{},validationReport:null,securityReport:null});
+    const [clearedObservation]=await db.select().from(workflowOptimizerObservations).where(eq(workflowOptimizerObservations.id,shadowObservation!.id));
+    expect(clearedObservation).toMatchObject({shadowResult:null,inputShapeHash:shadowObservation!.inputShapeHash,observedAt:shadowObservation!.observedAt,passed:true});
+    await db.update(workflowOptimizerObservations).set({shadowResult:shadowObservation!.shadowResult}).where(eq(workflowOptimizerObservations.id,shadowObservation!.id));
+    expect((await db.select().from(workflowOptimizerObservations).where(eq(workflowOptimizerObservations.id,shadowObservation!.id)))[0]!.shadowResult).toBeNull();
     const [erased] = await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id, replay.artifactVersionId));
     expect(erased).toMatchObject({ sourceCode: "", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec: {}, validationReport: null, securityReport: null });
     expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id, replay.evaluationId)))[0]).toMatchObject({ status: "retired", compilerResult: null, replayEvaluation: null, shadowEvaluation: null });

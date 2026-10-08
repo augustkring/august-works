@@ -1,3 +1,10 @@
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { withNativeAnalyticalReader } from "../analytical-reader.js";
+import type { AuthorizationActor } from "../authorization.js";
+import type { AutomationArtifactMutationActor } from "../automation-artifacts/automation-artifact-service.js";
+import { withNativeArtifactWorkflowSource } from "../automation-artifacts/automation-artifact-workflow-source.js";
+import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
+import { HttpError, conflict } from "../../errors.js";
 import { performance } from "node:perf_hooks";
 import { isDeepStrictEqual } from "node:util";
 import { isNull, and, desc, eq, inArray } from "drizzle-orm";
@@ -13,8 +20,12 @@ import { evaluateLiveOptimizerDrift } from "./optimizer-live-drift.js";
 
 /** A pure replacement may change output only after persisted qualification and governed promotion. */
 export async function executeOptimizedWorkflowTransform(db: Db, run: typeof workflowRuns.$inferSelect,
-  nodeId: string, input: unknown, memoryRecordIds: string[], trusted: () => unknown | Promise<unknown>) {
-  const [binding] = await db.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, run.companyId),
+  nodeId: string, input: unknown, memoryRecordIds: string[], trusted: () => unknown | Promise<unknown>,
+  stepId: string, actor: AutomationArtifactMutationActor) {
+  const [binding] = await db.select({ id: workflowOptimizerEvaluations.id, artifactVersionId: workflowOptimizerEvaluations.artifactVersionId, artifactId: workflowOptimizerEvaluations.artifactId,
+    status: workflowOptimizerEvaluations.status, canaryTrafficPercent: workflowOptimizerEvaluations.canaryTrafficPercent,
+    knownInputShapes: workflowOptimizerEvaluations.knownInputShapes, memoryRecordIds: workflowOptimizerEvaluations.memoryRecordIds })
+    .from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, run.companyId),
     eq(workflowOptimizerEvaluations.workflowRevisionId, run.workflowRevisionId), eq(workflowOptimizerEvaluations.nodeId, nodeId),
     inArray(workflowOptimizerEvaluations.status, ["shadow", "canary", "active"]))).orderBy(desc(workflowOptimizerEvaluations.createdAt)).limit(1);
   if (!binding) return trusted();
@@ -26,6 +37,43 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
   let candidateUsed = mode === "active" || (mode === "canary" && selectOptimizerCanaryRoute({ companyId: run.companyId,
     promotionKey: binding.id, routingKey: run.id, candidateTrafficPercent: binding.canaryTrafficPercent }).route === "candidate");
   if (mode === "canary" && !candidateUsed) return trusted();
+  return db.transaction(async rawTx => {
+    const tx = rawTx as unknown as Db;
+    await lockAnalyticalCompany(tx, run.companyId); await lockMemoryPrivacy(tx, run.companyId);
+    const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId), eq(workflowRuns.id, run.id))).for("update");
+    if (owned?.status !== "running" || owned.executionOwnerId !== run.executionOwnerId || !owned.leaseExpiresAt || owned.leaseExpiresAt <= new Date() ||
+      !isDeepStrictEqual(owned.executionPrincipal, actor.principal) || (owned.executionAgentRunId ?? null) !== (actor.runId ?? null)) {
+      throw conflict("Current Optimizer Workflow execution owner changed", { code: "workflow_run_claim_lost" });
+    }
+    const reader = learningActorFromPrincipal(run.companyId, actor.principal, actor.runId);
+    const inspect = () => assertOptimizerEvaluationBinding(tx, run.companyId, binding.id, true, reader);
+    // Retain every admitted candidate copy, including shadow/fallback work.
+    // A rejected Source never reaches execution or creates a success receipt.
+    try {
+      if (reader?.type === "agent") await withNativeAnalyticalReader(tx, run.companyId, reader, inspect, "task");
+      else await inspect();
+    } catch (error) {
+      if (error instanceof HttpError && [403,404,409].includes(error.status)) {
+        const code=(error.details as {code?:string}|undefined)?.code;
+        if (code === "optimizer_evaluation_binding_changed" || code === "optimizer_evaluation_gates_changed") {
+          await tx.update(workflowOptimizerEvaluations).set({status:"degraded",updatedAt:new Date()}).where(and(
+            eq(workflowOptimizerEvaluations.companyId,run.companyId),eq(workflowOptimizerEvaluations.id,binding.id),
+            inArray(workflowOptimizerEvaluations.status,["shadow","canary","active"])));
+        }
+        return trusted();
+      }
+      throw error;
+    }
+    const [pinned] = await tx.update(workflowStepRuns).set({ automationArtifactVersionId: binding.artifactVersionId })
+      .where(and(eq(workflowStepRuns.companyId, run.companyId), eq(workflowStepRuns.workflowRunId, run.id),
+        eq(workflowStepRuns.id, stepId), eq(workflowStepRuns.nodeId, nodeId), eq(workflowStepRuns.status, "running"))).returning();
+    if (!pinned || pinned.status !== "running" || !owned.executionOwnerId) throw conflict("Current Optimizer Workflow step changed", { code: "workflow_step_claim_conflict" });
+    return withNativeArtifactWorkflowSource(tx, run.companyId, binding.artifactVersionId, actor,
+      { stepId: pinned.id, executionOwnerId: owned.executionOwnerId, optimizerEvaluationId: binding.id },
+      (scopedDb, reader) => executeBound(scopedDb, reader));
+  });
+
+  async function executeBound(db: Db, reader: AuthorizationActor | undefined) {
   let output: unknown;
   let passed = false;
   let fallback = false;
@@ -36,9 +84,9 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
   const newInputShape = !binding.knownInputShapes.includes(shapeHash);
   const started = performance.now();
   try {
-    const { evaluation, artifact } = await assertOptimizerEvaluationBinding(db, run.companyId, binding.id);
+    const { evaluation, artifact } = await assertOptimizerEvaluationBinding(db, run.companyId, binding.id, true, reader);
     const codeOwner = { db, companyId: run.companyId, versionId: binding.artifactVersionId, expectedStatus: artifact.status,
-      actor: { principal: { type: "system" as const, service: "workflow-optimizer" } } };
+      actor: { principal: { type: "system" as const, service: "workflow-optimizer" }, sourceActor: reader } };
     if (artifact.kind === "typescript" && !flags.enableAutomationArtifactCodeExecutionV1) throw new Error("optimizer_code_execution_disabled");
     if (artifact.status !== (mode === "canary" ? "shadow" : mode) || evaluation.replayEvaluation?.status !== "passed") throw new Error("optimizer_evaluation_binding_changed");
     await assertMemoryRecordsRetained(db, run.companyId, memoryRecordIds);
@@ -79,6 +127,7 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
   const durationMs = Math.max(0, Math.round(performance.now() - started));
   let publication: Awaited<ReturnType<typeof persistActivity>>["publication"] | null = null;
   await db.transaction(async (tx) => {
+    await lockAnalyticalCompany(tx as unknown as Db, run.companyId);
     await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
     await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, [...new Set([...binding.memoryRecordIds, ...memoryRecordIds])]);
     const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId), eq(workflowRuns.id, run.id))).for("update");
@@ -91,8 +140,6 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
       evaluationId: binding.id, workflowRunId: run.id, nodeId, mode, candidateUsed, passed, fallback, inputShapeHash: shapeHash,
       newInputShape, invariantFailure, shadowResult, errorCode, durationMs }).onConflictDoNothing().returning();
     if (!observation) return;
-    if (candidateUsed) await tx.update(workflowStepRuns).set({ automationArtifactVersionId: binding.artifactVersionId })
-      .where(and(eq(workflowStepRuns.companyId, run.companyId), eq(workflowStepRuns.workflowRunId, run.id), eq(workflowStepRuns.nodeId, nodeId), eq(workflowStepRuns.status, "running")));
 
     await tx.update(workflowOptimizerEvaluations).set({ memoryRecordIds: [...new Set([...current.memoryRecordIds, ...memoryRecordIds])], updatedAt: new Date() }).where(eq(workflowOptimizerEvaluations.id, binding.id));
     if (!passed && mode !== "shadow") {
@@ -108,4 +155,5 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
   });
   if (publication) publishActivity(publication);
   return output;
+  }
 }

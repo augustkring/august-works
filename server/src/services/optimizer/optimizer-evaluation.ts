@@ -59,6 +59,14 @@ export async function executeCompiledOptimizerCandidate(candidate: OptimizerComp
 }
 
 export async function assertOptimizerEvaluationBinding(db: Db, companyId: string, evaluationId: string, requireGates = true, sourceActor?:AuthorizationActor) {
+  const [metadata] = await db.select({ revisionId: workflowOptimizerEvaluations.workflowRevisionId, versionId: workflowOptimizerEvaluations.artifactVersionId,
+    memoryRecordIds: workflowOptimizerEvaluations.memoryRecordIds }).from(workflowOptimizerEvaluations)
+    .where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId)));
+  if (!metadata) throw notFound("Optimizer evaluation not found");
+  await assertLearningAssetCurrent(db, companyId, "workflow_revision", metadata.revisionId, sourceActor);
+  await assertLearningAssetCurrent(db, companyId, "automation_artifact_version", metadata.versionId, sourceActor);
+  await assertMemoryRecordsRetained(db, companyId, metadata.memoryRecordIds);
+
   const [evaluation] = await db.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId)));
   if (!evaluation) throw notFound("Optimizer evaluation not found");
   const [workflow, artifact, version] = await Promise.all([
