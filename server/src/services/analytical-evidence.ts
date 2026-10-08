@@ -67,7 +67,8 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
       if(!point || source.view.result.status!=="qualified") throw conflict("Exact qualified forecast point is unavailable");
       if(definition.sensitivity==="internal" && source.forecastDefinition.sensitivity==="confidential") throw forbidden("Confidential forecast evidence cannot be downgraded");
       manifestId=source.lineageManifestId;sourceExpiry=new Date(source.view.expiresAt);sourceHash=nativeSha256({runContentHash:source.view.contentHash,pointIndex:ref.pointIndex,point});
-      facts={value:point.value,from:point.from,until:point.until,unit:source.metricDefinition.unit,status:source.view.result.status,cutoff:source.view.cutoff,intervalLower:null,intervalUpper:null,calibration:"not_assessed"};
+      facts={value:point.value,from:point.from,until:point.until,unit:source.metricDefinition.unit,status:source.view.result.status,cutoff:source.view.cutoff,intervalLower:point.interval?.lower??null,intervalUpper:point.interval?.upper??null,calibration:"not_assessed",
+        ...(point.interval?{intervalMethod:point.interval.method,intervalLevel:point.interval.level,intervalLower80:point.interval.level80.lower,intervalUpper80:point.interval.level80.upper}:{})};
       limitations=[...source.view.result.limitations,"A forecast estimates a future metric under its time-safe model; it is not an observed outcome or a causal effect."];
     } else if(ref.type==="scenario_run") {
       const source=await inspectBusinessScenarioRun(tx,companyId,actor,ref.scenarioId,ref.versionId,ref.id,!historicalQualification),scenarioCase=source.view.result.cases.find(item=>item.key===ref.caseKey),output=scenarioCase?.outputs.find(item=>item.key===ref.outputKey);
