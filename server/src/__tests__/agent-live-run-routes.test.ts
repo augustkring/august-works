@@ -29,6 +29,8 @@ const mockExecutionProjection = vi.hoisted(() => ({
   executionProjectionsForRuns: vi.fn(async () => new Map()),
 }));
 
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+
 const mockInstanceSettingsService = vi.hoisted(() => ({
   get: vi.fn(),
   getExperimental: vi.fn(),
@@ -79,6 +81,11 @@ const mockChatRunRetries = vi.hoisted(() => ({
 }));
 
 function registerModuleMocks() {
+  // This route fixture supplies no PostgreSQL Source graph. Its native
+  // authority boundary is controlled explicitly; denial is checked below.
+  vi.doMock("../services/analytical-context-authority.js", () => ({
+    assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+  }));
   vi.doMock("../services/execution-projection.js", () => mockExecutionProjection);
   vi.doMock("../routes/authz.js", async () =>
     vi.importActual("../routes/authz.js"),
@@ -285,6 +292,7 @@ describe("agent live run routes", () => {
     vi.doUnmock("../middleware/index.js");
     registerModuleMocks();
     vi.clearAllMocks();
+    mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockChatRunRetries.prepareFailedChatRunRetry.mockReset();
     mockChatRunRetries.processFailedChatRunRetry.mockReset();
     mockAccessService.canUser.mockResolvedValue(true);
@@ -1749,6 +1757,22 @@ describe("agent live run routes", () => {
         details: { traceId: "trace-1", rawPayloadRevealed: false },
       }),
     );
+  });
+
+  it.each([
+    ["get", "provider-trace"],
+    ["post", "provider-trace/reproject-workspace-diffs"],
+  ] as const)("withholds %s %s when the current analytical Source denies access", async (method, suffix) => {
+    const { HttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
+    const runId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const res = await requestApp(await createApp(), url => request(url)[method](`/api/heartbeat-runs/${runId}/${suffix}`));
+    expect(res.status).toBe(403);
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { runId });
+    expect(mockProviderTraceStore.inspect).not.toHaveBeenCalled();
+    expect(mockProviderTraceStore.getByRun).not.toHaveBeenCalled();
+    expect(mockWorkspaceDiffReprojection.persist).not.toHaveBeenCalled();
+    expect(mockLogActivity).not.toHaveBeenCalled();
   });
 
   it("lets a board member reproject only retained workspace diffs", async () => {
