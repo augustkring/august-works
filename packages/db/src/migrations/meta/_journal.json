@@ -3046,6 +3046,13 @@
       "when": 1791429502908,
       "tag": "0436_native_learning_verified_source_current",
       "breakpoints": true
+    },
+    {
+      "idx": 437,
+      "version": "7",
+      "when": 1791431104747,
+      "tag": "0437_native_optimizer_observation_source_owner",
+      "breakpoints": true
     }
   ]
 }

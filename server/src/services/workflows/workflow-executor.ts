@@ -6168,11 +6168,11 @@ async function executeWorkflowGraph(
               `Transform ${current.id} produced no runnable attempt`,
             );
           }
-          const transformNodeId = current.id;
+          const transformNodeId = current.id, transformStepId = runningStep.id;
           output = await withWorkflowExecutionLease(db, ownedRun, () => executeOptimizedWorkflowTransform(db, ownedRun,
             transformNodeId, input, actor.memoryRecordIds ?? [], () => evaluateWorkflowTransformMapping(mapping, {
               input, trigger: ownedRun.triggerPayload ?? {}, variables, steps: outputs,
-            })));
+            }), transformStepId, actor));
           await completeRunningStep(db, ownedRun, runningStep, output, actor);
         }
       } else if (current.type === "core.subworkflow") {
