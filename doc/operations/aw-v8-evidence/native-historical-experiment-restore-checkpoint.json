@@ -1,0 +1,88 @@
+{
+  "checkpoint": "Historical fully copied experiment lineage and two actual native local archive restores",
+  "recordedAt": "2026-10-08T16:19:26.422411+00:00",
+  "parentCommit": "4acdb47b2ebb1c7a17f64e192bfb1d65aa2f3651",
+  "primaryParentCommit": "89d407e17ee5d116e804e52e91a4ad11cd393e83",
+  "sourceFiles": [
+    {
+      "path": "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+      "sha256": "2153c25e55239364e85f8be89cc3f9cb424b1c056aed682f486e7520f0807549"
+    },
+    {
+      "path": "server/src/services/business-experiments/results.ts",
+      "sha256": "62b0793fe2c8c3a3dc4b1eded1e7a79b71e737e9c943ddb7d5cda0c1dd262ba2"
+    },
+    {
+      "path": "server/src/services/business-experiments/receipts.ts",
+      "sha256": "6878356cc58656eadb865c448df4707a8c56f821d1418941dca09c1f722c292b"
+    },
+    {
+      "path": "packages/db/src/backup-lib.ts",
+      "sha256": "9df2aa0f325f271cc2f88c26d6c44233c938f901027dc9f2ab065bae128f5139"
+    },
+    {
+      "path": "server/src/services/saas/quarantine.ts",
+      "sha256": "468b9fe21d2079c608c234c49f2cd05e38b33e4bed38bfaf2032bb67bad88209"
+    },
+    {
+      "path": "server/src/services/saas/database-admission.ts",
+      "sha256": "7061fcc21dd285c7445a49d98ed186dd6ac6dc4e612cf258a718d3234d73de27"
+    },
+    {
+      "path": "deploy/v6/deletion-ledger.mjs",
+      "sha256": "50f85505ab60a0a2340fd5e0e29bfaa443e64db1513e5d33557474308d37e141"
+    },
+    {
+      "path": "deploy/v6/deletion-ledger.test.mjs",
+      "sha256": "665f7c92396b1b666262f1cfa84938e4a61b318fd4533f72bd524a974a8d9b87"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "f2c1e3367624f8aeefd472cd81da4b8b9d040033f01ce8a402fdc74eefa1c69a"
+    },
+    {
+      "path": "doc/operations/aw-v8-source-and-data-register.md",
+      "sha256": "9953a1096d3c06e43fba4f6ac785c1b4f8adb074a95e549591a9ba60080a58ed"
+    }
+  ],
+  "validation": {
+    "completeOriginalExperimentRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-historical-experiment-archive-final.log",
+      "sha256": "f666a2dc885da457e130073f4762177bcdfeb9b3c2a7e5087ddd2a4528526454",
+      "tests": 18,
+      "files": 1,
+      "skipped": 0,
+      "actualDoWhyPython": "/workspace/.cloud-setup/aw-v8-dowhy-locked/bin/python"
+    },
+    "originalDeletionLedgerChecks": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-historical-experiment-ledger.log",
+      "sha256": "f826c72848bd3f38f756c29833ad93da529c956247d434a415292a97f8a1bd09",
+      "tests": 3,
+      "skipped": 0
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "sourceCommit": "89d407e17ee5d116e804e52e91a4ad11cd393e83",
+      "log": "/var/tmp/aw-v8-native-build-legacy-runtime-assets.log",
+      "sha256": "75f1756f6796e6127544c5ad34c871159ef961ed1da5baa8165a8048282d43c4"
+    }
+  },
+  "qualified": [
+    "Original fully copied outcome lineage replays exact signed outcomes/analysis alongside the existing compact-format regressions",
+    "Actual hidden current Task authority withholds the complete historical result",
+    "Original native backup owner creates a real gzip logical database archive before Source erasure",
+    "Original restore owner restores the same archive into two separate empty local PostgreSQL targets, preserving exact signed outcomes before reconciliation",
+    "Original quarantine replays the later final-only project marker with flags off, erases analytical copies, keeps canonical Task and another tenant, and blocks application admission",
+    "Original and both restored targets refuse late suppressed payload restoration; original manifest immutability is restored",
+    "All 18 complete native experiment/actual optional DoWhy checks and 3 original ledger checks pass without skips"
+  ],
+  "limitations": [
+    "Explicit isolated software prerequisite reconstructs the original lineage shape; no actual historical customer database is used",
+    "Trusted operator-fixture suppression marker is passed directly; pure crypto checks do not establish live operator ledger authentication",
+    "Local DB archive restore only; remote storage, filesystem/provider copies, mixed historical fleets and hosted DR remain unqualified",
+    "Quarantine remains blocked; no live provider/customer/Human intervention, cloud deployment, spend, pilot or business impact",
+    "Current complete branch Source/claim/release qualification and all hosted predecessor gates remain open"
+  ]
+}
