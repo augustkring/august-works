@@ -1,3 +1,5 @@
+import { buildRetainedNativeRuntimeContext, materializeAsset, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
+import { nativeRuntimeAssetsRoot, eraseNativeRuntimeAssets } from "../services/native-runtime/runtime-asset-retention.js";
 import {projects} from "@paperclipai/db";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -137,6 +139,81 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  it("commits the full source set and conservative expiry before returning a native result",async()=>{const f=await fixture(),result=await f.capture(),r=await root(),[memory]=await db.select().from(memoryRecords).where(eq(memoryRecords.id,r.memoryRecordId));expect(result.lineageManifestId).toBeTruthy();expect(r.sourceCount).toBe(1);expect(r.expiresAt.toISOString()).toBe(result.expiresAt);expect(memory).toMatchObject({reviewState:"rejected",verificationState:"unverified",memoryType:"observation",scopeType:"agent",confidenceScore:0});expect(await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.memoryRecordId,r.memoryRecordId))).toHaveLength(1);await expect(db.update(memoryRecords).set({reviewState:"accepted",verificationState:"human_verified",memoryType:"outcome"}).where(eq(memoryRecords.id,r.memoryRecordId))).rejects.toThrow();});
  it("requires the current native Context and rolls back measurement derivation on failure",async()=>{const f=await fixture(false);await expect(f.capture()).rejects.toMatchObject({status:409});expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(0);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);});
  it("rolls back a derived measurement if the complete source set is unavailable",async()=>{await fixture();await expect(withAnalyticalConversationRetention(db,companyId,actor(),async()=>({result:{copy:"uncommitted"},sourceManifestIds:[randomUUID()],retentionUntil:new Date(Date.now()+60000)}))).rejects.toMatchObject({status:409});expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(0);});
+ it("erases run-owned runtime copies and retained legacy bundles through native C7, retrying filesystem failure without removing another tenant reference",async()=>{
+  const priorHome=process.env.PAPERCLIP_HOME,priorInstance=process.env.PAPERCLIP_INSTANCE_ID,home=await fs.mkdtemp(path.join(os.tmpdir(),"aw-native-asset-c7-"));
+  process.env.PAPERCLIP_HOME=home;process.env.PAPERCLIP_INSTANCE_ID="native-asset-c7";
+  try{
+   const f=await fixture();await f.capture();
+   const instructions=path.join(home,"user-sources","instructions"),skillSource=path.join(home,"user-sources","skill");
+   await fs.mkdir(instructions,{recursive:true});await fs.mkdir(skillSource,{recursive:true});
+   await fs.writeFile(path.join(instructions,"AGENTS.md"),"Synthetic retained instructions");await fs.writeFile(path.join(skillSource,"SKILL.md"),"Synthetic retained procedure");
+   const [agent]=await db.update(agents).set({adapterConfig:{instructionsFilePath:path.join(instructions,"AGENTS.md")}}).where(eq(agents.id,agentId)).returning();
+   const key=`company/${companyId}/retained`,input={db,agent:agent!,runId,runtimeConfig:{paperclipSkillSync:{desiredSkills:[key]}},runtimeSkillEntries:[{key,runtimeName:"retained",source:skillSource,sourceStatus:"available" as const,versionId:null}]};
+   const context=await buildRetainedNativeRuntimeContext(input),owner={companyId,runId};
+   expect(context.skills).toHaveLength(1);expect(await readNativeRuntimeAssetText(context.skills[0]!.bundle,32000,owner)).toEqual([{path:"SKILL.md",text:"Synthetic retained procedure"}]);
+   await expect(readNativeRuntimeAssetText(context.skills[0]!.bundle,32000,{companyId,runId:randomUUID()})).rejects.toThrow();
+   await expect(eraseNativeRuntimeAssets(db,owner,[])).rejects.toThrow("no Source erasure receipt");
+   await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+   await expect(buildRetainedNativeRuntimeContext(input)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+   await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,f.sourceId));
+   const legacy=await materializeAsset([{path:"SKILL.md",content:Buffer.from("Independent identical synthetic procedure"),mode:0o444}]);
+   const otherCompany=randomUUID(),otherAgent=randomUUID(),otherRun=randomUUID();
+   await db.insert(companies).values({id:otherCompany,name:"Independent tenant",issuePrefix:randomUUID()});await db.insert(agents).values({id:otherAgent,companyId:otherCompany,name:"Independent agent",role:"engineer"});
+   const profile={nativeExecutionInput:{runtimeContext:{instructions:{bundle:legacy},skills:[]}}};
+   await db.insert(heartbeatRuns).values({id:otherRun,companyId:otherCompany,agentId:otherAgent,status:"running",runnerProfileJson:profile});
+   const otherOwner={companyId:otherCompany,runId:otherRun},otherBundle=await materializeAsset([{path:"SKILL.md",content:Buffer.from("Independent tenant run-owned procedure"),mode:0o444}],otherOwner);
+   // Persisted native historical profile fixture owns the old shared reference;
+   // newly published run-owned files exist even before the final profile write.
+   await db.update(heartbeatRuns).set({runnerProfileJson:profile}).where(eq(heartbeatRuns.id,runId));
+   const runRoot=nativeRuntimeAssetsRoot(owner),companyRoot=path.dirname(runRoot),saved=companyRoot+".saved";
+   await fs.rename(companyRoot,saved);await fs.symlink(saved,companyRoot);
+   await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false,enableCollectiveMemoryV1:false,enablePrivateAgentMemoryV1:false});
+   await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await db.delete(issues).where(eq(issues.id,f.sourceId));
+   expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);
+   await expect(buildRetainedNativeRuntimeContext(input)).rejects.toThrow("native_runtime_asset_source_unavailable");
+   await memoryJobService(db).tick({limit:100});
+   expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId)))[0]!.runnerProfileJson).toBeNull();
+   const failed=await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
+   expect(failed.length).toBeGreaterThan(0);expect(failed.every(job=>job.status==="failed")).toBe(true);
+   await fs.unlink(companyRoot);await fs.rename(saved,companyRoot);
+   await db.update(memoryJobs).set({updatedAt:new Date(Date.now()-61000)}).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
+   await memoryJobService(db).tick({limit:100});
+   expect((await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`))).every(job=>job.status==="succeeded")).toBe(true);
+   await expect(fs.stat(runRoot)).rejects.toMatchObject({code:"ENOENT"});
+   await expect(buildRetainedNativeRuntimeContext(input)).rejects.toThrow("native_runtime_asset_source_unavailable");
+   expect(await readNativeRuntimeAssetText(legacy,32000,otherOwner)).toHaveLength(1);
+   expect(await readNativeRuntimeAssetText(otherBundle,32000,otherOwner)).toHaveLength(1);
+   expect(await fs.readFile(path.join(skillSource,"SKILL.md"),"utf8")).toBe("Synthetic retained procedure");
+   await purgeCompanyContent(db,otherCompany);await memoryJobService(db).tick({limit:100});
+   await expect(fs.stat(otherBundle.rootPath)).rejects.toMatchObject({code:"ENOENT"});await expect(fs.stat(legacy.rootPath)).rejects.toMatchObject({code:"ENOENT"});
+  }finally{
+   if(priorHome===undefined)delete process.env.PAPERCLIP_HOME;else process.env.PAPERCLIP_HOME=priorHome;
+   if(priorInstance===undefined)delete process.env.PAPERCLIP_INSTANCE_ID;else process.env.PAPERCLIP_INSTANCE_ID=priorInstance;
+   const writable=async(directory:string):Promise<void>=>{const stat=await fs.lstat(directory);if(!stat.isDirectory()||stat.isSymbolicLink())return;await fs.chmod(directory,0o700);for(const name of await fs.readdir(directory))await writable(path.join(directory,name));};
+   await writable(home);await fs.rm(home,{recursive:true,force:true});
+  }
+ });
+ it("queues every legacy native profile digest in bounded original outbox jobs on actual run deletion",async()=>{
+  const priorHome=process.env.PAPERCLIP_HOME,priorInstance=process.env.PAPERCLIP_INSTANCE_ID,home=await fs.mkdtemp(path.join(os.tmpdir(),"aw-native-asset-batches-"));
+  process.env.PAPERCLIP_HOME=home;process.env.PAPERCLIP_INSTANCE_ID="asset-batches";
+  try{
+   // Explicit metadata fixtures qualify complete batching, not materialized bodies or provider execution.
+   const digests=Array.from({length:513},(_,index)=>index.toString(16).padStart(64,"0")),assets=nativeRuntimeAssetsRoot();
+   const reference=(digest:string)=>({digest,rootPath:path.join(assets,"bundles",digest)});
+   const profile={nativeExecutionInput:{runtimeContext:{instructions:{bundle:reference(digests[0]!)},skills:digests.slice(1).map(digest=>({bundle:reference(digest)}))}}};
+   await db.update(heartbeatRuns).set({runnerProfileJson:profile}).where(eq(heartbeatRuns.id,runId));
+   await db.delete(heartbeatRuns).where(eq(heartbeatRuns.id,runId));
+   const jobs=await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
+   expect(jobs).toHaveLength(3);expect(jobs.every(job=>(job.sourceRefJson.legacyDigests as string[]).length<=256)).toBe(true);
+   expect(jobs.flatMap(job=>job.sourceRefJson.legacyDigests as string[]).sort()).toEqual(digests);
+   await memoryJobService(db).tick({limit:100});
+   expect((await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`))).every(job=>job.status==="succeeded")).toBe(true);
+  }finally{
+   if(priorHome===undefined)delete process.env.PAPERCLIP_HOME;else process.env.PAPERCLIP_HOME=priorHome;
+   if(priorInstance===undefined)delete process.env.PAPERCLIP_INSTANCE_ID;else process.env.PAPERCLIP_INSTANCE_ID=priorInstance;
+   await fs.rm(home,{recursive:true,force:true});
+  }
+ });
  it.each(["issue","project","observation"])("queues the original retention sweep for actual %s deletion with all relevant flags off and company paused",async(kind)=>{
   const f=await fixture();let projectId:string|undefined;
   if(kind==="project"){
@@ -315,7 +392,7 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
    await fs.writeFile(prepared.path,"Synthetic late bytes");await fs.writeFile(`${prepared.path}.rehydration`,"Synthetic late rehydration");await db.update(providerTraceRecords).set({status:"capturing",reason:null,deletedAt:null,frameCount:99}).where(eq(providerTraceRecords.runId,runId));
    expect((await db.select().from(providerTraceRecords).where(eq(providerTraceRecords.runId,runId)))[0]).toMatchObject({status:"deleted",reason:"source_erased",frameCount:0});
    await purgeCompanyContent(db,companyId);expect(await db.select().from(providerTraceRecords).where(eq(providerTraceRecords.companyId,companyId))).toHaveLength(0);
-   const retained=await db.select().from(memoryJobs).where(eq(memoryJobs.companyId,companyId));expect(retained.length).toBeGreaterThan(0);expect(retained.every(j=>j.operationType==="retention"&&j.sourceRefJson.kind==="provider_trace_erasure"&&j.sourceHeartbeatRunId===null&&j.sourceMemoryRecordId===null)).toBe(true);
+   const retained=await db.select().from(memoryJobs).where(eq(memoryJobs.companyId,companyId));expect(retained.length).toBeGreaterThan(0);expect(retained.every(j=>j.operationType==="retention"&&["provider_trace_erasure","runtime_asset_erasure"].includes(String(j.sourceRefJson.kind))&&j.sourceHeartbeatRunId===null&&j.sourceMemoryRecordId===null)).toBe(true);
    await worker.tick();await expect(fs.readFile(prepared.path)).rejects.toMatchObject({code:"ENOENT"});await expect(fs.readFile(`${prepared.path}.rehydration`)).rejects.toMatchObject({code:"ENOENT"});expect(await fs.readFile(foreignTrace.path,"utf8")).toContain("independent tenant");
   }finally{if(previous===undefined)delete process.env.PROVIDER_TRACE_BASE_PATH;else process.env.PROVIDER_TRACE_BASE_PATH=previous;await fs.rm(temp,{recursive:true,force:true});}
  });

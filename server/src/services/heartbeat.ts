@@ -213,7 +213,7 @@ import {
   buildNativeProviderEnvironment,
   buildNativeExecutionInput,
   buildNativeExecutionWithCheckpoint,
-  buildNativeRuntimeContext,
+  buildRetainedNativeRuntimeContext,
   cancelNativeSession,
   claimNativeRestartRecoveries,
   closeWarmNativeSessionsForEnvironment,
@@ -23555,7 +23555,7 @@ export function heartbeatService(
                   safeWakeCommentContext?.body ??
                   null,
               });
-            const nativeRuntimeContext = await buildNativeRuntimeContext({
+            const nativeRuntimeContext = await buildRetainedNativeRuntimeContext({
               db,
               agent,
               runId: run.id,

@@ -2997,6 +2997,13 @@
       "when": 1791417878232,
       "tag": "0429_skill_version_file_erasure",
       "breakpoints": true
+    },
+    {
+      "idx": 430,
+      "version": "7",
+      "when": 1791418489665,
+      "tag": "0430_native_runtime_asset_erasure",
+      "breakpoints": true
     }
   ]
 }
