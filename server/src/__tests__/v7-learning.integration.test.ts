@@ -230,7 +230,7 @@ const support = await getEmbeddedPostgresTestSupport();
     }
     expect((await db.select().from(automationArtifacts).where(eq(automationArtifacts.id,replay.artifactId)))[0]!.status).toBe("testing");
     await expect(optimizer.startShadow(companyId,replay.evaluationId,{principal:{type:"user",userId:"unrelated-unadmitted-reviewer"}})).rejects.toMatchObject({status:403});
-    let descendantVersionId:string|null=null;
+    let descendantVersionId:string|null=null, artifactChildTaskId:string|null=null;
     if(signal){
       const [consumer] = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, created.id)));
       // Actual native owner IDs; the association is a software provenance
@@ -238,6 +238,12 @@ const support = await getEmbeddedPostgresTestSupport();
       await db.update(workflowStepRuns).set({ automationArtifactVersionId: replay.artifactVersionId })
         .where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, consumer!.id), eq(workflowStepRuns.nodeId, "copy")));
       expect((await executor.getRun(companyId, consumer!.id, owner))!.steps.find(step => step.nodeId === "copy")!.automationArtifactVersionId).toBe(replay.artifactVersionId);
+      // Software retained child-copy prerequisite on real native owner IDs;
+      // the original Artifact has not been promoted/executed by this Workflow.
+      const [child] = await db.insert(issues).values({ companyId, title: "Historical Artifact-informed task", description: "Copied private analytical procedure", originKind: "workflow_task", originId: created.id, originRunId: consumer!.id }).returning();
+      artifactChildTaskId = child!.id;
+      await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:artifactChildTaskId})).resolves.toBeUndefined();
+
       await expect(executor.getRun(companyId, consumer!.id)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
       expect((await artifacts.getDetail(companyId,replay.artifactId,principal))!.latestVersion!.sourceCode).not.toBe("");
       expect(await artifacts.list(companyId,principal)).toHaveLength(1);
@@ -254,6 +260,8 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(await artifacts.list(companyId,principal)).toEqual([]);
       await expect(artifacts.getDetail(companyId,replay.artifactId,principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       await expect(executor.getRun(companyId, consumer!.id, owner)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
+      await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:artifactChildTaskId!})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+
       await expect(executor.listRuns(companyId, created.id, 10, owner)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
       await expect(artifacts.transitionStatus(companyId,replay.artifactId,{expectedStatus:"testing",expectedLatestVersionId:replay.artifactVersionId,status:"candidate"},principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
       await expect(artifacts.archive(companyId,replay.artifactId,{expectedLatestVersionId:replay.artifactVersionId},principal)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
@@ -263,6 +271,8 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id,replay.evaluationId)))[0]!.status).toBe("testing");
       await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
       expect((await executor.getRun(companyId, consumer!.id, owner))!.steps.find(step => step.nodeId === "copy")!.outputJson).toEqual({ value: expect.any(Number) });
+      await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:artifactChildTaskId!})).resolves.toBeUndefined();
+
     }
     await optimizer.startShadow(companyId, replay.evaluationId, principal);
     if(signal){
@@ -291,6 +301,10 @@ const support = await getEmbeddedPostgresTestSupport();
       // The current Source owner queues the original cycle outbox; no provider is invoked.
       await memoryJobService(db).tick({limit:10});
       await expect(fs.lstat(workspace)).rejects.toMatchObject({code:"ENOENT"});
+      expect((await db.select().from(issues).where(eq(issues.id,artifactChildTaskId!)))[0]).toMatchObject({title:"Erased workflow task",description:null});
+      await db.update(issues).set({description:"Restored private analytical procedure"}).where(eq(issues.id,artifactChildTaskId!));
+      expect((await db.select().from(issues).where(eq(issues.id,artifactChildTaskId!)))[0]!.description).toBeNull();
+
       expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[0]!)))[0]!.deletedAt).toBeNull();
     }else await db.transaction(async tx => purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]));
     if(descendantVersionId)expect((await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id,descendantVersionId)))[0]).toMatchObject({sourceCode:"",inputSchema:{},outputSchema:{},testSpec:{},validationReport:null,securityReport:null});

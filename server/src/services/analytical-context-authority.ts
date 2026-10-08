@@ -1,4 +1,4 @@
-import {and,eq,or,sql} from "drizzle-orm";
+import {and,eq,inArray,or,sql} from "drizzle-orm";
 import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifestItems,contextManifests,agentExecutionManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,type Db} from "@paperclipai/db";
 import {analyticalContextAuthorityPinSchema,type AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {z} from "zod";
@@ -57,16 +57,24 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
 export async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string}|{workflowRunId:string},readScope?:NativeReadScope) {
  const deadline=performance.now()+30000;
  const budget=()=>{if(performance.now()>deadline)throw new HttpError(403,"Complete analytical Workflow source review exceeded its budget",{code:"analytical_source_access_lost"});};
- const match="workflowRunId" in scope?eq(workflowStepRuns.workflowRunId,scope.workflowRunId):"issueId" in scope?sql`exists(select 1 from workflow_waits w where w.company_id=${companyId}::uuid and w.workflow_run_id=${workflowStepRuns.workflowRunId} and w.node_id=${workflowStepRuns.nodeId} and w.reference_type='issue' and w.reference_id=${scope.issueId})`:
-  sql`(${workflowStepRuns.heartbeatRunId}=${scope.runId}::uuid or exists(select 1 from heartbeat_runs h left join agent_wakeup_requests a on a.company_id=h.company_id and a.id=h.wakeup_request_id where h.company_id=${companyId}::uuid and h.id=${scope.runId}::uuid and (a.idempotency_key='workflow-direct-agent:'||${workflowStepRuns.id}::text or exists(select 1 from workflow_waits w where w.company_id=h.company_id and w.workflow_run_id=${workflowStepRuns.workflowRunId} and w.node_id=${workflowStepRuns.nodeId} and w.reference_type='issue' and (w.reference_id=a.payload->>'issueId' or (h.runtime_mode='native' and w.reference_id=h.native_issue_id::text))))))`;
+ const match="workflowRunId" in scope?eq(workflowStepRuns.workflowRunId,scope.workflowRunId):"issueId" in scope?sql`exists(select 1 from workflow_waits w where w.company_id=${companyId}::uuid and w.workflow_run_id=${workflowStepRuns.workflowRunId} and w.node_id=${workflowStepRuns.nodeId} and w.reference_type='issue' and w.reference_id=${scope.issueId}) or exists(select 1 from issues i where i.company_id=${companyId}::uuid and i.id=${scope.issueId}::uuid and i.origin_kind='workflow_task' and i.origin_run_id=${workflowStepRuns.workflowRunId}::text)`:
+  sql`(${workflowStepRuns.heartbeatRunId}=${scope.runId}::uuid or exists(select 1 from heartbeat_runs h left join agent_wakeup_requests a on a.company_id=h.company_id and a.id=h.wakeup_request_id where h.company_id=${companyId}::uuid and h.id=${scope.runId}::uuid and (a.idempotency_key='workflow-direct-agent:'||${workflowStepRuns.id}::text or exists(select 1 from issues i where i.company_id=h.company_id and i.id=h.native_issue_id and i.origin_kind='workflow_task' and i.origin_run_id=${workflowStepRuns.workflowRunId}::text) or exists(select 1 from workflow_waits w where w.company_id=h.company_id and w.workflow_run_id=${workflowStepRuns.workflowRunId} and w.node_id=${workflowStepRuns.nodeId} and w.reference_type='issue' and (w.reference_id=a.payload->>'issueId' or (h.runtime_mode='native' and w.reference_id=h.native_issue_id::text))))))`;
+ // A later native Task may contain a prior Artifact's output. Its actual
+ // Workflow Run is the existing complete copy owner, including sibling steps.
+ const sourceRuns=db.selectDistinct({id:workflowStepRuns.workflowRunId}).from(workflowStepRuns)
+  .where(and(eq(workflowStepRuns.companyId,companyId),match));
  const assets=await db.selectDistinct({revisionId:workflowRuns.workflowRevisionId,artifactVersionId:workflowStepRuns.automationArtifactVersionId}).from(workflowStepRuns)
   .innerJoin(workflowRuns,and(eq(workflowRuns.companyId,workflowStepRuns.companyId),eq(workflowRuns.id,workflowStepRuns.workflowRunId)))
-  .where(and(eq(workflowStepRuns.companyId,companyId),match)).limit(257);
+  .where(and(eq(workflowStepRuns.companyId,companyId),inArray(workflowStepRuns.workflowRunId,sourceRuns))).limit(257);
  if(assets.length>256)throw new HttpError(403,"Analytical Workflow source access is unavailable",{code:"analytical_source_access_lost"});
  if(!assets.length)return;
  const {assertLearnedAssetAnalyticalSources}=await import("./learning/learning-analytical-sources.js");
  for(const revisionId of new Set(assets.map(asset=>asset.revisionId))){budget();await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",revisionId,actor,readScope);}
- for(const artifactId of new Set(assets.flatMap(asset=>asset.artifactVersionId?[asset.artifactVersionId]:[]))){budget();await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",artifactId,actor,readScope);}
+ for(const artifactId of new Set(assets.flatMap(asset=>asset.artifactVersionId?[asset.artifactVersionId]:[]))){
+  budget();const [receipt]=await db.execute<{erased:boolean}>(sql`select aw_artifact_version_source_erased(${companyId}::uuid,${artifactId}::uuid) as erased`);
+  if(receipt?.erased)throw new HttpError(403,"Native Workflow Artifact Source is unavailable",{code:"analytical_source_access_lost"});
+  await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",artifactId,actor,readScope);
+ }
  budget();
 }
 
