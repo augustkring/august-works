@@ -124,6 +124,15 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   expect((await root()).authorityPins).toHaveLength(1);expect(await db.select().from(analyticalContextDependencies).where(eq(analyticalContextDependencies.companyId,companyId))).toHaveLength(1);
   await expect(businessMetricService(db).query(companyId,actor(),f.query)).rejects.toMatchObject({status:403});
  });
+ it("explains complete exact metric lineage through the actual SDK and rejects substituted pins before retaining another root",async()=>{
+  const f=await fixture(),tools=toolAuthority(),queried=await tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:f.query}) as {result:{observation:BusinessMetricResult}},value=queried.result.observation;
+  const source={type:"metric_observation",id:value.id,metricId:value.metricId,metricVersionId:value.versionId},output=await tools.execute({tool:"explain_metric_lineage",callId:randomUUID(),arguments:{source}});
+  expect(output).toMatchObject({tool:"explain_metric_lineage",citations:[{kind:"analytical_evidence",source}],result:{source,manifest:{id:value.lineageManifestId},edges:expect.arrayContaining([expect.objectContaining({inputType:"metric_version",inputRef:value.versionId})])}});
+  const count=(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).length;expect(count).toBe(2);
+  await expect(tools.execute({tool:"explain_metric_lineage",callId:randomUUID(),arguments:{source:{...source,metricVersionId:randomUUID()}}})).rejects.toMatchObject({status:404});
+  expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(count);
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));await expect(tools.execute({tool:"explain_metric_lineage",callId:randomUUID(),arguments:{source}})).rejects.toMatchObject({status:403});
+ });
  it.each([false,true])("reuses exact native window comparison semantics through the actual SDK (count=%s)",async(count)=>{
   const f=await fixture(true,count),at=Date.now()-1000,day=86400000;
   await db.update(issues).set({createdAt:new Date(at-3600000)}).where(eq(issues.id,f.sourceId));

@@ -93,7 +93,10 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     expect((await sdk.roots()).every(root=>root.authorityPins.some(pin=>pin.kind==="process_run"&&pin.runId===runId))).toBe(true);
     await sdk.retainCopy(findings);expect(await sdk.retained()).toBe(true);
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,issueId));
-    await expect(sdk.read("list_process_findings",{definitionId:created.root.id,runId})).rejects.toMatchObject({status:409});
+    const fresh=await nativeManagementSdkFixture(db,companyId),rootCount=(await fresh.roots()).length;
+    await expect(fresh.read("analyze_process_scope",{definitionId:created.root.id,analysis:{versionId:created.version.id,...period}})).rejects.toMatchObject({status:403});
+    expect(await fresh.roots()).toHaveLength(rootCount);
+    await expect(sdk.read("list_process_findings",{definitionId:created.root.id,runId})).rejects.toMatchObject({status:403});
     await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,issueId));await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
     await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[issueId]);});
     expect(await sdk.retained()).toBe(false);expect(await db.select().from(processAnalysisRuns).where(eq(processAnalysisRuns.id,runId))).toHaveLength(0);
@@ -151,7 +154,7 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     expect((await service().getRun(companyId,actor,created.root.id,run.id)).result.objectSummaries[0].conformance?.deviatingObjectCount).toBe(1);
     await expect(db.update(processAnalysisRuns).set({result:{...run.result,objectSummaries:[]}}).where(eq(processAnalysisRuns.id,run.id))).rejects.toMatchObject({cause:{code:"23514"}});
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,issueId));
-    await expect(service().getRun(companyId,actor,created.root.id,run.id)).rejects.toMatchObject({status:409});
+    await expect(service().getRun(companyId,actor,created.root.id,run.id)).rejects.toMatchObject({status:403});
   });
   it("reads a retained V1 definition without adding fields to its frozen hash material",async()=>{
     const created=await service().create(companyId,actor,{key:`legacy_${randomUUID()}`,definition:definition()});
@@ -277,7 +280,7 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     const agent={type:"agent" as const,source:"agent_key" as const,companyId,agentId:randomUUID()};
     await expect(findings.detail(companyId,agent,created.root.id,run.id,finding.id)).rejects.toMatchObject({status:403});
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,issueId));
-    await expect(findings.detail(companyId,actor,created.root.id,run.id,finding.id)).rejects.toMatchObject({status:409});
+    await expect(findings.detail(companyId,actor,created.root.id,run.id,finding.id)).rejects.toMatchObject({status:403});
   });
   it("does not reuse an old analytical purpose after the current policy is superseded", async () => {
     const created=await published();await project();

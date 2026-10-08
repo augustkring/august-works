@@ -32,10 +32,12 @@ export async function captureNativeProcessSnapshot(tx: Db, companyId: string, ac
   }).from(activityLog).where(and(eq(activityLog.companyId,companyId),inArray(activityLog.action,[...NATIVE_PROCESS_ACTIVITIES]),
     sql`${activityLog.createdAt}>=${input.from}::timestamptz`,sql`${activityLog.createdAt}<=${input.until}::timestamptz`))
     .orderBy(asc(activityLog.createdAt),asc(activityLog.id)).limit(2001).for("share");
-  const expectedNativeSources=sources.slice(0,2000).flatMap(source => {
-    const event=projectBusinessEvent(source,source.exactTime);
-    return event ? [{ ref: source.id,hash: event.sourceHash }] : [];
-  });
+  const projectedSources=sources.map(source => ({source,event:projectBusinessEvent(source,source.exactTime)}));
+  // Readiness and missing-data findings also disclose facts about the requested
+  // population. Admit every projected source before deriving either outcome.
+  await businessEventService(tx).inspectCurrentObjectSources(companyId,actor,projectedSources.flatMap(({event})=>event?.objects ?? []));
+  const expectedNativeSources=projectedSources.slice(0,2000).flatMap(({source,event}) =>
+    event ? [{ ref: source.id,hash: event.sourceHash }] : []);
   const events: BusinessEvent[]=[]; let cursor: { at: string; id: string } | undefined;
   let eventScanExhausted=false;
   for (let page=0;page<11;page++) {
