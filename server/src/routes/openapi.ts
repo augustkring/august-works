@@ -9,6 +9,9 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import {
+  createManagementReviewTaskSchema, recordPlanningOutcomeSchema, startPlanningOutcomeLearningSchema, startDecisionReviewLearningSchema,
+  crossProjectPlanningProfileSchema, portfolioPlanningProfileSchema, proposeCrossProjectPlanningSchema, proposeInitiativePlanningSchema, reviewCrossProjectPlanningSchema,
+  statisticalForecastProfileSchema, doWhyCausalProfileSchema,
   managementReviewDefinitionSchema, managementSourceOptionsQuerySchema, publishManagementReviewSchema, recordManagementReviewEventSchema,
   projectPlanningProfileSchema, proposeProjectPlanningSchema, reviewRoadmapProposalSchema,
   createStrategyExecutionLinkSchema,
@@ -1393,6 +1396,10 @@ const BOARD_ONLY_PREFIXES = [
 ];
 
 const BOARD_ONLY_OPERATIONS = new Set([
+  "GET /api/companies/{companyId}/causal-claims/provider-profile",
+  "POST /api/companies/{companyId}/management-reviews/{reviewId}/tasks",
+  "POST /api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes",
+  "POST /api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes/learning",
   "GET /api/companies/{companyId}/ai-connections",
   "POST /api/companies/{companyId}/ai-connections",
   "POST /api/companies/{companyId}/ai-connections/local",
@@ -1735,6 +1742,7 @@ function resolveOperationAuthLevel(
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
+  if (path.startsWith("/api/companies/{companyId}/adaptive-planning/")) return "board";
   if(path.startsWith("/api/companies/{companyId}/decisions/{decisionId}/context")) return "board";
   if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/experiments") || path.startsWith("/api/companies/{companyId}/business-scenarios") || path.startsWith("/api/companies/{companyId}/business-forecasts") || path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
   if (
@@ -1841,6 +1849,10 @@ function applyDocumentFixups(document: any): any {
                 : { actor: "public" };
 
       const key = operationKey(method, path);
+      if (key === "GET /api/companies/{companyId}/runs/{runId}/playbooks/{playbookId}/body") {
+        operation.security = [securityRequirement(AGENT_BEARER_AUTH_SCHEME)];
+        operation["x-paperclip-authorization"] = { actor: "agent", heartbeatBound: true, executionManifestBound: true, currentNativeAuthority: true };
+      }
       if (authLevel !== "public") {
         const responses = (operation.responses ??= {}) as Record<
           string,
@@ -12056,3 +12068,39 @@ registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/management-
 registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/management-reviews/{reviewId}/publish",tags:["V8"],summary:"Publish an exact current packet after separate human review",query:z.object({expectedUserId:z.string().optional()}).strict(),body:publishManagementReviewSchema,responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
 
 registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/management-reviews/{reviewId}/events",tags:["V8"],summary:"Record an explicit human-reported agenda event without asserting verified impact",query:z.object({expectedUserId:z.string().optional()}).strict(),body:recordManagementReviewEventSchema,responses:{201:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
+
+// These supplemental outcomes and joint plans stay with their native owners.
+for (const operation of [
+  { method: "get", path: "/api/companies/{companyId}/business-forecasts/provider-profile", summary: "Inspect the exact optional statistical software profile; company forecast qualification remains separate", result: z.object({ companyId: z.string().uuid(), profile: statisticalForecastProfileSchema, models: z.array(z.enum(["auto_ets", "auto_arima"])), qualification: z.literal("synthetic_software_conformance"), limitations: z.array(z.string()) }).strict(), unavailable: true },
+  { method: "get", path: "/api/companies/{companyId}/causal-claims/provider-profile", summary: "Inspect the exact optional causal software profile under current Human authority", result: doWhyCausalProfileSchema },
+  { method: "post", path: "/api/companies/{companyId}/decisions/{decisionId}/context/outcome-review/learning", summary: "Start a separate Learning draft from the exact current human outcome review", body: startDecisionReviewLearningSchema, status: 201 },
+  { method: "post", path: "/api/companies/{companyId}/management-reviews/{reviewId}/tasks", summary: "Create an original native Task after separate human acknowledgement of an exact published agenda item", body: createManagementReviewTaskSchema, status: 201 },
+  { method: "post", path: "/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes", summary: "Record immutable descriptive completion facts without verified business impact", body: recordPlanningOutcomeSchema, status: 201 },
+  { method: "get", path: "/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes/{manifestId}", summary: "Inspect descriptive outcome facts after current native Source admission" },
+  { method: "post", path: "/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes/learning", summary: "Start a separate Learning draft from an exact descriptive outcome manifest", body: startPlanningOutcomeLearningSchema, status: 201 },
+  { method: "get", path: "/api/companies/{companyId}/adaptive-planning/source-options", summary: "Choose bounded currently authorized native projects", query: z.object({ expectedUserId: z.string().optional(), q: z.string().trim().max(120).optional() }).strict() },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/preview", summary: "Preview one governed same-company cross-project constraint problem", body: crossProjectPlanningProfileSchema },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/proposals", summary: "Propose exact source-pinned cross-project Roadmap changes for separate human review", body: proposeCrossProjectPlanningSchema, status: 201 },
+  { method: "get", path: "/api/companies/{companyId}/adaptive-planning/controls", summary: "List bounded independent cross-project proposal controls", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() },
+  { method: "get", path: "/api/companies/{companyId}/adaptive-planning/proposals/{proposalId}", summary: "Inspect the signed joint plan after current Source and account admission" },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/proposals/{proposalId}/review", summary: "Apply separately acknowledged joint changes through original native Roadmap owners", body: reviewCrossProjectPlanningSchema },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/initiatives/preview", summary: "Preview native initiative choices with separate explicit business dimensions", body: portfolioPlanningProfileSchema },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/initiatives/proposals", summary: "Propose source-pinned initiative dispositions requiring separate human review", body: proposeInitiativePlanningSchema, status: 201 },
+  { method: "get", path: "/api/companies/{companyId}/adaptive-planning/initiatives/controls", summary: "List bounded independent initiative proposal controls", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() },
+  { method: "get", path: "/api/companies/{companyId}/adaptive-planning/initiatives/proposals/{proposalId}", summary: "Inspect current native initiative, goal and accounting source pins" },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/initiatives/proposals/{proposalId}/review", summary: "Apply acknowledged dispositions through original Project, Goal, Budget and Human owners", body: reviewCrossProjectPlanningSchema },
+]) {
+  registerCurrentRoute({ ...operation, tags: ["V8"],
+    query: operation.query ?? z.object({ expectedUserId: z.string().optional() }).strict(),
+    responses: { [operation.status ?? 200]: { ...r.ok(operation.result), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } },
+      400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
+      409: { description: "Current account, native Source, retained revision or separate Human review changed" },
+      ...(operation.unavailable ? { 422: { description: "Exact qualified statistical runtime unavailable" } } : {}),
+    },
+  });
+}
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/runs/{runId}/playbooks/{playbookId}/body", tags: ["V5"],
+  summary: "Load the bounded exact approved Playbook body from the current authenticated execution pins",
+  responses: { 200: { ...r.ok(z.object({ playbookId: z.string().uuid(), revisionId: z.string().uuid(), markdown: z.string() }).strict()), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } },
+    401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 422: { description: "Pinned body exceeds the 32000-byte UTF-8 budget" } },
+});

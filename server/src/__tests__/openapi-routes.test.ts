@@ -24,6 +24,7 @@ const apiPrefixes: Record<string, string> = {
   "process-data-readiness.ts": "/api",
   "process-analysis.ts": "/api",
   "decision-intelligence.ts": "/api",
+  "cross-project-planning.ts": "/api",
   "agent-packages.ts": "/api",
   "ai-governance.ts": "/api",
   "cognitive-memory.ts": "/api",
@@ -874,6 +875,30 @@ describe("openapi routes", () => {
     expect(search.parameters).toContainEqual(expect.objectContaining({ name: "q", in: "query", required: false, schema: { type: "string", maxLength: 200 } }));
     const review = spec.paths["/api/companies/{companyId}/projects/{projectId}/roadmap/proposals/{proposalId}/review"].post;
     expect(review.requestBody.content["application/json"].schema.required).toEqual(expect.arrayContaining(["accept", "rationale"]));
+  });
+
+  it("documents native supplemental outcomes, joint Human review and execution-bound Playbook bodies", () => {
+    const spec = buildOpenApiSpec();
+    const root = "/api/companies/{companyId}";
+    const task = spec.paths[`${root}/management-reviews/{reviewId}/tasks`].post;
+    expect(task.requestBody.content["application/json"].schema).toMatchObject({ additionalProperties: false, required: expect.arrayContaining(["expectedContentHash", "idempotencyKey", "humanReviewAcknowledged"]) });
+    expect(task.requestBody.content["application/json"].schema.properties.humanReviewAcknowledged.enum).toEqual([true]);
+    const joint = spec.paths[`${root}/adaptive-planning/proposals/{proposalId}/review`].post;
+    expect(joint["x-paperclip-authorization"]).toEqual({ actor: "board" });
+    expect(joint.parameters).toContainEqual(expect.objectContaining({ name: "expectedUserId", in: "query" }));
+    expect(joint.requestBody.content["application/json"].schema).toMatchObject({ additionalProperties: false, required: ["expectedRevision", "action", "rationale"] });
+    expect(joint.responses[200].headers["Cache-Control"].schema.enum).toEqual(["no-store"]);
+    const learning = spec.paths[`${root}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes/learning`].post;
+    expect(learning.responses[201]).toBeDefined();
+    expect(learning.requestBody.content["application/json"].schema.required).toContain("manifestId");
+    expect(learning.requestBody.content["application/json"].schema.properties).not.toHaveProperty("analyticalSources");
+    const profile = spec.paths[`${root}/business-forecasts/provider-profile`].get.responses[200].content["application/json"].schema;
+    expect(profile.properties.qualification.enum).toEqual(["synthetic_software_conformance"]);
+    expect(profile.properties.profile.properties.version.enum).toEqual(["2.1.1"]);
+    const body = spec.paths[`${root}/runs/{runId}/playbooks/{playbookId}/body`].get;
+    expect(body.security).toEqual([{ AgentBearerAuth: [] }]);
+    expect(body["x-paperclip-authorization"]).toMatchObject({ actor: "agent", heartbeatBound: true, executionManifestBound: true });
+    expect(body.responses[422]).toBeDefined();
   });
 
   it("covers the mounted server routes exactly", () => {
