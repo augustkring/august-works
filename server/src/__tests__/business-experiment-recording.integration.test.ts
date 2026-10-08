@@ -3,8 +3,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
-import { companies, issues, projects, businessExperiments, businessExperimentAssignments, businessExperimentExposures, businessExperimentExecutions, businessExperimentCompletions, businessExperimentVersions, analyticalLineageManifests, analyticalLineageEdges, createDb } from "@paperclipai/db";
+import { and, eq, count } from "drizzle-orm";
+import { companies, issues, projects, businessExperiments, businessExperimentAssignments, businessExperimentExposures, businessExperimentExecutions, businessExperimentCompletions, businessExperimentVersions, businessExperimentOutcomes, analyticalLineageManifests, analyticalLineageEdges, createDb } from "@paperclipai/db";
 import { ISSUE_STATUSES, businessMetricDefinitionSchema } from "@paperclipai/shared";
 import { businessExperimentService } from "../services/business-experiments/service.js";
 import { businessExperimentRecordingService } from "../services/business-experiments/recording.js";
@@ -35,14 +35,19 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, policy)).id;
   });
   const registry = () => businessExperimentService(db), recording = () => businessExperimentRecordingService(db);
-  async function reviewed(short = false, maximumAssignedUnits = 100) {
+  async function reviewed(short = false, maximumAssignedUnits = 100, maximumMetrics = false) {
     const metrics = [];
-    for (const status of ["done", "cancelled", "in_progress"] as const) {
+    for (const status of [...(["done", "cancelled", "in_progress"] as const), ...(maximumMetrics ? Array(15).fill("done") as Array<"done"> : [])]) {
       const definition = businessMetricDefinitionSchema.parse({ ...metricDefinition(policyId), calculation: { kind: "native_ratio", numerator: { entity: "issue", statuses: [status], projectId: null }, denominator: { entity: "issue", statuses: [...ISSUE_STATUSES], projectId: null } } });
       const source = await businessMetricService(db).create(companyId, actor, { key: `metric_${randomUUID().replaceAll("-", "")}`, definition });
       await businessMetricService(db).publish(companyId, actor, source.metric.id, { expectedRevision: 1, versionId: source.version.id }); metrics.push(source);
     }
     const definition = experimentDefinition(policyId, metrics.map(item => ({ id: item.metric.id, versionId: item.version.id })));
+    if (maximumMetrics) {
+      const metric = (source: typeof metrics[number], key: string) => ({key,name:`${key} exact binary outcome`,metricId:source.metric.id,metricVersionId:source.version.id,outcome:"binary" as const,successDefinition:rationale});
+      definition.secondaryMetrics = metrics.slice(3,11).map((source,index)=>metric(source,`secondary_${index+1}`));
+      definition.guardrailMetrics.push(...metrics.slice(11).map((source,index)=>({...metric(source,`guardrail_${index+2}`),harmfulDirection:"increase" as const,maximumAcceptableHarm:0.1})));
+    }
     // Actual PostgreSQL time is used throughout. Synthetic fixture sources are
     // enrolled after the real preregistered start; no mocked database clock.
     definition.sampleOrDurationPlan.from = new Date(Date.now() + 1500).toISOString();
@@ -53,8 +58,8 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     const experiment = await registry().transition(companyId, actor, d.experiment.id, { expectedRevision: 2, versionId: d.version.id, state: "ready", rationale });
     return { ...d, experiment, definition, metrics };
   }
-  async function running(short = false, maximumAssignedUnits = 100) {
-    const d = await reviewed(short, maximumAssignedUnits), experiment = await recording().start(companyId, actor, d.experiment.id, { expectedRevision: 3, versionId: d.version.id, mode: "recording_only_human_attested_native_process", rationale });
+  async function running(short = false, maximumAssignedUnits = 100, maximumMetrics = false) {
+    const d = await reviewed(short, maximumAssignedUnits, maximumMetrics), experiment = await recording().start(companyId, actor, d.experiment.id, { expectedRevision: 3, versionId: d.version.id, mode: "recording_only_human_attested_native_process", rationale });
     return { ...d, experiment };
   }
   async function insideWindow(d: Awaited<ReturnType<typeof running>>) {
@@ -233,4 +238,37 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     expect(replay.analysis!.receiptHash).toBe(result.analysis.receiptHash);
     expect(replay.analysis!.result).toEqual(result.analysis.result);
   }, 180000);
+  it("captures all 68,000 exact outcomes at the 4,000-unit and seventeen-metric maxima without dropping sources", async () => {
+    const d = await running(false, 4000, true); await insideWindow(d);
+    const units=await experimentVolumeFixture(db, companyId, d.version.id, 4000, true);
+    const remaining = Date.parse(d.definition.sampleOrDurationPlan.until) - Date.now() + 10;
+    if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+    await recording().control(companyId, actor, d.experiment.id, { expectedRevision: 4, versionId: d.version.id, state: "completed", rationale, completion: { reason: "fixed_horizon", concurrentChangeReview: { assessment: "none_identified", rationale } } });
+    const started = performance.now();
+    const result = await businessExperimentAnalysisService(db).analyze(companyId, actor, d.experiment.id, { expectedRevision: 5, versionId: d.version.id });
+    expect(performance.now() - started).toBeLessThan(30000);
+    expect(result.analysis.qualityGates.finalOutcomeCapture).toBe("complete");
+    expect(result.analysis.qualityGates.exposureReports).toBe(true);
+    expect(result.analysis.result.diagnostics.assigned).toBe(4000);
+    const [stored]=await db.select({total:count()}).from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id));
+    expect(stored.total).toBe(68000);
+    expect(result.analysis.result.diagnostics.exposed).toBe(0);
+    const readAt = performance.now(), replay = await recording().receipts(companyId, actor, d.experiment.id, d.version.id);
+    expect(performance.now() - readAt).toBeLessThan(30000);
+    expect(replay.assignments).toHaveLength(4000); expect(replay.exposures).toHaveLength(4000);
+    expect(replay.analysis!.receiptHash).toBe(result.analysis.receiptHash);
+    expect(replay.analysis!.result).toEqual(result.analysis.result);
+    console.info("Maximum native outcome capture/replay",{units:4000,metrics:17,outcomes:stored.total,captureAndReadMs:Math.round(performance.now()-started),fixture:"explicit_bulk_software_prerequisites"});
+    const last=units[units.length-1];await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,last.id));
+    await expect(recording().receipts(companyId,actor,d.experiment.id,d.version.id)).rejects.toMatchObject({status:404});
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,last.id));
+    await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    const eraseAt=performance.now();
+    await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"issue",[last.id]);});
+    expect(performance.now()-eraseAt).toBeLessThan(30000);
+    expect(await db.select({id:businessExperiments.id}).from(businessExperiments).where(eq(businessExperiments.id,d.experiment.id))).toHaveLength(0);
+    expect(await db.select({id:businessExperimentOutcomes.id}).from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.companyId,companyId))).toHaveLength(0);
+    expect(await db.select({id:analyticalLineageManifests.id}).from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId,companyId))).toHaveLength(0);
+    expect(await db.select({id:issues.id}).from(issues).where(eq(issues.companyId,companyId))).toHaveLength(4000);
+  }, 300000);
 });

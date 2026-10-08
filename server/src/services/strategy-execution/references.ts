@@ -7,6 +7,7 @@ import { assertV7Authorization } from "../v7-authorization.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { canReadDecisionSource } from "../decision-queues.js";
 import { extractFoundationSections } from "../foundation/foundation-index.js";
+import type { NativeMetricInput } from "../business-metrics/native-engine.js";
 import { businessMetricService } from "../business-metrics/service.js";
 import { businessMetricTargetService } from "../business-metrics/targets.js";
 import {assertLearnedAssetAnalyticalSources} from "../learning/learning-analytical-sources.js";
@@ -16,22 +17,24 @@ export function strategyReferenceId(ref: StrategyExecutionReference) {
 }
 /** Current authority is checked separately from current version validity, so a
  * stale pin never makes a denied source visible through a review response. */
-export async function authorizeStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential") {
+export async function authorizeStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential", includeNativeSnapshot=false) {
   const issueIds = new Set<string>(), projectIds = new Set<string>();
   let metricObservation: BusinessMetricResult | undefined;
+  let nativeObject:{snapshot:NativeMetricInput;archived:boolean}|undefined;
   async function project(id: string) {
-    const [row] = await tx.select().from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).for("share");
+    const [row] = await tx.select({id:projects.id,status:projects.status,createdAt:projects.createdAt,updatedAt:projects.updatedAt,archivedAt:projects.archivedAt}).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).for("share");
     if (!row) throw notFound("Strategy project source is unavailable");
     await assertV7Authorization(tx, actor, companyId, "project:read", { type: "project", companyId, projectId: id });
     projectIds.add(id);
     return row;
   }
   async function issue(id: string) {
-    const [row] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, id), isNull(issues.hiddenAt))).for("share");
+    const [row] = await tx.select({id:issues.id,projectId:issues.projectId,parentId:issues.parentId,assigneeAgentId:issues.assigneeAgentId,assigneeUserId:issues.assigneeUserId,status:issues.status,originKind:issues.originKind,originId:issues.originId,createdAt:issues.createdAt,updatedAt:issues.updatedAt}).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, id), isNull(issues.hiddenAt))).for("share");
     if (!row) throw notFound("Strategy task source is unavailable");
     issueIds.add(id);
     await assertV7Authorization(tx, actor, companyId, "issue:read", { type: "issue", companyId, issueId: row.id, projectId: row.projectId, parentIssueId: row.parentId, assigneeAgentId: row.assigneeAgentId, assigneeUserId: row.assigneeUserId, status: row.status, originKind: row.originKind, originId: row.originId });
     if (row.projectId) await project(row.projectId);
+    return row;
   }
   async function metric(id: string, versionId: string) {
     const [row] = await tx.select().from(businessMetricVersions).where(and(eq(businessMetricVersions.companyId, companyId), eq(businessMetricVersions.metricId, id), eq(businessMetricVersions.id, versionId))).for("share");
@@ -57,8 +60,16 @@ export async function authorizeStrategyReference(tx: Db, companyId: string, acto
       if (!row) throw notFound("Strategy goal source is unavailable");
       break;
     }
-    case "project": await project(ref.id); break;
-    case "issue": await issue(ref.id); break;
+    case "project": {
+      const row=await project(ref.id);
+      if(includeNativeSnapshot)nativeObject={snapshot:{id:row.id,entity:"project",status:row.status,projectId:null,createdAt:row.createdAt.toISOString(),updatedAt:row.updatedAt.toISOString()},archived:!!row.archivedAt};
+      break;
+    }
+    case "issue": {
+      const row=await issue(ref.id);
+      if(includeNativeSnapshot)nativeObject={snapshot:{id:row.id,entity:"issue",status:row.status,projectId:row.projectId,createdAt:row.createdAt.toISOString(),updatedAt:row.updatedAt.toISOString()},archived:false};
+      break;
+    }
     case "milestone": {
       if (!v5FeatureEnabled(await instanceSettingsService(tx).getExperimental(), "project_roadmap_v5")) throw notFound("Native milestones are not enabled");
       const [row] = await tx.select().from(projectMilestones).where(and(eq(projectMilestones.companyId, companyId), eq(projectMilestones.id, ref.id), eq(projectMilestones.projectId, ref.projectId))).for("share");
@@ -92,7 +103,7 @@ export async function authorizeStrategyReference(tx: Db, companyId: string, acto
       metricObservation = await businessMetricService(tx).inspectCurrentObservation(companyId, actor, ref.id); break;
     }
   }
-  return { issueIds: [...issueIds], projectIds: [...projectIds], ...(metricObservation ? { metricObservation } : {}) };
+  return { issueIds: [...issueIds], projectIds: [...projectIds], ...(metricObservation ? { metricObservation } : {}),...(nativeObject?{nativeObject}:{}) };
 }
 
 export async function validateCurrentStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, now = new Date()) {

@@ -2,16 +2,20 @@
 
 Date: 2026-10-06. Reconciliation base: master
 `d550aa7ea5ad38b5209d79135cabaa227ab3f902`.
-Status as of native-owner checkpoint 41 (2026-10-08): default-off native
+Status as of native-owner checkpoint 46 (2026-10-08): default-off native
 Events, Metrics/targets, strategy links, Process analysis/findings, Decisions and
 outcome reviews, Forecasts, Scenarios, Experiments, causal analyses, adaptive
 project/initiative planning and Management Reviews are implemented. Separate
 Human proposals/review/application reuse their original canonical owners.
 Actual isolated StatsForecast and DoWhy software profiles are locally qualified.
 Native Context, runtime/Learning copies and bounded SDK Sources have local
-privacy/erasure evidence. The exact implementations, tested source hashes and
+privacy/erasure evidence. All twelve original analytical SDK paths have actual
+native dispatcher qualification. Native metrics cover the explicit 10,000-Source
+maximum, Forecasts cover 4,000 underlying Task Sources, and Experiments cover
+4,000 units with seventeen outcome metrics (68,000 outcomes), including complete
+capture, replay and flags-off/paused-company erasure. The exact tested source and
 limits are recorded in `doc/plans/2026-10-06-aw-v8-build.md` and
-`doc/operations/aw-v8-evidence/`. Full Source-graph completeness, other SDK and
+`doc/operations/aw-v8-evidence/`. Full Source-graph completeness, historical and
 indirect paths, current whole-branch release qualification and hosted acceptance
 remain open. This register grants neither access nor processing authority.
 
@@ -108,13 +112,13 @@ a verified Task outcome, business impact or authority to execute.
 | --- | --- | --- |
 | Process | Human publication, current native event watermarks, typed deterministic runs/findings and bounded interchange | `doc/plans/2026-10-06-aw-v8-build.md` and process owner tests |
 | Decisions/outcome review | Prospective exact pins, separate original choice, six independent Human judgments and reviewed Learning conversion | `aw-v8-evidence/native-decision-review-learning-checkpoint.json` |
-| Forecasts | Time-safe native baseline; explicit Human-pinned optional AutoETS/AutoARIMA; AutoTheta withheld | `aw-v8-evidence/native-statistical-forecast-checkpoint.json` |
+| Forecasts | Time-safe native baseline; explicit Human-pinned optional AutoETS/AutoARIMA; exact model intervals retained in advisory SDK; AutoTheta withheld | `aw-v8-evidence/native-statistical-sdk-interval-checkpoint.json` |
 | Scenarios | Typed units/equations, declared Human assumptions and reproducible bounded conditional simulation | `aw-v8-evidence/scenario-owner-checkpoint.json` |
-| Experiments | Original preregistration/allocation/exposure/final capture and separate Human interpretation; 4000 units with two metrics | `aw-v8-evidence/native-experiment-volume-checkpoint.json` |
+| Experiments | Original preregistration/allocation/exposure/final capture and separate Human interpretation; all 4000 units and 17 outcome metrics, exact replay and whole Source erasure | `aw-v8-evidence/native-experiment-maximum-outcome-checkpoint.json` |
 | Causal analysis | Separate Human graph/assumptions/review; registered primary interval; fixed optional DoWhy diagnostics with failed/unknown abstention | `aw-v8-evidence/native-dowhy-owner-checkpoint.json` |
 | Planning/initiative | Current complete selected project populations, actual Goals/accounting, signed proposal, independent review and original canonical application | `aw-v8-evidence/native-initiative-review-ui-checkpoint.json` |
 | Reviews/recurrence | Native Routine capture produces drafts; separate publication and explicit original Task handoff | `aw-v8-evidence/native-management-review-task-checkpoint.json` |
-| SDK Sources | Actual running native agent × current Human; complete Context retention before return; four advisory actions and 4000-Task local envelope | `aw-v8-evidence/native-sdk-action-volume-checkpoint.json` |
+| SDK Sources | Actual running native agent × current Human; all 12 analytical tool paths; complete Context retention before return; 10000-Source metric envelope; exact advisory Source pins | `aw-v8-evidence/native-sdk-remaining-owners-checkpoint.json`, `aw-v8-evidence/native-sdk-process-source-checkpoint.json`, `aw-v8-evidence/native-sdk-maximum-source-checkpoint.json` |
 | Runtime/Learning copies | Original Memory C7, Source fences, owned runtime files and original reviewed Learning owners | `aw-v8-evidence/native-remaining-learning-owners-checkpoint.json` |
 
 These receipts describe local source-specific development checks. They do not
@@ -123,3 +127,11 @@ playbooks and the complete brief are read in the corpus inventory. That reading
 claim is independent of source-completeness, privacy-graph completeness and release
 acceptance. `evals/aw-v8/readiness.json` records current implemented slices and open
 qualification work without promoting the release stage.
+
+MetricFlow and Cube have versioned public license/capability research in
+`aw-v8-evidence/semantic-provider-research.json`. The brief makes their actual
+adapter/conformance conditional on an existing customer semantic source. No
+customer dbt/warehouse or Cube authenticated source is supplied; both provider
+identities remain unqualified and cannot silently fall back to native truth.
+The explicit local volume cases do not establish hosted p95, cold-start latency,
+customer history, empirical interval coverage or business-impact acceptance.
