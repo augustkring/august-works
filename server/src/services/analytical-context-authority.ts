@@ -71,6 +71,8 @@ async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,actor:A
 }
 
 export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope) {
+ const [sourceReceipt]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid) as erased`);
+ if(sourceReceipt?.erased)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
  await assertLearnedWorkflowPayloadAccess(db,companyId,actor,scope,readScope);
  const nativeConversation="runId" in scope?await db.select({id:issues.id}).from(heartbeatRuns)
   .innerJoin(issues,and(eq(issues.companyId,heartbeatRuns.companyId),eq(issues.id,heartbeatRuns.nativeIssueId)))

@@ -1,3 +1,7 @@
+import { agentIdentities, agentExecutionManifests, agentExecutionManifestItems, contextManifests, memoryBindings } from "@paperclipai/db";
+import { agentExecutionManifestSchema, createGovernedSkillSchema } from "@paperclipai/shared";
+import { skillLifecycleService } from "../services/skill-lifecycle.js";
+import { companySkillService } from "../services/company-skills.js";
 import { buildRetainedNativeRuntimeContext, materializeAsset, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
 import { nativeRuntimeAssetsRoot, eraseNativeRuntimeAssets } from "../services/native-runtime/runtime-asset-retention.js";
 import {projects} from "@paperclipai/db";
@@ -212,6 +216,56 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
    if(priorHome===undefined)delete process.env.PAPERCLIP_HOME;else process.env.PAPERCLIP_HOME=priorHome;
    if(priorInstance===undefined)delete process.env.PAPERCLIP_INSTANCE_ID;else process.env.PAPERCLIP_INSTANCE_ID=priorInstance;
    await fs.rm(home,{recursive:true,force:true});
+  }
+ });
+ it.each(["profile","inventory"] as const)("fences and erases deleted Skill version copies using the actual %s owner without deleting independent outcomes",async(kind)=>{
+  const priorHome=process.env.PAPERCLIP_HOME,priorInstance=process.env.PAPERCLIP_INSTANCE_ID,home=await fs.mkdtemp(path.join(os.tmpdir(),"aw-native-skill-source-"));
+  process.env.PAPERCLIP_HOME=home;process.env.PAPERCLIP_INSTANCE_ID="skill-source";
+  try{
+   const f=await fixture();await f.capture();const privateRoot=await root();
+   await instanceSettingsService(db).updateExperimental({skill_lifecycle_v5:true});
+   const created=await skillLifecycleService(db).createDraft(board,companyId,createGovernedSkillSchema.parse({slug:"source-procedure",name:"Source procedure",markdown:"Synthetic native Skill procedure",sharing:"company_proposed"}));
+   const service=companySkillService(db),skill=(await service.getById(companyId,created.skillId))!;
+   const entries=await service.listRuntimeSkillEntries(companyId,{selectedSkillKeys:new Set([skill.key]),versionSelections:new Map([[skill.key,created.candidate.id]]),allowCandidateVersionsForTest:true});
+   const [agent]=await db.select().from(agents).where(eq(agents.id,agentId));
+   const input={db,agent:agent!,runId,runtimeConfig:{paperclipSkillSync:{desiredSkills:[skill.key]}},runtimeSkillEntries:entries};
+   // Native candidate test preparation and persisted profile/inventory fixtures;
+   // no promotion, provider execution or trial prerequisites are invented.
+   const context=await buildRetainedNativeRuntimeContext(input);
+   expect(context.skills[0]!.versionId).toBe(created.candidate.id);
+   expect(await readNativeRuntimeAssetText(context.skills[0]!.bundle,32000,{companyId,runId})).toEqual([{path:"SKILL.md",text:"Synthetic native Skill procedure"}]);
+   if(kind==="profile")await db.update(heartbeatRuns).set({runnerProfileJson:{nativeExecutionInput:{runtimeContext:context}}}).where(eq(heartbeatRuns.id,runId));
+   else{
+    const [identity]=await db.select().from(agentIdentities).where(eq(agentIdentities.id,agent!.agentIdentityId!));expect(identity).toBeDefined();
+    const [packet]=await db.select().from(contextManifests).where(eq(contextManifests.runId,runId));
+    const manifest=agentExecutionManifestSchema.parse({schemaVersion:5,runId,companyId,agentId,agentIdentityId:identity!.id,homeCompanyId:companyId,responsibleUserId:userId,
+     executionScope:{primaryCompanyId:companyId,primaryAgentPresenceId:agentId,delegatedScopes:[]},rolePack:null,contextManifests:[{companyId,contextManifestId:packet!.id}],
+     skills:[{skillId:skill.id,versionId:created.candidate.id,key:skill.key,name:skill.name,selection:"task_required",loadPoint:"always",estimatedDescriptorTokens:1}],playbooks:[],capabilities:[],
+     providers:[{companyId,agentId,providerBindingId:randomUUID(),profileRef:"software-fixture",snapshotHash:"fixture",isolationMode:"isolated_per_presence"}],
+     executionPolicy:{deterministicPreference:true,policies:[],approvalRefs:[],restrictions:[],policySnapshotHash:"fixture"},inventoryEstimatedTokens:1,warnings:[]});
+    const [inventory]=await db.insert(agentExecutionManifests).values({companyId,runId,agentId,agentIdentityId:identity!.id,contextManifestId:packet!.id,manifest,policySnapshotHash:"fixture",hash:"fixture"}).returning();
+    await db.insert(agentExecutionManifestItems).values({companyId,manifestId:inventory!.id,type:"skill",ref:skill.id,versionRef:created.candidate.id});
+    await db.update(heartbeatRuns).set({runnerProfileJson:null}).where(eq(heartbeatRuns.id,runId));
+   }
+   const [binding]=await db.insert(memoryBindings).values({companyId,key:"independent",name:"Independent outcome fixture",providerKey:"local"}).returning();
+   const [outcome]=await db.insert(memoryRecords).values({companyId,bindingId:binding!.id,providerKey:"local",memoryType:"outcome",scopeType:"company",content:"Independent verified outcome software fixture",reviewState:"accepted",verificationState:"human_verified",observedAt:new Date(),createdByActorType:"system",createdByActorId:"fixture"}).returning();
+   await copied();
+   await instanceSettingsService(db).updateExperimental({skill_lifecycle_v5:false,management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false,enableCollectiveMemoryV1:false,enablePrivateAgentMemoryV1:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+   await service.deleteSkill(companyId,skill.id);
+   expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);
+   await expect(assertAnalyticalContextPayloadAccess(db,companyId,actor(),{runId})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+   await expect(assertAnalyticalContextPayloadAccess(db,companyId,actor(),{issueId})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+   await expect(buildRetainedNativeRuntimeContext(input)).rejects.toThrow("native_runtime_asset_source_unavailable");
+   await memoryJobService(db).tick({limit:100});await erased();
+   await expect(fs.stat(nativeRuntimeAssetsRoot({companyId,runId}))).rejects.toMatchObject({code:"ENOENT"});await expect(fs.stat(entries[0]!.source)).rejects.toMatchObject({code:"ENOENT"});
+   expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,privateRoot.memoryRecordId)))[0]).toMatchObject({content:"",reviewState:"rejected",verificationState:"unverified"});
+   expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,outcome!.id)))[0]).toMatchObject({content:"Independent verified outcome software fixture",reviewState:"accepted",verificationState:"human_verified",deletedAt:null});
+   if(kind==="inventory")expect((await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId,runId)))[0]!.manifest).toEqual({payloadDeleted:true});
+   await db.update(heartbeatRuns).set({resultJson:{late:"Synthetic erased Skill copy"}}).where(eq(heartbeatRuns.id,runId));expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId)))[0]!.resultJson).toBeNull();
+  }finally{
+   if(priorHome===undefined)delete process.env.PAPERCLIP_HOME;else process.env.PAPERCLIP_HOME=priorHome;
+   if(priorInstance===undefined)delete process.env.PAPERCLIP_INSTANCE_ID;else process.env.PAPERCLIP_INSTANCE_ID=priorInstance;
+   const writable=async(directory:string):Promise<void>=>{const stat=await fs.lstat(directory);if(!stat.isDirectory()||stat.isSymbolicLink())return;await fs.chmod(directory,0o700);for(const name of await fs.readdir(directory))await writable(path.join(directory,name));};await writable(home);await fs.rm(home,{recursive:true,force:true});
   }
  });
  it.each(["issue","project","observation"])("queues the original retention sweep for actual %s deletion with all relevant flags off and company paused",async(kind)=>{

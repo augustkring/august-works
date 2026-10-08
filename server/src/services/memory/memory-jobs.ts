@@ -393,6 +393,13 @@ export function memoryJobService(
 
   async function executeRetention(job: MemoryJob, now: Date) {
     const source = record(job.sourceRefJson);
+    if (source.kind === "runtime_skill_source_erasure") {
+      if (typeof source.runId !== "string" || typeof source.versionId !== "string" ||
+        job.jobKey !== `runtime-skill-source-erasure:v1:${source.runId}:${source.versionId}`) throw unprocessable("Invalid native Skill runtime erasure binding");
+      const { eraseSkillRuntimeCopies } = await import("../learning/skill-file-erasure.js");
+      await eraseSkillRuntimeCopies(db, job.companyId, source.runId, source.versionId);
+      return { summary: "Erased the deleted Skill version's actual runtime copies.", result: { processedRunCount: 1 } };
+    }
     if (source.kind === "runtime_asset_erasure") {
       if (typeof source.runId !== "string" || !Array.isArray(source.legacyDigests) || source.legacyDigests.some(value => typeof value !== "string")) throw unprocessable("Invalid native runtime asset erasure binding");
       const digests = source.legacyDigests as string[];
@@ -617,7 +624,7 @@ export function memoryJobService(
     await db.update(memoryJobs).set({status:"queued",finishedAt:null,error:null,errorCode:null,updatedAt:now})
       .where(and(eq(memoryJobs.operationType,"retention"),eq(memoryJobs.status,"failed"),
         lte(memoryJobs.updatedAt,new Date(now.getTime()-60000)),
-        sql`(${memoryJobs.sourceRefJson}->>'kind' in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure') or (${memoryJobs.sourceRefJson}->>'kind'='retention_sweep' and ${memoryJobs.jobKey} like 'analytical-context-erasure:v1:%'))`));
+        sql`(${memoryJobs.sourceRefJson}->>'kind' in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure','runtime_skill_source_erasure') or (${memoryJobs.sourceRefJson}->>'kind'='retention_sweep' and ${memoryJobs.jobKey} like 'analytical-context-erasure:v1:%'))`));
     const recovered = await recoverExpiredLeases(now);
     const [backfilled, retentionQueued] = await Promise.all([
       enqueueMissingPostRunCaptures(),

@@ -3004,6 +3004,13 @@
       "when": 1791418489665,
       "tag": "0430_native_runtime_asset_erasure",
       "breakpoints": true
+    },
+    {
+      "idx": 431,
+      "version": "7",
+      "when": 1791419467079,
+      "tag": "0431_native_skill_source_run_erasure",
+      "breakpoints": true
     }
   ]
 }
