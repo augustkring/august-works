@@ -49,6 +49,32 @@ export const managementReviewDefinitionSchema = z.object({
 export const publishManagementReviewSchema = z.object({ expectedContentHash: sha, rationale: z.string().trim().min(10).max(2000), evidenceAndUncertaintyAcknowledged: z.literal(true), supersedesId: z.string().uuid().nullable().default(null) }).strict();
 export const recordManagementReviewEventSchema = z.object({ expectedContentHash: sha, itemKey: key, event: z.enum(["opened", "ignored", "acted_on", "false_alarm", "correction"]), rationale: z.string().trim().min(10).max(2000) }).strict();
 export type ManagementReviewDefinition = z.infer<typeof managementReviewDefinitionSchema>;
+/** Stored on a native Routine revision; observations are resolved afresh per run. */
+export const routineManagementReviewTemplateSchema = z.object({
+  name: managementReviewDefinitionSchema.shape.name,
+  reviewType: managementReviewDefinitionSchema.shape.reviewType,
+  purpose: managementReviewDefinitionSchema.shape.purpose,
+  sensitivity: managementReviewDefinitionSchema.shape.sensitivity,
+  retentionDays: managementReviewDefinitionSchema.shape.retentionDays,
+  governanceObligationRefs: managementReviewDefinitionSchema.shape.governanceObligationRefs,
+  periodDays: z.number().int().min(1).max(366),
+  sources: z.array(z.object({ key, selector: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("metric_query"), metricId: z.string().uuid(), offsetDays: z.number().int().min(0).max(366).default(0), dimensions: z.array(z.enum(["status", "project"])).max(2).default([]), maxRows: z.number().int().min(1).max(10000).default(5000) }).strict(),
+    z.object({ kind: z.literal("canonical"), reference: strategyExecutionReferenceSchema.refine(ref => ["goal", "project", "milestone", "issue", "metric_target", "decision"].includes(ref.type), "Use a fresh metric selector rather than a stored analytical observation") }).strict(),
+  ]) }).strict()).min(1).max(20),
+  comparisons: managementReviewDefinitionSchema.shape.comparisons,
+  agenda: z.array(managementReviewDefinitionSchema.shape.agenda.element.omit({ dueAt: true }).extend({ dueAfterDays: z.number().int().min(0).max(366) })).min(1).max(10),
+}).strict().superRefine((value, ctx) => {
+  const keys = new Set(value.sources.map(item => item.key));
+  const issue = (message: string) => ctx.addIssue({ code: "custom", message });
+  if (keys.size !== value.sources.length || value.agenda.some(item => new Set(item.sourceKeys).size !== item.sourceKeys.length || item.sourceKeys.some(key => !keys.has(key)))) issue("Every agenda citation must name a distinct declared selector");
+  if (new Set(value.agenda.map(item => item.key)).size !== value.agenda.length || new Set(value.governanceObligationRefs).size !== value.governanceObligationRefs.length || new Set(value.comparisons?.map(item => item.key)).size !== (value.comparisons?.length ?? 0)) issue("Agenda, comparison and governance declarations must be unique");
+  for (const comparison of value.comparisons ?? []) {
+    const left = value.sources.find(item => item.key === comparison.leftSourceKey)?.selector, right = value.sources.find(item => item.key === comparison.rightSourceKey)?.selector;
+    if (!left || comparison.leftSourceKey === comparison.rightSourceKey || right?.kind !== "metric_query" || (comparison.kind === "metric_change" ? left.kind !== "metric_query" : left.kind !== "canonical" || left.reference.type !== "metric_target")) issue("Comparisons require the declared native target and fresh metric selectors");
+  }
+});
+export type RoutineManagementReviewTemplate = z.infer<typeof routineManagementReviewTemplateSchema>;
 export type ManagementReviewSource = z.infer<typeof managementReviewSourceSchema>;
 export const managementSourceOptionsQuerySchema = z.object({
   kind: z.enum(["foundation_section", "goal", "project", "milestone", "issue", "decision", "metric", "metric_target", "metric_observation", "decision_outcome", "learning_cycle", "governance_obligation"]),

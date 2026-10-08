@@ -247,7 +247,14 @@ export function RoutineOverview() {
         ) : (
           <div className="flex flex-col gap-0.5">
             {recentRuns.map((run) =>
-              run.linkedIssue ? (
+              run.linkedManagementReviewId ? (
+                <div key={run.id} className="flex flex-wrap items-center gap-2 rounded-lg px-2 py-2 text-sm">
+                  <StatusBadge status={run.linkedWorkflowRunStatus ?? run.status} />
+                  <Link className="underline underline-offset-4" to={`/management-reviews?${new URLSearchParams({reviewId:run.linkedManagementReviewId,reviewCompanyId:routine.companyId})}`}>Open review draft</Link>
+                  {run.linkedWorkflowRunId && run.linkedWorkflowId && <Link className="underline underline-offset-4" to={`/workflows/${run.linkedWorkflowId}/runs/${run.linkedWorkflowRunId}`}>Open Workflow run</Link>}
+                  <span className="font-mono text-xs text-muted-foreground">{formatRoutineTimestamp(run.triggeredAt)}</span>
+                </div>
+              ) : run.linkedIssue ? (
                 <IssueRow
                   key={run.id}
                   issue={routineRunIssue(

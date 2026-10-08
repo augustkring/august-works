@@ -59,9 +59,9 @@ export function managementReviewService(db: Db) {
     async sourceOptions(companyId: string, actor: AuthorizationActor, raw: ManagementSourceOptionsQuery) { const query = managementSourceOptionsQuerySchema.parse(raw); return db.transaction(async transaction => { const tx = transaction as unknown as Db; await admit(tx, companyId, actor); return managementSourceOptions(tx, companyId, actor, query); }); },
     async controls(companyId: string, actor: AuthorizationActor, cursor?: string) { return db.transaction(async raw => { const tx = raw as unknown as Db; await admit(tx, companyId, actor, false, false); const rows = await tx.select({ id: managementReviewSnapshots.id, status: managementReviewSnapshots.status, createdAt: managementReviewSnapshots.createdAt, expiresAt: managementReviewSnapshots.expiresAt }).from(managementReviewSnapshots).where(and(eq(managementReviewSnapshots.companyId, companyId), cursor ? sql`${managementReviewSnapshots.id}>${cursor}::uuid` : undefined)).orderBy(asc(managementReviewSnapshots.id)).limit(21); return { items: rows.slice(0, 20).map(row => ({ ...row, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString() })), nextCursor: rows.length > 20 ? rows[19]!.id : null, coverage: "bounded_native_review_metadata" as const }; }); },
     async detail(companyId: string, actor: AuthorizationActor, id: string) { return db.transaction(async raw => { const tx = raw as unknown as Db; await admit(tx, companyId, actor); return retained(tx, companyId, actor, await root(tx, companyId, id)); }); },
-    async create(companyId: string, actor: AuthorizationActor, raw: ManagementReviewDefinition) {
+    async create(companyId: string, actor: AuthorizationActor, raw: ManagementReviewDefinition, retainedPublications?: Parameters<typeof logActivity>[2]) {
       const definition = managementReviewDefinitionSchema.parse(raw);
-      return withV7ActivityTransaction(db, async (tx, publications) => {
+      const draft = async (tx: Db, publications: Parameters<typeof logActivity>[2]) => {
         await admit(tx, companyId, actor, true); const captured = await captureManagementSources(tx, companyId, actor, definition), packet = composeManagementReview(definition, captured.sources, captured.asOf.toISOString());
         if (new TextEncoder().encode(JSON.stringify(captured.sources)).length > 512000) throw conflict("Management original evidence exceeds the 512 KB retained source budget");
         const id = randomUUID(), lineageManifestId = randomUUID(), createdBy = v7HumanActorId(actor), material = { id, companyId, definition, sources: captured.sources, packet, contentHash: packet.contentHash, createdBy, createdAt: captured.asOf, expiresAt: captured.expiresAt }, signature = signDecisionSpec(proof(material, captured.edges, captured.links, captured.dependencies));
@@ -73,7 +73,8 @@ export function managementReviewService(db: Db) {
         await tx.insert(managementReviewGovernanceDependencies).values(governanceRoots(definition).map(obligationId => ({ companyId, reviewId: id, obligationId })));
         await logActivity(tx, { companyId, actorType: "user", actorId: createdBy, action: "management_review.drafted", entityType: "management_review", entityId: id, details: { contentHash: packet.contentHash } }, publications);
         return { id, companyId, status: "draft" as const, contentHash: packet.contentHash };
-      });
+      };
+      return retainedPublications ? draft(db, retainedPublications) : withV7ActivityTransaction(db, draft);
     },
     async publish(companyId: string, actor: AuthorizationActor, id: string, raw: unknown) {
       const input = publishManagementReviewSchema.parse(raw);
