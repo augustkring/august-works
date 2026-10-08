@@ -11,6 +11,7 @@ import {
   projects,
 } from "@paperclipai/db";
 import { budgetService } from "../services/budgets.ts";
+import { projectService } from "../services/projects.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -533,6 +534,19 @@ describeEmbeddedPostgres("budgetService release gate enforcement", () => {
     }
   });
 
+  it("honors canonical Human project holds and stop status at the original dispatch gate without granting budget resume", async () => {
+    const { companyId, agentId, projectId } = await createBudgetFixture(), service = budgetService(db), owner = projectService(db);
+    expect(await service.getInvocationBlock(companyId, agentId, { projectId })).toBeNull();
+    await owner.update(projectId, { pauseReason: "manual", pausedAt: new Date() });
+    expect(await service.getInvocationBlock(companyId, agentId, { projectId })).toEqual({ scopeType: "project", scopeId: projectId, scopeName: "Budget Project", reason: "Project is paused and cannot start new work." });
+    // A budget policy adjustment cannot remove a separate Human project hold.
+    await service.upsertPolicy(companyId, { scopeType: "project", scopeId: projectId, metric: "billed_cents", windowKind: "lifetime", amount: 1000, warnPercent: 80, hardStopEnabled: true, notifyEnabled: true, isActive: true }, "software_human");
+    expect(await service.getInvocationBlock(companyId, agentId, { projectId })).toMatchObject({ reason: "Project is paused and cannot start new work." });
+    await owner.update(projectId, { pauseReason: null, pausedAt: null, status: "cancelled" });
+    expect(await service.getInvocationBlock(companyId, agentId, { projectId })).toMatchObject({ reason: "Project is stopped and cannot start new work." });
+    await owner.update(projectId, { status: "planned" });
+    expect(await service.getInvocationBlock(companyId, agentId, { projectId })).toBeNull();
+  });
   it("hard-stops project work until a valid budget raise resumes it and overview reconciles ledger spend", async () => {
     const { companyId, agentId, projectId } = await createBudgetFixture();
     const cancelWorkForScope = vi.fn().mockResolvedValue(undefined);

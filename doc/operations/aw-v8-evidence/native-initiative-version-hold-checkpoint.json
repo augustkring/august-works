@@ -1,0 +1,55 @@
+{
+  "checkpoint": "Current initiative Source JSON version pins and original Human project dispatch holds",
+  "parentCommit": "330a3d8774134776b567f5a72e54368ba65f34ff",
+  "primaryParentCommit": "a0192dd05991ebb6161bffb1818ce9cb16a1c1e2",
+  "recordedAt": "2026-10-08T08:44:38.642651+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "bd6210f3c3ab7438bb3b464b948e376d45f40c93339dbbb332e6f5bba5923d91"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-cross-project.integration.test.ts",
+      "sha256": "737d49446ff8186cfd994de5f792ae2617423e69d59db8186ad93c5053e26412"
+    },
+    {
+      "path": "server/src/__tests__/budgets-service.test.ts",
+      "sha256": "dd3ff2600521c32d9b490b21903b7ec732d17decbc07ce89696d131ee3352ae8"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/portfolio.ts",
+      "sha256": "bc4d5fca7c9d62d535a0c4b370db220daa223f81ebc1656b8aa6d5582986cc46"
+    },
+    {
+      "path": "server/src/services/budgets.ts",
+      "sha256": "6dc79ffb51e942f65c640d5ed7f74f12466266b88ee58e59d23efbf024d07bda"
+    }
+  ],
+  "validation": {
+    "nativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-version-hold-native-tests.log",
+      "sha256": "9e099c837b1354a94012c24b9bb2e06f89e2dc007cf56844d1ec2a021110d67c",
+      "tests": 20,
+      "files": 2,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-initiative-version-hold-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "qualified": [
+    "Native Goal/association/budget version-only changes alter Source hash while sanitized mathematical result stays identical",
+    "Original canonical project service updates are honored by the original invocation gate",
+    "Budget policy adjustment preserves separate manual project hold",
+    "Cancelled/stopped project blocks new work; explicit canonical return to planned removes that block"
+  ],
+  "limitations": [
+    "No active-run cancellation or new execution authority",
+    "Software native mutation fixtures do not perform Human/provider/pilot trials, authenticated dispatch or business impact",
+    "Persisted initiative proposal and separate canonical review remain to implement",
+    "Whole brief and hosted acceptance remain in progress"
+  ]
+}

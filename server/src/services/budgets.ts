@@ -855,6 +855,7 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
           id: projects.id,
           name: projects.name,
           companyId: projects.companyId,
+          status: projects.status,
           pauseReason: projects.pauseReason,
           pausedAt: projects.pausedAt,
         })
@@ -863,6 +864,12 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
         .then((rows) => rows[0] ?? null);
 
       if (!project || project.companyId !== companyId) return null;
+      // The existing dispatch gate must respect canonical Human project holds
+      // as well as budget holds. This grants no cancellation or resume action.
+      if (project.status === "cancelled" || project.pausedAt && project.pauseReason !== "budget") return {
+        scopeType: "project" as const, scopeId: project.id, scopeName: project.name,
+        reason: project.status === "cancelled" ? "Project is stopped and cannot start new work." : "Project is paused and cannot start new work.",
+      };
       const projectPolicy = await db
         .select()
         .from(budgetPolicies)
