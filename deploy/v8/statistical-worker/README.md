@@ -35,6 +35,8 @@ finish in the declared envelope remain unavailable/inconclusive.
 
 The Dockerfile pins the published Python image index and installs the same
 hashed wheels. Build from the repository root for Linux amd64. Running that image
+uses explicit read-only asset modes, so a restrictive checkout/build umask cannot
+make the fixed worker or dependency manifest unreadable by UID 65532. Running it
 requires a read-only root, no network or credentials, an ephemeral private tmpfs,
 a non-root identity and explicit memory/CPU/PID/output/deadline limits. The image
 is an optional packaging path, not a runtime qualification claim. Record and
