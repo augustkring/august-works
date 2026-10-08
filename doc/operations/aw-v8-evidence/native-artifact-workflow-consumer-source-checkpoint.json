@@ -1,0 +1,86 @@
+{
+  "checkpoint": "Current native Workflow consumer admits source-derived Artifact execution",
+  "parentCommit": "4db8f592cd586a930afac5cd44c30c7c3f82d9de",
+  "recordedAt": "2026-10-08T03:29:50.991986+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "3d91293986e2fe3efb6c48327bf04c1cf0c9759f262cff0d9ced2e3276c2b426"
+    },
+    {
+      "path": "packages/db/src/migrations/0436_native_learning_verified_source_current.sql",
+      "sha256": "4d649b903aa06bf4e7bd0c53c77e2ea7f2caba2630dd7dd2654a928e63a067d5"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0431_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0436_snapshot.json",
+      "sha256": "1611168c5a168ae1b5d86aa031b0d341cbbba524e4a02158e13ed3a416e2d917"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "0d6fe2768bc221e320c2de645f2e1c1e804cadd86476c177cecfd9e3aa597e44"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "d59f2063bdddb07ccab44b5769c9b6486ee99b7cd68257208314dd70a24cbe6a"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "ef62dd241504beca0d88f2289e6f6547adb2dbee3048f6a033d232aa059e1ed3"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-runtime.ts",
+      "sha256": "b04c66117618316ec30a510f514f58e5dd07748abf7020eeb0ecee290e07bc9d"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-workflow-source.ts",
+      "sha256": "6f467150da9f35a6b6d40faeac4bd8fece4d46b19018bbc648ddcb356d201451"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-workspace.ts",
+      "sha256": "a2ab364512b4c2b1ef7e9fda54c93500794fd9409c48bb612e868cbe834ab2aa"
+    },
+    {
+      "path": "server/src/services/workflows/workflow-executor.ts",
+      "sha256": "e7010e5b42bb0fae8270e66417e77c25c5ccbbc86abb5817a6b62fd50d68c778"
+    }
+  ],
+  "validation": {
+    "nativeOwners": {
+      "tests": 214,
+      "files": 9,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-artifact-workflow-consumer-final-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-artifact-workflow-consumer-final-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-artifact-workflow-consumer-migrations.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "c7ef7d598b0dd569d5f60785a1ef41c622ca6a17",
+      "log": "/var/tmp/aw-v8-native-build-artifact-copy.log"
+    }
+  },
+  "qualified": [
+    "Actual running native step, revision graph, immutable version pin, principal, agent run and lease match before/after Source use",
+    "Original compiler/security/replay and ordinary Workflow execute actual source-derived TypeScript code under the native filesystem owner",
+    "Another principal cannot borrow a live step; completed/historical consumers and standalone Source-derived execution are denied",
+    "Complete Run checkpoint/body Source admission, original verified Memory gate repeated in shared SQL predicate",
+    "Hidden Source, withdrawn Memory verification and original C7 with flags off/paused companies preserve foreign data and independent verified outcomes"
+  ],
+  "limits": [
+    "TypeScript classification, active lifecycle and Human identity are software prerequisites, not qualified promotion/model suggestions/browser or Human/provider trials",
+    "Dedicated native Agent \u00d7 Human Artifact end-to-end case unqualified",
+    "Optimizer live analytical Source fence remains closed pending native observation/copy owner qualification",
+    "Scenario retains Optimizer-derived calculator exclusion",
+    "No hosted populated backfill, hard latency, maximum-volume or whole-brief acceptance; remaining Planning/Routine/action/Source/provider/hosted work stays open"
+  ]
+}

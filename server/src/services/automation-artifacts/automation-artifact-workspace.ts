@@ -1,3 +1,4 @@
+import { assertLearningAssetCurrent } from "../learning/learning-assets.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -8,7 +9,7 @@ import { conflict, forbidden } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assertRuntimeStorageDirectories, removeRuntimeStorageTree } from "../runtime-skill-cache.js";
-import { assertLearnedAssetAnalyticalSources, learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
+import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
 import { executeAutomationArtifactTypeScriptSandbox } from "./automation-artifact-code-runtime.js";
 import type { AutomationArtifactMutationActor } from "./automation-artifact-service.js";
 
@@ -46,8 +47,9 @@ export async function executeNativeArtifactCode(db: Db, owner: Owner, actor: Aut
     // use a version lock only after the Source owners support finer concurrency.
     await lockAnalyticalCompany(tx, owner.companyId); await lockMemoryPrivacy(tx, owner.companyId);
     if (await erased(tx, owner)) throw forbidden("Artifact Source is unavailable", { code: "analytical_source_access_lost" });
-    await assertLearnedAssetAnalyticalSources(tx, owner.companyId, "automation_artifact_version", owner.versionId,
+    const checkSource = () => assertLearningAssetCurrent(tx, owner.companyId, "automation_artifact_version", owner.versionId,
       actor.sourceActor ?? learningActorFromPrincipal(owner.companyId, actor.principal, actor.runId));
+    await checkSource();
     const [version] = await tx.select().from(automationArtifactVersions).where(and(
       eq(automationArtifactVersions.companyId, owner.companyId), eq(automationArtifactVersions.id, owner.versionId)));
     const [root] = version ? await tx.select().from(automationArtifacts).where(and(
@@ -63,7 +65,11 @@ export async function executeNativeArtifactCode(db: Db, owner: Owner, actor: Aut
     const directory = artifactWorkspaceDirectory(owner);
     await assertRuntimeStorageDirectories(directory, resolvePaperclipInstanceRoot(), true);
     await fs.chmod(directory, 0o700);
-    try { return await executeAutomationArtifactTypeScriptSandbox({ ...input, workspaceDirectory: directory }); }
+    try {
+      const result = await executeAutomationArtifactTypeScriptSandbox({ ...input, workspaceDirectory: directory });
+      await checkSource();
+      return result;
+    }
     finally { await clearWorkspace(owner); }
   });
 }

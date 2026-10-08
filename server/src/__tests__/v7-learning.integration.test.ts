@@ -1,3 +1,4 @@
+import * as artifactRuntime from "../services/automation-artifacts/automation-artifact-runtime.js";
 import {companySkillTestRunCreateSchema} from "@paperclipai/shared";
 import {companySkillEvalRuns,companySkillEvalSuites,companySkillEvalCases,companySkillEvalScores} from "@paperclipai/db";
 import {skillEvaluationService} from "../services/skill-evaluations.js";
@@ -28,9 +29,9 @@ import {automationArtifactRuntimeService} from "../services/automation-artifacts
 import {artifactWorkspaceDirectory} from "../services/automation-artifacts/automation-artifact-workspace.js";
 import {assertRuntimeStorageDirectories} from "../services/runtime-skill-cache.js";
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflows, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, providerTraceRecords, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
+import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflowOptimizerSuggestions, workflows, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, providerTraceRecords, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
 import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, type LearningChange } from "@paperclipai/shared";
 import { learningService } from "../services/learning/learning-service.js";
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
@@ -215,6 +216,12 @@ const support = await getEmbeddedPostgresTestSupport();
     }
     const suggestion = (await optimizerSuggestionService(db).forWorkflow(companyId, created.id))!.suggestions.find(item => item.operationTypes.length === 1 && item.operationTypes[0] === "core.transform")!;
     const request = await proposeOptimizerCandidate(db, companyId, created.id, suggestion.id,owner);
+    if(sourceKind==="artifact_signal"){
+      // Native TypeScript classification prerequisite, not a model suggestion.
+      await instanceSettingsService(db).updateExperimental({enableAutomationArtifactCodeExecutionV1:true});
+      await db.update(workflowOptimizerSuggestions).set({candidateType:"typescript"}).where(eq(workflowOptimizerSuggestions.id,suggestion.id));
+      request.kind="typescript";request.sourceCode="export default (input: { value: number }) => ({ value: input.value });";
+    }
     const optimizer = optimizerEvaluationService(db), replay = await optimizer.compile(companyId, created.id, suggestion.id, request, principal);
     expect(replay.gatesPassed).toBe(true);
     const [evaluation] = await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id, replay.evaluationId));
@@ -230,7 +237,7 @@ const support = await getEmbeddedPostgresTestSupport();
     }
     expect((await db.select().from(automationArtifacts).where(eq(automationArtifacts.id,replay.artifactId)))[0]!.status).toBe("testing");
     await expect(optimizer.startShadow(companyId,replay.evaluationId,{principal:{type:"user",userId:"unrelated-unadmitted-reviewer"}})).rejects.toMatchObject({status:403});
-    let descendantVersionId:string|null=null, artifactChildTaskId:string|null=null;
+    let descendantVersionId:string|null=null, artifactChildTaskId:string|null=null, sourcefulRunId:string|null=null;
     if(signal){
       const [consumer] = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, created.id)));
       // Actual native owner IDs; the association is a software provenance
@@ -272,6 +279,60 @@ const support = await getEmbeddedPostgresTestSupport();
       await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
       expect((await executor.getRun(companyId, consumer!.id, owner))!.steps.find(step => step.nodeId === "copy")!.outputJson).toEqual({ value: expect.any(Number) });
       await expect(assertAnalyticalContextPayloadAccess(db,companyId,owner,{issueId:artifactChildTaskId!})).resolves.toBeUndefined();
+      if (sourceKind === "artifact_signal") {
+        // Active lifecycle is an explicit software prerequisite for isolating
+        // runtime admission. This is not an Optimizer promotion/approval proof.
+        await db.update(automationArtifacts).set({ status: "active" }).where(eq(automationArtifacts.id,replay.artifactId));
+        // Same declared Human as the analytical Source; membership is a
+        // software identity prerequisite, not a browser/JWT session proof.
+        await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",status:"active",membershipRole:"owner"});
+        const human = { principal: { type: "user" as const, userId: "local-board" } };
+        try {
+          const runtime = automationArtifactRuntimeService(db);
+          await expect(runtime.execute(companyId,replay.artifactId,replay.artifactVersionId,{value:7},human)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+          const ordinary = await service.create(companyId,{name:"Source-retained native Artifact consumer"},human);
+          const draft = await service.updateDraft(companyId,ordinary.id,{expectedRevisionId:ordinary.draftRevisionId!,graph:{version:1,nodes:[
+            {id:"start",type:"core.manual_trigger",name:"Start",position:{x:0,y:0},config:{}},
+            {id:"artifact",type:"automation.artifact",name:"Execute exact learned version",position:{x:100,y:0},config:{artifactId:replay.artifactId,artifactVersionId:replay.artifactVersionId}},
+            {id:"copy",type:"core.transform",name:"Copy native output",position:{x:200,y:0},config:{mapping:{value:"{{input.value}}"}}},
+          ],edges:[{id:"execute",source:"start",target:"artifact"},{id:"copy",source:"artifact",target:"copy"}],variables:[],settings:{}}},human);
+          await service.publish(companyId,ordinary.id,{expectedDraftRevisionId:draft.draftRevisionId!,expectedPublishedRevisionId:null,approvalId:null},human);
+          const originalRuntime = artifactRuntime.automationArtifactRuntimeService;
+          const spy = vi.spyOn(artifactRuntime,"automationArtifactRuntimeService").mockImplementation(scopedDb => {
+            const runtime = originalRuntime(scopedDb);
+            return {...runtime,execute:async(...args)=>{
+              await expect(runtime.execute(args[0],args[1],args[2],args[3],{principal:{type:"user",userId:"local-reviewer"}},args[5]))
+                .rejects.toMatchObject({details:{code:"workflow_artifact_consumer_changed"}});
+              return runtime.execute(...args);
+            }};
+          });
+          let completed:Awaited<ReturnType<typeof executor.startManualRun>>;
+          try { completed=await executor.startManualRun(companyId,ordinary.id,{input:{value:7}},human,null); }
+          finally { spy.mockRestore(); }
+          expect(completed.run.status,JSON.stringify({failure:completed.run.failureMessage,steps:completed.steps.map(step=>({nodeId:step.nodeId,errorCode:step.errorCode,errorMessage:step.errorMessage}))})).toBe("succeeded");
+          sourcefulRunId=completed.run.id;
+          await expect(fs.lstat(artifactWorkspaceDirectory({companyId,versionId:replay.artifactVersionId}))).rejects.toMatchObject({code:"ENOENT"});
+          await db.update(memoryRecords).set({verificationState:"unverified"}).where(eq(memoryRecords.id,roots[0]!));
+          expect((await db.execute(sql`select aw_learning_link_current(${companyId}::uuid,${link.id}::uuid) as current`))[0]).toMatchObject({current:false});
+          await expect(executor.getRun(companyId,completed.run.id,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+          await db.update(memoryRecords).set({verificationState:"human_verified"}).where(eq(memoryRecords.id,roots[0]!));
+          await expect(executor.startManualRun(companyId,ordinary.id,{input:{value:9}},{principal:{type:"user",userId:"local-reviewer"}},null)).resolves.toMatchObject({run:{status:"succeeded"}});
+
+          const pinned = completed.steps.find(step=>step.nodeId==="artifact")!;
+          expect(pinned).toMatchObject({automationArtifactVersionId:replay.artifactVersionId,outputJson:{value:7}});
+          expect(completed.steps.find(step=>step.nodeId==="copy")!.outputJson).toEqual({value:7});
+          await expect(runtime.execute(companyId,replay.artifactId,replay.artifactVersionId,{value:7},human,
+            {consumer:{stepId:pinned.id,executionOwnerId:"historical-owner"}})).rejects.toMatchObject({details:{code:"workflow_artifact_consumer_changed"}});
+          await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+          await expect(executor.getRun(companyId,completed.run.id,owner)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+          await expect(executor.startManualRun(companyId,ordinary.id,{input:{value:9}},human,null)).resolves.toMatchObject({run:{status:"failed"}});
+          await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
+          expect((await executor.getRun(companyId,completed.run.id,owner))!.steps.find(step=>step.nodeId==="copy")!.outputJson).toEqual({value:7});
+        } finally {
+          await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
+          await db.update(automationArtifacts).set({status:"testing"}).where(eq(automationArtifacts.id,replay.artifactId));
+        }
+      }
 
     }
     await optimizer.startShadow(companyId, replay.evaluationId, principal);
@@ -281,7 +342,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await artifacts.transitionStatus(companyId,replay.artifactId,{expectedStatus:"shadow",expectedLatestVersionId:replay.artifactVersionId,status:"candidate"},principal);
       const detail=(await artifacts.getDetail(companyId,replay.artifactId,principal))!;
       const version=detail.latestVersion!;
-      const descendant=await artifacts.appendVersion(companyId,replay.artifactId,{expectedLatestVersionId:version.id,sourceCode:'{"value":"{{input.value}}","reviewed":"true"}',inputSchema:version.inputSchema,outputSchema:version.outputSchema,dependencyManifest:version.dependencyManifest,testSpec:version.testSpec},principal);
+      const descendant=await artifacts.appendVersion(companyId,replay.artifactId,{expectedLatestVersionId:version.id,sourceCode:sourceKind==="artifact_signal"?"export default (input: { value: number }) => ({ value: input.value, reviewed: true });":'{"value":"{{input.value}}","reviewed":"true"}',inputSchema:version.inputSchema,outputSchema:version.outputSchema,dependencyManifest:version.dependencyManifest,testSpec:version.testSpec},principal);
       descendantVersionId=descendant.latestVersion!.id;
       expect(descendantVersionId).not.toBe(replay.artifactVersionId);
 
@@ -304,6 +365,12 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await db.select().from(issues).where(eq(issues.id,artifactChildTaskId!)))[0]).toMatchObject({title:"Erased workflow task",description:null});
       await db.update(issues).set({description:"Restored private analytical procedure"}).where(eq(issues.id,artifactChildTaskId!));
       expect((await db.select().from(issues).where(eq(issues.id,artifactChildTaskId!)))[0]!.description).toBeNull();
+      if(sourcefulRunId){
+        const steps=await db.select().from(workflowStepRuns).where(eq(workflowStepRuns.workflowRunId,sourcefulRunId));
+        expect(steps.every(step=>step.inputJson===null&&step.outputJson===null&&step.taskResultJson===null)).toBe(true);
+        expect(steps.find(step=>step.nodeId==="artifact")!.automationArtifactVersionId).toBe(replay.artifactVersionId);
+      }
+
 
       expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[0]!)))[0]!.deletedAt).toBeNull();
     }else await db.transaction(async tx => purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]));

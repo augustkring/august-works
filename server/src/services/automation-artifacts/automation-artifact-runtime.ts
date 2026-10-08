@@ -1,6 +1,8 @@
+import { withNativeArtifactWorkflowSource, type NativeArtifactWorkflowConsumer } from "./automation-artifact-workflow-source.js";
+import { assertLearningAssetCurrent } from "../learning/learning-assets.js";
+import type { AuthorizationActor } from "../authorization.js";
 import {lockAnalyticalCompany} from "../analytical-privacy.js";
 import {lockMemoryPrivacy} from "../memory/memory-privacy.js";
-import {assertLearnedAssetAnalyticalSources} from "../learning/learning-analytical-sources.js";
 import { automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
 import { and, eq } from "drizzle-orm";
 import {
@@ -63,8 +65,6 @@ function validateValueAgainstSchema(
  * any artifact may enter active/shadow state.
  */
 export function automationArtifactRuntimeService(db: Db) {
-  const artifacts = automationArtifactService(db);
-  const settings = instanceSettingsService(db);
 
   function qualifiedBinding(artifact: AutomationArtifact, latestVersion: AutomationArtifactVersion): AutomationArtifactRuntimeBinding {
     const validation = automationArtifactGateReportSchema.safeParse(
@@ -130,26 +130,28 @@ export function automationArtifactRuntimeService(db: Db) {
 
   /** Immutable consumer inspection. Historical bindings are never executed;
    * every current execution still requires the exact active-version pointer. */
-  async function inspectPinnedBinding(
+  async function inspectBinding(
+    scopedDb: Db,
+    reader: AuthorizationActor | undefined,
     companyId: string,
     artifactId: string,
     versionId: string | null,
     actor: AutomationArtifactMutationActor,
     requireCurrent = true,
   ): Promise<{ binding: AutomationArtifactRuntimeBinding; current: boolean; optimizerDerived: boolean }> {
-    if ((await settings.getExperimental()).enableAutomationArtifactsV1 !== true) {
+    if ((await instanceSettingsService(scopedDb).getExperimental()).enableAutomationArtifactsV1 !== true) {
       throw notFound("Automation Artifacts are not enabled", { code: "automation_artifacts_disabled" });
     }
-    await lockAnalyticalCompany(db,companyId);await lockMemoryPrivacy(db,companyId);
+    await lockAnalyticalCompany(scopedDb,companyId);await lockMemoryPrivacy(scopedDb,companyId);
     // Lock the native root before its version, as the canonical mutation owner
     // does. A consumer transaction cannot race revocation or pointer changes.
-    const [root] = await db.select().from(automationArtifacts).where(and(
+    const [root] = await scopedDb.select().from(automationArtifacts).where(and(
       eq(automationArtifacts.companyId, companyId), eq(automationArtifacts.id, artifactId),
     )).for("share");
-    const detail = await artifacts.getDetail(companyId, artifactId, actor);
+    const detail = await automationArtifactService(scopedDb).getDetail(companyId, artifactId, actor);
     if (!root || !detail) throw notFound("Automation Artifact not found");
     const selected = versionId ?? root.latestVersionId;
-    const [version] = selected ? await db.select().from(automationArtifactVersions).where(and(
+    const [version] = selected ? await scopedDb.select().from(automationArtifactVersions).where(and(
       eq(automationArtifactVersions.companyId, companyId), eq(automationArtifactVersions.artifactId, artifactId),
       eq(automationArtifactVersions.id, selected),
     )).for("share") : [];
@@ -161,9 +163,8 @@ export function automationArtifactRuntimeService(db: Db) {
         expectedVersionId: versionId, currentVersionId: root.latestVersionId, status: detail.artifact.status,
       });
     }
-    // Source-derived execution requires its native retention bridge. An
-    // in-process read principal alone cannot retain the resulting runtime copy.
-    await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",version.id);
+    // Only the validated current Workflow consumer supplies a Source reader.
+    await assertLearningAssetCurrent(scopedDb,companyId,"automation_artifact_version",version.id,reader,"task");
     // getDetail applies the existing optimizer privacy admission. Do not expose
     // a historical unredacted binding when that owner has erased its source.
     if (root.createdByOptimizerSuggestionId && detail.latestVersion?.sourceCode === "") {
@@ -172,24 +173,26 @@ export function automationArtifactRuntimeService(db: Db) {
     return { binding: qualifiedBinding(detail.artifact, version), current, optimizerDerived: root.createdByOptimizerSuggestionId !== null };
   }
 
-  async function resolveActiveBinding(
+  async function readBinding(
+    scopedDb: Db,
+    reader: AuthorizationActor | undefined,
     companyId: string,
     artifactId: string,
     expectedVersionId: string | null,
     actor: AutomationArtifactMutationActor,
   ): Promise<AutomationArtifactRuntimeBinding> {
-    const experimental = await settings.getExperimental();
+    const experimental = await instanceSettingsService(scopedDb).getExperimental();
     if (experimental.enableAutomationArtifactsV1 !== true) {
       throw notFound("Automation Artifacts are not enabled", {
         code: "automation_artifacts_disabled",
       });
     }
 
-    const detail = await artifacts.getDetail(companyId, artifactId, actor);
+    const detail = await automationArtifactService(scopedDb).getDetail(companyId, artifactId, actor);
     if (!detail) throw notFound("Automation Artifact not found");
 
     const { artifact, latestVersion } = detail;
-    if(latestVersion)await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",latestVersion.id);
+    if(latestVersion)await assertLearningAssetCurrent(scopedDb,companyId,"automation_artifact_version",latestVersion.id,reader,"task");
     if (
       artifact.archivedAt ||
       artifact.status !== "active" ||
@@ -215,19 +218,33 @@ export function automationArtifactRuntimeService(db: Db) {
     return qualifiedBinding(artifact, latestVersion);
   }
 
-  return {
-    resolveActiveBinding,
-    inspectPinnedBinding,
+  async function resolveActiveBinding(companyId: string, artifactId: string, versionId: string | null,
+    actor: AutomationArtifactMutationActor, consumer?: NativeArtifactWorkflowConsumer) {
+    if (!consumer) return readBinding(db, undefined, companyId, artifactId, versionId, actor);
+    if (!versionId) throw conflict("Native Workflow Artifact version must be explicit");
+    return withNativeArtifactWorkflowSource(db, companyId, versionId, actor, consumer,
+      (tx, reader) => readBinding(tx, reader, companyId, artifactId, versionId, actor));
+  }
+  async function inspectPinnedBinding(companyId: string, artifactId: string, versionId: string | null,
+    actor: AutomationArtifactMutationActor, requireCurrent = true, consumer?: NativeArtifactWorkflowConsumer) {
+    if (!consumer) return inspectBinding(db, undefined, companyId, artifactId, versionId, actor, requireCurrent);
+    if (!versionId) throw conflict("Native Workflow Artifact version must be explicit");
+    return withNativeArtifactWorkflowSource(db, companyId, versionId, actor, consumer,
+      (tx, reader) => inspectBinding(tx, reader, companyId, artifactId, versionId, actor, requireCurrent));
+  }
 
-    execute: async (
+  async function executeRuntime(
+      scopedDb: Db,
+      reader: AuthorizationActor | undefined,
       companyId: string,
       artifactId: string,
       expectedVersionId: string,
       input: unknown,
       actor: AutomationArtifactMutationActor,
       options: { timeoutMs?: number; deterministic?: boolean } = {},
-    ) => {
-      const binding = await resolveActiveBinding(
+    ) {
+      const binding = await readBinding(
+        scopedDb, reader,
         companyId,
         artifactId,
         expectedVersionId,
@@ -273,7 +290,7 @@ export function automationArtifactRuntimeService(db: Db) {
         );
       }
 
-      const experimental = await settings.getExperimental();
+      const experimental = await instanceSettingsService(scopedDb).getExperimental();
       if (experimental.enableAutomationArtifactCodeExecutionV1 !== true) {
         throw notFound("Generated-code Automation Artifact execution is disabled", {
           code: "automation_artifact_code_execution_disabled",
@@ -295,7 +312,7 @@ export function automationArtifactRuntimeService(db: Db) {
 
       let output: unknown;
       try {
-        output = await executeNativeArtifactCode(db, { companyId, versionId: binding.artifactVersionId }, actor, {
+        output = await executeNativeArtifactCode(scopedDb, { companyId, versionId: binding.artifactVersionId }, { ...actor, sourceActor: reader ?? actor.sourceActor }, {
           sourceCode: binding.sourceCode,
           dependencyManifest: binding.dependencyManifest,
           value: input,
@@ -314,6 +331,17 @@ export function automationArtifactRuntimeService(db: Db) {
 
       validateValueAgainstSchema("output", binding.outputSchema, output);
       return { binding, output };
+    }
+
+  return {
+    resolveActiveBinding,
+    inspectPinnedBinding,
+
+    execute: async (companyId: string, artifactId: string, versionId: string, input: unknown,
+      actor: AutomationArtifactMutationActor, options: { timeoutMs?: number; deterministic?: boolean; consumer?: NativeArtifactWorkflowConsumer } = {}) => {
+      if (!options.consumer) return executeRuntime(db, undefined, companyId, artifactId, versionId, input, actor, options);
+      return withNativeArtifactWorkflowSource(db, companyId, versionId, actor, options.consumer,
+        (tx, reader) => executeRuntime(tx, reader, companyId, artifactId, versionId, input, actor, options));
     },
 
     executeDeclarative: async (
