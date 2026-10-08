@@ -33,7 +33,7 @@ function mathematicalProblem(profile: ProjectPlanningProfile, snapshot: ProjectP
 function snapshotHash(profile: ProjectPlanningProfile, snapshot: ProjectPlanningSourceSnapshot, evidence: ProjectPlanningContext["evidence"]) {
   return nativeSha256({ profile, snapshot, evidence: evidence.map(({ key, source, sourceHash }) => ({ key, source, sourceHash })) });
 }
-async function capture(tx: Db, companyId: string, projectId: string, actor: AuthorizationActor, profile: ProjectPlanningProfile, checkVersions: boolean) {
+export async function capturePlanningProject(tx: Db, companyId: string, projectId: string, actor: AuthorizationActor, profile: ProjectPlanningProfile, checkVersions: boolean, includedTaskIds?: ReadonlySet<string>) {
   const deadline = performance.now() + 30_000, now = new Date();
   const policies = await currentAnalyticalPurpose(tx, companyId, profile, "planning");
   await authorizeStrategyReference(tx, companyId, actor, { type: "project", id: projectId }, profile.sensitivity);
@@ -62,8 +62,9 @@ async function capture(tx: Db, companyId: string, projectId: string, actor: Auth
     checkTime(deadline);
     const ancestry = await authorizeStrategyReference(tx, companyId, actor, { type: "issue", id: edge.issueId }, profile.sensitivity);
     const [predecessor] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, edge.issueId))).for("share");
-    if (!predecessor || predecessor.status !== "done" || predecessor.harnessKind === "conversation") throw conflict("Dependency coverage is not ready for a single-project plan; resolve the predecessor or use a cross-project proposal");
-    satisfied.set(predecessor.id, { id: predecessor.id, projectId: predecessor.projectId, updatedAt: predecessor.updatedAt.toISOString(), status: "done" });
+    if (!predecessor || predecessor.harnessKind === "conversation" || predecessor.status !== "done" && !includedTaskIds?.has(predecessor.id)) throw conflict("Dependency coverage is not ready for a single-project plan; resolve the predecessor or use a cross-project proposal");
+    if (includedTaskIds?.has(predecessor.id)) dependencies.push({ before: predecessor.id, after: edge.relatedIssueId });
+    else satisfied.set(predecessor.id, { id: predecessor.id, projectId: predecessor.projectId, updatedAt: predecessor.updatedAt.toISOString(), status: "done" });
     edges.push(...ancestry.issueIds.map((id) => ({ inputType: "issue" as const, inputRef: id, inputHash: nativeSha256({ type: "issue", id }), relationship: "source" as const })), ...ancestry.projectIds.map((id) => ({ inputType: "project" as const, inputRef: id, inputHash: nativeSha256({ type: "project", id }), relationship: "source" as const })));
   }
   const sourceSnapshot: ProjectPlanningSourceSnapshot = {
@@ -106,7 +107,7 @@ export async function inspectCurrentProjectPlanningProposal(tx: Db, actor: Autho
   const [marker] = await tx.select({ planningManifestId: projectRoadmapProposals.planningManifestId }).from(projectRoadmapProposals).where(and(eq(projectRoadmapProposals.companyId, companyId), eq(projectRoadmapProposals.projectId, projectId), eq(projectRoadmapProposals.id, id)));
   if (!marker?.planningManifestId) return;
   await admit(tx, companyId, actor, true);
-  const original = await inspectRetainedProjectPlanningProposal(tx, companyId, projectId, actor, id), current = await capture(tx, companyId, projectId, actor, original.context.profile, true);
+  const original = await inspectRetainedProjectPlanningProposal(tx, companyId, projectId, actor, id), current = await capturePlanningProject(tx, companyId, projectId, actor, original.context.profile, true);
   if (current.snapshotHash !== original.context.snapshotHash || current.expiresAt <= new Date()) throw conflict("Planning constraints or source evidence changed; create and review a fresh proposal");
 }
 
@@ -143,7 +144,7 @@ export function projectPlanningService(db: Db) {
       return db.transaction(async (rawTx) => {
         const tx = rawTx as unknown as Db; await admit(tx, companyId, actor);
         if (Date.parse(`${profile.horizon.start}T00:00:00Z`) < Math.floor(Date.now() / DAY) * DAY) throw conflict("A prospective plan horizon cannot begin in the past");
-        const source = await capture(tx, companyId, projectId, actor, profile, true), solved = await nativePlanningProvider.solve(mathematicalProblem(profile, source.sourceSnapshot));
+        const source = await capturePlanningProject(tx, companyId, projectId, actor, profile, true), solved = await nativePlanningProvider.solve(mathematicalProblem(profile, source.sourceSnapshot));
         return { snapshotHash: source.snapshotHash, result: solved.result, runtimeMs: solved.runtimeMs, capturedAt: source.now.toISOString(), expiresAt: source.expiresAt.toISOString(), authority: "human_roadmap_review_required" as const };
       });
     },
@@ -152,7 +153,7 @@ export function projectPlanningService(db: Db) {
       return withV5ActivityTransaction(db, async (tx, publications) => {
         await admit(tx, companyId, actor, true);
         if (Date.parse(`${input.profile.horizon.start}T00:00:00Z`) < Math.floor(Date.now() / DAY) * DAY) throw conflict("A prospective plan horizon cannot begin in the past");
-        const source = await capture(tx, companyId, projectId, actor, input.profile, true), solved = await nativePlanningProvider.solve(mathematicalProblem(input.profile, source.sourceSnapshot));
+        const source = await capturePlanningProject(tx, companyId, projectId, actor, input.profile, true), solved = await nativePlanningProvider.solve(mathematicalProblem(input.profile, source.sourceSnapshot));
         if (source.snapshotHash !== input.expectedSnapshotHash) throw conflict("Planning preview changed; inspect a fresh source snapshot before proposing");
         if (solved.result.status !== "feasible_best_known") throw conflict("Only an independently validated feasible plan can become a Roadmap change proposal");
         const { projectControlService } = await import("../project-control.js");
@@ -171,7 +172,7 @@ export function projectPlanningService(db: Db) {
       return db.transaction(async (rawTx) => {
         const tx = rawTx as unknown as Db; await admit(tx, companyId, actor);
         const original = await inspectRetainedProjectPlanningProposal(tx, companyId, projectId, actor, id);
-        const current = original.proposal.status === "pending" ? await capture(tx, companyId, projectId, actor, original.context.profile, false) : null;
+        const current = original.proposal.status === "pending" ? await capturePlanningProject(tx, companyId, projectId, actor, original.context.profile, false) : null;
         return { id: original.proposal.id, companyId, projectId, status: original.proposal.status, reason: original.proposal.reason, context: original.context, contextHash: original.proposal.planningContextHash!, currentQualification: current?.snapshotHash === original.context.snapshotHash ? "current" as const : "needs_revalidation" as const };
       });
     },

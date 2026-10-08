@@ -120,6 +120,7 @@ export function projectControlService(db: Db) {
     propose: async (actor: AuthorizationActor, companyId: string, projectId: string, raw: z.infer<typeof roadmapProposalSchema>, parentPublications?: ActivityPublication[]) => {
       const input = roadmapProposalSchema.parse(raw);
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await project(tx, actor, companyId, projectId, true), policy = roadmapPolicySchema.parse(row.roadmapPolicy ?? {});
         if (row.updatedAt.toISOString() !== input.expectedProjectUpdatedAt) throw conflict("Project changed; refresh before proposing");
         const inspected = await inspectChanges(tx, actor, companyId, projectId, input, policy);
@@ -129,7 +130,7 @@ export function projectControlService(db: Db) {
         await logActivity(tx, { companyId, actorType: actor.type === "agent" ? "agent" : "user", actorId: actor.agentId ?? v5HumanActorId(actor), action: autoApply ? "project.low_risk_plan_applied" : "project.roadmap_proposed", entityType: "project", entityId: projectId, details: { proposalId: proposal!.id, risk: inspected.risk, changedTaskIds: input.changes.map((c) => c.issueId) } }, publications); return proposal!;
       }, parentPublications);
     },
-    review: async (actor: AuthorizationActor, companyId: string, projectId: string, proposalId: string, accept: boolean, rationale: string) => {
+    review: async (actor: AuthorizationActor, companyId: string, projectId: string, proposalId: string, accept: boolean, rationale: string, parentPublications?: ActivityPublication[]) => {
       const userId = v5HumanActorId(actor); if (rationale.trim().length < 10 || rationale.length > 4000) throw unprocessable("Review rationale must contain 10–4000 characters");
       if (accept) {
         const { workSignalService } = await import("./work-signals/work-signal-service.js");
@@ -160,7 +161,7 @@ export function projectControlService(db: Db) {
         // Returning the raw row would expose copied evidence through the V5 API.
         if (reviewed!.planningManifestId) return { id: reviewed!.id, companyId, projectId, status: reviewed!.status, updatedAt: reviewed!.updatedAt };
         return reviewed!;
-      });
+      }, parentPublications);
     },
     forecast: async (actor: AuthorizationActor, companyId: string, projectId: string, issueId: string, raw: z.infer<typeof taskForecastPatchSchema>) => {
       await assertV5Enabled(db, "project_forecast_v5"); const input = taskForecastPatchSchema.parse(raw);

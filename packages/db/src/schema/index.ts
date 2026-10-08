@@ -292,3 +292,5 @@ export * from "./business_experiments.js";
 
 export {causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns} from "./causal_claims.js";
 export { managementReviewSnapshots, managementReviewSourceLinks, managementReviewManifestDependencies, managementReviewGovernanceDependencies, managementReviewEvents } from "./management_reviews.js";
+
+export { adaptivePlanningProposals } from "./adaptive_planning.js";
