@@ -526,6 +526,47 @@ const support = await getEmbeddedPostgresTestSupport();
     await expect(packs.getVersion(owner, companyId, pack.id, link.candidateId)).rejects.toMatchObject({ status: 409 });
     await expect(packs.publish(owner, companyId, pack.id, descendant.id, null)).rejects.toMatchObject({ status: 409 });
   });
+  it.each(["verified_memory","workflow_signal"] as const)("erases actual no-wait Workflow Tasks and native/preparation child copies: %s",async sourceKind=>{
+    const signal=sourceKind==="workflow_signal"?await analyticalSignal():null;
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"owner",status:"active"});
+    const human={principal:{type:"user" as const,userId:"local-board"}},service=workflowService(db);
+    const created=await service.create(companyId,{name:"Retained no-wait Task procedure"},human);
+    const graph={version:1 as const,nodes:[
+      {id:"start",type:"core.manual_trigger",name:"Start",position:{x:0,y:0},config:{}},
+      {id:"task",type:"work.create_task",name:"Apply learned review",position:{x:100,y:0},config:{title:"Apply retained source procedure",description:"Copied retained workflow facts",projectId:null,assigneeAgentId:null,assigneeUserId:"local-board",waitForCompletion:false}},
+    ],edges:[{id:"create",source:"start",target:"task"}],variables:[],settings:{}};
+    const link=await domainProposal(created.id,`workflow://${created.id}/${created.draftRevisionId}`,{targetDomain:"workflow",draft:{expectedRevisionId:created.draftRevisionId!,graph,changeSummary:"Verified outcomes inform the native no-wait procedure"}},signal?[signal.pin]:undefined);
+    await service.publish(companyId,created.id,{expectedDraftRevisionId:link.candidateId,expectedPublishedRevisionId:null,approvalId:null},human);
+    const executor=workflowExecutorService(db),run=await executor.startManualRun(companyId,created.id,{input:{}},human,null);
+    expect(run.run.status).toBe("succeeded");expect(run.waits).toHaveLength(0);
+    expect(run.steps.every(step=>step.automationArtifactVersionId===null)).toBe(true);
+    const [task]=await db.select().from(issues).where(and(eq(issues.companyId,companyId),eq(issues.originKind,"workflow_task"),eq(issues.originRunId,run.run.id)));
+    expect(task).toMatchObject({originId:created.id,description:"Copied retained workflow facts"});
+    // Actual materialized native Task/run IDs with software heartbeat/copy
+    // prerequisites; no provider execution, crash or Human/pilot trial.
+    const [agent]=await db.insert(agents).values({companyId,name:"Source-bound native Task worker",adapterType:"paperclip_runner"}).returning();
+    const children=[];
+    for(const stage of ["native","preparation"] as const){
+      const [child]=await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,status:"succeeded",...(stage==="native"?{nativeIssueId:task!.id,runtimeMode:"native"}:{}),contextSnapshot:{issueId:task!.id,copied:"Source-informed procedure"},resultJson:{copied:"Source-informed result"}}).returning();children.push(child!);
+    }
+    await instanceSettingsService(db).updateExperimental({learning_engine_v7:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    if(signal)await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,signal.observation.id));
+    else await db.transaction(async tx=>purgeMemoryRecords(tx as unknown as typeof db,companyId,[roots[0]!]));
+    expect((await db.execute(sql`select aw_workflow_memory_erased(${companyId}::uuid,null,${task!.id}::uuid) as erased`))[0]).toMatchObject({erased:true});
+    for(const child of children){
+      expect((await db.execute(sql`select aw_workflow_memory_erased(${companyId}::uuid,${child.id}::uuid,null) as erased`))[0]).toMatchObject({erased:true});
+    }
+    await db.update(issues).set({description:"Late private no-wait callback"}).where(eq(issues.id,task!.id));
+    expect((await db.select().from(issues).where(eq(issues.id,task!.id)))[0]!.description).toBeNull();
+    await memoryJobService(db).tick({limit:10});
+    expect((await db.select().from(issues).where(eq(issues.id,task!.id)))[0]).toMatchObject({title:"Erased workflow task",description:null,originRunId:run.run.id,originId:created.id});
+    for(const child of children){
+      expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,child.id)))[0]).toMatchObject({contextSnapshot:{},resultJson:null});
+      await db.update(heartbeatRuns).set({resultJson:{late:"Source-informed result"}}).where(eq(heartbeatRuns.id,child.id));
+      expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,child.id)))[0]!.resultJson).toBeNull();
+    }
+    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[1]!)))[0]).toMatchObject({deletedAt:null,verificationState:"human_verified"});
+  },60_000);
   it("retains Workflow challenger roots through publication, executions and later drafts", async () => {
     const service = workflowService(db), created = await service.create(companyId, { name: "Learning workflow", description: null, projectId: null }, principal);
     const graph = { version: 1 as const, nodes: [{ id: "start", type: "core.manual_trigger", name: "Review evidence first", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} };

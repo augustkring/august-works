@@ -1,0 +1,68 @@
+{
+  "checkpoint": "Actual no-wait Workflow origin Task Source erasure",
+  "parentCommit": "4525a3d1be4bc8f96abf0bafc376403ffc114eb4",
+  "recordedAt": "2026-10-08T04:58:05.998009+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "042d68df15586084db3ba471365a00f371bfa08ed493428b7ffa6d393f826c7d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0434_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "d57bcbd4472f34bb91ac076e3d3d35b2d5f9c1f25e3a683180911a190a63eb3c"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "024169e72568d48a7c48b7519f840b4c955869337d7aba07c60ecf9cc20a94c2"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "c25a35571961785224839e9ca12d8195d58e030c6b48d26a7be018ad35905c52"
+    },
+    {
+      "path": "packages/db/src/migrations/0439_native_workflow_origin_source_erasure.sql",
+      "sha256": "b95ecfa477e5b6bbb34068f91f8fddd0c43209071bad41379a10d655d2dc1b7d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0439_snapshot.json",
+      "sha256": "ddb2eb4e5c0dc3a1866d0bc6ab6222540c5bd973b6f2f244bd6d43c772eeae94"
+    }
+  ],
+  "validation": {
+    "nativeOwners": {
+      "tests": 218,
+      "files": 9,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-native-no-wait-source-final-recovered-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-no-wait-source-final-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-no-wait-source-migrations.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "f56bfefe10fb85dee9566b4df015ca4adff72026",
+      "log": "/var/tmp/aw-v8-native-build-memory-current-clock-recovery.log"
+    }
+  },
+  "qualified": [
+    "Actual learned no-wait native Task graphs with verified Memory or supplemental Workflow analytical signal, no wait or Artifact pin",
+    "Actual same-company native origin/root/revision/Run and step Memory Source erasure fence",
+    "Native and preparation heartbeat copy fixtures retain erasure after context cleanup through original Memory tombstones",
+    "Original flags-off/paused Task/run cleanup and late-write denial retain origin identities and independent verified Memory outcomes"
+  ],
+  "limits": [
+    "Heartbeat/payload copies are software prerequisites on real native Tasks, not actual provider/Human/pilot trials",
+    "Host-only init recovery collected 3961 already-exited orphans; all app sandbox/process limits unchanged",
+    "Planning outcomes, Routines, action materialization, remaining Source closure, cross-project Planning, readonly provider conformance and hosted acceptance remain open",
+    "No hard latency, maximum-volume, hosted populated backfill or whole-brief acceptance"
+  ]
+}
