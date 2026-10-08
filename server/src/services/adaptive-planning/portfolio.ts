@@ -47,7 +47,9 @@ export async function capturePortfolioPlanning(tx: Db, companyId: string, actor:
   if (performance.now() > deadline) throw unprocessable("Native initiative source inspection exceeded its bounded budget");
   if (joint.expiresAt <= new Date()) throw conflict("Initiative Sources expired during calculation");
   return { joint, sources, goalRows, associations, accounting, result,
-    snapshotHash: nativeSha256({ profile, jointSnapshotHash: joint.snapshotHash, sources, goals: goalRows, associations, accounting }),
+    // The original canonical hash accepts JSON data, not Date objects. Native
+    // version and UTC window timestamps must be pinned as their wire strings.
+    snapshotHash: nativeSha256({ profile, jointSnapshotHash: joint.snapshotHash, sources, goals: JSON.parse(JSON.stringify(goalRows)), associations: JSON.parse(JSON.stringify(associations)), accounting: JSON.parse(JSON.stringify(accounting)) }),
   };
 }
 

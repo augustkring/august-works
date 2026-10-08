@@ -97,6 +97,20 @@ describe.skipIf(!support.supported)("Native same-company cross-project planning 
     await expect(portfolioPlanningService(db).preview(companyId, { type: "agent", source: "agent_jwt", companyId, agentId: randomUUID() }, f.profile)).rejects.toMatchObject({ status: 403 });
     await disableV8Rollout(db); await expect(portfolioPlanningService(db).preview(companyId, actor(), f.profile)).rejects.toMatchObject({ status: 404 });
   });
+  it("pins current native Goal, association and budget version timestamps as JSON wire values", async () => {
+    const f = await portfolioFixture(), service = portfolioPlanningService(db);
+    const [budget] = await db.insert(budgetPolicies).values({ companyId, scopeType: "company", scopeId: companyId, windowKind: "lifetime", amount: 100 }).returning();
+    const original = await service.preview(companyId, actor(), f.profile);
+    await db.update(goals).set({ description: "Human changed only Goal wording", updatedAt: new Date(f.goal.updatedAt.getTime() + 1000) }).where(eq(goals.id, f.goal.id));
+    const goalChanged = await service.preview(companyId, actor(), f.profile);
+    expect(goalChanged.snapshotHash).not.toBe(original.snapshotHash); expect(goalChanged.result).toEqual(original.result);
+    await db.update(projectGoals).set({ updatedAt: new Date(Date.now() + 2000) }).where(and(eq(projectGoals.companyId, companyId), eq(projectGoals.projectId, f.projects[0].id)));
+    const associationChanged = await service.preview(companyId, actor(), f.profile);
+    expect(associationChanged.snapshotHash).not.toBe(goalChanged.snapshotHash); expect(associationChanged.result).toEqual(original.result);
+    await db.update(budgetPolicies).set({ updatedAt: new Date(budget.updatedAt.getTime() + 1000) }).where(eq(budgetPolicies.id, budget.id));
+    const budgetChanged = await service.preview(companyId, actor(), f.profile);
+    expect(budgetChanged.snapshotHash).not.toBe(associationChanged.snapshotHash); expect(budgetChanged.result).toEqual(original.result);
+  });
   it("jointly solves complete cross-project dependencies and applies only through separate native Human Roadmap review", async () => {
     const f = await proposed(), schedule = new Map(f.preview.result.schedule.map(item => [item.taskKey, item]));
     expect(f.preview.result.status).toBe("feasible_best_known"); expect(schedule.get(f.tasks[0].id)!.endDay).toBeLessThanOrEqual(schedule.get(f.tasks[1].id)!.startDay);
