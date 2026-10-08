@@ -82,7 +82,7 @@ export async function purgeCompanyContent(
       const column = config.columns.find((v) => v.name === "company_id");
       if (column && !retained.has(config.name))
         scopes.set(table, config.name==="memory_jobs"
-          ? sql`${column}=${companyId}::uuid and not (operation_type='retention' and coalesce(source_ref_json->>'kind','') in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure'))`
+          ? sql`${column}=${companyId}::uuid and not (operation_type='retention' and coalesce(source_ref_json->>'kind','') in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure','runtime_skill_source_erasure'))`
           : sql`${column} = ${companyId}::uuid`);
     }
     // Child records without a company column inherit only an already-owned parent's exact FK scope.

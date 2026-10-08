@@ -1,3 +1,6 @@
+import { materializeAsset } from "../services/native-runtime/runtime-context.js";
+import { nativeRuntimeAssetsRoot } from "../services/native-runtime/runtime-asset-retention.js";
+import { removeRuntimeStorageTree } from "../services/runtime-skill-cache.js";
 import path from "node:path";
 import os from "node:os";
 import { promises as fs } from "node:fs";
@@ -632,6 +635,13 @@ const support = await getEmbeddedPostgresTestSupport();
       const [entry] = await original.listRuntimeSkillEntries(companyId, options);
       expect(entry).toMatchObject({ sourceStatus: "available", versionId: link.candidateId });
       expect(await fs.readFile(path.join(entry!.source, "SKILL.md"), "utf8")).toContain("Review evidence");
+      const [runtimeAgent] = await db.insert(agents).values({ companyId, name: "Candidate test preparation fixture", role: "engineer" }).returning();
+      const [runtimeTask] = await db.insert(issues).values({ companyId, title: "Synthetic candidate test task", assigneeAgentId: runtimeAgent!.id }).returning();
+      const [runtimeRun] = await db.insert(heartbeatRuns).values({ companyId, agentId: runtimeAgent!.id, nativeIssueId: runtimeTask!.id, runtimeMode: "native", status: "running" }).returning();
+      const runtimeOwner = { companyId, runId: runtimeRun!.id };
+      const runtimeBundle = await materializeAsset([{ path: "SKILL.md", content: Buffer.from(await fs.readFile(path.join(entry!.source, "SKILL.md"))), mode: 0o444 }], runtimeOwner);
+      // Actual run metadata and copied candidate bytes qualify C7; no provider or trial is invoked.
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: { runtimeContext: { skills: [{ versionId: link.candidateId, bundle: runtimeBundle }] } } } }).where(eq(heartbeatRuns.id, runtimeRun!.id));
       await expect(eraseSkillVersionFiles(db, companyId, skill.id, link.candidateId)).rejects.toThrow("no erasure receipt");
       const namespace = path.resolve(resolvePaperclipInstanceRoot(), "skills", companyId, "__versions__");
       const saved = namespace + ".saved";
@@ -639,7 +649,9 @@ const support = await getEmbeddedPostgresTestSupport();
       await instanceSettingsService(db).updateExperimental({ enableCollectiveMemoryV1: false, enablePrivateAgentMemoryV1: false, learning_engine_v7: false, memory_observations_v7: false, cognitive_memory_v7: false });
       await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
       await db.transaction(async tx => { await purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]); });
+      await expect(assertAnalyticalContextPayloadAccess(db, companyId, owner, { runId: runtimeRun!.id })).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
       await memoryJobService(db).tick({ limit: 100 });
+      await expect(fs.stat(nativeRuntimeAssetsRoot(runtimeOwner))).rejects.toMatchObject({ code: "ENOENT" });
       const key = `skill-version-file-erasure:v1:${link.candidateId}`;
       const [failed] = await db.select().from(memoryJobs).where(eq(memoryJobs.jobKey, key));
       expect(failed).toMatchObject({ status: "failed", sourceRefJson: { kind: "skill_version_file_erasure", skillId: skill.id, versionId: link.candidateId } });
@@ -660,7 +672,7 @@ const support = await getEmbeddedPostgresTestSupport();
     } finally {
       if (previousHome === undefined) delete process.env.PAPERCLIP_HOME; else process.env.PAPERCLIP_HOME = previousHome;
       if (previousInstance === undefined) delete process.env.PAPERCLIP_INSTANCE_ID; else process.env.PAPERCLIP_INSTANCE_ID = previousInstance;
-      await fs.rm(home, { recursive: true, force: true });
+      await removeRuntimeStorageTree(home);
     }
   });
   it("uses the native Playbook proposal without replacing its approved procedure", async () => {

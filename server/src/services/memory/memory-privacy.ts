@@ -111,8 +111,8 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
 }
 
 export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, recordIds: string[], now = new Date(),
-  sourceAssets?:{workflowRevisionIds:string[];artifactVersionIds:string[]}) {
-  if (!recordIds.length&&!sourceAssets?.workflowRevisionIds.length&&!sourceAssets?.artifactVersionIds.length) return;
+  sourceAssets?:{workflowRevisionIds:string[];artifactVersionIds:string[];runIds?:string[]}) {
+  if (!recordIds.length&&!sourceAssets?.workflowRevisionIds.length&&!sourceAssets?.artifactVersionIds.length&&!sourceAssets?.runIds?.length) return;
   const evaluations = await db.select({ id: workflowOptimizerEvaluations.id, artifactId: workflowOptimizerEvaluations.artifactId }).from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId),
     or(recordIds.length?sql`${workflowOptimizerEvaluations.memoryRecordIds} ?| ARRAY[${sql.join(recordIds.map((id) => sql`${id}`), sql`, `)}]::text[]`:undefined,sourceAssets?.artifactVersionIds.length?inArray(workflowOptimizerEvaluations.artifactVersionId,sourceAssets.artifactVersionIds):undefined)??sql`false`));
   if (evaluations.length) {
@@ -133,11 +133,12 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   const affected = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId),
     or(recordIds.length?sql`${workflowStepRuns.memoryRecordIds} ?| ARRAY[${sql.join(recordIds.map((id) => sql`${id}`), sql`, `)}]::text[]`:undefined,
       sourceAssets?.workflowRevisionIds.length?sql`exists(select 1 from ${workflowRuns} w where w.company_id=${companyId}::uuid and w.id=${workflowStepRuns.workflowRunId} and w.workflow_revision_id in (${sql.join(sourceAssets.workflowRevisionIds.map(id=>sql`${id}::uuid`),sql`, `)}))`:undefined,
-      sourceAssets?.artifactVersionIds.length?inArray(workflowStepRuns.automationArtifactVersionId,sourceAssets.artifactVersionIds):undefined)??sql`false`));
+      sourceAssets?.artifactVersionIds.length?inArray(workflowStepRuns.automationArtifactVersionId,sourceAssets.artifactVersionIds):undefined,
+      sourceAssets?.runIds?.length?inArray(workflowStepRuns.heartbeatRunId,sourceAssets.runIds):undefined)??sql`false`));
   const contextRoots = await db.select({ runId: contextManifests.runId, issueId: contextManifests.issueId }).from(contextManifestMemoryRoots)
     .innerJoin(contextManifests, and(eq(contextManifests.companyId, contextManifestMemoryRoots.companyId), eq(contextManifests.id, contextManifestMemoryRoots.manifestId)))
     .where(and(eq(contextManifestMemoryRoots.companyId, companyId), inArray(contextManifestMemoryRoots.memoryRecordId, recordIds)));
-  if (!affected.length && !contextRoots.length) return;
+  if (!affected.length && !contextRoots.length && !sourceAssets?.runIds?.length) return;
   const children = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), sql`not (${heartbeatMemoryPayloadVisible()})`));
   const childIds = children.map((child) => child.id);
   if(affected.length)await db.update(workflowRunReviews).set({correctedOutputs:{},reason:"Source payload erased"}).where(and(eq(workflowRunReviews.companyId,companyId),inArray(workflowRunReviews.workflowRunId,[...new Set(affected.map(row=>row.workflowRunId))])));
@@ -182,7 +183,12 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   const childWaits = affected.length ? await db.select({ issueId: workflowWaits.referenceId }).from(workflowWaits).where(and(
     eq(workflowWaits.companyId, companyId), eq(workflowWaits.referenceType, "issue"),
     or(...affected.map((step) => and(eq(workflowWaits.workflowRunId, step.workflowRunId), eq(workflowWaits.nodeId, step.nodeId)))))) : [];
-  const issueIds = [...new Set([...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : [])])];
+  const sourceRunContexts = sourceAssets?.runIds?.length ? await db.select({ issueId: contextManifests.issueId }).from(agentExecutionManifests)
+    .innerJoin(contextManifests, and(eq(contextManifests.companyId, agentExecutionManifests.companyId), eq(contextManifests.id, agentExecutionManifests.contextManifestId)))
+    .where(and(eq(agentExecutionManifests.companyId, companyId), inArray(agentExecutionManifests.runId, sourceAssets.runIds))) : [];
+  const sourceRunIssues = sourceAssets?.runIds?.length ? children.filter(child => sourceAssets.runIds!.includes(child.id)).flatMap(child => child.nativeIssueId ? [child.nativeIssueId] : []) : [];
+  const issueIds = [...new Set([...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : []),
+    ...sourceRunContexts.flatMap(context => context.issueId ? [context.issueId] : []), ...sourceRunIssues])];
   if (issueIds.length) {
     await eraseAnalyticalSourcesUnderMemory(db, companyId, "issue", issueIds, now);
     for (const issueId of issueIds) await eraseBusinessEventObjectUnderMemory(db, companyId, "issue", issueId);
