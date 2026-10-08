@@ -1,0 +1,96 @@
+{
+  "checkpoint": "Original native Skill harness/evaluation Source reads, C7 copies, queued Task ownership and late-write fences",
+  "parentCommit": "56305803d97d50e8f00b3fab28ceedbd4995e028",
+  "recordedAt": "2026-10-08T01:26:59.743610+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "747bd79f5bb94cd7eea44a5c8ce4ef6815edeea274f31bc2e92c93613ced560f"
+    },
+    {
+      "path": "packages/db/src/migrations/0432_native_skill_harness_source_erasure.sql",
+      "sha256": "9f4609465276d0c49d41aeeacdf9a4fe0f6fdcb9917f7443f95fe19973fb99cd"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0427_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0432_snapshot.json",
+      "sha256": "50450a8e2f0b1a0dc490932ddbdf7e7c0a889fb944e6d638d791172f90b1fbc2"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "4aac8cfec2a7b400e85b31078372404d8ea64b233f5caf946bfbb551f028e835"
+    },
+    {
+      "path": "server/src/__tests__/company-skills-routes.test.ts",
+      "sha256": "2b3cbe3c789a3a0ba1616ad4f129cdd4a24720cecd1df8cd2f7b68575df803bb"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "3dcb38d2477d7d0f401094d0f1ad4e7a7f178362703ac15d0255e79653a7fc9f"
+    },
+    {
+      "path": "server/src/routes/company-skills.ts",
+      "sha256": "92e5b1525feb298e40b11d67bb3a0ef57568bd8185e323c13e4900a569a59127"
+    },
+    {
+      "path": "server/src/services/company-skills.ts",
+      "sha256": "c04598902580773fa0905e5e3e8975c374f9cd6a2e6ff395654dc217a2ae75b7"
+    },
+    {
+      "path": "server/src/services/learning/learning-privacy.ts",
+      "sha256": "8dc4323900a2d5024199e50c6d9b9f7a12c063a48a8d402ed8d50be2aa211c6d"
+    },
+    {
+      "path": "server/src/services/learning/skill-file-erasure.ts",
+      "sha256": "4aece986795b3778881d88226bbccc2645b2e52cfc72fbb465d55b73f853b59a"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "8010d56a95f72694980e53ed7948bb7965160035bc3cb4675ab2ee2c6f04232b"
+    },
+    {
+      "path": "server/src/services/skill-evaluations.ts",
+      "sha256": "ee48603945f3007853a04fc69062eda0b5aad2c4425b1199c962daaf829f9f61"
+    }
+  ],
+  "validation": {
+    "nativeRuntimeAndPostgresAndRoutesAndSnapshot": {
+      "tests": 717,
+      "files": 15,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-skill-harness-final-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-skill-harness-final-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-skill-harness-final-migrations.log"
+    },
+    "parentWholeNativeProductionBuild": {
+      "commit": "67d522a583d76f4d237d3085b49b8dd162981237",
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-skill-source-admission.log"
+    }
+  },
+  "qualified": [
+    "Original Actor-bound harness list/detail denies missing analytical authority, ordinary agent conversation scope and hidden Source",
+    "Original internal callbacks retain status/identity with erased payload fields when Source authority is unavailable",
+    "Actual original Human harness creation binds the selected version and Task before any run exists",
+    "Original Source predicate immediately fences pending harness Tasks and actual native Skill consumers",
+    "Existing Memory/Learning owners erase harness and evaluation payloads with flags off/company paused",
+    "Native provenance identities/timestamps and independent authored benchmark cases and verified Memory outcomes survive",
+    "Late harness insert queues the original version erasure owner and clears its Task; late payload writes cannot restore erased bodies",
+    "Existing cancel/delete assignment permissions and route Actor propagation remain covered"
+  ],
+  "limits": [
+    "Active state, provider discovery prerequisites and unknown-score evaluation rows are explicit software fixtures, not performed promotion/provider/Human trials",
+    "Full Orchestration review/analysis copied payload Source closure and standalone Artifact copies remain open",
+    "Company sweeps are complete rather than truncated; maximum retained volume and hosted historical populated backfill are unqualified",
+    "No new browser/JWT/provider invocation, hard latency or whole-brief completion claim"
+  ]
+}

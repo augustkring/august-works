@@ -3,7 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { companySkillVersions, heartbeatRuns, memoryJobs, type Db } from "@paperclipai/db";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
-import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { lockMemoryPrivacy,purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
 import { removeRuntimeSkillVersionDirectory } from "../runtime-skill-cache.js";
 
 /** Native version rows own generated snapshots; arbitrary imported paths are never accepted. */
@@ -38,6 +38,7 @@ export async function eraseSkillVersionFiles(db: Db, companyId: string, skillId:
       if (!source?.erased) throw new Error("Native Skill version has no erasure receipt");
     }
     await removeRuntimeSkillVersionDirectory(path.resolve(resolvePaperclipInstanceRoot(), "skills", companyId), skillId, versionId);
+    await purgeDerivedWorkflowMemory(tx,companyId,[],new Date(),{workflowRevisionIds:[],artifactVersionIds:[],skillVersionIds:[versionId]});
   });
 }
 
@@ -59,7 +60,7 @@ export async function eraseSkillRuntimeCopies(db: Db, companyId: string, runId: 
       where r.company_id=${companyId}::uuid and r.scope_type='agent' and r.owner_agent_id=${run.agentId}::uuid
         and r.review_state='rejected' and r.verification_state='unverified' and (context.run_id=${runId}::uuid or exists(
           select 1 from agent_execution_manifests e where e.company_id=context.company_id and e.run_id=${runId}::uuid and e.context_manifest_id=context.id))`);
-    const { purgeMemoryRecords, purgeDerivedWorkflowMemory } = await import("../memory/memory-privacy.js");
+    const { purgeMemoryRecords } = await import("../memory/memory-privacy.js");
     if (roots.length) await purgeMemoryRecords(tx, companyId, roots.map(root => root.id));
     await purgeDerivedWorkflowMemory(tx, companyId, [], new Date(), { workflowRevisionIds: [], artifactVersionIds: [], runIds: [runId] });
   });

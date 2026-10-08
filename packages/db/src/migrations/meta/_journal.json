@@ -3011,6 +3011,13 @@
       "when": 1791419467079,
       "tag": "0431_native_skill_source_run_erasure",
       "breakpoints": true
+    },
+    {
+      "idx": 432,
+      "version": "7",
+      "when": 1791421621550,
+      "tag": "0432_native_skill_harness_source_erasure",
+      "breakpoints": true
     }
   ]
 }
