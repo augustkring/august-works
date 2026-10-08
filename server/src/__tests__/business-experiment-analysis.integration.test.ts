@@ -2,10 +2,15 @@ import { nativeManagementSdkFixture } from "./helpers/native-management-sdk-fixt
 import {managementAnalyticalFixture} from "./helpers/management-analytical-fixture.js";
 import {disableV8Rollout} from "./helpers/v8-rollout.js";
 import { randomBytes, randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { runDatabaseBackup, runDatabaseRestore, analyticalSourceSuppressions } from "@paperclipai/db";
+import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { companies, issues, projects, agents, heartbeatRuns, authUsers, companyMemberships, decisions, decisionContexts, decisionContextVersions, decisionExperimentPins, decisionCausalPins, decisionEvidenceLinks, decisionCriteria, decisionExpectedOutcomes, issueComments, causalClaims, causalClaimVersions, causalClaimReviews, causalAnalysisRuns, businessExperiments, businessExperimentAssignments, businessExperimentExposures, businessExperimentExecutions, businessExperimentCompletions, businessExperimentVersions, businessExperimentTransitions, businessExperimentAnalyses, businessExperimentOutcomes, businessExperimentInterpretations, analyticalLineageManifests, analyticalLineageEdges, createDb } from "@paperclipai/db";
 import { ISSUE_STATUSES, businessMetricDefinitionSchema, decisionContextDefinitionSchema } from "@paperclipai/shared";
 import { causalClaimService } from "../services/causal-claims/service.js";
@@ -26,7 +31,8 @@ import { metricDefinition, analyticalPurpose } from "./helpers/business-metric-f
 import { experimentDefinition } from "./helpers/business-experiment-fixture.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { businessExperimentAnalysisService } from "../services/business-experiments/analysis.js";
-import { experimentAssignmentKey } from "../services/business-experiments/receipts.js";
+import { experimentAssignmentKey, experimentEdges } from "../services/business-experiments/receipts.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { assignNativeBusinessExperimentUnit } from "../services/business-experiments/kernel.js";
 const support = await getEmbeddedPostgresTestSupport(), suite = support.supported ? describe : describe.skip;
 const actor = { type: "board" as const, source: "local_implicit" as const }, rationale = "Human source-owner recording of this exact non-personal native protocol";
@@ -235,6 +241,81 @@ suite("Native experiment final capture and human interpretation on migrated Post
     await expect(db.update(businessExperimentOutcomes).set({value:0}).where(eq(businessExperimentOutcomes.id,outcomes[0].id))).rejects.toMatchObject({cause:{code:"23514"}});
     expect((await db.select().from(issues).where(eq(issues.id,unit.unit.id)))[0].status).toBe("done");
   });
+  it("replays the historical fully copied outcome lineage without changing signed facts and erases its final-only project ancestry",async()=>{
+    const d=await running(true),unit=await attested(d,"done");
+    const [project]=await db.insert(projects).values({companyId,name:"Historical final-only software Source",status:"in_progress"}).returning();
+    await db.update(issues).set({projectId:project.id}).where(eq(issues.id,unit.unit.id));
+    await closure(d);const result=await analyzed(d);
+    const [assignment]=await db.select().from(businessExperimentAssignments).where(eq(businessExperimentAssignments.id,unit.assignment.id));
+    const inherited=await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,assignment.lineageManifestId));
+    const outcomes=await db.select().from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id));
+    const legacyCopies:Array<typeof analyticalLineageManifests.$inferSelect>=[];
+    // Explicit software upgrade prerequisite: reconstruct the original copied
+    // lineage shape in this isolated DB, preserving every actual signed outcome.
+    // Only the manifest UPDATE guard is temporarily disabled inside this fixture
+    // transaction; original Source edge admission and all outcome guards remain.
+    await db.transaction(async tx=>{
+      await tx.execute(sql`alter table analytical_lineage_manifests disable trigger aw_analytical_manifest_immutable`);
+      for(const outcome of outcomes){
+        const [manifest]=await tx.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,outcome.lineageManifestId));
+        const direct=await tx.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,manifest.id));
+        const complete=experimentEdges([...inherited,...direct]);
+        await tx.insert(analyticalLineageEdges).values(complete.map(edge=>({...edge,companyId,manifestId:manifest.id}))).onConflictDoNothing();
+        const legacy={...manifest,sourceCount:complete.length,parameters:{receiptHash:outcome.receiptHash,lineageHash:nativeSha256(complete)}};
+        await tx.update(analyticalLineageManifests).set({sourceCount:legacy.sourceCount,parameters:legacy.parameters}).where(eq(analyticalLineageManifests.id,manifest.id));
+        legacyCopies.push(legacy);
+      }
+      await tx.execute(sql`alter table analytical_lineage_manifests enable trigger aw_analytical_manifest_immutable`);
+    });
+    for(let replay=0;replay<2;replay++)expect((await recording().receipts(companyId,actor,d.experiment.id,d.version.id)).analysis).toEqual(result.analysis);
+    expect(await db.select().from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id))).toEqual(outcomes);
+    await expect(db.update(analyticalLineageManifests).set({sourceCount:0}).where(eq(analyticalLineageManifests.id,legacyCopies[0].id))).rejects.toMatchObject({cause:{code:"23514"}});
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,unit.unit.id));
+    await expect(recording().receipts(companyId,actor,d.experiment.id,d.version.id)).rejects.toMatchObject({status:404});
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,unit.unit.id));
+    expect((await recording().receipts(companyId,actor,d.experiment.id,d.version.id)).analysis).toEqual(result.analysis);
+    const backupDirectory=await fs.mkdtemp(path.join(os.tmpdir(),"aw-v8-historical-experiment-backup-"));
+    try {
+    const backup=await runDatabaseBackup({connectionString:database.connectionString,backupDir:backupDirectory,backupEngine:"javascript",retention:{dailyDays:1,weeklyWeeks:0,monthlyMonths:0}});
+    expect(backup.sizeBytes).toBeGreaterThan(0);
+    await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
+    await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"project",[project.id]);});
+    expect(await db.select().from(businessExperimentAnalyses).where(eq(businessExperimentAnalyses.id,result.analysis.id))).toEqual([]);
+    expect(await db.select().from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id))).toEqual([]);
+    expect(await db.select().from(issues).where(eq(issues.id,unit.unit.id))).toHaveLength(1);
+    for(let replay=0;replay<2;replay++)await expect(db.transaction(async tx=>{
+      await tx.insert(analyticalLineageManifests).values(legacyCopies[0]);
+      await tx.insert(analyticalLineageEdges).values({companyId,manifestId:legacyCopies[0].id,inputType:"project",inputRef:project.id,inputHash:nativeSha256({type:"project",id:project.id}),relationship:"source"});
+    })).rejects.toMatchObject({cause:{code:"23514"}});
+    const [suppression]=await db.select().from(analyticalSourceSuppressions).where(and(eq(analyticalSourceSuppressions.companyId,companyId),eq(analyticalSourceSuppressions.inputType,"project"),eq(analyticalSourceSuppressions.inputRef,project.id)));
+    // Restore the actual gzip archive into two different empty targets. This is
+    // a local operator software drill; it cannot qualify hosted storage/DR.
+    for(let replay=0;replay<2;replay++){
+      const name=`aw_restore_${randomUUID().replaceAll("-","")}`,target=new URL(database.connectionString);target.pathname=`/${name}`;
+      await db.execute(sql`create database ${sql.identifier(name)}`);
+      const restored=createDb(target.toString());
+      try {
+        await runDatabaseRestore({connectionString:target.toString(),backupFile:backup.backupFile});
+        expect(await restored.select().from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id))).toEqual(outcomes);
+        await prepareRestoredQuarantine(restored,target.toString(),{companies:[],memory:[],businessEvents:[],analyticalSources:[{company_id:companyId,input_type:"project",input_ref:project.id,suppressed_at:suppression.suppressedAt.toISOString()}]});
+        await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
+        expect((await instanceSettingsService(restored,{runtimeEnv:{}}).getExperimental()).business_experiments_v8).toBe(false);
+        expect(await restored.select().from(businessExperimentAnalyses).where(eq(businessExperimentAnalyses.id,result.analysis.id))).toEqual([]);
+        expect(await restored.select().from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id))).toEqual([]);
+        expect(await restored.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,legacyCopies[0].id))).toEqual([]);
+        expect(await restored.select().from(issues).where(eq(issues.id,unit.unit.id))).toHaveLength(1);
+        expect(await restored.select().from(companies).where(eq(companies.id,otherId))).toHaveLength(1);
+        await expect(restored.transaction(async tx=>{
+          await tx.insert(analyticalLineageManifests).values(legacyCopies[0]);
+          await tx.insert(analyticalLineageEdges).values({companyId,manifestId:legacyCopies[0].id,inputType:"project",inputRef:project.id,inputHash:nativeSha256({type:"project",id:project.id}),relationship:"source"});
+        })).rejects.toMatchObject({cause:{code:"23514"}});
+      } finally {
+        await restored.$client.end({timeout:1});
+        await db.execute(sql`drop database ${sql.identifier(name)}`);
+      }
+    }
+    } finally {await fs.rm(backupDirectory,{recursive:true,force:true});}
+  },60000);
   it("withholds inference for a missing exposure receipt and requires explicit human abstention",async()=>{
     const d=await running(true);await enrolled(d);await closure(d);const result=await analyzed(d);expect(result.analysis.result.status).toBe("invalid");expect(result.analysis.result.metrics).toEqual([]);
     await expect(analysis().interpret(companyId,actor,d.experiment.id,{expectedRevision:6,versionId:d.version.id,analysisId:result.analysis.id,conclusion:"iterate",rationale,limitationsAcknowledged:true,executionAuthority:"advisory_only"})).rejects.toMatchObject({status:409});

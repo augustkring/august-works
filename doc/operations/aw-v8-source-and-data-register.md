@@ -2,7 +2,7 @@
 
 Date: 2026-10-06. Reconciliation base: master
 `d550aa7ea5ad38b5209d79135cabaa227ab3f902`.
-Status as of native-owner checkpoint 49 (2026-10-08): default-off native
+Status as of native-owner checkpoint 50 (2026-10-08): default-off native
 Events, Metrics/targets, strategy links, Process analysis/findings, Decisions and
 outcome reviews, Forecasts, Scenarios, Experiments, causal analyses, adaptive
 project/initiative planning and Management Reviews are implemented. Separate
@@ -19,7 +19,9 @@ All twelve original analytical SDK paths have actual
 native dispatcher qualification. Native metrics cover the explicit 10,000-Source
 maximum, Forecasts cover 4,000 underlying Task Sources, and Experiments cover
 4,000 units with seventeen outcome metrics (68,000 outcomes), including complete
-capture, replay and flags-off/paused-company erasure. The exact tested source and
+capture, replay and flags-off/paused-company erasure. The original fully copied
+experiment lineage also survives an actual local gzip archive restored into two
+separate quarantined databases; post-backup Source suppression closes both. The exact tested source and
 limits are recorded in `doc/plans/2026-10-06-aw-v8-build.md` and
 `doc/operations/aw-v8-evidence/`. Full Source-graph completeness, historical and
 indirect paths, current whole-branch release qualification and hosted acceptance
@@ -120,7 +122,7 @@ a verified Task outcome, business impact or authority to execute.
 | Decisions/outcome review | Prospective exact pins, separate original choice, six independent Human judgments and reviewed Learning conversion | `aw-v8-evidence/native-decision-review-learning-checkpoint.json` |
 | Forecasts | Time-safe native baseline; explicit Human-pinned optional AutoETS/AutoARIMA; exact model intervals retained in advisory SDK; AutoTheta withheld | `aw-v8-evidence/native-statistical-sdk-interval-checkpoint.json` |
 | Scenarios | Typed units/equations, declared Human assumptions and reproducible bounded conditional simulation | `aw-v8-evidence/scenario-owner-checkpoint.json` |
-| Experiments | Original preregistration/allocation/exposure/final capture and separate Human interpretation; all 4000 units and 17 outcome metrics, exact replay and whole Source erasure | `aw-v8-evidence/native-experiment-maximum-outcome-checkpoint.json` |
+| Experiments | Original preregistration/allocation/exposure/final capture and separate Human interpretation; all 4000 units and 17 outcome metrics, exact replay and whole Source erasure | `aw-v8-evidence/native-experiment-maximum-outcome-checkpoint.json`, `aw-v8-evidence/native-historical-experiment-restore-checkpoint.json` |
 | Causal analysis | Separate Human graph/assumptions/review; registered primary interval; fixed optional DoWhy diagnostics with failed/unknown abstention | `aw-v8-evidence/native-dowhy-owner-checkpoint.json` |
 | Planning/initiative | Current complete selected project populations, actual Goals/accounting, signed proposal, independent review and original canonical application | `aw-v8-evidence/native-initiative-review-ui-checkpoint.json` |
 | Reviews/recurrence | Native Routine capture produces drafts; separate publication and explicit original Task handoff | `aw-v8-evidence/native-management-review-task-checkpoint.json` |
