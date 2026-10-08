@@ -1,0 +1,190 @@
+{
+  "provider": "statsforecast",
+  "version": "2.1.1",
+  "python": "3.12.14",
+  "platform": "linux_amd64",
+  "packages": [
+    {
+      "name": "adagio",
+      "version": "0.2.6",
+      "wheel": "adagio-0.2.6-py3-none-any.whl",
+      "sha256": "1bb8317d41bfff8b11373bc03c9859ff166c498214bb2b7ce1e21638c0babb2c",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "cloudpickle",
+      "version": "3.1.2",
+      "wheel": "cloudpickle-3.1.2-py3-none-any.whl",
+      "sha256": "9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "coreforecast",
+      "version": "0.0.18",
+      "wheel": "coreforecast-0.0.18-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "a1bd994e9429863a71a7010d4f484e93a5f304b6422da062c0e2d8ef821d1ec2",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "formulaic",
+      "version": "1.2.2",
+      "wheel": "formulaic-1.2.2-py3-none-any.whl",
+      "sha256": "0f84ff49e3fc9dc0e68ab08a0a9427874021aa6c558e66b44dc634a35739b09b",
+      "license": "MIT"
+    },
+    {
+      "name": "fsspec",
+      "version": "2026.9.0",
+      "wheel": "fsspec-2026.9.0-py3-none-any.whl",
+      "sha256": "8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "fugue",
+      "version": "0.9.7",
+      "wheel": "fugue-0.9.7-py3-none-any.whl",
+      "sha256": "2eaab8aa709044a77b9f83b3fa79f83bd509205893824f27302082913a46f1fe",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "interface_meta",
+      "version": "2.0.1",
+      "wheel": "interface_meta-2.0.1-py3-none-any.whl",
+      "sha256": "f38016bef9a4429b6d0792d809be7b65e9781820c674bf7f463999086b6e6323",
+      "license": "MIT"
+    },
+    {
+      "name": "narwhals",
+      "version": "2.26.0",
+      "wheel": "narwhals-2.26.0-py3-none-any.whl",
+      "sha256": "29326d74f107c347fd1009bd58e38d9f7c7c5b51e6de97bc93dbc325d9038b54",
+      "license": "MIT"
+    },
+    {
+      "name": "numpy",
+      "version": "2.5.3",
+      "wheel": "numpy-2.5.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "b7e18c623bb5c95acb3b3328861272816ba199fb531921c5d6d0b675f1fde9e3",
+      "license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0"
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "wheel": "packaging-26.3-py3-none-any.whl",
+      "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+      "license": "Apache-2.0 OR BSD-2-Clause"
+    },
+    {
+      "name": "pandas",
+      "version": "2.3.3",
+      "wheel": "pandas-2.3.3-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "b3d11d2fda7eb164ef27ffc14b4fcab16a80e1ce67e9f57e19ec0afaf715ba89",
+      "license": "Full license notice included in the pinned distribution wheel; retain that wheel notice on redistribution."
+    },
+    {
+      "name": "patsy",
+      "version": "1.0.3",
+      "wheel": "patsy-1.0.3-py2.py3-none-any.whl",
+      "sha256": "d3dbebe8fd5f46e29912d030b63c6268647b59bf788a99e2af28a30234cf357c",
+      "license": "2-clause BSD"
+    },
+    {
+      "name": "pyarrow",
+      "version": "25.0.1",
+      "wheel": "pyarrow-25.0.1-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "sha256": "5389cdf79447ed1515c9e31620e6e1e2302249564d603f2ad727d4f6d313e4c3",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "python-dateutil",
+      "version": "2.9.0.post0",
+      "wheel": "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+      "sha256": "a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427",
+      "license": "Dual License"
+    },
+    {
+      "name": "pytz",
+      "version": "2026.5",
+      "wheel": "pytz-2026.5-py2.py3-none-any.whl",
+      "sha256": "e658af3757f9e26a9d25dd2aff38335acd92bc9104f890a894b2c1ba28311b03",
+      "license": "MIT"
+    },
+    {
+      "name": "scipy",
+      "version": "1.18.1",
+      "wheel": "scipy-1.18.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "f55fa87b6c612ecd6b058f167c53231b1d14e412efe361d3d6e38b3631c73218",
+      "license": "Full license notice included in the pinned distribution wheel; retain that wheel notice on redistribution."
+    },
+    {
+      "name": "six",
+      "version": "1.17.0",
+      "wheel": "six-1.17.0-py2.py3-none-any.whl",
+      "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274",
+      "license": "MIT"
+    },
+    {
+      "name": "statsforecast",
+      "version": "2.1.1",
+      "wheel": "statsforecast-2.1.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "a7eb73dd44a31c7a117297216a77083c3bafdcd5a97308f64a91f7a6b25b7ea3",
+      "license": "Apache Software License 2.0"
+    },
+    {
+      "name": "statsmodels",
+      "version": "0.15.0",
+      "wheel": "statsmodels-0.15.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "c6f2bd48915cc9b3b95c3c7f6ac363b6f8aaa38172962ba5f7f6885f0dfe57f2",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "threadpoolctl",
+      "version": "3.7.0",
+      "wheel": "threadpoolctl-3.7.0-py3-none-any.whl",
+      "sha256": "cd8b60b5641b45c67bbf73c64c843235fc2d8a480c87389f52f5dbee893b86be",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "tqdm",
+      "version": "4.70.1",
+      "wheel": "tqdm-4.70.1-py3-none-any.whl",
+      "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
+      "license": "MPL-2.0 AND MIT"
+    },
+    {
+      "name": "triad",
+      "version": "1.0.2",
+      "wheel": "triad-1.0.2-py3-none-any.whl",
+      "sha256": "f95257e9047fbd19a924958c4b7f9b5c0cef3e28cc03adf3baec28e80dcf45d9",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "wheel": "typing_extensions-4.16.0-py3-none-any.whl",
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+      "license": "PSF-2.0"
+    },
+    {
+      "name": "tzdata",
+      "version": "2026.5",
+      "wheel": "tzdata-2026.5-py2.py3-none-any.whl",
+      "sha256": "b683bd1b6659ddcd810ff02ad09ba821d4bf1065072805063eb35c49617905ac",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "utilsforecast",
+      "version": "0.2.17",
+      "wheel": "utilsforecast-0.2.17-py3-none-any.whl",
+      "sha256": "4bdc005676329cf76d3ef8586da8100f1831ab412bd33f888cd4ed62c7ba1290",
+      "license": "Apache Software License 2.0"
+    },
+    {
+      "name": "wrapt",
+      "version": "2.5.0",
+      "wheel": "wrapt-2.5.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl",
+      "sha256": "0cabb9c17ab79b2549d1f23b36f436473ad9253ef53995a817feba26fae69d5b",
+      "license": "BSD-2-Clause"
+    }
+  ]
+}
