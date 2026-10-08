@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { businessMetricDefinitionSchema, queryBusinessMetricSchema } from "@paperclipai/shared";
-import { calculateNativeMetric, type NativeMetricInput } from "../services/business-metrics/native-engine.js";
+import { calculateNativeMetric, prepareNativeMetric, type NativeMetricInput } from "../services/business-metrics/native-engine.js";
 import { metricDefinition } from "./helpers/business-metric-fixture.js";
 const definition = metricDefinition(randomUUID());
 const query = queryBusinessMetricSchema.parse({ metricId: randomUUID(), versionId: randomUUID(), from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", dimensions: ["project"] });
@@ -29,6 +29,16 @@ describe("native metric known-answer engine", () => {
     for (const inputs of [[input, input], [{ ...input, createdAt: query.until }], [{ ...input, status: "blocked" }], [{ ...input, entity: "project" as const }], [{ ...input, updatedAt: "unknown" }]])
       expect(() => calculateNativeMetric(definition, query, inputs)).toThrow();
     expect(() => calculateNativeMetric(definition, { ...query, maxRows: 1 }, [input, row("todo")])).toThrow(/budget/);
+  });
+  it("keeps a prepared definition/query snapshot while independently validating and hashing each later input", () => {
+    const rawDefinition=businessMetricDefinitionSchema.parse(definition),rawQuery=queryBusinessMetricSchema.parse(query),until=rawQuery.until;
+    const calculate=prepareNativeMetric(rawDefinition,rawQuery),done=row("done"),todo=row("todo");
+    rawDefinition.valueType="count";rawDefinition.calculation={kind:"native_count",population:{entity:"issue",statuses:["done"],projectId:null}};
+    rawQuery.from="2026-02-01T00:00:00Z";rawQuery.dimensions=["status"];
+    const first=calculate([done,todo]);expect(first).toMatchObject({value:0.5,groups:[{dimensions:{project:null},value:0.5,numerator:1,denominator:2}]});
+    const second=calculate([{...done,status:"todo"},todo]);expect(second.value).toBe(0);expect(second.inputHash).not.toBe(first.inputHash);expect(second.definitionHash).toBe(first.definitionHash);
+    expect(()=>calculate([{...done,createdAt:until}])).toThrow(/outside/);
+    expect(()=>calculate([done,done])).toThrow(/Duplicate/);
   });
   it("changes input lineage when current state changes and never substitutes a native result for external authority", () => {
     const input = row("todo"); const before = calculateNativeMetric(definition, query, [input]);
