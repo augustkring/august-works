@@ -21,8 +21,8 @@ import {
 } from "./automation-artifact-declarative.js";
 import {
   AutomationArtifactCodeRuntimeError,
-  executeAutomationArtifactTypeScriptSandbox,
 } from "./automation-artifact-code-runtime.js";
+import { executeNativeArtifactCode } from "./automation-artifact-workspace.js";
 import {
   automationArtifactService,
   automationArtifactVersionContentHash,
@@ -295,7 +295,7 @@ export function automationArtifactRuntimeService(db: Db) {
 
       let output: unknown;
       try {
-        output = await executeAutomationArtifactTypeScriptSandbox({
+        output = await executeNativeArtifactCode(db, { companyId, versionId: binding.artifactVersionId }, actor, {
           sourceCode: binding.sourceCode,
           dependencyManifest: binding.dependencyManifest,
           value: input,

@@ -1,0 +1,114 @@
+{
+  "checkpoint": "Actual native Artifact version owns sandbox source copies, C7 cleanup and original Memory retries",
+  "parentCommit": "55984cf43958e5bffdd7c0021e00079bddb247f8",
+  "recordedAt": "2026-10-08T02:43:23.814536+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "6be42a725e15553431e54721b9f8b9d57d6b56e9a333a95999bde87cb31528ef"
+    },
+    {
+      "path": "packages/db/src/migrations/0434_native_artifact_workspace_source_erasure.sql",
+      "sha256": "8599eea34671c7afd643f31f73187b722360862981bd5970dfad2d685c5f6b5d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0429_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0434_snapshot.json",
+      "sha256": "7150007a41cb7b4fccf9f9c4c409f69f7c38e47f499dd6be2e2f8df1666c5993"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "60477a0dfa08d8ee902288c30c54f8a31a65a07fc7a00a869dc846ccacb7ba98"
+    },
+    {
+      "path": "server/src/__tests__/business-scenario-artifacts.integration.test.ts",
+      "sha256": "3016ed66a3d63bdd5ddaf7d375c52379cbd83110426b62573938259a0bd8cee5"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "895a727c2b1703ca4602bcfe92e60b09b45a7747ed22755f957050433da5ca97"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-code-runtime.test.ts",
+      "sha256": "8b21738d6488d202924c97df5fcfe385476479c749a27550bc75db52d2e1a8c9"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-code-runtime.ts",
+      "sha256": "de12b243fe719a0c1f85615cd8688ff0e3bef3d89951fbcd577ac7170bd9fb00"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-runtime.ts",
+      "sha256": "475c1f6cc9805df78f75f2800bc5d00f37b31684c8f84b12f6c01ccedc2a8608"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-security.ts",
+      "sha256": "4cb086460134b8518a7edc289e09709ce62e6dda1c36c2fb2652dc3522f3e6a7"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-workspace.ts",
+      "sha256": "191b7d457178d21e6ddeeaf7d1dbb069f93577e3034f93727be67a940ad083bf"
+    },
+    {
+      "path": "server/src/services/memory/memory-jobs.ts",
+      "sha256": "a5bd4979c3eb92dce7be0ab775e201d9041faec8ef4b4374651e27206ad3c77b"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
+      "sha256": "1139f1ca36c1a5311b2401286f1b562e13a41edbb4ed6f401a3bc54f644e449a"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-evaluation.ts",
+      "sha256": "49f23b3dc7cf816dc08ff188cb16b5646c338b24332c56a2c0ae40d61e86f8dd"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+      "sha256": "e38e21534fbd7849e77517284e162d359126b925f14d0aa1c637cbef547d2454"
+    },
+    {
+      "path": "server/src/services/saas/company-purge.ts",
+      "sha256": "78aa8a6008b7b62649006d54a22de758c9459133562c2db3899bec121741513b"
+    }
+  ],
+  "validation": {
+    "nativeOwnersAndSandbox": {
+      "tests": 94,
+      "files": 6,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-artifact-workspace-closed-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-artifact-workspace-closed-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-artifact-workspace-final-migrations.log"
+    },
+    "parentWholeNativeProductionBuild": {
+      "result": "passed",
+      "commit": "fdadb94fe67d607d173679916551425bb0923f95",
+      "log": "/var/tmp/aw-v8-native-build-artifact-step.log"
+    }
+  },
+  "qualified": [
+    "Three production TypeScript sandbox paths bind actual canonical native version code/dependencies/status and current Source under original company -> Memory locks",
+    "Checked UUID-derived application workspace, exclusive file creation and original safe cleanup helpers",
+    "Real Linux sandbox source-copy observation and cleanup before return",
+    "Original version DELETE/Learning C7 queue metadata-only Memory cleanup, original 60-second failed-job reconciliation and canonical company purge",
+    "Flags-off/paused cleanup preserves foreign namespace and independent verified outcomes",
+    "Native compiler empty metadata accepted; actual dependencies/capabilities/unknown fields remain denied",
+    "Real local generated-code replay/shadow/canary/active engine gates using explicit software classification/reviewer prerequisites"
+  ],
+  "limits": [
+    "Interrupted-copy and TypeScript classification prerequisites are software fixtures, not performed process crashes/model suggestions/Human/provider trials",
+    "Source-derived standalone execution remains closed pending downstream Workflow inheritance and C7",
+    "Canonical tombstone company purge qualified; noncanonical physical company deletion filesystem cleanup unqualified",
+    "Historical unowned random temporary directories, copies outside this application namespace and same-UID adversarial filesystem races unqualified",
+    "No maximum volume, hard latency, hosted populated backfill or GA qualification",
+    "Planning outcomes, Routine cadence, action materialization, remaining Source closure, cross-project Planning, readonly provider conformance and hosted acceptance remain open",
+    "No whole-brief completion claim"
+  ]
+}

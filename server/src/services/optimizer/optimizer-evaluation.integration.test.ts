@@ -3,7 +3,7 @@ import { automationArtifactService } from "../automation-artifacts/automation-ar
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { companies, companyMemberships, createDb, instanceSettings, workflowOptimizerEvaluations, workflowOptimizerObservations } from "@paperclipai/db";
+import { companies, companyMemberships, createDb, instanceSettings, workflowOptimizerEvaluations, workflowOptimizerObservations, workflowOptimizerSuggestions } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { workflowExecutorService } from "../workflows/workflow-executor.js";
@@ -11,6 +11,8 @@ import { reviewWorkflowRun } from "./optimizer-run-review.js";
 import { optimizerSuggestionService } from "./optimizer-suggestions.js";
 import { optimizerCandidateRequestSchema, optimizerEvaluationService } from "./optimizer-evaluation.js";
 import { approvalService } from "../approvals.js";
+import fs from "node:fs/promises";
+import { artifactWorkspaceDirectory } from "../automation-artifacts/automation-artifact-workspace.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const suite = support.supported ? describe.sequential : describe.skip;
@@ -20,10 +22,11 @@ suite("governed optimizer workflow integration", () => {
   beforeAll(async () => { temp = await startEmbeddedPostgresTestDatabase("paperclip-optimizer-live-"); db = createDb(temp.connectionString); }, 30_000);
   afterAll(async () => temp?.cleanup());
 
-  async function qualify() {
+  async function qualify(kind: "transform" | "typescript" = "transform") {
     const experimental = {
       enableWorkflowsV1: true, enableWorkflowOptimizerSuggestions: true, enableWorkflowOptimizerShadow: true,
       enableWorkflowOptimizerPromotion: true, enableAutomationArtifactsV1: true,
+      enableAutomationArtifactCodeExecutionV1: kind === "typescript",
     };
     await db.insert(instanceSettings).values({ singletonKey: "default", general: {}, experimental })
       .onConflictDoUpdate({ target: instanceSettings.singletonKey, set: { experimental } });
@@ -49,6 +52,14 @@ suite("governed optimizer workflow integration", () => {
     expect(suggestion).toBeTruthy();
     const request = await proposeOptimizerCandidate(db, company!.id, workflow.id, suggestion.id);
     expect(request.sourceCode).toBe('{"value":"{{input.value}}"}');
+    if (kind === "typescript") {
+      // Explicit native classification prerequisite for the generated-code
+      // branch, not a performed model suggestion or Human/pilot trial.
+      await db.update(workflowOptimizerSuggestions).set({ candidateType: "typescript" })
+        .where(and(eq(workflowOptimizerSuggestions.companyId, company!.id), eq(workflowOptimizerSuggestions.id, suggestion.id)));
+      request.kind = "typescript";
+      request.sourceCode = "export default (input: { value: number }) => ({ value: input.value });";
+    }
     request.invariants.push({ id: "nonnegative", description: "Values remain nonnegative", critical: true, expression: "{{trigger.output.value}} >= 0" });
     expect(optimizerCandidateRequestSchema.safeParse({ ...request, humanApproved: true, canaryPassed: true }).success).toBe(false);
     const evaluations = optimizerEvaluationService(db);
@@ -76,6 +87,15 @@ suite("governed optimizer workflow integration", () => {
     expect(active.steps.find((item) => item.nodeId === "copy")).toMatchObject({ outputJson: { value: 42 }, automationArtifactVersionId: created.artifactVersionId });
     return { company: company!, userId, actor, svc, workflow, executor, evaluations, created, active };
   }
+
+  it("uses the native version workspace for actual generated-code replay, shadow, canary and active execution", async () => {
+    const { company, created, active } = await qualify("typescript");
+    expect(active.steps.find(step => step.nodeId === "copy")).toMatchObject({
+      outputJson: { value: 42 }, automationArtifactVersionId: created.artifactVersionId,
+    });
+    await expect(fs.lstat(artifactWorkspaceDirectory({ companyId: company.id, versionId: created.artifactVersionId })))
+      .rejects.toMatchObject({ code: "ENOENT" });
+  }, 120_000);
 
   it("uses generated contracts, reviewed runs, shadow observations, bound approval, canary and fallback", async () => {
     const { company, actor, workflow, executor, evaluations, created } = await qualify();

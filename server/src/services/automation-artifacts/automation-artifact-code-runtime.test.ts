@@ -102,11 +102,18 @@ describe("Automation Artifact generated-code policy", () => {
     );
   });
 
-  it("rejects runtime dependency declarations", () => {
+  it("accepts the native compiler's explicitly empty dependency metadata", () => {
+    expect(() => scanAndTranspileAutomationArtifactTypeScript({
+      sourceCode: "export default (input: unknown) => input;",
+      dependencyManifest: { packages: [], capabilityRefs: [] },
+    })).not.toThrow();
+  });
+  it.each([{ lodash: "4.17.21" }, { packages: ["lodash"], capabilityRefs: [] },
+    { packages: [], capabilityRefs: ["tool:private"] }, { packages: [], unknown: [] }])("rejects runtime dependency declarations: %j", dependencyManifest => {
     expect(() =>
       scanAndTranspileAutomationArtifactTypeScript({
         sourceCode: "export default (input: unknown) => input;",
-        dependencyManifest: { lodash: "4.17.21" },
+        dependencyManifest,
       }),
     ).toThrowError(
       expect.objectContaining<Partial<AutomationArtifactCodeRuntimeError>>({

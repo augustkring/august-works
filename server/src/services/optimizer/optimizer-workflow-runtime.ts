@@ -37,6 +37,8 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
   const started = performance.now();
   try {
     const { evaluation, artifact } = await assertOptimizerEvaluationBinding(db, run.companyId, binding.id);
+    const codeOwner = { db, companyId: run.companyId, versionId: binding.artifactVersionId, expectedStatus: artifact.status,
+      actor: { principal: { type: "system" as const, service: "workflow-optimizer" } } };
     if (artifact.kind === "typescript" && !flags.enableAutomationArtifactCodeExecutionV1) throw new Error("optimizer_code_execution_disabled");
     if (artifact.status !== (mode === "canary" ? "shadow" : mode) || evaluation.replayEvaluation?.status !== "passed") throw new Error("optimizer_evaluation_binding_changed");
     await assertMemoryRecordsRetained(db, run.companyId, memoryRecordIds);
@@ -47,7 +49,7 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
       const trustedOutput = await trusted();
       const shadow = await evaluateOptimizerShadow({ compilerResult: compiler, replayEvaluation: evaluation.replayEvaluation,
         observations: [{ id: `run:${run.id}:${nodeId}`, sourceRunId: run.id, input, trustedOutput }], executionMode: "pure" }, {
-        execute: async () => ({ output: await executeCompiledOptimizerCandidate(candidate, input), durationMs: performance.now() - started, costEstimate: 0 }),
+        execute: async () => ({ output: await executeCompiledOptimizerCandidate(candidate, input, codeOwner), durationMs: performance.now() - started, costEstimate: 0 }),
         evaluateAgreement: async ({ candidateOutput }) => ({ agreement: isDeepStrictEqual(trustedOutput, candidateOutput) }),
         evaluateInvariant: async ({ invariant, candidateOutput }) => ({ passed: evaluateCandidateInvariant(evaluation.invariants.find((item) => item.id === invariant.id)!.expression, input, candidateOutput) }),
       });
@@ -58,7 +60,7 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
       candidateUsed = false;
       output = trustedOutput;
     } else {
-      output = await executeCompiledOptimizerCandidate(candidate, input);
+      output = await executeCompiledOptimizerCandidate(candidate, input, codeOwner);
       for (const invariant of evaluation.invariants) {
         if (!evaluateCandidateInvariant(invariant.expression, input, output)) {
           invariantFailure = invariant.critical;
