@@ -1,0 +1,412 @@
+{
+  "checkpoint": "53 \u2014 native route fixture qualification and complete OpenAPI contract synchronization",
+  "recordedAt": "2026-10-08T21:33:08.049562+00:00",
+  "qualifiedTestCommit": "bbdd75fe0be6a0f8ba034d5b6eda96004ad1b57b",
+  "primaryEquivalentCommit": "ce819f03209282286b645acdc3c164f0bd2c24ac",
+  "sourceFiles": [
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "ae4a538e7781c3d93ede93d4abcc13ec4c6076ec33194a61abe372850fdae4b6"
+    },
+    {
+      "path": "server/src/__tests__/openapi-routes.test.ts",
+      "sha256": "81bc7eca78bef95f80e9d5e20fcd222d12c70f4170524af3e7df2ec5bcf06b55"
+    },
+    {
+      "path": "server/src/__tests__/issue-agent-mutation-ownership-routes.test.ts",
+      "sha256": "0a804b4e13e98379a0a9408f2dafef7f9a806644a296f6182d69348fc3c71871"
+    },
+    {
+      "path": "server/src/__tests__/issue-thread-interaction-routes.test.ts",
+      "sha256": "bd414027243e68f4561018ce3d12a2448cf4d9162a84ef2a47e514f248c7c48f"
+    },
+    {
+      "path": "server/src/__tests__/document-annotation-routes.test.ts",
+      "sha256": "080092f943ade415eaf49b3ef6bfadab6899bfd292201716d6e22a2215045ec1"
+    },
+    {
+      "path": "server/src/__tests__/issues-goal-context-routes.test.ts",
+      "sha256": "379c33fc96041b8edcd379154163d85d74761a3e3d4f32deeaa6cdb77ee697be"
+    },
+    {
+      "path": "server/src/__tests__/issue-attachment-routes.test.ts",
+      "sha256": "ec04a4552f68d57c2fba8a0bb97604d59eec1bb5d61c32c9e7f78a8a0518d30b"
+    },
+    {
+      "path": "server/src/__tests__/external-object-routes.test.ts",
+      "sha256": "981c0762224f137658630e93777d0761c28a0c03dd9d33c7575ed4ed07dbd86f"
+    }
+  ],
+  "validation": {
+    "completeRepairedSuites": [
+      {
+        "test": "server/src/__tests__/openapi-routes.test.ts",
+        "result": "passed",
+        "tests": 17,
+        "skipped": 0,
+        "log": "/var/tmp/aw-v8-route-fix-openapi-routes.log",
+        "sha256": "0b7005740edd5893c1c3d44e46d85c2bd9de76946ad0fd3183c7683f48462a6e"
+      },
+      {
+        "test": "server/src/__tests__/issue-agent-mutation-ownership-routes.test.ts",
+        "result": "passed",
+        "tests": 122,
+        "skipped": 0,
+        "log": "/var/tmp/aw-v8-route-fix-issue-agent-mutation-ownership-routes.log",
+        "sha256": "f7b51b7bd7c8ff18232fc657a2153914c8670d4dc950269853d607950488fd8c"
+      },
+      {
+        "test": "server/src/__tests__/issue-thread-interaction-routes.test.ts",
+        "result": "passed",
+        "tests": 82,
+        "skipped": 0,
+        "log": "/var/tmp/aw-v8-route-fix-issue-thread-interaction-routes.log",
+        "sha256": "20dcb9b202d293b53c0e82c99afd8792fd930ca539f2abfd6731875484e8c043"
+      },
+      {
+        "test": "server/src/__tests__/document-annotation-routes.test.ts",
+        "result": "passed",
+        "tests": 8,
+        "skipped": 0,
+        "log": "/var/tmp/aw-v8-route-fix-document-annotation-routes.log",
+        "sha256": "192dd45ab3033bd52eab308bf5e176b484118216293cceeaa207b81f1ead3a83"
+      },
+      {
+        "test": "server/src/__tests__/issues-goal-context-routes.test.ts",
+        "result": "passed",
+        "tests": 10,
+        "skipped": 0,
+        "log": "/var/tmp/aw-v8-route-fix-issues-goal-context-routes.log",
+        "sha256": "4996a8eb42e95bdbdd5a01b464f1cb5a21cee05793f1441dc1abe007c2add0d1"
+      },
+      {
+        "test": "server/src/__tests__/issue-attachment-routes.test.ts",
+        "result": "passed",
+        "tests": 33,
+        "skipped": 0,
+        "log": "/var/tmp/aw-v8-route-fix-issue-attachment-routes.log",
+        "sha256": "5225bb352a583d58ccc611d6434cb1f5237bb17f45812606f8af6e5c3ba6fe9a"
+      },
+      {
+        "test": "server/src/__tests__/external-object-routes.test.ts",
+        "result": "passed",
+        "tests": 9,
+        "skipped": 0,
+        "log": "/var/tmp/aw-v8-route-fix-external-object-routes.log",
+        "sha256": "9c3897109525ba30933a1d2bd6482b51b762aff9ec183f1bf931135547ec0453"
+      }
+    ],
+    "initialSerializedShards": {
+      "source": "afa2e5ef7d5afc382afc2ca2ddbcf8dcead5b897",
+      "selectionCoverage": {
+        "files": 155,
+        "duplicates": 0
+      },
+      "result": "failed_not_qualified",
+      "shards": [
+        {
+          "shardIndex": 0,
+          "exitCode": 0,
+          "selectedFiles": [
+            "server/src/__tests__/heartbeat-process-recovery.test.ts"
+          ],
+          "logSha256": "003a925cf0ec9c78078a76e781ca6787c94097b526f5680342871001db17eebf"
+        },
+        {
+          "shardIndex": 1,
+          "exitCode": 0,
+          "selectedFiles": [
+            "server/src/__tests__/agent-cross-tenant-authz-routes.test.ts",
+            "server/src/__tests__/authz-existence-oracle-guard.test.ts",
+            "server/src/__tests__/bootstrap-claim-routes.test.ts",
+            "server/src/__tests__/built-in-agent-routes.test.ts",
+            "server/src/__tests__/companies-route-cross-company-authz.test.ts",
+            "server/src/__tests__/health-dev-server-token.test.ts",
+            "server/src/__tests__/issues-service.test.ts",
+            "server/src/__tests__/secrets-routes.test.ts"
+          ],
+          "logSha256": "471e45badc6959a537a27cffbb700c749e5c71d24368ed7d40e54378f4c3f114"
+        },
+        {
+          "shardIndex": 2,
+          "exitCode": 1,
+          "selectedFiles": [
+            "server/src/__tests__/company-portability-routes.test.ts",
+            "server/src/__tests__/company-skills-import-authz-routes.test.ts",
+            "server/src/__tests__/costs-service.test.ts",
+            "server/src/__tests__/execution-workspace-runtime-lease-route.test.ts",
+            "server/src/__tests__/invite-join-manager.test.ts",
+            "server/src/__tests__/issue-agent-mutation-ownership-routes.test.ts",
+            "server/src/__tests__/issue-comment-cancel-routes.test.ts",
+            "server/src/__tests__/llms-routes.test.ts",
+            "server/src/__tests__/summary-slot-routes.test.ts"
+          ],
+          "logSha256": "99ac622d49fe592c0e30ff43b347468fee219cafa2229431cc0533ae4ccdd4b0"
+        },
+        {
+          "shardIndex": 3,
+          "exitCode": 1,
+          "selectedFiles": [
+            "server/src/__tests__/agent-hire-auth-inheritance-routes.test.ts",
+            "server/src/__tests__/environment-instance-routes.test.ts",
+            "server/src/__tests__/instance-settings-routes.test.ts",
+            "server/src/__tests__/invite-accept-replay.test.ts",
+            "server/src/__tests__/invite-onboarding-text.test.ts",
+            "server/src/__tests__/issue-comment-attribution-audit-routes.test.ts",
+            "server/src/__tests__/issue-thread-interaction-routes.test.ts",
+            "server/src/__tests__/issue-tree-control-routes.test.ts",
+            "server/src/__tests__/openclaw-invite-prompt-route.test.ts",
+            "server/src/__tests__/resource-memberships-routes.test.ts"
+          ],
+          "logSha256": "2d0e8709c18025a67914c93478032f12a8e88c5f7ea7089edd71583202e407c6"
+        },
+        {
+          "shardIndex": 4,
+          "exitCode": 0,
+          "selectedFiles": [
+            "server/src/__tests__/adapter-model-refresh-routes.test.ts",
+            "server/src/__tests__/agent-hire-idempotency-routes.test.ts",
+            "server/src/__tests__/agent-live-run-routes.test.ts",
+            "server/src/__tests__/authz-company-access.test.ts",
+            "server/src/__tests__/cases-routes.test.ts",
+            "server/src/__tests__/execution-workspaces-routes.test.ts",
+            "server/src/__tests__/invite-create-route.test.ts",
+            "server/src/__tests__/invite-summary-route.test.ts",
+            "server/src/__tests__/issue-feedback-routes.test.ts",
+            "server/src/__tests__/managed-agent-profile-routes-authz.test.ts",
+            "server/src/__tests__/user-profile-routes.test.ts"
+          ],
+          "logSha256": "f1d3145d401977c713aa164324528a52dffb8720ffdb77c66ea3c4355c994760"
+        },
+        {
+          "shardIndex": 5,
+          "exitCode": 0,
+          "selectedFiles": [
+            "server/src/__tests__/activity-routes.test.ts",
+            "server/src/__tests__/agent-action-audit-routes.test.ts",
+            "server/src/__tests__/auth-session-route.test.ts",
+            "server/src/__tests__/invite-logo-route.test.ts",
+            "server/src/__tests__/issue-dependency-wakeups-routes.test.ts",
+            "server/src/__tests__/issue-queued-comments-routes.test.ts",
+            "server/src/__tests__/issue-workspace-command-authz.test.ts",
+            "server/src/__tests__/permissions-upgrade-boundary-routes.test.ts",
+            "server/src/__tests__/project-goal-telemetry-routes.test.ts",
+            "server/src/routes/setup-token-route.test.ts"
+          ],
+          "logSha256": "e1b5582df232629e6335621915a759424274124b116b0560c18d27d2cf376eb9"
+        },
+        {
+          "shardIndex": 6,
+          "exitCode": 1,
+          "selectedFiles": [
+            "server/src/__tests__/authz-secret-context.test.ts",
+            "server/src/__tests__/document-annotation-routes.test.ts",
+            "server/src/__tests__/invite-list-route.test.ts",
+            "server/src/__tests__/issue-closed-workspace-routes.test.ts",
+            "server/src/__tests__/issue-created-from-routes.test.ts",
+            "server/src/__tests__/issue-stale-execution-lock-routes.test.ts",
+            "server/src/__tests__/low-trust-red-team-routes.test.ts",
+            "server/src/__tests__/plugin-scoped-api-routes.test.ts",
+            "server/src/__tests__/routines-routes.test.ts",
+            "server/src/__tests__/workspace-runtime-service-authz.test.ts"
+          ],
+          "logSha256": "d9fccc8a4e295b1ca2ed3dd0742fb3828130ce70531eb251af37ba50b0f12220"
+        },
+        {
+          "shardIndex": 7,
+          "exitCode": 1,
+          "selectedFiles": [
+            "server/src/__tests__/company-import-transfer-routes.test.ts",
+            "server/src/__tests__/company-portability.test.ts",
+            "server/src/__tests__/company-skills-routes.test.ts",
+            "server/src/__tests__/heartbeat-issue-liveness-escalation.test.ts",
+            "server/src/__tests__/issue-activity-events-routes.test.ts",
+            "server/src/__tests__/issue-assignee-invokability-routes.test.ts",
+            "server/src/__tests__/issue-blocker-diagnostics-routes.test.ts",
+            "server/src/__tests__/issue-create-deduplication-routes.test.ts",
+            "server/src/__tests__/openapi-routes.test.ts",
+            "server/src/services/openrouter-models.test.ts"
+          ],
+          "logSha256": "6f3e243f19993bd6804125e2c3238c85609ec04ac8060a9789d3f32176be6f3f"
+        },
+        {
+          "shardIndex": 8,
+          "exitCode": 1,
+          "selectedFiles": [
+            "server/src/__tests__/adapter-routes-authz.test.ts",
+            "server/src/__tests__/agent-device-login-routes.test.ts",
+            "server/src/__tests__/health.test.ts",
+            "server/src/__tests__/invite-expiry.test.ts",
+            "server/src/__tests__/issue-execution-policy-routes.test.ts",
+            "server/src/__tests__/issue-subtree-diagnostics-routes.test.ts",
+            "server/src/__tests__/issues-goal-context-routes.test.ts",
+            "server/src/__tests__/plugin-install-route-security.test.ts",
+            "server/src/__tests__/plugin-routes-authz.test.ts",
+            "server/src/__tests__/redaction.test.ts",
+            "server/src/__tests__/workflow-routes.test.ts"
+          ],
+          "logSha256": "068457f28833e3abb163eb392ddade81adee8f23cdd37b895116ecf54cea682b"
+        },
+        {
+          "shardIndex": 9,
+          "exitCode": 0,
+          "selectedFiles": [
+            "server/src/__tests__/access-routes-hidden-floor.test.ts",
+            "server/src/__tests__/agent-adapter-validation-routes.test.ts",
+            "server/src/__tests__/cli-auth-routes.test.ts",
+            "server/src/__tests__/environment-routes.test.ts",
+            "server/src/__tests__/express5-auth-wildcard.test.ts",
+            "server/src/__tests__/inbox-archive-routes.test.ts",
+            "server/src/__tests__/instance-database-backups-routes.test.ts",
+            "server/src/__tests__/issue-assigned-backlog-contract-routes.test.ts",
+            "server/src/__tests__/issue-identifier-routes.test.ts",
+            "server/src/__tests__/onboarding-seed-route.test.ts",
+            "server/src/__tests__/user-preferences-routes.test.ts"
+          ],
+          "logSha256": "b1317e28c5dac48cb6871c6494e4298bd92fc60309bcb1d92f86a90dc75353c3"
+        },
+        {
+          "shardIndex": 10,
+          "exitCode": 1,
+          "selectedFiles": [
+            "server/src/__tests__/adapter-auth-signal-routes.test.ts",
+            "server/src/__tests__/agent-skills-routes.test.ts",
+            "server/src/__tests__/assets.test.ts",
+            "server/src/__tests__/environment-selection-route-guards.test.ts",
+            "server/src/__tests__/invite-url-public-base-url.test.ts",
+            "server/src/__tests__/issue-attachment-routes.test.ts",
+            "server/src/__tests__/issue-document-restore-routes.test.ts",
+            "server/src/__tests__/issues-checkout-wakeup.test.ts",
+            "server/src/__tests__/memory-routes.test.ts",
+            "server/src/__tests__/projects-list-archived-routes.test.ts",
+            "server/src/__tests__/routine-document-annotation-routes.test.ts"
+          ],
+          "logSha256": "14491fee9796a45c19f8bc19764df7d00e6f7864ef2e7bff5f0dc46cb6e8c376"
+        },
+        {
+          "shardIndex": 11,
+          "exitCode": 1,
+          "selectedFiles": [
+            "server/src/__tests__/board-chat-route-feature-flag.test.ts",
+            "server/src/__tests__/companies-route-path-guard.test.ts",
+            "server/src/__tests__/company-search-rate-limit-routes.test.ts",
+            "server/src/__tests__/company-skill-policy-routes.test.ts",
+            "server/src/__tests__/company-user-directory-route.test.ts",
+            "server/src/__tests__/environment-custom-image-routes.test.ts",
+            "server/src/__tests__/external-object-routes.test.ts",
+            "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
+            "server/src/__tests__/inbox-agent-policy-routes.test.ts",
+            "server/src/__tests__/invite-test-resolution-route.test.ts",
+            "server/src/__tests__/issue-stalled-review-decision-routes.test.ts"
+          ],
+          "logSha256": "a348fc893a7656cd01d7430eab33135451bb8307fffbedd931e55aa158a743b3"
+        },
+        {
+          "shardIndex": 12,
+          "exitCode": 0,
+          "selectedFiles": [
+            "server/src/__tests__/agent-instructions-routes.test.ts",
+            "server/src/__tests__/announcements-routes.test.ts",
+            "server/src/__tests__/auth-routes.test.ts",
+            "server/src/__tests__/company-search-extract-routes.test.ts",
+            "server/src/__tests__/decision-queues-routes.test.ts",
+            "server/src/__tests__/invite-accept-existing-member.test.ts",
+            "server/src/__tests__/issue-list-assignee-filter-routes.test.ts",
+            "server/src/__tests__/issue-wake-diagnostics-routes.test.ts",
+            "server/src/__tests__/issue-watchdogs-routes.test.ts",
+            "server/src/__tests__/opencode-local-adapter-environment.test.ts",
+            "server/src/__tests__/workspace-command-authz.test.ts"
+          ],
+          "logSha256": "4b88553bbdb8dc116952552ac45d79069cf31f8d5fdce70830f5804f5c42f46a"
+        },
+        {
+          "shardIndex": 13,
+          "exitCode": 0,
+          "selectedFiles": [
+            "server/src/__tests__/access-routes-permissions-upgrade.test.ts",
+            "server/src/__tests__/adapter-routes.test.ts",
+            "server/src/__tests__/artifact-review-document-routes.test.ts",
+            "server/src/__tests__/automation-artifact-account-routes.test.ts",
+            "server/src/__tests__/cloud-routes.test.ts",
+            "server/src/__tests__/folders-routes.test.ts",
+            "server/src/__tests__/issue-list-updatedsince-filter-routes.test.ts",
+            "server/src/__tests__/issue-telemetry-routes.test.ts",
+            "server/src/__tests__/issue-update-comment-wakeup-routes.test.ts",
+            "server/src/__tests__/project-routes-env.test.ts",
+            "server/src/__tests__/secret-proposals-routes.test.ts"
+          ],
+          "logSha256": "0eee5cdaadb19323bc225c744130454e91bd661731f124b255c83cf5a38eca1e"
+        },
+        {
+          "shardIndex": 14,
+          "exitCode": 0,
+          "selectedFiles": [
+            "server/src/__tests__/agent-permissions-routes.test.ts",
+            "server/src/__tests__/approval-routes-idempotency.test.ts",
+            "server/src/__tests__/foundation-routes.test.ts",
+            "server/src/__tests__/invite-accept-gateway-defaults.test.ts",
+            "server/src/__tests__/invite-rate-limit-route.test.ts",
+            "server/src/__tests__/issue-onboarding-first-task-routes.test.ts",
+            "server/src/__tests__/multilingual-issues-routes.test.ts",
+            "server/src/__tests__/pipelines-routes.test.ts",
+            "server/src/__tests__/project-workspace-managed-sandbox-routes.test.ts",
+            "server/src/__tests__/sidebar-preferences-routes.test.ts"
+          ],
+          "logSha256": "da412e355a97f4b78c42ed4e6858ff72c260aabdaab553f42f3c0c61f87de648"
+        },
+        {
+          "shardIndex": 15,
+          "exitCode": 0,
+          "selectedFiles": [
+            "server/src/__tests__/agent-secrets-routes.test.ts",
+            "server/src/__tests__/agent-test-environment-routes.test.ts",
+            "server/src/__tests__/company-branding-route.test.ts",
+            "server/src/__tests__/issue-comment-reopen-routes.test.ts",
+            "server/src/__tests__/issue-scheduled-retry-routes.test.ts",
+            "server/src/__tests__/routines-e2e.test.ts",
+            "server/src/__tests__/secrets-routes-claude-oauth-service.test.ts",
+            "server/src/__tests__/task-connector-read-routes.test.ts",
+            "server/src/__tests__/teams-catalog-routes.test.ts",
+            "server/src/__tests__/workspace-runtime-routes-authz.test.ts"
+          ],
+          "logSha256": "f18075449b49a1302e694ee62ec00622c15be679353dedea8d1596f3d1664bc1"
+        }
+      ]
+    },
+    "previousCompleteGroups": {
+      "source": "5e6b6701e878a10909398f89172f9c7c883971a7",
+      "server": {
+        "passed": 15991,
+        "skipped": 65,
+        "filesPassed": 847,
+        "filesSkipped": 7
+      },
+      "ui": {
+        "passed": 7002,
+        "filesPassed": 684
+      },
+      "cli": {
+        "passed": 502,
+        "filesPassed": 63
+      },
+      "wholeCommandExit": 1,
+      "reason": "Codex real timer observed 249 ms for a 250 ms timeout; exact clock unit deadline remains unchanged; real-timer fixture allows one millisecond Date resolution. Complete workspace B rerun passed separately."
+    },
+    "completeWorkspacesB": {
+      "source": "fe080f9cefc25087d1c4d9f5e533d3e1cf9be2ef",
+      "result": "passed",
+      "logSha256": "a5631bea41295066498221b3afcf43d8a0f8f9a1fc20e5a42f65e36956c16480"
+    }
+  },
+  "qualified": [
+    "Every mounted API route is represented exactly; native shared validators, separate Human review and current execution-bound Playbook body identity remain synchronized",
+    "Historical service-mocked fixtures explicitly model the Source admission boundary and test denial before body/storage disclosure; real Source graph/SQL integration suites remain independent",
+    "All seven complete repaired suites passed 281 tests without skips"
+  ],
+  "limitations": [
+    "Initial complete workflow and initial route shards failed; no green whole-command exit is inferred",
+    "Repaired native route groups, current full typecheck/build and the optional local Docker packaging check remain in progress",
+    "The revision-history fixture in the following development commit is not qualified by these seven suites",
+    "No complete claim/Source graph, hosted/customer qualification, CI/Greptile pass, named acceptance or release promotion"
+  ]
+}
