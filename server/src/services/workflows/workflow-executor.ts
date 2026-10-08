@@ -1,4 +1,6 @@
 import {assertLearnedAssetAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
 import { admitOrchestrationWorkflow } from "../orchestration/orchestration-admission.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
@@ -244,51 +246,57 @@ async function assertActorCompanyScope(
 }
 
 async function getRunDetail(
-  db: Db,
+  connection: Db,
   companyId: string,
   runId: string,
   reader?:AuthorizationActor,
 ): Promise<WorkflowRunDetail | null> {
-  const run = await db
-    .select()
-    .from(workflowRuns)
-    .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)))
-    .then((rows) => rows[0] ?? null);
-  if (!run) return null;
-  await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",run.workflowRevisionId,reader);
-  const [steps, waits] = await Promise.all([
-    db
+  return connection.transaction(async rawTx => {
+    const db = rawTx as unknown as Db;
+    await lockAnalyticalCompany(db, companyId);
+    await lockMemoryPrivacy(db, companyId);
+    const run = await db
       .select()
-      .from(workflowStepRuns)
-      .where(
-        and(
-          eq(workflowStepRuns.companyId, companyId),
-          eq(workflowStepRuns.workflowRunId, runId),
-        ),
-      )
-      .orderBy(asc(workflowStepRuns.createdAt), asc(workflowStepRuns.attempt)),
-    db
-      .select()
-      .from(workflowWaits)
-      .where(
-        and(
-          eq(workflowWaits.companyId, companyId),
-          eq(workflowWaits.workflowRunId, runId),
-        ),
-      )
-      .orderBy(asc(workflowWaits.createdAt)),
-  ]);
-  const recordIds = [...new Set([...run.memoryRecordIds, ...steps.flatMap((step) => step.memoryRecordIds)])];
-  const erased = recordIds.length ? await db.select({ id: memoryDeletionMarkers.recordId }).from(memoryDeletionMarkers).where(and(
-    eq(memoryDeletionMarkers.companyId, companyId), inArray(memoryDeletionMarkers.recordId, recordIds))) : [];
-  const erasedIds = new Set(erased.map((row) => row.id));
-  return {
-    run: run.memoryRecordIds.some((id) => erasedIds.has(id)) ? { ...mapRun(run), triggerPayload: {} } : mapRun(run),
-    steps: steps.map((step) => step.memoryRecordIds.some((id) => erasedIds.has(id))
-      ? { ...mapStep(step), inputJson: null, outputJson: null, taskResultJson: null, errorMessage: null, payloadDeleted: true } : mapStep(step)),
-    waits: waits.map((wait) => steps.some((step) => step.nodeId === wait.nodeId && step.memoryRecordIds.some((id) => erasedIds.has(id)))
-      ? { ...mapWait(wait), resolutionJson: null } : mapWait(wait)),
-  };
+      .from(workflowRuns)
+      .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)))
+      .then((rows) => rows[0] ?? null);
+    if (!run) return null;
+    await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",run.workflowRevisionId,reader);
+    await assertLearnedWorkflowPayloadAccess(db, companyId, reader, { workflowRunId: run.id });
+    const [steps, waits] = await Promise.all([
+      db
+        .select()
+        .from(workflowStepRuns)
+        .where(
+          and(
+            eq(workflowStepRuns.companyId, companyId),
+            eq(workflowStepRuns.workflowRunId, runId),
+          ),
+        )
+        .orderBy(asc(workflowStepRuns.createdAt), asc(workflowStepRuns.attempt)),
+      db
+        .select()
+        .from(workflowWaits)
+        .where(
+          and(
+            eq(workflowWaits.companyId, companyId),
+            eq(workflowWaits.workflowRunId, runId),
+          ),
+        )
+        .orderBy(asc(workflowWaits.createdAt)),
+    ]);
+    const recordIds = [...new Set([...run.memoryRecordIds, ...steps.flatMap((step) => step.memoryRecordIds)])];
+    const erased = recordIds.length ? await db.select({ id: memoryDeletionMarkers.recordId }).from(memoryDeletionMarkers).where(and(
+      eq(memoryDeletionMarkers.companyId, companyId), inArray(memoryDeletionMarkers.recordId, recordIds))) : [];
+    const erasedIds = new Set(erased.map((row) => row.id));
+    return {
+      run: run.memoryRecordIds.some((id) => erasedIds.has(id)) ? { ...mapRun(run), triggerPayload: {} } : mapRun(run),
+      steps: steps.map((step) => step.memoryRecordIds.some((id) => erasedIds.has(id))
+        ? { ...mapStep(step), inputJson: null, outputJson: null, taskResultJson: null, errorMessage: null, payloadDeleted: true } : mapStep(step)),
+      waits: waits.map((wait) => steps.some((step) => step.nodeId === wait.nodeId && step.memoryRecordIds.some((id) => erasedIds.has(id)))
+        ? { ...mapWait(wait), resolutionJson: null } : mapWait(wait)),
+    };
+  });
 }
 
 async function getIdempotentRun(
@@ -712,6 +720,7 @@ async function completeRunningStep(
   runningStep: typeof workflowStepRuns.$inferSelect,
   outputJson: unknown,
   actor: WorkflowRunActor,
+  artifactBinding?: { artifactId: string; versionId: string },
 ) {
   await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,learningActorFromPrincipal(run.companyId,actor.principal,actor.runId));
   const finishedAt = new Date();
@@ -721,6 +730,26 @@ async function completeRunningStep(
   );
   const publications: ActivityPublication[] = [];
   const finished = await db.transaction(async (tx) => {
+    const scopedDb = tx as unknown as Db;
+    await lockAnalyticalCompany(scopedDb, run.companyId);
+    await lockMemoryPrivacy(scopedDb, run.companyId);
+    const [retainedStep] = await tx.select().from(workflowStepRuns).where(and(
+      eq(workflowStepRuns.companyId, run.companyId), eq(workflowStepRuns.workflowRunId, run.id),
+      eq(workflowStepRuns.id, runningStep.id), eq(workflowStepRuns.status, "running")));
+    if (!retainedStep) throw conflict("Workflow step changed before checkpoint", { code: "workflow_step_completion_conflict" });
+    await assertLearnedAssetAnalyticalSources(scopedDb, run.companyId, "workflow_revision", run.workflowRevisionId,
+      learningActorFromPrincipal(run.companyId, actor.principal, actor.runId));
+    if (retainedStep.automationArtifactVersionId) {
+      await assertLearnedAssetAnalyticalSources(scopedDb, run.companyId, "automation_artifact_version",
+        retainedStep.automationArtifactVersionId, learningActorFromPrincipal(run.companyId, actor.principal, actor.runId));
+    }
+    if (artifactBinding) {
+      if (retainedStep.automationArtifactVersionId !== artifactBinding.versionId) {
+        throw conflict("Workflow artifact retention changed before checkpoint", { code: "workflow_step_claim_conflict" });
+      }
+      await automationArtifactRuntimeService(scopedDb).inspectPinnedBinding(run.companyId,
+        artifactBinding.artifactId, artifactBinding.versionId, actor);
+    }
     if (actor.memoryRecordIds?.length) {
       await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
       await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, actor.memoryRecordIds);
@@ -744,6 +773,9 @@ async function completeRunningStep(
       .where(
         and(
           eq(workflowStepRuns.id, runningStep.id),
+          eq(workflowStepRuns.companyId, run.companyId),
+          eq(workflowStepRuns.workflowRunId, run.id),
+          sql`${workflowStepRuns.automationArtifactVersionId} is not distinct from ${retainedStep.automationArtifactVersionId}::uuid`,
           eq(workflowStepRuns.status, "running"),
         ),
       )
@@ -6294,17 +6326,40 @@ async function executeWorkflowGraph(
           if (!runningStep) throw new WorkflowCheckpointError("workflow_checkpoint_state_invalid",
             "Artifact step produced no runnable attempt");
           try {
+            // Retain the exact native version before executing or publishing a
+            // copied result. Existing Learning/C7 guards own this binding and enrich
+            // the step's Memory roots; a config string alone is not retention.
+            runningStep = await db.transaction(async (tx) => {
+              const scopedDb = tx as unknown as Db;
+              await lockAnalyticalCompany(scopedDb, ownedRun.companyId);
+              await lockMemoryPrivacy(scopedDb, ownedRun.companyId);
+              await automationArtifactRuntimeService(scopedDb).resolveActiveBinding(
+                ownedRun.companyId, artifactId, versionId, actor);
+              const [owned] = await tx.select().from(workflowRuns).where(and(
+                eq(workflowRuns.companyId, ownedRun.companyId), eq(workflowRuns.id, ownedRun.id))).for("update");
+              if (owned?.status !== "running" || owned.executionOwnerId !== ownedRun.executionOwnerId ||
+                !owned.leaseExpiresAt || owned.leaseExpiresAt <= new Date()) {
+                throw conflict("Workflow execution ownership changed before artifact retention", { code: "workflow_run_claim_lost" });
+              }
+              const [pinned] = await tx.update(workflowStepRuns).set({ automationArtifactVersionId: versionId })
+                .where(and(eq(workflowStepRuns.companyId, ownedRun.companyId), eq(workflowStepRuns.workflowRunId, ownedRun.id),
+                  eq(workflowStepRuns.id, runningStep!.id), eq(workflowStepRuns.status, "running"))).returning();
+              if (!pinned || pinned.status !== "running") {
+                throw conflict("Workflow artifact step changed before retention", { code: "workflow_step_claim_conflict" });
+              }
+              return pinned;
+            });
             const executed = await automationArtifactRuntimeService(db).execute(
               ownedRun.companyId, artifactId, versionId, input, actor,
               { timeoutMs: Math.min(5_000, (current.timeoutSeconds ?? 5) * 1_000) });
             output = executed.output;
+            await completeRunningStep(db, ownedRun, runningStep, output, actor, { artifactId, versionId });
           } catch (error) {
             if (!(error instanceof HttpError)) throw error;
             const code = typeof error.details === "object" && error.details !== null && "code" in error.details
               ? String(error.details.code) : "automation_artifact_execution_denied";
             throw new WorkflowCheckpointError(code, "Artifact execution failed its authorization, binding or validation gate");
           }
-          await completeRunningStep(db, ownedRun, runningStep, output, actor);
         }
       } else if (current.type === "core.condition") {
         const expression = conditionExpression(current);
@@ -8293,31 +8348,43 @@ export function workflowExecutorService(
       limit: number,
       reader?:AuthorizationActor,
     ): Promise<WorkflowRun[]> => {
-      const workflow = await db
-        .select({ id: workflows.id })
-        .from(workflows)
-        .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId)))
-        .then((rows) => rows[0] ?? null);
-      if (!workflow) throw notFound("Workflow not found");
+      const connection = db;
+      return connection.transaction(async rawTx => {
+        const db = rawTx as unknown as Db;
+        await lockAnalyticalCompany(db, companyId);
+        await lockMemoryPrivacy(db, companyId);
+        const workflow = await db
+          .select({ id: workflows.id })
+          .from(workflows)
+          .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId)))
+          .then((rows) => rows[0] ?? null);
+        if (!workflow) throw notFound("Workflow not found");
 
-      const safeLimit = Math.min(Math.max(limit, 1), 100);
-      const rows = await db
-        .select()
-        .from(workflowRuns)
-        .where(
-          and(
-            eq(workflowRuns.companyId, companyId),
-            eq(workflowRuns.workflowId, workflowId),
-          ),
-        )
-        .orderBy(desc(workflowRuns.createdAt))
-        .limit(safeLimit);
-      for(const revisionId of new Set(rows.map(row=>row.workflowRevisionId)))await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",revisionId,reader);
-      const references = [...new Set(rows.flatMap((row) => row.memoryRecordIds))];
-      const erased = references.length ? await db.select({ recordId: memoryDeletionMarkers.recordId }).from(memoryDeletionMarkers)
-        .where(and(eq(memoryDeletionMarkers.companyId, companyId), inArray(memoryDeletionMarkers.recordId, references))) : [];
-      const erasedIds = new Set(erased.map((marker) => marker.recordId));
-      return rows.map((row) => row.memoryRecordIds.some((id) => erasedIds.has(id)) ? { ...mapRun(row), triggerPayload: {} } : mapRun(row));
+        const safeLimit = Math.min(Math.max(limit, 1), 100);
+        const rows = await db
+          .select()
+          .from(workflowRuns)
+          .where(
+            and(
+              eq(workflowRuns.companyId, companyId),
+              eq(workflowRuns.workflowId, workflowId),
+            ),
+          )
+          .orderBy(desc(workflowRuns.createdAt))
+          .limit(safeLimit);
+        for(const revisionId of new Set(rows.map(row=>row.workflowRevisionId)))await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",revisionId,reader);
+        const sourceDeadline = performance.now() + 30_000;
+        for (const run of rows) {
+          if (performance.now() > sourceDeadline) throw forbidden("Complete Workflow Source review exceeded its budget");
+          await assertLearnedWorkflowPayloadAccess(db, companyId, reader, { workflowRunId: run.id });
+        }
+        if (performance.now() > sourceDeadline) throw forbidden("Complete Workflow Source review exceeded its budget");
+        const references = [...new Set(rows.flatMap((row) => row.memoryRecordIds))];
+        const erased = references.length ? await db.select({ recordId: memoryDeletionMarkers.recordId }).from(memoryDeletionMarkers)
+          .where(and(eq(memoryDeletionMarkers.companyId, companyId), inArray(memoryDeletionMarkers.recordId, references))) : [];
+        const erasedIds = new Set(erased.map((marker) => marker.recordId));
+        return rows.map((row) => row.memoryRecordIds.some((id) => erasedIds.has(id)) ? { ...mapRun(row), triggerPayload: {} } : mapRun(row));
+      });
     },
 
     executeQueuedRun: async (
