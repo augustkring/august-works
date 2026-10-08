@@ -30,3 +30,9 @@ export const DataNotReady:Story={render:()=> <Result state="data_not_ready"/>};
 export const Expired:Story={render:()=> <Result state="expired"/>};
 export const Draft:Story={render:()=> <Workspace/>};
 export const Published:Story={render:()=> <Workspace published/>};
+
+export const Statistical:Story={render:()=>{
+ const {backtest}=forecastFixture();const profile={provider:"statsforecast" as const,version:"2.1.1" as const,python:"3.12.14" as const,bundleHash:"a".repeat(64),conformanceHash:"b".repeat(64)};
+ const artifact={...backtest,result:{...backtest.result,engineVersion:"aw-statsforecast-business-forecast-v1" as const,providerProvenance:profile,uncertainty:{method:"statsforecast_model" as const,coverageLevel:0.95 as const,reason:"Model-specified intervals; empirical company coverage is unestablished."},points:backtest.result.points.map(point=>({...point,value:40,interval:{method:"statsforecast_model" as const,level:0.95 as const,lower:35,upper:45,level80:{lower:37,upper:43}}})),selectedReason:"The exact candidate improves a time-safe native last-value baseline; separate Human publication is required.",comparisons:[{...backtest.result.comparisons[0],model:{kind:"auto_ets" as const,seasonLength:1}},...backtest.result.comparisons],limitations:["Synthetic presentation fixture does not establish provider execution or customer forecasting skill.","Model intervals have no established empirical company coverage."]}};
+ return <div className="mx-auto w-full max-w-3xl"><BusinessForecastResult artifact={artifact}/></div>;
+}};

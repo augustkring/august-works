@@ -1,9 +1,10 @@
-import type {BusinessForecastSpecView,BusinessForecastVersionView,BusinessForecastArtifactView,CreateBusinessForecastSpec,ReviseBusinessForecastSpec,BacktestBusinessForecast,PublishBusinessForecastSpec,RetireBusinessForecastSpec} from "@paperclipai/shared";
+import type {StatisticalForecastProviderInfo,BusinessForecastSpecView,BusinessForecastVersionView,BusinessForecastArtifactView,CreateBusinessForecastSpec,ReviseBusinessForecastSpec,BacktestBusinessForecast,PublishBusinessForecastSpec,RetireBusinessForecastSpec} from "@paperclipai/shared";
 import {api} from "./client";
 const base=(companyId:string)=>`/companies/${encodeURIComponent(companyId)}/business-forecasts`;
 const account=(path:string,userId?:string|null)=>userId?`${path}${path.includes("?")?"&":"?"}expectedUserId=${encodeURIComponent(userId)}`:path;
 const spec=(companyId:string,id:string)=>`${base(companyId)}/${encodeURIComponent(id)}`;
 export const businessForecastingApi={
+ providerProfile:(companyId:string,userId?:string|null)=>api.get<StatisticalForecastProviderInfo>(account(`${base(companyId)}/provider-profile`,userId),{cache:"no-store"}),
  list:(companyId:string,cursor?:string,userId?:string|null)=>api.get<{items:BusinessForecastSpecView[];nextCursor:string|null;coverage:"bounded_current_authorized_page"}>(account(`${base(companyId)}${cursor?`?cursor=${encodeURIComponent(cursor)}`:""}`,userId),{cache:"no-store"}),
  detail:(companyId:string,id:string,userId?:string|null)=>api.get<{spec:BusinessForecastSpecView;versions:BusinessForecastVersionView[]}>(account(spec(companyId,id),userId),{cache:"no-store"}),
  create:(companyId:string,input:CreateBusinessForecastSpec,userId?:string|null)=>api.post<{spec:BusinessForecastSpecView;version:BusinessForecastVersionView}>(account(base(companyId),userId),input),

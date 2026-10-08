@@ -14,6 +14,12 @@ describe("Native business forecasting public contracts",()=>{
   expect(publishBusinessForecastSpecSchema.safeParse({expectedRevision:1,versionId:uuid,rationale:"Attempt to publish without a pinned backtest"}).success).toBe(false);
   expect(publishBusinessForecastSpecSchema.safeParse({expectedRevision:1,versionId:uuid,backtestId:uuid,rationale:"auto"}).success).toBe(false);
  });
+ it("admits only an exact statistical model/profile pair with sufficient seasonal training",()=>{
+  const profile={provider:"statsforecast",version:"2.1.1",python:"3.12.14",bundleHash:"a".repeat(64),conformanceHash:"b".repeat(64)},input={...definition(),provider:"statsforecast",providerProfile:profile,candidate:{kind:"auto_ets",seasonLength:1}};
+  expect(businessForecastDefinitionSchema.safeParse(input).success).toBe(true);
+  for(const invalid of [{...input,providerProfile:undefined},{...input,provider:"aw_native"},{...input,candidate:{kind:"naive"}},{...input,candidate:{kind:"auto_theta",seasonLength:1}},{...input,providerProfile:{...profile,version:"latest"}},{...input,providerProfile:{...profile,endpoint:"https://example.test"}},{...input,candidate:{kind:"auto_arima",seasonLength:7}}]) expect(businessForecastDefinitionSchema.safeParse(invalid).success).toBe(false);
+  expect(businessForecastDefinitionSchema.safeParse({...input,candidate:{kind:"auto_arima",seasonLength:7},minimumHistory:20,backtest:{...input.backtest,minimumTrainingPoints:14}}).success).toBe(true);
+ });
  it("does not admit external providers, fabricated intervals, weak baselines or insufficient chronological folds",()=>{
   expect(businessForecastDefinitionSchema.safeParse(definition()).success).toBe(true);
   for(const provider of ["statsforecast","darts","python","llm"]) expect(businessForecastDefinitionSchema.safeParse({...definition(),provider}).success).toBe(false);

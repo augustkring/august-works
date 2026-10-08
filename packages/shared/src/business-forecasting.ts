@@ -6,11 +6,18 @@ export const nativeBusinessForecastModelSchema=z.discriminatedUnion("kind",[
   z.object({kind:z.literal("moving_average"),window:z.number().int().min(2).max(60)}).strict(),
   z.object({kind:z.literal("drift")}).strict(),
 ]);
+/** Optional fixed models and a server-verified immutable numerical profile.
+ * A profile is software provenance, never evidence of customer forecasting skill. */
+export const statisticalBusinessForecastModelSchema=z.object({kind:z.enum(["auto_ets","auto_arima"]),seasonLength:z.number().int().min(1).max(365)}).strict();
+export const statisticalForecastProfileSchema=z.object({provider:z.literal("statsforecast"),version:z.literal("2.1.1"),python:z.literal("3.12.14"),bundleHash:z.string().regex(/^[a-f0-9]{64}$/),conformanceHash:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
+export type StatisticalBusinessForecastModel=z.infer<typeof statisticalBusinessForecastModelSchema>;
+export type StatisticalForecastProfile=z.infer<typeof statisticalForecastProfileSchema>;
+export type BusinessForecastModel=NativeBusinessForecastModel|StatisticalBusinessForecastModel;
 export const businessForecastDefinitionSchema=z.object({
   name:z.string().trim().min(3).max(160),businessQuestion:prose,decisionUse:prose,ownerUserId:z.string().trim().min(1).max(200),
   metricId:id,metricVersionId:id,scope:z.discriminatedUnion("type",[z.object({type:z.literal("company"),id:z.null()}).strict(),z.object({type:z.literal("project"),id}).strict()]),
-  frequency:z.enum(["daily_utc","weekly_utc"]),horizon:z.number().int().min(1).max(60),provider:z.literal("aw_native"),
-  candidate:nativeBusinessForecastModelSchema,baselines:z.array(nativeBusinessForecastModelSchema).min(1).max(4),
+  frequency:z.enum(["daily_utc","weekly_utc"]),horizon:z.number().int().min(1).max(60),provider:z.enum(["aw_native","statsforecast"]),providerProfile:statisticalForecastProfileSchema.optional(),
+  candidate:z.union([nativeBusinessForecastModelSchema,statisticalBusinessForecastModelSchema]),baselines:z.array(nativeBusinessForecastModelSchema).min(1).max(4),
   minimumHistory:z.number().int().min(4).max(1000),captureLatencySeconds:z.number().int().min(0).max(86400),
   backtest:z.object({minimumTrainingPoints:z.number().int().min(2).max(900),minimumOrigins:z.number().int().min(3).max(100),gapPeriods:z.number().int().min(1).max(7),
     maximumMAE:z.number().finite().nonnegative(),minimumRelativeMAEImprovement:z.number().finite().min(0).max(1)}).strict(),
@@ -18,6 +25,9 @@ export const businessForecastDefinitionSchema=z.object({
   governanceObligationRefs:z.array(id).min(1).max(16),retentionDays:z.number().int().min(1).max(3650),
 }).strict().superRefine((value,ctx)=>{
   const reject=(message:string)=>ctx.addIssue({code:"custom",message});
+  const statistical=statisticalBusinessForecastModelSchema.safeParse(value.candidate).success;
+  if(value.provider==="statsforecast"&&(!statistical||!value.providerProfile)||value.provider==="aw_native"&&(statistical||value.providerProfile)) reject("The declared model requires its exact native or verified statistical profile");
+  if(statistical&&"seasonLength" in value.candidate&&value.candidate.seasonLength>1&&value.backtest.minimumTrainingPoints<2*value.candidate.seasonLength) reject("Statistical seasonal models require two complete training seasons");
   if(!value.baselines.some(model=>model.kind==="naive")) reject("Last-value baseline comparison is required");
   if(new Set(value.baselines.map(model=>model.kind)).size!==value.baselines.length) reject("Baseline kinds cannot repeat");
   if(new Set(value.governanceObligationRefs).size!==value.governanceObligationRefs.length) reject("Purpose references cannot repeat");
@@ -47,14 +57,15 @@ export interface BusinessForecastLoss {
 }
 export interface BusinessForecastFold {
   origin:number;trainingObservationIds:string[];trainingCutoff:string;testObservationIds:string[];gapPeriods:number;
-  predictions:{model:NativeBusinessForecastModel;values:number[];actual:number[];loss:BusinessForecastLoss}[];
+  predictions:{model:BusinessForecastModel;values:number[];actual:number[];loss:BusinessForecastLoss}[];
 }
 export interface NativeBusinessForecastResult {
-  engineVersion:"aw-native-business-forecast-v1";status:"qualified"|"not_qualified"|"data_not_ready";reasons:string[];
+  engineVersion:"aw-native-business-forecast-v1"|"aw-statsforecast-business-forecast-v1";status:"qualified"|"not_qualified"|"data_not_ready";reasons:string[];
   inputHash:string;definitionHash:string;unit:string|null;trainingObservationIds:string[];backtests:BusinessForecastFold[];
-  comparisons:{model:NativeBusinessForecastModel;loss:BusinessForecastLoss}[];selectedReason:string|null;
-  points:{from:string;until:string;value:number;interval:null}[];
-  uncertainty:{method:"unavailable";coverageLevel:null;reason:string};limitations:string[];
+  comparisons:{model:BusinessForecastModel;loss:BusinessForecastLoss}[];selectedReason:string|null;
+  points:{from:string;until:string;value:number;interval:null|{method:"statsforecast_model";level:0.95;lower:number;upper:number;level80:{lower:number;upper:number}}}[];
+  providerProvenance?:StatisticalForecastProfile;
+  uncertainty:{method:"unavailable"|"statsforecast_model";coverageLevel:null|0.95;reason:string};limitations:string[];
 }
 export interface BusinessForecastSpecView {
   id:string;companyId:string;key:string;revision:number;status:"draft"|"published"|"retired";publishedVersionId:string|null;
@@ -69,3 +80,5 @@ export interface BusinessForecastArtifactView {
   series:BusinessForecastSeriesPoint[];contentHash:string;cutoff:string;createdAt:string;expiresAt:string;
   currentQualification:"qualified"|"needs_revalidation"|"inconclusive";reviewReason:string|null;
 }
+
+export interface StatisticalForecastProviderInfo { companyId:string;profile:StatisticalForecastProfile;models:StatisticalBusinessForecastModel["kind"][];qualification:"synthetic_software_conformance";limitations:string[]; }

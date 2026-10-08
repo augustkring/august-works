@@ -1,0 +1,238 @@
+{
+  "checkpoint": "Optional verified statistical profiles through original forecast owner and Human publication",
+  "recordedAt": "2026-10-08T10:37:39.930259+00:00",
+  "parentCommit": "2865afadab0d8c61e3efb91a64dac38cbeace406",
+  "primaryParentCommit": "ab96d12dcfb920aa9486cac47a12946b0c0dd48a",
+  "sourceFiles": [
+    {
+      "path": "deploy/v8/statistical-worker/README.md",
+      "sha256": "1ce96ea65ae9cccc292b4dc9258085216247f1b6239bba1154c86d66e95c1938",
+      "state": "present"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "237a7b857bc2ea7c5cdc740f8e2d862bd868fb1f153617f13e96b61152542817",
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/0444_native_statistical_forecast.sql",
+      "sha256": "5024ac7405be6c70bd41550d52772ec202b449dfecd6a4c77eb29d92d4c8e19e",
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0439_snapshot.json",
+      "sha256": null,
+      "state": "normal_snapshot_prune"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0444_snapshot.json",
+      "sha256": "f0842497aadaae4c53e0e9ce875b772b9c6e72ed2c449773b4d2c2fd87492155",
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "3cdd7d80ed4033746896969720a01940d126b29ead415bf30ac06e6eb3b3e924",
+      "state": "present"
+    },
+    {
+      "path": "packages/shared/src/business-forecasting.test.ts",
+      "sha256": "b2cdf781988a5f5e77c044a324f17fe955ca613b95f26478f90d2331182dc38e",
+      "state": "present"
+    },
+    {
+      "path": "packages/shared/src/business-forecasting.ts",
+      "sha256": "9cd6b411054e322e9db430fd0836a3ce4315b1518afe945933ad6aa4d315b049",
+      "state": "present"
+    },
+    {
+      "path": "server/src/__tests__/business-forecasting.integration.test.ts",
+      "sha256": "c3b128e4e14434886d016f6d328376d57ea5294860366e5d584e29a7daa5cb65",
+      "state": "present"
+    },
+    {
+      "path": "server/src/routes/business-forecasting.ts",
+      "sha256": "ba90fd91625eb104dd3de3b98876f45fefbb06f6943d8037518e167920ea35fa",
+      "state": "present"
+    },
+    {
+      "path": "server/src/services/business-forecasting/kernel.ts",
+      "sha256": "e26f487eb6f701572f04b62c1672fdcadf59d6a2bc6d7d21218e54cbac688e49",
+      "state": "present"
+    },
+    {
+      "path": "server/src/services/business-forecasting/service.ts",
+      "sha256": "038cb6e270a43718e538e073aa74cb3f63d516d2be1b0887dd6777f6b8b0bc8c",
+      "state": "present"
+    },
+    {
+      "path": "server/src/services/business-forecasting/statistical-provider.ts",
+      "sha256": "d83031bb25211c6ad6956125c99e640899058b3b7a05cf204ae0e4e6e7d2dcb7",
+      "state": "present"
+    },
+    {
+      "path": "tests/e2e/statistical-forecast.spec.ts",
+      "sha256": "6cf89bad423d77f29921889c410957a99ed6b58996e8b6e6e97b53a1e6fe9025",
+      "state": "present"
+    },
+    {
+      "path": "tests/storybook-visual/business-forecasts.spec.ts",
+      "sha256": "cb5bcda1de4e87f84cc90d57666e3a6898947d25dbd80f8756cd878e008b0a21",
+      "state": "present"
+    },
+    {
+      "path": "ui/src/api/business-forecasting.ts",
+      "sha256": "2a3283837777906fa0b9c3f52924ef23981253a16819ffef9f63f01be0781dd3",
+      "state": "present"
+    },
+    {
+      "path": "ui/src/components/BusinessForecastDefinitionForm.tsx",
+      "sha256": "4416f51b7bd2643dc1d8ce4ff24ef9bbcf6ff14733c103043ba55ebee86fe075",
+      "state": "present"
+    },
+    {
+      "path": "ui/src/components/BusinessForecastResult.tsx",
+      "sha256": "58efa35bcdc4b9399a66564e96ade787da74962b74e4bc96722d82c94fcbdadd",
+      "state": "present"
+    },
+    {
+      "path": "ui/src/pages/BusinessForecasts.test.tsx",
+      "sha256": "72da69595602df2d4377f609b9f02fce31b62723a7746d338ea63420be8fd9eb",
+      "state": "present"
+    },
+    {
+      "path": "ui/src/pages/BusinessForecasts.tsx",
+      "sha256": "dad1d7a52dfbe9206502335297ebc0fc077b5228c8bc20d99ab2edfb558a05a2",
+      "state": "present"
+    },
+    {
+      "path": "ui/storybook/stories/business-forecasts.stories.tsx",
+      "sha256": "9c8ec94895d79a1abc7ec596a931e4d521de394ea66becf0f2481800262c1bed",
+      "state": "present"
+    }
+  ],
+  "validation": {
+    "nativeOwnerKernelWorkerSnapshot": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statistical-forecast-owner-final-source-tests.log",
+      "sha256": "4563439e4df0356bb414126cde6fa43eb064530f018e3488b26458e822e6d41c",
+      "tests": 43,
+      "skipped": 0
+    },
+    "sharedContractsAndUI": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statistical-forecast-ui-contract-reviewed-tests.log",
+      "sha256": "a067126e1925734b86e5e1a84fbcaa0c4db8ca35273dfd51bf6f9fa4b2d19725",
+      "tests": 12,
+      "skipped": 0
+    },
+    "presentationBrowser": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statistical-forecast-reviewed-story-browser.log",
+      "sha256": "2e7a69f1d3a31c8a1e6c87fd89737abae300d27ed47cb130d82f852939eed5bb",
+      "tests": 41,
+      "skipped": 0
+    },
+    "actualNativeBrowser": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statistical-forecast-reviewed-native-browser.log",
+      "sha256": "b5ebd103eef972c3ef12ec06976972f06a5c63d546e7fa484364266634d4908e",
+      "tests": 1,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statistical-forecast-final-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statistical-forecast-reviewed-ui-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migrations": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statistical-forecast-reviewed-migration-check.log",
+      "sha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statistical-forecast-reviewed-token-gates.log",
+      "sha256": "1898a9427dcd361ced77ef33872a3b1787486212a3ac87a1cfacd87a3d0252fe"
+    },
+    "storyBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-statistical-forecast-story-reviewed-build.log",
+      "sha256": "47799137dd5ceed543eaff61f2764bd4cfb735477b13005fc107371d2794af6c"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-statistical-worker.log",
+      "sha256": "d585789af153e2e3e8e9b6a09ca5b8c1a0cdf5d036badf3ceccc5df6cc5d82bc",
+      "commit": "ab96d12dcfb920aa9486cac47a12946b0c0dd48a"
+    }
+  },
+  "screenshots": [
+    {
+      "path": "tests/e2e/test-results/statistical-forecast-a-nat-1396c-cation-or-canonical-changes-chromium/native-statistical-definition-dark-1200.png",
+      "sha256": "d8d595856f6f138c9119a287c8060c36f48e61a12101ced08b08d8861176379e",
+      "scope": "actual_native_local_trusted_software"
+    },
+    {
+      "path": "tests/e2e/test-results/statistical-forecast-a-nat-1396c-cation-or-canonical-changes-chromium/native-statistical-definition-dark-390.png",
+      "sha256": "003d724d24a43e9711ecc42508219068a2f4d8bb007b45a4a03cc2ee2e41b7f6",
+      "scope": "actual_native_local_trusted_software"
+    },
+    {
+      "path": "tests/e2e/test-results/statistical-forecast-a-nat-1396c-cation-or-canonical-changes-chromium/native-statistical-definition-light-1200.png",
+      "sha256": "2cb4131ca2ad1b2d9e026e3e7e7f697ae0df6ef9b2b5dd1438559a0a004fee10",
+      "scope": "actual_native_local_trusted_software"
+    },
+    {
+      "path": "tests/e2e/test-results/statistical-forecast-a-nat-1396c-cation-or-canonical-changes-chromium/native-statistical-definition-light-390.png",
+      "sha256": "9138ae455f0c0835611f480242c1bd460c485da120d9cdf336a4ef6f4a3acfeb",
+      "scope": "actual_native_local_trusted_software"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/business-forecasts/business-forecasts-statist-5349f-als-from-empirical-coverage/statistical-forecast-dark-390.png",
+      "sha256": "ce10068be07905be2be797154c948c9c0b2a07fe2c852e956a91c205a05a5de5",
+      "scope": "synthetic_presentation_with_API_aborted"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/business-forecasts/business-forecasts-statist-74615-als-from-empirical-coverage/statistical-forecast-dark-1200.png",
+      "sha256": "6cc8ee3ecf9a19d5b20df495f38fed5f384ad8e1a89396cd53d3e9a44393d594",
+      "scope": "synthetic_presentation_with_API_aborted"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/business-forecasts/business-forecasts-statist-9cc7d-als-from-empirical-coverage/statistical-forecast-light-390.png",
+      "sha256": "f9473866e94174cd921ce8a4c85ecdc4a52540308bd3ebc2af401221d907561b",
+      "scope": "synthetic_presentation_with_API_aborted"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/business-forecasts/business-forecasts-statist-b88a4-als-from-empirical-coverage/statistical-forecast-light-1200.png",
+      "sha256": "dd086e43addccfba2f081c4220c91140b61fe47dbb9c5721f8fe2defb0248121",
+      "scope": "synthetic_presentation_with_API_aborted"
+    }
+  ],
+  "qualified": [
+    "Original company/Memory/Source/purpose/expiry and separate Human publication reused",
+    "Exact pinned current AutoETS/AutoARIMA profile, native last-value parity and both trend conformance checks",
+    "Native historical definition/signature/arithmetic contracts preserved",
+    "Actual statistical backtest and Human-published run through original migrated PostgreSQL guards",
+    "Strict baseline improvement, constant tie refusal and immutable nested model intervals",
+    "Provider rollback retains authorized original facts while withholding current qualification",
+    "Cancellation rolls back artifacts/manifests; final persistence repeats cancellation checks",
+    "Flags-off paused-company Source erasure removes published statistical derivatives and preserves independent Task",
+    "Current HTTP company/account/strict-query/no-store profile boundary",
+    "Final shared/UI/types/migration/snapshot/token gates and presentation browser",
+    "Actual shipped local-trusted browser creates only an exactly pinned draft, no publication/run/canonical changes"
+  ],
+  "limitations": [
+    "Synthetic timely-capture history and longer native metric review are software prerequisites, not collected customer history",
+    "Model-specified intervals have no established empirical customer calibration or business impact",
+    "Software fixture actors are not authenticated JWT/Human/commercial/pilot/hosted trials",
+    "Actual browser qualifies proposal/current-profile flow; historical statistical owner flow is separately qualified on migrated PostgreSQL",
+    "AutoTheta remains unqualified on the pinned point/interval mismatch",
+    "Initial parser/test fixture/flag state/draft erasure expectation/timeouts excluded from qualification",
+    "Complete built optional container, hosted runtime, entire Source graph and whole-brief acceptance remain open"
+  ]
+}
