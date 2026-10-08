@@ -1,3 +1,4 @@
+import { enqueueSkillVersionFileErasure } from "./skill-file-erasure.js";
 import {purgeDerivedWorkflowMemory} from "../memory/memory-privacy.js";
 import { and, eq, sql, ne, inArray } from "drizzle-orm";
 import { learningCycles, companyAgentPackageInstallations, agentPackageUpdateProposals, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, policyChangeProposals, workflowOptimizerEvaluations, automationArtifacts, workflows, workflowRevisions, workflowRuns, rolePacks, rolePackVersions, rolePackItems,
@@ -74,6 +75,7 @@ export async function invalidateLearningCycles(tx:Db,companyId:string,cycleIds:s
   }
   const versionIds = [...new Set([...ids("skill"), ...assets.filter((asset) => asset.assetType === "skill_version").map((asset) => asset.assetId)])];
   if (versionIds.length) {
+    if (erase) await enqueueSkillVersionFileErasure(tx, companyId, versionIds);
     if (erase) await tx.update(companySkillVersions).set({ fileInventory: [], label: null, validationSummary: { erased: true }, state: "rejected" }).where(and(eq(companySkillVersions.companyId, companyId), inArray(companySkillVersions.id, versionIds)));
     const skills = await tx.select().from(companySkills).where(and(eq(companySkills.companyId, companyId), inArray(companySkills.activeVersionId, versionIds)));
     for (const row of skills) await tx.update(companySkills).set(erase ? { lifecycleState: "degraded", activeVersionId: null, currentVersionId: null, markdown: "", fileInventory: [], description: null, publicShareToken: null, degradedReason: "Learning evidence erased", updatedAt: now }

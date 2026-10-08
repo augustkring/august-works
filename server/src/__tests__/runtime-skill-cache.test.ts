@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompanySkill } from "@paperclipai/shared";
-import { removeRuntimeSkillCache, resolveRuntimeSkillCache, runtimeSkillCacheSpec } from "../services/runtime-skill-cache.js";
+import { prepareRuntimeSkillVersionDirectory, removeRuntimeSkillVersionDirectory, removeRuntimeSkillCache, resolveRuntimeSkillCache, runtimeSkillCacheSpec } from "../services/runtime-skill-cache.js";
 
 async function makeWritable(root: string): Promise<void> {
   const stat = await fs.lstat(root);
@@ -37,6 +37,23 @@ describe("runtime skill revision cache", () => {
   });
   afterEach(async () => { await makeWritable(root); await fs.rm(root, { recursive: true, force: true }); });
   const reader = () => vi.fn(async (file: string) => contents[file]);
+
+  it("erases only the native version directory and rejects symlink ancestors and path identities", async () => {
+    const versionId = randomUUID(), neighborId = randomUUID();
+    const directory = await prepareRuntimeSkillVersionDirectory(root, skill.id, versionId);
+    const neighbor = await prepareRuntimeSkillVersionDirectory(root, skill.id, neighborId);
+    await fs.writeFile(path.join(directory, "SKILL.md"), "Private copied evidence");
+    await fs.writeFile(path.join(neighbor, "SKILL.md"), "Independent procedure");
+    await makeReadonly(directory);
+    await removeRuntimeSkillVersionDirectory(root, skill.id, versionId);
+    await expect(fs.stat(directory)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await fs.readFile(path.join(neighbor, "SKILL.md"), "utf8")).toBe("Independent procedure");
+    await removeRuntimeSkillVersionDirectory(root, skill.id, versionId);
+    await expect(removeRuntimeSkillVersionDirectory(root, "../outside", versionId)).rejects.toThrow("identity");
+    await fs.symlink(neighbor, directory);
+    await expect(removeRuntimeSkillVersionDirectory(root, skill.id, versionId)).rejects.toThrow("Unsafe");
+    expect(await fs.readFile(path.join(neighbor, "SKILL.md"), "utf8")).toBe("Independent procedure");
+  });
 
   it("publishes complete contents once for twenty callers and leaves warm files untouched", async () => {
     const spec = runtimeSkillCacheSpec(root, skill)!;

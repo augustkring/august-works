@@ -1,3 +1,8 @@
+import path from "node:path";
+import os from "node:os";
+import { promises as fs } from "node:fs";
+import { resolvePaperclipInstanceRoot } from "../home-paths.js";
+import { eraseSkillVersionFiles } from "../services/learning/skill-file-erasure.js";
 import {readFile} from "node:fs/promises";
 import {orchestrationService} from "../services/orchestration/orchestration-service.js";
 import {completionContracts,orchestrationPlans,verificationRuns,documents} from "@paperclipai/db";
@@ -613,6 +618,50 @@ const support = await getEmbeddedPostgresTestSupport();
     expect((await db.select().from(companySkillVersions).where(eq(companySkillVersions.id, link.candidateId)))[0]!.state).toBe("candidate");
     expect((await db.select().from(companySkills).where(eq(companySkills.id, created.skillId)))[0]!.activeVersionId).toBeNull();
     await expect(skills.promote(owner, companyId, created.skillId, { versionId: link.candidateId, expectedActiveVersionId: null, evaluationRunId: randomUUID() })).rejects.toBeDefined();
+  });
+  it("erases native Skill snapshots with flags off, retries unsafe filesystem ancestors, and fences late publishers", async () => {
+    const previousHome = process.env.PAPERCLIP_HOME, previousInstance = process.env.PAPERCLIP_INSTANCE_ID;
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), "aw-skill-source-erasure-"));
+    process.env.PAPERCLIP_HOME = home; process.env.PAPERCLIP_INSTANCE_ID = "skill-erasure-test";
+    try {
+      const created = await skillLifecycleService(db).createDraft(owner, companyId, createGovernedSkillSchema.parse({ slug: "copied-evidence", name: "Copied procedure", markdown: "Independent original draft" }));
+      const link = await domainProposal(created.skillId, `skill://${created.skillId}/none`, { targetDomain: "skill", candidate: { baseActiveVersionId: null, markdown: "Review evidence before drafting; keep human approval", summary: "Earlier review", dependencies: [], sharing: "company_proposed" } });
+      const original = companySkillService(db), skill = (await original.getById(companyId, created.skillId))!;
+      // Candidate test preparation exercises native snapshot publication; it does not promote a Skill.
+      const options = { selectedSkillKeys: new Set([skill.key]), versionSelections: new Map([[skill.key, link.candidateId]]), allowCandidateVersionsForTest: true };
+      const [entry] = await original.listRuntimeSkillEntries(companyId, options);
+      expect(entry).toMatchObject({ sourceStatus: "available", versionId: link.candidateId });
+      expect(await fs.readFile(path.join(entry!.source, "SKILL.md"), "utf8")).toContain("Review evidence");
+      await expect(eraseSkillVersionFiles(db, companyId, skill.id, link.candidateId)).rejects.toThrow("no erasure receipt");
+      const namespace = path.resolve(resolvePaperclipInstanceRoot(), "skills", companyId, "__versions__");
+      const saved = namespace + ".saved";
+      await fs.rename(namespace, saved); await fs.symlink(saved, namespace);
+      await instanceSettingsService(db).updateExperimental({ enableCollectiveMemoryV1: false, enablePrivateAgentMemoryV1: false, learning_engine_v7: false, memory_observations_v7: false, cognitive_memory_v7: false });
+      await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
+      await db.transaction(async tx => { await purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]); });
+      await memoryJobService(db).tick({ limit: 100 });
+      const key = `skill-version-file-erasure:v1:${link.candidateId}`;
+      const [failed] = await db.select().from(memoryJobs).where(eq(memoryJobs.jobKey, key));
+      expect(failed).toMatchObject({ status: "failed", sourceRefJson: { kind: "skill_version_file_erasure", skillId: skill.id, versionId: link.candidateId } });
+      expect(await fs.readFile(path.join(saved, skill.id, link.candidateId, "SKILL.md"), "utf8")).toContain("Review evidence");
+      await fs.unlink(namespace); await fs.rename(saved, namespace);
+      await db.update(memoryJobs).set({ updatedAt: new Date(Date.now() - 61000) }).where(eq(memoryJobs.id, failed!.id));
+      await memoryJobService(db).tick({ limit: 100 });
+      expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id, failed!.id)))[0]!.status).toBe("succeeded");
+      await expect(fs.stat(entry!.source)).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(original.listRuntimeSkillEntries(companyId, options)).rejects.toMatchObject({ details: { code: "analytical_source_access_lost" } });
+      const [erasedVersion] = await db.select().from(companySkillVersions).where(eq(companySkillVersions.id, link.candidateId));
+      await db.update(companySkillVersions).set({ fileInventory: [{ path: "SKILL.md", kind: "skill", content: "Late private copy" }] }).where(eq(companySkillVersions.id, link.candidateId));
+      expect((await db.select().from(companySkillVersions).where(eq(companySkillVersions.id, link.candidateId)))[0]).toEqual(erasedVersion);
+      await expect(db.update(companySkillVersions).set({ createdAt: new Date(0) }).where(eq(companySkillVersions.id, link.candidateId))).rejects.toBeDefined();
+      await expect(fs.stat(entry!.source)).rejects.toMatchObject({ code: "ENOENT" });
+      expect((await db.select().from(companySkills).where(eq(companySkills.id, skill.id)))[0]!.activeVersionId).toBeNull();
+      expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id, roots[1]!)))[0]!.content).toContain("Actual customer outcome");
+    } finally {
+      if (previousHome === undefined) delete process.env.PAPERCLIP_HOME; else process.env.PAPERCLIP_HOME = previousHome;
+      if (previousInstance === undefined) delete process.env.PAPERCLIP_INSTANCE_ID; else process.env.PAPERCLIP_INSTANCE_ID = previousInstance;
+      await fs.rm(home, { recursive: true, force: true });
+    }
   });
   it("uses the native Playbook proposal without replacing its approved procedure", async () => {
     const playbooks = playbookService(db), created = await playbooks.create(owner, companyId, createPlaybookSchema.parse({ key: "learning-procedure", title: "Procedure", markdown: "Original reviewed procedure" }));
