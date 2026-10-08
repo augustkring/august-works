@@ -1,0 +1,63 @@
+{
+  "checkpoint": "Original company/run owns the fixed public native conformance instruction asset",
+  "recordedAt": "2026-10-08T15:41:15.797569+00:00",
+  "parentCommit": "d53331a29fb7faa9bc88c7c00262c9abcde881a5",
+  "primaryParentCommit": "24a2ae70f1134ae5edcf5f5ae57bf3ecf091526a",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-source-and-data-register.md",
+      "sha256": "a7851e4808a1689d22ef5ddd1bb05d9173dc7dfee826bdce0f62c45cea2372b5"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "97c3d21bc8d7ada21fdce88175b6d39c1c4c7be385f7410ac30caa34d48e1f42"
+    },
+    {
+      "path": "server/src/__tests__/native-provider-conformance-v5.test.ts",
+      "sha256": "436517d278d6d0ec11848788419c27a070849af2dc4ead1f3328c6ba37d1f6f1"
+    },
+    {
+      "path": "server/src/__tests__/provider-conformance-v5.test.ts",
+      "sha256": "8e5e44725520a3bf14afae76185aa20f7a25a301259c54afc7e809a5da08637a"
+    },
+    {
+      "path": "server/src/services/native-provider-conformance.ts",
+      "sha256": "c965b9e93f22f10eecfd44546ca8cc09e983b47a63a710921a20b529a788c5a0"
+    }
+  ],
+  "validation": {
+    "completeOriginalConformanceRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-owned-conformance-assets-tests.log",
+      "sha256": "4cecb494ee44e8275eeac0acf1b978c630951724be6419dc62a57ff37a95386c",
+      "tests": 18,
+      "files": 2,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-owned-conformance-assets-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "sourceCommit": "24a2ae70f1134ae5edcf5f5ae57bf3ecf091526a",
+      "log": "/var/tmp/aw-v8-native-build-connector-owned-assets.log",
+      "sha256": "a8265724a51a1c0cbd64377fe417489adea7dc1c4c3e7a86bee0cf72adadf8c1"
+    }
+  },
+  "qualified": [
+    "The existing conformance company/run binding owns its fixed public instruction asset; no new global bundle is published",
+    "All four original server runtime asset publication paths are run-owned; configuration previews publish no private assignment files",
+    "Content/context digests remain unchanged across physical run paths and the original synthetic resumed session retains its exact identity",
+    "Original empty tool/credential input, changed-profile refusal, private-home/alias checks, cancellation acknowledgement/uncertainty and separate retained Human review remain",
+    "All 18 complete constructor/retained conformance-owner software checks pass without skips; final isolated server types pass"
+  ],
+  "limitations": [
+    "Fixed instruction text contains no customer data, private probe input, credentials or response; this is an ownership correction for public software bytes",
+    "Readable constructor identities, backend responses, resumed provider session and close acknowledgements are explicit software fixtures, not actual provider/hosted/customer/Human trials",
+    "No live provider probe, message, deployment or spend is performed",
+    "Historical unowned global files, provider/workspace/home copies outside the application-owned runtime asset namespace and archive/multi-restore qualification remain open",
+    "Current whole branch release qualification and hosted predecessor/pilot acceptance remain unfinished; no whole-brief completion or release promotion"
+  ]
+}

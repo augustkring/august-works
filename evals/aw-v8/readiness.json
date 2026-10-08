@@ -87,7 +87,8 @@
     "native_exact_model_specified_forecast_intervals_retained_in_advisory_sdk",
     "native_4000_unit_seventeen_metric_68000_outcome_capture_replay_and_whole_source_erasure",
     "optional_metricflow_cube_versioned_public_license_capability_research_with_customer_source_conditional_conformance",
-    "native_run_owned_connector_assignment_copies_and_shared_original_runtime_source_fence"
+    "native_run_owned_connector_assignment_copies_and_shared_original_runtime_source_fence",
+    "native_original_public_conformance_assets_owned_by_existing_company_run"
   ],
   "unfinishedWaves": [
     "complete_source_graph_and_historical_orphan_multi_restore_reconciliation",
@@ -150,9 +151,11 @@
     "server/src/__tests__/issue-remove-cascade.test.ts",
     "server/src/__tests__/management-review-kernel.test.ts",
     "server/src/__tests__/management-reviews.integration.test.ts",
+    "server/src/__tests__/native-provider-conformance-v5.test.ts",
     "server/src/__tests__/openapi-routes.test.ts",
     "server/src/__tests__/process-analysis.integration.test.ts",
     "server/src/__tests__/process-data-readiness-engine.test.ts",
+    "server/src/__tests__/provider-conformance-v5.test.ts",
     "server/src/__tests__/provider-trace-store.test.ts",
     "server/src/__tests__/routine-management-reviews.integration.test.ts",
     "server/src/__tests__/runtime-skill-cache.test.ts",
@@ -219,8 +222,8 @@
     "All H6/H7 environment-specific predecessor gates remain open. No live cloud/customer/provider/Human trial, deployment or business-impact acceptance is represented by the local receipts."
   ],
   "implementationStatus": "LOCAL_IMPLEMENTATION_IN_PROGRESS",
-  "updatedAt": "2026-10-08T15:32:46.686634+00:00",
-  "statusAsOfCheckpoint": 47,
+  "updatedAt": "2026-10-08T15:41:15.797569+00:00",
+  "statusAsOfCheckpoint": 48,
   "sourceCorpusFullyRead": true,
   "localDevelopmentEvidence": [
     {
@@ -510,6 +513,10 @@
     {
       "path": "doc/operations/aw-v8-evidence/native-orchestration-source-payload-checkpoint.json",
       "sha256": "bddd79ac0397a024cf0de89965c7b9296749762743591faa5b643eb4507aef5d"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-owned-conformance-assets-checkpoint.json",
+      "sha256": "7389a5f98594f1d173b9cf7df2804d10d79d3e302e4c7fd299d3e828e2173d39"
     },
     {
       "path": "doc/operations/aw-v8-evidence/native-planning-outcome-learning-checkpoint.json",

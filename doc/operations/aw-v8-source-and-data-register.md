@@ -2,7 +2,7 @@
 
 Date: 2026-10-06. Reconciliation base: master
 `d550aa7ea5ad38b5209d79135cabaa227ab3f902`.
-Status as of native-owner checkpoint 47 (2026-10-08): default-off native
+Status as of native-owner checkpoint 48 (2026-10-08): default-off native
 Events, Metrics/targets, strategy links, Process analysis/findings, Decisions and
 outcome reviews, Forecasts, Scenarios, Experiments, causal analyses, adaptive
 project/initiative planning and Management Reviews are implemented. Separate
@@ -11,7 +11,9 @@ Actual isolated StatsForecast and DoWhy software profiles are locally qualified.
 Native Context, runtime/Learning copies and bounded SDK Sources have local
 privacy/erasure evidence. Connector assignment copies now use the original
 company/run owner and Source fence; configuration previews publish no private
-assignment files. All twelve original analytical SDK paths have actual
+assignment files. The fixed public conformance instruction also uses its
+existing run owner; every original server runtime asset publisher is run-owned.
+All twelve original analytical SDK paths have actual
 native dispatcher qualification. Native metrics cover the explicit 10,000-Source
 maximum, Forecasts cover 4,000 underlying Task Sources, and Experiments cover
 4,000 units with seventeen outcome metrics (68,000 outcomes), including complete
