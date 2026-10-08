@@ -2,7 +2,7 @@ import type { ProjectPlanningDetail } from "@/api/adaptive-planning";
 import { CausalClaimResult } from "./CausalClaimResult";
 import { BusinessExperimentResult } from "./BusinessExperimentResult";
 const humanLabel=(name:string)=>name.replace(/([a-z])([A-Z])/g,"$1 $2").replaceAll("_"," ");
-export function ProjectPlanningBasis({detail,taskLabels}:{detail:ProjectPlanningDetail;taskLabels:Record<string,string>}){
+export function ProjectPlanningBasis({detail,taskLabels}:{detail:Pick<ProjectPlanningDetail,"currentQualification"|"contextHash"> & {context:Pick<ProjectPlanningDetail["context"],"profile"|"evidence"|"capturedAt"|"expiresAt">};taskLabels:Record<string,string>}){
  const {profile,evidence}=detail.context;
  return <details className="min-w-0 space-y-3"><summary className="cursor-pointer font-medium">Original human declarations and evidence</summary>
   <p>Captured {detail.context.capturedAt}; retention until {detail.context.expiresAt}. Classification: {profile.sensitivity}.</p>

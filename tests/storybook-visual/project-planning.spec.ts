@@ -44,3 +44,32 @@ for(const theme of ["light","dark"])for(const width of [390,1200])test(`observed
  await expect(page.getByRole("button",{name:"Approve committed planning dates",exact:true})).toHaveCount(0);await expect(outcome).toContainText("business impact and causation remain unestablished");
  await accessibility(page);await page.screenshot({path:info.outputPath(`planning-outcome-${theme}-${width}.png`),fullPage:true,animations:"disabled"});
 });
+
+for (const theme of ["light", "dark"]) for (const width of [390, 1200]) {
+  for (const state of ["current", "retained", "disabled"]) test(`joint planning ${state} ${theme} ${width}px retains separate Human review`, async ({ page }, info) => {
+    await page.route("**/api/**", route => route.abort()); await page.setViewportSize({ width, height: 1100 });
+    await page.goto(`/iframe.html?id=business-intelligence-cross-project-planning--${state}&viewMode=story&globals=theme:${theme}`);
+    await page.getByRole("combobox", { name: "Joint proposal reference", exact: true }).selectOption("00000000-0000-4000-8000-000000002403");
+    await page.getByRole("textbox", { name: "Joint planning review rationale", exact: true }).fill("Human independently reviews complete native populations and shared capacity");
+    await expect(page.getByRole("button", { name: "Cancel joint proposal", exact: true })).toBeEnabled();
+    const begin = page.getByRole("button", { name: "Begin separate joint review", exact: true });
+    if (state === "disabled") { await expect(begin).toHaveCount(0); await expect(page.getByRole("region", { name: "Declared planning constraint result", exact: true })).toHaveCount(0); await expect(page.getByText("First project", { exact: true })).toHaveCount(0); }
+    else { await expect(begin).toBeDisabled(); const ack = page.getByRole("region", { name: "Separate Human joint review", exact: true }).getByRole("checkbox"); await ack.focus(); await page.keyboard.press("Space"); if (state === "current") await expect(begin).toBeEnabled(); else { await expect(begin).toBeDisabled(); await expect(page.getByRole("region", { name: "Declared planning constraint result", exact: true })).toContainText("Retained feasible calculation"); } const original = page.getByText("Original human declarations and evidence", { exact: true }); await original.focus(); await page.keyboard.press("Space"); await expect(page.getByRole("region", { name: "Original declared task assumptions", exact: true })).toBeVisible(); }
+    await accessibility(page); await page.screenshot({ path: info.outputPath(`joint-planning-${state}-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
+  });
+  test(`joint declarations ${theme} ${width}px reuse explicit native assumptions`, async ({ page }, info) => {
+    await page.route("**/api/**", route => route.abort()); await page.setViewportSize({ width, height: 1100 });
+    await page.goto(`/iframe.html?id=business-intelligence-cross-project-planning--current&viewMode=story&globals=theme:${theme}`);
+    const choices = page.getByRole("region", { name: "Native joint planning project choices", exact: true });
+    await choices.getByRole("checkbox", { name: "First project", exact: true }).check(); await choices.getByRole("checkbox", { name: "Second project", exact: true }).check();
+    await page.getByRole("button", { name: "Declare shared project constraints", exact: true }).click();
+    const form = page.getByRole("form", { name: "Declared project planning assumptions", exact: true });
+    await expect(form).toContainText("All current active tasks are required in the selected projects");
+    await form.getByRole("textbox", { name: "Declaration rationale for First project · Prepare source evidence", exact: true }).fill("Human explicitly maintains joint duration and capacity assumptions");
+    await form.getByRole("textbox", { name: "Declaration rationale for Second project · Resolve native dependency", exact: true }).fill("Human explicitly maintains the dependent native Task assumptions");
+    await form.getByRole("combobox", { name: "Approved planning purpose", exact: true }).selectOption({ index: 1 });
+    const inspect = form.getByRole("button", { name: "Inspect constraints and proposed schedule", exact: true }); await expect(inspect).toBeDisabled();
+    for (const ack of await form.getByRole("checkbox", { name: "Explicitly declare no demand on the supplied pool", exact: true }).all()) { await ack.focus(); await page.keyboard.press("Space"); }
+    await expect(inspect).toBeEnabled(); await accessibility(page); await page.screenshot({ path: info.outputPath(`joint-declarations-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
+  });
+}
