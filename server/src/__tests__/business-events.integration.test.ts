@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { activityLog, analyticalLineageEdges, analyticalLineageManifests, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, governanceObligations, createDb, applyPendingMigrations, issues, projects } from "@paperclipai/db";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { activityLog, analyticalLineageEdges, analyticalLineageManifests, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, governanceObligations, createDb, applyPendingMigrations, runDatabaseBackup, runDatabaseRestore, issues, projects } from "@paperclipai/db";
 import { businessEventBackfillSchema } from "@paperclipai/shared";
 import { businessEventService } from "../services/business-events.js";
 import { businessEventExportService } from "../services/business-event-export.js";
@@ -17,6 +21,7 @@ import { eraseAnalyticalSourcesUnderMemory } from "../services/analytical-source
 import { eraseBusinessEventObjectUnderMemory } from "../services/business-event-payload-erasure.js";
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { disableV8Rollout } from "./helpers/v8-rollout.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const suite = support.supported ? describe : describe.skip;
@@ -56,6 +61,77 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
   }
   const service = () => businessEventService(db);
   const stored = () => db.select().from(businessEvents).where(eq(businessEvents.companyId, companyId));
+
+  it("upgrades the real prior schema by removing ungoverned legacy metadata and redundant audit counters", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "aw-v8-backfill-prior-migrations-"));
+    const name = `aw_backfill_legacy_${randomUUID().replaceAll("-", "")}`;
+    const target = new URL(database.connectionString); target.pathname = `/${name}`;
+    await db.execute(sql`create database ${sql.identifier(name)}`);
+    const legacy = createDb(target.toString());
+    try {
+      const migrationsRoot = new URL("../../../packages/db/src/migrations/", import.meta.url);
+      const journal = JSON.parse(await readFile(new URL("meta/_journal.json", migrationsRoot), "utf8"));
+      const entries = journal.entries.filter((entry: { idx: number }) => entry.idx < 450);
+      await mkdir(join(directory, "meta"));
+      for (const entry of entries) await copyFile(new URL(`${entry.tag}.sql`, migrationsRoot), join(directory, `${entry.tag}.sql`));
+      await writeFile(join(directory, "meta/_journal.json"), JSON.stringify({ ...journal, entries }));
+      await migrate(legacy, { migrationsFolder: directory });
+      await legacy.insert(companies).values({ id: companyId, name: "Legacy metadata software fixture", issuePrefix: randomUUID() });
+      const id = randomUUID();
+      await legacy.execute(sql`insert into business_event_backfill_runs
+        (id,company_id,projector_version,window_from,window_until,last_source_cursor_json,batch_limit,projected,unchanged,status)
+        values (${id}::uuid,${companyId}::uuid,'legacy-software-fixture',${timeWindow.from}::timestamptz,${timeWindow.until}::timestamptz,
+          ${JSON.stringify({ at: timeWindow.from, id: randomUUID() })}::jsonb,100,1,0,'window_scan_exhausted')`);
+      const [audit] = await legacy.insert(activityLog).values({ companyId, actorType: "user", actorId: "legacy-software-operator",
+        action: "business_event.backfill_recorded", entityType: "business_event_backfill", entityId: id,
+        details: { projector: "legacy-software-fixture", projected: 1, unchanged: 0 } }).returning();
+      await applyPendingMigrations(target.toString());
+      expect(await legacy.select().from(businessEventBackfillRuns)).toHaveLength(0);
+      const [after] = await legacy.select().from(activityLog).where(eq(activityLog.id, audit.id));
+      expect(after).toEqual({ ...audit, details: { projector: "legacy-software-fixture" } });
+      expect(await legacy.select().from(companies)).toHaveLength(1);
+      await expect(legacy.execute(sql`insert into business_event_backfill_runs
+        (id,company_id,projector_version,window_from,window_until,batch_limit,projected,unchanged,status)
+        values (${randomUUID()}::uuid,${companyId}::uuid,'legacy-software-fixture',${timeWindow.from}::timestamptz,${timeWindow.until}::timestamptz,100,1,0,'window_scan_exhausted')`))
+        .rejects.toMatchObject({ cause: { code: "23502" } });
+    } finally {
+      await legacy.$client.end({ timeout: 1 });
+      await db.execute(sql`drop database ${sql.identifier(name)} with (force)`);
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it("erases and expires retained backfill metadata through its original Source lineage with rollout off", async () => {
+    const first = await source();
+    const second = await source({ status: "done" }, { createdAt: new Date("2026-01-01T12:01:00Z") });
+    const one = await service().backfill(companyId, actor, { ...window, until: "2026-01-01T12:00:01Z", retentionDays: 1 });
+    const two = await service().backfill(companyId, actor, { ...window, from: "2026-01-01T12:01:00Z", retentionDays: 1 });
+    const [metadata] = await db.select().from(businessEventBackfillRuns).where(eq(businessEventBackfillRuns.id, one.runId));
+    expect(metadata.lineageManifestId).toBeTruthy();
+    const [manifest] = await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id, metadata.lineageManifestId));
+    expect(manifest.analysisType).toBe("business_event_backfill");
+    expect(manifest.analysisRef).toBe(one.runId);
+    const [audit] = await db.select().from(activityLog).where(and(eq(activityLog.companyId, companyId), eq(activityLog.action, "business_event.backfill_recorded"), eq(activityLog.entityId, one.runId)));
+    expect(audit.details).toEqual({ projector: manifest.engineVersion });
+    expect(manifest.expiresAt.getTime() - manifest.createdAt.getTime()).toBeLessThanOrEqual(86_400_000);
+    const flags = await instanceSettingsService(db).getExperimental();
+    try {
+      await disableV8Rollout(db);
+      await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
+      await service().suppressSource(companyId, actor, first.id);
+      expect(await db.select().from(businessEventBackfillRuns).where(eq(businessEventBackfillRuns.id, one.runId))).toHaveLength(0);
+      expect(await db.select().from(businessEventBackfillRuns).where(eq(businessEventBackfillRuns.id, two.runId))).toHaveLength(1);
+      await expect(db.insert(businessEventBackfillRuns).values(metadata)).rejects.toThrow();
+      await eraseExpiredAnalyticalLineage(db, new Date(Date.now() + 2 * 86_400_000));
+      expect(await db.select().from(businessEventBackfillRuns).where(eq(businessEventBackfillRuns.companyId, companyId))).toHaveLength(0);
+      expect(await db.select().from(activityLog).where(sql`${activityLog.id} in (${first.id}::uuid,${second.id}::uuid)`)).toHaveLength(2);
+      expect(await db.select().from(issues).where(eq(issues.id, issueId))).toHaveLength(1);
+      // Keep the later bounded expiry fixture's global backlog independent.
+      await service().suppressSource(companyId, actor, second.id);
+    } finally {
+      await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental(flags);
+    }
+  });
 
   it("inspects native source coverage before readiness and abstains after Memory erasure or for unqualified external sources", async () => {
     await source({ status: "todo",projectId },{ action:"issue.created" });
@@ -247,25 +323,19 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
     const exporter = businessEventExportService(db);
     const erasedExport = await exporter.exportPage(companyId,actor,{ ...window,from: "2026-01-01T12:00:00Z",until: "2026-01-01T12:00:00Z",format: "native_jsonl" });
     const retainedExport = await exporter.exportPage(companyId,actor,{ ...window,from: "2026-01-01T12:01:00Z",until: "2026-01-01T12:01:00Z",format: "native_jsonl" });
-    const backupManifests = await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.companyId,companyId));
-    const backupEdges = await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.companyId,companyId));
-    const backupEvents = await stored();
-    const backupObjects = await db.select().from(businessEventObjects).where(eq(businessEventObjects.companyId, companyId));
+    const retainedBackfill = await service().backfill(companyId, actor, { ...window, from: "2026-01-01T12:01:00Z", until: "2026-01-01T12:01:00Z" });
+    const backupBackfills = await db.select().from(businessEventBackfillRuns).where(eq(businessEventBackfillRuns.companyId, companyId));
+    const backupDirectory = await mkdtemp(join(tmpdir(), "aw-v8-backfill-archive-"));
+    const backup = await runDatabaseBackup({ connectionString: database.connectionString, backupDir: backupDirectory,
+      backupEngine: "javascript", retention: { dailyDays: 1, weeklyWeeks: 0, monthlyMonths: 0 } });
     const name = `aw_restore_${randomUUID().replaceAll("-", "")}`;
     const target = new URL(database.connectionString); target.pathname = `/${name}`;
     await db.execute(sql`create database ${sql.identifier(name)}`);
     const restored = createDb(target.toString());
     try {
-      await applyPendingMigrations(target.toString());
-      await restored.insert(companies).values(await db.select().from(companies).where(sql`${companies.id} in (${companyId}::uuid, ${otherCompanyId}::uuid)`));
-      await restored.insert(governanceObligations).values(await db.select().from(governanceObligations).where(eq(governanceObligations.companyId, companyId)));
-      await restored.insert(projects).values(await db.select().from(projects).where(eq(projects.companyId, companyId)));
-      await restored.insert(issues).values(await db.select().from(issues).where(eq(issues.companyId, companyId)));
-      await restored.insert(activityLog).values(await db.select().from(activityLog).where(eq(activityLog.companyId, companyId)));
-      for (const event of backupEvents.sort((a, b) => a.revision - b.revision)) await restored.insert(businessEvents).values(event);
-      await restored.insert(businessEventObjects).values(backupObjects);
-      await restored.insert(analyticalLineageManifests).values(backupManifests);
-      await restored.insert(analyticalLineageEdges).values(backupEdges);
+      // The real archive/restore owner handles historical immutable Source
+      // snapshots; ordinary INSERT intentionally rejects a superseded hash.
+      await runDatabaseRestore({ connectionString: target.toString(), backupFile: backup.backupFile });
       // The old backup has projections, but no post-backup suppression register.
       const suppressedAt = new Date().toISOString();
       const marker = { company_id: companyId, source_ref: erased.id, suppressed_at: suppressedAt };
@@ -282,11 +352,14 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       expect(await restored.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,erasedExport.manifest.lineageManifestId))).toHaveLength(0);
       expect(await restored.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,erasedExport.manifest.lineageManifestId))).toHaveLength(0);
       expect(await restored.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,retainedExport.manifest.lineageManifestId))).toHaveLength(1);
+      expect((await restored.select().from(businessEventBackfillRuns).where(eq(businessEventBackfillRuns.companyId, companyId))).map(row => row.id)).toEqual([retainedBackfill.runId]);
+      await expect(restored.insert(businessEventBackfillRuns).values(backupBackfills.find(row => row.id !== retainedBackfill.runId)!)).rejects.toThrow();
       await instanceSettingsService(restored, { runtimeEnv: {} }).updateExperimental({ business_events_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true });
       expect((await businessEventService(restored).backfill(companyId, actor, window)).projected).toBe(0);
       expect((await businessEventService(restored).list(companyId, actor, timeWindow)).items.map(event => event.source.ref)).toEqual([retained.id]);
     } finally {
       await restored.$client.end({ timeout: 1 });
+      await rm(backupDirectory, { recursive: true, force: true });
       await db.execute(sql`drop database ${sql.identifier(name)}`);
     }
   }, 30000);
