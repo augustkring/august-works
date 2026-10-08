@@ -1,3 +1,5 @@
+import { automationArtifactService } from "../automation-artifacts/automation-artifact-service.js";
+import { withNativeAnalyticalReader } from "../analytical-reader.js";
 import {assertLearnedAssetAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
@@ -737,6 +739,8 @@ async function completeRunningStep(
       eq(workflowStepRuns.companyId, run.companyId), eq(workflowStepRuns.workflowRunId, run.id),
       eq(workflowStepRuns.id, runningStep.id), eq(workflowStepRuns.status, "running")));
     if (!retainedStep) throw conflict("Workflow step changed before checkpoint", { code: "workflow_step_completion_conflict" });
+    await assertLearnedWorkflowPayloadAccess(scopedDb, run.companyId, learningActorFromPrincipal(run.companyId, actor.principal, actor.runId),
+      { workflowRunId: run.id }, "task");
     await assertLearnedAssetAnalyticalSources(scopedDb, run.companyId, "workflow_revision", run.workflowRevisionId,
       learningActorFromPrincipal(run.companyId, actor.principal, actor.runId));
     if (retainedStep.automationArtifactVersionId) {
@@ -748,7 +752,8 @@ async function completeRunningStep(
         throw conflict("Workflow artifact retention changed before checkpoint", { code: "workflow_step_claim_conflict" });
       }
       await automationArtifactRuntimeService(scopedDb).inspectPinnedBinding(run.companyId,
-        artifactBinding.artifactId, artifactBinding.versionId, actor);
+        artifactBinding.artifactId, artifactBinding.versionId, actor, true,
+        { stepId: retainedStep.id, executionOwnerId: requireWorkflowExecutionOwnerId(run) });
     }
     if (actor.memoryRecordIds?.length) {
       await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
@@ -6333,8 +6338,12 @@ async function executeWorkflowGraph(
               const scopedDb = tx as unknown as Db;
               await lockAnalyticalCompany(scopedDb, ownedRun.companyId);
               await lockMemoryPrivacy(scopedDb, ownedRun.companyId);
-              await automationArtifactRuntimeService(scopedDb).resolveActiveBinding(
-                ownedRun.companyId, artifactId, versionId, actor);
+              // A current read admits staging; only the persisted exact step
+              // binding below admits execution. Both stay under privacy locks.
+              const reader = learningActorFromPrincipal(ownedRun.companyId, actor.principal, actor.runId);
+              const inspect = () => automationArtifactService(scopedDb).getDetail(ownedRun.companyId, artifactId, actor);
+              if (reader?.type === "agent") await withNativeAnalyticalReader(scopedDb, ownedRun.companyId, reader, inspect, "task");
+              else await inspect();
               const [owned] = await tx.select().from(workflowRuns).where(and(
                 eq(workflowRuns.companyId, ownedRun.companyId), eq(workflowRuns.id, ownedRun.id))).for("update");
               if (owned?.status !== "running" || owned.executionOwnerId !== ownedRun.executionOwnerId ||
@@ -6347,11 +6356,14 @@ async function executeWorkflowGraph(
               if (!pinned || pinned.status !== "running") {
                 throw conflict("Workflow artifact step changed before retention", { code: "workflow_step_claim_conflict" });
               }
+              await automationArtifactRuntimeService(scopedDb).resolveActiveBinding(ownedRun.companyId, artifactId, versionId, actor,
+                { stepId: pinned.id, executionOwnerId: requireWorkflowExecutionOwnerId(ownedRun) });
               return pinned;
             });
             const executed = await automationArtifactRuntimeService(db).execute(
               ownedRun.companyId, artifactId, versionId, input, actor,
-              { timeoutMs: Math.min(5_000, (current.timeoutSeconds ?? 5) * 1_000) });
+              { timeoutMs: Math.min(5_000, (current.timeoutSeconds ?? 5) * 1_000),
+                consumer: { stepId: runningStep.id, executionOwnerId: requireWorkflowExecutionOwnerId(ownedRun) } });
             output = executed.output;
             await completeRunningStep(db, ownedRun, runningStep, output, actor, { artifactId, versionId });
           } catch (error) {
