@@ -21384,7 +21384,7 @@ export function heartbeatService(
       const runtimeSkillEntries = await (async () => {
         try {
           return await companySkills.listRuntimeSkillEntries(agent.companyId, {
-            ...(v5Fabric ? { selectedSkillKeys: new Set(eagerV5Skills!.map((pin) => pin.key)), allowCandidateVersionsForTest: Boolean(pinnedSkillTestContext), versionSelections: new Map(eagerV5Skills!.map((pin) => [pin.key, pin.versionId])) } : {}),
+            ...(v5Fabric ? { actor:{type:"agent" as const,source:"agent_jwt" as const,companyId:agent.companyId,agentId:agent.id,runId:run.id,onBehalfOfUserId:run.responsibleUserId},readScope:"task" as const,selectedSkillKeys: new Set(eagerV5Skills!.map((pin) => pin.key)), allowCandidateVersionsForTest: Boolean(pinnedSkillTestContext), versionSelections: new Map(eagerV5Skills!.map((pin) => [pin.key, pin.versionId])) } : {}),
             versionSelections: v5Fabric ? new Map(eagerV5Skills!.map((pin) => [pin.key, pin.versionId])) : skillVersionSelectionMap(
               runtimeSkillPreference.desiredSkillEntries,
               {

@@ -35,11 +35,10 @@ export async function assertLearningAnalyticalSources(db:Db,actor:AuthorizationA
 /** A native consumer must supply its current actor before copying learned
  * content with analytical signal dependencies. Missing actor never grants access. */
 export async function assertLearnedAssetAnalyticalSources(db:Db,companyId:string,type:string,id:string,actor?:AuthorizationActor,readScope?:NativeReadScope) {
- const cycles=await db.selectDistinct({cycle:learningCycles}).from(learningRetainedAssets)
-  .innerJoin(learningDomainCandidates,and(eq(learningDomainCandidates.companyId,companyId),eq(learningDomainCandidates.id,learningRetainedAssets.candidateLinkId)))
+ const cycles=await db.selectDistinct({cycle:learningCycles}).from(learningDomainCandidates)
   .innerJoin(learningHypotheses,and(eq(learningHypotheses.companyId,companyId),eq(learningHypotheses.id,learningDomainCandidates.hypothesisId)))
   .innerJoin(learningCycles,and(eq(learningCycles.companyId,companyId),eq(learningCycles.id,learningHypotheses.cycleId)))
-  .where(and(eq(learningRetainedAssets.companyId,companyId),eq(learningRetainedAssets.assetType,type),eq(learningRetainedAssets.assetId,id),sql`(${learningCycles.analyticalSourceCount}>0 or ${learningCycles.erasedAt} is not null)`)).limit(21);
+  .where(and(eq(learningDomainCandidates.companyId,companyId),sql`(exists(select 1 from ${learningRetainedAssets} a where a.company_id=${companyId}::uuid and a.candidate_link_id=${learningDomainCandidates.id} and a.asset_type=${type} and a.asset_id=${id}::uuid) or (${type}='skill_version' and ${learningDomainCandidates.targetDomain}='skill' and ${learningDomainCandidates.candidateId}=${id}::uuid))`,sql`(${learningCycles.analyticalSourceCount}>0 or ${learningCycles.erasedAt} is not null)`)).limit(21);
  if(cycles.length>20)throw lost();
  let sourceSensitivity:"internal"|"confidential"|null=null;
  for(const {cycle} of cycles){if(cycle.erasedAt)throw lost();const sensitivity=await assertLearningAnalyticalSources(db,actor,cycle,readScope);if(sensitivity==="confidential"||!sourceSensitivity)sourceSensitivity=sensitivity;}
@@ -47,11 +46,11 @@ export async function assertLearnedAssetAnalyticalSources(db:Db,companyId:string
 }
 
 /** The canonical domain's own human review repeats original signal admission. */
-export async function assertLearningCandidateAnalyticalSources(db:Db,companyId:string,domain:string,candidateId:string,actor?:AuthorizationActor) {
+export async function assertLearningCandidateAnalyticalSources(db:Db,companyId:string,domain:string,candidateId:string,actor?:AuthorizationActor,readScope?:NativeReadScope) {
  const cycles=await db.selectDistinct({cycle:learningCycles}).from(learningDomainCandidates)
   .innerJoin(learningHypotheses,and(eq(learningHypotheses.companyId,companyId),eq(learningHypotheses.id,learningDomainCandidates.hypothesisId)))
   .innerJoin(learningCycles,and(eq(learningCycles.companyId,companyId),eq(learningCycles.id,learningHypotheses.cycleId)))
   .where(and(eq(learningDomainCandidates.companyId,companyId),eq(learningDomainCandidates.targetDomain,domain),eq(learningDomainCandidates.candidateId,candidateId))).limit(21);
  if(cycles.length>20)throw lost();
- for(const {cycle} of cycles){if(cycle.erasedAt)throw lost();await assertLearningAnalyticalSources(db,actor,cycle);}
+ for(const {cycle} of cycles){if(cycle.erasedAt)throw lost();await assertLearningAnalyticalSources(db,actor,cycle,readScope);}
 }
