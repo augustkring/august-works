@@ -1,7 +1,7 @@
 # V8 source acceptance crosswalk
 
 Reconciled on 2026-10-08 against build brief V8 V2 section 57. This is a review
-crosswalk, not a passed release claim manifest. Native-owner checkpoint 52 is
+crosswalk, not a passed release claim manifest. Native-owner checkpoint 53 is
 committed on the requested branch. `evals/aw-v8/readiness.json` retains R0,
 `sourceComplete: false`, no release identity, and no accepted risk owner.
 
@@ -33,7 +33,7 @@ caller, hosted environment or restored filesystem.
 | 19 | Reject employment/performance scoring | Strict typed dimensions/protocols; `packages/shared/src/business-metrics.test.ts`; `packages/shared/src/business-experiments.test.ts` |
 | 20 | Optional versioned qualified providers | Locked StatsForecast/DoWhy profiles and owner checks; `doc/operations/aw-v8-optional-semantic-provider-decision.md`; customer semantic adapter is conditional on an existing supplied source |
 | 21 | Python has no ambient database/secret authority | `server/src/services/native-runtime/numerical-worker.ts`; actual isolated worker regression receipts; hosted image/profile qualification remains separate |
-| 22 | Typed V8 route contracts | Shared domain validators and existing `server/src/routes/business-metrics.ts`, `server/src/routes/process-analysis.ts`, `server/src/routes/decision-intelligence.ts`, `server/src/routes/business-experiments.ts`, `server/src/routes/management-reviews.ts` |
+| 22 | Typed V8 route contracts | Complete exact mounted-route OpenAPI coverage in `server/src/__tests__/openapi-routes.test.ts`; shared domain validators and existing `server/src/routes/business-metrics.ts`, `server/src/routes/process-analysis.ts`, `server/src/routes/decision-intelligence.ts`, `server/src/routes/business-experiments.ts`, `server/src/routes/management-reviews.ts` |
 | 23 | UI account/company isolation | `ui/src/pages/BusinessMetrics.test.tsx`; `ui/src/components/DecisionContextPanel.test.tsx`; corresponding domain UI tests |
 | 24 | Accessibility and actual browser flows | Native `tests/e2e/` and material `tests/storybook-visual/` receipts retained in the plan; no authenticated hosted Human trial is inferred |
 | 25 | Analytics performance/cost envelopes | Original 30-second/8-second SQL and bounded payload/population owners; local 10,000 metric Sources, 4,000 Forecast Tasks and 68,000 experiment outcomes; hosted p95/COGS remain open |

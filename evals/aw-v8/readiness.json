@@ -90,7 +90,8 @@
     "native_run_owned_connector_assignment_copies_and_shared_original_runtime_source_fence",
     "native_original_public_conformance_assets_owned_by_existing_company_run",
     "native_instance_idle_bounded_global_legacy_runtime_cache_reconciliation_with_all_tenant_reference_retention",
-    "native_historical_copied_experiment_lineage_and_actual_two_target_local_database_archive_restore_quarantine"
+    "native_historical_copied_experiment_lineage_and_actual_two_target_local_database_archive_restore_quarantine",
+    "native_openapi_complete_mounted_outcomes_joint_planning_and_execution_bound_playbook_contracts"
   ],
   "unfinishedWaves": [
     "complete_source_graph_and_historical_orphan_multi_restore_reconciliation",
@@ -101,6 +102,7 @@
   ],
   "localTests": [
     "deploy/v6/deletion-ledger.test.mjs",
+    "packages/adapters/codex-local/src/server/output-inactivity-monitor.integration.test.ts",
     "packages/db/src/migration-snapshot-drift.test.ts",
     "packages/shared/src/business-experiments.test.ts",
     "packages/shared/src/business-forecasting.test.ts",
@@ -115,6 +117,7 @@
     "server/src/__tests__/adaptive-planning-portfolio-kernel.test.ts",
     "server/src/__tests__/adaptive-planning-project.integration.test.ts",
     "server/src/__tests__/agent-conversations.test.ts",
+    "server/src/__tests__/agent-live-run-routes.test.ts",
     "server/src/__tests__/agent-skills-routes.test.ts",
     "server/src/__tests__/analytical-context-privacy.integration.test.ts",
     "server/src/__tests__/analytical-reader.integration.test.ts",
@@ -144,13 +147,19 @@
     "server/src/__tests__/company-skills-routes.test.ts",
     "server/src/__tests__/decision-intelligence.integration.test.ts",
     "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
+    "server/src/__tests__/document-annotation-routes.test.ts",
     "server/src/__tests__/email-channels.integration.test.ts",
+    "server/src/__tests__/external-object-routes.test.ts",
     "server/src/__tests__/heartbeat-direct-adapter-native-isolation.test.ts",
     "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
     "server/src/__tests__/heartbeat-native-runner-selection.test.ts",
     "server/src/__tests__/heartbeat-native-status-context.test.ts",
     "server/src/__tests__/heartbeat-runtime-skills.test.ts",
+    "server/src/__tests__/issue-agent-mutation-ownership-routes.test.ts",
+    "server/src/__tests__/issue-attachment-routes.test.ts",
     "server/src/__tests__/issue-remove-cascade.test.ts",
+    "server/src/__tests__/issue-thread-interaction-routes.test.ts",
+    "server/src/__tests__/issues-goal-context-routes.test.ts",
     "server/src/__tests__/legacy-runtime-assets.integration.test.ts",
     "server/src/__tests__/management-review-kernel.test.ts",
     "server/src/__tests__/management-reviews.integration.test.ts",
@@ -227,8 +236,8 @@
     "All H6/H7 environment-specific predecessor gates remain open. No live cloud/customer/provider/Human trial, deployment or business-impact acceptance is represented by the local receipts."
   ],
   "implementationStatus": "LOCAL_IMPLEMENTATION_IN_PROGRESS",
-  "updatedAt": "2026-10-08T18:25:59.361175+00:00",
-  "statusAsOfCheckpoint": 52,
+  "updatedAt": "2026-10-08T21:33:08.049562+00:00",
+  "statusAsOfCheckpoint": 53,
   "sourceCorpusFullyRead": true,
   "localDevelopmentEvidence": [
     {
@@ -550,6 +559,10 @@
     {
       "path": "doc/operations/aw-v8-evidence/native-remaining-learning-owners-checkpoint.json",
       "sha256": "b50242538a73877d8e6ec7634e8330c4d297a41524d3ac8d50084d2b07de3a0a"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-route-contract-qualification-checkpoint.json",
+      "sha256": "8a501c4fdd991cacd74c53e333c3eec0f3ad856c646dce5d1cca1f5d6a359ff3"
     },
     {
       "path": "doc/operations/aw-v8-evidence/native-routine-review-cadence-checkpoint.json",
