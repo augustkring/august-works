@@ -381,3 +381,34 @@ There is no new API shape, owner, migration, permission or business mutation.
 Ship the updated server before enabling V9; flag rollback retains the native
 routes. Full source composition, hosted multi-user/assistive-technology and
 representative usability qualification remain open.
+
+## ADR-V9-022 — Private feedback reads and original-request recovery
+
+2026-10-09. The existing feedback owner, immutable submission/event tables,
+current author/operator admission and version/idempotency checks remain the only
+write authority. The UI keeps an unacknowledged creation, customer follow-up or
+triage tuple immutable: text and material inputs cannot replace its request key.
+Retry uses that exact tuple. Only canonical validation or the exact native
+version/status refusal releases it for correction; transport, authorization,
+malformed/foreign receipt and unknown failures do not establish non-application.
+Successful feedback receipts must match the requested company and, for an
+existing report, its resource ID. Invalid deep-link IDs fail before transport.
+
+My Feedback hides retained history and response text while identity or reads
+are being checked, and rejects late prior epochs after native access loss.
+Its selected response component retains its private in-memory original request
+while rendering no private content during a read recheck. Replay remains possible
+if a refreshed native status has moved to REVIEWING after an accepted-but-unheard
+follow-up. Current operator reads also suppress retained private details while
+rechecking and validate detail bindings. Query identity remains principal/company
+scoped; private mutations have zero inactive cache retention. No browser persistent
+storage, analytics or new data destination is introduced.
+
+There is no API shape, database, permission or server change. Native transactional
+replay precedes the version/status check; no second customer message or triage
+event is inferred from a retry. Existing default-off rollout, native authorization,
+private logs, account erasure and immutable original text remain authoritative.
+The recovery tuple is scoped to the current UI session: full page exit, another
+selected report or context/flag teardown may discard it; durable cross-navigation
+recovery, complete triage/retention/attachments and hosted/human qualification
+remain open. This source does not claim those pending requirements complete.

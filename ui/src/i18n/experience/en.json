@@ -118,7 +118,10 @@
     "triageHistoryFailed": "Feedback history could not be loaded. Check your current access before applying triage.",
     "olderMessages": "Load older messages",
     "customerResponse": "Customer response",
-    "noMessages": "No messages or internal notes yet."
+    "noMessages": "No messages or internal notes yet.",
+    "submissionUnknown": "Feedback could not be confirmed. The original text is locked; retry sends the same request. Check My feedback before starting another report.",
+    "replyUnknown": "Your response has not been confirmed. The original text is locked; retry checks the same response without creating a second one.",
+    "triageUnknown": "Triage has not been confirmed. Inputs are locked; retry sends the original update."
   },
   "profileView": "View",
   "profileFailed": "Your view could not be changed. Refresh to check your access.",

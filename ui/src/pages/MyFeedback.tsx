@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useQuery,
   useInfiniteQuery,
@@ -9,8 +9,14 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "../lib/router";
 import { useAccountIdentity } from "../api/companies-query";
 import { useCompany } from "../context/CompanyContext";
+import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
+import { useExperienceHeading } from "../hooks/useExperienceHeading";
+import { ExperienceReadError } from "../components/ExperienceReadError";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
-import { customerFeedbackApi } from "../api/customer-feedback";
+import {
+  customerFeedbackApi,
+  isRejectedFeedbackRequest,
+} from "../api/customer-feedback";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import type { CustomerFeedback } from "@paperclipai/shared";
@@ -18,10 +24,14 @@ function Response({
   item,
   companyId,
   principal,
+  active,
+  id,
 }: {
-  item: CustomerFeedback;
+  item: CustomerFeedback | null;
   companyId: string;
   principal: string;
+  active: boolean;
+  id: string;
 }) {
   const { t } = useTranslation("experience"),
     client = useQueryClient();
@@ -33,7 +43,10 @@ function Response({
     idempotencyKey: string;
   } | null>(null);
   const send = useMutation({
+    mutationKey: ["customer-feedback", companyId, principal, id, "reply"],
+    gcTime: 0,
     mutationFn: () => {
+      if (!active || !item) throw new Error("Feedback context changed");
       attempted.current ??= {
         body,
         expectedVersion: item.version,
@@ -47,6 +60,15 @@ function Response({
       );
     },
     retry: false,
+    onError: (error) => {
+      if (isRejectedFeedbackRequest(error)) {
+        attempted.current = null;
+        setKey(crypto.randomUUID());
+        void client.invalidateQueries({
+          queryKey: ["customer-feedback", companyId, principal],
+        });
+      }
+    },
     onSuccess: () => {
       attempted.current = null;
       setBody("");
@@ -56,6 +78,20 @@ function Response({
       });
     },
   });
+  const error = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (
+      send.isError &&
+      active &&
+      !document.activeElement?.closest('[role="dialog"]')
+    )
+      error.current?.focus();
+  }, [send.isError, active]);
+  // Keep the original request in this scoped component during read rechecks,
+  // without retaining its private text in the DOM. A changed native status
+  // may acknowledge that it applied; replay still uses the exact original key.
+  if (!active || !item || (item.status !== "NEEDS_INFO" && !attempted.current))
+    return null;
   return (
     <form
       className="space-y-3"
@@ -69,9 +105,10 @@ function Response({
         <Textarea
           maxLength={10000}
           required
-          disabled={send.isPending}
+          disabled={send.isPending || !!attempted.current}
           value={body}
           onChange={(event) => {
+            if (attempted.current) return;
             attempted.current = null;
             setBody(event.target.value);
             setKey(crypto.randomUUID());
@@ -79,7 +116,11 @@ function Response({
           }}
         />
       </label>
-      {send.isError && <p role="alert">{t("feedback.failed")}</p>}
+      {send.isError && (
+        <p ref={error} tabIndex={-1} role="alert">
+          {t(attempted.current ? "feedback.replyUnknown" : "feedback.failed")}
+        </p>
+      )}
       <Button
         type="submit"
         className="min-h-11"
@@ -100,8 +141,34 @@ export function MyFeedback() {
   const principal = identity.localImplicit ? "local-board" : identity.userId;
   const selected = params.get("feedbackId");
   const allowed = !!selectedCompanyId && identity.settled && !!principal;
+  const scope = `${selectedCompanyId ?? ""}:${principal ?? "unresolved"}`;
+  const [revision, setRevision] = useState({ scope, epoch: 0 });
+  const epoch = revision.scope === scope ? revision.epoch : 0;
+  const prefix = ["customer-feedback", selectedCompanyId, principal];
+  useCompanyLiveEvent((event) => {
+    if (event.companyId !== selectedCompanyId) return;
+    const action =
+      typeof event.payload.action === "string" ? event.payload.action : "";
+    if (
+      event.type !== "analytical.context.access_lost" &&
+      !(
+        event.type === "activity.logged" &&
+        (/customer_feedback|permission|membership|privacy|erased|deleted|withdraw/i.test(
+          action,
+        ) ||
+          event.payload.entityType === "company_membership")
+      )
+    )
+      return;
+    setRevision((previous) => ({
+      scope,
+      epoch: (previous.scope === scope ? previous.epoch : 0) + 1,
+    }));
+    void client.cancelQueries({ queryKey: prefix });
+    client.removeQueries({ queryKey: prefix });
+  });
   const query = useInfiniteQuery({
-    queryKey: ["customer-feedback", selectedCompanyId, principal, "list"],
+    queryKey: [...prefix, "list", epoch],
     queryFn: ({ signal, pageParam }) =>
       customerFeedbackApi.list(
         selectedCompanyId!,
@@ -124,6 +191,7 @@ export function MyFeedback() {
       principal,
       "detail",
       selected,
+      epoch,
     ],
     queryFn: ({ signal }) =>
       customerFeedbackApi.get(
@@ -137,36 +205,43 @@ export function MyFeedback() {
     gcTime: 0,
     retry: false,
   });
-  if (!selectedCompanyId) return <p>{t("selectCompany")}</p>;
+  const failed =
+    query.isError || (!!selected && detail.isError) || identity.failed;
+  const loading =
+    !allowed ||
+    query.isPending ||
+    query.isFetching ||
+    (!!selected && (detail.isPending || detail.isFetching));
+  const current = !loading && !failed && detail.isSuccess ? detail.data : null;
+  const heading = useExperienceHeading(scope, loading, failed);
+  if (!selectedCompanyId) return <p role="status">{t("selectCompany")}</p>;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="text-2xl font-semibold">{t("feedback.history")}</h1>
+      <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
+        {t("feedback.history")}
+      </h1>
       {!enabled && <p role="status">{t("feedback.submissionsPaused")}</p>}
-      {(query.isError || detail.isError || identity.failed) && (
-        <div role="alert">
-          <p>{t("feedback.historyFailed")}</p>
-          <Button
-            variant="outline"
-            className="min-h-11"
-            onClick={() => {
-              if (identity.failed || !principal) {
-                void client.refetchQueries({ queryKey: ["auth", "session"] });
-                return;
-              }
-              void query.refetch();
-              if (selected) void detail.refetch();
-            }}
-          >
-            {t("tryAgain")}
-          </Button>
-        </div>
+      {failed && (
+        <ExperienceReadError
+          message={t("feedback.historyFailed")}
+          retry={() => {
+            if (identity.failed || !principal) {
+              void client.refetchQueries({ queryKey: ["auth", "session"] });
+              return;
+            }
+            void query.refetch();
+            if (selected) void detail.refetch();
+          }}
+        />
       )}
-      {!identity.settled || query.isLoading ? (
+      {loading && !failed ? (
         <p role="status">{t("loading")}</p>
-      ) : query.isSuccess && !query.data.pages[0]?.length ? (
+      ) : !failed && query.isSuccess && !query.data.pages[0]?.length ? (
         <p>{t("feedback.empty")}</p>
       ) : null}
-      {query.isSuccess &&
+      {!loading &&
+        !failed &&
+        query.isSuccess &&
         query.data.pages.flat().map((item) => (
           <Button
             key={item.id}
@@ -178,7 +253,7 @@ export function MyFeedback() {
             <span>{t(`feedback.statuses.${item.status}`)}</span>
           </Button>
         ))}
-      {query.hasNextPage && (
+      {!loading && !failed && query.hasNextPage && (
         <Button
           variant="outline"
           className="min-h-11"
@@ -188,21 +263,19 @@ export function MyFeedback() {
           {t("feedback.older")}
         </Button>
       )}
-      {detail.isSuccess && detail.data && (
+      {current && (
         <article className="space-y-4 rounded-lg border border-border p-4">
-          <h2 className="text-lg font-semibold">{detail.data.feedbackId}</h2>
+          <h2 className="text-lg font-semibold">{current.feedbackId}</h2>
           <p>
-            {t(`feedback.categories.${detail.data.category}`)} ·{" "}
-            {new Date(detail.data.createdAt).toLocaleDateString()} ·{" "}
-            {t(`feedback.statuses.${detail.data.status}`)}
+            {t(`feedback.categories.${current.category}`)} ·{" "}
+            {new Date(current.createdAt).toLocaleDateString()} ·{" "}
+            {t(`feedback.statuses.${current.status}`)}
           </p>
-          <p className="whitespace-pre-wrap break-words">{detail.data.body}</p>
-          {detail.data.goal && (
-            <p className="whitespace-pre-wrap break-words">
-              {detail.data.goal}
-            </p>
+          <p className="whitespace-pre-wrap break-words">{current.body}</p>
+          {current.goal && (
+            <p className="whitespace-pre-wrap break-words">{current.goal}</p>
           )}
-          {detail.data.messages.map((message) => (
+          {current.messages.map((message) => (
             <div
               key={message.id}
               className="rounded-md border border-border p-3"
@@ -217,15 +290,17 @@ export function MyFeedback() {
               <p className="whitespace-pre-wrap break-words">{message.body}</p>
             </div>
           ))}
-          {detail.data.status === "NEEDS_INFO" && principal && (
-            <Response
-              key={`${selectedCompanyId}:${principal}:${detail.data.id}`}
-              item={detail.data}
-              companyId={selectedCompanyId}
-              principal={principal}
-            />
-          )}
         </article>
+      )}
+      {selected && principal && (
+        <Response
+          key={`${scope}:${selected}`}
+          item={current}
+          active={!!current}
+          id={selected}
+          companyId={selectedCompanyId}
+          principal={principal}
+        />
       )}
     </div>
   );

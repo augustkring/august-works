@@ -216,6 +216,11 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
       .click();
     await expect(dialog.getByRole("alert")).toBeVisible();
     await expect(dialog.getByRole("textbox").first()).toHaveValue(body);
+    await expect(dialog.getByRole("textbox").first()).toBeDisabled();
+    await expect(dialog.getByRole("combobox")).toBeDisabled();
+    await expect(dialog.getByRole("alert")).toContainText(
+      "retry sends the same request",
+    );
     await dialog
       .getByRole("button", { name: "Send feedback", exact: true })
       .click();

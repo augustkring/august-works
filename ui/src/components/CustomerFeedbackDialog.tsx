@@ -7,7 +7,10 @@ import {
   type CreateCustomerFeedback,
 } from "@paperclipai/shared";
 import { useLocation, Link } from "../lib/router";
-import { customerFeedbackApi } from "../api/customer-feedback";
+import {
+  customerFeedbackApi,
+  isRejectedFeedbackRequest,
+} from "../api/customer-feedback";
 import { useCompany } from "../context/CompanyContext";
 import { useAccountIdentity } from "../api/companies-query";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
@@ -69,9 +72,17 @@ function FeedbackForm({
     receiptFocus = useRef<HTMLDivElement>(null),
     errorFocus = useRef<HTMLParagraphElement>(null);
   const send = useMutation({
+    mutationKey: ["customer-feedback", companyId, principal, "create"],
+    gcTime: 0,
     mutationFn: (input: CreateCustomerFeedback) =>
       customerFeedbackApi.create(companyId, principal, input),
     retry: false,
+    onError: (error) => {
+      if (isRejectedFeedbackRequest(error)) {
+        attempted.current = null;
+        setRequestKey(crypto.randomUUID());
+      }
+    },
   });
   function show(event?: Event) {
     returnFocus.current =
@@ -103,11 +114,13 @@ function FeedbackForm({
     return () => document.removeEventListener("paperclip:open-feedback", show);
   }, [location.pathname, i18n.resolvedLanguage]);
   function edit(change: () => void) {
+    if (attempted.current) return;
     change();
     attempted.current = null;
     setRequestKey(crypto.randomUUID());
     send.reset();
   }
+  const inputsLocked = send.isPending || !!attempted.current;
   return (
     <>
       <Button
@@ -188,6 +201,7 @@ function FeedbackForm({
                   attempted.current = null;
                   setRequestKey(crypto.randomUUID());
                   send.reset();
+                  send.reset();
                 }}
               >
                 {t("feedback.close")}
@@ -225,7 +239,7 @@ function FeedbackForm({
                 <span>{t("feedback.category")}</span>
                 <select
                   ref={categoryInput}
-                  disabled={send.isPending}
+                  disabled={inputsLocked}
                   className="min-h-11 w-full rounded-md border border-input bg-background px-3"
                   value={category}
                   onChange={(event) =>
@@ -248,7 +262,7 @@ function FeedbackForm({
                 <Textarea
                   required
                   maxLength={10000}
-                  disabled={send.isPending}
+                  disabled={inputsLocked}
                   value={body}
                   onChange={(event) => edit(() => setBody(event.target.value))}
                 />
@@ -258,7 +272,7 @@ function FeedbackForm({
                   <span>{t(`feedback.goals.${category}`)}</span>
                   <Textarea
                     maxLength={2000}
-                    disabled={send.isPending}
+                    disabled={inputsLocked}
                     value={goal}
                     onChange={(event) =>
                       edit(() => setGoal(event.target.value))
@@ -270,7 +284,7 @@ function FeedbackForm({
                 <label className="flex min-h-11 items-center gap-3">
                   <input
                     type="checkbox"
-                    disabled={send.isPending}
+                    disabled={inputsLocked}
                     checked={blocksWork}
                     onChange={(event) =>
                       edit(() => setBlocksWork(event.target.checked))
@@ -290,7 +304,7 @@ function FeedbackForm({
               <label className="flex min-h-11 items-center gap-3">
                 <input
                   type="checkbox"
-                  disabled={send.isPending}
+                  disabled={inputsLocked}
                   checked={includeDiagnostics}
                   onChange={(event) =>
                     edit(() => setIncludeDiagnostics(event.target.checked))
@@ -301,7 +315,7 @@ function FeedbackForm({
               <label className="flex min-h-11 items-center gap-3">
                 <input
                   type="checkbox"
-                  disabled={send.isPending}
+                  disabled={inputsLocked}
                   checked={omitName}
                   onChange={(event) =>
                     edit(() => setOmitName(event.target.checked))
@@ -324,7 +338,11 @@ function FeedbackForm({
                   role="alert"
                   className="outline-none"
                 >
-                  {t("feedback.failed")}
+                  {t(
+                    attempted.current
+                      ? "feedback.submissionUnknown"
+                      : "feedback.failed",
+                  )}
                 </p>
               )}
               <div className="flex items-center justify-between gap-3">

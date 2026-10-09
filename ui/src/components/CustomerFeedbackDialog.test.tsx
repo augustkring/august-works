@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "../i18n";
 import { customerFeedbackApi } from "../api/customer-feedback";
+import { ApiError } from "../api/client";
 import { CustomerFeedbackDialog } from "./CustomerFeedbackDialog";
 vi.mock("../hooks/useV9FeatureEnabled", () => ({
   useV9FeatureEnabled: () => ({ enabled: true }),
@@ -124,6 +125,15 @@ describe("feedback consent and canonical receipt", () => {
       "Thanks — feedback received",
     );
     const first = save.mock.calls[0]![2];
+    expect(
+      [
+        ...document.querySelectorAll<
+          HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+        >("input, textarea, select"),
+      ].every((input) => input.disabled),
+    ).toBe(true);
+    await enter("An edit must not replace the unacknowledged request");
+    expect(document.querySelector("textarea")!.value).toBe(accepted.body);
     expect(first.context.surfaceKey).toBe("needs_you");
     expect(first.includeDiagnostics).toBe(false);
     expect(first).not.toHaveProperty("diagnostics");
@@ -139,5 +149,33 @@ describe("feedback consent and canonical receipt", () => {
     );
     expect(save.mock.calls[1]![2]).toEqual(first);
     expect(document.body.textContent).toContain("Thanks — feedback received");
+    await click("Close");
+    await click("Feedback");
+    expect(document.querySelector("textarea")!.value).toBe("");
+    expect(document.querySelector("textarea")!.disabled).toBe(false);
+  });
+  it("allows correcting a canonically rejected validation request without discarding its text", async () => {
+    const save = vi
+      .spyOn(customerFeedbackApi, "create")
+      .mockRejectedValueOnce(
+        new ApiError("Invalid request", 400, { error: "Invalid request" }),
+      )
+      .mockResolvedValueOnce(accepted);
+    await mount();
+    await enter(accepted.body);
+    await click("Send feedback");
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="alert"]')).not.toBeNull(),
+    );
+    expect(document.querySelector("textarea")!.disabled).toBe(false);
+    expect(document.querySelector("textarea")!.value).toBe(accepted.body);
+    const first = save.mock.calls[0]![2];
+    await enter("Corrected report");
+    await click("Send feedback");
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls[1]![2].idempotencyKey).not.toBe(
+      first.idempotencyKey,
+    );
+    expect(save.mock.calls[1]![2].body).toBe("Corrected report");
   });
 });

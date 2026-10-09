@@ -1819,3 +1819,12 @@ checks before reply. Changed sources remain partial; no complete empty queue or
 durable authority is inferred. This is read-only source work within the original
 1500 ms admission/deadline (ADR-V9-021 / SCR-V9-014); full composition and hosted
 or human qualification remain incomplete.
+
+Private feedback UI now freezes unacknowledged creation/reply/triage tuples until
+a bound accepted receipt or canonical non-application refusal. Selected customer
+replies survive read rechecks without exposing their private text, and can replay
+the original key after native status moves to REVIEWING. My Feedback suppresses
+retained/late private history on identity/access loss; customer receipts and
+operator details validate existing company/resource bindings. Native transactional
+replay remains authoritative. Durable recovery across page/context/flag teardown
+and full feedback lifecycle qualification remain open (ADR-V9-022 / SCR-V9-015).

@@ -50,20 +50,20 @@
       "Customer Feedback joined through the principal’s private access relation",
       "Customer-visible append-only events"
     ],
-    "canonicalWriteOperation": "Append a current-version follow-up only for NEEDS_INFO; original text remains immutable.",
+    "canonicalWriteOperation": "Append a current-version follow-up only for NEEDS_INFO; replay an already accepted original request before version/status checks. Original text stays immutable.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
-    "asyncWork": "Native reads/mutations only; projection work uses bounded admission and a 1500 ms total deadline. Unknown mutation outcomes retain the original request key for reconciliation.",
+    "asyncWork": "Existing native feedback owner locks current membership/ownership and versions. Private no-store reads hide retained results during rechecks. Unknown response retries retain the exact original request tuple in the selected session.",
     "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
   },
   "states": {
-    "loading": "Announce loading only while the current identity/company request is pending.",
+    "loading": "Announce current identity/read checks while hiding retained private history and reply text.",
     "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
     "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
-    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "stale": "Suppress retained history and mutation controls during native rechecks; principal/company epochs reject late access-loss responses.",
     "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
     "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
-    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "recovering": "Retry only the frozen original tuple; keep text locked until a bound accepted receipt or canonical non-application refusal. The selected session preserves this tuple through private read rechecks.",
     "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
   },
   "navigation": {
@@ -119,7 +119,8 @@
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
     ],
     "securityPrivacy": [
-      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose.",
+      "Reject foreign/resource-mismatched receipts and invalid deep links, hide stale private history on identity/access loss, and preserve the original tuple through unknown acknowledgement and native status change."
     ],
     "usability": [
       "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."

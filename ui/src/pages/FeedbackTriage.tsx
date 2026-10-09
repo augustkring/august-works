@@ -13,6 +13,7 @@ import {
 } from "@paperclipai/shared";
 import { useAccountIdentity } from "../api/companies-query";
 import { api } from "../api/client";
+import { isRejectedFeedbackRequest } from "../api/customer-feedback";
 import { Link } from "../lib/router";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -59,14 +60,18 @@ function Queue({
   });
   const detail = useInfiniteQuery({
     queryKey: ["feedback-triage", principal, companyId, "detail", selected],
-    queryFn: async ({ signal, pageParam }) =>
-      feedbackInternalDetailSchema.parse(
+    queryFn: async ({ signal, pageParam }) => {
+      const result = feedbackInternalDetailSchema.parse(
         await api.get(
           `/internal/customer-feedback/${companyId}/${selected}?expectedUserId=${encodeURIComponent(principal)}` +
             (pageParam ? `&beforeEvent=${pageParam}` : ""),
           { signal, cache: "no-store" },
         ),
-      ),
+      );
+      if (result.companyId !== companyId || result.id !== selected)
+        throw new Error("Feedback context changed");
+      return result;
+    },
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextEventCursor ?? undefined,
     enabled: !!selected && query.isSuccess,
@@ -75,9 +80,17 @@ function Queue({
     retry: false,
   });
   const current =
-    query.isSuccess && detail.isSuccess ? detail.data.pages[0] : null;
+    query.isSuccess &&
+    !query.isFetching &&
+    detail.isSuccess &&
+    !detail.isFetching
+      ? detail.data.pages[0]
+      : null;
   const save = useMutation({
+    mutationKey: ["feedback-triage", principal, companyId],
+    gcTime: 0,
     mutationFn: async () => {
+      if (!current || !selected) throw new Error("Feedback context changed");
       attempted.current ??= {
         id: selected!,
         input: feedbackTriageSchema.parse({
@@ -95,6 +108,15 @@ function Queue({
       );
     },
     retry: false,
+    onError: (error) => {
+      if (isRejectedFeedbackRequest(error)) {
+        attempted.current = null;
+        setKey(crypto.randomUUID());
+        void client.invalidateQueries({
+          queryKey: ["feedback-triage", principal, companyId],
+        });
+      }
+    },
     onSuccess: () => {
       attempted.current = null;
       void client.invalidateQueries({
@@ -108,6 +130,7 @@ function Queue({
     },
   });
   function edit(change: () => void) {
+    if (attempted.current) return;
     attempted.current = null;
     change();
     setKey(crypto.randomUUID());
@@ -126,7 +149,9 @@ function Queue({
         </Button>
       </div>
     );
-  if (query.isLoading) return <p role="status">{t("loading")}</p>;
+  const inputsLocked = save.isPending || !!attempted.current;
+  if (query.isLoading || query.isFetching)
+    return <p role="status">{t("loading")}</p>;
   return (
     <div className="space-y-6">
       {!query.data?.pages[0]?.length && <p>{t("feedback.triageEmpty")}</p>}
@@ -135,7 +160,9 @@ function Queue({
           key={item.id}
           variant="outline"
           className="min-h-11"
+          disabled={inputsLocked}
           onClick={() => {
+            if (attempted.current) return;
             attempted.current = null;
             setSelected(item.id);
             setState(item.internalState);
@@ -254,7 +281,7 @@ function Queue({
             <span>{t("feedback.triageState")}</span>
             <select
               className="min-h-11 rounded-md border border-input bg-background px-3"
-              disabled={save.isPending}
+              disabled={inputsLocked}
               value={state}
               onChange={(event) =>
                 edit(() =>
@@ -274,7 +301,7 @@ function Queue({
             <Textarea
               maxLength={10000}
               required={state === "NEEDS_INFO"}
-              disabled={save.isPending}
+              disabled={inputsLocked}
               value={customerMessage}
               onChange={(event) =>
                 edit(() => setCustomerMessage(event.target.value))
@@ -285,7 +312,7 @@ function Queue({
             <span>{t("feedback.internalNote")}</span>
             <Textarea
               maxLength={10000}
-              disabled={save.isPending}
+              disabled={inputsLocked}
               value={internalNote}
               onChange={(event) =>
                 edit(() => setInternalNote(event.target.value))
@@ -296,7 +323,7 @@ function Queue({
             <span>{t("feedback.linkType")}</span>
             <select
               className="min-h-11 rounded-md border border-input bg-background px-3"
-              disabled={save.isPending}
+              disabled={inputsLocked}
               value={linkType}
               onChange={(event) =>
                 edit(() =>
@@ -312,18 +339,26 @@ function Queue({
             <span>{t("feedback.linkId")}</span>
             <input
               className="min-h-11 w-full rounded-md border border-input bg-background px-3"
-              disabled={save.isPending}
+              disabled={inputsLocked}
               value={linkId}
               onChange={(event) => edit(() => setLinkId(event.target.value))}
             />
           </label>
-          {save.isError && <p role="alert">{t("feedback.triageFailed")}</p>}
+          {save.isError && (
+            <p role="alert">
+              {t(
+                attempted.current
+                  ? "feedback.triageUnknown"
+                  : "feedback.triageFailed",
+              )}
+            </p>
+          )}
           <div className="flex items-center justify-between gap-3">
             <Button
               type="button"
               variant="outline"
               className="min-h-11"
-              disabled={save.isPending}
+              disabled={inputsLocked}
               onClick={() => setSelected(null)}
             >
               {t("feedback.cancel")}

@@ -118,7 +118,10 @@
     "triageHistoryFailed": "Feedbackhistorikken kunne ikke indlæses. Kontrollér din aktuelle adgang, før du behandler feedbacken.",
     "olderMessages": "Indlæs ældre beskeder",
     "customerResponse": "Kundens svar",
-    "noMessages": "Ingen beskeder eller interne noter endnu."
+    "noMessages": "Ingen beskeder eller interne noter endnu.",
+    "submissionUnknown": "Din feedback kunne ikke bekræftes. Den oprindelige tekst er låst; et genforsøg sender samme anmodning. Kontrollér Min feedback, før du starter en ny indsendelse.",
+    "replyUnknown": "Dit svar er ikke bekræftet. Den oprindelige tekst er låst; et genforsøg kontrollerer samme svar uden at oprette et ekstra.",
+    "triageUnknown": "Triage er ikke bekræftet. Felterne er låst; et genforsøg sender den oprindelige opdatering."
   },
   "profileView": "Visning",
   "profileFailed": "Din visning kunne ikke ændres. Opdatér for at kontrollere din adgang.",
