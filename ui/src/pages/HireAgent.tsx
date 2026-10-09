@@ -93,12 +93,14 @@ function HireCatalog({
     : catalog.data?.find((item) => item.versionId === versionId);
   const create = useMutation({
     mutationFn: async () => {
-      if (!selected) throw new Error("Choose a current capability");
-      attempt.current ??= {
-        requestId: crypto.randomUUID(),
-        agentId: null,
-        packageVersionId: selected.versionId,
-      };
+      if (!attempt.current) {
+        if (!selected) throw new Error("Choose a current capability");
+        attempt.current = {
+          requestId: crypto.randomUUID(),
+          agentId: null,
+          packageVersionId: selected.versionId,
+        };
+      }
       const epoch = securityEpoch.current;
       return {
         draft: await agentAuthoringApi.create(
@@ -143,6 +145,24 @@ function HireCatalog({
       <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
         {selected?.name ?? "Hire agent"}
       </h1>
+      {create.isError &&
+        attempt.current &&
+        (!selected ||
+          selected.versionId !== attempt.current.packageVersionId) && (
+          <div role="alert" className="space-y-2">
+            <p>
+              The earlier setup request was not acknowledged. Check that same
+              request to find its saved result before starting another setup.
+            </p>
+            <Button
+              className="min-h-11"
+              disabled={create.isPending || checkingAccess}
+              onClick={() => create.mutate()}
+            >
+              Retry the same setup request
+            </Button>
+          </div>
+        )}
       {(catalog.isPending || checkingAccess) && (
         <p role="status">Loading available capabilities…</p>
       )}

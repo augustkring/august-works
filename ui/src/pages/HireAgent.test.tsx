@@ -176,57 +176,77 @@ it("hides the catalog on a permission event while the native owner rechecks curr
   expect(container.textContent).toContain("Loading available capabilities");
 });
 
-it("retries an unacknowledged create with the exact request and package version", async () => {
-  vi.spyOn(agentAuthoringApi, "hireCatalog").mockResolvedValue([capability]);
-  const create = vi
-    .spyOn(agentAuthoringApi, "create")
-    .mockRejectedValueOnce(new Error("Disconnected"))
-    .mockResolvedValueOnce({
-      id: "10000000-0000-4000-8000-000000000003",
-      companyId: context.company,
-      agentId: null,
-      createdByUserId: context.principal,
-      kind: "hire",
-      version: 1,
-      status: "draft",
-      step: "hire_access",
-      baselineHash: null,
-      package: {
-        key: capability.key,
-        versionId: capability.versionId,
-        version: capability.version,
-        contentHash: "a".repeat(64),
-      },
-      content: agentAuthoringContentSchema.parse({
-        name: capability.name,
-        ownerUserId: context.principal,
-      }),
-      createdAt: "2026-10-09T00:00:00.000Z",
-      updatedAt: "2026-10-09T00:00:00.000Z",
-    });
-  await mount(`/AW/agents/hire/capabilities/${capability.versionId}`);
-  await vi.waitFor(() =>
-    expect(container.textContent).toContain("Use this agent"),
-  );
-  const click = async () =>
-    act(async () =>
-      [...container.querySelectorAll("button")]
-        .find(
-          (button) =>
-            button.textContent === "Use this agent" ||
-            button.textContent === "Retry the same setup request",
-        )!
-        .click(),
+it.each([false, true])(
+  "retries an unacknowledged create with the exact request and package version (withdrawn: %s)",
+  async (withdrawn) => {
+    const catalog = vi
+      .spyOn(agentAuthoringApi, "hireCatalog")
+      .mockResolvedValue([capability]);
+    const create = vi
+      .spyOn(agentAuthoringApi, "create")
+      .mockRejectedValueOnce(new Error("Disconnected"))
+      .mockResolvedValueOnce({
+        id: "10000000-0000-4000-8000-000000000003",
+        companyId: context.company,
+        agentId: null,
+        createdByUserId: context.principal,
+        kind: "hire",
+        version: 1,
+        status: "draft",
+        step: "hire_access",
+        baselineHash: null,
+        package: {
+          key: capability.key,
+          versionId: capability.versionId,
+          version: capability.version,
+          contentHash: "a".repeat(64),
+        },
+        content: agentAuthoringContentSchema.parse({
+          name: capability.name,
+          ownerUserId: context.principal,
+        }),
+        createdAt: "2026-10-09T00:00:00.000Z",
+        updatedAt: "2026-10-09T00:00:00.000Z",
+      });
+    await mount(`/AW/agents/hire/capabilities/${capability.versionId}`);
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain("Use this agent"),
     );
-  await click();
-  await vi.waitFor(() =>
-    expect(container.textContent).toContain("not acknowledged"),
-  );
-  const first = structuredClone(create.mock.calls[0]![2]);
-  expect(first.packageVersionId).toBe(capability.versionId);
-  await click();
-  expect(create.mock.calls[1]![2]).toEqual(first);
-  await vi.waitFor(() =>
-    expect(container.textContent).toContain("Saved Hire setup destination"),
-  );
-});
+    const click = async () =>
+      act(async () =>
+        [...container.querySelectorAll("button")]
+          .find(
+            (button) =>
+              button.textContent === "Use this agent" ||
+              button.textContent === "Retry the same setup request",
+          )!
+          .click(),
+      );
+    await click();
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain("not acknowledged"),
+    );
+    const first = structuredClone(create.mock.calls[0]![2]);
+    expect(first.packageVersionId).toBe(capability.versionId);
+    if (withdrawn) {
+      catalog.mockResolvedValue([]);
+      await act(async () => {
+        await client.refetchQueries({
+          queryKey: [
+            "agent-authoring-hire-catalog",
+            context.company,
+            context.principal,
+          ],
+        });
+      });
+      await vi.waitFor(() =>
+        expect(container.textContent).toContain("no longer available"),
+      );
+    }
+    await click();
+    expect(create.mock.calls[1]![2]).toEqual(first);
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain("Saved Hire setup destination"),
+    );
+  },
+);
