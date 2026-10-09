@@ -42,7 +42,14 @@ const state = vi.hoisted(() => ({
 const managedApi = vi.hoisted(() => ({
   list: vi.fn(async () => ({ currentUserId: "user-1", connections: [] })),
   create: vi.fn(async () => ({ connectionId: "managed-connection", grantId: "managed-grant" })),
+  startLocalLogin: vi.fn(async () => ({ sessionId: "local-login", command: "codex login", expiresAt: "2026-10-10T00:00:00Z" })),
+  checkLocalLogin: vi.fn(async () => ({ status: "ready" as const })),
+  cancelLocalLogin: vi.fn(async () => ({})),
+  connectLocal: vi.fn(async () => ({ connectionId: "local-account", grantId: "local-grant" })),
+  loginResult: vi.fn(async () => ({ connectionId: "managed-connection", grantId: "managed-grant" })),
 }));
+const health = vi.hoisted(() => ({ get: vi.fn() }));
+vi.mock("@/api/health", () => ({ healthApi: health }));
 vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: managedApi }));
 vi.mock("@/api/agents", () => ({ agentsApi: api }));
 vi.mock("@/api/environments", () => ({ environmentsApi: envApi }));
@@ -140,6 +147,13 @@ async function render(adapter = "pi_local", runnerProvider = "codex") {
       </QueryClientProvider>,
     ),
   );
+  // The V9 entry checks feature admission before mounting native setup. Wait
+  // for its environment/settings reads rather than clicking a transient form
+  // whose environment key can still change and remount provider connection.
+  await vi.waitFor(() => {
+    expect(cache.getQueryState(queryKeys.environments.list("company-1"))?.status).toBe("success");
+    expect(cache.getQueryState(queryKeys.instance.settings)?.status).toBe("success");
+  });
   await settle();
 }
 async function connect(provider: string) {
@@ -162,6 +176,12 @@ beforeEach(() => {
   cache = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  // Provider setup can refresh health before environment discovery settles.
+  // Keep that response consistent with this test's local/Cloud cache fixture;
+  // an unrelated localhost server must not replace the simulated instance.
+  health.get.mockImplementation(async () =>
+    cache.getQueryData(queryKeys.health) ?? { status: "ok", deploymentMode: "local_trusted", localAiLoginSupported: true },
+  );
   state.adapters = [
     "claude_local",
     "codex_local",
