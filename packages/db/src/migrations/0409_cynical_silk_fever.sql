@@ -71,4 +71,3 @@ BEGIN
 END $$;
 --> statement-breakpoint
 CREATE CONSTRAINT TRIGGER aw_decision_causal_material_complete AFTER INSERT ON decision_context_versions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION aw_decision_causal_material_complete();
-
