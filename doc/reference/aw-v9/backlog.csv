@@ -108,7 +108,7 @@ V9-106,2372,Hire Agent flow + capability/access/authority/test/review/activation
 V9-107,2374,"Custom Agent builder steps 1–6 (outcome, identity, instructions, knowledge, tools, authority)",in_progress
 V9-108,2376,"Custom Agent builder steps 7–13 (memory, collaboration, runtime, test, review, publish, monitor) + draft/live lifecycle",in_progress
 V9-109,2378,orchestration decision contract + bounded multi-agent admin projection + takeover/kill propagation,not_started
-V9-110,2380,workflow full lifecycle + plain-language-first review + safe test + immutable publish revision + recovery/retirement,not_started
+V9-110,2380,workflow full lifecycle + plain-language-first review + safe test + immutable publish revision + recovery/retirement,in_progress
 V9-111,2382,Company/Settings/Governance canonical IA + contextual governance + settings search/deep-link contracts,in_progress
 V9-112,2384,global microcopy/form/confirmation/error/recovery/loading/success receipt standards + component/state QA,in_progress
 V9-113,2386,enhanced accessibility targets + dialog/focus/live-status/zoom/touch/authentication critical-flow evidence,in_progress

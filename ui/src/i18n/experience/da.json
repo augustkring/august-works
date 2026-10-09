@@ -426,5 +426,62 @@
   "workObjects": "Virksomhedens arbejde",
   "projects": "Projekter",
   "tasks": "Opgaver",
-  "routines": "Rutiner"
+  "routines": "Rutiner",
+  "workflowLoadFailed": "Dette workflow kunne ikke kontrolleres. Din adgang eller workflowet kan være ændret.",
+  "workflowBack": "Alle workflows",
+  "workflowVersions": "Workflowversioner",
+  "workflowActiveVersion": "Aktiv version {{version}}",
+  "workflowDraftVersion": "Kladdeversion {{version}}",
+  "workflowDraftSeparate": "Denne kladde er adskilt fra den aktive version. At læse eller redigere kladden ændrer ikke det aktive workflow.",
+  "workflowFlowUnavailable": "Dette flow kan ikke vises fuldstændigt her. Gennemgå hele grafen, før du træffer en beslutning.",
+  "workflowEmptyDraft": "Denne version har endnu ingen trin. Den er ikke en testet proces.",
+  "workflowFlowNumbers": "Trinnumrene identificerer de angivne trin. Forbindelserne bestemmer rækkefølge og forgreninger; dette er ikke et kørselsforløb.",
+  "workflowStep": "Trin {{number}}: {{name}}",
+  "workflowOperation": "Handling",
+  "workflowEffect": "Mulig effekt angivet af handlingen",
+  "workflowApproval": "Godkendelse",
+  "workflowCheckpoint": "Et trin til menneskelig godkendelse er angivet. Denne visning bekræfter ingen godkendelsesbeslutning.",
+  "workflowApprovalUnverified": "De gældende godkendelsesregler er ikke verificeret i denne visning.",
+  "workflowRetry": "Genforsøg",
+  "workflowTestMode": "Angivet testtilstand",
+  "workflowNext": "Forbundne næste trin",
+  "workflowEnd": "Ingen udgående forbindelse angivet.",
+  "workflowNextStep": "Trin {{number}}",
+  "workflowBranchLabel": "Angivet forgreningsetiket: {{label}}",
+  "workflowNoRevision": "Ingen aktuel version kunne læses.",
+  "workflowReviewBoundary": "Før du foretager ændringer",
+  "workflowReviewLimits": "Input, ansvarlige aktører, modtagere, aktuel adgang og gældende godkendelsesregler kræver en fuld gennemgang af den native kladde. Handlingsnavne fastslår ikke tilladelse eller sikkerhed.",
+  "workflowTestLimits": "Intet repræsentativt testresultat er verificeret her. En angivet testtilstand er ikke en bestået test; denne visning kan ikke teste, udgive, køre, pause eller udfase et workflow.",
+  "workflowActions": "Workflowhandlinger",
+  "workflowEditDraft": "Rediger kladde i Avanceret",
+  "workflowRunHistory": "Kørselshistorik",
+  "workflowStatus": {
+    "draft": "Kladde — ingen aktiv udgivet version",
+    "active": "Aktiv",
+    "paused": "På pause",
+    "archived": "Arkiveret"
+  },
+  "workflowEffects": {
+    "pure": "Beregning uden angivet ekstern effekt",
+    "read": "Læs data",
+    "write": "Skriv data",
+    "destructive": "Destruktiv ændring",
+    "external_communication": "Kommuniker eksternt",
+    "financial": "Økonomisk effekt",
+    "privileged": "Privilegeret handling",
+    "unknown": "Ukendt — fuld gennemgang kræves"
+  },
+  "workflowRetries": {
+    "none": "Intet genforsøg angivet",
+    "declared": "Genforsøg er angivet. Sikker gentagelse og ukendte udfald kræver fortsat native kontroller.",
+    "unknown": "Ukendt — gennemgå før genforsøg"
+  },
+  "workflowTestModes": {
+    "safe": "Sikker tilstand angivet",
+    "dry_run": "Prøvekørsel angivet",
+    "sandbox": "Sandbox angivet",
+    "live_only": "Kun reelle effekter — ikke en sikker test",
+    "unavailable": "Testtilstand utilgængelig"
+  },
+  "workflowOutput": "Angivet udgang: {{output}}"
 }

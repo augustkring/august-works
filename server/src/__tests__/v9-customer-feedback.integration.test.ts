@@ -378,7 +378,8 @@ const support = await getEmbeddedPostgresTestSupport();
       const result = await request(app())
         .post(`/api/companies/${companyId}/customer-feedback/${id}/follow-up`)
         .send(follow)
-        .expect(200);
+        .expect(200)
+        .expect("Cache-Control", "private, no-store");
       expect(result.body.status).toBe("REVIEWING");
       expect(result.body.body).toBe(input().body);
       expect(result.body.messages.map((m: { body: string }) => m.body)).toEqual(

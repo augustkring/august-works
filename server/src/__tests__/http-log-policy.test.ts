@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   isPrivateWebhookHttpRequest,
+  isPrivateExperienceHttpRequest,
+  privateExperienceLogUrl,
   isSecretSensitiveHttpRequest,
   shouldSilenceHttpSuccessLog,
 } from "../middleware/http-log-policy.js";
+
+it("purpose-separates workflow review text, account identity and rejected requests from generic logs", () => {
+  for (const method of ["GET", "POST", "DELETE"]) {
+    const url = "/api/companies/private-company/workflows/private-workflow/experience?expectedUserId=private-user";
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+    expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+    expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflows/:workflowId/experience");
+  }
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflows/id/experience-other")).toBe(false);
+});
 
 describe("isPrivateWebhookHttpRequest", () => {
   it("protects the native webhook namespace, including rejected methods and query data", () => {

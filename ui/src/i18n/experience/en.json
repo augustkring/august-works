@@ -426,5 +426,62 @@
   "workObjects": "Company work",
   "projects": "Projects",
   "tasks": "Tasks",
-  "routines": "Routines"
+  "routines": "Routines",
+  "workflowLoadFailed": "This workflow could not be checked. Your access or the workflow may have changed.",
+  "workflowBack": "All workflows",
+  "workflowVersions": "Workflow versions",
+  "workflowActiveVersion": "Active version {{version}}",
+  "workflowDraftVersion": "Draft version {{version}}",
+  "workflowDraftSeparate": "This draft is separate from the active version. Reading or editing a draft does not change the active workflow.",
+  "workflowFlowUnavailable": "This flow cannot be shown completely here. Review its full graph before making any decision.",
+  "workflowEmptyDraft": "This revision has no steps yet. It is not a tested process.",
+  "workflowFlowNumbers": "Step numbers identify the declared steps. Connections determine execution order and branches; this is not an execution trace.",
+  "workflowStep": "Step {{number}}: {{name}}",
+  "workflowOperation": "Operation",
+  "workflowEffect": "Possible effect declared by the operation",
+  "workflowApproval": "Approval",
+  "workflowCheckpoint": "Human approval checkpoint declared. No approval decision is confirmed by this view.",
+  "workflowApprovalUnverified": "Effective approval policy has not been verified in this view.",
+  "workflowRetry": "Retry",
+  "workflowTestMode": "Declared test mode",
+  "workflowNext": "Connected next steps",
+  "workflowEnd": "No outgoing connection declared.",
+  "workflowNextStep": "Step {{number}}",
+  "workflowBranchLabel": "Declared branch label: {{label}}",
+  "workflowNoRevision": "No current revision could be read.",
+  "workflowReviewBoundary": "Before making changes",
+  "workflowReviewLimits": "Inputs, actor assignments, recipients, current access and effective approval rules require a full review of the native draft. Operation labels alone do not establish permission or safety.",
+  "workflowTestLimits": "No representative test result is verified here. A declared test mode is not a passed test; this view cannot test, publish, run, pause or retire a workflow.",
+  "workflowActions": "Workflow actions",
+  "workflowEditDraft": "Edit draft in Advanced",
+  "workflowRunHistory": "Run history",
+  "workflowStatus": {
+    "draft": "Draft — no active published revision",
+    "active": "Active",
+    "paused": "Paused",
+    "archived": "Archived"
+  },
+  "workflowEffects": {
+    "pure": "Calculation without a declared external effect",
+    "read": "Read data",
+    "write": "Write data",
+    "destructive": "Destructive change",
+    "external_communication": "Communicate externally",
+    "financial": "Financial effect",
+    "privileged": "Privileged operation",
+    "unknown": "Unknown — full review required"
+  },
+  "workflowRetries": {
+    "none": "No retry declared",
+    "declared": "Retries are declared. Safe repetition and unknown outcomes still require native checks.",
+    "unknown": "Unknown — review before retrying"
+  },
+  "workflowTestModes": {
+    "safe": "Safe mode declared",
+    "dry_run": "Dry run declared",
+    "sandbox": "Sandbox declared",
+    "live_only": "Live effects only — not a safe test",
+    "unavailable": "Test mode unavailable"
+  },
+  "workflowOutput": "Declared output: {{output}}"
 }

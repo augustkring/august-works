@@ -1780,3 +1780,12 @@ state or known blocked counts. A native page boundary is observed partial
 coverage, never a complete empty queue. Work shows bounded active/recent Tasks
 with native Project/Task/Routine drill-down. Both projections are read-only;
 full source composition/adapters and human journey acceptance remain incomplete.
+
+The gated workflow detail now reads native published and draft revisions as a
+plain-language step review, with explicit branches and declared effects. The
+human-only projection requires a matching principal and current workflow read
+permission; it excludes raw configuration, prompts, inputs and credentials.
+Operation metadata does not establish effective authority or test success. The
+native graph remains available at `/workflows/:workflowId/advanced`; testing,
+publication, execution and recovery remain native owners. Complete workflow
+authoring and representative lifecycle qualification remain open.

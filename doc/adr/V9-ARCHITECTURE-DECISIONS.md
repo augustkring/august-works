@@ -238,3 +238,34 @@ The strict shared dependency reason adds `more_items_available`; update native
 server and V9 clients together before flag enablement. An older V9 client rejects
 this new reason rather than misreading a partial queue as fully observed. No
 persisted format changes; flag rollback restores the native queue.
+
+## ADR-V9-016 — Workflow review projects native revisions without creating authority
+
+The gated ordinary workflow detail shows a plain-language step review before
+the existing Advanced graph editor. A new human-only private read reuses native
+workflow permissions, revision reads and learned-asset privacy checks. A required
+expected principal prevents account-switch reads; native workflow admission and
+read permission are rechecked after assembly. No additional workflow store,
+revision, action or test result is created.
+
+The immutable published revision and mutable draft pointer are displayed
+separately. A native workflow created with status active but no publication is
+called Draft. Step numbers identify declarations; actual native connections and
+branch labels/output keys remain visible; dependency order is not presented as
+an execution trace.
+Projection excludes graph configuration, prompts, schemas, variables, credentials,
+actor assignments and results. Unknown operations retain unknown effect/policy.
+Registry effects, test modes and retry defaults are declarations, never verified
+safety, effective permission or a passed test. Oversized or incomplete topology
+is unavailable rather than silently truncated, including cycles/duplicate edges
+(100 nodes / 200 edges per revision).
+
+Company/principal/record query keys, no-store/gc=0 and new observer epochs hide
+private data during authority/privacy/version invalidation and reject late old
+responses. The endpoint has a purpose-separated HTTP logging policy. Advanced
+edit links use current native edit permission; reads cannot publish, run, retry,
+pause or retire. The new server/shared schema precede the enabled client. Flag
+rollback restores the native graph route; /advanced retains a direct graph link.
+Full actor/input/effect/access review, governed chat authoring, representative
+testing and the remaining lifecycle are open. WORKFLOW-REVIEW remains in progress;
+source tests confer no release or human usability qualification.

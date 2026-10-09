@@ -134,7 +134,7 @@ export function Workflows() {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <Badge variant="outline">{workflow.status}</Badge>
+                  <Badge variant="outline">{workflow.status === "active" && !workflow.publishedRevisionId ? "draft" : workflow.status}</Badge>
                   <span className="hidden text-xs text-muted-foreground sm:inline">
                     Updated {formatDate(workflow.updatedAt)}
                   </span>

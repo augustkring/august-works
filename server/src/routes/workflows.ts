@@ -17,7 +17,8 @@ import {
   type WorkflowCapabilities,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
+import { conflict, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
+import { workflowReview } from "../services/experience/workflow-review.js";
 import {
   accessService,
   instanceSettingsService,
@@ -591,6 +592,27 @@ export function workflowRoutes(db: Db) {
       res.json(result);
     },
   );
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal)
+      throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    const detail = await svc.getDetail(companyId, workflowId, req.actor);
+    if (!detail) throw notFound("Workflow not found");
+    const edit = await decidePermission(req, companyId, "workflows:edit");
+    const result = workflowReview(detail, nodeRegistry.list(), edit.allowed);
+    // Current native admission remains necessary after the asynchronous private read.
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    res.json(result);
+  });
 
   router.get("/companies/:companyId/workflows/:workflowId", async (req, res) => {
     await assertWorkflowsEnabled();

@@ -73,7 +73,8 @@ export function customerFeedbackRoutes(
   });
   router.post(
     "/companies/:companyId/customer-feedback/:feedbackId/follow-up",
-    async (req, res) =>
+    async (req, res) => {
+      res.setHeader("Cache-Control", "private, no-store");
       res.json(
         await service.followUp(
           req.actor,
@@ -81,7 +82,8 @@ export function customerFeedbackRoutes(
           feedbackId(req),
           req.body,
         ),
-      ),
+      );
+    },
   );
   // Explicit platform operator admission lives in service; no company-admin bypass.
   router.get("/internal/customer-feedback/:companyId", async (req, res) => {

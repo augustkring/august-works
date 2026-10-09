@@ -24,8 +24,14 @@ import type {
   WorkflowRevision,
 } from "@paperclipai/shared";
 import { api as defaultApi } from "./client";
+import { workflowExperienceSchema } from "@paperclipai/shared";
 
 export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
+  experience: async (companyId: string, principal: string, workflowId: string, signal?: AbortSignal) =>
+    workflowExperienceSchema.parse(await api.get(
+      `/companies/${companyId}/workflows/${workflowId}/experience?expectedUserId=${encodeURIComponent(principal)}`,
+      { signal, cache: "no-store" },
+    )),
   optimizerEvaluations: (companyId: string, workflowId: string) => api.get<WorkflowOptimizerEvaluationSummary[]>(`/companies/${companyId}/workflows/${workflowId}/optimizer-evaluations`),
   proposeOptimizerCandidate: (companyId: string, workflowId: string, suggestionId: string) =>
     api.post<WorkflowOptimizerCandidateRequest>(`/companies/${companyId}/workflows/${workflowId}/optimizer-suggestions/${suggestionId}/propose`, {}),

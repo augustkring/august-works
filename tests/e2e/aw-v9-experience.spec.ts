@@ -265,3 +265,162 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     });
   }
 });
+
+test("V9 workflow review keeps active and draft revisions separate and preserves Advanced rollback", async ({
+  page,
+  request,
+}) => {
+  const original = await json(
+    await request.get("/api/instance/settings/experimental"),
+  );
+  const enabled = {
+    experience_projection_v9: true,
+    progressive_shell_v9: true,
+    enableWorkflowsV1: true,
+    enableWorkflowBuilderV1: true,
+  };
+  await json(
+    await request.patch("/api/instance/settings/experimental", {
+      data: enabled,
+    }),
+  );
+  const company = await json(
+    await request.post("/api/companies", {
+      data: { name: "V9 disposable workflow company" },
+    }),
+  );
+  const base = `/api/companies/${company.id}/workflows`;
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    const created = await json(
+      await request.post(base, { data: { name: "Review deal opportunities" } }),
+    );
+    const path = `/${company.issuePrefix}/workflows/${created.id}`;
+    await page.goto(`/${company.issuePrefix}/workflows`);
+    await expect(page.getByRole("button", { name: /Review deal opportunities/ })).toContainText("draft");
+    await page.goto(path);
+    await expect(
+      page.getByRole("heading", {
+        name: "Review deal opportunities",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Draft — no active published revision", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "This revision has no steps yet. It is not a tested process.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    const graph = (name: string) => ({
+      version: 1,
+      nodes: [
+        {
+          id: "start",
+          type: "core.manual_trigger",
+          name,
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+      ],
+      edges: [],
+      variables: [],
+      settings: {},
+    });
+    const prepared = await json(
+      await request.patch(`${base}/${created.id}/draft`, {
+        data: {
+          expectedRevisionId: created.draftRevisionId,
+          graph: graph("Active manual start"),
+        },
+      }),
+    );
+    // Fixture-only native publication. This does not qualify the V9 test/publish journey.
+    const published = await json(
+      await request.post(`${base}/${created.id}/publish`, {
+        data: {
+          expectedDraftRevisionId: prepared.draftRevisionId,
+          expectedPublishedRevisionId: null,
+          approvalId: null,
+        },
+      }),
+    );
+    const changed = await json(
+      await request.patch(`${base}/${created.id}/draft`, {
+        data: {
+          expectedRevisionId: published.draftRevisionId,
+          graph: graph("Proposed manual start"),
+        },
+      }),
+    );
+    await page.reload();
+    await expect(
+      page.getByRole("heading", {
+        name: "Step 1: Active manual start",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Step 1: Proposed manual start",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", {
+        name: `Draft version ${changed.draftRevision.revisionNumber}`,
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByRole("heading", {
+        name: "Step 1: Proposed manual start",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Step 1: Active manual start",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "Effective approval policy has not been verified in this view.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Publish", exact: true }),
+    ).toHaveCount(0);
+    const current = await json(await request.get(`${base}/${created.id}`));
+    expect(current.publishedRevisionId).toBe(published.publishedRevisionId);
+    expect(current.draftRevisionId).toBe(changed.draftRevisionId);
+    await page
+      .getByRole("link", { name: "Edit draft in Advanced", exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`${path}/advanced$`));
+    await expect(
+      page.getByRole("button", { name: "Save draft", exact: true }),
+    ).toBeVisible();
+    await json(
+      await request.patch("/api/instance/settings/experimental", {
+        data: { progressive_shell_v9: false },
+      }),
+    );
+    await page.goto(path);
+    await expect(
+      page.getByRole("button", { name: "Save draft", exact: true }),
+    ).toBeVisible();
+    expect(errors).toEqual([]);
+  } finally {
+    await request.patch("/api/instance/settings/experimental", {
+      data: Object.fromEntries(
+        Object.keys(enabled).map((key) => [key, original[key]]),
+      ),
+    });
+  }
+});
