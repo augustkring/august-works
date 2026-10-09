@@ -607,5 +607,20 @@
   "workflowRecentBoundary": "These are recorded execution statuses. A completed run does not establish an independently verified business result.",
   "workflowNoRecentRuns": "No runs have been recorded.",
   "workflowMoreRecentRuns": "Showing the ten most recent runs. Open the full history for more.",
-  "workflowNeedsAttention": "Needs attention"
+  "workflowNeedsAttention": "Needs attention",
+  "workflowStartTitle": "Start work",
+  "workflowStartNow": "Run now",
+  "workflowStartConfirmTitle": "Run the published version?",
+  "workflowStartConsequence": "This run performs internal calculations with default inputs. A separate draft stays separate. Confirmation accepts this run; inspect its result and verification separately.",
+  "workflowStartConfirm": "Confirm run",
+  "workflowStartPending": "Confirming run admission…",
+  "workflowStartAdmitted": "The original run request was accepted. Open its recorded status and inspect the result; completion and independent verification are separate.",
+  "workflowStartInspect": "Inspect accepted run",
+  "workflowStartUnknown": "Run admission is unconfirmed. Keep the original request and retry it to reconcile the outcome.",
+  "workflowStartRetry": "Retry original run request",
+  "workflowStartRefused": "The run was refused. Review the current workflow before making a new request.",
+  "workflowStartReviewRequired": "Review this workflow's execution settings, inputs and governed actions in Advanced before starting it here.",
+  "workflowStartAdvanced": "Review run in Advanced",
+  "workflowStartInactive": "A current active published version is required for a new run.",
+  "workflowStartVersion": "Reviewed published version {{version}}"
 }

@@ -20,6 +20,8 @@ const detail: WorkflowExperience = {
   status: "active",
   canEdit: true,
   canOperate: true,
+  canRequestRun: false,
+  runAvailability: "review_required",
   updatedAt: "2026-10-09T10:00:00.000Z",
   active: {
     id: "10000000-0000-4000-8000-000000000003",
@@ -199,16 +201,36 @@ it.each(["companyId", "workflowId", "requestId", "action"] as const)(
       expectedDraftRevisionId: detail.draft!.id,
       workPolicy: "finish_existing",
     };
-    const post = vi
-      .fn()
-      .mockResolvedValue({
-        ...receipt(command),
-        [field]: field === "action" ? "resume" : crypto.randomUUID(),
+    const post = vi.fn().mockResolvedValue({
+      ...receipt(command),
+      [field]: field === "action" ? "resume" : crypto.randomUUID(),
       status: field === "action" ? "active" : "paused",
-      });
+    });
     const client = createWorkflowsApi({ ...api, post });
     await expect(
       client.lifecycle(detail.companyId, "member", detail.id, command),
     ).rejects.toThrow("Workflow request context changed");
   },
 );
+
+it("confirms the reviewed retirement tuple when a newer draft arrives while the dialog is open", async () => {
+  const change = vi
+    .spyOn(workflowsApi, "lifecycle")
+    .mockImplementation(async (_company, _principal, _id, input) =>
+      receipt(input),
+    );
+  await render({ ...detail, status: "paused" });
+  await click("Retire workflow");
+  await render({
+    ...detail,
+    status: "paused",
+    updatedAt: "2026-10-09T10:10:00.000Z",
+    draft: { ...detail.draft!, id: crypto.randomUUID(), version: 4 },
+  });
+  await click("Confirm retirement");
+  await vi.waitFor(() => expect(change).toHaveBeenCalledTimes(1));
+  expect(change.mock.calls[0]![3]).toMatchObject({
+    expectedUpdatedAt: detail.updatedAt,
+    expectedDraftRevisionId: detail.draft!.id,
+  });
+});

@@ -48,6 +48,10 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { persistActivity, publishActivity } from "../activity-log.js";
 import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
 import { workflowOperationsSchema } from "@paperclipai/shared";
+import { workflowLaunchCommandSchema, workflowLaunchReceiptSchema, type WorkflowLaunchCommand } from "@paperclipai/shared";
+import { customerWorkflowLaunchReady } from "./workflow-customer-launch.js";
+import { enqueueWorkflowRunInTransaction, resolveWorkflowExecutionRevision } from "./workflow-executor.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
 
 type WorkflowDb = Db;
 
@@ -187,6 +191,70 @@ function assertPublishedPointer(workflow: typeof workflows.$inferSelect, expecte
 
 export function workflowService(db: Db) {
   return {
+    launch: async (companyId: string, workflowId: string, rawInput: WorkflowLaunchCommand, authority: AuthorizationActor) => {
+      const input = workflowLaunchCommandSchema.parse(rawInput), principal = v5HumanActorId(authority);
+      const result = await db.transaction(async tx => {
+        const nativeDb = tx as unknown as Db;
+        await lockAnalyticalCompany(nativeDb, companyId);
+        await lockMemoryPrivacy(nativeDb, companyId);
+        await instanceSettingsService(nativeDb).getExperimental();
+        await nativeDb.select({ id: instanceSettings.id }).from(instanceSettings).for("share");
+        const flags = await instanceSettingsService(nativeDb).getExperimental();
+        if (!flags.enableWorkflowsV1 || !v9FeatureEnabled(flags, "progressive_shell_v9")) throw notFound("Workflow controls are not enabled");
+        if (authority.source !== "local_implicit") {
+          await nativeDb.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+            eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, principal), eq(companyMemberships.status, "active"))).for("share");
+          await nativeDb.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants).where(and(
+            eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalType, "user"),
+            eq(principalPermissionGrants.principalId, principal))).for("share");
+        }
+        await assertV5Authorization(nativeDb, authority, companyId, "workflows:read");
+        await assertV5Authorization(nativeDb, authority, companyId, "workflows:run");
+        const workflow = await lockWorkflow(tx, companyId, workflowId);
+        if (!workflow) throw notFound("Workflow not found");
+        await getRevisionById(nativeDb, companyId, workflowId, workflow.publishedRevisionId, authority);
+        await getRevisionById(nativeDb, companyId, workflowId, workflow.draftRevisionId, authority);
+        const [prior] = await nativeDb.select().from(activityLog).where(and(eq(activityLog.companyId, companyId),
+          eq(activityLog.entityType, "workflow"), eq(activityLog.entityId, workflowId), eq(activityLog.action, "workflow.customer_run_admitted"),
+          sql`${activityLog.details}->>'requestId' = ${input.requestId}`)).limit(1);
+        if (prior) {
+          if (prior.actorId !== principal || !isDeepStrictEqual(prior.details?.command, input))
+            throw conflict("Original run request changed", { code: "workflow_launch_request_conflict" });
+          const receipt = workflowLaunchReceiptSchema.parse(prior.details?.receipt);
+          if (receipt.companyId !== companyId || receipt.workflowId !== workflowId || receipt.requestId !== input.requestId || receipt.revisionId !== input.expectedPublishedRevisionId)
+            throw notFound("Original workflow receipt is unavailable");
+          const [run] = await nativeDb.select({ id: workflowRuns.id }).from(workflowRuns).where(and(
+            eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId), eq(workflowRuns.id, receipt.runId),
+            eq(workflowRuns.workflowRevisionId, receipt.revisionId))).limit(1);
+          if (!run || !await getRevisionById(nativeDb, companyId, workflowId, receipt.revisionId, authority)) throw notFound("Original workflow run is unavailable");
+          await assertLearnedWorkflowPayloadAccess(nativeDb, companyId, authority, { workflowRunId: run.id });
+          return { receipt, publications: [] };
+        }
+        if (workflow.status !== "active" || workflow.updatedAt.toISOString() !== input.expectedUpdatedAt ||
+          workflow.publishedRevisionId !== input.expectedPublishedRevisionId || workflow.draftRevisionId !== input.expectedDraftRevisionId)
+          throw conflict("Workflow changed; review the current version", { code: "workflow_launch_conflict" });
+        const resolved = await resolveWorkflowExecutionRevision(nativeDb, companyId, workflowId, input.expectedPublishedRevisionId);
+        if (!customerWorkflowLaunchReady(mapRevision(resolved.revision)))
+          throw conflict("This workflow requires its native review and run controls", { code: "workflow_launch_review_required" });
+        await workflowNodeRegistryService(nativeDb).validatePublishGraph(companyId, resolved.revision.graph, workflowId);
+        await assertSaasDomainAdmission(nativeDb, companyId, "workflows.use");
+        const queued = await enqueueWorkflowRunInTransaction(nativeDb, {
+          companyId, workflowId, revisionId: resolved.revision.id, nodeId: resolved.triggerNodeId, source: "manual", triggerPayload: {},
+          responsibleUserId: authority.userId ?? null, idempotencyKey: `v9-workflow:${nativeSha256({ principal, workflowId, requestId: input.requestId })}`,
+          correlationId: input.requestId, actor: { principal: authority.source === "local_implicit"
+            ? { type: "system", service: "local-board" } : { type: "user", userId: principal } },
+        });
+        const receipt = workflowLaunchReceiptSchema.parse({ companyId, workflowId, requestId: input.requestId,
+          runId: queued.run.id, revisionId: resolved.revision.id, disposition: "admitted" });
+        const activity = await persistActivity(nativeDb, { companyId, actorType: "user", actorId: principal,
+          action: "workflow.customer_run_admitted", entityType: "workflow", entityId: workflowId,
+          details: { requestId: input.requestId, command: input, receipt } });
+        return { receipt, publications: [...queued.publications, activity.publication] };
+      });
+      for (const publication of result.publications) publishActivity(publication);
+      return result.receipt;
+    },
     operations: async (companyId: string, workflowId: string, authority: AuthorizationActor) => {
       v5HumanActorId(authority);
       return db.transaction(async tx => {

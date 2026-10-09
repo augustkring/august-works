@@ -35,6 +35,9 @@ export function WorkflowLifecycleControls({
   >(null);
   const [open, setOpen] = useState(false);
   const [attempt, setAttempt] = useState<WorkflowLifecycleCommand | null>(null);
+  const [reviewed, setReviewed] = useState<WorkflowLifecycleCommand | null>(
+    null,
+  );
   const feedback = useRef<HTMLParagraphElement>(null);
   const mutation = useMutation({
     mutationKey: ["workflow-lifecycle", company, principal, id],
@@ -44,6 +47,7 @@ export function WorkflowLifecycleControls({
       workflowsApi.lifecycle(company, principal, id, command),
     onSuccess: () => {
       setAttempt(null);
+      setReviewed(null);
       setAction(null);
       setOpen(false);
       refresh();
@@ -68,6 +72,7 @@ export function WorkflowLifecycleControls({
         ].includes(String(reason))
       ) {
         setAttempt(null);
+        setReviewed(null);
         setAction(null);
         setOpen(false);
         refresh();
@@ -86,17 +91,13 @@ export function WorkflowLifecycleControls({
   // Keep the component mounted across private read rechecks, but omit all private
   // controls until the current principal's admission is known again.
   if (!detail || !detail.canOperate) return null;
-  function send() {
-    if (
-      !detail ||
-      mutation.isPending ||
-      !action ||
-      (!attempt && detail.status === "archived")
-    )
-      return;
-    const command = attempt ?? {
+  function begin(nextAction: WorkflowLifecycleCommand["action"]) {
+    if (!detail) return;
+    mutation.reset();
+    setAction(nextAction);
+    setReviewed({
       requestId: crypto.randomUUID(),
-      action,
+      action: nextAction,
       expectedStatus:
         detail.status === "draft"
           ? "active"
@@ -104,8 +105,14 @@ export function WorkflowLifecycleControls({
       expectedUpdatedAt: detail.updatedAt,
       expectedPublishedRevisionId: detail.active?.id ?? null,
       expectedDraftRevisionId: detail.draft?.id ?? null,
-      workPolicy: "finish_existing" as const,
-    };
+      workPolicy: "finish_existing",
+    });
+    setOpen(true);
+  }
+  function send() {
+    if (!detail || mutation.isPending || !action) return;
+    const command = attempt ?? reviewed;
+    if (!command) return;
     setAttempt(command);
     mutation.mutate(command);
   }
@@ -134,11 +141,7 @@ export function WorkflowLifecycleControls({
             <Button
               className="min-h-11"
               variant="outline"
-              onClick={() => {
-                mutation.reset();
-                setAction("pause");
-                setOpen(true);
-              }}
+              onClick={() => begin("pause")}
             >
               {t("workflowPause")}
             </Button>
@@ -146,25 +149,14 @@ export function WorkflowLifecycleControls({
           {detail.status === "paused" && (
             <>
               {detail.active && (
-                <Button
-                  className="min-h-11"
-                  onClick={() => {
-                    mutation.reset();
-                    setAction("resume");
-                    setOpen(true);
-                  }}
-                >
+                <Button className="min-h-11" onClick={() => begin("resume")}>
                   {t("workflowResume")}
                 </Button>
               )}
               <Button
                 className="min-h-11"
                 variant="outline"
-                onClick={() => {
-                  mutation.reset();
-                  setAction("retire");
-                  setOpen(true);
-                }}
+                onClick={() => begin("retire")}
               >
                 {t("workflowRetire")}
               </Button>
@@ -217,7 +209,10 @@ export function WorkflowLifecycleControls({
               disabled={mutation.isPending}
               onClick={() => {
                 setOpen(false);
-                if (!attempt) setAction(null);
+                if (!attempt) {
+                  setAction(null);
+                  setReviewed(null);
+                }
               }}
             >
               {t(

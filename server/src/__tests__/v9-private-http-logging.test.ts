@@ -13,6 +13,10 @@ import {
 describe("V9 private HTTP purpose", () => {
   it.each([
     [
+      "POST",
+      "/api/companies/private-company/workflows/private-record/experience/launch?expectedUserId=private-principal",
+    ],
+    [
       "GET",
       "/api/companies/private-company/workflows/private-record/experience/operations?expectedUserId=private-principal",
     ],

@@ -27,6 +27,8 @@ import {
   workflowLifecycleCommandSchema,
   workflowLifecycleReceiptSchema,
   workflowOperationsSchema,
+  workflowLaunchCommandSchema,
+  workflowLaunchReceiptSchema,
 } from "@paperclipai/shared";
 
 /** Current mounted contracts. Listing an operation confers no rollout or execution qualification. */
@@ -84,6 +86,9 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  { ...write(`${company}/workflows/{workflowId}/experience/launch`,
+    "Admit a version-bound native internal run with an immutable original-request receipt; no completion or independent verification is claimed",
+    workflowLaunchCommandSchema, workflowLaunchReceiptSchema), query: z.strictObject({ expectedUserId: z.string().min(1).max(300) }) },
   read(
     `${company}/workflows/{workflowId}/experience/operations`,
     "Read the native scheduled trigger and bounded run/blocker status metadata with current source admission",

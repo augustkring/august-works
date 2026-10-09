@@ -34,6 +34,8 @@ const data: WorkflowExperience = {
   status: "active",
   canEdit: true,
   canOperate: false,
+  canRequestRun: false,
+  runAvailability: "review_required",
   updatedAt: "2026-10-09T10:00:00.000Z",
   comparison: {
     state: "available",

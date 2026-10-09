@@ -24,6 +24,7 @@ import {
 import type {
   WorkflowDetail,
   WorkflowLifecycleCommand,
+  WorkflowLaunchCommand,
 } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
@@ -83,7 +84,9 @@ describePg("V9 native workflow lifecycle", () => {
     app.use(errorHandler);
     return request(app);
   }
-  async function seed() {
+  async function seed(
+    settings: { totalDeadlineSeconds?: number } = { totalDeadlineSeconds: 60 },
+  ) {
     const [company] = await db
       .insert(companies)
       .values({
@@ -120,7 +123,7 @@ describePg("V9 native workflow lifecycle", () => {
           ],
           edges: [],
           variables: [],
-          settings: {},
+          settings,
         },
       },
       native,
@@ -158,6 +161,191 @@ describePg("V9 native workflow lifecycle", () => {
       local,
     ))!;
   }
+
+  function launchCommand(detail: WorkflowDetail): WorkflowLaunchCommand {
+    return {
+      requestId: randomUUID(),
+      expectedUpdatedAt: detail.updatedAt.toISOString(),
+      expectedPublishedRevisionId: detail.publishedRevisionId!,
+      expectedDraftRevisionId: detail.draftRevisionId,
+      acknowledgeInternalExecution: true,
+    };
+  }
+  const launchPath = (detail: WorkflowDetail, principal = "local-board") =>
+    `/api/companies/${detail.companyId}/workflows/${detail.id}/experience/launch?expectedUserId=${principal}`;
+  it("admits one immutable native run and reconciles its original receipt after Pause", async () => {
+    const detail = await seed(),
+      input = launchCommand(detail);
+    const revisionBefore = await db
+      .select()
+      .from(workflowRevisions)
+      .where(eq(workflowRevisions.workflowId, detail.id));
+    const responses = await Promise.all([
+      http().post(launchPath(detail)).send(input),
+      http().post(launchPath(detail)).send(input),
+    ]);
+    for (const response of responses) expect(response.status).toBe(200);
+    expect(responses[0].body).toEqual(responses[1].body);
+    expect(responses[0].body).toMatchObject({
+      disposition: "admitted",
+      revisionId: detail.publishedRevisionId,
+      requestId: input.requestId,
+    });
+    const runs = await db
+      .select()
+      .from(workflowRuns)
+      .where(eq(workflowRuns.workflowId, detail.id));
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.status).toBe("succeeded");
+    expect(
+      await db
+        .select()
+        .from(workflowRevisions)
+        .where(eq(workflowRevisions.workflowId, detail.id)),
+    ).toEqual(revisionBefore);
+    await http().post(path(detail)).send(command(detail, "pause")).expect(200);
+    const replay = await http()
+      .post(launchPath(detail))
+      .send(input)
+      .expect(200);
+    expect(replay.body).toEqual(responses[0].body);
+    await http()
+      .post(launchPath(detail))
+      .send(launchCommand(await current(detail)))
+      .expect(409);
+    expect(
+      await db
+        .select()
+        .from(workflowRuns)
+        .where(eq(workflowRuns.workflowId, detail.id)),
+    ).toHaveLength(1);
+  });
+  it("refuses changed and stale commands without admitting additional work", async () => {
+    const detail = await seed(),
+      input = launchCommand(detail);
+    await http()
+      .post(launchPath(detail))
+      .send({ ...input, expectedUpdatedAt: "2026-01-01T00:00:00.000Z" })
+      .expect(409);
+    expect(await db.select().from(workflowRuns)).toHaveLength(0);
+    await http().post(launchPath(detail)).send(input).expect(200);
+    const changed = await http()
+      .post(launchPath(detail))
+      .send({ ...input, expectedDraftRevisionId: randomUUID() })
+      .expect(409);
+    expect(changed.body.details.code).toBe("workflow_launch_request_conflict");
+    expect(await db.select().from(workflowRuns)).toHaveLength(1);
+  });
+  it("requires bounded execution settings and explicit internal acknowledgement", async () => {
+    const detail = await seed({}),
+      input = launchCommand(detail);
+    await http()
+      .post(launchPath(detail))
+      .send({ ...input, acknowledgeInternalExecution: false })
+      .expect(400);
+    await http()
+      .post(launchPath(detail))
+      .send({ ...input, input: { private: "SECRET" } })
+      .expect(400);
+    const rejected = await http()
+      .post(launchPath(detail))
+      .send(input)
+      .expect(409);
+    expect(rejected.body.details.code).toBe("workflow_launch_review_required");
+    expect(await db.select().from(workflowRuns)).toHaveLength(0);
+  });
+  it("rechecks current native run authority, account and rollout before admitting a run", async () => {
+    const detail = await seed(),
+      input = launchCommand(detail);
+    await http()
+      .post(launchPath(detail, "other-account"))
+      .send(input)
+      .expect(409);
+    const userId = randomUUID();
+    await db.insert(companyMemberships).values({
+      companyId: detail.companyId,
+      principalType: "user",
+      principalId: userId,
+      membershipRole: "viewer",
+      status: "active",
+    });
+    await db.insert(principalPermissionGrants).values({
+      companyId: detail.companyId,
+      principalType: "user",
+      principalId: userId,
+      permissionKey: "workflows:read",
+    });
+    const actor: Express.Request["actor"] = {
+      type: "board",
+      source: "session",
+      userId,
+      isInstanceAdmin: false,
+    };
+    await http(actor).post(launchPath(detail, userId)).send(input).expect(403);
+    await instanceSettingsService(db).updateExperimental({
+      progressive_shell_v9: false,
+    });
+    await http().post(launchPath(detail)).send(input).expect(404);
+    expect(await db.select().from(workflowRuns)).toHaveLength(0);
+  });
+
+  it("denies original run reconciliation after effective run-grant revocation", async () => {
+    const detail = await seed(),
+      userId = "run-operator",
+      input = launchCommand(detail);
+    await db
+      .insert(companyMemberships)
+      .values({
+        companyId: detail.companyId,
+        principalType: "user",
+        principalId: userId,
+        membershipRole: "viewer",
+        status: "active",
+      });
+    await db
+      .insert(principalPermissionGrants)
+      .values(
+        ["workflows:read", "workflows:run"].map((permissionKey) => ({
+          companyId: detail.companyId,
+          principalType: "user",
+          principalId: userId,
+          permissionKey,
+        })),
+      );
+    const actor: Express.Request["actor"] = {
+      type: "board",
+      source: "session",
+      userId,
+      companyIds: [detail.companyId],
+      memberships: [
+        {
+          companyId: detail.companyId,
+          membershipRole: "viewer",
+          status: "active",
+        },
+      ],
+      isInstanceAdmin: false,
+    };
+    const original = await http(actor)
+      .post(launchPath(detail, userId))
+      .send(input)
+      .expect(200);
+    await db
+      .delete(principalPermissionGrants)
+      .where(
+        and(
+          eq(principalPermissionGrants.principalId, userId),
+          eq(principalPermissionGrants.permissionKey, "workflows:run"),
+        ),
+      );
+    await http(actor).post(launchPath(detail, userId)).send(input).expect(403);
+    const runs = await db
+      .select()
+      .from(workflowRuns)
+      .where(eq(workflowRuns.workflowId, detail.id));
+    expect(runs).toHaveLength(1);
+    expect(runs[0].id).toBe(original.body.runId);
+  });
 
   it("reads bounded native run status and blockers without exposing copied payloads or errors", async () => {
     const detail = await seed();
@@ -342,14 +530,12 @@ describePg("V9 native workflow lifecycle", () => {
       membershipRole: "viewer",
       status: "active",
     });
-    await db
-      .insert(principalPermissionGrants)
-      .values({
-        companyId: detail.companyId,
-        principalType: "user",
-        principalId: userId,
-        permissionKey: "workflows:read",
-      });
+    await db.insert(principalPermissionGrants).values({
+      companyId: detail.companyId,
+      principalType: "user",
+      principalId: userId,
+      permissionKey: "workflows:read",
+    });
     const actor: Express.Request["actor"] = {
       type: "board",
       source: "session",

@@ -32,6 +32,8 @@ const detail: WorkflowExperience = {
   updatedAt: "2026-10-09T10:00:00.000Z",
   canEdit: false,
   canOperate: false,
+  canRequestRun: false,
+  runAvailability: "review_required",
   draft: null,
   comparison: null,
   active: {

@@ -943,6 +943,12 @@ describe("openapi routes", () => {
     expect(operations.security).toEqual(board);
     expect(operations.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
     expect(operations.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const launch = spec.paths[`${root}/workflows/{workflowId}/experience/launch`].post;
+    expect(launch.security).toEqual(board);
+    expect(launch.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(launch.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(launch.requestBody.content["application/json"].schema.properties.acknowledgeInternalExecution.enum).toEqual([true]);
+    expect(launch.responses[200].content["application/json"].schema.properties.disposition.enum).toEqual(["admitted"]);
     const lifecycle = spec.paths[`${root}/workflows/{workflowId}/experience/lifecycle`].post;
     expect(lifecycle.security).toEqual(board);
     expect(lifecycle.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);

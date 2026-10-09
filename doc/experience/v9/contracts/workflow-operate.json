@@ -8,7 +8,7 @@
     "admin",
     "security_admin"
   ],
-  "customerOutcome": "Inspect the next configured native schedule, bounded recent execution statuses and waiting/recovering runs; explicitly Pause or Resume with an original-request receipt.",
+  "customerOutcome": "Inspect the next configured native schedule, bounded recent execution statuses and waiting/recovering runs; explicitly Pause or Resume with an original-request receipt. Explicitly admit a bounded internal run of the reviewed published version and inspect its recorded result.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
     "Effective feature admission is required for new work; native membership and resource authority remain necessary"
@@ -25,7 +25,9 @@
       "Resume",
       "Retire workflow",
       "Existing work",
-      "Run history"
+      "Run history",
+      "Run now",
+      "Inspect accepted run"
     ],
     "displayedState": [
       "Current native workflow status and separate active/draft versions.",
@@ -33,7 +35,9 @@
       "Confirmation before each action; original unknown request retained across read rechecks and ordinary dialog close/reopen.",
       "Original native receipt is historical confirmation; refreshed workflow status remains separate.",
       "Next configured enabled routine schedule, with request/event and execution-gate limitations; paused/archived workflows do not promise new triggers.",
-      "Ten latest run status records and five current waiting/recovering records, independently bounded with explicit additional-history indicators. Execution success is not independent business verification."
+      "Ten latest run status records and five current waiting/recovering records, independently bounded with explicit additional-history indicators. Execution success is not independent business verification.",
+      "Run now is available only for the closed built-in internal subset with no input/output schema or variables and an explicit deadline up to 60 seconds. Material work requires its Advanced review.",
+      "Run and lifecycle confirmation freeze the displayed native version at dialog opening; a later version never silently replaces that reviewed tuple."
     ]
   },
   "inputs": [],
@@ -46,7 +50,8 @@
       "Resume a paused published workflow after explicit acknowledgement",
       "Close confirmation without changing the original unknown request",
       "Retry the same unacknowledged request",
-      "Open run history and authorized Advanced draft controls"
+      "Open run history and authorized Advanced draft controls",
+      "Confirm the reviewed bounded internal run; retry the original unknown request without re-publication or second admission."
     ],
     "destructiveOrIrreversible": [
       "Retirement is permanent; the draft is deliberately discarded and published/run history retained."
@@ -58,15 +63,15 @@
       "Existing workflow runs, steps, waits, bound heartbeat/tool state and routine/pipeline/parent workflow dependencies",
       "workflowService.operations and routineService.nextWorkflowSchedule; bounded native metadata under workflow/run share locks, current source guards and final authorization/rollout recheck."
     ],
-    "canonicalWriteOperation": "workflowService.lifecycle under native workflow/privacy/configuration locks, with atomic activity receipt; every native enqueue uses the same workflow row fence.",
-    "authorityEffect": "Current human company/source and publication authority are required, including on replay. No new grants, execution, cancellation, approval or external effect. Resume repeats SaaS domain admission.",
+    "canonicalWriteOperation": "workflowService.lifecycle under native workflow/privacy/configuration locks, with atomic activity receipt; every native enqueue uses the same workflow row fence. workflowService.launch uses the same row fence, existing enqueueWorkflowRunInTransaction and atomic activity admission receipt.",
+    "authorityEffect": "Lifecycle requires current human company/source and publication authority, including replay. Bounded internal launch requires current workflows:read/run, rollout, native source admission, current published version and SaaS workflows.use before new enqueue. No grants, cancellation, approvals or external actions are introduced.",
     "asyncWork": "Native transactional read with bounded 11 recent/6 blocker candidates and content-free schedule lookup. Current native source owners enforce their existing budgets; SQL cancellation and 1.5-second projection qualification are not claimed.",
-    "receipt": "Strict company/workflow/action/request/version-bound native original receipt; current state is refreshed separately. Idempotent replay has no second effect/audit event."
+    "receipt": "Strict company/workflow/action/request/version-bound native original receipt; current state is refreshed separately. Idempotent replay has no second effect/audit event. Run receipt binds company/workflow/request/revision/run and says admitted, never completed or independently verified; reconciliation after Pause returns only the original admitted run."
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
     "empty": "An unpublished draft may be paused/retired; Resume requires a published revision.",
-    "partial": "Run now admission and independently verified business outcomes remain open. Current waiting/recovering runs are distinct from failed historical runs; a source-read failure suppresses the entire overview.",
+    "partial": "Material Run now, independently verified business outcomes and complete workflow authoring remain open. Current waiting/recovering runs differ from failed historical runs; source failure suppresses the overview.",
     "stale": "A stale expected status, timestamp or revision pointer is refused. During private read rechecks all controls and receipts are hidden.",
     "validation_error": "Strict action/request/status/timestamp/revision/finish-existing schema; canonical pre-effect conflicts allow a fresh reviewed request.",
     "system_error": "Transport, authorization and malformed/foreign receipt failures remain unconfirmed. Preserve the original tuple and offer exact retry without new request identity.",
@@ -86,7 +91,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
@@ -123,7 +128,8 @@
     "functional": [
       "Prove concurrent version conflict, original receipt replay after later state changes, pause barriers for prepared manual/routine/pipeline/API/task admissions, publication immutability and current authority loss.",
       "Prove retirement refusal for pending native work, active waits/children, unconfirmed external tools and routine/pipeline/parent bindings; preserve published/run history and discard the draft on accepted retirement.",
-      "Safe Run now, independently verified business outcomes, durable navigation recovery, automated owned-resource cleanup and full external reconciliation/customer qualification remain open. Shared resources are not automatically removed."
+      "Material Run now, independently verified business outcomes, durable navigation recovery, automated owned-resource cleanup and full external reconciliation/customer qualification remain open. Shared resources are not automatically removed.",
+      "Prove concurrent identical internal launch has one native run/receipt, immutable publication, original replay after Pause, and rejection of stale reviewed versions, changed UUID payloads, unknown/account/grant/rollout loss and unbounded work."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

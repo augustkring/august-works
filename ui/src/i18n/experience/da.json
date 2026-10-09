@@ -607,5 +607,20 @@
   "workflowRecentBoundary": "Dette er registrerede eksekveringsstatusser. En afsluttet kørsel dokumenterer ikke et uafhængigt verificeret forretningsresultat.",
   "workflowNoRecentRuns": "Der er endnu ingen registrerede kørsler.",
   "workflowMoreRecentRuns": "Viser de ti seneste kørsler. Åbn hele historikken for flere.",
-  "workflowNeedsAttention": "Kræver handling"
+  "workflowNeedsAttention": "Kræver handling",
+  "workflowStartTitle": "Start arbejde",
+  "workflowStartNow": "Kør nu",
+  "workflowStartConfirmTitle": "Kør den udgivne version?",
+  "workflowStartConsequence": "Denne kørsel udfører interne beregninger med standardinput. En separat kladde forbliver separat. Bekræftelse godkender denne kørsel; gennemgå resultat og verificering separat.",
+  "workflowStartConfirm": "Bekræft kørsel",
+  "workflowStartPending": "Bekræfter kørselsadgang…",
+  "workflowStartAdmitted": "Den oprindelige kørselsanmodning blev accepteret. Åbn dens registrerede status og gennemgå resultatet; afslutning og uafhængig verificering er separate.",
+  "workflowStartInspect": "Gennemgå accepteret kørsel",
+  "workflowStartUnknown": "Kørselsadgang er ubekræftet. Bevar den oprindelige anmodning og genprøv den for at afklare udfaldet.",
+  "workflowStartRetry": "Genprøv oprindelig kørselsanmodning",
+  "workflowStartRefused": "Kørslen blev afvist. Gennemgå det aktuelle workflow, før du opretter en ny anmodning.",
+  "workflowStartReviewRequired": "Gennemgå workflowets kørselsindstillinger, input og regulerede handlinger i Advanced, før du starter det her.",
+  "workflowStartAdvanced": "Gennemgå kørsel i Advanced",
+  "workflowStartInactive": "En aktuel aktiv udgivet version er nødvendig for en ny kørsel.",
+  "workflowStartVersion": "Gennemgået udgivet version {{version}}"
 }

@@ -11,6 +11,7 @@ import { Link, useParams } from "../lib/router";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowLifecycleControls } from "../components/WorkflowLifecycleControls";
 import { WorkflowOperations } from "../components/WorkflowOperations";
+import { WorkflowRunControls } from "../components/WorkflowRunControls";
 import { queryKeys } from "../lib/queryKeys";
 
 export function WorkflowEntry() {
@@ -104,6 +105,10 @@ export function WorkflowReview({
     if (query.isError) error.current?.focus();
   }, [query.isError]);
   const controls = (
+    <>
+    <WorkflowRunControls key="launch" company={company} principal={principal} id={id}
+      detail={!query.isPending && !query.isFetching && !query.isError ? query.data : null}
+      refresh={() => void query.refetch()} />
     <WorkflowLifecycleControls
       key="lifecycle"
       company={company}
@@ -118,6 +123,7 @@ export function WorkflowReview({
         void query.refetch();
       }}
     />
+    </>
   );
   if (query.isError)
     return (

@@ -6,6 +6,7 @@ import {
   type WorkflowExperienceRevision,
 } from "@paperclipai/shared";
 import { workflowComparison } from "./workflow-comparison.js";
+import { customerWorkflowLaunchReady } from "../workflows/workflow-customer-launch.js";
 
 /** Native graph projection only. Config, prompts, schemas, variables and results never leave here. */
 export function workflowReview(
@@ -13,6 +14,7 @@ export function workflowReview(
   definitions: WorkflowNodeDefinitionDescriptor[],
   canEdit: boolean,
   canOperate = false,
+  canRequestRun = false,
 ) {
   if (
     Boolean(detail.draftRevisionId) !== Boolean(detail.draftRevision) ||
@@ -121,6 +123,13 @@ export function workflowReview(
         : detail.status,
     canEdit: canEdit && detail.status !== "archived",
     canOperate,
+    canRequestRun,
+    runAvailability:
+      detail.status !== "active" || !detail.publishedRevisionId
+        ? "not_active"
+        : customerWorkflowLaunchReady(detail.publishedRevision)
+          ? "internal_ready"
+          : "review_required",
     updatedAt: detail.updatedAt.toISOString(),
     draft,
     active,

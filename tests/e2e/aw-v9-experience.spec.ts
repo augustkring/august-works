@@ -371,7 +371,7 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
       ],
       edges: [],
       variables: [],
-      settings: {},
+      settings: { totalDeadlineSeconds: 60 },
     });
     const prepared = await json(
       await request.patch(`${base}/${created.id}/draft`, {
@@ -512,6 +512,68 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     await expect(
       operationOverview.locator(`a[href$='/runs/${run.run.id}']`),
     ).toBeVisible();
+    const originalRuns: unknown[] = [];
+    let admittedRun: {
+      runId: string;
+      revisionId: string;
+      disposition: string;
+    } | null = null;
+    const launchRoute = `**/api/companies/${company.id}/workflows/${created.id}/experience/launch?**`;
+    await page.route(launchRoute, async (route) => {
+      originalRuns.push(route.request().postDataJSON());
+      if (originalRuns.length === 1) {
+        const accepted = await route.fetch();
+        expect(accepted.ok()).toBe(true);
+        admittedRun = await accepted.json();
+        await route.abort("failed");
+      } else await route.continue();
+    });
+    await page.getByRole("button", { name: "Run now", exact: true }).click();
+    await expect(
+      page.getByText(
+        `Reviewed published version ${published.publishedRevision.revisionNumber}`,
+        { exact: true },
+      ),
+    ).toBeVisible();
+    expect(originalRuns).toHaveLength(0);
+    await page
+      .getByRole("button", { name: "Confirm run", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toContainText(
+      "Run admission is unconfirmed",
+    );
+    await page
+      .getByRole("button", { name: "Retry original run request", exact: true })
+      .click();
+    await expect(page.getByRole("status")).toContainText(
+      "The original run request was accepted",
+    );
+    expect(originalRuns).toHaveLength(2);
+    expect(originalRuns[1]).toEqual(originalRuns[0]);
+    expect(admittedRun).toMatchObject({
+      disposition: "admitted",
+      revisionId: published.publishedRevisionId,
+    });
+    const afterLaunch = await json(
+      await request.get(`${base}/${created.id}/runs`),
+    );
+    expect(afterLaunch).toHaveLength(2);
+    expect(
+      afterLaunch.filter(
+        (entry: { id: string }) => entry.id === admittedRun!.runId,
+      ),
+    ).toHaveLength(1);
+    await page
+      .getByRole("link", { name: "Inspect accepted run", exact: true })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(`${path}/runs/${admittedRun!.runId}$`),
+    );
+    await expect(
+      page.getByText("Attempt 1 · Recorded as completed", { exact: true }),
+    ).toBeVisible();
+    await page.unroute(launchRoute);
+    await page.goto(path);
     const lifecycleRoute = `**/api/companies/${company.id}/workflows/${created.id}/experience/lifecycle?**`;
     await page.route(lifecycleRoute, async (route) => {
       originalChanges.push(route.request().postDataJSON());

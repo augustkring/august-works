@@ -1251,7 +1251,10 @@
         "server/src/services/workflows/workflow-executor.ts",
         "server/src/routes/workflows.ts",
         "ui/src/components/WorkflowOperations.tsx",
-        "packages/shared/src/workflow-operations.ts"
+        "packages/shared/src/workflow-operations.ts",
+        "ui/src/components/WorkflowRunControls.tsx",
+        "packages/shared/src/workflow-launch.ts",
+        "server/src/services/workflows/workflow-customer-launch.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-operate.json"

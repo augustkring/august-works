@@ -30,10 +30,35 @@ import {
   workflowLifecycleCommandSchema,
   workflowLifecycleReceiptSchema,
   workflowOperationsSchema,
+  workflowLaunchCommandSchema,
+  workflowLaunchReceiptSchema,
+  type WorkflowLaunchCommand,
   type WorkflowLifecycleCommand,
 } from "@paperclipai/shared";
 
 export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
+  launch: async (
+    companyId: string,
+    principal: string,
+    workflowId: string,
+    raw: WorkflowLaunchCommand,
+  ) => {
+    const command = workflowLaunchCommandSchema.parse(raw);
+    const receipt = workflowLaunchReceiptSchema.parse(
+      await api.post(
+        `/companies/${companyId}/workflows/${workflowId}/experience/launch?expectedUserId=${encodeURIComponent(principal)}`,
+        command,
+      ),
+    );
+    if (
+      receipt.companyId !== companyId ||
+      receipt.workflowId !== workflowId ||
+      receipt.requestId !== command.requestId ||
+      receipt.revisionId !== command.expectedPublishedRevisionId
+    )
+      throw new Error("Workflow run request context changed");
+    return receipt;
+  },
   operations: async (
     companyId: string,
     principal: string,

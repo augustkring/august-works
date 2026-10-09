@@ -42,6 +42,8 @@ export const workflowExperienceSchema = z.strictObject({
   status: z.enum(["draft", "active", "paused", "archived"]),
   canEdit: z.boolean(),
   canOperate: z.boolean(),
+  canRequestRun: z.boolean(),
+  runAvailability: z.enum(["internal_ready", "review_required", "not_active"]),
   updatedAt: z.iso.datetime(),
   draft: workflowExperienceRevisionSchema.nullable(),
   active: workflowExperienceRevisionSchema.nullable(),

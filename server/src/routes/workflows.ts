@@ -14,6 +14,7 @@ import {
   workflowRunListQuerySchema,
   workflowDataSelectorRequestSchema,
   workflowLifecycleCommandSchema,
+  workflowLaunchCommandSchema,
   v9FeatureEnabled,
   type PermissionKey,
   type WorkflowCapabilities,
@@ -616,6 +617,20 @@ export function workflowRoutes(db: Db) {
     },
   );
 
+  router.post("/companies/:companyId/workflows/:workflowId/experience/launch", validate(workflowLaunchCommandSchema), async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    const receipt = await svc.launch(companyId, workflowId, req.body, req.actor);
+    // Native durable reconciliation also owns this run. Inline execution is
+    // best effort and cannot upgrade the admission receipt to completion.
+    try { await executor.executeQueuedRun(companyId, receipt.runId, runActor(req)); } catch { /* Original admission remains durable. */ }
+    res.json(receipt);
+  });
+
   router.get("/companies/:companyId/workflows/:workflowId/experience/operations", async (req, res) => {
     assertBoard(req);
     const companyId = z.uuid().parse(req.params.companyId);
@@ -642,8 +657,10 @@ export function workflowRoutes(db: Db) {
     if (!detail) throw notFound("Workflow not found");
     const edit = await decidePermission(req, companyId, "workflows:edit");
     const operate = await decidePermission(req, companyId, "workflows:publish");
+    const run = await decidePermission(req, companyId, "workflows:run");
+    const rollout = v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9");
     const result = workflowReview(detail, nodeRegistry.list(), edit.allowed,
-      operate.allowed && v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9"));
+      operate.allowed && rollout, run.allowed && rollout);
     // Current native admission remains necessary after the asynchronous private read.
     await assertWorkflowsEnabled();
     await assertPermission(req, companyId, "workflows:read");

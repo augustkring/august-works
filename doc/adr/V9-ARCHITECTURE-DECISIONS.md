@@ -482,3 +482,42 @@ credentials or execution principals are exposed, and reads create no receipt or
 effect. This direct native view retains native source budgets; cooperative SQL
 cancellation, full orchestration performance qualification, safe Run now,
 independent outcomes and the complete lifecycle remain open.
+
+## ADR-V9-025 — Reviewed bounded internal workflow admission
+
+The customer Run now command uses the existing native workflow executor and
+activity ledger, under the same company/privacy/configuration/workflow fence as
+Pause. Current human read/run authority and source admission are required on
+every attempt, including original-receipt reconciliation. New requests also
+require an active exact published/draft/timestamp tuple, native graph validation
+and SaaS workflow admission. No new queue, scheduler, policy engine, grant or
+persistent schema is introduced.
+
+The first customer admission subset is closed to built-in pure C0 manual,
+transform, condition, switch, merge and parallel nodes, with at most 20 nodes,
+40 edges and 65,536 serialized characters. Input/output schemas and variables
+are absent; a configured total deadline of 1–60 seconds is required. Registry
+metadata cannot substitute caller-defined purity. Child workflows, provider/model
+work, network/tools and approvals require their existing Advanced review. This
+eligibility rule is not representative execution qualification or independent
+business verification.
+
+The atomic existing activity record stores the immutable original command and
+strict admitted receipt. Same-principal exact replay returns the original native
+run even after Pause or later publication, after current authority/source checks;
+a changed UUID payload is refused. Native execution/lease/recovery owns that run.
+Inline execution is best effort, and the response never upgrades admission to
+completion. Native run inspection remains the source for recorded results.
+
+Run and lifecycle dialogs capture version pointers at opening. Confirmation and
+unknown retries cannot substitute a newer publication or retirement draft. UI
+receipts bind company/workflow/request/revision; private rechecks hide retained
+controls without losing the mounted original tuple. Durable recovery after full
+route/principal/flag teardown remains open. Compatible strict shared/server/UI
+versions must deploy together before the existing default-off rollout; old
+strict clients reject canRequestRun/runAvailability. Rollback never resumes work.
+
+CI pulls the same digest-pinned PostgreSQL manifest from the official Docker
+image ECR public mirror. Manifest bytes hash to the unchanged reviewed SHA-256;
+Docker Hub's unauthenticated quota had blocked tests before execution. No mutable
+image tag, test omission or increased budget is introduced.
