@@ -5,6 +5,7 @@ import {
   type WorkflowRevision,
   type WorkflowExperienceRevision,
 } from "@paperclipai/shared";
+import { workflowComparison } from "./workflow-comparison.js";
 
 /** Native graph projection only. Config, prompts, schemas, variables and results never leave here. */
 export function workflowReview(
@@ -12,9 +13,15 @@ export function workflowReview(
   definitions: WorkflowNodeDefinitionDescriptor[],
   canEdit: boolean,
 ) {
+  if (
+    Boolean(detail.draftRevisionId) !== Boolean(detail.draftRevision) ||
+    Boolean(detail.publishedRevisionId) !== Boolean(detail.publishedRevision)
+  )
+    throw new Error("Workflow revision binding changed");
   const registry = new Map(
     definitions.map((definition) => [definition.type, definition]),
   );
+  let draftNodeOrder: string[] = [];
   function revision(
     source: WorkflowRevision | null,
     state: "draft" | "published",
@@ -59,6 +66,8 @@ export function workflowReview(
       }
     }
     const available = bounded && ordered.length === nodes.length;
+    if (state === "draft" && available)
+      draftNodeOrder = ordered.map((node) => node.id);
     const positions = new Map(
       ordered.map((node, index) => [node.id, index + 1]),
     );
@@ -97,6 +106,8 @@ export function workflowReview(
         : [],
     };
   }
+  const draft = revision(detail.draftRevision, "draft"),
+    active = revision(detail.publishedRevision, "published");
   return workflowExperienceSchema.parse({
     companyId: detail.companyId,
     id: detail.id,
@@ -104,11 +115,18 @@ export function workflowReview(
     description: detail.description?.slice(0, 600) ?? null,
     // Native create keeps status=active before first publication. Do not present that as live.
     status:
-      detail.status === "active" && !detail.publishedRevision
+      detail.status === "active" && !detail.publishedRevisionId
         ? "draft"
         : detail.status,
     canEdit: canEdit && detail.status !== "archived",
-    draft: revision(detail.draftRevision, "draft"),
-    active: revision(detail.publishedRevision, "published"),
+    draft,
+    active,
+    comparison: workflowComparison(
+      detail.publishedRevision,
+      detail.draftRevision,
+      active,
+      draft,
+      draftNodeOrder,
+    ),
   });
 }

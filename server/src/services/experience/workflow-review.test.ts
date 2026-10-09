@@ -185,3 +185,108 @@ it.each(["company", "workflow", "state", "id"])(
     );
   },
 );
+
+function liveAndDraft() {
+  const source = detail();
+  source.publishedRevision = structuredClone(source.draftRevision!);
+  source.publishedRevision.id = "10000000-0000-4000-8000-000000000004";
+  source.publishedRevision.state = "published";
+  source.publishedRevisionId = source.publishedRevision.id;
+  source.draftRevision!.revisionNumber = 2;
+  return source;
+}
+it("compares native identities and material declarations while omitting private values and preserving the active source", () => {
+  const source = liveAndDraft();
+  const original = structuredClone(source.publishedRevision);
+  const draft = source.draftRevision!;
+  draft.graph.nodes.find((node) => node.id === "review")!.config = {
+    prompt: "NEW-PRIVATE-PROMPT",
+  };
+  draft.graph.nodes = draft.graph.nodes.filter((node) => node.id !== "missing");
+  draft.graph.nodes.push({
+    id: "new",
+    name: "Next",
+    type: "core.noop",
+    position: { x: 0, y: 0 },
+    config: { private: "NEW-SECRET" },
+  });
+  draft.graph.edges[1].target = "new";
+  draft.graph.variables[0].defaultValue = "NEW-PRIVATE-DEFAULT";
+  draft.graph.settings.totalDeadlineSeconds = 10;
+  const result = workflowReview(source, workflowNodeDefinitions(), false);
+  expect(result.comparison).toEqual({
+    state: "available",
+    steps: [
+      { number: 2, change: "changed" },
+      { number: 3, change: "added" },
+    ],
+    removedSteps: 1,
+    connectionsChanged: true,
+    dataDefinitionChanged: true,
+    settingsChanged: true,
+  });
+  expect(JSON.stringify(result)).not.toMatch(
+    /PRIVATE|SECRET|prompt|defaultValue|sha256/,
+  );
+  expect(source.publishedRevision).toEqual(original);
+});
+it("ignores layout, object-key insertion order and graph-array ordering without inventing an access or test decision", () => {
+  const source = liveAndDraft();
+  source.publishedRevision!.graph.nodes[0].config = { a: 1, b: 2 };
+  source.draftRevision!.graph.nodes[0].config = { b: 2, a: 1 };
+  source.draftRevision!.graph.nodes[0].position = { x: 100, y: 200 };
+  source.draftRevision!.graph.nodes.reverse();
+  source.draftRevision!.graph.edges.reverse();
+  expect(workflowReview(source, [], false).comparison).toEqual({
+    state: "available",
+    steps: [],
+    removedSteps: 0,
+    connectionsChanged: false,
+    dataDefinitionChanged: false,
+    settingsChanged: false,
+  });
+});
+it("uses dependency step numbers when a changed node moves within the stored array", () => {
+  const source = liveAndDraft();
+  source.draftRevision!.graph.nodes[0].continueOnFailure = true;
+  source.draftRevision!.graph.nodes.reverse();
+  expect(workflowReview(source, [], false).comparison).toMatchObject({
+    state: "available",
+    steps: [{ number: 1, change: "changed" }],
+  });
+});
+it.each(["oversized_private_value", "deep_private_value", "invalid_topology"])(
+  "does not report no changes when comparison is unavailable: %s",
+  (reason) => {
+    const source = liveAndDraft();
+    if (reason === "oversized_private_value")
+      source.draftRevision!.graph.nodes[0].config = {
+        private: "x".repeat(262145),
+      };
+    if (reason === "deep_private_value") {
+      let value: unknown = "PRIVATE-LEAF";
+      for (let i = 0; i < 40; i++) value = { nested: value };
+      source.draftRevision!.graph.nodes[0].config = value;
+    }
+    if (reason === "invalid_topology")
+      source.draftRevision!.graph.edges[0].target = "absent";
+    expect(workflowReview(source, [], false).comparison).toEqual({
+      state: "unavailable",
+    });
+  },
+);
+it("does not fabricate comparison before a first publication", () => {
+  expect(workflowReview(detail(), [], false).comparison).toBeNull();
+});
+
+it.each(["draft", "active"])(
+  "rejects a missing native %s revision instead of inventing an unpublished state",
+  (state) => {
+    const source = liveAndDraft();
+    if (state === "draft") source.draftRevision = null;
+    else source.publishedRevision = null;
+    expect(() => workflowReview(source, [], false)).toThrow(
+      "Workflow revision binding changed",
+    );
+  },
+);

@@ -162,6 +162,67 @@ export function WorkflowReview({
             )}
           </h2>
           {current.state === "draft" && <p>{t("workflowDraftSeparate")}</p>}
+          {current.state === "draft" && detail.active && detail.comparison && (
+            <section
+              aria-labelledby="workflow-changes"
+              className="space-y-3 rounded-lg border border-border p-4"
+            >
+              <h3 id="workflow-changes" className="font-medium">
+                {t("workflowComparisonTitle", {
+                  version: detail.active.version,
+                })}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {t("workflowComparisonBoundary")}
+              </p>
+              {detail.comparison.state === "unavailable" ? (
+                <p role="status">{t("workflowComparisonUnavailable")}</p>
+              ) : (
+                <>
+                  <ul className="space-y-2">
+                    {detail.comparison.steps.map((step) => (
+                      <li key={step.number}>
+                        <a
+                          className="inline-flex min-h-11 items-center underline"
+                          href={`#workflow-step-${step.number}`}
+                        >
+                          {t(
+                            step.change === "added"
+                              ? "workflowStepAdded"
+                              : "workflowStepChanged",
+                            { number: step.number },
+                          )}
+                        </a>
+                      </li>
+                    ))}
+                    {detail.comparison.removedSteps > 0 && (
+                      <li>
+                        {t("workflowStepsRemoved", {
+                          count: detail.comparison.removedSteps,
+                        })}
+                      </li>
+                    )}
+                    {detail.comparison.connectionsChanged && (
+                      <li>{t("workflowConnectionsChanged")}</li>
+                    )}
+                    {detail.comparison.dataDefinitionChanged && (
+                      <li>{t("workflowDataDefinitionChanged")}</li>
+                    )}
+                    {detail.comparison.settingsChanged && (
+                      <li>{t("workflowSettingsChanged")}</li>
+                    )}
+                  </ul>
+                  {detail.comparison.steps.length === 0 &&
+                    detail.comparison.removedSteps === 0 &&
+                    !detail.comparison.connectionsChanged &&
+                    !detail.comparison.dataDefinitionChanged &&
+                    !detail.comparison.settingsChanged && (
+                      <p>{t("workflowComparedUnchanged")}</p>
+                    )}
+                </>
+              )}
+            </section>
+          )}
           {current.coverage === "flow_unavailable" ? (
             <p role="status">{t("workflowFlowUnavailable")}</p>
           ) : current.steps.length === 0 ? (
@@ -175,6 +236,8 @@ export function WorkflowReview({
                 {current.steps.map((step) => (
                   <li
                     key={step.number}
+                    id={`workflow-step-${step.number}`}
+                    tabIndex={-1}
                     className="space-y-3 rounded-lg border border-border p-4"
                   >
                     <h3 className="break-words font-medium">

@@ -1790,6 +1790,12 @@ native graph remains available at `/workflows/:workflowId/advanced`; testing,
 publication, execution and recovery remain native owners. Complete workflow
 authoring and representative lifecycle qualification remain open.
 
+Workflow draft review also projects native-ID-bound change indicators against
+the active revision. Only added/changed step numbers, removed counts and changed
+connection/data-definition/settings indicators reach the customer. Private
+values and signatures stay on the server. Comparison work is bounded and may be
+unavailable; no comparison result is permission, approval or evaluation evidence.
+
 Agent detail exposes a new-revision draft link only after private metadata-only
 admission by the native authoring owner. The read checks current verified
 membership, configuration and target read permission, bound company/principal

@@ -485,5 +485,16 @@
   },
   "workflowOutput": "Angivet udgang: {{output}}",
   "agentRevisionCreate": "Ny revisionskladde",
-  "agentRevisionBoundary": "Opret et privat revideret setup. Den aktive agent forbliver uændret."
+  "agentRevisionBoundary": "Opret et privat revideret setup. Den aktive agent forbliver uændret.",
+  "workflowComparisonTitle": "Kladdeændringer sammenlignet med aktiv version {{version}}",
+  "workflowComparisonBoundary": "Dette sammenligner de gemte flowdefinitioner. Det verificerer ikke effektiv adgang, godkendelse, testresultater eller sikker udførelse. Private værdier forbliver skjulte.",
+  "workflowComparisonUnavailable": "Disse versioner kan ikke sammenlignes fuldstændigt her. Gennemgå kladden i Avanceret, før du træffer en beslutning.",
+  "workflowStepAdded": "Tilføjet trin {{number}}",
+  "workflowStepChanged": "Ændret trin {{number}}",
+  "workflowStepsRemoved_one": "{{count}} trin fjernet",
+  "workflowStepsRemoved_other": "{{count}} trin fjernet",
+  "workflowConnectionsChanged": "Forbindelser eller forgreningsdefinitioner er ændret",
+  "workflowDataDefinitionChanged": "Input-, output- eller variabeldefinitioner er ændret",
+  "workflowSettingsChanged": "Flowindstillinger er ændret",
+  "workflowComparedUnchanged": "Ingen ændringer fundet i de sammenlignede flowdefinitioner."
 }

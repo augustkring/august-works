@@ -33,6 +33,14 @@ const data: WorkflowExperience = {
   description: null,
   status: "active",
   canEdit: true,
+  comparison: {
+    state: "available",
+    steps: [{ number: 1, change: "changed" }],
+    removedSteps: 1,
+    connectionsChanged: true,
+    dataDefinitionChanged: true,
+    settingsChanged: false,
+  },
   active: {
     id: "10000000-0000-4000-8000-000000000003",
     version: 2,
@@ -109,6 +117,7 @@ it("keeps active and draft views separate, names unverified policy and only link
     expect.any(AbortSignal),
   );
   expect(container.textContent).not.toContain("Proposed step");
+  expect(container.textContent).not.toContain("Draft changes compared");
   expect(container.textContent).toContain("No approval decision is confirmed");
   await act(async () =>
     [...container.querySelectorAll("button")]
@@ -116,6 +125,15 @@ it("keeps active and draft views separate, names unverified policy and only link
       .click(),
   );
   expect(container.textContent).toContain("Proposed step");
+  expect(container.textContent).toContain(
+    "Draft changes compared with active version 2",
+  );
+  expect(container.textContent).toContain("Changed step 1");
+  expect(container.textContent).toContain("1 step removed");
+  expect(container.textContent).toContain(
+    "Connections or branch declarations changed",
+  );
+  expect(container.querySelector('a[href="#workflow-step-1"]')).not.toBeNull();
   expect(container.textContent).not.toContain("Ask owner");
   expect(container.textContent).toContain(
     "Effective approval policy has not been verified",
@@ -129,6 +147,7 @@ it("keeps active and draft views separate, names unverified policy and only link
     ),
   ).toEqual([
     "/AW/workflows",
+    "#workflow-step-1",
     `/AW/workflows/${data.id}/advanced`,
     `/AW/workflows/${data.id}/runs`,
   ]);
@@ -142,6 +161,7 @@ it("labels an unpublished native active record as a draft and distinguishes inco
     ...data,
     status: "draft",
     active: null,
+    comparison: null,
     canEdit: false,
     draft: { ...data.draft!, coverage: "flow_unavailable", steps: [] },
   });
@@ -204,4 +224,21 @@ it("hides retained private prose immediately during a permission recheck and rej
   expect(document.activeElement).toBe(
     container.querySelector('[role="alert"]'),
   );
+});
+
+it("keeps an unavailable comparison separate from an unchanged-flow result", async () => {
+  vi.spyOn(workflowsApi, "experience").mockResolvedValue({
+    ...data,
+    comparison: { state: "unavailable" },
+  });
+  await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain(data.name));
+  await act(async () =>
+    [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Draft version 3")!
+      .click(),
+  );
+  expect(container.textContent).toContain("cannot be compared completely");
+  expect(container.textContent).not.toContain("No changes found");
+  expect(container.querySelector('a[href="#workflow-step-1"]')).toBeNull();
 });

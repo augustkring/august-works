@@ -298,7 +298,9 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     );
     const path = `/${company.issuePrefix}/workflows/${created.id}`;
     await page.goto(`/${company.issuePrefix}/workflows`);
-    await expect(page.getByRole("button", { name: /Review deal opportunities/ })).toContainText("draft");
+    await expect(
+      page.getByRole("button", { name: /Review deal opportunities/ }),
+    ).toContainText("draft");
     await page.goto(path);
     await expect(
       page.getByRole("heading", {
@@ -393,6 +395,19 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
         { exact: true },
       ),
     ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: `Draft changes compared with active version ${published.publishedRevision.revisionNumber}`,
+        exact: true,
+      }),
+    ).toBeVisible();
+    const changedStep = page.getByRole("link", {
+      name: "Changed step 1",
+      exact: true,
+    });
+    await expect(changedStep).toHaveAttribute("href", "#workflow-step-1");
+    await changedStep.click();
+    await expect(page.locator("#workflow-step-1")).toBeFocused();
     await expect(
       page.getByRole("button", { name: "Publish", exact: true }),
     ).toHaveCount(0);

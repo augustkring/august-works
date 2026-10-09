@@ -287,3 +287,19 @@ context change. Flag rollback hides the entry while the new native service
 retains private draft reads/discard. New server/shared contracts precede enabled
 clients. No migration or additional business owner is introduced. Testing,
 publication, active receipts and fencing all expert active writers remain open.
+
+## ADR-V9-018 — Workflow change comparison reveals indicators, not private values
+
+The existing private workflow read compares bound native published and draft
+revisions in-process. Native step identities and validated dependency numbering
+identify additions/changes; removed-step counts and connection/data-definition/
+settings indicators explain other changes. Layout and insertion order are not
+material. Raw values and fingerprints never leave the projection. Both revisions
+must be completely projected and comparison is bounded by entry, character and
+depth budgets. Incomplete comparison is unavailable, never unchanged or approved.
+
+The same native read/privacy and final admission checks govern this result. No
+new owner, write, grant or test result is created. New strict server/shared/client
+contracts deploy together before enabling the existing shell flag; rollback
+restores the native graph route. Complete access/test/publish lifecycle review and
+representative human qualification remain open.

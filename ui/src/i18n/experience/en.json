@@ -485,5 +485,16 @@
   },
   "workflowOutput": "Declared output: {{output}}",
   "agentRevisionCreate": "New revision draft",
-  "agentRevisionBoundary": "Create a private revised setup. The active agent stays unchanged."
+  "agentRevisionBoundary": "Create a private revised setup. The active agent stays unchanged.",
+  "workflowComparisonTitle": "Draft changes compared with active version {{version}}",
+  "workflowComparisonBoundary": "This compares stored flow declarations. It does not verify effective access, approval, test results or safe execution. Private values stay hidden.",
+  "workflowComparisonUnavailable": "These revisions cannot be compared completely here. Review the draft in Advanced before making a decision.",
+  "workflowStepAdded": "Added step {{number}}",
+  "workflowStepChanged": "Changed step {{number}}",
+  "workflowStepsRemoved_one": "{{count}} step removed",
+  "workflowStepsRemoved_other": "{{count}} steps removed",
+  "workflowConnectionsChanged": "Connections or branch declarations changed",
+  "workflowDataDefinitionChanged": "Input, output or variable definitions changed",
+  "workflowSettingsChanged": "Flow settings changed",
+  "workflowComparedUnchanged": "No changes found in the compared flow declarations."
 }

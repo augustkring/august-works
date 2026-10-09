@@ -31,7 +31,8 @@
       "Native published revision and draft are separate and explicitly versioned",
       "Declared operation, possible effects, approval checkpoint, retry and test-mode metadata",
       "Native connections and branch labels remain explicit; step numbering is not an execution trace",
-      "Oversized, duplicate, cyclic or dangling topology is unavailable, never silently truncated"
+      "Oversized, duplicate, cyclic or dangling topology is unavailable, never silently truncated",
+      "Bound native-ID draft changes against the active revision; private values omitted; incomplete comparison is unavailable, never unchanged or approved."
     ]
   },
   "inputs": [],
@@ -115,7 +116,8 @@
   "acceptance": {
     "functional": [
       "Verify immutable active/draft separation, publication-free reads, native graph links, unknown operations, branch visibility and explicit bounds.",
-      "Complete per-step actor/input/effect/access policy, chat authoring, representative test/inspect/check/publish/run/change/recovery/retirement remain open."
+      "Complete per-step actor/input/effect/access policy, chat authoring, representative test/inspect/check/publish/run/change/recovery/retirement remain open.",
+      "Verify added/changed/removed native steps, dependency numbering, connection/data/settings indicators, private-value exclusion and unchanged immutable active source."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

@@ -43,6 +43,26 @@ export const workflowExperienceSchema = z.strictObject({
   canEdit: z.boolean(),
   draft: workflowExperienceRevisionSchema.nullable(),
   active: workflowExperienceRevisionSchema.nullable(),
+  comparison: z
+    .discriminatedUnion("state", [
+      z.strictObject({
+        state: z.literal("available"),
+        steps: z
+          .array(
+            z.strictObject({
+              number: z.number().int().min(1).max(100),
+              change: z.enum(["added", "changed"]),
+            }),
+          )
+          .max(100),
+        removedSteps: z.number().int().min(0).max(100),
+        connectionsChanged: z.boolean(),
+        dataDefinitionChanged: z.boolean(),
+        settingsChanged: z.boolean(),
+      }),
+      z.strictObject({ state: z.literal("unavailable") }),
+    ])
+    .nullable(),
 });
 export type WorkflowExperience = z.infer<typeof workflowExperienceSchema>;
 export type WorkflowExperienceRevision = z.infer<

@@ -229,6 +229,16 @@ describePg("Workflow routes", () => {
     }).expect(200);
     const active = await http.get(url).expect(200);
     expect(active.body).toMatchObject({ status: "active", active: { id: published.body.publishedRevisionId, version: 2, state: "published" }, draft: { id: published.body.draftRevisionId, version: 3, state: "draft" } });
+    expect(active.body.comparison).toEqual({ state: "available", steps: [], removedSteps: 0, connectionsChanged: false, dataDefinitionChanged: false, settingsChanged: false });
+    await http.patch(`/api/companies/${company.id}/workflows/${created.body.id}/draft`).send({
+      expectedRevisionId: published.body.draftRevisionId,
+      graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start revised", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [{ name: "private", defaultValue: "PRIVATE-CHANGED" }], settings: {} },
+    }).expect(200);
+    const compared = await http.get(url).expect(200);
+    expect(compared.body.comparison).toEqual({ state: "available", steps: [{ number: 1, change: "changed" }], removedSteps: 0, connectionsChanged: false, dataDefinitionChanged: true, settingsChanged: false });
+    expect(compared.body.active).toEqual(active.body.active);
+    expect(compared.body.draft.id).not.toBe(published.body.draftRevisionId);
+    expect(JSON.stringify(compared.body)).not.toContain("PRIVATE-");
     for (const forbidden of ["PRIVATE-", "config", "position", "variables", "changeSummary", "canRun", "canPublish"]) expect(JSON.stringify(active.body)).not.toContain(forbidden);
     const before = await db.select().from(activityLog);
     await http.get(url).expect(200);
