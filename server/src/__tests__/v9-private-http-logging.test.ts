@@ -17,6 +17,8 @@ describe("V9 private HTTP purpose", () => {
       "/api/saas/companies/private-company/activation?expectedUserId=private-principal",
     ],
     ["POST", "/api/companies//customer-feedback"],
+    ["POST", "/api/companies/private-company/agent-configuration-drafts/private-record/save?expectedUserId=private-principal"],
+    ["PATCH", "/api/companies//agent-configuration-drafts/private-record"],
     [
       "POST",
       "/api/companies/private-company/customer-feedback?expectedUserId=private-principal",
@@ -58,6 +60,7 @@ describe("V9 private HTTP purpose", () => {
     const call =
       method === "POST"
         ? request(app).post(url)
+        : method === "PATCH" ? request(app).patch(url)
         : method === "DELETE"
           ? request(app).delete(url)
           : request(app).get(url);

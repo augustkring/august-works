@@ -1,6 +1,7 @@
 import { SecurityEvents } from "./pages/SecurityEvents";
 import { Enterprise } from "./pages/Enterprise";
 import { AgentPackages } from "./pages/AgentPackages";
+import { CustomAgent } from "./pages/CustomAgent";
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
 import { Playbooks } from "./pages/Playbooks";
@@ -351,6 +352,8 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
         />
       ))}
       <Route path="agents/new" element={<NewAgent />} />
+      <Route path="agents/custom" element={<CustomAgent />} />
+      <Route path="agents/custom/:draftId/:screen?" element={<CustomAgent />} />
       <Route path="agents/:agentId" element={<AgentDetail />} />
       <Route path="agents/:agentId/:tab" element={<AgentDetail />} />
       <Route path="agents/:agentId/runs/:runId" element={<AgentDetail />} />
@@ -977,6 +980,8 @@ export function App() {
             <Route key={tab} path={`agents/${tab}`} element={<UnprefixedBoardRedirect />} />
           ))}
           <Route path="agents/new" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/custom" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/custom/:draftId/:screen?" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/:agentId" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/:agentId/:tab" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/:agentId/runs/:runId" element={<UnprefixedBoardRedirect />} />

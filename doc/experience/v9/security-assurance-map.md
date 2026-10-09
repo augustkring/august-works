@@ -44,3 +44,7 @@ and unit checks cannot lower it. Safe Change records in the dated build ledger
 identify owner, authority/data changes, migration/mixed versions, irreversible
 boundary, admission, rollback, exact source/config identity and residual evidence.
 Existing erasure/history APIs and the output-sharing privacy latch survive rollback.
+
+| Unpublished agent content | `agent_configuration_drafts` native agent owner | Creator/company/current create or target configure/read; verified membership | Scope/baseline/request/version fences; no production writes or grants | Focused native/HTTP/DOM; complete publish mapping and hosted proof pending |
+| Agent installation reconciliation | Existing native package installation | Installing principal/company/request plus current agent authority | Immutable normalized request/path hash; current receipt survives withdrawal/uninstall | Native concurrent replay/conflict cases; customer Hire flow qualification pending |
+| Restore admission across V9 flag changes | Native instance settings/quarantine | Operator-owned private metadata never becomes public settings input | Atomic privacy-latch merge preserves restore quarantine | Existing restore regression reproduced; corrected native recheck pending |

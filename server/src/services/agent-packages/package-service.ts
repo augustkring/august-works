@@ -1,7 +1,7 @@
 import { learningRoots } from "../learning/learning-service.js";
 import { entitlementService } from "../billing/entitlements.js";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import {
   agents,
   agentPackages,
@@ -130,8 +130,9 @@ export function agentPackageService(
     return row;
   }
   function view(row: Installation): PackageInstallationView {
+    const { installationRequestHash: _privateHash, ...receipt } = row;
     return {
-      ...row,
+      ...receipt,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -1197,6 +1198,8 @@ export function agentPackageService(
           status: "configuring",
           version: 1,
           installedByUserId: v7HumanActorId(actor),
+          installationRequestId: null,
+          installationRequestHash: null,
           components: resolved,
           activationHash: null,
           readiness: null,
@@ -1217,6 +1220,7 @@ export function agentPackageService(
       actor: AuthorizationActor,
       companyId: string,
       raw: unknown,
+      expectedPackageKey?: string,
     ) => {
       const input = packageInstallSchema.parse(raw);
       await assertV7Enabled(db, "agent_packages_v7");
@@ -1225,7 +1229,21 @@ export function agentPackageService(
       return withV7ActivityTransaction(db, async (tx, p) => {
         await lockMemoryPrivacy(tx, companyId);
         await access(tx, actor, companyId, input.agentId, true);
+        const principal = v7HumanActorId(actor), requestHash = input.installationRequestId ? nativeSha256({input, expectedPackageKey: expectedPackageKey ?? null}) : null;
+        if (input.installationRequestId) {
+          const [previous] = await tx.select().from(companyAgentPackageInstallations).where(and(
+            eq(companyAgentPackageInstallations.companyId, companyId),
+            eq(companyAgentPackageInstallations.installedByUserId, principal),
+            eq(companyAgentPackageInstallations.installationRequestId, input.installationRequestId),
+          )).limit(1);
+          if (previous) {
+            if (previous.installationRequestHash !== requestHash) throw conflict("Installation request has different content", {code: "PACKAGE_INSTALL_REQUEST_CONFLICT"});
+            await assertV7Authorization(tx, actor, companyId, "agent:read", {type: "agent", companyId, agentId: previous.agentId});
+            return view(previous);
+          }
+        }
         const published = await release(tx, input.versionId, true);
+        if (expectedPackageKey && published.package.key !== expectedPackageKey) throw notFound("Package version not found");
         available(published);
         if (
           published.version.release.manifest.audience === "internal_test" &&
@@ -1243,6 +1261,8 @@ export function agentPackageService(
           .for("update");
         if (!a || a.status === "terminated")
           throw notFound("Agent presence unavailable");
+        const [existing] = await tx.select({id: companyAgentPackageInstallations.id}).from(companyAgentPackageInstallations).where(and(eq(companyAgentPackageInstallations.companyId, companyId), eq(companyAgentPackageInstallations.agentId, input.agentId), ne(companyAgentPackageInstallations.status, "uninstalled"))).limit(1);
+        if (existing) throw conflict("This agent already has a package installation; review its current configuration", {code: "PACKAGE_ALREADY_INSTALLED", installationId: existing.id});
         const resolved = await pins(
           tx,
           actor,
@@ -1259,6 +1279,8 @@ export function agentPackageService(
             agentId: input.agentId,
             aiUseCaseId: input.aiUseCaseId,
             installedByUserId: v7HumanActorId(actor),
+            installationRequestId: input.installationRequestId ?? null,
+            installationRequestHash: requestHash,
             components: resolved,
             updatePolicy: input.updatePolicy,
           })

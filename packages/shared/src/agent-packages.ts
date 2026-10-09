@@ -143,6 +143,7 @@ export type PackageRelease = z.infer<typeof packageReleaseSchema>;
 export type PackageComponent = z.infer<typeof packageComponentSchema>;
 export const packageInstallSchema = z
   .object({
+    installationRequestId: z.uuid().optional(),
     versionId: z.string().uuid(),
     agentId: z.string().uuid(),
     components: z
@@ -177,7 +178,8 @@ export const packageUpdateSchema = packageInstallSchema
     approveMaterialChange: z.boolean(),
     reason: z.string().trim().min(1).max(2000),
   })
-  .strict();
+  .strict()
+  .refine((value) => value.installationRequestId === undefined, "Installation request IDs are for initial installation only");
 export interface PackageCatalogView {
   id: string;
   key: string;
@@ -211,6 +213,7 @@ export interface PackageInstallationView {
     | "uninstalled";
   updatePolicy: "manual" | "auto_low_risk";
   installedByUserId: string;
+  installationRequestId?: string | null;
   components: Array<{
     key: string;
     type: string;

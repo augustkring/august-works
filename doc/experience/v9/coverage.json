@@ -342,9 +342,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-01.json"
     },
     {
       "screenId": "CUSTOM-02",
@@ -357,9 +361,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-02.json"
     },
     {
       "screenId": "CUSTOM-03",
@@ -372,9 +380,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-03.json"
     },
     {
       "screenId": "CUSTOM-04",
@@ -387,9 +399,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-04.json"
     },
     {
       "screenId": "CUSTOM-05",
@@ -402,9 +418,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-05.json"
     },
     {
       "screenId": "CUSTOM-06",
@@ -417,9 +437,13 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-06.json"
     },
     {
       "screenId": "CUSTOM-07",
@@ -432,9 +456,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-07.json"
     },
     {
       "screenId": "CUSTOM-08",
@@ -447,9 +475,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-08.json"
     },
     {
       "screenId": "CUSTOM-09",
@@ -462,9 +494,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-09.json"
     },
     {
       "screenId": "CUSTOM-10",
@@ -477,9 +513,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-10.json"
     },
     {
       "screenId": "CUSTOM-11",
@@ -492,9 +532,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-11.json"
     },
     {
       "screenId": "CUSTOM-12",
@@ -507,9 +551,13 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-12.json"
     },
     {
       "screenId": "CUSTOM-13",
@@ -522,9 +570,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/custom-13.json"
     },
     {
       "screenId": "SHELL",

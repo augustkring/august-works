@@ -122,6 +122,8 @@ export const companyAgentPackageInstallations = pgTable(
       .default("configuring"),
     version: integer("version").notNull().default(1),
     installedByUserId: text("installed_by_user_id").notNull(),
+    installationRequestId: uuid("installation_request_id"),
+    installationRequestHash: text("installation_request_hash"),
     components: jsonb("resolved_components")
       .$type<PackageInstallationView["components"]>()
       .notNull(),
@@ -130,6 +132,8 @@ export const companyAgentPackageInstallations = pgTable(
     ...times(),
   },
   (t) => ({
+    request: uniqueIndex("company_agent_package_installations_request_uq").on(t.companyId, t.installedByUserId, t.installationRequestId).where(sql`${t.installationRequestId} is not null`),
+    requestPair: check("company_agent_package_installations_request_check", sql`(${t.installationRequestId} is null and ${t.installationRequestHash} is null) or (${t.installationRequestId} is not null and ${t.installationRequestHash} is not null and ${t.installationRequestHash} ~ '^[a-f0-9]{64}$')`),
     tenant: unique("company_agent_package_installations_tenant_uq").on(
       t.companyId,
       t.id,

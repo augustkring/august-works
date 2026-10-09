@@ -246,6 +246,45 @@ const support = await getEmbeddedPostgresTestSupport();
         reason: "Explicit internal evaluation",
       });
     }
+    it("reconciles concurrent installation acknowledgements without duplicate installation or audit", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      const [first, second] = await Promise.all([
+        service.install(f.actor, f.home, body, input.packageKey),
+        service.install(f.actor, f.home, body, input.packageKey),
+      ]);
+      expect(first.id).toBe(second.id);
+      expect(first.installationRequestId).toBe(body.installationRequestId);
+      expect(first).not.toHaveProperty("installationRequestHash");
+      expect(first.status).toBe("configuring");
+      expect(first.activationHash).toBeNull();
+      expect(await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.agentId, f.presence.id))).toHaveLength(1);
+      const audit = await db.select().from(activityLog).where(eq(activityLog.entityId, first.id));
+      expect(audit.filter((event) => event.action === "agent_package.installed")).toHaveLength(1);
+      await expect(service.install(f.actor, f.home, { ...body, updatePolicy: "auto_low_risk" }, input.packageKey)).rejects.toMatchObject({status: 409, details: {code: "PACKAGE_INSTALL_REQUEST_CONFLICT"}});
+      await expect(service.install(f.actor, f.home, body, "other-package")).rejects.toMatchObject({status: 409});
+    });
+    it("retains the installation receipt after release withdrawal and uninstall, but requires current authority", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      const first = await service.install(f.actor, f.home, body, input.packageKey);
+      await service.revoke(f.actor, versionId);
+      const withdrawn = await service.install(f.actor, f.home, body, input.packageKey);
+      expect(withdrawn.id).toBe(first.id);
+      expect(withdrawn.status).not.toBe("active");
+      const removed = await service.decide(f.actor, f.home, first.id, "uninstall", {expectedVersion: withdrawn.version, reason: "Retire withdrawn evaluation"});
+      expect((await service.install(f.actor, f.home, body, input.packageKey)).status).toBe("uninstalled");
+      expect(removed.id).toBe(first.id);
+      await db.update(companyMemberships).set({status: "suspended"}).where(sql`company_id=${f.home}::uuid and principal_id=${f.userId}`);
+      await expect(service.install(f.actor, f.home, body, input.packageKey)).rejects.toMatchObject({status: 403});
+    });
+    it("rejects package-path substitution and immutable installation request rewrites at the native database", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      await expect(service.install(f.actor, f.home, body, "other-package")).rejects.toMatchObject({status: 404});
+      const first = await service.install(f.actor, f.home, body, input.packageKey);
+      await expect(db.update(companyAgentPackageInstallations).set({installationRequestId: randomUUID(), version: first.version + 1}).where(eq(companyAgentPackageInstallations.id, first.id))).rejects.toMatchObject({cause: {code: "23514", message: "package_installation_request_immutable"}});
+      await expect(db.update(companyAgentPackageInstallations).set({installationRequestHash: null, version: first.version + 1}).where(eq(companyAgentPackageInstallations.id, first.id))).rejects.toMatchObject({cause: {code: "23514"}});
+      const other = await seedV5Presences(db);
+      await expect(service.install(other.actor, other.home, body, input.packageKey)).rejects.toMatchObject({status: 404});
+    });
     async function run() {
       return (
         await db

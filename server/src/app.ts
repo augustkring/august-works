@@ -1,5 +1,6 @@
 import { enterpriseRoutes } from "./routes/enterprise.js";
 import { agentPackageRoutes } from "./routes/agent-packages.js";
+import { agentAuthoringRoutes } from "./routes/agent-authoring.js";
 import { aiGovernanceRoutes } from "./routes/ai-governance.js";
 import { executionSandboxRoutes } from "./routes/execution-sandbox.js";
 import { openShellBackend } from "./services/execution-sandbox/openshell-backend.js";
@@ -906,6 +907,7 @@ export async function createApp(
   api.use(decisionIntelligenceRoutes(db));
   api.use(dashboardRoutes(db));
   api.use(experienceRoutes(db));
+  api.use(agentAuthoringRoutes(db));
   api.use(customerFeedbackRoutes(db,{operatorUserIds:opts.saasPlatform?.config.operatorUserIds}));
   api.use(attentionRoutes(db));
   api.use(decisionTrainingRoutes(db));

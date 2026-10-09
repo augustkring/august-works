@@ -36,7 +36,7 @@ import {
   applyOperatorGeneralDefaults,
   stripOperatorGeneralEchoes,
 } from "@paperclipai/shared";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getManagedInstanceConfig, type ManagedInstanceConfig } from "./managed-config.js";
 import { getOperatorSettingDefaults } from "./setting-defaults.js";
 
@@ -224,6 +224,11 @@ function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
     backupRetention: DEFAULT_BACKUP_RETENTION,
     ...sticky,
   };
+}
+
+/** Public settings normalization must not erase native operator admission metadata. */
+function internalGeneralState(raw: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(raw).filter(([key]) => !Object.hasOwn(instanceGeneralSettingsStorageSchema.shape, key)));
 }
 
 export function normalizeExperimentalSettings(raw: unknown): InstanceExperimentalSettings {
@@ -600,7 +605,7 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       const [updated] = await db
         .update(instanceSettings)
         .set({
-          general: { ...nextGeneral },
+          general: { ...internalGeneralState(current.general), ...nextGeneral },
           updatedAt: now,
         })
         .where(eq(instanceSettings.id, current.id))
@@ -647,7 +652,11 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
           .update(instanceSettings)
           .set({
             experimental: { ...nextExperimental },
-            general: {...normalizeGeneralSettings(current.general),...(toExperimentalView(nextExperimental).customer_feedback_v9 ? {outputFeedbackPolicyVersion:"aw-v9-local-v1"} : {})},
+            // Experimental admission must preserve native operator state, including
+            // restore quarantine. Merge only the irreversible output-sharing latch.
+            ...(toExperimentalView(nextExperimental).customer_feedback_v9 ? {
+              general: sql`coalesce(${instanceSettings.general}, '{}'::jsonb) || '{"outputFeedbackPolicyVersion":"aw-v9-local-v1"}'::jsonb`,
+            } : {}),
             updatedAt: now,
           })
           .where(eq(instanceSettings.id, current.id))

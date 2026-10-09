@@ -23,6 +23,7 @@ import { feedbackService } from "../services/feedback.js";
 import { customerFeedbackService } from "../services/customer-feedback.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { eraseAccountAccess } from "../services/saas/account-deletion.js";
+import { assertDatabaseRestoreAdmission } from "../services/saas/database-admission.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -214,6 +215,25 @@ const support = await getEmbeddedPostgresTestSupport();
       await request(app(otherUser))
         .get(`/api/companies/${companyId}/customer-feedback/${randomUUID()}`)
         .expect(404);
+    });
+    it("preserves the native restore quarantine through feedback rollout and ordinary setting writes", async () => {
+      const marker = {admission: "blocked", restoredAt: "2026-10-09T00:00:00.000Z"};
+      try {
+      await db.execute(sql`update instance_settings set general=general||jsonb_build_object('awV6RestoreQuarantine',${JSON.stringify(marker)}::jsonb) where singleton_key='default'`);
+      const settings = instanceSettingsService(db, {runtimeEnv: {}});
+      for (const enabled of [false, true, false]) {
+        await settings.updateExperimental({customer_feedback_v9: enabled});
+        await expect(assertDatabaseRestoreAdmission(db)).rejects.toThrow("remains quarantined");
+        expect(await settings.getGeneral()).not.toHaveProperty("awV6RestoreQuarantine");
+        expect((await settings.getGeneral()).outputFeedbackPolicyVersion).toBe("aw-v9-local-v1");
+      }
+      await settings.updateGeneral({keyboardShortcuts: true});
+      await expect(assertDatabaseRestoreAdmission(db)).rejects.toThrow("remains quarantined");
+      const [stored] = await db.execute(sql`select general from instance_settings where singleton_key='default'`);
+      expect(stored!.general.awV6RestoreQuarantine).toEqual(marker);
+      } finally {
+        await db.execute(sql`update instance_settings set general=general-'awV6RestoreQuarantine' where singleton_key='default'`);
+      }
     });
     it("pages private queues and operator history without losing PostgreSQL sub-millisecond ties or accepting foreign cursors", async () => {
       const submitted = await request(app())
