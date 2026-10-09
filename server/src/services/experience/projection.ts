@@ -9,9 +9,11 @@ import { experienceModelSchema } from "@paperclipai/shared";
 export type ExperienceSection = "needsYou" | "inProgress" | "done" | "watch";
 export interface ExperienceReader {
   domain: string;
-  read: (
-    signal: AbortSignal,
-  ) => Promise<Partial<Record<ExperienceSection, ExperienceCard[]>>>;
+  read: (signal: AbortSignal) => Promise<
+    Partial<Record<ExperienceSection, ExperienceCard[]>> & {
+      coverage?: { state: "partial"; reason: "more_items_available" };
+    }
+  >;
 }
 export class ExperienceOverloadError extends Error {}
 /** Keep admission occupied until underlying work settles, including after timeout. */
@@ -75,6 +77,7 @@ export async function composeExperience(input: {
         });
         try {
           const result = await Promise.race([pending, timeout]);
+          const { coverage, ...cards } = result;
           const validated = experienceModelSchema.parse({
             companyId: input.companyId,
             profile: input.profile,
@@ -84,7 +87,7 @@ export async function composeExperience(input: {
             inProgress: [],
             done: [],
             watch: [],
-            ...result,
+            ...cards,
           });
           for (const section of Object.keys(sections) as ExperienceSection[]) {
             if (result[section])
@@ -92,9 +95,9 @@ export async function composeExperience(input: {
           }
           dependencies.push({
             domain: reader.domain,
-            state: "fresh",
+            state: coverage?.state ?? "fresh",
             observedAt: now().toISOString(),
-            reason: null,
+            reason: coverage?.reason ?? null,
           });
         } catch {
           dependencies.push({

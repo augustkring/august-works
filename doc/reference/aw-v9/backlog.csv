@@ -40,8 +40,8 @@ V9-038,2231,chat Foundation proposal adapter,not_started
 V9-039,2233,chat agent/package proposal adapter,not_started
 V9-040,2235,chat connection intent adapter,not_started
 V9-041,2237,assistant-ui tool/action component registry,not_started
-V9-042,2239,approval/decision/question cards,not_started
-V9-043,2241,result/progress/recovery cards,not_started
+V9-042,2239,approval/decision/question cards,in_progress
+V9-043,2241,result/progress/recovery cards,in_progress
 V9-044,2243,V8 insight cards contracts,not_started
 V9-045,2245,Slack block/modal action-card mapping,not_started
 V9-046,2247,Teams adaptive-card action mapping,not_started

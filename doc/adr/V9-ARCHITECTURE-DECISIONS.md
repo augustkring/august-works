@@ -217,3 +217,24 @@ the new migration/server/UI before enabling the flag. Old binaries cannot render
 Hire steps or pins; flag rollback with the new server retains reads/discard, while
 binary downgrade requires draining new clients and retaining the recovery-capable
 server until those setups have been reconciled or discarded.
+
+## ADR-V9-015 — Needs You preserves native resolver ownership and page boundaries
+
+The ordinary gated `/needs-you` entry renders the existing principal/company
+experience projection. Exact decision/attention deep links use the existing
+native resolver. `/decisions` retains the complete native queue and history.
+Cards distinguish approval, question/confirmation, permission, recovery and
+warning states. Consequences describe only known native pending state or an
+explicit native blocked count; no future business impact is invented. The view
+performs no approval, retry, grant or other mutation.
+
+A native next-page cursor becomes typed partial coverage without exposing counts
+or raw cursors. Neither Home nor Needs You may treat that partial page as a
+complete empty queue. Existing admission, resource checks, private no-store
+queries and authority invalidation remain applicable. Full card types/adapters,
+inline native actions and human accessibility/usability acceptance remain open.
+
+The strict shared dependency reason adds `more_items_available`; update native
+server and V9 clients together before flag enablement. An older V9 client rejects
+this new reason rather than misreading a partial queue as fully observed. No
+persisted format changes; flag rollback restores the native queue.

@@ -265,6 +265,15 @@ const support = await getEmbeddedPostgresTestSupport();
         "Confidential foreign work",
       );
     });
+    it("keeps a native attention page boundary visible without inventing a full-queue count", async () => {
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true });
+      await db.insert(approvals).values(Array.from({ length: 26 }, (_, index) => ({ companyId, type: "request_board_approval", status: "pending" as const, payload: { title: `Bounded approval ${index}` } })));
+      const response = await request(app(member())).get(`/api/companies/${companyId}/experience`).expect(200);
+      expect(response.body.dependencies.find((dependency: { domain: string }) => dependency.domain === "attention")).toMatchObject({ state: "partial", reason: "more_items_available" });
+      expect(response.body.needsYou.length).toBeLessThanOrEqual(25);
+      expect(response.body).not.toHaveProperty("totalCount");
+      expect(response.body.needsYou.every((card: { kind: string; consequence: string; actions: { operation: string }[] }) => card.kind === "approval" && card.consequence.includes("remains pending") && card.actions.every(action => action.operation === "open"))).toBe(true);
+    });
     it("filters attention linked to foreign work and leaves queue materialization to its native owner", async () => {
       await instanceSettingsService(db).updateExperimental({
         experience_projection_v9: true,

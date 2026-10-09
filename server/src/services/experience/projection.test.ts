@@ -20,6 +20,28 @@ const card = {
   evidence: [],
 };
 describe("experience fan-in", () => {
+  it("preserves a native page boundary as partial coverage rather than a complete empty queue", async () => {
+    const model = await composeExperience({
+      companyId,
+      profile: "member",
+      readers: [
+        {
+          domain: "attention",
+          read: async () => ({
+            needsYou: [],
+            coverage: { state: "partial", reason: "more_items_available" },
+          }),
+        },
+      ],
+    });
+    expect(model.needsYou).toEqual([]);
+    expect(model.dependencies[0]).toMatchObject({
+      domain: "attention",
+      state: "partial",
+      reason: "more_items_available",
+    });
+    expect(model.dependencies[0]!.observedAt).toBeTruthy();
+  });
   it("retains healthy domains and truthfully reports failure without content in diagnostics", async () => {
     const model = await composeExperience({
       companyId,

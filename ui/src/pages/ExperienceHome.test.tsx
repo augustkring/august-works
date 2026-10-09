@@ -57,6 +57,25 @@ const model = {
   watch: [],
 };
 describe("Home state truth", () => {
+  it("does not describe an observed native page boundary as an outage or a complete empty queue", async () => {
+    vi.spyOn(experienceApi, "home").mockResolvedValue({
+      ...model,
+      dependencies: [
+        {
+          domain: "attention",
+          state: "partial",
+          observedAt: model.generatedAt,
+          reason: "more_items_available",
+        },
+      ],
+    });
+    await mount();
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain("Open the full queue"),
+    );
+    expect(container.textContent).not.toContain("temporarily unavailable");
+    expect(container.textContent).not.toContain("Nothing needs your attention");
+  });
   it("shows the meaningful empty state without empty dashboard sections", async () => {
     vi.spyOn(experienceApi, "home").mockResolvedValue(model);
     await mount();

@@ -1772,3 +1772,11 @@ new server. Representative execution, independent verification and governed
 native publication are incomplete and reject activation. Migration 0462 and the
 new server must precede enabled clients; older binaries cannot recover Hire
 steps, so rollback retains the recovery-capable service until reconciliation.
+
+The gated ordinary `/needs-you` and `/work` routes project current native work.
+Exact attention/decision links retain the existing resolver and `/decisions`
+retains the full queue/history. Needs You consequences state only native pending
+state or known blocked counts. A native page boundary is observed partial
+coverage, never a complete empty queue. Work shows bounded active/recent Tasks
+with native Project/Task/Routine drill-down. Both projections are read-only;
+full source composition/adapters and human journey acceptance remain incomplete.

@@ -174,10 +174,29 @@ export const experienceDependencySchema = z
     state: experienceFreshnessSchema,
     observedAt: z.iso.datetime().nullable(),
     reason: z
-      .enum(["timeout", "overload", "denied", "failure", "source_stale"])
+      .enum([
+        "timeout",
+        "overload",
+        "denied",
+        "failure",
+        "source_stale",
+        "more_items_available",
+      ])
       .nullable(),
   })
-  .strict();
+  .strict()
+  .superRefine((dependency, ctx) => {
+    if (
+      dependency.reason === "more_items_available" &&
+      (dependency.state !== "partial" || dependency.observedAt === null)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A native page boundary is observed partial coverage",
+        path: ["state"],
+      });
+    }
+  });
 export const experienceModelSchema = z
   .object({
     companyId: z.uuid(),

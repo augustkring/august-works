@@ -4,9 +4,27 @@ import {
   experienceModelSchema,
   experienceScreenContractSchema,
   experienceAdvancedLinkSchema,
+  experienceDependencySchema,
   resolveExperienceProfile,
 } from "./experience.js";
 const companyId = "10000000-0000-4000-8000-000000000001";
+it("requires a native page boundary to be an observed partial dependency", () => {
+  const dependency = {
+    domain: "attention",
+    state: "partial",
+    observedAt: "2026-10-09T00:00:00.000Z",
+    reason: "more_items_available",
+  };
+  expect(experienceDependencySchema.safeParse(dependency).success).toBe(true);
+  expect(
+    experienceDependencySchema.safeParse({ ...dependency, state: "fresh" })
+      .success,
+  ).toBe(false);
+  expect(
+    experienceDependencySchema.safeParse({ ...dependency, observedAt: null })
+      .success,
+  ).toBe(false);
+});
 const source = {
   companyId,
   domain: "task",

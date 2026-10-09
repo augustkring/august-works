@@ -1,0 +1,115 @@
+{
+  "screenId": "NEEDS-YOU",
+  "journeyId": "attention",
+  "routeOrSurface": "/needs-you",
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "customerOutcome": "Review current authorized items that need human action and open the exact native resolver.",
+  "entryConditions": [
+    "Effective progressive_shell_v9 and native experience projection prerequisites are enabled.",
+    "Current company/principal and native resource visibility are resolved."
+  ],
+  "exitConditions": [
+    "Review opens an exact attention/decision ID in the existing native resolver.",
+    "Explicit native action and current native authorization remain required; this projection performs no mutation.",
+    "The full native queue remains available for other items, history and existing filters."
+  ],
+  "content": {
+    "h1": "Needs You",
+    "supportingCopy": "Review current authorized items that need human action and open the exact native resolver.",
+    "customerTerms": ["Company", "Work", "Needs You", "Agent", "Feedback"],
+    "displayedState": [
+      "Title, why action is needed, known pending-state consequence, compact native evidence, action link and freshness in that order.",
+      "A bounded native attention page; more_items_available is partial coverage, never a complete empty queue.",
+      "No future business impact, full-queue count, effective authority or completed decision is inferred."
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Review",
+      "operation": "Open the exact native attention/decision resolver; no approval/reject/retry is performed by the projection."
+    },
+    "secondary": ["Open full queue", "Retry a failed current projection read"],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Native Attention source owners and current company/resource authorization"
+    ],
+    "canonicalWriteOperation": "None; existing native resolvers own every mutation.",
+    "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
+    "asyncWork": "Native reads/mutations only; projection work uses bounded admission and a 1500 ms total deadline. Unknown mutation outcomes retain the original request key for reconciliation.",
+    "receipt": "Current canonical attention/version/observation reference only."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Browser and product Back preserve session form state without recreating organizations, agents or runs.",
+    "cancelOrSaveExit": "No input is written to browser persistent storage; committed activation drafts remain in the native onboarding owner.",
+    "deepLink": "/needs-you",
+    "resume": "Re-resolve the current company and principal; exact attention/decision links use the native resolver."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Only current principal/company-authorized customer data",
+      "Feedback original text and visible messages only in private customer history"
+    ],
+    "dataCollected": [
+      "Only explicit fields and the published safe-context allowlist"
+    ],
+    "sensitiveFields": [
+      "Raw intent, company facts, feedback and results remain customer data"
+    ],
+    "loggingConstraints": "Exclude customer prose, prompts, result bodies, attachments and raw errors from generic analytics/activity details; native domain audit is purpose-separated."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Check pending-state consequence copy, source-specific card kind, exact resolver IDs and conservative consequence levels.",
+      "Verify partial native pagination, unavailable versus empty, principal switches and unchanged native decision/action owners."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

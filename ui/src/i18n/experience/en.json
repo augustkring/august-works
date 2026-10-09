@@ -413,5 +413,18 @@
       "run_workflow": "Open Workflows to run",
       "ask_august": "Ask August"
     }
-  }
+  },
+  "needsYouLoadFailed": "Needs You could not be loaded. Your current company access must be checked.",
+  "needsYouUnavailable": "The attention queue could not be checked. This does not mean that no action is needed.",
+  "needsYouEmpty": "Nothing needs your action in the current queue.",
+  "needsYouBounded": "This view shows some current items. Open the full queue to review other items and history.",
+  "openFullQueue": "Open full queue",
+  "workLoadFailed": "Work could not be loaded. Your current company access must be checked.",
+  "workUnavailable": "Current work could not be checked. This does not mean that the company has no work.",
+  "workEmptyView": "No current tasks appear in this view. Open Tasks or Projects to review other work.",
+  "workBounded": "This view shows active and recently completed tasks. Open Projects, Tasks or Routines to review other work and history.",
+  "workObjects": "Company work",
+  "projects": "Projects",
+  "tasks": "Tasks",
+  "routines": "Routines"
 }

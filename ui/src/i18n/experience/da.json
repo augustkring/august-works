@@ -413,5 +413,18 @@
       "run_workflow": "Åbn workflows til kørsel",
       "ask_august": "Spørg August"
     }
-  }
+  },
+  "needsYouLoadFailed": "Needs You kunne ikke indlæses. Din aktuelle adgang til virksomheden skal kontrolleres.",
+  "needsYouUnavailable": "Handlingskøen kunne ikke kontrolleres. Det betyder ikke, at der ikke er behov for handling.",
+  "needsYouEmpty": "Der er ingen handlinger til dig i den aktuelle kø.",
+  "needsYouBounded": "Denne visning viser et begrænset udvalg af aktuelt tilgængelige emner. Åbn hele køen for at se andre emner og historik.",
+  "openFullQueue": "Åbn hele køen",
+  "workLoadFailed": "Arbejde kunne ikke indlæses. Din aktuelle adgang til virksomheden skal kontrolleres.",
+  "workUnavailable": "Aktuelt arbejde kunne ikke kontrolleres. Det betyder ikke, at virksomheden ikke har arbejde.",
+  "workEmptyView": "Ingen aktuelle opgaver vises her. Åbn Opgaver eller Projekter for at se andet arbejde.",
+  "workBounded": "Denne visning viser et begrænset udvalg af aktive og nyligt afsluttede opgaver. Projekter, Opgaver og Rutiner beholder deres aktuelle rettigheder og historik.",
+  "workObjects": "Virksomhedens arbejde",
+  "projects": "Projekter",
+  "tasks": "Opgaver",
+  "routines": "Rutiner"
 }

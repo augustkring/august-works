@@ -49,11 +49,25 @@ export function ExperienceHome() {
           role="status"
           className="space-y-2 rounded-lg border border-border p-4"
         >
-          <p>{t("partial")}</p>
+          <p>
+            {t(
+              unavailable.every(
+                (d) =>
+                  d.state === "partial" && d.reason === "more_items_available",
+              )
+                ? "needsYouBounded"
+                : "partial",
+            )}
+          </p>
           <ul>
             {unavailable.map((d) => (
               <li key={d.domain}>
-                {t(`domain.${d.domain}`)} — {t("unavailable")}
+                {t(`domain.${d.domain}`)} —{" "}
+                {t(
+                  d.state === "partial" && d.reason === "more_items_available"
+                    ? "openFullQueue"
+                    : "unavailable",
+                )}
               </li>
             ))}
           </ul>

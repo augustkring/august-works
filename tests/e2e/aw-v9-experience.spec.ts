@@ -54,6 +54,48 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     );
     expect(projection.companyId).toBe(company.id);
     expect(projection.needsYou).toEqual([]);
+    await page.goto(`/${company.issuePrefix}/needs-you`);
+    await expect(
+      page.getByRole("heading", { name: "Needs You", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Nothing needs your action in the current queue.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page
+      .getByRole("link", { name: "Open full queue", exact: true })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(`/${company.issuePrefix}/decisions$`),
+    );
+    await page.goto(`/${company.issuePrefix}/work`);
+    await expect(
+      page.getByRole("heading", { name: "Work", exact: true }),
+    ).toBeVisible();
+    const workOwners = page.getByRole("navigation", {
+      name: "Company work",
+      exact: true,
+    });
+    for (const [label, path] of [
+      ["Projects", "projects"],
+      ["Tasks", "issues"],
+      ["Routines", "routines"],
+    ]) {
+      await expect(
+        workOwners.getByRole("link", { name: label, exact: true }),
+      ).toHaveAttribute("href", `/${company.issuePrefix}/${path}`);
+    }
+    await expect(
+      page.getByText(
+        "No current tasks appear in this view. Open Tasks or Projects to review other work.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await page.goto(`/${company.issuePrefix}/dashboard`);
+    await expect(
+      page.getByRole("heading", { name: "Home", exact: true }),
+    ).toBeVisible();
     const homeEndpoint = `**/api/companies/${company.id}/experience?*`;
     await page.route(homeEndpoint, (route) =>
       route.fulfill({ status: 503, json: { error: "Temporary test outage" } }),
@@ -204,6 +246,8 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
         await request.get(`${base}/experience?expectedUserId=local-board`)
       ).status(),
     ).toBe(404);
+    await page.goto(`/${company.issuePrefix}/work`);
+    await expect(page).toHaveURL(new RegExp(`/${company.issuePrefix}/issues$`));
     await page.goto(`/${company.issuePrefix}/my-feedback`);
     await expect(
       page.getByRole("heading", { name: "My feedback", exact: true }),

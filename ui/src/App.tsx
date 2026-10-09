@@ -99,6 +99,8 @@ import { AuditHub } from "./pages/audit/AuditHub";
 import { Inbox } from "./pages/Inbox";
 import { WhatNeedsMe } from "./pages/WhatNeedsMe";
 import { DashboardEntry } from "./pages/ExperienceHome";
+import { NeedsYouEntry } from "./pages/ExperienceNeedsYou";
+import { WorkEntry } from "./pages/ExperienceWork";
 import { ExperienceInsights } from "./pages/ExperienceInsights";
 import { MyFeedback } from "./pages/MyFeedback";
 import { FeedbackTriage } from "./pages/FeedbackTriage";
@@ -206,11 +208,11 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
     <>
       <Route index element={<Navigate to="dashboard" replace />} />
       <Route path="overview" element={<Navigate to="/dashboard" replace />} />
-      <Route path="work" element={<Navigate to="/issues" replace />} />
+      <Route path="work" element={<WorkEntry />} />
       <Route path="connections" element={<Navigate to="/apps" replace />} />
       <Route path="governance" element={<Governance />} />
       <Route path="dashboard" element={<DashboardEntry />} />
-      <Route path="needs-you" element={<WhatNeedsMe />} />
+      <Route path="needs-you" element={<NeedsYouEntry />} />
       <Route path="insights" element={<ExperienceInsights />} />
       <Route path="advanced" element={<ExperienceAdvanced />} />
       <Route path="my-feedback" element={<MyFeedback />} />

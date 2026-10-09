@@ -31,6 +31,7 @@ import { issueService } from "../issues.js";
 import { forbidden, notFound } from "../../errors.js";
 import { composeExperience } from "./projection.js";
 import { withExperienceAdmission } from "./admission.js";
+import { attentionExperienceCard } from "./attention-card.js";
 
 export function experienceService(db: Db) {
   const auth = authorizationService(db);
@@ -430,46 +431,8 @@ export function experienceService(db: Db) {
                     )
                       visible.push(item);
                   return {
-                    needsYou: visible.map((item) => {
-                      const source = {
-                        domain: "attention" as const,
-                        companyId,
-                        resourceId: item.id,
-                        version: item.updatedAt,
-                        observedAt: feed.generatedAt,
-                      };
-                      return {
-                        id: item.id,
-                        kind:
-                          item.sourceKind === "approval"
-                            ? "approval"
-                            : "decision",
-                        title: item.subject.title ?? item.whyNow,
-                        whyYou: item.whyNow,
-                        consequence: null,
-                        source,
-                        freshness: "fresh",
-                        evidence: [
-                          item.subject.status ?? "Current attention item",
-                        ],
-                        actions: [
-                          {
-                            id: "open",
-                            label: "Review",
-                            labelKey: "review",
-                            operation: "open",
-                            href:
-                              item.sourceKind === "decision"
-                                ? `/needs-you?decisionId=${encodeURIComponent(item.subject.id)}`
-                                : `/needs-you?attentionId=${encodeURIComponent(item.id)}`,
-                            criticality:
-                              item.severity === "critical" ? "C3" : "C2",
-                            source,
-                            requiresCurrentAuthorization: true,
-                          },
-                        ],
-                      };
-                    }) as ExperienceCard[],
+                    ...(feed.nextCursor ? { coverage: { state: "partial" as const, reason: "more_items_available" as const } } : {}),
+                    needsYou: visible.map((item) => attentionExperienceCard(item, feed.generatedAt)),
                   };
                 },
               },

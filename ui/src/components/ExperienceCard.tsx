@@ -2,14 +2,21 @@ import type { ExperienceCard as CardModel } from "@paperclipai/shared";
 import { Link } from "@/lib/router";
 import { useTranslation } from "react-i18next";
 /** Text and typed links only; models cannot supply HTML, handlers or arbitrary React. */
-export function ExperienceCard({ card }: { card: CardModel }) {
+export function ExperienceCard({
+  card,
+  headingLevel = 3,
+}: {
+  card: CardModel;
+  headingLevel?: 2 | 3;
+}) {
   const { t } = useTranslation("experience");
+  const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
     <article
       className="space-y-2 rounded-lg border border-border bg-card p-4"
       aria-label={card.title}
     >
-      <h3 className="font-medium text-foreground">{card.title}</h3>
+      <Heading className="font-medium text-foreground">{card.title}</Heading>
       {card.whyYou && <p className="text-sm text-foreground">{card.whyYou}</p>}
       {card.consequence && (
         <p className="text-sm text-muted-foreground">{card.consequence}</p>

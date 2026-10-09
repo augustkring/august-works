@@ -675,9 +675,16 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceNeedsYou.tsx",
+        "ui/src/pages/WhatNeedsMe.tsx",
+        "ui/src/components/ExperienceCard.tsx",
+        "server/src/services/experience/attention-card.ts",
+        "server/src/services/experience/service.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/needs-you.json"
     },
     {
       "screenId": "WORK",
@@ -690,9 +697,14 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceWork.tsx",
+        "ui/src/components/ExperienceCard.tsx",
+        "server/src/services/experience/service.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/work.json"
     },
     {
       "screenId": "APPS",
@@ -867,9 +879,14 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/components/ExperienceCard.tsx",
+        "server/src/services/experience/attention-card.ts",
+        "ui/src/pages/WhatNeedsMe.tsx"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/approval-card.json"
     },
     {
       "screenId": "SETTINGS-GENERAL",
