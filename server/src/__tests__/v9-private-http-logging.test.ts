@@ -14,6 +14,10 @@ describe("V9 private HTTP purpose", () => {
   it.each([
     [
       "POST",
+      "/api/companies/private-company/workflow-runs/private-record/experience/stop?expectedUserId=private-principal",
+    ],
+    [
+      "POST",
       "/api/companies/private-company/workflows/private-record/experience/launch?expectedUserId=private-principal",
     ],
     [

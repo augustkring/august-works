@@ -29,6 +29,8 @@ import {
   workflowOperationsSchema,
   workflowLaunchCommandSchema,
   workflowLaunchReceiptSchema,
+  workflowStopCommandSchema,
+  workflowStopReceiptSchema,
 } from "@paperclipai/shared";
 
 /** Current mounted contracts. Listing an operation confers no rollout or execution qualification. */
@@ -86,6 +88,9 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  { ...write(`${company}/workflow-runs/{runId}/experience/stop`,
+    "Request native cancellation of the exact reviewed run with an original-request receipt; no completed stop or reversal is claimed",
+    workflowStopCommandSchema, workflowStopReceiptSchema), query: z.strictObject({ expectedUserId: z.string().min(1).max(300) }) },
   { ...write(`${company}/workflows/{workflowId}/experience/launch`,
     "Admit a version-bound native internal run with an immutable original-request receipt; no completion or independent verification is claimed",
     workflowLaunchCommandSchema, workflowLaunchReceiptSchema), query: z.strictObject({ expectedUserId: z.string().min(1).max(300) }) },

@@ -32,11 +32,40 @@ import {
   workflowOperationsSchema,
   workflowLaunchCommandSchema,
   workflowLaunchReceiptSchema,
+  workflowStopCommandSchema,
+  workflowStopReceiptSchema,
+  type WorkflowStopCommand,
   type WorkflowLaunchCommand,
   type WorkflowLifecycleCommand,
 } from "@paperclipai/shared";
 
 export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
+  stop: async (
+    companyId: string,
+    principal: string,
+    workflowId: string,
+    runId: string,
+    raw: WorkflowStopCommand,
+  ) => {
+    const command = workflowStopCommandSchema.parse(raw);
+    if (command.expectedWorkflowId !== workflowId)
+      throw new Error("Workflow stop request context changed");
+    const receipt = workflowStopReceiptSchema.parse(
+      await api.post(
+        `/companies/${companyId}/workflow-runs/${runId}/experience/stop?expectedUserId=${encodeURIComponent(principal)}`,
+        command,
+      ),
+    );
+    if (
+      receipt.companyId !== companyId ||
+      receipt.workflowId !== workflowId ||
+      receipt.runId !== runId ||
+      receipt.revisionId !== command.expectedRevisionId ||
+      receipt.requestId !== command.requestId
+    )
+      throw new Error("Workflow stop receipt context changed");
+    return receipt;
+  },
   launch: async (
     companyId: string,
     principal: string,

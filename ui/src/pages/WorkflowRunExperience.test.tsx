@@ -33,6 +33,8 @@ const data: View = {
   revisionNumber: 2,
   revisionState: "superseded",
   status: "waiting",
+  updatedAt: "2026-10-09T00:00:00.000Z",
+  canRequestStop: false,
   trace: {
     state: "available",
     attempts: [

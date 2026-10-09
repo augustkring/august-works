@@ -3,7 +3,7 @@
   "journeyId": "workflow",
   "routeOrSurface": "/workflows/:workflowId/runs/:runId",
   "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
-  "customerOutcome": "Inspect the recorded native run and exact historical revision without exposing private payloads or treating recorded completion as independent verification.",
+  "customerOutcome": "Inspect the recorded native run and exact historical revision without exposing private payloads or treating recorded completion as independent verification. Request cancellation of the exact reviewed run after confirming retained completed effects; reconcile the original admission separately from recorded stop completion.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
     "Effective feature admission is required for new work; native membership and resource authority remain necessary"
@@ -28,10 +28,23 @@
       "Current native wait kinds on waiting attempts; declared approval checkpoint is not an approval decision",
       "Private inputs, outputs, errors, actor IDs and hidden reasoning are omitted",
       "Oversized, duplicate or unbound history is unavailable; no attempt history is distinct from successful execution",
-      "Completed native condition/switch checkpoints select a next-step name from the exact historical graph. Private keys and raw outputs are never returned; selection does not prove the next step ran. Recovery, missing/deleted/ambiguous checkpoints remain not recorded."
+      "Completed native condition/switch checkpoints select a next-step name from the exact historical graph. Private keys and raw outputs are never returned; selection does not prove the next step ran. Recovery, missing/deleted/ambiguous checkpoints remain not recorded.",
+      "Current native updatedAt and effective workflows:run capability are bound to the exact company/workflow/run view.",
+      "Cancellation-requested receipt is historical admission; actual cancelling/cancelled status and unresolved outcomes remain separate."
     ]
   },
-  "inputs": [],
+  "inputs": [
+    {
+      "id": "acknowledgeCompletedEffectsRemain",
+      "label": "Completed actions remain",
+      "dataType": "boolean",
+      "required": true,
+      "default": "Unchecked",
+      "help": "Stopping may take time; completed effects remain and unknown outcomes need reconciliation.",
+      "validation": "Must be explicitly checked before each confirmation.",
+      "autofillOrPrefill": "Never prechecked or inferred from a prior acknowledgement."
+    }
+  ],
   "actions": {
     "primary": {
       "label": "Refresh run",
@@ -39,9 +52,12 @@
     },
     "secondary": [
       "Return to native run history",
-      "Open native run controls in Advanced"
+      "Open native run controls in Advanced",
+      "Retry the identical original stop command after a private authority recheck, including after native terminal status."
     ],
-    "destructiveOrIrreversible": []
+    "destructiveOrIrreversible": [
+      "Stop the exact reviewed run after explicit confirmation; already completed effects are retained and unknown outcomes need reconciliation."
+    ]
   },
   "systemWork": {
     "canonicalReadDomains": [
@@ -49,17 +65,17 @@
       "Exact native historical workflow revision and immutable node registry descriptors",
       "Current human identity, company membership and workflows:read"
     ],
-    "canonicalWriteOperation": "None; native executor and existing revision owner retain all state and effects.",
+    "canonicalWriteOperation": "Existing native workflow executor cancellation owner, with the exact command and requested receipt recorded atomically in the native activity ledger.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
     "asyncWork": "Native privacy-checked run and exact revision reads. Projection bounds: 100 nodes, 200 graph edges, 500 attempts and 200 waits. Native read-owner database latency and payload checks remain inherited.",
-    "receipt": "Only the exact native run/revision identity and recorded state. No independent verification, approval, safe retry, test qualification or current-active receipt is invented."
+    "receipt": "Strict company/workflow/run/revision/request-bound cancellation_requested admission. Current run status is separate; no completed-stop, reversal, safe retry or provider-termination receipt is invented."
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
     "empty": "No recorded step attempts; not a successful or verified result.",
     "partial": "Whole trace unavailable for oversized, duplicate, foreign or unbound history; no silent truncation.",
     "stale": "Hide retained private data during background rechecks and live authority/privacy/version invalidations; a new query epoch rejects late prior responses.",
-    "validation_error": "This read-only surface accepts no workflow inputs.",
+    "validation_error": "Consequence acknowledgement is required. A canonical native pre-effect version/state conflict requires a fresh current review; unknown replies retain the original tuple.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
     "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
     "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
@@ -67,7 +83,7 @@
   },
   "navigation": {
     "back": "Return to the native workflow run list.",
-    "cancelOrSaveExit": "No writes or browser-persisted inputs. Leave through Run history; native Advanced controls retain canonical authority.",
+    "cancelOrSaveExit": "Close confirmation without an effect before submission. An unknown submitted command remains in the mounted component; route/principal/flag teardown reconciliation is still open.",
     "deepLink": "/workflows/:workflowId/runs/:runId",
     "resume": "Re-read current company/principal/run/revision bindings and native privacy/grants. Shell rollback restores native run controls; /advanced retains a direct native route."
   },
@@ -92,7 +108,9 @@
       "Native run/revision identity and recorded status",
       "Allowlisted attempt metadata and current waiting kinds"
     ],
-    "dataCollected": [],
+    "dataCollected": [
+      "Strict reviewed workflow/revision/timestamp/request tuple and explicit consequence acknowledgement; no free-text reason or private result payload."
+    ],
     "sensitiveFields": [
       "Run/step inputs, outputs, errors, credentials, actor assignments, approval resolutions, reference IDs, wait tokens and hidden reasoning remain excluded"
     ],
@@ -110,9 +128,10 @@
   },
   "acceptance": {
     "functional": [
-      "Verify exact historical revision, native attempts, retry numbers, wait association, no mutations and empty/unavailable separation.",
+      "Verify exact historical revision, native attempts, retry numbers, wait association and empty/unavailable separation. Stop remains an explicit separately confirmed mutation.",
       "Complete selected-agent/tool identity, independently verified outcome/error and branch-path reconstruction remain open; this metadata view does not fulfill all §81.9 requirements.",
-      "Verify true/false and switch checkpoints, no destination-attempt inference, private switch-key exclusion, deletion, recovery, ambiguous edges and historical graph identity."
+      "Verify true/false and switch checkpoints, no destination-attempt inference, private switch-key exclusion, deletion, recovery, ambiguous edges and historical graph identity.",
+      "Verify native concurrent exact replay, stale refusal, real wait/child cleanup, retained completed steps, current authority loss, lost replies and cancellation-only recovery after rollout rollback."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

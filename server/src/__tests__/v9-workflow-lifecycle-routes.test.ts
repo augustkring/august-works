@@ -9,6 +9,7 @@ import {
   companyMemberships,
   createDb,
   instanceSettings,
+  instanceUserRoles,
   pipelineStages,
   pipelines,
   principalPermissionGrants,
@@ -25,13 +26,17 @@ import type {
   WorkflowDetail,
   WorkflowLifecycleCommand,
   WorkflowLaunchCommand,
+  WorkflowStopCommand,
 } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
-import { enqueueWorkflowRunInTransaction } from "../services/workflows/workflow-executor.js";
+import {
+  enqueueWorkflowRunInTransaction,
+  workflowExecutorService,
+} from "../services/workflows/workflow-executor.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { workflowRoutes } from "../routes/workflows.js";
 import { errorHandler } from "../middleware/error-handler.js";
@@ -66,6 +71,7 @@ describePg("V9 native workflow lifecycle", () => {
     await db.delete(workflowRuns);
     await db.delete(workflows);
     await db.delete(principalPermissionGrants);
+    await db.delete(instanceUserRoles);
     await db.delete(companyMemberships);
     await db.delete(companies);
     await db.delete(instanceSettings);
@@ -173,6 +179,594 @@ describePg("V9 native workflow lifecycle", () => {
   }
   const launchPath = (detail: WorkflowDetail, principal = "local-board") =>
     `/api/companies/${detail.companyId}/workflows/${detail.id}/experience/launch?expectedUserId=${principal}`;
+  async function queue(detail: WorkflowDetail) {
+    return db.transaction((tx) =>
+      enqueueWorkflowRunInTransaction(tx as unknown as typeof db, {
+        companyId: detail.companyId,
+        workflowId: detail.id,
+        revisionId: detail.publishedRevisionId!,
+        nodeId: "start",
+        source: "manual",
+        triggerPayload: {},
+        responsibleUserId: null,
+        idempotencyKey: randomUUID(),
+        correlationId: randomUUID(),
+        actor: native,
+      }),
+    );
+  }
+  function stopCommand(
+    detail: WorkflowDetail,
+    run: Pick<typeof workflowRuns.$inferSelect, "workflowRevisionId" | "updatedAt">,
+  ): WorkflowStopCommand {
+    return {
+      requestId: randomUUID(),
+      expectedWorkflowId: detail.id,
+      expectedRevisionId: run.workflowRevisionId,
+      expectedUpdatedAt: run.updatedAt.toISOString(),
+      acknowledgeCompletedEffectsRemain: true,
+    };
+  }
+  const stopPath = (
+    detail: WorkflowDetail,
+    runId: string,
+    principal = "local-board",
+  ) =>
+    `/api/companies/${detail.companyId}/workflow-runs/${runId}/experience/stop?expectedUserId=${principal}`;
+  const reviewPath = (
+    detail: WorkflowDetail,
+    runId: string,
+    principal = "local-board",
+  ) =>
+    `/api/companies/${detail.companyId}/workflow-runs/${runId}/experience?expectedUserId=${principal}`;
+  async function stops() {
+    return db
+      .select()
+      .from(activityLog)
+      .where(eq(activityLog.action, "workflow.customer_stop_admitted"));
+  }
+  it("serializes identical stop requests, retaining one original admission after cancellation and Pause", async () => {
+    const detail = await seed(),
+      queued = await queue(detail),
+      input = stopCommand(detail, queued.run);
+    const replies = await Promise.all([
+      http().post(stopPath(detail, queued.run.id)).send(input),
+      http().post(stopPath(detail, queued.run.id)).send(input),
+    ]);
+    expect(replies.map((reply) => reply.status)).toEqual([200, 200]);
+    expect(replies[0].body).toEqual(replies[1].body);
+    expect(replies[0].body).toEqual({
+      companyId: detail.companyId,
+      workflowId: detail.id,
+      runId: queued.run.id,
+      revisionId: queued.run.workflowRevisionId,
+      requestId: input.requestId,
+      disposition: "cancellation_requested",
+    });
+    expect(await stops()).toHaveLength(1);
+    expect(
+      (
+        await workflowExecutorService(db).getRun(
+          detail.companyId,
+          queued.run.id,
+        )
+      )?.run.status,
+    ).toBe("cancelled");
+    const svc = workflowService(db);
+    const changed = await svc.updateDraft(
+      detail.companyId,
+      detail.id,
+      {
+        expectedRevisionId: detail.draftRevisionId!,
+        graph: {
+          ...detail.publishedRevision!.graph,
+          nodes: detail.publishedRevision!.graph.nodes.map((node) => ({
+            ...node,
+            name: "New publication",
+          })),
+        },
+      },
+      native,
+    );
+    const newer = await svc.publish(
+      detail.companyId,
+      detail.id,
+      {
+        expectedDraftRevisionId: changed.draftRevisionId!,
+        expectedPublishedRevisionId: detail.publishedRevisionId,
+      },
+      native,
+    );
+    await http().post(path(newer)).send(command(newer, "pause")).expect(200);
+    const replay = await http()
+      .post(stopPath(detail, queued.run.id))
+      .send(input)
+      .expect(200);
+    expect(replay.body).toEqual(replies[0].body);
+    await http()
+      .post(stopPath(detail, queued.run.id))
+      .send({ ...input, requestId: randomUUID() })
+      .expect(409);
+    expect(await stops()).toHaveLength(1);
+    expect(await db.select().from(workflowRuns)).toHaveLength(1);
+  });
+  it("refuses stale review, wrong revision and expanded commands without changing native work", async () => {
+    const detail = await seed(),
+      queued = await queue(detail),
+      input = stopCommand(detail, queued.run);
+    for (const override of [
+      { expectedUpdatedAt: "2026-01-01T00:00:00.000Z" },
+      { expectedRevisionId: randomUUID() },
+    ]) {
+      const rejected = await http()
+        .post(stopPath(detail, queued.run.id))
+        .send({ ...input, ...override })
+        .expect(409);
+      expect(rejected.body.details.code).toBe("workflow_stop_conflict");
+    }
+    for (const override of [
+      { acknowledgeCompletedEffectsRemain: false },
+      { killAllAgents: true },
+    ])
+      await http()
+        .post(stopPath(detail, queued.run.id))
+        .send({ ...input, ...override })
+        .expect(400);
+    expect(await stops()).toHaveLength(0);
+    expect((await db.select().from(workflowRuns))[0].status).toBe("queued");
+    await http().post(stopPath(detail, queued.run.id)).send(input).expect(200);
+    const changed = await http()
+      .post(stopPath(detail, queued.run.id))
+      .send({ ...input, expectedUpdatedAt: "2026-01-01T00:00:00.000Z" })
+      .expect(409);
+    expect(changed.body.details.code).toBe("workflow_stop_request_conflict");
+    expect(await stops()).toHaveLength(1);
+  });
+  it("cancels a real native wait and retains completed step history and the published revision", async () => {
+    let detail = await seed();
+    const svc = workflowService(db),
+      base = detail.publishedRevision!.graph;
+    const saved = await svc.updateDraft(
+      detail.companyId,
+      detail.id,
+      {
+        expectedRevisionId: detail.draftRevisionId!,
+        graph: {
+          ...base,
+          nodes: [
+            ...base.nodes,
+            {
+              id: "delay",
+              name: "Wait",
+              type: "core.wait",
+              config: { durationSeconds: 30 },
+              position: { x: 0, y: 0 },
+            },
+          ],
+          edges: [{ id: "start-delay", source: "start", target: "delay" }],
+        },
+      },
+      native,
+    );
+    detail = await svc.publish(
+      detail.companyId,
+      detail.id,
+      {
+        expectedDraftRevisionId: saved.draftRevisionId!,
+        expectedPublishedRevisionId: detail.publishedRevisionId,
+      },
+      native,
+    );
+    const executor = workflowExecutorService(db),
+      waiting = await executor.startManualRun(
+        detail.companyId,
+        detail.id,
+        { input: {}, revisionId: detail.publishedRevisionId! },
+        native,
+        randomUUID(),
+      );
+    expect(waiting.run.status).toBe("waiting");
+    expect(waiting.waits).toMatchObject([{ status: "active", kind: "delay" }]);
+    const input = stopCommand(detail, waiting.run);
+    await http().post(stopPath(detail, waiting.run.id)).send(input).expect(200);
+    const stopped = await executor.getRun(detail.companyId, waiting.run.id);
+    expect(stopped?.run.status).toBe("cancelled");
+    expect(stopped?.steps.find((step) => step.nodeId === "start")?.status).toBe(
+      "succeeded",
+    );
+    expect(stopped?.steps.find((step) => step.nodeId === "delay")?.status).toBe(
+      "cancelled",
+    );
+    expect(stopped?.waits).toMatchObject([{ status: "cancelled" }]);
+    expect((await current(detail)).publishedRevisionId).toBe(
+      detail.publishedRevisionId,
+    );
+    const reviewed = await http()
+      .get(reviewPath(detail, waiting.run.id))
+      .expect(200);
+    expect(reviewed.body).toMatchObject({
+      status: "cancelled",
+      canRequestStop: true,
+    });
+    expect(reviewed.headers["cache-control"]).toBe("private, no-store");
+  });
+  it("uses native child cancellation and retains both historical run identities", async () => {
+    let parent = await seed();
+    const svc = workflowService(db);
+    const childDraft = await svc.create(
+      parent.companyId,
+      { name: "Child wait" },
+      native,
+    );
+    const childSaved = await svc.updateDraft(
+      parent.companyId,
+      childDraft.id,
+      {
+        expectedRevisionId: childDraft.draftRevisionId!,
+        graph: {
+          version: 1,
+          variables: [],
+          settings: { totalDeadlineSeconds: 60 },
+          nodes: [
+            {
+              id: "start",
+              name: "Child start",
+              type: "core.manual_trigger",
+              config: {},
+              position: { x: 0, y: 0 },
+            },
+            {
+              id: "delay",
+              name: "Child wait",
+              type: "core.wait",
+              config: { durationSeconds: 30 },
+              position: { x: 0, y: 0 },
+            },
+          ],
+          edges: [{ id: "start-delay", source: "start", target: "delay" }],
+        },
+      },
+      native,
+    );
+    const child = await svc.publish(
+      parent.companyId,
+      childDraft.id,
+      {
+        expectedDraftRevisionId: childSaved.draftRevisionId!,
+        expectedPublishedRevisionId: null,
+      },
+      native,
+    );
+    const parentSaved = await svc.updateDraft(
+      parent.companyId,
+      parent.id,
+      {
+        expectedRevisionId: parent.draftRevisionId!,
+        graph: {
+          ...parent.publishedRevision!.graph,
+          nodes: [
+            ...parent.publishedRevision!.graph.nodes,
+            {
+              id: "child",
+              name: "Invoke child",
+              type: "core.subworkflow",
+              config: {
+                workflowId: child.id,
+                revisionId: child.publishedRevisionId,
+                timeoutSeconds: 60,
+                cancellationPolicy: "propagate",
+              },
+              position: { x: 0, y: 0 },
+            },
+          ],
+          edges: [{ id: "start-child", source: "start", target: "child" }],
+        },
+      },
+      native,
+    );
+    parent = await svc.publish(
+      parent.companyId,
+      parent.id,
+      {
+        expectedDraftRevisionId: parentSaved.draftRevisionId!,
+        expectedPublishedRevisionId: parent.publishedRevisionId,
+      },
+      native,
+    );
+    const executor = workflowExecutorService(db),
+      waiting = await executor.startManualRun(
+        parent.companyId,
+        parent.id,
+        { input: {} },
+        native,
+        randomUUID(),
+      );
+    expect(waiting.run.status).toBe("waiting");
+    const childId = waiting.steps.find(
+      (step) => step.nodeId === "child",
+    )!.childWorkflowRunId!;
+    expect(childId).toBeTruthy();
+    expect((await executor.getRun(parent.companyId, childId))?.run.status).toBe(
+      "waiting",
+    );
+    const input = stopCommand(parent, waiting.run);
+    await http().post(stopPath(parent, waiting.run.id)).send(input).expect(200);
+    const stoppedParent = await executor.getRun(
+        parent.companyId,
+        waiting.run.id,
+      ),
+      stoppedChild = await executor.getRun(parent.companyId, childId);
+    expect(stoppedParent?.run.status).toBe("cancelled");
+    expect(stoppedChild?.run.status).toBe("cancelled");
+    expect(stoppedChild?.run.parentWorkflowRunId).toBe(waiting.run.id);
+    expect(
+      stoppedChild?.steps.find((step) => step.nodeId === "start")?.status,
+    ).toBe("succeeded");
+    expect(stoppedChild?.waits).toMatchObject([{ status: "cancelled" }]);
+    expect(await db.select().from(workflowRuns)).toHaveLength(2);
+    expect(await stops()).toHaveLength(1);
+    await http().post(stopPath(parent, waiting.run.id)).send(input).expect(200);
+    expect(await stops()).toHaveLength(1);
+  });
+  it("rechecks current run grants and membership before original stop reconciliation", async () => {
+    const detail = await seed(),
+      queued = await queue(detail),
+      input = stopCommand(detail, queued.run),
+      userId = randomUUID();
+    await db.insert(companyMemberships).values({
+      companyId: detail.companyId,
+      principalType: "user",
+      principalId: userId,
+      membershipRole: "operator",
+      status: "active",
+    });
+    await db.insert(principalPermissionGrants).values({
+      companyId: detail.companyId,
+      principalType: "user",
+      principalId: userId,
+      permissionKey: "workflows:read",
+    });
+    const actor: Express.Request["actor"] = {
+      type: "board",
+      source: "session",
+      userId,
+      companyIds: [detail.companyId],
+      memberships: [
+        {
+          companyId: detail.companyId,
+          membershipRole: "operator",
+          status: "active",
+        },
+      ],
+      isInstanceAdmin: false,
+    };
+    expect(
+      (
+        await http(actor)
+          .get(reviewPath(detail, queued.run.id, userId))
+          .expect(200)
+      ).body.canRequestStop,
+    ).toBe(false);
+    await http(actor)
+      .post(stopPath(detail, queued.run.id, userId))
+      .send(input)
+      .expect(403);
+    await db.insert(principalPermissionGrants).values({
+      companyId: detail.companyId,
+      principalType: "user",
+      principalId: userId,
+      permissionKey: "workflows:run",
+    });
+    await db
+      .update(companyMemberships)
+      .set({ membershipRole: "viewer" })
+      .where(eq(companyMemberships.principalId, userId));
+    expect(
+      (
+        await http(actor)
+          .get(reviewPath(detail, queued.run.id, userId))
+          .expect(200)
+      ).body.canRequestStop,
+    ).toBe(false);
+    await http(actor)
+      .post(stopPath(detail, queued.run.id, userId))
+      .send(input)
+      .expect(403);
+    expect(await stops()).toHaveLength(0);
+    await db
+      .update(companyMemberships)
+      .set({ membershipRole: "operator" })
+      .where(eq(companyMemberships.principalId, userId));
+    const admitted = await http(actor)
+      .post(stopPath(detail, queued.run.id, userId))
+      .send(input);
+    expect(admitted.status, JSON.stringify(admitted.body)).toBe(200);
+    await db
+      .update(companyMemberships)
+      .set({ membershipRole: "viewer" })
+      .where(eq(companyMemberships.principalId, userId));
+    await http(actor)
+      .post(stopPath(detail, queued.run.id, userId))
+      .send(input)
+      .expect(403);
+    await db
+      .update(companyMemberships)
+      .set({ membershipRole: "operator" })
+      .where(eq(companyMemberships.principalId, userId));
+    await db
+      .delete(principalPermissionGrants)
+      .where(
+        and(
+          eq(principalPermissionGrants.principalId, userId),
+          eq(principalPermissionGrants.permissionKey, "workflows:run"),
+        ),
+      );
+    await http(actor)
+      .post(stopPath(detail, queued.run.id, userId))
+      .send(input)
+      .expect(403);
+    await db.insert(principalPermissionGrants).values({
+      companyId: detail.companyId,
+      principalType: "user",
+      principalId: userId,
+      permissionKey: "workflows:run",
+    });
+    await db
+      .delete(companyMemberships)
+      .where(eq(companyMemberships.principalId, userId));
+    await http(actor)
+      .post(stopPath(detail, queued.run.id, userId))
+      .send(input)
+      .expect(403);
+    expect(await stops()).toHaveLength(1);
+  });
+  it("rechecks actual native admin role evidence instead of a retained admin snapshot", async () => {
+    const detail = await seed(),
+      queued = await queue(detail),
+      input = stopCommand(detail, queued.run),
+      userId = randomUUID();
+    await db
+      .insert(companyMemberships)
+      .values({
+        companyId: detail.companyId,
+        principalType: "user",
+        principalId: userId,
+        membershipRole: "viewer",
+        status: "active",
+      });
+    await db.insert(principalPermissionGrants).values(
+      ["workflows:read", "workflows:run"].map((permissionKey) => ({
+        companyId: detail.companyId,
+        principalType: "user",
+        principalId: userId,
+        permissionKey,
+      })),
+    );
+    const actor: Express.Request["actor"] = {
+      type: "board",
+      source: "session",
+      userId,
+      isInstanceAdmin: true,
+      companyIds: [detail.companyId],
+      memberships: [
+        {
+          companyId: detail.companyId,
+          membershipRole: "viewer",
+          status: "active",
+        },
+      ],
+    };
+    expect(
+      (
+        await http(actor)
+          .get(reviewPath(detail, queued.run.id, userId))
+          .expect(200)
+      ).body.canRequestStop,
+    ).toBe(false);
+    await http(actor)
+      .post(stopPath(detail, queued.run.id, userId))
+      .send(input)
+      .expect(403);
+    expect(await stops()).toHaveLength(0);
+    await db
+      .insert(instanceUserRoles)
+      .values({ userId, role: "instance_admin" });
+    expect(
+      (
+        await http(actor)
+          .get(reviewPath(detail, queued.run.id, userId))
+          .expect(200)
+      ).body.canRequestStop,
+    ).toBe(true);
+    await http(actor)
+      .post(stopPath(detail, queued.run.id, userId))
+      .send(input)
+      .expect(200);
+    await db
+      .delete(instanceUserRoles)
+      .where(eq(instanceUserRoles.userId, userId));
+    expect(
+      (
+        await http(actor)
+          .get(reviewPath(detail, queued.run.id, userId))
+          .expect(200)
+      ).body.canRequestStop,
+    ).toBe(false);
+    await http(actor)
+      .post(stopPath(detail, queued.run.id, userId))
+      .send(input)
+      .expect(403);
+    expect(await stops()).toHaveLength(1);
+  });
+  it("denies changed accounts, foreign runs, agents and disabled rollout before admission", async () => {
+    const detail = await seed(),
+      queued = await queue(detail),
+      other = await seed(),
+      input = stopCommand(detail, queued.run);
+    await http()
+      .post(stopPath(detail, queued.run.id, "other-account"))
+      .send(input)
+      .expect(409);
+    await http()
+      .post(stopPath(other, queued.run.id))
+      .send({ ...input, expectedWorkflowId: other.id })
+      .expect(404);
+    await http({
+      type: "agent",
+      source: "agent_key",
+      agentId: randomUUID(),
+      companyId: detail.companyId,
+      isInstanceAdmin: false,
+    })
+      .post(stopPath(detail, queued.run.id))
+      .send(input)
+      .expect(403);
+    await instanceSettingsService(db).updateExperimental({
+      progressive_shell_v9: false,
+    });
+    expect(
+      (await http().get(reviewPath(detail, queued.run.id)).expect(200)).body
+        .canRequestStop,
+    ).toBe(false);
+    await http().post(stopPath(detail, queued.run.id)).send(input).expect(404);
+    expect(await stops()).toHaveLength(0);
+    expect((await db.select().from(workflowRuns))[0].status).toBe("queued");
+  });
+  it("drains durable native cancellation after rollback without advancing queued work", async () => {
+    const detail = await seed(),
+      queued = await queue(detail),
+      interrupted = await queue(detail);
+    // Explicit crash-recovery software fixture: native admission already exists,
+    // but the process has exited with its durable cancellation fence retained.
+    await db
+      .update(workflowRuns)
+      .set({ status: "cancelling" })
+      .where(eq(workflowRuns.id, interrupted.run.id));
+    await db
+      .update(workflowStepRuns)
+      .set({ status: "cancelled", finishedAt: new Date() })
+      .where(eq(workflowStepRuns.workflowRunId, interrupted.run.id));
+    await instanceSettingsService(db).updateExperimental({
+      enableWorkflowsV1: false,
+      progressive_shell_v9: false,
+    });
+    const recovered = await workflowExecutorService(db).recoverExpiredRuns(
+      20,
+      new Date(Date.now() + 120_000),
+      { cancellationOnly: true },
+    );
+    expect(recovered).toMatchObject({
+      checked: 1,
+      recovered: 1,
+      failedRunIds: [],
+    });
+    const rows = await db.select().from(workflowRuns);
+    expect(rows.find((run) => run.id === interrupted.run.id)?.status).toBe(
+      "cancelled",
+    );
+    expect(rows.find((run) => run.id === queued.run.id)?.status).toBe("queued");
+    expect(await stops()).toHaveLength(0);
+  });
   it("inspects the real executor's selected branch using the exact historical revision after a newer publication", async () => {
     let detail = await seed();
     const svc = workflowService(db);

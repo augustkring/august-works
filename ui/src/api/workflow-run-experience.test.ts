@@ -11,6 +11,8 @@ const data = {
   revisionNumber: 2,
   revisionState: "superseded",
   status: "succeeded",
+  updatedAt: "2026-10-09T00:00:00.000Z",
+  canRequestStop: false,
   trace: { state: "available", attempts: [] },
 };
 afterEach(() => vi.restoreAllMocks());
@@ -48,4 +50,51 @@ it("rejects unexpected private configuration in a purported metadata response", 
   await expect(
     workflowsApi.runExperience(id(1), "member", id(2), id(3)),
   ).rejects.toThrow();
+});
+const stopCommand = {
+  requestId: id(5),
+  expectedWorkflowId: id(2),
+  expectedRevisionId: id(4),
+  expectedUpdatedAt: data.updatedAt,
+  acknowledgeCompletedEffectsRemain: true as const,
+};
+const stopReceipt = {
+  companyId: id(1),
+  workflowId: id(2),
+  runId: id(3),
+  revisionId: id(4),
+  requestId: id(5),
+  disposition: "cancellation_requested",
+};
+it("binds a stop request to the original reviewed run and account", async () => {
+  const post = vi.spyOn(api, "post").mockResolvedValue(stopReceipt);
+  expect(
+    await workflowsApi.stop(id(1), "private user", id(2), id(3), stopCommand),
+  ).toEqual(stopReceipt);
+  expect(post).toHaveBeenCalledWith(
+    `/companies/${id(1)}/workflow-runs/${id(3)}/experience/stop?expectedUserId=private%20user`,
+    stopCommand,
+  );
+});
+it.each(["companyId", "workflowId", "runId", "revisionId", "requestId"])(
+  "rejects an original stop receipt with a foreign %s",
+  async (field) => {
+    vi.spyOn(api, "post").mockResolvedValue({
+      ...stopReceipt,
+      [field]: id(99),
+    });
+    await expect(
+      workflowsApi.stop(id(1), "member", id(2), id(3), stopCommand),
+    ).rejects.toThrow("context changed");
+  },
+);
+it("refuses a workflow mismatch before sending any stop command", async () => {
+  const post = vi.spyOn(api, "post");
+  await expect(
+    workflowsApi.stop(id(1), "member", id(2), id(3), {
+      ...stopCommand,
+      expectedWorkflowId: id(99),
+    }),
+  ).rejects.toThrow("context changed");
+  expect(post).not.toHaveBeenCalled();
 });

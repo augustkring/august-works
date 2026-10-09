@@ -47,7 +47,8 @@
       "Close confirmation without changing the original unknown request",
       "Retry the same unacknowledged request",
       "Open run history and authorized Advanced draft controls",
-      "Confirm the reviewed bounded internal run; retry the original unknown request without re-publication or second admission."
+      "Confirm the reviewed bounded internal run; retry the original unknown request without re-publication or second admission.",
+      "Inspect the bound native run and explicitly request Stop there; Pause continues to finish existing work and never means Stop."
     ],
     "destructiveOrIrreversible": [
       "Retirement is permanent; the draft is deliberately discarded and published/run history retained."

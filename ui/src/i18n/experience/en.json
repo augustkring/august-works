@@ -624,5 +624,16 @@
   "workflowStartInactive": "A current active published version is required for a new run.",
   "workflowStartVersion": "Reviewed published version {{version}}",
   "workflowRunBranchSelected": "Recorded branch selects next step: {{name}}. This does not confirm that the next step ran.",
-  "workflowRunBranchNotRecorded": "A branch selection is not available from this attempt’s retained checkpoint."
+  "workflowRunBranchNotRecorded": "A branch selection is not available from this attempt’s retained checkpoint.",
+  "workflowStopTitle": "Stop this run",
+  "workflowStopAction": "Stop run",
+  "workflowStopConfirmTitle": "Stop this workflow run?",
+  "workflowStopVersion": "Reviewed run of published version {{version}}",
+  "workflowStopConsequences": "New steps will stop. Active work and waiting approvals will enter cancellation. Completed actions remain. Work with an unknown outcome needs reconciliation. Check this run’s recorded status to see when cancellation finishes.",
+  "workflowStopAcknowledge": "I understand that completed actions remain and stopping may take time.",
+  "workflowStopAccepted": "The original stop request was accepted. Check the recorded run status to see whether all work has stopped.",
+  "workflowStopUnknown": "The stop request could not be confirmed. Retry the original request to check its receipt.",
+  "workflowStopChanged": "The run changed before this stop request was accepted. Review the current run.",
+  "workflowStopPending": "Requesting stop…",
+  "workflowStopRetry": "Retry original stop request"
 }

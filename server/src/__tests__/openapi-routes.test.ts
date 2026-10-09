@@ -939,6 +939,12 @@ describe("openapi routes", () => {
     const { spec } = loadSpecRoutes();
     const board = [{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }];
     const root = "/api/companies/{companyId}";
+    const stop = spec.paths[`${root}/workflow-runs/{runId}/experience/stop`].post;
+    expect(stop.security).toEqual(board);
+    expect(stop.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(stop.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(stop.requestBody.content["application/json"].schema.properties.acknowledgeCompletedEffectsRemain.enum).toEqual([true]);
+    expect(stop.responses[200].content["application/json"].schema.properties.disposition.enum).toEqual(["cancellation_requested"]);
     const operations = spec.paths[`${root}/workflows/{workflowId}/experience/operations`].get;
     expect(operations.security).toEqual(board);
     expect(operations.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);

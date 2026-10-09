@@ -72,6 +72,7 @@ export function workflowRunReview(
   detail: WorkflowRunDetail,
   revision: WorkflowRevision,
   definitions: WorkflowNodeDefinitionDescriptor[],
+  canRequestStop = false,
 ): WorkflowRunExperience {
   const { run, steps, waits } = detail;
   if (
@@ -167,6 +168,8 @@ export function workflowRunReview(
     revisionNumber: revision.revisionNumber,
     revisionState: revision.state,
     status: run.status,
+    updatedAt: run.updatedAt.toISOString(),
+    canRequestStop,
     trace,
   });
 }

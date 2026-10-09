@@ -624,5 +624,16 @@
   "workflowStartInactive": "En aktuel aktiv udgivet version er nødvendig for en ny kørsel.",
   "workflowStartVersion": "Gennemgået udgivet version {{version}}",
   "workflowRunBranchSelected": "Den registrerede gren vælger næste trin: {{name}}. Det bekræfter ikke, at næste trin blev kørt.",
-  "workflowRunBranchNotRecorded": "Et grenvalg er ikke tilgængeligt fra dette forsøgs bevarede kontrolpunkt."
+  "workflowRunBranchNotRecorded": "Et grenvalg er ikke tilgængeligt fra dette forsøgs bevarede kontrolpunkt.",
+  "workflowStopTitle": "Stop denne kørsel",
+  "workflowStopAction": "Stop kørsel",
+  "workflowStopConfirmTitle": "Stop denne workflow-kørsel?",
+  "workflowStopVersion": "Gennemgået kørsel af publiceret version {{version}}",
+  "workflowStopConsequences": "Nye trin stopper. Igangværende arbejde og ventende godkendelser går til annullering. Gennemførte handlinger bevares. Arbejde med et ukendt udfald skal afstemmes. Se kørselsstatus for at følge, hvornår annulleringen er afsluttet.",
+  "workflowStopAcknowledge": "Jeg forstår, at gennemførte handlinger bevares, og at et stop kan tage tid.",
+  "workflowStopAccepted": "Den oprindelige stopanmodning blev accepteret. Se den registrerede kørselsstatus for at afgøre, om alt arbejde er stoppet.",
+  "workflowStopUnknown": "Stopanmodningen kunne ikke bekræftes. Gentag den oprindelige anmodning for at kontrollere kvitteringen.",
+  "workflowStopChanged": "Kørslen ændrede sig, før denne stopanmodning blev accepteret. Gennemgå den aktuelle kørsel.",
+  "workflowStopPending": "Anmoder om stop…",
+  "workflowStopRetry": "Gentag oprindelig stopanmodning"
 }

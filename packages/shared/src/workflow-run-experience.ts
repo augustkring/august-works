@@ -14,6 +14,8 @@ export const workflowRunExperienceSchema = z.strictObject({
   revisionNumber: z.number().int().positive(),
   revisionState: z.enum(WORKFLOW_REVISION_STATES),
   status: z.enum(WORKFLOW_RUN_STATUSES),
+  updatedAt: z.iso.datetime(),
+  canRequestStop: z.boolean(),
   trace: z.discriminatedUnion("state", [
     z.strictObject({
       state: z.literal("available"),

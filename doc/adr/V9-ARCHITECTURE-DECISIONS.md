@@ -568,3 +568,44 @@ all 68,000 outcomes and replays them within each original 30-second bound; repla
 takes 15.7 seconds in this local fixture. This single software fixture is not a
 hosted percentile, sustained-load or business-outcome claim. Full final-source
 types/build, complete regression and current remote CI remain required.
+
+## ADR-V9-028 — Reviewed customer stop through native cancellation
+
+2026-10-09. Stop is a run-scoped command to the existing native cancellation
+owner, not a second executor, provider kill mechanism or reversal. Its strict
+command binds request, workflow, historical revision and reviewed run timestamp,
+and explicitly acknowledges retained completed effects. Company → Memory →
+configuration → current membership/grants → workflow → run locks protect native
+admission. Current human read/run authority, retained revision sources and copied
+run payload access precede receipt replay as well as a new effect.
+The existing native cancellation route's viewer write fence is preserved.
+Current membership role is checked under the native transaction lock, so a
+stale operator snapshot cannot survive a current viewer downgrade. Read views
+also hide Stop for the current viewer role, even with a retained run grant.
+The native authorization owner exposes its existing current admin-role lookup
+with an optional transaction share lock. Both the cancellation fence and view
+use actual role evidence; retained actor admin flags cannot restore revoked
+administration. Run-view read grants are repeated through the same native owner.
+
+The existing activity ledger records the exact command and cancellation-requested
+receipt in the same transaction as the native cancellation fence. Identical
+same-principal requests serialize on the native run row. A reused UUID with a
+different command is refused; a new request for changed or terminal work requires
+a new review. A historical receipt remains distinguishable from current run
+status, including after Pause or later publication. No model or migration changes.
+
+The native owner cancels waits, pending steps and approval requests, and drains
+its existing child workflow, issue and heartbeat cleanup. Failure to finish child
+cleanup retains the durable cancelling status. Recovery continues cancellation
+after workflow rollout is disabled, selecting only cancelling runs and never
+advancing queued, running or waiting work in that mode. Admission does not claim
+that remote providers stopped or that unknown outcomes have been reconciled.
+
+The confirmation captures the reviewed tuple at dialog opening. Unknown replies
+retain the identical command across ordinary private-read checks; current denied
+or checking views hide controls. Only a canonical pre-effect conflict permits a
+fresh UUID. Account/company/run teardown still loses in-memory reconciliation
+state and remains an open requirement. The new updatedAt/canRequestStop fields
+and strict command/receipt require compatible shared/server/UI deployment behind
+the default-off shell flag. Hosted, provider, full-graph and human qualification
+remain separate from source tests; V9 source completion is not promoted.

@@ -7,6 +7,7 @@ import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { Button } from "../components/ui/button";
+import { WorkflowStopControls } from "../components/WorkflowStopControls";
 import { Link, useParams } from "../lib/router";
 import { queryKeys } from "../lib/queryKeys";
 import { WorkflowRun } from "./WorkflowRun";
@@ -107,97 +108,123 @@ export function WorkflowRunExperience({
   useEffect(() => {
     if (query.isError) error.current?.focus();
   }, [query.isError]);
+  const controls = (
+    <WorkflowStopControls
+      company={company}
+      principal={principal}
+      workflow={workflow}
+      id={id}
+      detail={
+        !query.isPending && !query.isFetching && !query.isError
+          ? query.data
+          : null
+      }
+      refresh={() => void query.refetch()}
+    />
+  );
   if (query.isError)
     return (
-      <div ref={error} role="alert" tabIndex={-1} className="space-y-4">
-        <p>{t("workflowRunLoadFailed")}</p>
-        <Button className="min-h-11" onClick={() => void query.refetch()}>
-          {t("tryAgain")}
-        </Button>
-      </div>
+      <>
+        <div ref={error} role="alert" tabIndex={-1} className="space-y-4">
+          <p>{t("workflowRunLoadFailed")}</p>
+          <Button className="min-h-11" onClick={() => void query.refetch()}>
+            {t("tryAgain")}
+          </Button>
+        </div>
+        {controls}
+      </>
     );
-  if (query.isPending || query.isFetching) return <RunLoading />;
+  if (query.isPending || query.isFetching)
+    return (
+      <>
+        <RunLoading />
+        {controls}
+      </>
+    );
   const detail = query.data;
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
-      <Link
-        className="inline-flex min-h-11 items-center underline"
-        to={`/workflows/${workflow}/runs`}
-      >
-        {t("workflowRunBack")}
-      </Link>
-      <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
-        {t("workflowRunTitle")}
-      </h1>
-      <p>
-        {t("workflowRunRevision", {
-          version: detail.revisionNumber,
-          state: t(`workflowRunRevisionState.${detail.revisionState}`),
-        })}
-      </p>
-      <p role="status">{t(`workflowRunStatus.${detail.status}`)}</p>
-      <p className="text-sm text-muted-foreground">
-        {t("workflowRunBoundary")}
-      </p>
-      <Button
-        className="min-h-11"
-        variant="outline"
-        onClick={() => void query.refetch()}
-      >
-        {t("workflowRunRefresh")}
-      </Button>
-      <section aria-labelledby="workflow-run-attempts" className="space-y-4">
-        <h2 id="workflow-run-attempts" className="text-lg font-medium">
-          {t("workflowRunAttempts")}
-        </h2>
-        {detail.trace.state === "unavailable" ? (
-          <p role="status">{t("workflowRunUnavailable")}</p>
-        ) : detail.trace.attempts.length === 0 ? (
-          <p>{t("workflowRunEmpty")}</p>
-        ) : (
-          <ol className="space-y-4">
-            {detail.trace.attempts.map((attempt) => (
-              <li
-                key={attempt.id}
-                className="space-y-2 rounded-lg border border-border p-4"
-              >
-                <h3 className="break-words font-medium">{attempt.name}</h3>
-                <p className="break-words">{attempt.operation}</p>
-                <p>
-                  {t("workflowRunAttempt", { number: attempt.attempt })} ·{" "}
-                  {t(`workflowAttemptStatus.${attempt.status}`)}
-                </p>
-                <p>{t(`workflowExecution.${attempt.execution}`)}</p>
-                {attempt.branchChoice.state === "selected" && (
-                  <p className="break-words">
-                    {t("workflowRunBranchSelected", {
-                      name: attempt.branchChoice.nextStep,
-                    })}
+    <>
+      <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+        <Link
+          className="inline-flex min-h-11 items-center underline"
+          to={`/workflows/${workflow}/runs`}
+        >
+          {t("workflowRunBack")}
+        </Link>
+        <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
+          {t("workflowRunTitle")}
+        </h1>
+        <p>
+          {t("workflowRunRevision", {
+            version: detail.revisionNumber,
+            state: t(`workflowRunRevisionState.${detail.revisionState}`),
+          })}
+        </p>
+        <p role="status">{t(`workflowRunStatus.${detail.status}`)}</p>
+        <p className="text-sm text-muted-foreground">
+          {t("workflowRunBoundary")}
+        </p>
+        <Button
+          className="min-h-11"
+          variant="outline"
+          onClick={() => void query.refetch()}
+        >
+          {t("workflowRunRefresh")}
+        </Button>
+        <section aria-labelledby="workflow-run-attempts" className="space-y-4">
+          <h2 id="workflow-run-attempts" className="text-lg font-medium">
+            {t("workflowRunAttempts")}
+          </h2>
+          {detail.trace.state === "unavailable" ? (
+            <p role="status">{t("workflowRunUnavailable")}</p>
+          ) : detail.trace.attempts.length === 0 ? (
+            <p>{t("workflowRunEmpty")}</p>
+          ) : (
+            <ol className="space-y-4">
+              {detail.trace.attempts.map((attempt) => (
+                <li
+                  key={attempt.id}
+                  className="space-y-2 rounded-lg border border-border p-4"
+                >
+                  <h3 className="break-words font-medium">{attempt.name}</h3>
+                  <p className="break-words">{attempt.operation}</p>
+                  <p>
+                    {t("workflowRunAttempt", { number: attempt.attempt })} ·{" "}
+                    {t(`workflowAttemptStatus.${attempt.status}`)}
                   </p>
-                )}
-                {attempt.branchChoice.state === "not_recorded" && (
-                  <p>{t("workflowRunBranchNotRecorded")}</p>
-                )}
-                {attempt.approvalCheckpoint && (
-                  <p>{t("workflowRunApprovalBoundary")}</p>
-                )}
-                {attempt.waitingFor.map((kind) => (
-                  <p key={kind}>{t(`workflowWaiting.${kind}`)}</p>
-                ))}
-                {attempt.payloadUnavailable && (
-                  <p>{t("workflowRunPayloadUnavailable")}</p>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
-      <Link
-        className="inline-flex min-h-11 items-center underline"
-        to={`/workflows/${workflow}/runs/${id}/advanced`}
-      >
-        {t("workflowRunAdvanced")}
-      </Link>
-    </div>
+                  <p>{t(`workflowExecution.${attempt.execution}`)}</p>
+                  {attempt.branchChoice.state === "selected" && (
+                    <p className="break-words">
+                      {t("workflowRunBranchSelected", {
+                        name: attempt.branchChoice.nextStep,
+                      })}
+                    </p>
+                  )}
+                  {attempt.branchChoice.state === "not_recorded" && (
+                    <p>{t("workflowRunBranchNotRecorded")}</p>
+                  )}
+                  {attempt.approvalCheckpoint && (
+                    <p>{t("workflowRunApprovalBoundary")}</p>
+                  )}
+                  {attempt.waitingFor.map((kind) => (
+                    <p key={kind}>{t(`workflowWaiting.${kind}`)}</p>
+                  ))}
+                  {attempt.payloadUnavailable && (
+                    <p>{t("workflowRunPayloadUnavailable")}</p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+        <Link
+          className="inline-flex min-h-11 items-center underline"
+          to={`/workflows/${workflow}/runs/${id}/advanced`}
+        >
+          {t("workflowRunAdvanced")}
+        </Link>
+      </div>
+      {controls}
+    </>
   );
 }
