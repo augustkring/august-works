@@ -1,0 +1,770 @@
+<!doctype html>
+
+<html lang="en"><head><meta name="robots" content="noindex,nofollow"/><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><meta content="dark" name="color-scheme"/><meta content="noindex,nofollow" name="robots"/><title>BLENTERA — Company AI foundation</title><meta content="Build your company’s AI capability once. Keep building on it." name="description"/><style>:root {
+  color-scheme: dark;
+  --canvas: #0d1110;
+  --surface: #111715;
+  --surface-raised: #171e1b;
+  --surface-soft: #1b2420;
+  --line: #2b342f;
+  --line-faint: #212a26;
+  --text: #f3f5f0;
+  --soft: #c2cac3;
+  --muted: #8b998f;
+  --accent: #9ad2a8;
+  --accent-strong: #b6e6bf;
+  --accent-ink: #0e2013;
+  --max: 1280px;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 96px; }
+body { margin: 0; min-width: 320px; background: var(--canvas); color: var(--text); font: 400 15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 4px; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+::selection { background: var(--accent); color: var(--accent-ink); }
+.wrap { width: min(var(--max),calc(100% - 80px)); margin-inline: auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.skip-link { position: fixed; z-index: 500; top: -80px; left: 20px; color: #101710; background: #b3ebbd; padding: 10px 16px; border-radius: 5px; font-weight: 650; }
+.skip-link:focus { top: 16px; }
+
+/* Supabase-inspired platform navigation: disciplined spacing, horizontal alignment, quiet borders. */
+.site-header { position: sticky; top: 0; z-index: 100; border-bottom: 1px solid var(--line); background: rgba(13,17,16,.94); backdrop-filter: blur(18px); }
+.site-header-inner { height: 74px; display: flex; align-items: center; gap: 36px; }
+.wordmark { display: inline-flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 780; letter-spacing: .067em; white-space: nowrap; }
+.brand-symbol { width: 25px; height: 25px; display: inline-grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; transform: rotate(-10deg); flex: none; }
+.brand-symbol i { display: block; background: var(--accent); border-radius: 1.5px; }
+.brand-symbol i:nth-child(2),.brand-symbol i:nth-child(3) { background: #557765; }
+.brand-symbol i:nth-child(4) { background: #c6edce; }
+.desktop-nav { display: flex; gap: 26px; align-items: center; margin-left: auto; }
+.desktop-nav a,.site-footer nav a { color: var(--soft); font-size: 13px; font-weight: 510; transition: color .18s ease; }
+.desktop-nav a:hover,.site-footer nav a:hover { color: var(--text); }
+.site-header .header-action { margin-left: 20px; }
+.button { display: inline-flex; justify-content: center; align-items: center; gap: 13px; min-height: 46px; padding: 0 18px; border-radius: 5px; border: 1px solid transparent; font-size: 13px; line-height: 1.2; font-weight: 625; transition: background-color .18s ease,border-color .18s ease,color .18s ease,transform .18s ease; cursor: pointer; }
+.button:hover { transform: translateY(-1px); }
+.button:active { transform: translateY(0); }
+.button-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.button-primary:hover { background: #baeac4; border-color: #baeac4; }
+.button-outline,.button-secondary { border-color: #3b4640; background: #151b18; color: var(--text); }
+.button-outline:hover,.button-secondary:hover { background: #1e2822; border-color: #64776a; }
+.button-small { min-height: 35px; padding-inline: 12px; gap: 8px; }
+.button-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mobile-menu-toggle,.mobile-nav { display: none; }
+
+/* Main Supabase-derived two-column headline architecture. */
+.hero { padding-top: 108px; padding-bottom: 45px; }
+.hero-meta,.micro-label { font-size: 11px; letter-spacing: .15em; font-weight: 650; text-transform: uppercase; color: var(--muted); }
+.hero-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 36px; }
+.live-dot,.subtle-dot { width: 7px; height: 7px; display: inline-block; flex: none; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(154,210,168,.12); }
+.hero-grid { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,.65fr); align-items: end; gap: 40px; }
+.hero h1 { font-weight: 585; letter-spacing: -.068em; font-size: clamp(48px,5.7vw,86px); line-height: 1.06; max-width: 880px; text-wrap: balance; margin: 0; }
+.hero h1 span { color: var(--text); }
+.hero h1 em,.final-cta h2 em { color: var(--accent); font-style: normal; }
+.hero-aside { padding-bottom: 8px; max-width: 380px; justify-self: end; }
+.hero-aside p { margin: 0; max-width: 370px; font-size: clamp(15px,1.15vw,17px); line-height: 1.65; color: var(--soft); text-wrap: pretty; }
+.hero-cta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 29px; }
+.hero-scroll-note { display: flex; align-items: center; gap: 12px; padding-top: 75px; color: #738177; font-size: 11px; letter-spacing: .03em; }
+
+.stage-section { border-block: 1px solid var(--line); min-height: 560px; position: relative; background: #101613; overflow: hidden; }
+.stage-grid { pointer-events: none; position: absolute; inset: 0; opacity: .46; background-image: linear-gradient(to right, rgba(184,226,193,.06) 1px, transparent 1px),linear-gradient(to bottom, rgba(184,226,193,.06) 1px, transparent 1px); background-size: 64px 64px; mask-image: linear-gradient(to bottom,black 20%, transparent 100%); }
+.stage-content { position: relative; z-index: 1; padding-top: 32px; padding-bottom: 43px; }
+.stage-heading { display: flex; justify-content: space-between; gap: 24px; color: #8da494; font: 540 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .12em; }
+.stage-label { color: var(--accent); }
+.system-diagram { width: min(790px,100%); margin: 67px auto 52px; }
+.system-input-row { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; }
+.system-input-row div { padding: 13px 18px; background: #17201b; border: 1px solid #36443b; border-radius: 5px; color: #cad5cc; font-size: 13px; display: flex; justify-content: space-between; }
+.system-input-row span { color: var(--accent); }
+.system-stem { height: 64px; width: 1px; margin: 0 auto; background: linear-gradient(to bottom,#738e7b,#435c4c); }
+.system-core { border: 1px solid #4a7559; background: #18241d; border-radius: 8px; box-shadow: 0 24px 80px rgba(0,0,0,.2); }
+.system-core-header { display: flex; gap: 13px; align-items: center; padding: 16px 21px; border-bottom: 1px solid #395443; letter-spacing: .11em; color: #cae3d0; font: 580 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.symbol-large { width: 22px; height: 22px; }
+.system-core-marker { color: #839b88; margin-left: auto; }
+.system-core-body { padding: 29px 20px; display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
+.system-core-body span { border: 1px solid #3c5a47; border-radius: 5px; min-height: 65px; display: flex; align-items: center; justify-content: center; background: #223026; text-align: center; color: #e0ebe3; font-size: 12px; }
+.system-out { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; max-width: 850px; margin: 37px auto 0; }
+.system-out span { border-top: 1px solid #385e43; color: #849d89; padding-top: 13px; font-size: 12px; text-align: center; }
+.stage-caption { margin: 0; text-align: center; color: #cbd7cc; font-size: 13px; }
+.stage-caption span { color: #71877a; margin-left: 12px; font-size: 11px; }
+
+.section { padding-block: 130px; }
+.block-section { border-bottom: 1px solid var(--line); }
+.section-intro { display: grid; grid-template-columns: minmax(145px,.28fr) minmax(0,1fr); gap: 38px; margin-bottom: 62px; align-items: start; }
+.section-index { font: 550 11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .13em; color: var(--accent); padding-top: 13px; }
+.section-intro h2 { margin: 0; max-width: 760px; font-size: clamp(35px,4.1vw,61px); line-height: 1.11; letter-spacing: -.054em; font-weight: 585; text-wrap: balance; }
+.section-intro p { font-size: 16px; line-height: 1.65; color: var(--muted); max-width: 610px; margin: 24px 0 0; text-wrap: pretty; }
+.comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
+.comparison-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: #121715; }
+.comparison-before { background: #151817; }
+.comparison-after { background: #16241a; border-color: #3b6148; }
+.comparison-title { padding: 31px 32px 26px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+.comparison-after .comparison-title { border-color: #35503b; }
+.comparison-title h3 { margin: 0; font-size: 18px; font-weight: 550; letter-spacing: -.025em; }
+.muted-circle,.accent-circle { width: 27px; height: 27px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #252a27; color: #a9b2a9; font-size: 18px; line-height: 1; }
+.accent-circle { background: #355d3f; color: #c0efc6; }
+.comparison-card ul { list-style: none; padding: 20px 33px 10px; margin: 0; }
+.comparison-card li { padding-block: 15px; border-bottom: 1px solid #29322d; color: #b8c3ba; font-size: 14px; }
+.comparison-card li:last-child { border-bottom: 0; }
+.comparison-after li { border-color: #304d37; color: #d9e7db; }
+.comparison-summary { margin: auto 33px 29px; padding-top: 37px; font-weight: 560; font-size: 13px; color: #a4ada4; }
+.comparison-after .comparison-summary { color: var(--accent); }
+
+.foundation-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
+.foundation-card { position: relative; min-height: 355px; background: #141b17; border: 1px solid #2f3c33; border-radius: 7px; padding: 24px 24px 25px; display: flex; flex-direction: column; justify-content: space-between; transition: border-color .2s ease,background .2s ease; }
+.foundation-card:hover { border-color: #5b8063; background: #18211b; }
+.foundation-card-top { display: flex; align-items: start; justify-content: space-between; color: #c3d1c5; font: 500 11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+.foundation-card-top svg { color: var(--accent); }
+.foundation-detail { color: #7ba187; font: 550 10px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .07em; margin: 0 0 15px; }
+.foundation-card h3 { margin: 0 0 13px; font-size: 25px; line-height: 1.2; font-weight: 540; letter-spacing: -.045em; }
+.foundation-description { margin: 0; color: #9eada2; font-size: 13px; line-height: 1.62; }
+.foundation-card-link { display: none; }
+.demo-section-heading { display: flex; justify-content: space-between; align-items: end; gap: 30px; margin: 112px 0 28px; }
+.demo-section-heading h3 { margin: 14px 0 0; font-weight: 540; font-size: clamp(27px,3vw,42px); line-height: 1.14; letter-spacing: -.045em; }
+.demo-section-heading h3 span { color: #8e9b91; }
+.demo-section-heading > p { color: var(--muted); max-width: 315px; font-size: 13px; line-height: 1.65; margin: 0; }
+
+.product-demo { border: 1px solid #38493d; background: #101713; border-radius: 9px; box-shadow: 0 24px 55px rgba(0,0,0,.18); overflow: hidden; }
+.demo-browser-bar { min-height: 41px; border-bottom: 1px solid #2e3a32; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; color: #829288; font: 500 11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+.browser-dots { display: flex; gap: 6px; }
+.browser-dots i { width: 8px; height: 8px; background: #3d4b41; border: 1px solid #516456; border-radius: 50%; }
+.browser-mode { display: inline-flex; gap: 9px; align-items: center; }
+.browser-mode .subtle-dot { width: 5px; height: 5px; }
+.demo-workspace { display: grid; grid-template-columns: 233px minmax(0,1fr); min-height: 560px; }
+.demo-sidebar { border-right: 1px solid #29352c; background: #121915; display: flex; flex-direction: column; }
+.demo-sidebar-head { height: 85px; display: flex; gap: 10px; padding: 25px 16px; align-items: center; border-bottom: 1px solid #26312a; color: #cfdbd0; font-size: 12px; }
+.sidebar-avatar { height: 27px; width: 27px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #42654b; color: var(--accent); background: #223226; border-radius: 5px; font-weight: 700; }
+.sidebar-avatar-small { width: 21px; height: 21px; }
+.sidebar-menu { padding: 17px 10px; display: grid; gap: 7px; }
+.sidebar-menu span { height: 33px; display: flex; gap: 10px; align-items: center; padding: 0 12px; border-radius: 5px; color: #829589; font-size: 12px; }
+.sidebar-menu .selected { background: #26382b; color: #d5e7d9; }
+.demo-sidebar-bottom { margin-top: auto; padding: 15px; border-top: 1px solid #29352c; display: flex; align-items: center; gap: 10px; font-size: 11px; color: #7f9184; }
+.demo-main { padding: 27px 38px 19px; min-width: 0; }
+.demo-main-heading { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 25px; }
+.demo-crumb { display: block; color: #839387; font-size: 11px; margin-bottom: 14px; }
+.demo-main-heading h2 { font-size: 22px; line-height: 1.25; font-weight: 560; letter-spacing: -.038em; margin: 0 0 7px; }
+.demo-main-heading p { font-size: 12px; margin: 0; color: #87988c; }
+.demo-heading-mark { color: #4a7354; font-size: 26px; }
+.demo-tablist { display: flex; gap: 22px; border-bottom: 1px solid #2c3c31; overflow-x: auto; scrollbar-width: thin; }
+.demo-tablist button { background: none; border: 0; border-bottom: 2px solid transparent; margin: 0; white-space: nowrap; padding: 0 1px 13px; color: #849488; cursor: pointer; font-size: 12px; font-weight: 540; }
+.demo-tablist button:hover { color: #deede0; }
+.demo-tablist button[aria-selected="true"] { border-bottom-color: var(--accent); color: #e3f0e6; }
+.demo-panel { margin-top: 20px; }
+.demo-content-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 12px; }
+.demo-primary-panel,.demo-secondary-panel { border: 1px solid #2e3e32; background: #19231c; padding: 24px 25px; border-radius: 6px; min-height: 290px; }
+.demo-secondary-panel { background: #151e18; }
+.demo-overline { color: #8ca492; text-transform: uppercase; font: 570 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .09em; display: flex; justify-content: space-between; margin: 0 0 20px; }
+.demo-overline span { color: #647b68; }
+.demo-document-icon { height: 41px; width: 41px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #2b4431; color: var(--accent); margin-bottom: 18px; }
+.demo-primary-panel h3 { font-weight: 540; font-size: 22px; letter-spacing: -.034em; line-height: 1.25; max-width: 330px; margin: 0 0 9px; }
+.demo-primary-panel > p:not(.demo-overline) { color: #91a295; font-size: 12px; line-height: 1.62; max-width: 310px; margin: 0 0 17px; }
+.demo-mini-metrics { border-top: 1px solid #36503c; padding-top: 13px; margin-top: 20px; display: grid; gap: 9px; }
+.demo-mini-metrics div { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; }
+.demo-mini-metrics span { color: #8da394; }
+.demo-mini-metrics strong { color: #c4e9cb; font-weight: 550; }
+.demo-stack-list,.demo-activity-list { list-style: none; margin: 0; padding: 0; }
+.demo-stack-list li { display: flex; align-items: center; gap: 11px; border-bottom: 1px solid #2e3b31; padding: 12px 0; }
+.demo-stack-list li:last-child { border-bottom: 0; }
+.demo-stack-list li > span:nth-child(2) { flex: 1; min-width: 0; }
+.demo-stack-list strong,.demo-activity-list strong { display: block; color: #d6e5d7; font-size: 11px; font-weight: 555; }
+.demo-stack-list small,.demo-activity-list small { color: #7c9382; display: block; font-size: 10px; padding-top: 2px; }
+.stack-icon { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border: 1px solid #385340; color: #99c7a0; border-radius: 4px; }
+.success-icon { color: #83be8b; }
+.demo-footnote { color: #7e9884; display: flex; align-items: center; gap: 10px; font: 500 10px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; margin-top: 17px; }
+.demo-footnote .subtle-dot { width: 5px; height: 5px; }
+.demo-path { display: flex; gap: 9px; align-items: center; color: #bcdbc2; font: 500 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; margin-top: 30px; }
+.demo-path svg { color: #6a8c71; }
+.demo-activity-list li { position: relative; display: flex; align-items: start; gap: 10px; border-bottom: 1px solid #2d3d30; padding: 15px 0; }
+.demo-activity-list li:last-child { border-bottom: 0; }
+.demo-activity-list li div { flex: 1; }
+.activity-node { width: 8px; height: 8px; margin-top: 6px; border: 1px solid #637f69; border-radius: 50%; flex: none; }
+.activity-node.is-active { background: var(--accent); border-color: var(--accent); }
+.demo-status { font-size: 10px; color: #a5c2ab; }
+.control-indicator { color: #b7dabc; font: 500 9px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.demo-disclaimer { margin: 20px 0 0; color: #718777; font-size: 10px; line-height: 1.55; display: flex; gap: 7px; align-items: start; }
+.demo-disclaimer svg { flex: none; margin-top: 1px; }
+
+.section-with-line { border-top: 1px solid var(--line); }
+.loop-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 0; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.loop-step { position: relative; display: flex; flex-direction: column; padding: 25px 19px 32px; min-height: 235px; border-right: 1px solid var(--line); background: #131916; }
+.loop-step:last-child { border-right: 0; }
+.loop-number { color: var(--accent); font: 550 11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+.loop-step-body { margin-top: auto; }
+.loop-step h3 { font-size: 16px; line-height: 1.3; font-weight: 540; margin: 0 0 10px; letter-spacing: -.024em; }
+.loop-step p { font-size: 12px; line-height: 1.56; color: #899b8f; margin: 0; }
+.loop-arrow { position: absolute; right: 17px; top: 22px; color: #5c7e65; }
+.loop-step:last-child .loop-arrow { display: none; }
+.loop-after { display: flex; gap: 17px; align-items: center; max-width: 690px; margin: 25px auto 0; text-align: center; }
+.loop-after-symbol { flex: none; color: #c5e9cd; border: 1px solid #45644a; background: #25372b; border-radius: 50%; display: grid; place-items: center; width: 41px; height: 41px; }
+.loop-after p { font-size: 14px; color: #b5c7b7; line-height: 1.6; margin: 0; }
+
+.portability-section { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); gap: 80px; align-items: center; border-top: 1px solid var(--line); }
+.portability-copy h2 { font-size: clamp(36px,4.1vw,58px); line-height: 1.12; letter-spacing: -.05em; font-weight: 550; margin: 16px 0 21px; }
+.portability-copy h2 span { color: #92ac96; }
+.portability-copy > p:not(.micro-label) { color: #9eafa2; font-size: 15px; line-height: 1.7; max-width: 445px; }
+.check-list { margin-top: 36px; display: grid; gap: 16px; color: #c3d4c5; font-size: 13px; }
+.check-list span { display: flex; align-items: center; gap: 12px; }
+.check-list svg { color: var(--accent); flex: none; }
+.portability-visual { position: relative; height: 425px; border: 1px solid #384c3d; border-radius: 8px; background-image: radial-gradient(circle at 50% 45%,rgba(113,155,122,.17),transparent 47%),linear-gradient(to right,rgba(174,219,182,.045) 1px,transparent 1px),linear-gradient(to bottom,rgba(174,219,182,.045) 1px,transparent 1px); background-size: auto,44px 44px,44px 44px; overflow: hidden; }
+.portability-visual::before,.portability-visual::after { position: absolute; content: ""; height: 1px; width: 75%; left: 12%; top: 50%; background: #405744; transform: rotate(31deg); }
+.portability-visual::after { transform: rotate(-31deg); }
+.portability-center { position: absolute; z-index: 1; top: 50%; left: 50%; transform: translate(-50%,-50%); height: 155px; width: 205px; border: 1px solid #5e9670; border-radius: 8px; background: #1b2a1f; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 12px 50px rgba(2,12,5,.4); }
+.portability-center .brand-symbol { margin-bottom: 15px; }
+.portability-center strong { font-size: 15px; letter-spacing: .1em; font-weight: 650; }
+.portability-center small { color: #8eae95; font-size: 10px; margin-top: 7px; }
+.portability-satellite { position: absolute; z-index: 2; border: 1px solid #4b6551; border-radius: 5px; padding: 10px 19px; background: #1b2820; color: #c8d8ca; font-size: 12px; min-width: 100px; text-align: center; }
+.satellite-1 { left: 14%; top: 18%; }
+.satellite-2 { right: 12%; top: 18%; }
+.satellite-3 { left: 14%; bottom: 22%; }
+.satellite-4 { right: 12%; bottom: 22%; }
+.portability-visual-note { position: absolute; z-index: 2; left: 20px; bottom: 17px; color: #78917d; font: 500 9px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .1em; }
+
+.control-panel { display: grid; grid-template-columns: .98fr 1.02fr; border: 1px solid #3b5742; background: #18231b; border-radius: 8px; overflow: hidden; }
+.control-panel-intro { position: relative; min-height: 420px; padding: 52px; border-right: 1px solid #385441; }
+.control-panel-intro h2 { margin: 27px 0 20px; max-width: 455px; font-size: clamp(33px,3.4vw,51px); font-weight: 550; letter-spacing: -.05em; line-height: 1.1; }
+.control-panel-intro > p:not(.micro-label) { max-width: 410px; font-size: 14px; line-height: 1.7; color: #a0b5a4; }
+.control-icon { position: absolute; bottom: 45px; left: 52px; border: 1px solid #476a4f; display: grid; place-items: center; width: 53px; height: 53px; border-radius: 8px; color: var(--accent); background: #223527; }
+.control-list { display: flex; flex-direction: column; justify-content: stretch; }
+.control-list-row { display: grid; grid-template-columns: 28px minmax(0,1fr) 18px; gap: 15px; align-items: center; padding: 28px 34px; border-bottom: 1px solid #38503b; flex: 1; }
+.control-list-row:last-child { border-bottom: 0; }
+.control-list-row > span { color: #7b9d83; font: 510 11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+.control-list-row h3 { font-size: 16px; margin: 0 0 5px; font-weight: 520; letter-spacing: -.02em; }
+.control-list-row p { font-size: 12px; color: #94ad9a; line-height: 1.55; margin: 0; }
+.control-list-row > svg { color: #769b7d; }
+.control-disclaimer { display: flex; align-items: center; gap: 11px; color: #8fa390; font-size: 12px; margin: 20px 0 0; }
+.control-disclaimer svg { flex: none; }
+
+.status-section { border-top: 1px solid var(--line); padding-block: 100px 118px; }
+.status-grid { display: grid; grid-template-columns: minmax(0,.95fr) minmax(0,1.05fr); align-items: start; gap: 90px; }
+.status-grid h2 { max-width: 530px; font-size: clamp(32px,3.5vw,48px); font-weight: 550; letter-spacing: -.049em; line-height: 1.16; margin: 17px 0; }
+.status-grid p:not(.micro-label) { font-size: 14px; line-height: 1.72; color: #94a599; max-width: 495px; }
+.status-cards { border: 1px solid var(--line); border-radius: 6px; }
+.status-cards > div { min-height: 82px; display: grid; grid-template-columns: 12px minmax(0,.85fr) minmax(0,1.15fr); gap: 15px; align-items: center; padding: 20px 22px; border-bottom: 1px solid var(--line); }
+.status-cards > div:last-child { border-bottom: 0; }
+.status-cards strong { color: #dbe7dd; font-size: 12px; font-weight: 580; }
+.status-cards span:last-child { font-size: 11px; color: #879d8a; }
+.status-dot { width: 7px; height: 7px; background: #67746b; border-radius: 50%; }
+.status-dot.is-built { background: #95d4a5; }
+.status-dot.is-gated { background: #d4af7a; }
+
+.final-cta { position: relative; border-top: 1px solid #34523b; background: #19261d; border-radius: 7px 7px 0 0; padding: 90px 86px 100px; overflow: hidden; }
+.final-cta-decoration { position: absolute; right: 6%; top: -120px; font-size: 410px; font-weight: 100; line-height: 1; color: rgba(164,211,174,.085); pointer-events: none; }
+.final-cta h2 { position: relative; z-index: 1; font-size: clamp(45px,6vw,78px); line-height: 1.04; font-weight: 560; letter-spacing: -.065em; margin: 22px 0; }
+.final-cta > p:not(.micro-label) { position: relative; z-index: 1; color: #acc0b0; max-width: 440px; font-size: 15px; line-height: 1.68; margin-bottom: 28px; }
+.final-cta .button { position: relative; z-index: 1; }
+.contact-note { color: #829c88; font-size: 11px; display: block; margin-top: 17px; }
+.site-footer { border-top: 1px solid var(--line); padding-block: 55px 22px; }
+.footer-top { display: flex; justify-content: space-between; gap: 28px; }
+.footer-identity p { margin: 17px 0 0; color: #8d9f91; font-size: 13px; }
+.site-footer nav { display: flex; gap: 29px; align-items: start; flex-wrap: wrap; }
+.footer-bottom { border-top: 1px solid #29342d; margin-top: 75px; padding-top: 19px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 18px; color: #6e8173; font-size: 11px; }
+.footer-bottom a:hover { color: var(--accent); }
+
+.error-screen { min-height: 85vh; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; margin: auto; padding: 50px; width: min(850px,100%); }
+.error-screen h1 { font-size: clamp(38px,6vw,66px); line-height: 1.13; letter-spacing: -.055em; font-weight: 560; margin: 16px 0; }
+.error-screen p:not(.micro-label) { color: var(--muted); margin-bottom: 23px; }
+.loading-screen { width: min(950px,calc(100% - 40px)); margin: 110px auto; display: grid; gap: 23px; }
+.loading-line,.loading-panel { animation: loading-pulse 1.6s ease-in-out infinite; background: #1c2720; border-radius: 4px; height: 42px; width: 62%; }
+.loading-line-short { width: 37%; height: 26px; }
+.loading-panel { width: 100%; height: 360px; }
+@keyframes loading-pulse { 50% { background: #2a392e; } }
+
+@media (max-width: 1150px) {
+  .wrap { width: min(var(--max),calc(100% - 56px)); }
+  .hero-grid { grid-template-columns: minmax(0,1.18fr) minmax(0,.82fr); }
+  .hero h1 { font-size: clamp(48px,5.6vw,72px); }
+  .desktop-nav { gap: 16px; }
+  .site-header-inner { gap: 15px; }
+  .site-header .header-action { margin-left: 8px; }
+  .foundation-card { padding: 20px; }
+  .foundation-card h3 { font-size: 22px; }
+  .foundation-card { min-height: 370px; }
+  .demo-workspace { grid-template-columns: 190px minmax(0,1fr); }
+  .demo-main { padding-inline: 25px; }
+  .portability-section { gap: 45px; }
+}
+@media (max-width: 900px) {
+  .desktop-nav,.header-action { display: none; }
+  .site-header-inner { height: 66px; }
+  .mobile-menu-toggle { margin-left: auto; display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 5px; color: var(--text); background: transparent; cursor: pointer; }
+  .mobile-menu-toggle:hover { background: #212b23; }
+  .mobile-nav:not([hidden]) { display: flex; flex-direction: column; gap: 0; padding: 10px 28px 18px; border-top: 1px solid var(--line); }
+  .mobile-nav a { display: flex; justify-content: space-between; align-items: center; min-height: 49px; border-bottom: 1px solid #2a362e; color: #d2ddd4; font-size: 15px; }
+  .mobile-nav a:hover { color: var(--accent); }
+  .hero { padding-top: 75px; }
+  .hero-grid { grid-template-columns: 1fr; gap: 25px; }
+  .hero h1 { font-size: clamp(43px,7.6vw,70px); max-width: 730px; }
+  .hero-aside { justify-self: start; max-width: 630px; }
+  .hero-aside p { max-width: 600px; }
+  .hero-scroll-note { padding-top: 50px; }
+  .section { padding-block: 90px; }
+  .section-intro { grid-template-columns: 110px 1fr; gap: 25px; margin-bottom: 45px; }
+  .foundation-grid { grid-template-columns: repeat(2,1fr); }
+  .foundation-card { min-height: 265px; }
+  .demo-section-heading { margin-top: 74px; }
+  .demo-workspace { grid-template-columns: 150px minmax(0,1fr); }
+  .demo-sidebar-head { padding: 20px 10px; font-size: 11px; }
+  .demo-sidebar-bottom { font-size: 10px; padding: 10px; }
+  .demo-main { padding-inline: 17px; }
+  .demo-content-grid { grid-template-columns: 1fr; }
+  .demo-primary-panel,.demo-secondary-panel { min-height: auto; }
+  .demo-disclaimer { max-width: 590px; }
+  .loop-grid { grid-template-columns: repeat(3,1fr); }
+  .loop-step:nth-child(3) { border-right: 0; }
+  .loop-step:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
+  .portability-section { grid-template-columns: 1fr; }
+  .portability-visual { height: 390px; }
+  .control-panel-intro { padding: 34px; }
+  .control-icon { bottom: 25px; left: 34px; }
+  .control-list-row { padding: 21px; }
+  .status-grid { gap: 30px; }
+  .final-cta { padding-inline: 55px; }
+}
+@media (max-width: 620px) {
+  .wrap { width: calc(100% - 36px); }
+  .hero { padding-top: 55px; padding-bottom: 29px; }
+  .hero-meta { margin-bottom: 24px; }
+  .hero h1 { font-size: clamp(38px,10vw,56px); letter-spacing: -.065em; }
+  .hero-aside p { font-size: 15px; }
+  .hero-cta { align-items: stretch; }
+  .hero-cta .button { min-height: 45px; padding-inline: 13px; }
+  .hero-scroll-note { padding-top: 37px; gap: 9px; font-size: 10px; }
+  .stage-section { min-height: 0; }
+  .stage-content { padding-top: 24px; padding-bottom: 38px; }
+  .stage-heading { font-size: 9px; }
+  .system-diagram { margin-top: 45px; margin-bottom: 32px; }
+  .system-input-row { gap: 6px; }
+  .system-input-row div { padding: 9px 6px; font-size: 10px; }
+  .system-stem { height: 38px; }
+  .system-core-header { padding: 13px 11px; font-size: 9px; }
+  .symbol-large { width: 16px; height: 16px; }
+  .system-core-body { padding: 16px 10px; gap: 5px; grid-template-columns: repeat(3,1fr); }
+  .system-core-body span { min-height: 48px; font-size: 10px; }
+  .system-out { gap: 9px; margin-top: 22px; }
+  .system-out span { font-size: 9px; }
+  .stage-caption { font-size: 11px; }
+  .stage-caption span { display: block; padding-top: 5px; }
+  .section { padding-block: 75px; }
+  .section-intro { display: block; margin-bottom: 32px; }
+  .section-index { display: block; padding-top: 0; margin-bottom: 19px; }
+  .section-intro h2 { font-size: clamp(32px,9vw,43px); }
+  .section-intro p { font-size: 14px; margin-top: 17px; }
+  .comparison-grid { grid-template-columns: 1fr; }
+  .comparison-title { padding: 22px; }
+  .comparison-card ul { padding: 8px 22px 4px; }
+  .comparison-card li { padding-block: 12px; }
+  .comparison-summary { margin: auto 22px 22px; padding-top: 23px; }
+  .foundation-grid { grid-template-columns: 1fr; }
+  .foundation-card { min-height: 225px; }
+  .foundation-card h3 { font-size: 24px; }
+  .demo-section-heading { display: block; margin-top: 65px; }
+  .demo-section-heading > p { margin-top: 20px; }
+  .product-demo { border-radius: 6px; }
+  .demo-browser-bar { padding-inline: 12px; }
+  .browser-title { font-size: 9px; }
+  .browser-mode { font-size: 9px; }
+  .demo-workspace { display: block; }
+  .demo-sidebar { display: none; }
+  .demo-main { padding: 20px 15px 16px; }
+  .demo-main-heading { margin-bottom: 23px; }
+  .demo-main-heading h2 { font-size: 19px; }
+  .demo-tablist { gap: 17px; }
+  .demo-tablist button { font-size: 11px; }
+  .demo-primary-panel,.demo-secondary-panel { padding: 18px; }
+  .demo-primary-panel h3 { font-size: 20px; }
+  .demo-disclaimer { align-items: start; }
+  .loop-grid { grid-template-columns: 1fr; }
+  .loop-step,.loop-step:nth-child(3) { min-height: 0; padding: 22px; flex-direction: row; gap: 25px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .loop-step:last-child { border-bottom: 0; }
+  .loop-step-body { margin-top: 0; }
+  .loop-number { min-width: 23px; margin-top: 3px; }
+  .loop-arrow { display: none; }
+  .loop-step h3 { margin-bottom: 6px; }
+  .loop-after { text-align: left; }
+  .portability-section { gap: 32px; }
+  .portability-visual { height: 355px; }
+  .portability-center { height: 115px; width: 145px; }
+  .portability-center small { font-size: 8px; }
+  .portability-satellite { min-width: 78px; padding: 8px 9px; font-size: 10px; }
+  .satellite-1,.satellite-3 { left: 4%; }
+  .satellite-2,.satellite-4 { right: 4%; }
+  .control-panel { grid-template-columns: 1fr; }
+  .control-panel-intro { min-height: 310px; padding: 27px; border-right: 0; border-bottom: 1px solid #36533d; }
+  .control-panel-intro h2 { font-size: 35px; }
+  .control-icon { left: 27px; bottom: 21px; height: 38px; width: 38px; }
+  .control-list-row { padding: 20px; }
+  .control-disclaimer { align-items: start; }
+  .status-grid { grid-template-columns: 1fr; }
+  .status-cards > div { padding: 15px; gap: 9px; }
+  .final-cta { padding: 57px 24px 65px; }
+  .final-cta h2 { font-size: clamp(39px,10vw,55px); }
+  .final-cta-decoration { top: -65px; font-size: 240px; }
+  .footer-top { flex-direction: column; gap: 35px; }
+  .site-footer nav { gap: 16px 24px; }
+  .footer-bottom { margin-top: 54px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,*::before,*::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ABOUT / THE ORGANISATION — A product-grade operating-model explorer. */
+.about-hero { padding-top: 108px; padding-bottom: 60px; }
+.about-hero-grid { display: grid; grid-template-columns: minmax(0,1.45fr) minmax(290px,.55fr); gap: 44px; align-items: end; }
+.about-hero h1 { font-size: clamp(52px,6.35vw,96px); line-height: 1.02; font-weight: 565; letter-spacing: -.074em; margin: 0; text-wrap: balance; }
+.about-hero h1 em,.about-statement h2 em,.delegation-header h2 em,.about-bottom-cta h2 em { font-style: normal; color: var(--accent); }
+.about-hero-aside { padding-bottom: 10px; max-width: 363px; justify-self: end; }
+.about-hero-aside p { color: var(--soft); font-size: 16px; line-height: 1.73; margin: 0 0 28px; }
+.about-hero-aside > span { display: block; color: var(--muted); font-size: 11px; line-height: 1.6; margin-top: 17px; }
+.about-quick-stats { margin-top: 105px; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); }
+.about-quick-stats > div { display: flex; align-items: baseline; gap: 18px; border-right: 1px solid var(--line); padding: 28px 18px 28px 26px; }
+.about-quick-stats > div:first-child { padding-left: 0; }
+.about-quick-stats > div:last-child { border-right: 0; }
+.about-quick-stats strong { font-size: 31px; line-height: 1; font-weight: 500; letter-spacing: -.06em; color: #eaf6ea; }
+.about-quick-stats span { font-size: 11px; line-height: 1.35; color: var(--muted); }
+.about-statement-section { background: #111915; border-block: 1px solid var(--line); }
+.about-statement { display: grid; grid-template-columns: minmax(120px,.23fr) minmax(0,.95fr) minmax(0,.36fr); gap: 30px; padding-block: 88px; align-items: start; }
+.about-statement .section-index { padding-top: 12px; }
+.about-statement h2 { margin: 0; max-width: 720px; font-size: clamp(35px,4.1vw,60px); line-height: 1.13; font-weight: 560; letter-spacing: -.054em; text-wrap: balance; }
+.about-statement > p { font-size: 14px; line-height: 1.75; margin: 12px 0 0; color: var(--soft); }
+.about-organisation-section { padding-bottom: 70px; }
+.org-visual { border-radius: 9px; border: 1px solid var(--line); background: #111713; padding: 42px 36px 36px; position: relative; overflow: hidden; }
+.org-visual::before { content: ""; pointer-events: none; position: absolute; inset: 0; opacity: .36; background: linear-gradient(to right,rgba(164,199,170,.052) 1px,transparent 1px),linear-gradient(to bottom,rgba(164,199,170,.052) 1px,transparent 1px); background-size: 49px 49px; mask-image: linear-gradient(to bottom,black,transparent 95%); }
+.org-hierarchy-head,.org-grid { position: relative; z-index: 1; }
+.org-hierarchy-head { display: flex; flex-direction: column; align-items: center; }
+.org-root-card { border-radius: 8px; border: 1px solid #3a4e40; background: #19211b; width: min(455px,100%); min-height: 98px; padding: 18px; display: flex; align-items: center; gap: 15px; box-shadow: 0 12px 34px rgba(0,0,0,.12); }
+.org-human { border-color: #75674b; background: #24231b; }
+.org-root-info { display: flex; flex-direction: column; min-width: 0; }
+.org-root-info strong { font-size: 17px; line-height: 1.35; letter-spacing: -.02em; font-weight: 590; }
+.org-root-info > span:last-child { color: #a2aca1; font-size: 11px; margin-top: 3px; }
+.org-avatar { display: grid; place-items: center; flex: none; width: 55px; height: 55px; border: 1px solid #516f57; color: var(--accent); background: #263b2c; border-radius: 9px; }
+.avatar-human { background: #3a3425; border-color: #6c5b3d; color: #f0d3a0; }
+.org-type { font: 590 9px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .095em; color: #9ed0aa; text-transform: uppercase; }
+.org-type.human-type { color: #e0c494; }
+.org-status-pill { border: 1px solid #3a5140; border-radius: 3px; background: #213227; display: flex; align-items: center; gap: 8px; color: #bad4bd; padding: 7px 9px; white-space: nowrap; font-size: 10px; margin-left: auto; }
+.org-human .org-status-pill { background: #373225; border-color: #66563c; color: #dbcaa8; }
+.org-status-dot { display: inline-block; background: var(--accent); width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.org-human .org-status-dot { background: #d7b378; }
+.org-spine { width: 1px; height: 45px; background: #56745e; position: relative; }
+.org-spine span { width: 6px; height: 6px; position: absolute; border: 1px solid #5e7f65; background: #161e19; border-radius: 50%; bottom: 50%; left: -2.5px; }
+.org-spine-bottom { height: 52px; }
+.org-branch-cap { width: calc(87.5% - 15px); margin: -1px auto 15px; border-top: 1px solid #3f5644; height: 16px; position: relative; }
+.org-branch-cap::after,.org-branch-cap::before { content: ""; position: absolute; top: -1px; height: 16px; width: 1px; background: #3f5644; }
+.org-branch-cap::before { left: 0; }
+.org-branch-cap::after { right: 0; }
+.org-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
+.org-exec { appearance: none; cursor: pointer; text-align: left; color: var(--text); background: rgba(24,32,26,.93); padding: 18px; border: 1px solid #303e34; border-radius: 6px; min-height: 182px; display: flex; flex-direction: column; transition: background .16s,border-color .16s,transform .16s; position: relative; }
+.org-exec:hover { background: #1f2e23; border-color: #6b9475; transform: translateY(-2px); }
+.org-exec:active { transform: translateY(0); }
+.org-exec.is-selected { background: #233b29; border-color: #8cbf98; box-shadow: inset 0 0 0 1px rgba(154,210,168,.15); }
+.org-exec::before { content: ""; width: 1px; height: 16px; background: #435f4a; position: absolute; top: -16px; left: 50%; }
+.org-exec:nth-child(n+5)::before { display: none; }
+.org-exec-top { display: flex; align-items: center; gap: 8px; width: 100%; }
+.org-exec-top svg { margin-left: auto; color: #6f9075; }
+.org-exec-icon { font: 550 16px/1 ui-monospace,SFMono-Regular,Menlo,monospace; display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid #416348; color: var(--accent); background: #293e2e; border-radius: 4px; }
+.org-exec-title { margin-top: 20px; font-size: 25px; font-weight: 600; letter-spacing: -.055em; line-height: 1.15; }
+.org-exec-title span { font-size: 13px; margin-left: 10px; font-weight: 470; letter-spacing: 0; color: #b9c7bc; }
+.org-exec-domain { margin-top: 9px; font-size: 12px; line-height: 1.45; color: #88978b; }
+.org-exec-footer { border-top: 1px solid #39473d; margin-top: auto; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 7px; color: #9cb9a2; font-size: 10px; }
+.org-exec.is-selected .org-exec-footer { border-color: #42684c; color: #b5e7be; }
+.org-division-detail { border: 1px solid #435846; border-radius: 9px; background: #17221a; margin-top: 14px; overflow: hidden; }
+.org-division-intro { padding: 35px 36px; display: flex; justify-content: space-between; align-items: end; gap: 26px; border-bottom: 1px solid #354739; }
+.org-division-intro h3 { margin: 12px 0; font-size: clamp(28px,3vw,38px); line-height: 1.2; font-weight: 560; letter-spacing: -.047em; }
+.org-division-intro h3 span { color: #97ae9b; font-size: 17px; font-weight: 460; letter-spacing: -.01em; }
+.org-division-intro p { color: #a4baaa; margin: 0; line-height: 1.65; max-width: 630px; font-size: 14px; }
+.org-division-badge { font: 580 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; border: 1px solid #456249; display: inline-flex; align-items: center; gap: 9px; padding: 10px 12px; color: #b0d9b7; white-space: nowrap; border-radius: 4px; }
+.org-reporting-line { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 91px; gap: 6px; color: #9bb7a1; font: 560 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .06em; text-transform: uppercase; }
+.org-reporting-line svg { color: #6f9074; }
+.org-team-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; padding: 0 23px 24px; }
+.org-team-card { border: 1px solid #3c4f40; border-radius: 6px; background: #1d2920; min-width: 0; overflow: hidden; }
+.org-team-head { display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #3c4f40; padding: 17px 18px; }
+.org-team-head > div:last-child { display: flex; flex-direction: column; gap: 3px; }
+.org-team-head strong { font-weight: 550; font-size: 14px; letter-spacing: -.015em; }
+.org-team-icon { border: 1px solid #506a55; background: #2c4030; display: grid; place-items: center; width: 35px; height: 35px; flex: none; border-radius: 4px; color: #b1e0ba; }
+.org-team-stem { margin: 0 auto; height: 19px; width: 1px; background: #597960; }
+.org-workers { display: grid; gap: 6px; padding: 0 13px 14px; }
+.org-worker { display: grid; align-items: center; grid-template-columns: 8px minmax(0,1fr) auto; gap: 10px; padding: 12px 10px; background: #26372a; border: 1px solid #3c5541; min-width: 0; border-radius: 3px; }
+.org-worker-dot { width: 6px; height: 6px; border-radius: 50%; background: #a0c8a8; }
+.org-worker span:nth-child(2) { font-size: 12px; line-height: 1.35; color: #e5ede4; min-width: 0; }
+.org-worker small { font: 550 8px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .02em; white-space: nowrap; color: #8da293; }
+.org-caption { display: flex; align-items: start; gap: 9px; padding: 14px 25px; margin: 0; border-top: 1px solid #354739; color: #8aa08f; font-size: 11px; line-height: 1.6; }
+.org-caption svg { margin-top: 2px; flex: none; }
+
+.delegation-section { padding-top: 155px; }
+.delegation-header { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 30px; margin-bottom: 42px; }
+.delegation-header h2 { margin: 16px 0 16px; font-size: clamp(40px,4.6vw,66px); font-weight: 560; letter-spacing: -.063em; line-height: 1.08; }
+.delegation-header p { color: var(--muted); max-width: 610px; margin: 0; font-size: 15px; line-height: 1.65; }
+.delegation-legend { display: flex; align-items: center; gap: 23px; padding-bottom: 12px; }
+.delegation-legend span { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 11px; color: #a4b4a8; }
+.delegation-legend i { width: 9px; height: 9px; display: inline-block; border-radius: 50%; }
+.legend-human { background: #ddb676; }.legend-ai { background: #9ad2a8; }
+.delegation-workspace { background: #111814; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.delegation-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 19px 22px; border-bottom: 1px solid var(--line); }
+.delegation-scenario-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.delegation-scenario-pills button { cursor: pointer; border: 1px solid #37443a; border-radius: 4px; color: #aebfb1; background: #202920; padding: 9px 13px; font-size: 11px; }
+.delegation-scenario-pills button:hover { border-color: #739d7a; color: #fff; }
+.delegation-scenario-pills button.chosen { color: #dff3e2; border-color: #89b695; background: #2b4330; }
+.delegation-columns { display: grid; grid-template-columns: minmax(260px,.43fr) minmax(0,.57fr); }
+.delegation-steps { border-right: 1px solid var(--line); padding: 26px 21px 29px; }
+.delegation-goal { font-size: 13px; line-height: 1.65; color: #9faea3; padding: 0 7px 20px; margin: 0 0 12px; border-bottom: 1px solid #2d3a30; }
+.delegation-step { text-align: left; width: 100%; color: #b4c3b7; background: transparent; border: 1px solid transparent; display: flex; align-items: center; gap: 12px; padding: 13px 10px; border-radius: 5px; cursor: pointer; }
+.delegation-step:hover { background: #1b2820; }
+.delegation-step.is-active { border-color: #507d59; background: #253c2b; color: #e2f1e3; }
+.delegation-step.is-complete { color: #9fd2aa; }
+.delegation-step-number { width: 29px; height: 29px; border: 1px solid #445449; color: #9ead9f; display: grid; place-items: center; font: 580 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace; border-radius: 4px; flex: none; }
+.delegation-step.is-active .delegation-step-number { border-color: #7faa88; background: #35553c; color: #ecffec; }
+.delegation-step.is-complete .delegation-step-number { background: #2b4732; border-color: #587b60; }
+.delegation-step-label { font-size: 12px; font-weight: 560; flex: 1; }
+.delegation-step > svg { opacity: .4; }
+.delegation-step.is-active > svg { opacity: 1; }
+.delegation-focus-panel { padding: 31px 35px 28px; min-height: 515px; display: flex; flex-direction: column; }
+.delegation-focus-top { display: flex; justify-content: space-between; color: #74947e; font: 560 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .08em; }
+.delegation-actor { display: flex; align-items: center; gap: 15px; padding: 26px 0 23px; margin-top: 30px; border-block: 1px solid #334138; }
+.delegation-actor-icon { width: 57px; height: 57px; flex: none; display: grid; place-items: center; color: #bbebc4; background: #314534; border: 1px solid #5a8262; border-radius: 6px; }
+.delegation-actor.human .delegation-actor-icon { background: #3a3527; border-color: #806b49; color: #e9c88d; }
+.delegation-actor > div { display: flex; flex-direction: column; gap: 4px; }
+.delegation-actor small { font: 590 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .05em; color: #93a995; }
+.delegation-actor.human small { color: #bba47d; }
+.delegation-actor strong { font-size: 17px; font-weight: 570; letter-spacing: -.028em; }
+.delegation-focus-panel h3 { font-size: clamp(27px,3vw,39px); line-height: 1.13; font-weight: 560; letter-spacing: -.046em; margin: 32px 0 13px; }
+.delegation-focus-panel > p { max-width: 550px; font-size: 14px; line-height: 1.65; margin: 0; color: #a5b7a9; }
+.delegation-rule { padding: 16px 17px; border: 1px solid #3e5744; border-radius: 4px; color: #a5c7ab; background: #233128; display: flex; gap: 12px; margin-top: 24px; font-size: 11px; line-height: 1.6; }
+.delegation-rule svg { flex: none; margin-top: 1px; }
+.delegation-actions { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: auto; padding-top: 34px; }
+.delegation-actions > span { color: #8ca090; font: 560 10px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .05em; }
+.delegation-outcome { border: 1px solid #304d37; border-top: 0; background: #17261a; padding: 23px 29px; display: flex; align-items: center; justify-content: space-between; gap: 45px; border-radius: 0 0 6px 6px; }
+.delegation-outcome > div { display: flex; align-items: center; gap: 13px; white-space: nowrap; color: #d3eeda; }
+.delegation-outcome strong { font-weight: 590; letter-spacing: -.01em; font-size: 13px; }
+.delegation-outcome p { margin: 0; max-width: 500px; font-size: 12px; line-height: 1.55; color: #8ea997; }
+
+.about-principles-section { border-top: 1px solid var(--line); background: #111613; padding-block: 112px 130px; }
+.about-principles-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
+.about-principle { border: 1px solid #303e34; background: #19211b; min-height: 290px; border-radius: 6px; padding: 27px; display: flex; flex-direction: column; }
+.about-principle-top { display: flex; align-items: center; justify-content: space-between; color: var(--accent); }
+.about-principle-top > span { font: 550 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.about-principle h3 { font-size: 21px; line-height: 1.2; letter-spacing: -.04em; font-weight: 555; margin: auto 0 12px; }
+.about-principle p { color: #a4b1a5; font-size: 13px; line-height: 1.65; margin: 0; }
+.about-bottom-cta { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 30px; padding-block: 135px 125px; }
+.about-bottom-cta h2 { font-size: clamp(38px,4.8vw,69px); line-height: 1.09; letter-spacing: -.059em; font-weight: 540; margin: 22px 0; }
+.about-bottom-cta p:not(.micro-label) { color: var(--muted); max-width: 590px; line-height: 1.7; }
+.about-bottom-links { display: flex; gap: 9px; flex-wrap: wrap; padding-bottom: 5px; }
+.about-status-note { display: flex; gap: 10px; color: #8d9f92; padding-bottom: 42px; align-items: start; }
+.about-status-note svg { flex: none; margin-top: 2px; }
+.about-status-note p { margin: 0; max-width: 900px; font-size: 11px; line-height: 1.65; }
+.homepage-org-link { border: 1px solid #3a5140; border-radius: 6px; margin-top: 23px; background: #1a2c20; padding: 27px 29px; display: flex; align-items: center; justify-content: space-between; gap: 30px; }
+.homepage-org-link strong { margin: 7px 0 5px; display: block; font-size: 18px; letter-spacing: -.02em; font-weight: 550; }
+.homepage-org-link p { color: #9eb8a5; font-size: 12px; margin: 0; max-width: 580px; }
+.homepage-org-link .button { flex: none; }
+
+@media (max-width: 1150px) {
+  .about-hero-grid { grid-template-columns: 1.1fr .7fr; }
+  .about-statement { grid-template-columns: 110px 1fr; }
+  .about-statement > p { grid-column: 2; margin-top: 0; max-width: 680px; }
+  .org-visual { padding-inline: 20px; }
+  .org-grid { gap: 9px; }
+  .org-exec { padding: 15px; }
+  .org-exec-title { font-size: 22px; }
+  .org-exec-title span { display: block; margin: 5px 0 0; }
+  .org-worker { grid-template-columns: 8px minmax(0,1fr); }
+  .org-worker small { display: none; }
+  .about-principle { padding: 23px; }
+}
+@media (max-width: 900px) {
+  .about-hero { padding-top: 75px; }
+  .about-hero-grid { display: block; }
+  .about-hero h1 { font-size: clamp(52px,8.1vw,74px); }
+  .about-hero-aside { margin-top: 32px; max-width: 650px; }
+  .about-quick-stats { margin-top: 70px; }
+  .about-quick-stats > div { align-items: start; flex-direction: column; gap: 8px; padding-inline: 16px; }
+  .about-statement { padding-block: 75px; }
+  .org-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .org-branch-cap { width: 51%; }
+  .org-exec:nth-child(3),.org-exec:nth-child(4) { margin-top: 0; }
+  .org-exec:nth-child(n+3)::before { display: none; }
+  .org-team-grid { grid-template-columns: 1fr; }
+  .org-team-stem { height: 9px; }
+  .org-workers { grid-template-columns: 1fr 1fr; }
+  .org-worker small { display: block; }
+  .delegation-section { padding-top: 105px; }
+  .delegation-header { display: block; }
+  .delegation-legend { margin-top: 26px; }
+  .delegation-columns { grid-template-columns: minmax(215px,.4fr) minmax(0,.6fr); }
+  .delegation-focus-panel { padding-inline: 22px; }
+  .about-principles-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .about-principle { min-height: 250px; }
+  .about-bottom-cta { padding-block: 95px; display: block; }
+  .about-bottom-links { margin-top: 27px; }
+}
+@media (max-width: 620px) {
+  .about-hero { padding-top: 56px; padding-bottom: 18px; }
+  .about-hero h1 { font-size: clamp(40px,10.15vw,55px); }
+  .about-hero-aside p { font-size: 15px; }
+  .about-quick-stats { margin-top: 56px; grid-template-columns: 1fr 1fr; }
+  .about-quick-stats > div { padding: 18px 10px !important; gap: 8px; min-height: 90px; flex-direction: row; align-items: baseline; }
+  .about-quick-stats > div:nth-child(2) { border-right: 0; }
+  .about-quick-stats > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .about-quick-stats strong { font-size: 27px; }
+  .about-quick-stats span { font-size: 10px; }
+  .about-statement { display: block; padding-block: 64px; }
+  .about-statement h2 { font-size: clamp(32px,8.6vw,43px); margin-top: 20px; }
+  .about-statement > p { font-size: 13px; margin-top: 22px; }
+  .about-organisation-section { padding-bottom: 40px; }
+  .org-visual { padding: 25px 12px 17px; }
+  .org-root-card { padding: 11px; min-height: 81px; }
+  .org-avatar { width: 42px; height: 42px; }
+  .org-root-info strong { font-size: 14px; }
+  .org-root-info > span:last-child { font-size: 10px; }
+  .org-type { font-size: 8px; }
+  .org-status-pill { display: none; }
+  .org-spine { height: 36px; }
+  .org-spine-bottom { height: 37px; }
+  .org-grid { gap: 7px; }
+  .org-exec { padding: 12px; min-height: 163px; }
+  .org-exec-top { gap: 5px; }
+  .org-exec-top svg { display: none; }
+  .org-exec-icon { width: 24px; height: 24px; font-size: 15px; }
+  .org-exec-title { margin-top: 14px; font-size: 19px; }
+  .org-exec-title span { font-size: 11px; }
+  .org-exec-domain { font-size: 10px; }
+  .org-exec-footer { font-size: 9px; padding-top: 9px; }
+  .org-exec-footer svg { display: none; }
+  .org-division-intro { display: block; padding: 25px 18px 20px; }
+  .org-division-intro h3 { font-size: 30px; }
+  .org-division-intro h3 span { font-size: 12px; display: block; margin-top: 5px; }
+  .org-division-intro p { font-size: 12px; }
+  .org-division-badge { margin-top: 18px; font-size: 9px; }
+  .org-reporting-line { min-height: 62px; }
+  .org-team-grid { padding: 0 10px 12px; gap: 8px; }
+  .org-team-head { padding: 12px; }
+  .org-team-head strong { font-size: 12px; }
+  .org-workers { padding: 0 8px 9px; gap: 6px; }
+  .org-worker { padding: 10px 7px; gap: 6px; }
+  .org-worker span:nth-child(2) { font-size: 10px; }
+  .org-worker small { display: none; }
+  .org-caption { padding: 11px 12px; font-size: 10px; }
+  .delegation-section { padding-top: 78px; }
+  .delegation-header h2 { font-size: clamp(36px,9vw,45px); }
+  .delegation-header p { font-size: 13px; }
+  .delegation-legend { gap: 13px; flex-wrap: wrap; }
+  .delegation-legend span { font-size: 10px; }
+  .delegation-toolbar { display: block; padding: 16px; }
+  .delegation-scenario-pills { margin-top: 12px; }
+  .delegation-scenario-pills button { padding: 8px 9px; font-size: 10px; }
+  .delegation-columns { display: block; }
+  .delegation-steps { padding: 14px 12px 15px; border-right: 0; border-bottom: 1px solid var(--line); display: flex; overflow-x: auto; gap: 4px; }
+  .delegation-goal { display: none; }
+  .delegation-step { flex: 0 0 55px; height: 46px; display: flex; justify-content: center; padding: 5px; }
+  .delegation-step-label,.delegation-step > svg { display: none; }
+  .delegation-step-number { width: 32px; height: 32px; }
+  .delegation-focus-panel { padding: 22px 17px; min-height: 425px; }
+  .delegation-focus-top { font-size: 9px; }
+  .delegation-actor { margin-top: 22px; }
+  .delegation-actor-icon { width: 48px; height: 48px; }
+  .delegation-actor strong { font-size: 14px; }
+  .delegation-actor small { font-size: 9px; }
+  .delegation-focus-panel h3 { font-size: 31px; margin-top: 26px; }
+  .delegation-focus-panel > p { font-size: 13px; }
+  .delegation-rule { font-size: 10px; padding: 13px; }
+  .delegation-actions { padding-top: 28px; }
+  .delegation-actions .button { min-height: 42px; }
+  .delegation-outcome { display: block; padding: 19px; }
+  .delegation-outcome > div { white-space: normal; }
+  .delegation-outcome p { margin-top: 11px; }
+  .about-principles-section { padding-block: 70px; }
+  .about-principles-grid { grid-template-columns: 1fr; gap: 8px; }
+  .about-principle { min-height: 195px; }
+  .about-principle h3 { margin-top: 30px; }
+  .about-bottom-cta { padding-block: 80px 60px; }
+  .about-bottom-cta h2 { font-size: clamp(37px,9vw,53px); }
+  .about-bottom-links { align-items: stretch; }
+  .homepage-org-link { padding: 22px; display: block; }
+  .homepage-org-link .button { margin-top: 19px; }
+}
+
+[hidden]{display:none!important}
+</style></head><body><a class="skip-link" href="#main">Skip to content</a><header class="site-header"><div class="site-header-inner wrap"><a aria-label="BLENTERA home" class="wordmark" href="?view=home"><span aria-hidden="true" class="brand-symbol"><i></i><i></i><i></i><i></i></span><span>BLENTERA</span></a><nav aria-label="Main navigation" class="desktop-nav"><a href="?view=home#why">Why BLENTERA</a><a href="?view=home#platform">Platform</a><a href="?view=home#how-it-works">How it works</a><a href="?view=about">About / Organisation</a><a href="?view=home#control">Control</a></nav><a class="button button-small button-outline header-action" href="?view=home#contact">Get in touch <svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24" width="15"><path d="M7 17 17 7M7 7h10v10"></path></svg></a><button aria-controls="mobile-navigation" aria-label="Open navigation" class="mobile-menu-toggle" type="button"><svg aria-hidden="true" class="" fill="none" height="22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="22"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button></div><nav aria-label="Mobile navigation" class="mobile-nav" hidden="" id="mobile-navigation"><a href="?view=home#why">Why BLENTERA</a><a href="?view=home#platform">Platform</a><a href="?view=home#how-it-works">How it works</a><a href="?view=about">About / Organisation</a><a href="?view=home#control">Control</a><a href="?view=home#contact">Get in touch <svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><path d="M7 17 17 7M7 7h10v10"></path></svg></a></nav></header><div id="page-home"><main id="main"><section aria-labelledby="hero-title" class="hero wrap"><div class="hero-meta"><span class="live-dot"></span> The company AI foundation</div><div class="hero-grid"><h1 id="hero-title">Build your company’s AI capability <span>once.</span><br/><em>Keep building on it.</em></h1><div class="hero-aside"><p>One shared foundation for company knowledge, work, governance and learning. It stays useful as people, agents, models and tools change.</p><div class="hero-cta"><a class="button button-primary" href="#platform">Explore the foundation <svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><path d="M7 17 17 7M7 7h10v10"></path></svg></a><a class="button button-outline" href="#how-it-works">How it works <svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></a></div></div></div><div class="hero-scroll-note"><span>One company foundation</span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="15"><path d="M12 4v16m-6-6 6 6 6-6"></path></svg><span>Not another isolated AI tool</span></div></section><section aria-label="Shared foundation visualisation" class="stage-section"><div aria-hidden="true" class="stage-grid"></div><div class="stage-content wrap"><div class="stage-heading"><span class="stage-label">ONE COMPANY LAYER</span><span>PEOPLE + AGENTS + AI</span></div><div class="system-diagram"><div class="system-input-row"><div>People <span>↘</span></div><div>AI agents <span>↓</span></div><div>Models &amp; tools <span>↙</span></div></div><div aria-hidden="true" class="system-stem"></div><div class="system-core"><div class="system-core-header"><span aria-hidden="true" class="brand-symbol symbol-large"><i></i><i></i><i></i><i></i></span><span>BLENTERA FOUNDATION</span><span class="system-core-marker">001</span></div><div class="system-core-body"><span>Knowledge</span><span>Work</span><span>Organisation</span><span>Governance</span><span>Capability</span></div></div><div class="system-out"><span>One source of company context</span><span>Reusable capability</span><span>Continuity across change</span></div></div><p class="stage-caption">What the company learns stays with the company. <span>Illustrative architecture</span></p></div></section><section aria-labelledby="why-heading" class="section block-section wrap" id="why"><div class="section-intro"><span class="section-index">THE PROBLEM</span><div><h2 id="why-heading">Every new AI use case shouldn't start from zero.</h2><p>Knowledge, workflows and learning become fragmented when they live inside individual people, tools or AI models.</p></div></div><div class="comparison-grid"><div class="comparison-card comparison-before"><div class="comparison-title"><span class="muted-circle">×</span><h3>Without a shared foundation</h3></div><ul><li>Reconnect company context</li><li>Rebuild permissions and controls</li><li>Reimplement workflows</li><li>Lose learning between tools and people</li></ul><p class="comparison-summary">More AI can mean more fragmentation.</p></div><div class="comparison-card comparison-after"><div class="comparison-title"><span class="accent-circle"><svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><path d="m5 12 5 5L20 7"></path></svg></span><h3>With BLENTERA</h3></div><ul><li>One company context</li><li>Governed, reusable knowledge</li><li>Persistent work and coordination</li><li>Learning that improves future work</li></ul><p class="comparison-summary">Company capability compounds over time.</p></div></div></section><section aria-labelledby="platform-heading" class="section wrap" id="platform"><div class="section-intro"><span class="section-index">THE PLATFORM</span><div><h2 id="platform-heading">Everything works from the same foundation.</h2><p>Four interconnected layers keep the company’s AI capability durable, coordinated and under control.</p></div></div><div class="foundation-grid"><article class="foundation-card"><div class="foundation-card-top"><span>01</span><svg aria-hidden="true" class="" fill="none" height="22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" viewbox="0 0 24 24" width="22"><path d="M12 7v14M3 5.5c3-.6 6-.5 9 1 3-1.5 6-1.6 9-1V19c-3-.6-6-.5-9 1-3-1.5-6-1.6-9-1V5.5Z"></path><path d="M5 10h4m-4 3h4m6-3h4m-4 3h4"></path></svg></div><div><p class="foundation-detail">CONTEXT · KNOWLEDGE · MEMORY</p><h3>Company knowledge</h3><p class="foundation-description">Company context, connected information and governed memory that people and AI can reuse.</p></div><span aria-hidden="true" class="foundation-card-link"><svg aria-hidden="true" class="" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="20"><path d="M7 17 17 7M7 7h10v10"></path></svg></span></article><article class="foundation-card"><div class="foundation-card-top"><span>02</span><svg aria-hidden="true" class="" fill="none" height="22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" viewbox="0 0 24 24" width="22"><rect height="4" rx="1" width="4" x="10" y="2"></rect><rect height="4" rx="1" width="5" x="2" y="18"></rect><rect height="4" rx="1" width="5" x="10" y="18"></rect><rect height="4" rx="1" width="4" x="18" y="18"></rect><path d="M12 6v8M4.5 18v-4h15v4M12.5 14v4"></path></svg></div><div><p class="foundation-detail">WORK · ROLES · DELEGATION</p><h3>Work &amp; organisation</h3><p class="foundation-description">Goals, tasks, projects and accountable work across people, agents and workflows.</p></div><span aria-hidden="true" class="foundation-card-link"><svg aria-hidden="true" class="" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="20"><path d="M7 17 17 7M7 7h10v10"></path></svg></span></article><article class="foundation-card"><div class="foundation-card-top"><span>03</span><svg aria-hidden="true" class="" fill="none" height="22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" viewbox="0 0 24 24" width="22"><path d="m12 2 10 6-10 6L2 8l10-6Zm-10 10 10 6 10-6M2 16l10 6 10-6"></path></svg></div><div><p class="foundation-detail">LEARNING · STANDARDS · SOFTWARE</p><h3>Compounding capability</h3><p class="foundation-description">Turn reviewed outcomes into reusable playbooks, skills, standards and, eventually, software.</p></div><span aria-hidden="true" class="foundation-card-link"><svg aria-hidden="true" class="" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="20"><path d="M7 17 17 7M7 7h10v10"></path></svg></span></article><article class="foundation-card"><div class="foundation-card-top"><span>04</span><svg aria-hidden="true" class="" fill="none" height="22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" viewbox="0 0 24 24" width="22"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="m8.5 12.5 2.5 2.5 4.5-5"></path></svg></div><div><p class="foundation-detail">AUTHORITY · AUDIT · FREEDOM</p><h3>Control &amp; portability</h3><p class="foundation-description">Scoped permissions, approvals, evidence and replaceable agents, models and runtimes.</p></div><span aria-hidden="true" class="foundation-card-link"><svg aria-hidden="true" class="" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="20"><path d="M7 17 17 7M7 7h10v10"></path></svg></span></article></div><div class="demo-section-heading"><div><p class="micro-label">The product, made tangible</p><h3>One workspace. Shared context.<br/><span>Different ways to work.</span></h3></div><p>A concept view of how knowledge, people, agents and controls connect within one company foundation.</p></div><div aria-label="Illustrative BLENTERA interface" class="product-demo"><div class="demo-browser-bar"><div aria-hidden="true" class="browser-dots"><i></i><i></i><i></i></div><span class="browser-title">BLENTERA / Your company</span><span class="browser-mode"><span class="subtle-dot"></span> Concept preview</span></div><div class="demo-workspace"><aside aria-hidden="true" class="demo-sidebar"><div class="demo-sidebar-head"><span class="sidebar-avatar">B</span><span>Company workspace</span></div><div class="sidebar-menu"><span class="selected"><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><rect height="16" rx="2" width="18" x="3" y="4"></rect><path d="M9 4v16"></path></svg> Foundation</span><span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><rect height="6" rx="1" width="6" x="3" y="3"></rect><rect height="6" rx="1" width="6" x="15" y="15"></rect><path d="M9 6h5a4 4 0 0 1 4 4v5M6 9v8h9"></path></svg> Work</span><span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><path d="M12 7v14M3 5.5c3-.6 6-.5 9 1 3-1.5 6-1.6 9-1V19c-3-.6-6-.5-9 1-3-1.5-6-1.6-9-1V5.5Z"></path><path d="M5 10h4m-4 3h4m6-3h4m-4 3h4"></path></svg> Knowledge</span><span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="m8.5 12.5 2.5 2.5 4.5-5"></path></svg> Governance</span></div><div class="demo-sidebar-bottom"><span class="sidebar-avatar sidebar-avatar-small">◎</span><span>Shared company layer</span></div></aside><div class="demo-main"><div class="demo-main-heading"><div><span class="demo-crumb">Company / Foundation</span><h2>Company AI foundation</h2><p>A shared starting point for people, agents and work.</p></div><span aria-hidden="true" class="demo-heading-mark">✳</span></div><div aria-label="Example company foundation views" class="demo-tablist" role="tablist"><button aria-controls="panel-knowledge" aria-selected="true" id="tab-knowledge" role="tab" tabindex="0" type="button">Company knowledge</button><button aria-controls="panel-work" id="tab-work" role="tab" tabindex="-1" type="button">Work &amp; agents</button><button aria-controls="panel-control" id="tab-control" role="tab" tabindex="-1" type="button">Governance</button></div><div aria-labelledby="tab-knowledge" class="demo-panel" id="panel-knowledge" role="tabpanel" tabindex="0"><div class="demo-content-grid"><div class="demo-primary-panel"><p class="demo-overline">Company foundation <span>／ 001</span></p><div class="demo-document-icon"><svg aria-hidden="true" class="" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="20"><path d="M12 7v14M3 5.5c3-.6 6-.5 9 1 3-1.5 6-1.6 9-1V19c-3-.6-6-.5-9 1-3-1.5-6-1.6-9-1V5.5Z"></path><path d="M5 10h4m-4 3h4m6-3h4m-4 3h4"></path></svg></div><h3>One source of company context.</h3><p>Connect what the company knows. Review what AI learns. Keep the foundation usable as the stack changes.</p><div class="demo-mini-metrics"><div><span>Strategy &amp; standards</span><strong>Shared</strong></div><div><span>Approved memory</span><strong>Governed</strong></div><div><span>Model dependency</span><strong>Replaceable</strong></div></div></div><div class="demo-secondary-panel"><p class="demo-overline">Knowledge layers</p><ul class="demo-stack-list"><li><span class="stack-icon"><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><path d="M12 7v14M3 5.5c3-.6 6-.5 9 1 3-1.5 6-1.6 9-1V19c-3-.6-6-.5-9 1-3-1.5-6-1.6-9-1V5.5Z"></path><path d="M5 10h4m-4 3h4m6-3h4m-4 3h4"></path></svg></span><span><strong>Company context</strong><small>Strategy · facts · shared knowledge</small></span><svg aria-hidden="true" class="success-icon" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><path d="m5 12 5 5L20 7"></path></svg></li><li><span class="stack-icon"><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h7M14 2v6h6M14 2l6 6"></path><circle cx="17" cy="17" r="5"></circle><path d="M17 14v3l2 1"></path></svg></span><span><strong>Reviewed memory</strong><small>Versioned learning · corrections</small></span><svg aria-hidden="true" class="success-icon" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><path d="m5 12 5 5L20 7"></path></svg></li><li><span class="stack-icon"><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><rect height="6" rx="1" width="6" x="3" y="3"></rect><rect height="6" rx="1" width="6" x="15" y="15"></rect><path d="M9 6h5a4 4 0 0 1 4 4v5M6 9v8h9"></path></svg></span><span><strong>Reusable standards</strong><small>Playbooks · skills · workflows</small></span><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><path d="M7 17 17 7M7 7h10v10"></path></svg></li></ul><div class="demo-footnote"><span class="subtle-dot"></span> Context belongs to the company, not the model.</div></div></div></div><div aria-labelledby="tab-work" class="demo-panel" hidden="" id="panel-work" role="tabpanel" tabindex="-1"><div class="demo-content-grid"><div class="demo-primary-panel"><p class="demo-overline">Shared work <span>／ 002</span></p><div class="demo-document-icon"><svg aria-hidden="true" class="" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="20"><rect height="6" rx="1" width="6" x="3" y="3"></rect><rect height="6" rx="1" width="6" x="15" y="15"></rect><path d="M9 6h5a4 4 0 0 1 4 4v5M6 9v8h9"></path></svg></div><h3>People and agents. One accountable way of working.</h3><p>Goals, ownership, handoffs and execution state live with the company, not inside an individual conversation.</p><div class="demo-path"><span>Goal</span><svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg><span>Task</span><svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg><span>Review</span></div></div><div class="demo-secondary-panel"><p class="demo-overline">Illustrative workflow</p><ol class="demo-activity-list"><li><span class="activity-node is-active"></span><div><strong>Prepare weekly operating review</strong><small>Assigned to a specialised agent</small></div><span class="demo-status">In progress</span></li><li><span class="activity-node"></span><div><strong>Validate outcome</strong><small>Evidence and postconditions</small></div><span class="demo-status">Next</span></li><li><span class="activity-node"></span><div><strong>Publish reviewed learning</strong><small>Update the company standard</small></div><span class="demo-status">Next</span></li></ol><div class="demo-footnote"><span class="subtle-dot"></span> Every meaningful action has an owner.</div></div></div></div><div aria-labelledby="tab-control" class="demo-panel" hidden="" id="panel-control" role="tabpanel" tabindex="-1"><div class="demo-content-grid"><div class="demo-primary-panel"><p class="demo-overline">Company governance <span>／ 003</span></p><div class="demo-document-icon"><svg aria-hidden="true" class="" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="m8.5 12.5 2.5 2.5 4.5-5"></path></svg></div><h3>Autonomy without losing control.</h3><p>Define what AI can access, when people approve and how decisions can be inspected and revisited.</p><div class="demo-mini-metrics"><div><span>Authority</span><strong>Scoped</strong></div><div><span>High-impact action</span><strong>Approved</strong></div><div><span>Evidence</span><strong>Retained</strong></div></div></div><div class="demo-secondary-panel"><p class="demo-overline">Control surface</p><ul class="demo-stack-list"><li><span class="stack-icon"><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><rect height="12" rx="2" width="16" x="4" y="10"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path><circle cx="12" cy="16" r="1"></circle></svg></span><span><strong>Permissions</strong><small>Identity · scope · purpose</small></span><span class="control-indicator">Scoped</span></li><li><span class="stack-icon"><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><circle cx="12" cy="12" r="9"></circle><path d="M10 9v6M14 9v6"></path></svg></span><span><strong>Approvals</strong><small>Human control when required</small></span><span class="control-indicator">Required</span></li><li><span class="stack-icon"><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h7M14 2v6h6M14 2l6 6"></path><circle cx="17" cy="17" r="5"></circle><path d="M17 14v3l2 1"></path></svg></span><span><strong>Evidence &amp; audit</strong><small>Know what happened, and why</small></span><span class="control-indicator">Reviewable</span></li></ul><div class="demo-footnote"><span class="subtle-dot"></span> Controls support compliance; they do not certify it.</div></div></div></div><p class="demo-disclaimer"><svg aria-hidden="true" class="" fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="13"><path d="m7 7 10 10M7 17h10V7"></path></svg> Illustrative product concept. Advanced capabilities are source-built and gated; hosted production is not yet qualified.</p></div></div></div><div class="homepage-org-link"><div><span class="micro-label">A WHOLE AGENT-ENABLED COMPANY</span><strong>From one AI assistant to an entire coordinated organisation.</strong><p>Explore a human founder, executive agent leaders, specialists and worker agents—plus how they delegate work.</p></div><a class="button button-outline" href="?view=about">Explore the organisation <svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><path d="M7 17 17 7M7 7h10v10"></path></svg></a></div></section><section aria-labelledby="how-heading" class="section section-with-line wrap" id="how-it-works"><div class="section-intro"><span class="section-index">THE COMPOUNDING LOOP</span><div><h2 id="how-heading">Real work becomes reusable company capability.</h2><p>AI is most valuable when useful outcomes can improve the next run, not disappear at the end of a conversation.</p></div></div><div class="loop-grid"><article class="loop-step"><span class="loop-number">01</span><div class="loop-step-body"><h3>Run real work</h3><p>People and agents start with shared company context.</p></div><svg aria-hidden="true" class="loop-arrow" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="18"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></article><article class="loop-step"><span class="loop-number">02</span><div class="loop-step-body"><h3>Verify the outcome</h3><p>Review results, corrections and evidence.</p></div><svg aria-hidden="true" class="loop-arrow" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="18"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></article><article class="loop-step"><span class="loop-number">03</span><div class="loop-step-body"><h3>Capture learning</h3><p>Promote useful knowledge into governed memory.</p></div><svg aria-hidden="true" class="loop-arrow" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="18"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></article><article class="loop-step"><span class="loop-number">04</span><div class="loop-step-body"><h3>Make it reusable</h3><p>Improve playbooks, skills and workflows.</p></div><svg aria-hidden="true" class="loop-arrow" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="18"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></article><article class="loop-step"><span class="loop-number">05</span><div class="loop-step-body"><h3>Move stable work to software</h3><p>Keep AI for judgement; automate repeatable steps.</p></div><svg aria-hidden="true" class="loop-arrow" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="18"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></article></div><div class="loop-after"><span class="loop-after-symbol"><svg aria-hidden="true" class="" fill="none" height="19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="19"><path d="m12 3 2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6ZM19 18l1 2 2 1-2 1M3 3l1 2 2 1"></path></svg></span><p>Next time, the company starts from what it already knows, has standardised and has learned.</p></div></section><section aria-labelledby="portability-heading" class="section wrap portability-section"><div class="portability-copy"><p class="micro-label">ANY AI. SAME FOUNDATION.</p><h2 id="portability-heading">Change your tools.<br/><span>Keep your capability.</span></h2><p>Company knowledge, workflows and standards should outlive any individual agent, model, provider or employee.</p><div class="check-list"><span><svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 3 3 5-6"></path></svg> Bring your own AI providers</span><span><svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 3 3 5-6"></path></svg> Connect existing business systems</span><span><svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 3 3 5-6"></path></svg> Preserve a portable company layer</span></div></div><div aria-label="An illustration of replaceable AI tools connected to a persistent company foundation" class="portability-visual"><div class="portability-satellite satellite-1">People</div><div class="portability-satellite satellite-2">Agents</div><div class="portability-satellite satellite-3">Models</div><div class="portability-satellite satellite-4">Systems</div><div class="portability-center"><span aria-hidden="true" class="brand-symbol"><i></i><i></i><i></i><i></i></span><strong>BLENTERA</strong><small>Persistent company layer</small></div><span class="portability-visual-note">REPLACEABLE AT THE EDGE. DURABLE AT THE CENTRE.</span></div></section><section aria-labelledby="control-heading" class="section wrap" id="control"><div class="control-panel"><div class="control-panel-intro"><p class="micro-label">GOVERNED FROM THE START</p><h2 id="control-heading">Powerful AI should still be accountable.</h2><p>Give people and agents a shared way to work, with explicit authority and evidence where it matters.</p><div class="control-icon"><svg aria-hidden="true" class="" fill="none" height="22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" viewbox="0 0 24 24" width="22"><rect height="12" rx="2" width="16" x="4" y="10"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path><circle cx="12" cy="16" r="1"></circle></svg></div></div><div class="control-list"><div class="control-list-row"><span>01</span><div><h3>Purpose &amp; ownership</h3><p>Know what the AI system is doing and who is accountable.</p></div><svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="17"><path d="M7 17 17 7M7 7h10v10"></path></svg></div><div class="control-list-row"><span>02</span><div><h3>Permissions &amp; approval</h3><p>Bound access and put people in control of consequential actions.</p></div><svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="17"><path d="M7 17 17 7M7 7h10v10"></path></svg></div><div class="control-list-row"><span>03</span><div><h3>Evidence &amp; oversight</h3><p>Make outcomes, changes and interventions reviewable.</p></div><svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="17"><path d="M7 17 17 7M7 7h10v10"></path></svg></div><div class="control-list-row"><span>04</span><div><h3>Portability</h3><p>Keep company knowledge usable when technologies change.</p></div><svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="17"><path d="M7 17 17 7M7 7h10v10"></path></svg></div></div></div><p class="control-disclaimer"><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="m8.5 12.5 2.5 2.5 4.5-5"></path></svg> BLENTERA is designed to support responsible AI operations. Controls and evidence do not, by themselves, guarantee legal compliance.</p></section><section aria-labelledby="status-heading" class="section status-section wrap"><div class="status-grid"><div><p class="micro-label">PRODUCT STATUS</p><h2 id="status-heading">Building towards real, repeatable customer value.</h2><p>BLENTERA is in product qualification. The goal is to make useful workflows run repeatedly and preserve what the company learns.</p></div><div class="status-cards"><div><span class="status-dot is-built"></span><strong>Foundation</strong><span>Source-built product primitives</span></div><div><span class="status-dot is-gated"></span><strong>Advanced capabilities</strong><span>Built in source, gated by default</span></div><div><span class="status-dot"></span><strong>Hosted production</strong><span>Qualification not yet complete</span></div></div></div></section><section aria-labelledby="contact-heading" class="final-cta wrap" id="contact"><div aria-hidden="true" class="final-cta-decoration">↗</div><p class="micro-label">BUILD ON WHAT YOUR COMPANY KNOWS</p><h2 id="contact-heading">Make AI capability<br/><em>a company asset.</em></h2><p>We’re working with the product and early customer evidence. Interested in a design partnership or a conversation about BLENTERA?</p><a class="button button-primary" href="mailto:august@augustworks.dk?subject=BLENTERA%20design%20partnership">Contact the founder <svg aria-hidden="true" class="" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="18"><path d="M7 17 17 7M7 7h10v10"></path></svg></a><span class="contact-note">Founder contact via August Works, a separate implementation company.</span></section></main></div><div hidden="" id="page-about"><main id="about-main"><section aria-labelledby="about-heading" class="about-hero wrap"><div class="hero-meta"><span class="live-dot"></span> ABOUT BLENTERA / THE OPERATING MODEL</div><div class="about-hero-grid"><h1 id="about-heading">A company of<br/>people and agents.<br/><em>One organisation.</em></h1><div class="about-hero-aside"><p>Imagine an entire company organisation where AI executives coordinate specialised teams, worker agents handle defined tasks, and humans retain the authority that matters.</p><a class="button button-primary" href="#organisation">Explore the organisation <svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><path d="M7 17 17 7M7 7h10v10"></path></svg></a><span>Illustrative organisational design. Not a live staffing directory.</span></div></div><div class="about-quick-stats"><div><strong>01</strong><span>Human founder</span></div><div><strong>01</strong><span>Executive orchestrator</span></div><div><strong>08</strong><span>AI executive functions</span></div><div><strong>72</strong><span>Team-lead &amp; specialist roles</span></div></div></section><section class="about-statement-section"><div class="wrap about-statement"><span class="section-index">THE IDEA</span><h2>Instead of one general-purpose assistant, imagine <em>an entire company that can delegate.</em></h2><p>A request moves from a human decision-maker to an orchestrator, then to accountable functions, specialist agents and bounded workers. The organisation retains the context, work and learning that connect them.</p></div></section><section aria-labelledby="organisation-heading" class="section wrap about-organisation-section" id="organisation"><div class="section-intro"><span class="section-index">THE ORGANISATION</span><div><h2 id="organisation-heading">The whole company.<br/>Not just one agent.</h2><p>Start with the human. Follow delegation through an AI Chief of Staff, a complete executive layer and specialist teams. Select an executive to open its reporting structure.</p></div></div><div aria-label="Illustrative organisation chart showing a human founder, an AI Chief of Staff and eight AI executive roles, each with team leads and specialist agents" class="org-visual"><div class="org-hierarchy-head"><div class="org-root-card org-human"><span class="org-avatar avatar-human"><svg aria-hidden="true" class="" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="24"><circle cx="12" cy="8" r="4"></circle><path d="M5 21a7 7 0 0 1 14 0"></path></svg></span><div class="org-root-info"><span class="org-type human-type">HUMAN · ACCOUNTABLE</span><strong>Founder &amp; CEO</strong><span>August Kring</span></div><span class="org-status-pill"><span class="org-status-dot"></span>Decision owner</span></div><div aria-hidden="true" class="org-spine"><span></span></div><div class="org-root-card org-chief-of-staff"><span class="org-avatar avatar-ai"><svg aria-hidden="true" class="" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.55" viewbox="0 0 24 24" width="24"><rect height="4" rx="1" width="4" x="10" y="2"></rect><rect height="4" rx="1" width="5" x="2" y="18"></rect><rect height="4" rx="1" width="5" x="10" y="18"></rect><rect height="4" rx="1" width="4" x="18" y="18"></rect><path d="M12 6v8M4.5 18v-4h15v4M12.5 14v4"></path></svg></span><div class="org-root-info"><span class="org-type">AI · EXECUTIVE ORCHESTRATOR</span><strong>Chief of Staff</strong><span>Plans · delegates · supervises · escalates</span></div><span class="org-status-pill"><span class="org-status-dot"></span>Coordination layer</span></div><div aria-hidden="true" class="org-spine org-spine-bottom"><span></span></div></div><div aria-hidden="true" class="org-branch-cap"></div><div aria-label="Select an AI executive to explore its delegated teams" class="org-grid"><button aria-controls="org-division-details" aria-pressed="true" class="org-exec is-selected" type="button"><span class="org-exec-top"><span aria-hidden="true" class="org-exec-icon">⌘</span><span class="org-type">AI EXECUTIVE</span><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="16"><path d="M7 17 17 7M7 7h10v10"></path></svg></span><span class="org-exec-title">CTO<span>Technology</span></span><span class="org-exec-domain">Engineering &amp; architecture</span><span class="org-exec-footer">3 team leads · 6 specialists <svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><path d="m9 18 6-6-6-6"></path></svg></span></button><button aria-controls="org-division-details" class="org-exec" type="button"><span class="org-exec-top"><span aria-hidden="true" class="org-exec-icon">◈</span><span class="org-type">AI EXECUTIVE</span><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="16"><path d="M7 17 17 7M7 7h10v10"></path></svg></span><span class="org-exec-title">CPO<span>Product</span></span><span class="org-exec-domain">Strategy &amp; experience</span><span class="org-exec-footer">3 team leads · 6 specialists <svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><path d="m9 18 6-6-6-6"></path></svg></span></button><button aria-controls="org-division-details" class="org-exec" type="button"><span class="org-exec-top"><span aria-hidden="true" class="org-exec-icon">◇</span><span class="org-type">AI EXECUTIVE</span><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="16"><path d="M7 17 17 7M7 7h10v10"></path></svg></span><span class="org-exec-title">COO<span>Operations</span></span><span class="org-exec-domain">Execution &amp; customer success</span><span class="org-exec-footer">3 team leads · 6 specialists <svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><path d="m9 18 6-6-6-6"></path></svg></span></button><button aria-controls="org-division-details" class="org-exec" type="button"><span class="org-exec-top"><span aria-hidden="true" class="org-exec-icon">✳</span><span class="org-type">AI EXECUTIVE</span><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="16"><path d="M7 17 17 7M7 7h10v10"></path></svg></span><span class="org-exec-title">CMO<span>Marketing</span></span><span class="org-exec-domain">Brand &amp; demand</span><span class="org-exec-footer">3 team leads · 6 specialists <svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><path d="m9 18 6-6-6-6"></path></svg></span></button><button aria-controls="org-division-details" class="org-exec" type="button"><span class="org-exec-top"><span aria-hidden="true" class="org-exec-icon">↗</span><span class="org-type">AI EXECUTIVE</span><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="16"><path d="M7 17 17 7M7 7h10v10"></path></svg></span><span class="org-exec-title">CRO<span>Revenue</span></span><span class="org-exec-domain">Sales &amp; partnerships</span><span class="org-exec-footer">3 team leads · 6 specialists <svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><path d="m9 18 6-6-6-6"></path></svg></span></button><button aria-controls="org-division-details" class="org-exec" type="button"><span class="org-exec-top"><span aria-hidden="true" class="org-exec-icon">▥</span><span class="org-type">AI EXECUTIVE</span><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="16"><path d="M7 17 17 7M7 7h10v10"></path></svg></span><span class="org-exec-title">CFO<span>Finance</span></span><span class="org-exec-domain">Economics &amp; planning</span><span class="org-exec-footer">3 team leads · 6 specialists <svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><path d="m9 18 6-6-6-6"></path></svg></span></button><button aria-controls="org-division-details" class="org-exec" type="button"><span class="org-exec-top"><span aria-hidden="true" class="org-exec-icon">⬡</span><span class="org-type">AI EXECUTIVE</span><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="16"><path d="M7 17 17 7M7 7h10v10"></path></svg></span><span class="org-exec-title">CISO<span>Security</span></span><span class="org-exec-domain">Trust &amp; governance</span><span class="org-exec-footer">3 team leads · 6 specialists <svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><path d="m9 18 6-6-6-6"></path></svg></span></button><button aria-controls="org-division-details" class="org-exec" type="button"><span class="org-exec-top"><span aria-hidden="true" class="org-exec-icon">⌑</span><span class="org-type">AI EXECUTIVE</span><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24" width="16"><path d="M7 17 17 7M7 7h10v10"></path></svg></span><span class="org-exec-title">CHRO<span>People &amp; Agents</span></span><span class="org-exec-domain">Workforce enablement</span><span class="org-exec-footer">3 team leads · 6 specialists <svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><path d="m9 18 6-6-6-6"></path></svg></span></button></div></div><div aria-atomic="true" aria-live="polite" class="org-division-detail" id="org-division-details"><div class="org-division-intro"><div><span class="micro-label">INSIDE THE CTO ORGANISATION</span><h3>Technology<span> / AI-led division</span></h3><p>Owns implementation quality, architecture, platform reliability and technical delivery.</p></div><div class="org-division-badge"><span class="org-status-dot"></span> 3 LEADS · 6 SPECIALISTS</div></div><div aria-hidden="true" class="org-reporting-line"><span>CTO · AI executive</span><svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><path d="M12 4v16m-6-6 6 6 6-6"></path></svg></div><div class="org-team-grid"><div class="org-team-card"><div class="org-team-head"><div class="org-team-icon"><svg aria-hidden="true" class="" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="18"><rect height="13" rx="2" width="16" x="4" y="8"></rect><path d="M12 4v4m-3-4h6M8 13h.01M16 13h.01M8 17h8"></path></svg></div><div><span class="org-type">AI TEAM LEAD / 01</span><strong>Engineering Lead</strong></div></div><div aria-hidden="true" class="org-team-stem"></div><div class="org-workers"><div class="org-worker"><span class="org-worker-dot"></span><span>Frontend Engineer</span><small>WORKER AGENT</small></div><div class="org-worker"><span class="org-worker-dot"></span><span>Backend Engineer</span><small>WORKER AGENT</small></div></div></div><div class="org-team-card"><div class="org-team-head"><div class="org-team-icon"><svg aria-hidden="true" class="" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="18"><rect height="13" rx="2" width="16" x="4" y="8"></rect><path d="M12 4v4m-3-4h6M8 13h.01M16 13h.01M8 17h8"></path></svg></div><div><span class="org-type">AI TEAM LEAD / 02</span><strong>Platform Lead</strong></div></div><div aria-hidden="true" class="org-team-stem"></div><div class="org-workers"><div class="org-worker"><span class="org-worker-dot"></span><span>DevOps / SRE</span><small>WORKER AGENT</small></div><div class="org-worker"><span class="org-worker-dot"></span><span>Integration Engineer</span><small>WORKER AGENT</small></div></div></div><div class="org-team-card"><div class="org-team-head"><div class="org-team-icon"><svg aria-hidden="true" class="" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewbox="0 0 24 24" width="18"><rect height="13" rx="2" width="16" x="4" y="8"></rect><path d="M12 4v4m-3-4h6M8 13h.01M16 13h.01M8 17h8"></path></svg></div><div><span class="org-type">AI TEAM LEAD / 03</span><strong>Quality Lead</strong></div></div><div aria-hidden="true" class="org-team-stem"></div><div class="org-workers"><div class="org-worker"><span class="org-worker-dot"></span><span>QA &amp; Test Agent</span><small>WORKER AGENT</small></div><div class="org-worker"><span class="org-worker-dot"></span><span>Code Review Agent</span><small>WORKER AGENT</small></div></div></div></div><p class="org-caption"><svg aria-hidden="true" class="" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="14"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3"></circle></svg> Example agent-enabled organisation. Roles, staffing, execution and authority are illustrative—not claims that these agents are all deployed today.</p></div><div class="delegation-section" id="delegation"><div class="delegation-header"><div><span class="section-index">SEE THE DELEGATION</span><h2>One goal.<br/><em>Many coordinated agents.</em></h2><p>Explore how one request can move from human intent to executive planning, specialist work, approvals and company learning.</p></div><div class="delegation-legend"><span><i class="legend-human"></i>Human accountability</span><span><i class="legend-ai"></i>AI agent</span></div></div><div class="delegation-workspace"><div class="delegation-toolbar"><span class="micro-label">EXAMPLE MISSION</span><div aria-label="Choose an example mission" class="delegation-scenario-pills" role="group"><button aria-pressed="true" class="chosen" type="button">Ship a new capability</button><button class="" type="button">Open a new market</button><button class="" type="button">Resolve a critical incident</button></div></div><div class="delegation-columns"><aside aria-label="Delegation stages" class="delegation-steps"><p class="delegation-goal">From idea to a reviewed release — without losing who owns what.</p><button class="delegation-step is-complete" type="button"><span class="delegation-step-number"><svg aria-hidden="true" class="" fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="13"><path d="m5 12 5 5L20 7"></path></svg></span><span class="delegation-step-label">Sets the outcome</span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></button><button aria-current="step" class="delegation-step is-active" type="button"><span class="delegation-step-number">02</span><span class="delegation-step-label">Routes the mission</span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></button><button class="delegation-step" type="button"><span class="delegation-step-number">03</span><span class="delegation-step-label">Defines what to build</span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></button><button class="delegation-step" type="button"><span class="delegation-step-number">04</span><span class="delegation-step-label">Builds and tests</span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></button><button class="delegation-step" type="button"><span class="delegation-step-number">05</span><span class="delegation-step-label">Checks the boundary</span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></button><button class="delegation-step" type="button"><span class="delegation-step-number">06</span><span class="delegation-step-label">Approves material action</span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></button><button class="delegation-step" type="button"><span class="delegation-step-number">07</span><span class="delegation-step-label">Captures what worked</span><svg aria-hidden="true" class="" fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="15"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></button></aside><div aria-atomic="true" aria-live="polite" class="delegation-focus-panel"><div class="delegation-focus-top"><span>DELEGATION TRACE / 02</span><span>ILLUSTRATIVE</span></div><div class="delegation-actor agent"><span class="delegation-actor-icon"><svg aria-hidden="true" class="" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="24"><rect height="13" rx="2" width="16" x="4" y="8"></rect><path d="M12 4v4m-3-4h6M8 13h.01M16 13h.01M8 17h8"></path></svg></span><div><small>AI DELEGATED ROLE</small><strong>Chief of Staff</strong></div></div><h3>Routes the mission</h3><p>The orchestrator breaks the goal into bounded tasks with owners and dependencies.</p><div class="delegation-rule"><svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><rect height="12" rx="2" width="16" x="4" y="10"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path><circle cx="12" cy="16" r="1"></circle></svg><span>Scope, permissions and human checkpoints remain explicit. AI proposals do not grant their own authority.</span></div><div class="delegation-actions"><span>STEP 2 OF 7</span><button class="button button-primary" type="button">Next handoff<svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></button></div></div></div></div><div class="delegation-outcome"><div><svg aria-hidden="true" class="" fill="none" height="22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="22"><rect height="6" rx="1" width="6" x="3" y="3"></rect><rect height="6" rx="1" width="6" x="15" y="15"></rect><path d="M9 6h5a4 4 0 0 1 4 4v5M6 9v8h9"></path></svg><strong>Delegation without fragmentation.</strong></div><p>Every team works from the same company context, while execution, review and reusable learning stay connected.</p></div></div></section><section aria-labelledby="principles-heading" class="about-principles-section"><div class="wrap"><div class="section-intro"><span class="section-index">THE RULES</span><div><h2 id="principles-heading">More capability.<br/>Clearer responsibility.</h2><p>The value is not the number of agents. It is coordinated work that produces better outcomes without losing human control.</p></div></div><div class="about-principles-grid"><article class="about-principle"><div class="about-principle-top"><span>01</span><svg aria-hidden="true" class="" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" viewbox="0 0 24 24" width="24"><circle cx="9" cy="8" r="3"></circle><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 7a3 3 0 0 1 0 6M21 21v-3a5 5 0 0 0-4-5"></path></svg></div><h3>Human authority</h3><p>People set purpose, own decisions and approve consequential actions. Delegation never removes accountability.</p></article><article class="about-principle"><div class="about-principle-top"><span>02</span><svg aria-hidden="true" class="" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" viewbox="0 0 24 24" width="24"><rect height="6" rx="1" width="6" x="3" y="3"></rect><rect height="6" rx="1" width="6" x="15" y="15"></rect><path d="M9 6h5a4 4 0 0 1 4 4v5M6 9v8h9"></path></svg></div><h3>Agent leverage</h3><p>Executive agents coordinate specialist teams. Specialists can delegate bounded jobs to worker agents.</p></article><article class="about-principle"><div class="about-principle-top"><span>03</span><svg aria-hidden="true" class="" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" viewbox="0 0 24 24" width="24"><path d="M12 7v14M3 5.5c3-.6 6-.5 9 1 3-1.5 6-1.6 9-1V19c-3-.6-6-.5-9 1-3-1.5-6-1.6-9-1V5.5Z"></path><path d="M5 10h4m-4 3h4m6-3h4m-4 3h4"></path></svg></div><h3>Company learning</h3><p>Work, reviews and reusable standards belong to the organisation rather than any single model or conversation.</p></article><article class="about-principle"><div class="about-principle-top"><span>04</span><svg aria-hidden="true" class="" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" viewbox="0 0 24 24" width="24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="m8.5 12.5 2.5 2.5 4.5-5"></path></svg></div><h3>Governance built in</h3><p>Permissions, budgets, supervision, evidence and portability make more autonomous work controllable.</p></article></div></div></section><section aria-labelledby="about-cta-title" class="about-bottom-cta wrap"><div><p class="micro-label">THE BLENTERA FOUNDATION</p><h2 id="about-cta-title">The organisation can change.<br/><em>The capability stays.</em></h2><p>People move. AI models improve. New agents join. The shared company foundation keeps useful work, context and learning available.</p></div><div class="about-bottom-links"><a class="button button-primary" href="?view=home">Explore BLENTERA <svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><path d="M7 17 17 7M7 7h10v10"></path></svg></a><a class="button button-outline" href="mailto:august@augustworks.dk?subject=BLENTERA%20organisation">Talk to the founder <svg aria-hidden="true" class="" fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="17"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></a></div></section><div class="about-status-note wrap"><svg aria-hidden="true" class="" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewbox="0 0 24 24" width="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="m8.5 12.5 2.5 2.5 4.5-5"></path></svg><p>Concept demonstration: the chart illustrates an agentic operating model that BLENTERA is designed to support. It does not indicate all depicted agents are currently active. Advanced capabilities are gated and hosted production qualification remains incomplete.</p></div></main></div><footer class="site-footer wrap"><div class="footer-top"><div class="footer-identity"><span class="wordmark"><span aria-hidden="true" class="brand-symbol"><i></i><i></i><i></i><i></i></span>BLENTERA</span><p>Company AI capability that stays.</p></div><nav aria-label="Footer navigation"><a href="#why">Why BLENTERA</a><a href="#platform">Platform</a><a href="?view=about">About / Organisation</a><a href="#how-it-works">How it works</a><a href="#control">Control</a></nav></div><div class="footer-bottom"><span>© 2026 BLENTERA · In development</span><span>Built around company continuity, not vendor lock-in.</span><a href="#main">Back to top ↑</a></div></footer><script>
+(() => {
+  const toggle=document.querySelector('.mobile-menu-toggle');
+  const nav=document.querySelector('#mobile-navigation');
+  if(toggle && nav){
+    const close=()=>{nav.hidden=true;toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Open navigation');toggle.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';};
+    toggle.addEventListener('click',()=>{const open=nav.hidden;nav.hidden=!open;toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'Close navigation':'Open navigation');toggle.innerHTML=open?'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 5l14 14M19 5 5 19"/></svg>':'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';});
+    for(const a of nav.querySelectorAll('a')) a.addEventListener('click',close);
+    document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&!nav.hidden){close();toggle.focus();}});
+    window.addEventListener('resize',()=>{if(innerWidth>900)close();});
+  }
+  const tabs=Array.from(document.querySelectorAll('.demo-tablist [role="tab"]'));
+  const activate=index=>{
+    tabs.forEach((tab,i)=>{const active=i===index;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;const panel=document.getElementById(tab.getAttribute('aria-controls'));if(panel){panel.hidden=!active;panel.tabIndex=active?0:-1;}});
+  };
+  tabs.forEach((tab,i)=>{
+    tab.addEventListener('click',()=>activate(i));
+    tab.addEventListener('keydown',ev=>{let n=-1;if(ev.key==='ArrowRight')n=(i+1)%tabs.length;if(ev.key==='ArrowLeft')n=(i+tabs.length-1)%tabs.length;if(ev.key==='Home')n=0;if(ev.key==='End')n=tabs.length-1;if(n>=0){ev.preventDefault();activate(n);tabs[n].focus();}});
+  });
+  const divisions=[{"code":"CTO","title":"Technology","domain":"Engineering & architecture","symbol":"⌘","mandate":"Owns implementation quality, architecture, platform reliability and technical delivery.","leaders":[{"name":"Engineering Lead","specialists":["Frontend Engineer","Backend Engineer"]},{"name":"Platform Lead","specialists":["DevOps / SRE","Integration Engineer"]},{"name":"Quality Lead","specialists":["QA & Test Agent","Code Review Agent"]}]},{"code":"CPO","title":"Product","domain":"Strategy & experience","symbol":"◈","mandate":"Turns company goals and customer needs into coherent, valuable product decisions.","leaders":[{"name":"Discovery Lead","specialists":["Customer Research","Market Validation"]},{"name":"Design Lead","specialists":["UX Designer","UI Designer"]},{"name":"Delivery Lead","specialists":["Product Owner","Product Analytics"]}]},{"code":"COO","title":"Operations","domain":"Execution & customer success","symbol":"◇","mandate":"Keeps delivery coordinated, workflows reliable and customers supported.","leaders":[{"name":"Workflow Lead","specialists":["Automation Builder","Process Optimiser"]},{"name":"Customer Success Lead","specialists":["Onboarding Agent","Support Agent"]},{"name":"Operations Lead","specialists":["Project Coordinator","Knowledge Curator"]}]},{"code":"CMO","title":"Marketing","domain":"Brand & demand","symbol":"✳","mandate":"Builds recognition, discoverability and qualified demand with a consistent brand voice.","leaders":[{"name":"Organic Growth Lead","specialists":["SEO / Discoverability","Content Strategist"]},{"name":"Community Lead","specialists":["LinkedIn Agent","Reddit / Social Agent"]},{"name":"Campaign Lead","specialists":["Paid Media Agent","Creative Producer"]}]},{"code":"CRO","title":"Revenue","domain":"Sales & partnerships","symbol":"↗","mandate":"Connects the right accounts to measurable value and maintains a healthy commercial pipeline.","leaders":[{"name":"Sales Lead","specialists":["Account Research","Outreach Specialist"]},{"name":"Deal Desk Lead","specialists":["Proposal Agent","Sales Operations"]},{"name":"Partnership Lead","specialists":["Partner Research","Partner Enablement"]}]},{"code":"CFO","title":"Finance","domain":"Economics & planning","symbol":"▥","mandate":"Keeps forecasts, spending, business economics and decision evidence visible.","leaders":[{"name":"FP&A Lead","specialists":["Forecast Analyst","Unit Economics Agent"]},{"name":"Finance Ops Lead","specialists":["Billing Analyst","Cost Intelligence"]},{"name":"Controls Lead","specialists":["Reconciliation Agent","Reporting Agent"]}]},{"code":"CISO","title":"Security","domain":"Trust & governance","symbol":"⬡","mandate":"Sets security boundaries and verifies that permissions, privacy and oversight follow policy.","leaders":[{"name":"Security Lead","specialists":["Security Reviewer","Monitoring Agent"]},{"name":"Privacy Lead","specialists":["Data Protection Agent","Data Governance Agent"]},{"name":"Assurance Lead","specialists":["Audit Evidence Agent","Policy / Risk Agent"]}]},{"code":"CHRO","title":"People & Agents","domain":"Workforce enablement","symbol":"⌑","mandate":"Designs clear roles, onboarding and performance feedback across human and AI teams.","leaders":[{"name":"People Operations Lead","specialists":["Talent Research","Human Onboarding"]},{"name":"Agent Enablement Lead","specialists":["Skills Librarian","Agent Provisioning"]},{"name":"Capability Lead","specialists":["Evaluation Agent","Learning Agent"]}]}];
+  const scenarios=[{"id":"product","name":"Ship a new capability","goal":"From idea to a reviewed release — without losing who owns what.","steps":[{"actor":"CEO","kind":"human","label":"Sets the outcome","description":"A person specifies the business objective, limits and decision rights."},{"actor":"Chief of Staff","kind":"agent","label":"Routes the mission","description":"The orchestrator breaks the goal into bounded tasks with owners and dependencies."},{"actor":"CPO · Product teams","kind":"agent","label":"Defines what to build","description":"Discovery, UX and product-owner agents produce a reviewed scope and acceptance criteria."},{"actor":"CTO · Engineering teams","kind":"agent","label":"Builds and tests","description":"Engineering agents delegate implementation, code review and QA to specialist workers."},{"actor":"CISO · Assurance teams","kind":"agent","label":"Checks the boundary","description":"Security and policy agents assess the proposed change and flag risks for review."},{"actor":"CEO / authorised reviewer","kind":"human","label":"Approves material action","description":"A responsible person approves deployment when the required evidence is sufficient."},{"actor":"COO · Knowledge teams","kind":"agent","label":"Captures what worked","description":"Operational learning is proposed for review, versioning and reuse in future work."}]},{"id":"growth","name":"Open a new market","goal":"One market decision, a coordinated commercial organisation.","steps":[{"actor":"CEO","kind":"human","label":"Frames the opportunity","description":"Sets market intent, budget and what would count as a credible decision."},{"actor":"Chief of Staff","kind":"agent","label":"Coordinates the leads","description":"Delegates customer, product, marketing, finance and risk work in parallel."},{"actor":"CPO · Discovery team","kind":"agent","label":"Studies the customer","description":"Research agents identify buyer needs and observable demand assumptions."},{"actor":"CMO + CRO · Go-to-market","kind":"agent","label":"Builds the go-to-market case","description":"Marketing and sales specialists propose channels, accounts and proof points."},{"actor":"CFO + CISO · Controls","kind":"agent","label":"Tests economics and risk","description":"Finance and governance leads assess downside, budget and operating constraints."},{"actor":"CEO","kind":"human","label":"Makes the call","description":"The accountable owner chooses to proceed, revise the plan or stop."}]},{"id":"incident","name":"Resolve a critical incident","goal":"Clear incident ownership, bounded actions and a verified recovery path.","steps":[{"actor":"Monitoring agent","kind":"agent","label":"Flags an anomaly","description":"A detection signal creates an incident requiring triage, not autonomous guesswork."},{"actor":"Chief of Staff","kind":"agent","label":"Escalates and routes","description":"Notifies the responsible human and relevant engineering, security and operations teams."},{"actor":"CTO + CISO","kind":"agent","label":"Investigates","description":"Specialist agents collect evidence, identify scope and propose safe containment."},{"actor":"Authorised incident owner","kind":"human","label":"Authorises containment","description":"A person approves consequential changes and controls blast radius."},{"actor":"COO · Operations","kind":"agent","label":"Verifies restoration","description":"Recovery is checked against real state and postconditions, not just an apparent success."},{"actor":"Knowledge Lead","kind":"agent","label":"Proposes a safer playbook","description":"Root causes and reviewed improvements feed back into company standards."}]}];
+  const execs=[...document.querySelectorAll('.org-exec')];
+  const safe=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+  const divisionHeading=document.querySelector('.org-division-intro h3');
+  if(execs.length&&divisionHeading){
+    const divisionDesc=document.querySelector('.org-division-intro p');
+    const divisionLabel=document.querySelector('.org-division-intro .micro-label');
+    const reporting=document.querySelector('.org-reporting-line span');
+    const teams=document.querySelector('.org-team-grid');
+    execs.forEach((b,i)=>b.addEventListener('click',()=>{
+      const d=divisions[i];execs.forEach((x,k)=>{x.classList.toggle('is-selected',i===k);x.setAttribute('aria-pressed',String(i===k));});
+      divisionHeading.innerHTML=safe(d.title)+'<span> / AI-led division</span>';
+      divisionDesc.textContent=d.mandate;divisionLabel.textContent='INSIDE THE '+d.code+' ORGANISATION';
+      reporting.textContent=d.code+' · AI executive';
+      teams.innerHTML=d.leaders.map((lead,n)=>'<div class="org-team-card"><div class="org-team-head"><div class="org-team-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="8" width="16" height="13" rx="2"/><path d="M12 4v4m-3-4h6M8 13h.01M16 13h.01M8 17h8"/></svg></div><div><span class="org-type">AI TEAM LEAD / 0'+(n+1)+'</span><strong>'+safe(lead.name)+'</strong></div></div><div class="org-team-stem" aria-hidden="true"></div><div class="org-workers">'+lead.specialists.map(w=>'<div class="org-worker"><span class="org-worker-dot"></span><span>'+safe(w)+'</span><small>WORKER AGENT</small></div>').join('')+'</div></div>').join('');
+    }));
+  }
+  let scenarioId='product', step=1;
+  const pills=[...document.querySelectorAll('.delegation-scenario-pills button')];
+  const steps=document.querySelector('.delegation-steps');
+  const focus=document.querySelector('.delegation-focus-panel');
+  function drawScenario(){
+    if(!focus||!steps)return;
+    const scenario=scenarios.find(x=>x.id===scenarioId);const item=scenario.steps[step];
+    document.querySelectorAll('.delegation-scenario-pills button').forEach((b,i)=>{const on=scenarios[i].id===scenarioId;b.classList.toggle('chosen',on);b.setAttribute('aria-pressed',String(on));});
+    steps.innerHTML='<p class="delegation-goal">'+safe(scenario.goal)+'</p>'+scenario.steps.map((x,i)=>'<button type="button" data-step="'+i+'" class="delegation-step'+(i===step?' is-active':'')+(i<step?' is-complete':'')+'"'+(i===step?' aria-current="step"':'')+'><span class="delegation-step-number">'+(i<step?'✓':String(i+1).padStart(2,'0'))+'</span><span class="delegation-step-label">'+safe(x.label)+'</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>').join('');
+    focus.querySelector('.delegation-focus-top span').textContent='DELEGATION TRACE / '+String(step+1).padStart(2,'0');
+    const actor=focus.querySelector('.delegation-actor');actor.classList.toggle('human',item.kind==='human');actor.classList.toggle('agent',item.kind!=='human');
+    actor.querySelector('small').textContent=item.kind==='human'?'HUMAN APPROVAL / DIRECTION':'AI DELEGATED ROLE';
+    actor.querySelector('strong').textContent=item.actor;
+    focus.querySelector('h3').textContent=item.label;
+    focus.querySelector(':scope > p').textContent=item.description;
+    focus.querySelector('.delegation-actions > span').textContent='STEP '+(step+1)+' OF '+scenario.steps.length;
+    const button=focus.querySelector('.delegation-actions button');if(button.childNodes[0])button.childNodes[0].textContent=step===scenario.steps.length-1?'Replay scenario':'Next handoff';
+  }
+  if(focus&&steps){
+    pills.forEach((b,i)=>b.addEventListener('click',()=>{scenarioId=scenarios[i].id;step=0;drawScenario();}));
+    steps.addEventListener('click',e=>{const b=e.target.closest('button[data-step]');if(b){step=Number(b.dataset.step);drawScenario();}});
+    focus.querySelector('.delegation-actions button').addEventListener('click',()=>{step=(step+1)%scenarios.find(x=>x.id===scenarioId).steps.length;drawScenario();});
+  }
+})();
+
+(() => {
+  const home=document.getElementById('page-home'),about=document.getElementById('page-about');
+  const show=(pathname,hash,doScroll)=>{
+    const isAbout=(new URLSearchParams(location.search).get('view')==='about');
+    home.hidden=isAbout;about.hidden=!isAbout;
+    document.title=isAbout?'About BLENTERA — Human + AI organisation':'BLENTERA — Company AI foundation';
+    for(const a of document.querySelectorAll('a[href="?view=about"]')) a.setAttribute('aria-current',isAbout?'page':'false');
+    if(doScroll){
+      if(hash){const id=decodeURIComponent(hash.slice(1));const target=document.getElementById(id);if(target && !target.closest('[hidden]')){target.scrollIntoView({behavior:'instant'});return;}}
+      window.scrollTo({top:0,behavior:'instant'});
+    }
+  };
+  show(location.pathname,location.hash,false);
+  document.addEventListener('click',ev=>{
+    const a=ev.target.closest('a[href]');if(!a)return;
+    const href=a.getAttribute('href');if(!href || !(href==='?view=home'||href==='?view=about'||href.startsWith('?view=home#')||href.startsWith('?view=about#')))return;
+    ev.preventDefault();
+    const url=new URL(href,location.href.startsWith("http")?location.href:"https://preview.local");
+    try{history.pushState({},'',url.pathname+url.search+url.hash)}catch(e){}
+    show(url.pathname,url.hash,true);
+  });
+  window.addEventListener('popstate',()=>show(location.pathname,location.hash,true));
+})();</script></body></html>
