@@ -496,5 +496,61 @@
   "workflowConnectionsChanged": "Forbindelser eller forgreningsdefinitioner er ændret",
   "workflowDataDefinitionChanged": "Input-, output- eller variabeldefinitioner er ændret",
   "workflowSettingsChanged": "Flowindstillinger er ændret",
-  "workflowComparedUnchanged": "Ingen ændringer fundet i de sammenlignede flowdefinitioner."
+  "workflowComparedUnchanged": "Ingen ændringer fundet i de sammenlignede flowdefinitioner.",
+  "workflowRunTitle": "Workflow-kørsel",
+  "workflowRunLoadFailed": "Denne workflow-kørsel kunne ikke indlæses. Opdater for at kontrollere din aktuelle adgang.",
+  "workflowRunBack": "Kørselshistorik",
+  "workflowRunBoundary": "Dette er registrerede forsøg fra kørslen. Det dokumenterer ikke uafhængig verificering af eksterne resultater. Private input, output og fejldetaljer er udeladt.",
+  "workflowRunRefresh": "Opdater kørsel",
+  "workflowRunAttempts": "Registrerede forsøg",
+  "workflowRunUnavailable": "Den samlede forsøgshistorik kan ikke vises. Åbn Avanceret for en detaljeret gennemgang.",
+  "workflowRunEmpty": "Der er endnu ingen registrerede trinforsøg for denne kørsel.",
+  "workflowRunAttempt": "Forsøg {{number}}",
+  "workflowRunApprovalBoundary": "Der er angivet et godkendelsespunkt her. Denne visning har ikke verificeret beslutningen eller autorisationen.",
+  "workflowRunPayloadUnavailable": "Dette forsøgs private data er ikke længere tilgængelige.",
+  "workflowRunAdvanced": "Åbn kørselsstyring i Avanceret",
+  "workflowRunStatus": {
+    "queued": "I kø",
+    "running": "Kører",
+    "waiting": "Venter",
+    "recovering": "Gendanner",
+    "cancelling": "Stopper",
+    "succeeded": "Registreret som afsluttet",
+    "failed": "Kræver opmærksomhed",
+    "cancelled": "Stoppet"
+  },
+  "workflowAttemptStatus": {
+    "pending": "Ikke startet",
+    "running": "Kører",
+    "waiting": "Venter",
+    "retry_scheduled": "Nyt forsøg planlagt",
+    "retried": "Forsøgt igen",
+    "succeeded": "Registreret som afsluttet",
+    "failed": "Fejlet",
+    "skipped": "Sprunget over",
+    "cancelling": "Stopper",
+    "cancelled": "Stoppet"
+  },
+  "workflowExecution": {
+    "agent": "Der er registreret en agentkørsel.",
+    "tool": "Der er registreret en værktøjskørsel.",
+    "not_recorded": "Ingen agent- eller værktøjskørsel er registreret."
+  },
+  "workflowWaiting": {
+    "tool_action": "Venter på gennemgang af en forbundet handling.",
+    "delay": "Venter på den angivne forsinkelse.",
+    "human_interaction": "Venter på et menneskeligt svar.",
+    "external_callback": "Venter på et eksternt svar.",
+    "task_completion": "Venter på afslutning af opgaven.",
+    "external_agent_run": "Venter på en ekstern agentkørsel.",
+    "direct_agent_run": "Venter på en agentkørsel.",
+    "subworkflow": "Venter på et andet workflow."
+  },
+  "workflowRunRevision": "Registreret {{state}} version {{version}}",
+  "workflowRunRevisionState": {
+    "draft": "kladde",
+    "published": "publiceret",
+    "superseded": "tidligere publiceret",
+    "discarded": "kasseret kladde"
+  }
 }

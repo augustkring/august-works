@@ -180,6 +180,11 @@ export function workflowService(db: Db) {
 
     getDetail: async (companyId: string, workflowId: string, actor?:AuthorizationActor) => getDetail(db, companyId, workflowId,actor),
 
+    getRevision: async (companyId: string, workflowId: string, revisionId: string, actor?:AuthorizationActor) => {
+      const row = await getRevisionById(db, companyId, workflowId, revisionId, actor);
+      return row ? mapRevision(row) : null;
+    },
+
     listRevisions: async (companyId: string, workflowId: string, actor?:AuthorizationActor) => {
       if (!(await getWorkflowRow(db, companyId, workflowId))) return null;
       return db.select().from(workflowRevisions)

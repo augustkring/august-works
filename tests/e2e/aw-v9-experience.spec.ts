@@ -414,6 +414,43 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     const current = await json(await request.get(`${base}/${created.id}`));
     expect(current.publishedRevisionId).toBe(published.publishedRevisionId);
     expect(current.draftRevisionId).toBe(changed.draftRevisionId);
+    const run = await json(
+      await request.post(`${base}/${created.id}/run`, {
+        headers: { "Idempotency-Key": "v9-disposable-run-review" },
+        data: { input: { private: "PRIVATE-V9-RUN-INPUT" } },
+      }),
+    );
+    const runPath = `${path}/runs/${run.run.id}`;
+    await page.goto(runPath);
+    await expect(
+      page.getByRole("heading", { name: "Workflow run", exact: true }),
+    ).toBeFocused();
+    await expect(
+      page.getByText(
+        `Recorded published version ${published.publishedRevision.revisionNumber}`,
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Active manual start", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Attempt 1 · Recorded as completed", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("PRIVATE-V9-RUN-INPUT", { exact: false }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("link", {
+        name: "Open run controls in Advanced",
+        exact: true,
+      })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`${runPath}/advanced$`));
+    await expect(
+      page.getByRole("heading", { name: "Execution log", exact: true }),
+    ).toBeVisible();
+    await page.goto(path);
     await page
       .getByRole("link", { name: "Edit draft in Advanced", exact: true })
       .click();
@@ -430,6 +467,13 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     await expect(
       page.getByRole("button", { name: "Save draft", exact: true }),
     ).toBeVisible();
+    await page.goto(runPath);
+    await expect(
+      page.getByRole("heading", { name: "Execution log", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Workflow run", exact: true }),
+    ).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     await request.patch("/api/instance/settings/experimental", {

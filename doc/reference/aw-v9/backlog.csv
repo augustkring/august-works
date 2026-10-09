@@ -35,7 +35,7 @@ V9-033,2221,command palette Ask/Create/Run UI,in_progress
 V9-034,2223,deterministic command catalog,in_progress
 V9-035,2225,natural-language task/project authoring,not_started
 V9-036,2227,chat workflow draft adapter,not_started
-V9-037,2229,workflow preview/diff/test card,not_started
+V9-037,2229,workflow preview/diff/test card,in_progress
 V9-038,2231,chat Foundation proposal adapter,not_started
 V9-039,2233,chat agent/package proposal adapter,not_started
 V9-040,2235,chat connection intent adapter,not_started

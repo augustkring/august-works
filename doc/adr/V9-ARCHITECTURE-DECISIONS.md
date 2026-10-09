@@ -303,3 +303,30 @@ new owner, write, grant or test result is created. New strict server/shared/clie
 contracts deploy together before enabling the existing shell flag; rollback
 restores the native graph route. Complete access/test/publish lifecycle review and
 representative human qualification remain open.
+
+## ADR-V9-019 — Private native workflow attempt metadata
+
+2026-10-09. A read-only customer run view uses the existing executor's company,
+learned-source and private-payload admission and the exact historical revision
+owner. Superseded/discarded revision state remains distinct from current active
+publication. Current human principal, native workflows:read and final admission
+checks remain required. No new workflow, trace record, approval, retry, execution
+or publication owner is introduced.
+
+The strict projection allows run/revision identity, recorded statuses/attempt
+numbers, registry operation labels, execution-kind presence, declared checkpoint
+and current wait kinds on waiting attempts. It excludes actor IDs, raw errors,
+inputs/outputs, token/reference values, resolutions and hidden reasoning. Native
+payload deletion remains explicit. Bounds are 100 nodes, 200 graph edges, 500
+attempts and 200 waits; invalid/unbound or oversized history is wholly unavailable,
+not truncated or successful. Empty means no recorded attempts. Native read-owner
+query latency and private-payload checks remain inherited. Full selected-actor,
+verified outcome/error and executed-branch inspection remains open.
+
+A private/no-store namespace also minimizes generic logs for rejected requests.
+Company/principal/workflow/run query identity, authority epochs and native source
+access-loss invalidation suppress retained/late private metadata. English/Danish
+copy distinguishes recorded completion from independent verification. The
+existing shell flag is default-off; rollback restores native run controls and an
+explicit /advanced route remains available. No migration is needed. Deploy the
+new shared/server/client contract before enabling this customer view.

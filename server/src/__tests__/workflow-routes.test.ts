@@ -590,6 +590,43 @@ describePg("Workflow routes", () => {
       .expect(201);
     expect(repeated.body.run.id).toBe(first.body.run.id);
 
+    const privateRead = `/api/companies/${company.id}/workflow-runs/${first.body.run.id}/experience`;
+    const auditBeforeRead = await db.select().from(activityLog);
+    const projected = await http.get(`${privateRead}?expectedUserId=local-board`).expect(200);
+    expect(projected.headers["cache-control"]).toBe("private, no-store");
+    expect(projected.body).toMatchObject({
+      companyId: company.id, id: first.body.run.id, workflowId: created.body.id,
+      revisionId: first.body.run.workflowRevisionId, revisionState: "published", status: "succeeded",
+      trace: { state: "available", attempts: [{ name: "Manual start", status: "succeeded", attempt: 1 }] },
+    });
+    for (const privateField of ["triggerPayload", "inputJson", "outputJson", "errorMessage", "responsibleUserId", "executionOwnerId", "idempotencyKey", "c-1"])
+      expect(JSON.stringify(projected.body)).not.toContain(privateField);
+    await http.get(privateRead).expect(409);
+    await http.get(`${privateRead}?expectedUserId=another-account`).expect(409);
+    const other = await seedCompany("Run foreign company");
+    await http.get(`/api/companies/${other.id}/workflow-runs/${first.body.run.id}/experience?expectedUserId=local-board`).expect(404);
+    await request(app({ type: "agent", agentId: randomUUID(), companyId: company.id, source: "agent_key" })).get(`${privateRead}?expectedUserId=local-board`).expect(403);
+    const userId = "workflow-run-viewer";
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "viewer" });
+    await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read", scope: null });
+    const viewer = request(app({ type: "board", userId, source: "session", isInstanceAdmin: false, companyIds: [company.id] }));
+    await viewer.get(`${privateRead}?expectedUserId=${userId}`).expect(200);
+    await db.delete(principalPermissionGrants).where(eq(principalPermissionGrants.principalId, userId));
+    await viewer.get(`${privateRead}?expectedUserId=${userId}`).expect(403);
+    await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read", scope: null });
+    await db.delete(companyMemberships).where(eq(companyMemberships.principalId, userId));
+    await viewer.get(`${privateRead}?expectedUserId=${userId}`).expect(403);
+    expect(await db.select().from(activityLog)).toEqual(auditBeforeRead);
+
+    const beforeRepublish = await http.get(`/api/companies/${company.id}/workflows/${created.body.id}`).expect(200);
+    await http.post(`/api/companies/${company.id}/workflows/${created.body.id}/publish`).send({
+      expectedDraftRevisionId: beforeRepublish.body.draftRevisionId,
+      expectedPublishedRevisionId: beforeRepublish.body.publishedRevisionId,
+      approvalId: null,
+    }).expect(200);
+    const historical = await http.get(`${privateRead}?expectedUserId=local-board`).expect(200);
+    expect(historical.body).toMatchObject({ revisionId: first.body.run.workflowRevisionId, revisionState: "superseded", revisionNumber: projected.body.revisionNumber });
+
     await http
       .get(`/api/companies/${company.id}/workflow-runs/${first.body.run.id}`)
       .expect(200)

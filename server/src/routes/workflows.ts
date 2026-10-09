@@ -19,6 +19,7 @@ import {
 import { validate } from "../middleware/validate.js";
 import { conflict, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
 import { workflowReview } from "../services/experience/workflow-review.js";
+import { workflowRunReview } from "../services/experience/workflow-run-review.js";
 import {
   accessService,
   instanceSettingsService,
@@ -505,6 +506,26 @@ export function workflowRoutes(db: Db) {
   };
   router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/approve", reviewToolAction("approve"));
   router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/reject", reviewToolAction("reject"));
+
+  router.get("/companies/:companyId/workflow-runs/:runId/experience", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const runId = z.uuid().parse(req.params.runId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    const detail = await executor.getRun(companyId, runId, req.actor);
+    if (!detail) throw notFound("Workflow run not found");
+    const revision = await svc.getRevision(companyId, detail.run.workflowId, detail.run.workflowRevisionId, req.actor);
+    if (!revision) throw notFound("Workflow run revision not found");
+    const result = workflowRunReview(detail, revision, nodeRegistry.list());
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    res.json(result);
+  });
 
   router.get("/companies/:companyId/workflow-runs/:runId", async (req, res) => {
     await assertWorkflowsEnabled();

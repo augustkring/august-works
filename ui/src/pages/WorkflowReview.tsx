@@ -74,10 +74,16 @@ export function WorkflowReview({
     refetchOnWindowFocus: true,
   });
   useCompanyLiveEvent((event) => {
-    if (event.companyId !== company || event.type !== "activity.logged") return;
+    if (
+      event.companyId !== company ||
+      (event.type !== "activity.logged" &&
+        event.type !== "analytical.context.access_lost")
+    )
+      return;
     const action =
       typeof event.payload.action === "string" ? event.payload.action : "";
     if (
+      event.type === "activity.logged" &&
       !/workflow|permission|membership|privacy|erased|deleted|withdraw/i.test(
         action,
       ) &&

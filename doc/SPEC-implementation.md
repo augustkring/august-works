@@ -1803,3 +1803,11 @@ and the V9 feature gate. It creates no draft or active configuration. Navigation
 preserves the existing unsaved-change guard and rejects late confirmation after
 a context change. Active-agent testing/publication and fencing all expert active
 configuration writers remain incomplete.
+
+The V9 workflow run entry also projects recorded native attempt metadata from the
+exact historical revision, with current read and native source/payload admission.
+It excludes private payloads, raw errors and actor IDs; recorded completion does
+not establish independent verification. Oversized/unbound history is unavailable.
+The default-off customer shell retains a native /advanced run route and rollback.
+Full branch/selected-actor/verification inspection and lifecycle acceptance remain
+open (ADR-V9-019 / SCR-V9-012).

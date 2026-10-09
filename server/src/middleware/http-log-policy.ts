@@ -51,6 +51,7 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/saas\/companies\/[^/]+\/(?:activation|onboarding)(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/commands(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/workflows\/[^/]+\/experience(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]+\/workflow-runs\/[^/]+\/experience(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/(?:[^/]*\/)*agent-configuration-drafts(?:\/|$)/i.test(pathname);
 }
 export function privateExperienceLogUrl(url: string): string {
@@ -59,6 +60,7 @@ export function privateExperienceLogUrl(url: string): string {
   if (/^\/api\/saas\/companies\//i.test(pathname)) return "/api/saas/companies/:companyId/activation-or-onboarding/:operation";
   if (/\/experience\/commands(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/commands";
   if (/\/workflows\/[^/]+\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflows/:workflowId/experience";
+  if (/\/workflow-runs\/[^/]+\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflow-runs/:runId/experience";
   if (/^\/api\/internal\//i.test(pathname)) return "/api/internal/customer-feedback/:companyId/:operation";
   return "/api/companies/:companyId/customer-feedback/:operation";
 }

@@ -1,0 +1,130 @@
+{
+  "screenId": "WORKFLOW-INSPECT",
+  "journeyId": "workflow",
+  "routeOrSurface": "/workflows/:workflowId/runs/:runId",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Inspect the recorded native run and exact historical revision without exposing private payloads or treating recorded completion as independent verification.",
+  "entryConditions": [
+    "Current authenticated principal and company selection; no retained foreign-principal payload",
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+  ],
+  "exitConditions": [
+    "Only a canonical server-confirmed result permits a success claim",
+    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+  ],
+  "content": {
+    "h1": "Workflow run",
+    "supportingCopy": "Inspect the recorded native run and exact historical revision without exposing private payloads or treating recorded completion as independent verification.",
+    "customerTerms": [
+      "Workflow run",
+      "Recorded attempts",
+      "Waiting",
+      "Needs attention",
+      "Run history"
+    ],
+    "displayedState": [
+      "Exact native run/revision IDs and revision number/state; superseded versions are never labeled current active",
+      "Recorded attempt status, attempt number, registry operation and agent/tool execution presence only",
+      "Current native wait kinds on waiting attempts; declared approval checkpoint is not an approval decision",
+      "Private inputs, outputs, errors, actor IDs and hidden reasoning are omitted",
+      "Oversized, duplicate or unbound history is unavailable; no attempt history is distinct from successful execution"
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Refresh run",
+      "operation": "Re-read current native run admission and attempt metadata. No execution, cancellation, retry or approval is performed."
+    },
+    "secondary": [
+      "Return to native run history",
+      "Open native run controls in Advanced"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Native workflow executor run/payload access and learned-asset analytical-source admission",
+      "Exact native historical workflow revision and immutable node registry descriptors",
+      "Current human identity, company membership and workflows:read"
+    ],
+    "canonicalWriteOperation": "None; native executor and existing revision owner retain all state and effects.",
+    "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
+    "asyncWork": "Native privacy-checked run and exact revision reads. Projection bounds: 100 nodes, 200 graph edges, 500 attempts and 200 waits. Native read-owner database latency and payload checks remain inherited.",
+    "receipt": "Only the exact native run/revision identity and recorded state. No independent verification, approval, safe retry, test qualification or current-active receipt is invented."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "No recorded step attempts; not a successful or verified result.",
+    "partial": "Whole trace unavailable for oversized, duplicate, foreign or unbound history; no silent truncation.",
+    "stale": "Hide retained private data during background rechecks and live authority/privacy/version invalidations; a new query epoch rejects late prior responses.",
+    "validation_error": "This read-only surface accepts no workflow inputs.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Native recorded completion is distinct from independently verified external outcomes."
+  },
+  "navigation": {
+    "back": "Return to the native workflow run list.",
+    "cancelOrSaveExit": "No writes or browser-persisted inputs. Leave through Run history; native Advanced controls retain canonical authority.",
+    "deepLink": "/workflows/:workflowId/runs/:runId",
+    "resume": "Re-read current company/principal/run/revision bindings and native privacy/grants. Shell rollback restores native run controls; /advanced retains a direct native route."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Native run/revision identity and recorded status",
+      "Allowlisted attempt metadata and current waiting kinds"
+    ],
+    "dataCollected": [],
+    "sensitiveFields": [
+      "Run/step inputs, outputs, errors, credentials, actor assignments, approval resolutions, reference IDs, wait tokens and hidden reasoning remain excluded"
+    ],
+    "loggingConstraints": "Purpose-separated workflow-run-experience namespace for success and rejected requests; generic logs omit account query strings, raw errors and private payloads."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify exact historical revision, native attempts, retry numbers, wait association, no mutations and empty/unavailable separation.",
+      "Complete selected-agent/tool identity, independently verified outcome/error and branch-path reconstruction remain open; this metadata view does not fulfill all §81.9 requirements."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current native grants/membership, account/company/agent denial, private-value exclusion, no-store, rejected-request log minimization and late-response suppression."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

@@ -23,6 +23,7 @@ import {
   experienceCommandsSchema,
   companyExperienceSchema,
   workflowExperienceSchema,
+  workflowRunExperienceSchema,
 } from "@paperclipai/shared";
 
 /** Current mounted contracts. Listing an operation confers no rollout or execution qualification. */
@@ -268,6 +269,12 @@ export const v9ApiPaths: V9ApiOperation[] = [
     `${company}/workflows/{workflowId}/experience`,
     "Read separate native published/draft revisions as bounded declarations; no authority or test result is created",
     workflowExperienceSchema,
+    z.object({ expectedUserId: z.string().min(1) }),
+  ),
+  read(
+    `${company}/workflow-runs/{runId}/experience`,
+    "Read current native run status and bounded attempt metadata; no private payload or approval decision is returned",
+    workflowRunExperienceSchema,
     z.object({ expectedUserId: z.string().min(1) }),
   ),
 ];

@@ -7,6 +7,14 @@ import {
   shouldSilenceHttpSuccessLog,
 } from "../middleware/http-log-policy.js";
 
+it("purpose-separates native run metadata and rejected requests from generic logs", () => {
+  const url = "/api/companies/private-company/workflow-runs/private-run/experience?expectedUserId=private-user";
+  for (const method of ["GET", "POST", "DELETE"])
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflow-runs/:runId/experience");
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflow-runs/id/experience-other")).toBe(false);
+});
+
 it("purpose-separates workflow review text, account identity and rejected requests from generic logs", () => {
   for (const method of ["GET", "POST", "DELETE"]) {
     const url = "/api/companies/private-company/workflows/private-workflow/experience?expectedUserId=private-user";

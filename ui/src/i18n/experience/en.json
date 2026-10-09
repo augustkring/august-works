@@ -496,5 +496,61 @@
   "workflowConnectionsChanged": "Connections or branch declarations changed",
   "workflowDataDefinitionChanged": "Input, output or variable definitions changed",
   "workflowSettingsChanged": "Flow settings changed",
-  "workflowComparedUnchanged": "No changes found in the compared flow declarations."
+  "workflowComparedUnchanged": "No changes found in the compared flow declarations.",
+  "workflowRunTitle": "Workflow run",
+  "workflowRunLoadFailed": "This workflow run could not be loaded. Refresh to check your current access.",
+  "workflowRunBack": "Run history",
+  "workflowRunBoundary": "These are recorded attempts from this run, not proof that external outcomes were independently verified. Private inputs, outputs and error details are omitted.",
+  "workflowRunRefresh": "Refresh run",
+  "workflowRunAttempts": "Recorded attempts",
+  "workflowRunUnavailable": "The complete attempt history cannot be shown. Open Advanced for a detailed review.",
+  "workflowRunEmpty": "No step attempts have been recorded for this run.",
+  "workflowRunAttempt": "Attempt {{number}}",
+  "workflowRunApprovalBoundary": "An approval checkpoint is declared here. Its decision and authorization have not been verified by this view.",
+  "workflowRunPayloadUnavailable": "This attempt’s private data is no longer available.",
+  "workflowRunAdvanced": "Open run controls in Advanced",
+  "workflowRunStatus": {
+    "queued": "Queued",
+    "running": "Running",
+    "waiting": "Waiting",
+    "recovering": "Recovering",
+    "cancelling": "Stopping",
+    "succeeded": "Recorded as completed",
+    "failed": "Needs attention",
+    "cancelled": "Stopped"
+  },
+  "workflowAttemptStatus": {
+    "pending": "Not started",
+    "running": "Running",
+    "waiting": "Waiting",
+    "retry_scheduled": "Retry scheduled",
+    "retried": "Retried",
+    "succeeded": "Recorded as completed",
+    "failed": "Failed",
+    "skipped": "Skipped",
+    "cancelling": "Stopping",
+    "cancelled": "Stopped"
+  },
+  "workflowExecution": {
+    "agent": "An agent execution was recorded.",
+    "tool": "A tool execution was recorded.",
+    "not_recorded": "No agent or tool execution was recorded."
+  },
+  "workflowWaiting": {
+    "tool_action": "Waiting for a connected action review.",
+    "delay": "Waiting for the declared delay.",
+    "human_interaction": "Waiting for a human response.",
+    "external_callback": "Waiting for an external callback.",
+    "task_completion": "Waiting for task completion.",
+    "external_agent_run": "Waiting for an external agent run.",
+    "direct_agent_run": "Waiting for an agent run.",
+    "subworkflow": "Waiting for another workflow."
+  },
+  "workflowRunRevision": "Recorded {{state}} version {{version}}",
+  "workflowRunRevisionState": {
+    "draft": "draft",
+    "published": "published",
+    "superseded": "earlier published",
+    "discarded": "discarded draft"
+  }
 }

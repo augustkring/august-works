@@ -24,9 +24,18 @@ import type {
   WorkflowRevision,
 } from "@paperclipai/shared";
 import { api as defaultApi } from "./client";
-import { workflowExperienceSchema } from "@paperclipai/shared";
+import { workflowExperienceSchema, workflowRunExperienceSchema } from "@paperclipai/shared";
 
 export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
+  runExperience: async (companyId: string, principal: string, workflowId: string, runId: string, signal?: AbortSignal) => {
+    const result = workflowRunExperienceSchema.parse(await api.get(
+      `/companies/${companyId}/workflow-runs/${runId}/experience?expectedUserId=${encodeURIComponent(principal)}`,
+      { signal, cache: "no-store" },
+    ));
+    if (result.companyId !== companyId || result.workflowId !== workflowId || result.id !== runId)
+      throw new Error("Workflow run context changed");
+    return result;
+  },
   experience: async (companyId: string, principal: string, workflowId: string, signal?: AbortSignal) =>
     workflowExperienceSchema.parse(await api.get(
       `/companies/${companyId}/workflows/${workflowId}/experience?expectedUserId=${encodeURIComponent(principal)}`,
