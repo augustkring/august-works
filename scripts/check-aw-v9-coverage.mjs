@@ -71,6 +71,28 @@ for (const screen of manifest.screens) {
     .digest("hex");
   if (hash !== spec.sha256)
     failures.push(`Specification drift: ${screen.screenId}`);
+  if (screen.contractPath) {
+    if (!inside(screen.contractPath)) {
+      failures.push(`Missing resolved Screen Contract: ${screen.screenId}`);
+    } else {
+      try {
+        const contract = JSON.parse(
+          readFileSync(resolve(root, screen.contractPath), "utf8"),
+        );
+        if (
+          contract.screenId !== screen.screenId ||
+          contract.journeyId !== screen.journeyId
+        )
+          failures.push(
+            `Resolved Screen Contract identity mismatch: ${screen.screenId}`,
+          );
+      } catch {
+        failures.push(
+          `Invalid resolved Screen Contract JSON: ${screen.screenId}`,
+        );
+      }
+    }
+  }
   if (screen.implementationStatus === "implemented" || release) {
     if (!inside(screen.contractPath))
       failures.push(`Missing resolved Screen Contract: ${screen.screenId}`);

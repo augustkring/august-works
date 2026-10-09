@@ -1,6 +1,6 @@
 {
   "screenId": "APPROVAL-CARD",
-  "journeyId": "approval",
+  "journeyId": "attention",
   "routeOrSurface": "Home / Needs You approval cards bound to native Attention IDs",
   "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
   "customerOutcome": "Review a current pending approval and open its native authorized resolver.",
