@@ -578,10 +578,7 @@ jobs:
 
       - name: Install generated-code sandbox
         if: matrix.group == 'general-server-without-chat'
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends bubblewrap
+        run: bash scripts/ci-install-native-sandbox.sh
 
       - name: Run grouped general test suites
         run: |
@@ -1213,25 +1210,19 @@ jobs:
         with:
           python-version: '3.12.14'
 
+      - name: Install selected native numerical sandbox
+        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts')
+        run: bash scripts/ci-install-native-sandbox.sh
+
       - name: Install selected hash-locked numerical runtimes
         if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts')
         env:
           AW_E2E_SPECS: ${{ steps.e2e_suites.outputs.specs }}
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends bubblewrap
-          command -v bwrap
-          command -v prlimit
           # The production worker clears ambient loader variables as well.
           env -i PATH=/usr/bin:/bin "$pythonLocation/bin/python" -I \
             -c 'import platform; print(platform.python_version())'
-          # Fail with the host namespace diagnostic before provider admission.
-          env -i PATH=/usr/bin:/bin bwrap --die-with-parent --new-session \
-            --unshare-pid --unshare-ipc --unshare-uts --unshare-net \
-            --tmpfs / --proc /proc --dev /dev --ro-bind /usr /usr \
-            --symlink usr/bin /bin --symlink usr/lib /lib --symlink usr/lib64 /lib64 \
-            -- /bin/true
           if [[ " $AW_E2E_SPECS " == *" tests/e2e/statistical-forecast.spec.ts "* ]]; then
             python -m venv "$RUNNER_TEMP/aw-statistical-runtime"
             "$RUNNER_TEMP/aw-statistical-runtime/bin/pip" install --only-binary=:all: --require-hashes \
