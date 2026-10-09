@@ -12,6 +12,7 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
+    ["POST", "/api/companies/private-company/workflows/private-record/experience/lifecycle?expectedUserId=private-principal"],
     [
       "POST",
       "/api/saas/companies/private-company/activation?expectedUserId=private-principal",

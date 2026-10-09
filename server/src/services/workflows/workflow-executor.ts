@@ -386,6 +386,26 @@ export async function enqueueWorkflowRunInTransaction(
     }
   }
 
+  // All native run sources share this admission fence. A status read before
+  // enqueue is insufficient: pause/retirement can commit while callers prepare
+  // input. The lifecycle owner takes the same row lock. Replayed receipts above
+  // admit no new work and remain recoverable after pause.
+  const [workflow] = await executor.select({ status: workflows.status })
+    .from(workflows)
+    .where(and(eq(workflows.companyId, input.companyId), eq(workflows.id, input.workflowId)))
+    .for("update");
+  if (!workflow) throw notFound("Workflow not found");
+  if (input.idempotencyKey) {
+    const committed = await getIdempotentRun(executor, input.companyId, input.idempotencyKey);
+    if (committed) {
+      assertIdempotentRequestMatches(committed, input);
+      return { run: committed, created: false, publications: [] };
+    }
+  }
+  if (workflow.status !== "active") throw conflict("Workflow is not active", {
+    code: "workflow_invalid_transition", status: workflow.status,
+  });
+
   const now = new Date();
   const [run] = await executor
     .insert(workflowRuns)

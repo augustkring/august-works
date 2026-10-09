@@ -4,12 +4,23 @@ import type {AuthorizationActor} from "../authorization.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { isDeepStrictEqual } from "node:util";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  activityLog,
   companyMemberships,
+  instanceSettings,
+  principalPermissionGrants,
+  pipelineStages,
+  pipelines,
   projects,
+  routines,
+  heartbeatRuns,
+  toolInvocations,
+  workflowStepRuns,
+  workflowWaits,
+  workflowRuns,
   workflowRevisions,
   workflows,
 } from "@paperclipai/db";
@@ -17,6 +28,10 @@ import {
   createWorkflowSchema,
   publishWorkflowSchema,
   updateWorkflowDraftSchema,
+  workflowLifecycleCommandSchema,
+  workflowLifecycleReceiptSchema,
+  v9FeatureEnabled,
+  type WorkflowLifecycleCommand,
   type CreateWorkflow,
   type ExecutionPrincipal,
   type PublishWorkflow,
@@ -28,6 +43,9 @@ import {
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { workflowNodeRegistryService } from "./workflow-node-registry.js";
+import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
+import { instanceSettingsService } from "../instance-settings.js";
+import { persistActivity, publishActivity } from "../activity-log.js";
 
 type WorkflowDb = Db;
 
@@ -167,6 +185,119 @@ function assertPublishedPointer(workflow: typeof workflows.$inferSelect, expecte
 
 export function workflowService(db: Db) {
   return {
+    lifecycle: async (companyId: string, workflowId: string, rawInput: WorkflowLifecycleCommand, authority: AuthorizationActor) => {
+      const input = workflowLifecycleCommandSchema.parse(rawInput);
+      const principal = v5HumanActorId(authority);
+      const result = await db.transaction(async tx => {
+        const txDb = tx as unknown as Db;
+        await lockAnalyticalCompany(txDb, companyId);
+        await lockMemoryPrivacy(txDb, companyId);
+        // Hold rollout configuration through commit; a late toggle cannot admit
+        // an effect from an earlier enabled snapshot.
+        await instanceSettingsService(txDb).getExperimental();
+        await txDb.select({ id: instanceSettings.id }).from(instanceSettings).for("share");
+        const flags = await instanceSettingsService(txDb).getExperimental();
+        if (!flags.enableWorkflowsV1 || !v9FeatureEnabled(flags, "progressive_shell_v9"))
+          throw notFound("Workflow controls are not enabled");
+        if (authority.source !== "local_implicit") {
+          await txDb.select().from(companyMemberships).where(and(
+            eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, principal), eq(companyMemberships.status, "active"),
+          )).for("share");
+          await txDb.select().from(principalPermissionGrants).where(and(
+            eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalType, "user"),
+            eq(principalPermissionGrants.principalId, principal),
+          )).for("share");
+        }
+        await assertV5Authorization(txDb, authority, companyId, "workflows:read");
+        await assertV5Authorization(txDb, authority, companyId, "workflows:publish");
+        const workflow = await lockWorkflow(tx, companyId, workflowId);
+        if (!workflow) throw notFound("Workflow not found");
+        // Resolve current source admission even when replaying a prior receipt.
+        await getRevisionById(txDb, companyId, workflowId, workflow.publishedRevisionId, authority);
+        await getRevisionById(txDb, companyId, workflowId, workflow.draftRevisionId, authority);
+        const [prior] = await txDb.select().from(activityLog).where(and(
+          eq(activityLog.companyId, companyId), eq(activityLog.entityType, "workflow"),
+          eq(activityLog.entityId, workflowId), eq(activityLog.action, "workflow.lifecycle_changed"),
+          sql`${activityLog.details}->>'requestId' = ${input.requestId}`,
+        )).limit(1);
+        if (prior) {
+          if (prior.actorId !== principal || !isDeepStrictEqual(prior.details?.command, input))
+            throw conflict("Original workflow request changed", { code: "workflow_request_conflict" });
+          return { receipt: workflowLifecycleReceiptSchema.parse(prior.details?.receipt), publication: null };
+        }
+        assertMutableWorkflow(workflow);
+        if (workflow.status !== input.expectedStatus || workflow.updatedAt.toISOString() !== input.expectedUpdatedAt ||
+          workflow.publishedRevisionId !== input.expectedPublishedRevisionId || workflow.draftRevisionId !== input.expectedDraftRevisionId)
+          throw conflict("Workflow changed; review the current version", { code: "workflow_lifecycle_conflict" });
+        if ((input.action === "pause" && workflow.status !== "active") ||
+          (input.action === "resume" && (workflow.status !== "paused" || !workflow.publishedRevisionId)) ||
+          (input.action === "retire" && workflow.status !== "paused"))
+          throw conflict("Workflow action is unavailable in this state", { code: "workflow_invalid_transition" });
+        if (input.action === "resume") await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
+        if (input.action === "retire") {
+          const [pending] = await txDb.select({ id: workflowRuns.id }).from(workflowRuns).where(and(
+            eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId),
+            inArray(workflowRuns.status, ["queued", "running", "waiting", "recovering", "cancelling"]),
+          )).limit(1);
+          if (pending) throw conflict("Existing work must finish before retirement", { code: "workflow_work_pending" });
+          const [step] = await txDb.select({ id: workflowStepRuns.id }).from(workflowStepRuns).innerJoin(workflowRuns, and(
+            eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId), eq(workflowRuns.id, workflowStepRuns.workflowRunId),
+          )).where(and(eq(workflowStepRuns.companyId, companyId), inArray(workflowStepRuns.status, ["pending", "running", "waiting", "retry_scheduled", "cancelling"]))).limit(1);
+          const [wait] = await txDb.select({ id: workflowWaits.id }).from(workflowWaits).innerJoin(workflowRuns, and(
+            eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId), eq(workflowRuns.id, workflowWaits.workflowRunId),
+          )).where(and(eq(workflowWaits.companyId, companyId), eq(workflowWaits.status, "active"))).limit(1);
+          const [provider] = await txDb.select({ id: heartbeatRuns.id }).from(heartbeatRuns).innerJoin(workflowStepRuns, and(
+            eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.heartbeatRunId, heartbeatRuns.id),
+          )).innerJoin(workflowRuns, and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId), eq(workflowRuns.id, workflowStepRuns.workflowRunId)))
+            .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.status, ["queued", "scheduled_retry", "running"]))).limit(1);
+          const [tool] = await txDb.select({ id: toolInvocations.id }).from(toolInvocations).innerJoin(workflowRuns, and(
+            eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId), eq(workflowRuns.id, toolInvocations.workflowRunId),
+          )).where(and(eq(toolInvocations.companyId, companyId), inArray(toolInvocations.status, ["pending", "authorized", "awaiting_approval", "executing", "failed", "timed_out"]))).limit(1);
+          if (step || wait || provider || tool) throw conflict("Existing work must finish or be reconciled before retirement", { code: "workflow_work_pending" });
+          const [routine] = await txDb.select({ id: routines.id }).from(routines).where(and(
+            eq(routines.companyId, companyId), eq(routines.executionTargetKind, "workflow"), eq(routines.executionTargetRef, workflowId),
+          )).limit(1);
+          const [stage] = await txDb.select({ id: pipelineStages.id }).from(pipelineStages)
+            .innerJoin(pipelines, and(eq(pipelines.id, pipelineStages.pipelineId), eq(pipelines.companyId, companyId)))
+            .where(sql`(
+              ${pipelineStages.config}#>>'{onEnter,target,workflowId}' = ${workflowId} or
+              ${pipelineStages.config}#>>'{automation,targetRef}' = ${workflowId} or
+              ${pipelineStages.config}#>>'{automation,workflowId}' = ${workflowId}
+            )`).limit(1);
+          const [parent] = await txDb.select({ id: workflowRevisions.id }).from(workflowRevisions).innerJoin(workflows, and(
+            eq(workflows.companyId, companyId), eq(workflows.id, workflowRevisions.workflowId),
+            sql`(${workflows.publishedRevisionId} = ${workflowRevisions.id} or ${workflows.draftRevisionId} = ${workflowRevisions.id})`,
+          )).where(and(eq(workflowRevisions.companyId, companyId), sql`${workflows.status} <> 'archived'`,
+            sql`${workflowRevisions.graph}->'nodes' @> jsonb_build_array(jsonb_build_object('config', jsonb_build_object('workflowId', ${workflowId}::text)))`,
+          )).limit(1);
+          if (routine || stage || parent) throw conflict("Remove connected automations before retirement", { code: "workflow_bindings_present" });
+          if (workflow.draftRevisionId) await txDb.update(workflowRevisions).set({ state: "discarded" }).where(and(
+            eq(workflowRevisions.companyId, companyId), eq(workflowRevisions.workflowId, workflowId),
+            eq(workflowRevisions.id, workflow.draftRevisionId), eq(workflowRevisions.state, "draft"),
+          ));
+        }
+        const now = new Date(Math.max(Date.now(), workflow.updatedAt.getTime() + 1));
+        const [updated] = await txDb.update(workflows).set({
+          status: input.action === "pause" ? "paused" : input.action === "resume" ? "active" : "archived",
+          updatedAt: now, ...(input.action === "retire" ? { archivedAt: now, draftRevisionId: null } : {}),
+        }).where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId))).returning();
+        const receipt = workflowLifecycleReceiptSchema.parse({
+          requestId: input.requestId, companyId, workflowId, action: input.action, status: updated!.status,
+          updatedAt: now.toISOString(), publishedRevisionId: updated!.publishedRevisionId,
+          draftRevisionId: updated!.draftRevisionId, workPolicy: input.workPolicy,
+        });
+        const { publication } = await persistActivity(txDb, {
+          companyId, actorType: authority.source === "local_implicit" ? "system" : "user", actorId: principal,
+          action: "workflow.lifecycle_changed", entityType: "workflow", entityId: workflowId,
+          responsibleUserIdOverride: authority.source === "local_implicit" ? null : principal,
+          details: { requestId: input.requestId, command: input, receipt },
+        });
+        return { receipt, publication };
+      });
+      if (result.publication) publishActivity(result.publication);
+      return result.receipt;
+    },
     list: async (companyId: string) =>
       db.select().from(workflows)
         .where(eq(workflows.companyId, companyId))

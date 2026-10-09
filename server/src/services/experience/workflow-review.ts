@@ -12,6 +12,7 @@ export function workflowReview(
   detail: WorkflowDetail,
   definitions: WorkflowNodeDefinitionDescriptor[],
   canEdit: boolean,
+  canOperate = false,
 ) {
   if (
     Boolean(detail.draftRevisionId) !== Boolean(detail.draftRevision) ||
@@ -119,6 +120,8 @@ export function workflowReview(
         ? "draft"
         : detail.status,
     canEdit: canEdit && detail.status !== "archived",
+    canOperate,
+    updatedAt: detail.updatedAt.toISOString(),
     draft,
     active,
     comparison: workflowComparison(

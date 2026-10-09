@@ -1,0 +1,130 @@
+{
+  "screenId": "WORKFLOW-RETIRE",
+  "journeyId": "workflow",
+  "routeOrSurface": "/workflows/:workflowId",
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "customerOutcome": "Retire a paused, drained and unbound native workflow while preserving published revisions and run history.",
+  "entryConditions": [
+    "Current authenticated principal and company selection; no retained foreign-principal payload",
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+  ],
+  "exitConditions": [
+    "Only a canonical server-confirmed result permits a success claim",
+    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+  ],
+  "content": {
+    "h1": "Workflow name",
+    "supportingCopy": "Retire a paused, drained and unbound native workflow while preserving published revisions and run history.",
+    "customerTerms": [
+      "Pause",
+      "Resume",
+      "Retire workflow",
+      "Existing work",
+      "Run history"
+    ],
+    "displayedState": [
+      "Current native workflow status and separate active/draft versions.",
+      "Explicit finish-existing policy: Pause blocks new admissions and does not cancel already admitted work.",
+      "Confirmation before each action; original unknown request retained across read rechecks and ordinary dialog close/reopen.",
+      "Original native receipt is historical confirmation; refreshed workflow status remains separate."
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Retire workflow",
+      "operation": "Confirm a source/version-bound native lifecycle command; never perform an effect from a read."
+    },
+    "secondary": [
+      "Resume a paused published workflow after explicit acknowledgement",
+      "Close confirmation without changing the original unknown request",
+      "Retry the same unacknowledged request",
+      "Open run history and authorized Advanced draft controls"
+    ],
+    "destructiveOrIrreversible": [
+      "Retirement is permanent; the draft is deliberately discarded and published/run history retained."
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Native workflow/revision/source admission and current workflows:read/publish permissions",
+      "Existing workflow runs, steps, waits, bound heartbeat/tool state and routine/pipeline/parent workflow dependencies"
+    ],
+    "canonicalWriteOperation": "workflowService.lifecycle under native workflow/privacy/configuration locks, with atomic activity receipt; every native enqueue uses the same workflow row fence.",
+    "authorityEffect": "Current human company/source and publication authority are required, including on replay. No new grants, execution, cancellation, approval or external effect. Resume repeats SaaS domain admission.",
+    "asyncWork": "One transaction. Native reads use scoped EXISTS/limit-one dependency queries. No independent projection deadline or cancellation guarantee is invented.",
+    "receipt": "Strict company/workflow/action/request/version-bound native original receipt; current state is refreshed separately. Idempotent replay has no second effect/audit event."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "An unpublished draft may be paused/retired; Resume requires a published revision.",
+    "partial": "Next trigger, recent outcomes, blocker and safe Run now composition remain open; no healthy complete operation overview is claimed.",
+    "stale": "A stale expected status, timestamp or revision pointer is refused. During private read rechecks all controls and receipts are hidden.",
+    "validation_error": "Strict action/request/status/timestamp/revision/finish-existing schema; canonical pre-effect conflicts allow a fresh reviewed request.",
+    "system_error": "Transport, authorization and malformed/foreign receipt failures remain unconfirmed. Preserve the original tuple and offer exact retry without new request identity.",
+    "permission_denied": "Current authority/source/feature loss suppresses controls and refuses effects/replay. Navigation and a previous receipt confer no grant.",
+    "recovering": "Retry the original request; repeat current native admission before returning its stored receipt. Failed/timed-out tools and unfinished native children block retirement until reconciled.",
+    "success": "Only a bound canonical receipt confirms that original change; it does not establish current running status or independently verified work."
+  },
+  "navigation": {
+    "back": "Return to existing native workflow list.",
+    "cancelOrSaveExit": "Ordinary close/reopen retains an unknown in-memory tuple and offers same-request retry. Full route/company/principal/flag teardown can lose it; durable cross-navigation recovery remains open.",
+    "deepLink": "/workflows/:workflowId",
+    "resume": "Re-read current company/principal/native revision and grants. Flag rollback restores the existing graph editor; /advanced preserves a direct graph route."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current admitted native workflow/revision/status and action consequences",
+      "Historical original-request confirmation without private provider/tool payloads"
+    ],
+    "dataCollected": [
+      "Opaque original request UUID and expected native status/timestamp/revision pointers; finish-existing policy."
+    ],
+    "sensitiveFields": [
+      "Native graph configuration, prompts, credentials, inputs, schemas, variables, actor assignments and results are excluded from this projection"
+    ],
+    "loggingConstraints": "Existing private workflow-experience namespace covers lifecycle successes and rejected methods; no raw errors, account query or private payloads in generic HTTP logs. Content-free native activity receipt retains source IDs and versions."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Prove concurrent version conflict, original receipt replay after later state changes, pause barriers for prepared manual/routine/pipeline/API/task admissions, publication immutability and current authority loss.",
+      "Prove retirement refusal for pending native work, active waits/children, unconfirmed external tools and routine/pipeline/parent bindings; preserve published/run history and discard the draft on accepted retirement.",
+      "Complete operation overview, safe Run now, durable navigation recovery, automated owned-resource cleanup and full external reconciliation/customer qualification remain open. Shared resources are not automatically removed."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current native grants, membership revocation, account mismatch, foreign-company denial, agent denial, raw-config omission and late-response suppression."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

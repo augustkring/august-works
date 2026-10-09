@@ -1828,3 +1828,13 @@ retained/late private history on identity/access loss; customer receipts and
 operator details validate existing company/resource bindings. Native transactional
 replay remains authoritative. Durable recovery across page/context/flag teardown
 and full feedback lifecycle qualification remain open (ADR-V9-022 / SCR-V9-015).
+
+Explicit V9 workflow controls now use the existing native owner for pause/resume
+and drained retirement, with current human publication/source authority, expected
+status/timestamp/revision pointers, atomic original-request activity receipts and
+a shared native enqueue row fence. Pause permits admitted work to finish; blocked
+or uncertain child/tool work and linked automations refuse retirement. Published
+versions/run history are retained and the draft deliberately discarded. Receipt
+confirmation remains separate from current status; native state survives shell
+rollback. Complete operation overview, durable recovery, resource cleanup and
+workflow/runtime/human qualification remain open (ADR-V9-023 / SCR-V9-016).

@@ -558,5 +558,36 @@
     "published": "publiceret",
     "superseded": "tidligere publiceret",
     "discarded": "kasseret kladde"
-  }
+  },
+  "workflowOperationControls": "Workflowkontrol",
+  "workflowFinishExisting": "Pause stopper nye starter. Eksisterende arbejde fortsætter med sine gældende regler for godkendelse, genforsøg og genoprettelse.",
+  "workflowPause": "Pause",
+  "workflowResume": "Genoptag",
+  "workflowRetire": "Pensionér workflow",
+  "workflowLifecycleCancel": "Annuller",
+  "workflowLifecyclePending": "Kontrollerer aktuel adgang og workflowstatus…",
+  "workflowLifecycleRefused": "Ændringen blev afvist. Gennemgå workflowet, og afslut eksisterende arbejde eller fjern tilknyttede automatiseringer, før du prøver igen.",
+  "workflowLifecycleUnknown": "Ændringen kunne ikke bekræftes. Prøv samme anmodning igen for at hente kvitteringen. Start ikke en anden ændring, før denne anmodning er afklaret.",
+  "workflowLifecycleRetry": "Prøv samme anmodning igen",
+  "workflowLifecycleTitle": {
+    "pause": "Sæt workflowet på pause?",
+    "resume": "Genoptag workflowet?",
+    "retire": "Pensionér workflowet?"
+  },
+  "workflowLifecycleConsequence": {
+    "pause": "Nye kørsler fra alle kilder blokeres. Allerede startet eller ventende arbejde fortsætter; Pause annullerer det ikke.",
+    "resume": "Den publicerede version kan modtage nye kørsler igen, også fra tilknyttede automatiseringer. Kladdeændringer forbliver adskilte.",
+    "retire": "Pensionering er permanent. Workflowet skal være på pause, eksisterende arbejde afsluttet eller afklaret og tilknyttede rutiner, pipelines eller overordnede workflows fjernet. Kladden kasseres; publicerede versioner og kørselshistorik bevares."
+  },
+  "workflowLifecycleConfirm": {
+    "pause": "Bekræft pause",
+    "resume": "Bekræft genoptagelse",
+    "retire": "Bekræft pensionering"
+  },
+  "workflowLifecycleConfirmed": {
+    "pause": "Pause bekræftet for den oprindelige anmodning. Gennemgå workflowets aktuelle status; eksisterende arbejde kan fortsætte.",
+    "resume": "Genoptagelse bekræftet for den oprindelige anmodning. Gennemgå workflowets aktuelle status, før nyt arbejde startes.",
+    "retire": "Pensionering bekræftet. Nye kørsler kan ikke starte. Publicerede versioner og kørselshistorik er bevaret."
+  },
+  "workflowLifecycleClose": "Luk"
 }

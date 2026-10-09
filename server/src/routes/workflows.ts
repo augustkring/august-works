@@ -13,6 +13,8 @@ import {
   workflowCapabilitySearchQuerySchema,
   workflowRunListQuerySchema,
   workflowDataSelectorRequestSchema,
+  workflowLifecycleCommandSchema,
+  v9FeatureEnabled,
   type PermissionKey,
   type WorkflowCapabilities,
 } from "@paperclipai/shared";
@@ -628,12 +630,26 @@ export function workflowRoutes(db: Db) {
     const detail = await svc.getDetail(companyId, workflowId, req.actor);
     if (!detail) throw notFound("Workflow not found");
     const edit = await decidePermission(req, companyId, "workflows:edit");
-    const result = workflowReview(detail, nodeRegistry.list(), edit.allowed);
+    const operate = await decidePermission(req, companyId, "workflows:publish");
+    const result = workflowReview(detail, nodeRegistry.list(), edit.allowed,
+      operate.allowed && v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9"));
     // Current native admission remains necessary after the asynchronous private read.
     await assertWorkflowsEnabled();
     await assertPermission(req, companyId, "workflows:read");
     res.json(result);
   });
+
+  router.post("/companies/:companyId/workflows/:workflowId/experience/lifecycle",
+    validate(workflowLifecycleCommandSchema), async (req, res) => {
+      assertBoard(req);
+      const companyId = z.uuid().parse(req.params.companyId);
+      const workflowId = z.uuid().parse(req.params.workflowId);
+      const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+      if (!principal) throw unauthorized("Authenticated user identity required");
+      if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+      res.set("Cache-Control", "private, no-store");
+      res.json(await svc.lifecycle(companyId, workflowId, req.body, req.actor));
+    });
 
   router.get("/companies/:companyId/workflows/:workflowId", async (req, res) => {
     await assertWorkflowsEnabled();

@@ -939,6 +939,10 @@ describe("openapi routes", () => {
     const { spec } = loadSpecRoutes();
     const board = [{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }];
     const root = "/api/companies/{companyId}";
+    const lifecycle = spec.paths[`${root}/workflows/{workflowId}/experience/lifecycle`].post;
+    expect(lifecycle.security).toEqual(board);
+    expect(lifecycle.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(lifecycle.requestBody).toBeDefined();
     const review = spec.paths[`${root}/workflows/{workflowId}/experience`].get;
     expect(review.security).toEqual(board);
     expect(review["x-paperclip-authorization"]).toMatchObject({ actor: "board", currentNativeAuthority: true, companyScoped: true });

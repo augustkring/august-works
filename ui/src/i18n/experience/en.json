@@ -558,5 +558,36 @@
     "published": "published",
     "superseded": "earlier published",
     "discarded": "discarded draft"
-  }
+  },
+  "workflowOperationControls": "Workflow controls",
+  "workflowFinishExisting": "Pause stops new starts. Existing work continues under its current approval, retry and recovery rules.",
+  "workflowPause": "Pause",
+  "workflowResume": "Resume",
+  "workflowRetire": "Retire workflow",
+  "workflowLifecycleCancel": "Cancel",
+  "workflowLifecyclePending": "Checking current access and workflow state…",
+  "workflowLifecycleRefused": "The change was refused. Review the current workflow and finish existing work or remove connected automations before trying again.",
+  "workflowLifecycleUnknown": "This change could not be confirmed. Retry the same request to recover its receipt. Do not start another change until this request is resolved.",
+  "workflowLifecycleRetry": "Retry same request",
+  "workflowLifecycleTitle": {
+    "pause": "Pause this workflow?",
+    "resume": "Resume this workflow?",
+    "retire": "Retire this workflow?"
+  },
+  "workflowLifecycleConsequence": {
+    "pause": "New runs from every source will be blocked. Already started or waiting work continues; Pause does not cancel it.",
+    "resume": "The published version can receive new runs again, including connected automations. Draft changes stay separate.",
+    "retire": "Retirement is permanent. The workflow must be paused, existing work finished or reconciled and connected routine, pipeline or parent workflow automations removed. Its draft is discarded; published versions and run history are kept."
+  },
+  "workflowLifecycleConfirm": {
+    "pause": "Confirm pause",
+    "resume": "Confirm resume",
+    "retire": "Confirm retirement"
+  },
+  "workflowLifecycleConfirmed": {
+    "pause": "Pause confirmed for the original request. Review the current workflow status; existing work may continue.",
+    "resume": "Resume confirmed for the original request. Review the current workflow status before starting new work.",
+    "retire": "Retirement confirmed. No new runs can start. Published versions and run history have been kept."
+  },
+  "workflowLifecycleClose": "Close"
 }

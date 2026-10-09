@@ -33,6 +33,8 @@ const data: WorkflowExperience = {
   description: null,
   status: "active",
   canEdit: true,
+  canOperate: false,
+  updatedAt: "2026-10-09T10:00:00.000Z",
   comparison: {
     state: "available",
     steps: [{ number: 1, change: "changed" }],

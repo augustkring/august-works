@@ -3331,3 +3331,4 @@ export * from "./notification-policy.js";
 export * from "./agent-authoring.js";
 export * from "./workflow-experience.js";
 export * from "./workflow-run-experience.js";
+export * from "./workflow-lifecycle.js";

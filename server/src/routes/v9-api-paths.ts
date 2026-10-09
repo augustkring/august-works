@@ -24,6 +24,8 @@ import {
   companyExperienceSchema,
   workflowExperienceSchema,
   workflowRunExperienceSchema,
+  workflowLifecycleCommandSchema,
+  workflowLifecycleReceiptSchema,
 } from "@paperclipai/shared";
 
 /** Current mounted contracts. Listing an operation confers no rollout or execution qualification. */
@@ -81,6 +83,11 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  { ...write(`${company}/workflows/{workflowId}/experience/lifecycle`,
+    "Pause new native admissions, resume explicitly or retire a drained unbound workflow; replay original receipts",
+    workflowLifecycleCommandSchema, workflowLifecycleReceiptSchema),
+    query: z.strictObject({ expectedUserId: z.string().min(1).max(300) }),
+  },
   {
     ...read(
       `${company}/activation`,

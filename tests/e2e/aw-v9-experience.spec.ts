@@ -492,6 +492,54 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
       page.getByRole("heading", { name: "Execution log", exact: true }),
     ).toBeVisible();
     await page.goto(path);
+    const originalChanges: unknown[] = [];
+    const lifecycleRoute = `**/api/companies/${company.id}/workflows/${created.id}/experience/lifecycle?**`;
+    await page.route(lifecycleRoute, async (route) => {
+      originalChanges.push(route.request().postDataJSON());
+      if (originalChanges.length === 1) {
+        const accepted = await route.fetch();
+        expect(accepted.ok()).toBe(true);
+        await route.abort("failed");
+      } else await route.continue();
+    });
+    await page.getByRole("button", { name: "Pause", exact: true }).click();
+    await expect(page.getByRole("dialog")).toContainText(
+      "Pause does not cancel it",
+    );
+    await page
+      .getByRole("button", { name: "Confirm pause", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toContainText(
+      "This change could not be confirmed",
+    );
+    await page
+      .getByRole("button", { name: "Retry same request", exact: true })
+      .click();
+    await expect(
+      page.getByText(/Pause confirmed for the original request/),
+    ).toBeVisible();
+    expect(originalChanges).toHaveLength(2);
+    expect(originalChanges[1]).toEqual(originalChanges[0]);
+    expect(
+      (await json(await request.get(`${base}/${created.id}`))).status,
+    ).toBe("paused");
+    const blocked = await request.post(`${base}/${created.id}/run`, {
+      headers: { "Idempotency-Key": "v9-paused-must-not-start" },
+      data: { input: {} },
+    });
+    expect(blocked.status()).toBe(409);
+    await page.unroute(lifecycleRoute);
+    await page.getByRole("button", { name: "Resume", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Confirm resume", exact: true })
+      .click();
+    await expect(
+      page.getByText(/Resume confirmed for the original request/),
+    ).toBeVisible();
+    const resumed = await json(await request.get(`${base}/${created.id}`));
+    expect(resumed.status).toBe("active");
+    expect(resumed.publishedRevisionId).toBe(published.publishedRevisionId);
+    expect(resumed.draftRevisionId).toBe(changed.draftRevisionId);
     await page
       .getByRole("link", { name: "Edit draft in Advanced", exact: true })
       .click();
@@ -515,6 +563,37 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     await expect(
       page.getByRole("heading", { name: "Workflow run", exact: true }),
     ).toHaveCount(0);
+    await json(
+      await request.patch("/api/instance/settings/experimental", {
+        data: { progressive_shell_v9: true },
+      }),
+    );
+    await page.goto(path);
+    await page.getByRole("button", { name: "Pause", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Confirm pause", exact: true })
+      .click();
+    await expect(
+      page.getByText(/Pause confirmed for the original request/),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Retire workflow", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toContainText(
+      "Retirement is permanent",
+    );
+    await page
+      .getByRole("button", { name: "Confirm retirement", exact: true })
+      .click();
+    await expect(page.getByText(/Retirement confirmed/)).toBeVisible();
+    const retired = await json(await request.get(`${base}/${created.id}`));
+    expect(retired.status).toBe("archived");
+    expect(retired.draftRevisionId).toBeNull();
+    expect(retired.publishedRevisionId).toBe(published.publishedRevisionId);
+    await page.goto(runPath);
+    await expect(
+      page.getByRole("heading", { name: "Workflow run", exact: true }),
+    ).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
     await request.patch("/api/instance/settings/experimental", {

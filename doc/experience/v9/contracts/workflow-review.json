@@ -45,7 +45,8 @@
       "Switch active/draft revision",
       "Open authorized Advanced draft editor",
       "Open native run history",
-      "Retry current private read"
+      "Retry current private read",
+      "Authorized native Pause/Resume/Retire controls, each with separate consequence confirmation"
     ],
     "destructiveOrIrreversible": []
   },
@@ -54,7 +55,7 @@
       "Native workflows/revisions and current learned-asset privacy/lineage checks",
       "Native workflows:read/edit grants and immutable node registry descriptors"
     ],
-    "canonicalWriteOperation": "None; existing workflow owner retains creation, immutable draft/published revisions, execution and recovery.",
+    "canonicalWriteOperation": "Review remains read-only; separate explicit lifecycle controls invoke the original native workflow owner (ADR-V9-023).",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
     "asyncWork": "One current native workflow detail read; projected response is limited to 100 nodes and 200 connections per revision. Account identity and native read admission are checked; existing native owner governs read latency.",
     "receipt": "Native revision IDs and version numbers only. No representative test, approval decision, effective access or publish/run receipt is fabricated."
@@ -116,7 +117,7 @@
   "acceptance": {
     "functional": [
       "Verify immutable active/draft separation, publication-free reads, native graph links, unknown operations, branch visibility and explicit bounds.",
-      "Complete per-step actor/input/effect/access policy, chat authoring, representative test/inspect/check/publish/run/change/recovery/retirement remain open.",
+      "Complete per-step actor/input/effect/access policy, chat authoring, representative test/inspect/check/publish/safe run and full recovery remain open. Separate native lifecycle controls are specified in WORKFLOW-OPERATE/RETIRE.",
       "Verify added/changed/removed native steps, dependency numbering, connection/data/settings indicators, private-value exclusion and unchanged immutable active source."
     ],
     "accessibility": [

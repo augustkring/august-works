@@ -412,3 +412,51 @@ The recovery tuple is scoped to the current UI session: full page exit, another
 selected report or context/flag teardown may discard it; durable cross-navigation
 recovery, complete triage/retention/attachments and hosted/human qualification
 remain open. This source does not claim those pending requirements complete.
+
+## ADR-V9-023 — Native workflow pause, resume and drained retirement
+
+The existing workflow owner now accepts explicit current-human lifecycle commands.
+The original request UUID, expected status/timestamp and active/draft pointers,
+and `finish_existing` policy are immutable until acknowledged or canonically
+refused. Native company/source/read/publication admission is repeated under the
+transaction; membership/grants and rollout configuration remain locked through
+commit. The workflow row is the status/version fence and the activity receipt
+commits with the change. Replays repeat current admission, bind principal and full
+command, and return the original historical receipt without undoing later state.
+There is no new authoritative lifecycle table or secondary execution engine.
+
+Every native enqueue, including routines, pipelines and child workflows, repeats
+status admission under that same row lock. An earlier status read cannot admit
+new work after Pause. Already admitted work retains its own approvals, recovery
+and cancellation policy. An already admitted enqueue receipt can be returned
+without creating more work; this does not add a new legacy manual-run replay API.
+Resume requires a published version and current SaaS workflow admission. Active
+and draft revisions remain unchanged by pause/resume and no new grant is issued.
+
+Retirement requires Pause first. Nonterminal runs, steps, active waits, bound
+queued/running provider children, and pending/executing/failed/timed-out tools
+refuse retirement; uncertainty is not a completed drain. Existing routine,
+pipeline and current parent-workflow references require deliberate removal.
+Accepted retirement discards the draft pointer/version deliberately, preserves
+the immutable published pointer and run history, and permanently blocks native
+new admission. Shared connections/grants/schedules are not automatically deleted.
+A reference concurrently introduced by an inherited owner still cannot enqueue
+into the archived workflow; full dependency-authoring fencing and automated
+owned-resource cleanup/reconciliation remain open. No external effect is retried.
+
+The customer controls disclose consequences before each effect. Pending private
+reads suppress all controls/receipts but preserve the scoped original tuple;
+ordinary dialog close/reopen retains retry. Only explicit pre-effect native
+conflicts release it for a newly reviewed version. Foreign/malformed receipts
+cannot establish success. Confirmations describe the original receipt; they do
+not promise the workflow's current state after someone else changes it. No new
+browser persistent storage, telemetry or external data destination is introduced.
+Full route/account/company/flag teardown durable recovery remains open.
+
+Strict shared/server/UI versions must be deployed together before enabling the
+existing default-off progressive shell: older strict clients reject the new
+canOperate/updatedAt fields. Flag rollback keeps native paused/archived state;
+it never silently resumes or un-retires work. Full operation overview, safe Run
+now, representative test/publish, independently verified external outcomes,
+inherited runtime gates and hosted/human qualification remain open. These two
+partial Screen Contracts do not upgrade V9 source or release readiness.

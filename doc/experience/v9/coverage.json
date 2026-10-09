@@ -1242,9 +1242,17 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/WorkflowReview.tsx",
+        "ui/src/components/WorkflowLifecycleControls.tsx",
+        "packages/shared/src/workflow-lifecycle.ts",
+        "server/src/services/workflows/workflow-service.ts",
+        "server/src/services/workflows/workflow-executor.ts",
+        "server/src/routes/workflows.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/workflow-operate.json"
     },
     {
       "screenId": "WORKFLOW-RECOVER",
@@ -1272,9 +1280,17 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/WorkflowReview.tsx",
+        "ui/src/components/WorkflowLifecycleControls.tsx",
+        "packages/shared/src/workflow-lifecycle.ts",
+        "server/src/services/workflows/workflow-service.ts",
+        "server/src/services/workflows/workflow-executor.ts",
+        "server/src/routes/workflows.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/workflow-retire.json"
     }
   ]
 }
