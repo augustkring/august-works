@@ -609,3 +609,29 @@ state and remains an open requirement. The new updatedAt/canRequestStop fields
 and strict command/receipt require compatible shared/server/UI deployment behind
 the default-off shell flag. Hosted, provider, full-graph and human qualification
 remain separate from source tests; V9 source completion is not promoted.
+
+## ADR-V9-029 — Recover stop admission from its native private ledger
+
+2026-10-09. A fresh run view projects only the current human's latest native
+`workflow.customer_stop_admitted` event for this company and run. Its strict
+original command and receipt must bind the actual historical workflow/revision,
+run and request. Existing native entity indexes bound the lookup. No browser
+storage, second receipt table or effect is introduced by this read.
+
+Current read/run authority, rollout and actual membership/admin role gate the
+receipt. The run's private copied-source admission is repeated after assembling
+it; final read/run/rollout/role checks precede release. Another authorized human
+may read the run but cannot recover the original submitter's admission. A denied
+or checking view hides retained receipt data. Malformed or foreign retained
+bindings fail closed without exposing their private fields.
+
+The strict shared run-view schema rejects cross-company/workflow/run/revision
+receipts and receipts accompanying absent stop authority. A fresh UI displays
+admission separately from current cancellation status. An in-memory unknown
+attempt reconciles only its matching request; an unrelated historical admission
+cannot acknowledge it. This closes recovery after navigation/reload for admitted
+customer stops. A command that never reached native admission still has no
+canonical receipt; transport loss alone never proves application or reversal.
+Provider termination, unresolved external effects and human usability remain
+separate qualification gates. Deploy compatible shared/server/UI versions
+behind default-off rollout; R0/sourceComplete=false remains unchanged.

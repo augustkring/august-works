@@ -9,7 +9,7 @@ async function json(response: APIResponse) {
 }
 // Real built UI/native local-board integration. The native published wait graph
 // is an explicit software prerequisite, not customer publication qualification.
-test("customer stop reconciles a lost native admission without repeating effects", async ({
+test("customer stop recovers a lost native admission after reload without repeating effects", async ({
   page,
   request,
 }, info) => {
@@ -132,34 +132,32 @@ test("customer stop reconciles a lost native admission without repeating effects
     });
     await dialog.getByRole("checkbox").check();
     await confirm.click();
-    // Native activity invalidation may temporarily hide the private view. Its
-    // mounted original command survives; the server already finished cancelling.
-    await expect(
-      page
-        .getByRole("alert")
-        .filter({ hasText: "The stop request could not be confirmed" }),
-    ).toBeVisible();
-    await dialog.getByRole("button", { name: "Close", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Retry original stop request", exact: true })
-      .click();
-    await expect(
-      dialog.getByRole("button", {
-        name: "Retry original stop request",
-        exact: true,
-      }),
-    ).toBeDisabled();
-    await dialog.getByRole("checkbox").check();
-    await dialog
-      .getByRole("button", { name: "Retry original stop request", exact: true })
-      .click();
+    // Leave the mounted command state behind. The fresh private native read
+    // recovers the actual original admission, with no browser-persisted draft.
+    await expect.poll(() => commands.length).toBe(1);
+    await expect.poll(() => accepted?.requestId).toBe(commands[0].requestId);
+    await page.reload();
     await expect(
       page
         .getByRole("status")
         .filter({ hasText: "The original stop request was accepted" }),
     ).toBeVisible();
-    expect(commands).toHaveLength(2);
-    expect(commands[1]).toEqual(commands[0]);
+    expect(commands).toHaveLength(1);
+    const recovered = await json(
+      await request.get(
+        `${base}/workflow-runs/${runId}/experience?expectedUserId=local-board`,
+      ),
+    );
+    expect(recovered.stopReceipt).toEqual(accepted);
+    // Reconciliation reads add no effect; the same native command is also
+    // replayable by its current authorized human and retains one admission.
+    expect(
+      await json(await request.post(endpoint, { data: commands[0] })),
+    ).toEqual(accepted);
+    await page.screenshot({
+      path: info.outputPath("customer-stop-recovered-mobile.png"),
+      fullPage: true,
+    });
     expect(accepted).toMatchObject({
       companyId: company.id,
       workflowId: draft.id,

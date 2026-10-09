@@ -38,6 +38,10 @@ export function WorkflowStopControls({
   const [reviewedVersion, setReviewedVersion] = useState<number | null>(null);
   const [attempt, setAttempt] = useState<WorkflowStopCommand | null>(null);
   const feedback = useRef<HTMLParagraphElement>(null);
+  const observedReceipt = detail?.stopReceipt;
+  const reconciled =
+    !!observedReceipt &&
+    (!attempt || observedReceipt.requestId === attempt.requestId);
   const mutation = useMutation({
     mutationKey: ["workflow-stop", company, principal, workflow, id],
     retry: false,
@@ -76,8 +80,14 @@ export function WorkflowStopControls({
     },
   });
   useEffect(() => {
-    if (mutation.isSuccess || mutation.isError) feedback.current?.focus();
-  }, [mutation.isSuccess, mutation.isError, detail]);
+    if (mutation.isSuccess || mutation.isError || reconciled)
+      feedback.current?.focus();
+  }, [mutation.isSuccess, mutation.isError, reconciled, detail]);
+  useEffect(() => {
+    if (!reconciled) return;
+    setOpen(false);
+    setChecked(false);
+  }, [reconciled]);
   const allowed =
     detail?.companyId === company &&
     detail.workflowId === workflow &&
@@ -92,7 +102,8 @@ export function WorkflowStopControls({
     !attempt &&
     !mutation.isSuccess &&
     !mutation.isError &&
-    !mutation.isPending
+    !mutation.isPending &&
+    !reconciled
   )
     return null;
   const command = attempt ?? reviewed;
@@ -104,52 +115,55 @@ export function WorkflowStopControls({
       <h2 id="workflow-stop-heading" className="text-lg font-medium">
         {t("workflowStopTitle")}
       </h2>
-      {mutation.isSuccess && (
+      {(mutation.isSuccess || reconciled) && (
         <p ref={feedback} tabIndex={-1} role="status">
           {t("workflowStopAccepted")}
         </p>
       )}
-      {mutation.isError && !open && (
+      {mutation.isError && !open && !reconciled && (
         <p ref={feedback} tabIndex={-1} role="alert">
           {t(attempt ? "workflowStopUnknown" : "workflowStopChanged")}
         </p>
       )}
-      {mutation.isPending && <p role="status">{t("workflowStopPending")}</p>}
-      {attempt
-        ? !open && (
-            <Button
-              className="min-h-11"
-              variant="outline"
-              disabled={mutation.isPending}
-              onClick={() => {
-                setChecked(false);
-                setOpen(true);
-              }}
-            >
-              {t("workflowStopRetry")}
-            </Button>
-          )
-        : live && (
-            <Button
-              className="min-h-11"
-              variant="outline"
-              onClick={() => {
-                mutation.reset();
-                setChecked(false);
-                setReviewedVersion(detail.revisionNumber);
-                setReviewed({
-                  requestId: crypto.randomUUID(),
-                  expectedWorkflowId: workflow,
-                  expectedRevisionId: detail.revisionId,
-                  expectedUpdatedAt: detail.updatedAt,
-                  acknowledgeCompletedEffectsRemain: true,
-                });
-                setOpen(true);
-              }}
-            >
-              {t("workflowStopAction")}
-            </Button>
-          )}
+      {mutation.isPending && !reconciled && (
+        <p role="status">{t("workflowStopPending")}</p>
+      )}
+      {!reconciled &&
+        (attempt
+          ? !open && (
+              <Button
+                className="min-h-11"
+                variant="outline"
+                disabled={mutation.isPending}
+                onClick={() => {
+                  setChecked(false);
+                  setOpen(true);
+                }}
+              >
+                {t("workflowStopRetry")}
+              </Button>
+            )
+          : live && (
+              <Button
+                className="min-h-11"
+                variant="outline"
+                onClick={() => {
+                  mutation.reset();
+                  setChecked(false);
+                  setReviewedVersion(detail.revisionNumber);
+                  setReviewed({
+                    requestId: crypto.randomUUID(),
+                    expectedWorkflowId: workflow,
+                    expectedRevisionId: detail.revisionId,
+                    expectedUpdatedAt: detail.updatedAt,
+                    acknowledgeCompletedEffectsRemain: true,
+                  });
+                  setOpen(true);
+                }}
+              >
+                {t("workflowStopAction")}
+              </Button>
+            ))}
       <Dialog
         open={open}
         onOpenChange={(value) => {

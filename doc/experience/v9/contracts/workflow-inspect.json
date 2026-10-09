@@ -2,7 +2,12 @@
   "screenId": "WORKFLOW-INSPECT",
   "journeyId": "workflow",
   "routeOrSurface": "/workflows/:workflowId/runs/:runId",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Inspect the recorded native run and exact historical revision without exposing private payloads or treating recorded completion as independent verification. Request cancellation of the exact reviewed run after confirming retained completed effects; reconcile the original admission separately from recorded stop completion.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
@@ -68,7 +73,7 @@
     "canonicalWriteOperation": "Existing native workflow executor cancellation owner, with the exact command and requested receipt recorded atomically in the native activity ledger.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
     "asyncWork": "Native privacy-checked run and exact revision reads. Projection bounds: 100 nodes, 200 graph edges, 500 attempts and 200 waits. Native read-owner database latency and payload checks remain inherited.",
-    "receipt": "Strict company/workflow/run/revision/request-bound cancellation_requested admission. Current run status is separate; no completed-stop, reversal, safe retry or provider-termination receipt is invented."
+    "receipt": "Strict company/workflow/run/revision/request-bound cancellation_requested admission. Current run status is separate; no completed-stop, reversal, safe retry or provider-termination receipt is invented. A fresh private run read recovers only the current human's bound original admission from native activity, after renewed source/read/run/role checks; unrelated human or request receipts never acknowledge an unknown command."
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
@@ -131,7 +136,8 @@
       "Verify exact historical revision, native attempts, retry numbers, wait association and empty/unavailable separation. Stop remains an explicit separately confirmed mutation.",
       "Complete selected-agent/tool identity, independently verified outcome/error and branch-path reconstruction remain open; this metadata view does not fulfill all §81.9 requirements.",
       "Verify true/false and switch checkpoints, no destination-attempt inference, private switch-key exclusion, deletion, recovery, ambiguous edges and historical graph identity.",
-      "Verify native concurrent exact replay, stale refusal, real wait/child cleanup, retained completed steps, current authority loss, lost replies and cancellation-only recovery after rollout rollback."
+      "Verify native concurrent exact replay, stale refusal, real wait/child cleanup, retained completed steps, current authority loss, lost replies and cancellation-only recovery after rollout rollback.",
+      "Verify original stop admission recovery after route teardown/reload without another effect or persistent private browser storage; current role/grant loss hides it, another authorized human receives no original receipt, and malformed retained bindings fail closed."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

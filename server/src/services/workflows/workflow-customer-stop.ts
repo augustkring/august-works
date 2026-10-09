@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   activityLog,
   companyMemberships,
@@ -13,8 +13,10 @@ import {
 import {
   v9FeatureEnabled,
   workflowStopReceiptSchema,
+  workflowStopCommandSchema,
   type WorkflowStopCommand,
   type WorkflowStopReceipt,
+  type WorkflowRunDetail,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import {
@@ -36,6 +38,46 @@ export interface CustomerWorkflowStop {
   receipt: WorkflowStopReceipt | null;
 }
 type Run = typeof workflowRuns.$inferSelect;
+/** Recover only this human's native admission. The route repeats current run,
+ * source and read/run authority checks before releasing this private receipt. */
+export async function readCustomerWorkflowStopReceipt(
+  db: Db,
+  run: WorkflowRunDetail["run"],
+  authority: AuthorizationActor,
+): Promise<WorkflowStopReceipt | null> {
+  const [event] = await db
+    .select({ details: activityLog.details })
+    .from(activityLog)
+    .where(
+      and(
+        eq(activityLog.companyId, run.companyId),
+        eq(activityLog.entityType, "workflow_run"),
+        eq(activityLog.entityId, run.id),
+        eq(activityLog.action, "workflow.customer_stop_admitted"),
+        eq(activityLog.actorType, "user"),
+        eq(activityLog.actorId, v5HumanActorId(authority)),
+      ),
+    )
+    .orderBy(desc(activityLog.createdAt), desc(activityLog.id))
+    .limit(1);
+  if (!event) return null;
+  const receipt = workflowStopReceiptSchema.safeParse(event.details?.receipt);
+  const command = workflowStopCommandSchema.safeParse(event.details?.command);
+  if (
+    !receipt.success ||
+    !command.success ||
+    receipt.data.companyId !== run.companyId ||
+    receipt.data.workflowId !== run.workflowId ||
+    receipt.data.runId !== run.id ||
+    receipt.data.revisionId !== run.workflowRevisionId ||
+    receipt.data.requestId !== event.details?.requestId ||
+    receipt.data.requestId !== command.data.requestId ||
+    command.data.expectedWorkflowId !== run.workflowId ||
+    command.data.expectedRevisionId !== run.workflowRevisionId
+  )
+    throw notFound("Original workflow stop receipt is unavailable");
+  return receipt.data;
+}
 /** The native cancellation route also retains the board viewer write fence.
  * Read the current membership, not the role copied into a request snapshot. */
 export async function currentWorkflowStopRoleAllows(

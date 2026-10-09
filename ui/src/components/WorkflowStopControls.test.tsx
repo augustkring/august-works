@@ -25,6 +25,7 @@ const detail: WorkflowRunExperience = {
   status: "waiting",
   updatedAt: "2026-10-09T10:00:00.000Z",
   canRequestStop: true,
+  stopReceipt: null,
   trace: { state: "available", attempts: [] },
 };
 let root: Root, container: HTMLDivElement, client: QueryClient;
@@ -219,4 +220,62 @@ it.each([
   await render(view);
   expect(container.textContent).toBe("");
   expect(stop).not.toHaveBeenCalled();
+});
+it("recovers an actual native admission on a fresh view without submitting another command", async () => {
+  const stop = vi.spyOn(workflowsApi, "stop");
+  await render({
+    ...detail,
+    status: "cancelled",
+    stopReceipt: receipt({
+      requestId: crypto.randomUUID(),
+      expectedWorkflowId: workflow,
+      expectedRevisionId: revision,
+      expectedUpdatedAt: detail.updatedAt,
+      acknowledgeCompletedEffectsRemain: true,
+    }),
+  });
+  expect(container.textContent).toContain(
+    "The original stop request was accepted",
+  );
+  expect(container.textContent).toContain("whether all work has stopped");
+  expect(container.textContent).not.toContain("Retry original stop request");
+  expect(stop).not.toHaveBeenCalled();
+  await render(null);
+  expect(container.textContent).toBe("");
+  await render({ ...detail, canRequestStop: false, stopReceipt: null });
+  expect(container.textContent).toBe("");
+});
+it("reconciles a mounted unknown request only with the matching native request", async () => {
+  const stop = vi
+    .spyOn(workflowsApi, "stop")
+    .mockRejectedValue(new Error("lost reply"));
+  await render(detail);
+  await click("Stop run");
+  await acknowledge();
+  await click("Stop run", true);
+  await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(1));
+  const command = stop.mock.calls[0][4];
+  await render({
+    ...detail,
+    status: "cancelled",
+    stopReceipt: receipt({ ...command, requestId: crypto.randomUUID() }),
+  });
+  expect(document.body.textContent).toContain(
+    "The stop request could not be confirmed",
+  );
+  expect(document.body.textContent).not.toContain(
+    "The original stop request was accepted",
+  );
+  await render(null);
+  await render({
+    ...detail,
+    status: "cancelled",
+    stopReceipt: receipt(command),
+  });
+  expect(container.textContent).toContain(
+    "The original stop request was accepted",
+  );
+  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+  expect(container.textContent).not.toContain("Retry original stop request");
+  expect(stop).toHaveBeenCalledTimes(1);
 });

@@ -6,6 +6,7 @@ import {
   type WorkflowRunExperience,
   type WorkflowStepRun,
   type WorkflowGraphV1,
+  type WorkflowStopReceipt,
 } from "@paperclipai/shared";
 
 type BranchChoice = Extract<
@@ -73,6 +74,7 @@ export function workflowRunReview(
   revision: WorkflowRevision,
   definitions: WorkflowNodeDefinitionDescriptor[],
   canRequestStop = false,
+  stopReceipt: WorkflowStopReceipt | null = null,
 ): WorkflowRunExperience {
   const { run, steps, waits } = detail;
   if (
@@ -170,6 +172,7 @@ export function workflowRunReview(
     status: run.status,
     updatedAt: run.updatedAt.toISOString(),
     canRequestStop,
+    stopReceipt,
     trace,
   });
 }

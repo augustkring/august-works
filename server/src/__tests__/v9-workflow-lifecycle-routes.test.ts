@@ -197,7 +197,10 @@ describePg("V9 native workflow lifecycle", () => {
   }
   function stopCommand(
     detail: WorkflowDetail,
-    run: Pick<typeof workflowRuns.$inferSelect, "workflowRevisionId" | "updatedAt">,
+    run: Pick<
+      typeof workflowRuns.$inferSelect,
+      "workflowRevisionId" | "updatedAt"
+    >,
   ): WorkflowStopCommand {
     return {
       requestId: randomUUID(),
@@ -283,12 +286,49 @@ describePg("V9 native workflow lifecycle", () => {
       .send(input)
       .expect(200);
     expect(replay.body).toEqual(replies[0].body);
+    const recovered = await http()
+      .get(reviewPath(detail, queued.run.id))
+      .expect(200);
+    expect(recovered.headers["cache-control"]).toBe("private, no-store");
+    expect(recovered.body).toMatchObject({
+      revisionId: detail.publishedRevisionId,
+      revisionState: "superseded",
+      status: "cancelled",
+      stopReceipt: replies[0].body,
+    });
     await http()
       .post(stopPath(detail, queued.run.id))
       .send({ ...input, requestId: randomUUID() })
       .expect(409);
     expect(await stops()).toHaveLength(1);
     expect(await db.select().from(workflowRuns)).toHaveLength(1);
+  });
+  it("fails closed when retained native stop evidence no longer binds to this run", async () => {
+    const detail = await seed(),
+      queued = await queue(detail);
+    await http()
+      .post(stopPath(detail, queued.run.id))
+      .send(stopCommand(detail, queued.run))
+      .expect(200);
+    const [event] = await stops();
+    await db
+      .update(activityLog)
+      .set({
+        details: {
+          ...event.details,
+          receipt: {
+            ...(event.details!.receipt as Record<string, unknown>),
+            runId: randomUUID(),
+          },
+        },
+      })
+      .where(eq(activityLog.id, event.id));
+    const reply = await http()
+      .get(reviewPath(detail, queued.run.id))
+      .expect(404);
+    expect(JSON.stringify(reply.body)).not.toContain(event.details!.requestId);
+    expect(await stops()).toHaveLength(1);
+    expect((await db.select().from(workflowRuns))[0].status).toBe("cancelled");
   });
   it("refuses stale review, wrong revision and expanded commands without changing native work", async () => {
     const detail = await seed(),
@@ -581,10 +621,30 @@ describePg("V9 native workflow lifecycle", () => {
       .post(stopPath(detail, queued.run.id, userId))
       .send(input);
     expect(admitted.status, JSON.stringify(admitted.body)).toBe(200);
+    expect(
+      (
+        await http(actor)
+          .get(reviewPath(detail, queued.run.id, userId))
+          .expect(200)
+      ).body.stopReceipt,
+    ).toEqual(admitted.body);
+    // Another authorized board principal can inspect this run without reading
+    // the submitting human's original-request receipt.
+    expect(
+      (await http().get(reviewPath(detail, queued.run.id)).expect(200)).body
+        .stopReceipt,
+    ).toBeNull();
     await db
       .update(companyMemberships)
       .set({ membershipRole: "viewer" })
       .where(eq(companyMemberships.principalId, userId));
+    expect(
+      (
+        await http(actor)
+          .get(reviewPath(detail, queued.run.id, userId))
+          .expect(200)
+      ).body,
+    ).toMatchObject({ canRequestStop: false, stopReceipt: null });
     await http(actor)
       .post(stopPath(detail, queued.run.id, userId))
       .send(input)
@@ -601,6 +661,13 @@ describePg("V9 native workflow lifecycle", () => {
           eq(principalPermissionGrants.permissionKey, "workflows:run"),
         ),
       );
+    expect(
+      (
+        await http(actor)
+          .get(reviewPath(detail, queued.run.id, userId))
+          .expect(200)
+      ).body,
+    ).toMatchObject({ canRequestStop: false, stopReceipt: null });
     await http(actor)
       .post(stopPath(detail, queued.run.id, userId))
       .send(input)
@@ -625,15 +692,13 @@ describePg("V9 native workflow lifecycle", () => {
       queued = await queue(detail),
       input = stopCommand(detail, queued.run),
       userId = randomUUID();
-    await db
-      .insert(companyMemberships)
-      .values({
-        companyId: detail.companyId,
-        principalType: "user",
-        principalId: userId,
-        membershipRole: "viewer",
-        status: "active",
-      });
+    await db.insert(companyMemberships).values({
+      companyId: detail.companyId,
+      principalType: "user",
+      principalId: userId,
+      membershipRole: "viewer",
+      status: "active",
+    });
     await db.insert(principalPermissionGrants).values(
       ["workflows:read", "workflows:run"].map((permissionKey) => ({
         companyId: detail.companyId,

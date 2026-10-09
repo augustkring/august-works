@@ -24,7 +24,7 @@ import { validate } from "../middleware/validate.js";
 import { conflict, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
 import { workflowReview } from "../services/experience/workflow-review.js";
 import { workflowRunReview } from "../services/experience/workflow-run-review.js";
-import { currentWorkflowStopRoleAllows } from "../services/workflows/workflow-customer-stop.js";
+import { currentWorkflowStopRoleAllows, readCustomerWorkflowStopReceipt } from "../services/workflows/workflow-customer-stop.js";
 import { assertV5Authorization } from "../services/v5-authorization.js";
 import {
   accessService,
@@ -534,7 +534,19 @@ export function workflowRoutes(db: Db) {
     const stopAllowed = await access.decide({ actor: req.actor, action: "workflows:run", resource: { type: "company", companyId } });
     const stopEnabled = v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9");
     const stopRoleAllowed = await currentWorkflowStopRoleAllows(db, companyId, req.actor);
-    res.json(workflowRunReview(detail, revision, nodeRegistry.list(), stopAllowed.allowed && stopEnabled && stopRoleAllowed));
+    const canRequestStop = stopAllowed.allowed && stopEnabled && stopRoleAllowed;
+    const stopReceipt = canRequestStop ? await readCustomerWorkflowStopReceipt(db, detail.run, req.actor) : null;
+    // A receipt survives navigation, but never bypasses current private-source
+    // admission or reveals another principal's original request.
+    if (stopReceipt) {
+      if (!await executor.getRun(companyId, runId, req.actor)) throw notFound("Workflow run not found");
+      await assertWorkflowsEnabled();
+      await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+      await assertV5Authorization(db, req.actor, companyId, "workflows:run");
+      if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") ||
+          !await currentWorkflowStopRoleAllows(db, companyId, req.actor)) throw notFound("Workflow stop receipt is unavailable");
+    }
+    res.json(workflowRunReview(detail, revision, nodeRegistry.list(), canRequestStop, stopReceipt));
   });
 
   router.post("/companies/:companyId/workflow-runs/:runId/experience/stop", validate(workflowStopCommandSchema), async (req, res) => {

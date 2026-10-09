@@ -13,6 +13,7 @@ const data = {
   status: "succeeded",
   updatedAt: "2026-10-09T00:00:00.000Z",
   canRequestStop: false,
+  stopReceipt: null,
   trace: { state: "available", attempts: [] },
 };
 afterEach(() => vi.restoreAllMocks());
@@ -97,4 +98,23 @@ it("refuses a workflow mismatch before sending any stop command", async () => {
     }),
   ).rejects.toThrow("context changed");
   expect(post).not.toHaveBeenCalled();
+});
+it.each(["companyId", "workflowId", "runId", "revisionId"])(
+  "rejects a recovered native admission bound to a different %s",
+  async (field) => {
+    vi.spyOn(api, "get").mockResolvedValue({
+      ...data,
+      canRequestStop: true,
+      stopReceipt: { ...stopReceipt, [field]: id(99) },
+    });
+    await expect(
+      workflowsApi.runExperience(id(1), "member", id(2), id(3)),
+    ).rejects.toThrow("context changed");
+  },
+);
+it("does not accept a recovered stop admission after stop authority is lost", async () => {
+  vi.spyOn(api, "get").mockResolvedValue({ ...data, stopReceipt });
+  await expect(
+    workflowsApi.runExperience(id(1), "member", id(2), id(3)),
+  ).rejects.toThrow("context changed");
 });
