@@ -3,9 +3,87 @@ import {
   agentAuthoringContentSchema,
   agentDraftCreateSchema,
   agentDraftSaveSchema,
+  agentAuthoringDraftPageSchema,
+  agentAuthoringDraftViewSchema,
 } from "./agent-authoring.js";
 
 describe("unpublished agent authoring contracts", () => {
+  it("keeps earlier accepted drafts readable above the new write budget", () => {
+    const content = agentAuthoringContentSchema.parse({
+      scenarios: Array.from({ length: 10 }, () => "界".repeat(1800)),
+    });
+    content.instructions.responsibilities = "界".repeat(3200);
+    const bytes = new TextEncoder().encode(JSON.stringify(content)).length;
+    expect(bytes).toBeGreaterThan(62 * 1024);
+    expect(bytes).toBeLessThan(64 * 1024);
+    expect(agentAuthoringContentSchema.safeParse(content).success).toBe(false);
+    expect(
+      agentAuthoringDraftViewSchema.safeParse({
+        id: "10000000-0000-4000-8000-000000000001",
+        companyId: "10000000-0000-4000-8000-000000000002",
+        agentId: null,
+        createdByUserId: "author",
+        version: 1,
+        status: "draft",
+        step: "instructions",
+        content,
+        baselineHash: null,
+        createdAt: "2026-10-09T00:00:00.000Z",
+        updatedAt: "2026-10-09T00:00:00.000Z",
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects complete Unicode payloads above the storage budget and null characters before a database write", () => {
+    expect(
+      agentAuthoringContentSchema.safeParse({
+        instructions: {
+          responsibilities: "界".repeat(6000),
+          prohibited: "界".repeat(3000),
+        },
+        scenarios: Array.from({ length: 10 }, () => "界".repeat(2000)),
+      }).success,
+    ).toBe(false);
+    expect(
+      agentAuthoringContentSchema.safeParse({ name: "Name\u0000invalid" })
+        .success,
+    ).toBe(false);
+    expect(
+      agentAuthoringContentSchema.safeParse({ name: "Name\ud800invalid" })
+        .success,
+    ).toBe(false);
+    expect(
+      agentAuthoringContentSchema.safeParse({ name: "Valid \ud83d\ude00" })
+        .success,
+    ).toBe(true);
+    expect(
+      agentAuthoringContentSchema.safeParse({
+        scenarios: Array.from({ length: 10 }, () => "界".repeat(1500)),
+      }).success,
+    ).toBe(true);
+  });
+  it("keeps instructions, owner identity and request receipts out of draft history", () => {
+    const summary = {
+      id: "10000000-0000-4000-8000-000000000001",
+      companyId: "10000000-0000-4000-8000-000000000002",
+      agentId: null,
+      version: 1,
+      name: "Private draft",
+      step: "identity",
+      updatedAt: "2026-10-09T00:00:00.000Z",
+    };
+    expect(
+      agentAuthoringDraftPageSchema.safeParse({
+        items: [summary],
+        nextCursor: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      agentAuthoringDraftPageSchema.safeParse({
+        items: [{ ...summary, content: {} }],
+        nextCursor: null,
+      }).success,
+    ).toBe(false);
+  });
   it("preserves entered text while defaulting to no memory, delegation or capabilities", () => {
     const draft = agentAuthoringContentSchema.parse({
       instructions: { purpose: "  A bounded outcome  " },

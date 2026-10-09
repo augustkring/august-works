@@ -278,6 +278,35 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(agentConfigurationDrafts.id, first.id)),
       ).toHaveLength(0);
     });
+    it("reads earlier accepted native drafts above the new write budget without permitting another oversized write", async () => {
+      const content = agentAuthoringContentSchema.parse({
+        ownerUserId: f.userId,
+        scenarios: Array.from({ length: 10 }, () => "界".repeat(1800)),
+      });
+      content.instructions.responsibilities = "界".repeat(3200);
+      const [row] = await db
+        .insert(agentConfigurationDrafts)
+        .values({
+          companyId: f.home,
+          createdByUserId: f.userId,
+          creationRequestId: randomUUID(),
+          creationRequestHash: "a".repeat(64),
+          content,
+        })
+        .returning();
+      expect((await service.get(f.actor, f.home, row!.id)).content).toEqual(
+        content,
+      );
+      await expect(
+        service.save(f.actor, f.home, row!.id, {
+          requestId: randomUUID(),
+          expectedVersion: 1,
+          step: "instructions",
+          content,
+        }),
+      ).rejects.toThrow("complete draft is too large");
+      expect((await service.get(f.actor, f.home, row!.id)).version).toBe(1);
+    });
     it("pages private draft history across native timestamp ties and rejects foreign cursors", async () => {
       const rows = await db
         .insert(agentConfigurationDrafts)
@@ -299,6 +328,8 @@ const support = await getEmbeddedPostgresTestSupport();
       );
       const first = await service.list(f.actor, f.home);
       expect(first.items).toHaveLength(25);
+      expect(first.items[0]).not.toHaveProperty("content");
+      expect(first.items[0]).not.toHaveProperty("createdByUserId");
       expect(first.nextCursor).not.toBeNull();
       const second = await service.list(f.actor, f.home, first.nextCursor!);
       expect(second.items).toHaveLength(5);

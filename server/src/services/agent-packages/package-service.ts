@@ -1009,6 +1009,7 @@ export function agentPackageService(
     },
     catalog: async (
       actor: AuthorizationActor,
+      audience?: "customer",
     ): Promise<PackageCatalogView[]> => {
       v7HumanActorId(actor);
       await assertV7Enabled(db, "agent_packages_v7");
@@ -1023,6 +1024,7 @@ export function agentPackageService(
           and(
             eq(agentPackages.status, "active"),
             eq(agentPackageVersions.state, "published"),
+            audience ? sql`${agentPackageVersions.release}->'manifest'->>'audience'=${audience}` : undefined,
           ),
         )
         .orderBy(agentPackages.key, desc(agentPackageVersions.createdAt))

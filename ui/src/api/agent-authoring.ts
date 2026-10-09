@@ -1,6 +1,7 @@
 import {
   agentAuthoringDraftPageSchema,
   agentAuthoringDraftViewSchema,
+  hireAgentCatalogSchema,
   type AgentDraftSave,
   type AgentAuthoringReview,
 } from "@paperclipai/shared";
@@ -15,6 +16,17 @@ export interface AgentAuthoringOptions {
   runtimes: Array<{ id: string }>;
 }
 export const agentAuthoringApi = {
+  hireCatalog: async (
+    company: string,
+    principal: string,
+    signal?: AbortSignal,
+  ) =>
+    hireAgentCatalogSchema.parse(
+      await api.get(scope(`${root(company)}/hire-catalog`, principal), {
+        signal,
+        cache: "no-store",
+      }),
+    ),
   list: async (
     company: string,
     principal: string,

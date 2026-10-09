@@ -7,6 +7,7 @@ import { agentAuthoringRoutes } from "../routes/agent-authoring.js";
 import { errorHandler } from "../middleware/error-handler.js";
 
 const service = vi.hoisted(() => ({
+  hireCatalog: vi.fn(),
   list: vi.fn(),
   get: vi.fn(),
   options: vi.fn(),
@@ -42,6 +43,20 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 describe("native authoring HTTP boundary", () => {
+  it("binds the customer capability catalog to the current company and account with private no-store responses", async () => {
+    service.hireCatalog.mockResolvedValue([]);
+    const path = `/api/companies/${companyId}/agent-configuration-drafts/hire-catalog`;
+    await request(app()).get(`${path}?expectedUserId=other`).expect(409);
+    expect(service.hireCatalog).not.toHaveBeenCalled();
+    const response = await request(app())
+      .get(`${path}?expectedUserId=author`)
+      .expect(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(service.hireCatalog).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "author" }),
+      companyId,
+    );
+  });
   it("prevents a stale principal or foreign company from reaching the draft owner", async () => {
     await request(app())
       .get(

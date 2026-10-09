@@ -65,12 +65,16 @@ afterEach(async () => {
   context.live = null;
   vi.restoreAllMocks();
 });
-async function render() {
+async function render(start = false) {
   await act(async () =>
     root.render(
       <StrictMode>
         <QueryClientProvider client={client}>
-          <MemoryRouter initialEntries={[`/AW/agents/custom/${id}/identity`]}>
+          <MemoryRouter
+            initialEntries={[
+              start ? "/AW/agents/custom" : `/AW/agents/custom/${id}/identity`,
+            ]}
+          >
             <Routes>
               <Route
                 path="/AW/agents/custom/:draftId/:screen?"
@@ -78,7 +82,9 @@ async function render() {
               />
               <Route
                 path="/AW/agents/custom"
-                element={<p>Saved drafts destination</p>}
+                element={
+                  start ? <CustomAgent /> : <p>Saved drafts destination</p>
+                }
               />
             </Routes>
           </MemoryRouter>
@@ -87,7 +93,7 @@ async function render() {
     ),
   );
 }
-async function mount() {
+async function mount(start = false) {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -108,13 +114,54 @@ async function mount() {
     knowledge: [],
     runtimes: [],
   });
-  await render();
+  await render(start);
+  if (start) {
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain("Your saved drafts"),
+    );
+    return;
+  }
   await vi.waitFor(() =>
     expect(document.querySelector("input")?.value).toBe(
       "Private customer draft",
     ),
   );
 }
+it("immediately hides private history titles while access is rechecked", async () => {
+  const list = vi.spyOn(agentAuthoringApi, "list").mockResolvedValue({
+    items: [
+      {
+        id,
+        companyId: context.company,
+        agentId: null,
+        name: "Private saved title",
+        version: 1,
+        step: "identity",
+        updatedAt: draft.updatedAt,
+      },
+    ],
+    nextCursor: null,
+  });
+  await mount(true);
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain("Private saved title"),
+  );
+  list.mockImplementation(() => new Promise(() => {}));
+  await act(async () =>
+    context.live?.({
+      id: 1,
+      createdAt: draft.updatedAt,
+      type: "activity.logged",
+      companyId: context.company,
+      payload: {
+        action: "company_membership.permission_changed",
+        entityType: "company_membership",
+      },
+    } as LiveEvent),
+  );
+  expect(container.textContent).not.toContain("Private saved title");
+  expect(container.textContent).toContain("Loading saved drafts");
+});
 async function enter(value: string) {
   const element = document.querySelector("input")!;
   await act(async () => {

@@ -237,9 +237,14 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "server/src/services/agent-packages/package-service.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/hire-01.json"
     },
     {
       "screenId": "HIRE-02",
@@ -252,9 +257,14 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "server/src/services/agent-packages/package-service.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/hire-02.json"
     },
     {
       "screenId": "HIRE-03",

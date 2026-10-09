@@ -256,7 +256,7 @@ export function experienceService(db: Db) {
           const entries = [
             {
               id: "custom_agent",
-              href: "/agents/new",
+              href: "/agents/custom",
               action: "agents:create",
               enabled: true,
             },

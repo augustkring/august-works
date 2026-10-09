@@ -14,6 +14,7 @@ import {
   agentDraftCreateSchema,
   agentDraftSaveSchema,
   agentDraftDiscardSchema,
+  hireAgentCatalogSchema,
   v9FeatureEnabled,
   type AgentAuthoringContent,
   type AgentAuthoringReview,
@@ -25,6 +26,7 @@ import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { readBuiltInAgentMarker } from "../built-in-agent-metadata.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { agentPackageService } from "../agent-packages/package-service.js";
 import { withV5ActivityTransaction } from "../v5-mutations.js";
 import { logActivity } from "../activity-log.js";
 import {
@@ -244,6 +246,39 @@ export function agentAuthoringService(db: Db) {
     }
   }
   return {
+    hireCatalog: async (actor: AuthorizationActor, companyId: string) => {
+      await access(db, actor, companyId, null, false, true);
+      const releases = await agentPackageService(db).catalog(
+        {
+          ...actor,
+          ignoreInstanceAdmin: true,
+        },
+        "customer",
+      );
+      const seen = new Set<string>();
+      const capabilities = releases
+        .filter((release) => {
+          if (release.manifest.audience !== "customer" || seen.has(release.key))
+            return false;
+          seen.add(release.key);
+          return true;
+        })
+        .slice(0, 50)
+        .map((release) => ({
+          key: release.key,
+          versionId: release.versionId,
+          version: release.version,
+          name: release.name,
+          category: release.category,
+          outcome: release.manifest.purpose,
+          requiredKnowledge: release.manifest.requiredKnowledge,
+          requiredConnections: release.manifest.requiredConnections,
+          limits: release.manifest.knownLimitations,
+          actionClasses: release.manifest.actionClasses,
+        }));
+      await access(db, actor, companyId, null, false, true);
+      return hireAgentCatalogSchema.parse(capabilities);
+    },
     options: async (
       actor: AuthorizationActor,
       companyId: string,
@@ -465,7 +500,15 @@ export function agentAuthoringService(db: Db) {
       for (const row of rows.slice(0, 25)) {
         try {
           await access(db, actor, companyId, row.agentId);
-          visible.push(view(row));
+          visible.push({
+            id: row.id,
+            companyId: row.companyId,
+            agentId: row.agentId,
+            version: row.version,
+            name: row.content?.name ?? "",
+            step: row.step,
+            updatedAt: row.updatedAt.toISOString(),
+          });
         } catch (error) {
           if (
             (error as { status?: number }).status !== 403 &&

@@ -104,7 +104,7 @@ V9-102,2364,"canonical profile navigation + shell utility area (`Ask August`, `F
 V9-103,2366,onboarding execution screens ONB-01–ONB-04,in_progress
 V9-104,2368,onboarding execution screens ONB-05–ONB-08 + just-in-time connection/permission contract,in_progress
 V9-105,2370,onboarding execution screens ONB-09–ONB-12 + resume/recovery/accessibility,in_progress
-V9-106,2372,Hire Agent flow + capability/access/authority/test/review/activation receipt,not_started
+V9-106,2372,Hire Agent flow + capability/access/authority/test/review/activation receipt,in_progress
 V9-107,2374,"Custom Agent builder steps 1–6 (outcome, identity, instructions, knowledge, tools, authority)",in_progress
 V9-108,2376,"Custom Agent builder steps 7–13 (memory, collaboration, runtime, test, review, publish, monitor) + draft/live lifecycle",in_progress
 V9-109,2378,orchestration decision contract + bounded multi-agent admin projection + takeover/kill propagation,not_started

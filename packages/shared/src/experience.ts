@@ -10,7 +10,7 @@ export const experienceProfileSchema = z.enum(EXPERIENCE_PROFILES);
 export type ExperienceProfile = z.infer<typeof experienceProfileSchema>;
 /** Stable expert destinations. Arbitrary agent-generated routes are forbidden. */
 export const EXPERIENCE_ADVANCED_DESTINATIONS = {
-  custom_agent: "/agents/new",
+  custom_agent: "/agents/custom",
   foundation: "/foundation",
   workflows: "/workflows",
   runtime: "/company/settings/runtime",

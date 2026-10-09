@@ -54,6 +54,9 @@ export function agentAuthoringRoutes(db: Db) {
       ),
     ),
   );
+  router.get(`${root}/hire-catalog`, async (req, res) =>
+    res.json(await service.hireCatalog(req.actor, company(req))),
+  );
   router.post(root, validate(agentDraftCreateSchema), async (req, res) =>
     res
       .status(201)

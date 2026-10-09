@@ -175,3 +175,18 @@ without another role assignment or audit. Current authority is still required.
 No parallel receipt table or synthetic active version is introduced. Nullable
 columns preserve legacy installation writers; new clients require the new
 server before enabling this admission.
+
+## ADR-V9-013 — Ordinary hiring reads qualified native releases
+
+The Hire Agent catalog/detail is a read projection of the existing V7 package
+owner. Its native catalog supports customer-audience selection before the
+bounded query, then applies existing publication, expiration and independent
+qualification rules. Customer-facing projection omits protected evidence URIs
+and implementation components. No duplicated capability owner or client-authored
+release qualification is created. Current verified company membership and
+agents:create authority apply even to instance administrators.
+
+Catalog/detail are partial HIRE source; missing-access assessment, representative
+test, production review/publication and active receipt remain open. Declared
+capabilities are conditional on native policy/access and do not grant them.
+Withdrawn exact-version links never fall back to another version automatically.

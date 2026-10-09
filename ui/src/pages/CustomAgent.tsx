@@ -68,6 +68,9 @@ function DraftStart({
   const attempt = useRef<{ requestId: string; agentId: string | null } | null>(
     null,
   );
+  const client = useQueryClient();
+  const [checkingAccess, setCheckingAccess] = useState(false);
+  const securityEpoch = useRef(0);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -87,6 +90,32 @@ function DraftStart({
     getNextPageParam: (page) => page.nextCursor,
     gcTime: 0,
     retry: false,
+  });
+  useCompanyLiveEvent((event) => {
+    if (event.companyId !== company || event.type !== "activity.logged") return;
+    const action =
+      typeof event.payload.action === "string" ? event.payload.action : "";
+    if (
+      event.payload.entityType === "company_membership" ||
+      event.payload.entityType === "agent" ||
+      action.startsWith("resource_membership.") ||
+      action.includes("erased") ||
+      action.endsWith("deleted") ||
+      action.includes("permission")
+    ) {
+      // Hide private titles while the native owner checks current access again.
+      setCheckingAccess(true);
+      const epoch = ++securityEpoch.current;
+      void client
+        .resetQueries({
+          queryKey: ["agent-authoring", company, principal, "list"],
+          exact: true,
+        })
+        .then(() => {
+          if (alive.current && epoch === securityEpoch.current)
+            setCheckingAccess(false);
+        });
+    }
   });
   const create = useMutation({
     mutationFn: () => {
@@ -146,7 +175,9 @@ function DraftStart({
         <h2 id="saved-drafts" className="text-lg font-semibold">
           Your saved drafts
         </h2>
-        {drafts.isPending && <p role="status">Loading saved drafts…</p>}
+        {(drafts.isPending || checkingAccess) && (
+          <p role="status">Loading saved drafts…</p>
+        )}
         {drafts.isError && (
           <>
             <p role="alert">Saved drafts could not be loaded.</p>
@@ -155,25 +186,25 @@ function DraftStart({
             </Button>
           </>
         )}
-        {drafts.data?.pages[0]?.items.length === 0 && !drafts.hasNextPage && (
-          <p>No saved drafts yet.</p>
-        )}
+        {!checkingAccess &&
+          drafts.data?.pages[0]?.items.length === 0 &&
+          !drafts.hasNextPage && <p>No saved drafts yet.</p>}
         <ul>
-          {drafts.data?.pages
-            .flatMap((page) => page.items)
-            .map((draft) => (
-              <li key={draft.id}>
-                <Link
-                  className="inline-flex min-h-11 items-center underline"
-                  to={`/agents/custom/${draft.id}/${draft.step}`}
-                >
-                  {draft.content?.name || "Untitled agent"} · Draft v
-                  {draft.version}
-                </Link>
-              </li>
-            ))}
+          {!checkingAccess &&
+            drafts.data?.pages
+              .flatMap((page) => page.items)
+              .map((draft) => (
+                <li key={draft.id}>
+                  <Link
+                    className="inline-flex min-h-11 items-center underline"
+                    to={`/agents/custom/${draft.id}/${draft.step}`}
+                  >
+                    {draft.name || "Untitled agent"} · Draft v{draft.version}
+                  </Link>
+                </li>
+              ))}
         </ul>
-        {drafts.hasNextPage && (
+        {!checkingAccess && drafts.hasNextPage && (
           <Button
             className="min-h-11"
             disabled={drafts.isFetchingNextPage}

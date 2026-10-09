@@ -66,6 +66,7 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { rolePackService } from "../services/role-packs.js";
 import { agentPackageService } from "../services/agent-packages/package-service.js";
+import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import {
   assertPackageExecution,
   packageToolRestriction,
@@ -246,6 +247,32 @@ const support = await getEmbeddedPostgresTestSupport();
         reason: "Explicit internal evaluation",
       });
     }
+    it("projects only available customer releases for Hire Agent and does not expose internal evaluation or release evidence", async () => {
+      await instanceSettingsService(db).updateExperimental({ hire_agent_v9: true });
+      const hire = agentAuthoringService(db);
+      expect((await hire.hireCatalog(f.actor, f.home)).some((row) => row.key === input.packageKey)).toBe(false);
+      const evidence = input.releaseEvidence.provenance;
+      const customer: PackageRelease = {
+        ...input,
+        packageKey: `customer-catalog-fixture-${randomUUID()}`,
+        manifest: { ...input.manifest, audience: "customer", commercialProductKey: "agent_package_research" },
+        releaseEvidence: { ...input.releaseEvidence, sbom: evidence, scan: evidence, evaluations: evidence, protectedHoldout: evidence, customerDemand: evidence },
+      };
+      const published = await service.publish(f.actor, customer);
+      const rows = await hire.hireCatalog(f.actor, f.home);
+      const capability = rows.find((row) => row.key === customer.packageKey)!;
+      expect(capability.versionId).toBe(published.id);
+      expect(capability.outcome).toBe(customer.manifest.purpose);
+      expect(capability).not.toHaveProperty("releaseEvidence");
+      expect(capability).not.toHaveProperty("components");
+      const agentCount = (await db.select().from(agents)).length;
+      await service.revoke(f.actor, published.id);
+      expect((await hire.hireCatalog(f.actor, f.home)).some((row) => row.key === customer.packageKey)).toBe(false);
+      expect(await db.select().from(agents)).toHaveLength(agentCount);
+      await expect(hire.hireCatalog({ ...f.actor, userId: "unknown-account", isInstanceAdmin: true }, f.home)).rejects.toMatchObject({ status: 403 });
+      await instanceSettingsService(db).updateExperimental({ hire_agent_v9: false });
+      await expect(hire.hireCatalog(f.actor, f.home)).rejects.toMatchObject({ status: 404 });
+    });
     it("reconciles concurrent installation acknowledgements without duplicate installation or audit", async () => {
       const body = { ...installInput(), installationRequestId: randomUUID() };
       const [first, second] = await Promise.all([

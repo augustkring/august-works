@@ -1,4 +1,4 @@
-import { v7FeatureEnabled } from "@paperclipai/shared";
+import { v7FeatureEnabled, v9FeatureEnabled } from "@paperclipai/shared";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { useAgentChatEnabled } from "../hooks/useAgentChatEnabled";
 import { useState, useEffect, useMemo, lazy, Suspense } from "react";
@@ -520,9 +520,9 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
               </Button>
           </div> : null}
           {v7FeatureEnabled(instanceSettings?.experimental ?? {}, "agent_packages_v7") && <Link className="saas-link" to="/agents/packages">Specialist packages</Link>}
-          <Button size="sm" variant="outline" onClick={openNewAgent}>
+          <Button size="sm" variant="outline" onClick={() => v9FeatureEnabled(instanceSettings?.experimental ?? {}, "hire_agent_v9") ? navigate("/agents/hire") : openNewAgent()}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
-            New Agent
+            {v9FeatureEnabled(instanceSettings?.experimental ?? {}, "hire_agent_v9") ? "Hire agent" : "New Agent"}
           </Button>
         </div>
       </div>
@@ -537,8 +537,8 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
         <EmptyState
           icon={Bot}
           message="Create your first agent to get started."
-          action="New Agent"
-          onAction={openNewAgent}
+          action={v9FeatureEnabled(instanceSettings?.experimental ?? {}, "hire_agent_v9") ? "Hire agent" : "New Agent"}
+          onAction={() => v9FeatureEnabled(instanceSettings?.experimental ?? {}, "hire_agent_v9") ? navigate("/agents/hire") : openNewAgent()}
         />
       )}
 

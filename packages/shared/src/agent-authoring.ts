@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { READINESS_ACTIONS } from "./readiness.js";
 
 export const CUSTOM_AGENT_STEPS = [
   "outcome",
@@ -16,12 +17,21 @@ export const CUSTOM_AGENT_STEPS = [
   "monitor",
 ] as const;
 export const customAgentStepSchema = z.enum(CUSTOM_AGENT_STEPS);
-const text = (max: number) => z.string().max(max);
+const text = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .refine(
+      (value) => !/[\u0000\uD800-\uDFFF]/u.test(value),
+      "Remove null or malformed Unicode characters",
+    );
+// Leave room for JSONB formatting beneath the native 64 KiB storage limit.
+export const AGENT_DRAFT_CONTENT_MAX_BYTES = 62 * 1024;
 const distinctIds = z
   .array(z.uuid())
   .max(30)
   .refine((ids) => new Set(ids).size === ids.length, "Choose each source once");
-export const agentAuthoringContentSchema = z
+const storedAgentAuthoringContentSchema = z
   .strictObject({
     outcome: text(2000).default(""),
     ownerUserId: text(200).default(""),
@@ -98,6 +108,18 @@ export const agentAuthoringContentSchema = z
         });
     }
   });
+export const agentAuthoringContentSchema =
+  storedAgentAuthoringContentSchema.superRefine((value, ctx) => {
+    if (
+      new TextEncoder().encode(JSON.stringify(value)).length >
+      AGENT_DRAFT_CONTENT_MAX_BYTES
+    )
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "The complete draft is too large. Shorten instructions or scenarios.",
+      });
+  });
 export type AgentAuthoringContent = z.infer<typeof agentAuthoringContentSchema>;
 export const agentDraftCreateSchema = z.strictObject({
   requestId: z.uuid(),
@@ -121,7 +143,8 @@ export const agentAuthoringDraftViewSchema = z.strictObject({
   version: z.number().int().positive(),
   status: z.enum(["draft", "discarded"]),
   step: customAgentStepSchema,
-  content: agentAuthoringContentSchema.nullable(),
+  // Earlier accepted drafts remain readable; new writes use the tighter byte budget.
+  content: storedAgentAuthoringContentSchema.nullable(),
   baselineHash: z
     .string()
     .regex(/^[a-f0-9]{64}$/)
@@ -132,14 +155,39 @@ export const agentAuthoringDraftViewSchema = z.strictObject({
 export type AgentAuthoringDraftView = z.infer<
   typeof agentAuthoringDraftViewSchema
 >;
+export const agentAuthoringDraftSummarySchema = z.strictObject({
+  id: z.uuid(),
+  companyId: z.uuid(),
+  agentId: z.uuid().nullable(),
+  version: z.number().int().positive(),
+  name: text(200),
+  step: customAgentStepSchema,
+  updatedAt: z.string().datetime(),
+});
 export const agentAuthoringDraftListSchema = z
-  .array(agentAuthoringDraftViewSchema)
+  .array(agentAuthoringDraftSummarySchema)
   .max(25);
 export const agentAuthoringDraftPageSchema = z.strictObject({
   items: agentAuthoringDraftListSchema,
   nextCursor: z.uuid().nullable(),
 });
 export type AgentDraftSave = z.infer<typeof agentDraftSaveSchema>;
+export const hireAgentCapabilitySchema = z.strictObject({
+  key: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,119}$/),
+  versionId: z.uuid(),
+  version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  name: text(200),
+  category: text(100),
+  outcome: text(2000),
+  requiredKnowledge: z.array(text(120)).max(30),
+  requiredConnections: z.array(text(120)).max(20),
+  limits: z.array(text(1000)).max(30),
+  actionClasses: z.array(z.enum(READINESS_ACTIONS)).max(7),
+});
+export const hireAgentCatalogSchema = z
+  .array(hireAgentCapabilitySchema)
+  .max(50);
+export type HireAgentCapability = z.infer<typeof hireAgentCapabilitySchema>;
 export interface AgentAuthoringReview {
   draftId: string;
   version: number;
