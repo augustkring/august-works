@@ -2,7 +2,10 @@
   "screenId": "COMPANY",
   "journeyId": "settings",
   "routeOrSurface": "/:companyPrefix/company/settings",
-  "targetExperienceProfiles": ["admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Find authorized company controls in ten stable categories using customer terms and old aliases.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
@@ -15,10 +18,17 @@
   "content": {
     "h1": "Company",
     "supportingCopy": "Find authorized company controls in ten stable categories using customer terms and old aliases.",
-    "customerTerms": ["Company", "Work", "Needs You", "Agent", "Feedback"],
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
     "displayedState": [
-      "Current canonical state/version",
-      "Missing permission or qualification is explicit; no invented progress or outcomes"
+      "Bound current company metadata with native administrative admission and effective per-entry grant rechecks",
+      "Names, one-line purpose, Company section and restricted-access context for authorized settings only",
+      "Customer/legacy synonym search remains local and announces a matching count under ten stable categories"
     ]
   },
   "inputs": [
@@ -29,7 +39,7 @@
       "required": false,
       "default": "Empty",
       "help": "Names, purposes and old aliases are searchable.",
-      "validation": "Local matching over authorized entries only",
+      "validation": "Local matching over authorized entries only, at most 180 characters; no API query text",
       "autofillOrPrefill": "No automatic content collection"
     }
   ],
@@ -52,14 +62,14 @@
     ],
     "canonicalWriteOperation": "Navigation only; each destination owns its configuration review, mutation and authorization.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
-    "asyncWork": "Native reads/mutations only; projection work uses bounded admission and a 1500 ms total deadline. Unknown mutation outcomes retain the original request key for reconciliation.",
-    "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
+    "asyncWork": "Native Company read uses the inherited 1500 ms total admission/deadline; effective grants, admin eligibility and shell admission are rechecked before response. No mutation or recovery request is created.",
+    "receipt": "Bound company identity and native observed-at metadata only; navigation cannot grant access or claim a saved configuration."
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
     "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
     "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
-    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "stale": "Hide retained controls during background checks and live authority/source-loss invalidations; query epochs reject late prior responses.",
     "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
     "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
@@ -68,7 +78,7 @@
   },
   "navigation": {
     "back": "Browser and product Back preserve session form state without recreating organizations, agents or runs.",
-    "cancelOrSaveExit": "No input is written to browser persistent storage; committed activation drafts remain in the native onboarding owner.",
+    "cancelOrSaveExit": "No configuration changes. Local search resets at company/account changes and is never persisted or sent to the API.",
     "deepLink": "/:companyPrefix/company/settings",
     "resume": "Refresh current native state and resume the first incomplete material step; stale steps cannot override it."
   },
@@ -99,7 +109,7 @@
     "sensitiveFields": [
       "Raw intent, company facts, feedback and results remain customer data"
     ],
-    "loggingConstraints": "Exclude customer prose, prompts, result bodies, attachments and raw errors from generic analytics/activity details; native domain audit is purpose-separated."
+    "loggingConstraints": "Private Company-control namespace; omit account query strings, search text, payloads and raw errors from generic logs."
   },
   "analytics": {
     "allowedEvents": [],
@@ -113,13 +123,15 @@
   },
   "acceptance": {
     "functional": [
-      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact.",
+      "Verify customer labels/purposes/old aliases, ten stable categories, restricted-access context and empty matching counts; current native destination owners retain all mutations."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
     ],
     "securityPrivacy": [
-      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose.",
+      "Verify foreign response rejection, account/company search reset, native in-flight grant loss, private/no-store requests and late-response suppression."
     ],
     "usability": [
       "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."

@@ -1,8 +1,18 @@
 import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { and, eq } from "drizzle-orm";
+import * as authorization from "../services/authorization.js";
 import {
   companies,
   companyMemberships,
@@ -37,6 +47,7 @@ const support = await getEmbeddedPostgresTestSupport();
     afterAll(async () => {
       await database?.cleanup();
     });
+    afterEach(() => vi.restoreAllMocks());
     beforeEach(async () => {
       companyId = randomUUID();
       foreignId = randomUUID();
@@ -102,15 +113,13 @@ const support = await getEmbeddedPostgresTestSupport();
       await db
         .insert(projects)
         .values({ id: project, companyId, name: "Command project" });
-      await db
-        .insert(agents)
-        .values({
-          id: agent,
-          companyId,
-          name: "Command agent",
-          role: "general",
-          adapterType: "process",
-        });
+      await db.insert(agents).values({
+        id: agent,
+        companyId,
+        name: "Command agent",
+        role: "general",
+        adapterType: "process",
+      });
       const response = await request(app(member()))
         .get(`${url}?q=command`)
         .expect(200);
@@ -151,14 +160,12 @@ const support = await getEmbeddedPostgresTestSupport();
       await request(app(member()))
         .get(`${url}?q=${"x".repeat(181)}`)
         .expect(400);
-      await db
-        .insert(principalPermissionGrants)
-        .values({
-          companyId,
-          principalType: "user",
-          principalId: userId,
-          permissionKey: "tools:manage_connections",
-        });
+      await db.insert(principalPermissionGrants).values({
+        companyId,
+        principalType: "user",
+        principalId: userId,
+        permissionKey: "tools:manage_connections",
+      });
       const granted = await request(app(member())).get(url).expect(200);
       expect(
         granted.body.commands.map((command: { id: string }) => command.id),
@@ -209,6 +216,73 @@ const support = await getEmbeddedPostgresTestSupport();
         .where(eq(companyMemberships.companyId, companyId));
       await request(app(member())).get(url).expect(403);
     });
+    it.each(["users:invite", "tools:manage_connections"] as const)(
+      "rechecks %s revoked during the Company read before returning controls",
+      async (permission) => {
+        await instanceSettingsService(db).updateExperimental({
+          experience_projection_v9: true,
+          progressive_shell_v9: true,
+        });
+        await db.insert(principalPermissionGrants).values({
+          companyId,
+          principalType: "user",
+          principalId: userId,
+          permissionKey: "users:invite",
+        });
+        if (permission !== "users:invite")
+          await db.insert(principalPermissionGrants).values({
+            companyId,
+            principalType: "user",
+            principalId: userId,
+            permissionKey: permission,
+          });
+        const real = authorization.authorizationService;
+        let reads = 0,
+          revoked = false;
+        vi.spyOn(authorization, "authorizationService").mockImplementation(
+          (connection) => {
+            const native = real(connection);
+            return {
+              ...native,
+              decide: async (input) => {
+                const decision = await native.decide(input);
+                if (
+                  input.action === permission &&
+                  ++reads === (permission === "users:invite" ? 2 : 1)
+                ) {
+                  expect(decision.allowed).toBe(true);
+                  await db
+                    .delete(principalPermissionGrants)
+                    .where(
+                      and(
+                        eq(principalPermissionGrants.companyId, companyId),
+                        eq(principalPermissionGrants.permissionKey, permission),
+                      ),
+                    );
+                  revoked = true;
+                }
+                return decision;
+              },
+            };
+          },
+        );
+        const response = await request(app(member()))
+          .get(
+            `/api/companies/${companyId}/experience/company?expectedUserId=${userId}`,
+          )
+          .expect(permission === "users:invite" ? 403 : 200);
+        expect(revoked).toBe(true);
+        if (permission === "tools:manage_connections") {
+          const ids = response.body.sections.flatMap(
+            (section: { entries: Array<{ id: string }> }) =>
+              section.entries.map((entry) => entry.id),
+          );
+          expect(ids).toContain("members");
+          expect(ids).not.toContain("connections");
+        } else expect(response.body.sections).toBeUndefined();
+      },
+    );
+
     it("enforces disabled rollout, tenant scope and human-only access", async () => {
       await request(app(member()))
         .get(`/api/companies/${companyId}/experience`)
@@ -266,13 +340,39 @@ const support = await getEmbeddedPostgresTestSupport();
       );
     });
     it("keeps a native attention page boundary visible without inventing a full-queue count", async () => {
-      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true });
-      await db.insert(approvals).values(Array.from({ length: 26 }, (_, index) => ({ companyId, type: "request_board_approval", status: "pending" as const, payload: { title: `Bounded approval ${index}` } })));
-      const response = await request(app(member())).get(`/api/companies/${companyId}/experience`).expect(200);
-      expect(response.body.dependencies.find((dependency: { domain: string }) => dependency.domain === "attention")).toMatchObject({ state: "partial", reason: "more_items_available" });
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+      });
+      await db.insert(approvals).values(
+        Array.from({ length: 26 }, (_, index) => ({
+          companyId,
+          type: "request_board_approval",
+          status: "pending" as const,
+          payload: { title: `Bounded approval ${index}` },
+        })),
+      );
+      const response = await request(app(member()))
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(200);
+      expect(
+        response.body.dependencies.find(
+          (dependency: { domain: string }) => dependency.domain === "attention",
+        ),
+      ).toMatchObject({ state: "partial", reason: "more_items_available" });
       expect(response.body.needsYou.length).toBeLessThanOrEqual(25);
       expect(response.body).not.toHaveProperty("totalCount");
-      expect(response.body.needsYou.every((card: { kind: string; consequence: string; actions: { operation: string }[] }) => card.kind === "approval" && card.consequence.includes("remains pending") && card.actions.every(action => action.operation === "open"))).toBe(true);
+      expect(
+        response.body.needsYou.every(
+          (card: {
+            kind: string;
+            consequence: string;
+            actions: { operation: string }[];
+          }) =>
+            card.kind === "approval" &&
+            card.consequence.includes("remains pending") &&
+            card.actions.every((action) => action.operation === "open"),
+        ),
+      ).toBe(true);
     });
     it("filters attention linked to foreign work and leaves queue materialization to its native owner", async () => {
       await instanceSettingsService(db).updateExperimental({

@@ -188,7 +188,41 @@ export async function companyExperience(
             .find((s) => s.id === entry.section)!
             .entries.push({ id: entry.id, href: entry.href });
       }
-      await experienceService(db).context(actor, companyId);
+      for (const permission of checked.keys()) {
+        signal.throwIfAborted();
+        checked.set(
+          permission,
+          (
+            await auth.decide({
+              actor,
+              action: permission,
+              resource: { type: "company", companyId },
+            })
+          ).allowed,
+        );
+      }
+      const permissionByEntry = new Map(
+        entries.map((entry) => [entry.id, entry.permission]),
+      );
+      for (const section of sections)
+        section.entries = section.entries.filter((entry) =>
+          checked.get(permissionByEntry.get(entry.id)!),
+        );
+      // Resolve authority again after fan-out; a member context alone does not
+      // retain eligibility for the administrative view or each displayed entry.
+      const current = await experienceService(db).context(actor, companyId);
+      if (
+        !current.availableProfiles.includes("admin") &&
+        !current.availableProfiles.includes("security_admin")
+      )
+        throw forbidden("Company administration access is required");
+      if (
+        !v9FeatureEnabled(
+          await instanceSettingsService(db).getExperimental(),
+          "progressive_shell_v9",
+        )
+      )
+        throw notFound("Company navigation is not enabled");
       signal.throwIfAborted();
       return companyExperienceSchema.parse({
         companyId,

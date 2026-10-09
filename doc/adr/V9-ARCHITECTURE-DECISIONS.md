@@ -330,3 +330,28 @@ copy distinguishes recorded completion from independent verification. The
 existing shell flag is default-off; rollback restores native run controls and an
 explicit /advanced route remains available. No migration is needed. Deploy the
 new shared/server/client contract before enabling this customer view.
+
+## ADR-V9-020 — Current Company controls and private settings search
+
+2026-10-09. The existing Company navigation owner rechecks each effective native
+permission and administrative eligibility after assembling its bounded metadata.
+Loss of the administrative profile rejects the response; loss of one entry's
+permission suppresses that entry. Native role-default grants remain authoritative;
+removing an explicit grant row alone does not necessarily revoke effective access.
+The existing 1500 ms admission/deadline and feature rollback remain unchanged.
+
+The UI binds response company identity, resets search on company/account changes,
+hides retained controls during rechecks and advances its query epoch on native
+permission/membership/privacy/source-loss events. Search stays in browser memory
+and only filters native-authorized labels/purposes/old aliases; no search text is
+sent to the API. Results retain the ten categories, show restricted-access context
+and announce matching counts. Navigation conveys no grant. Native destination
+owners still check current authority for every effect.
+
+The private Company namespace minimizes generic success/rejected-request logs.
+No API/schema/database migration or new settings owner is introduced. Legacy
+clients retain the same response shape; the new UI can use the existing server
+contract, with the updated server needed for final admission rechecks. Feature
+rollback preserves the native Company settings routes. Full settings catalogue,
+native form lifecycle and representative accessibility/usability qualification
+remain open.

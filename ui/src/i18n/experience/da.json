@@ -330,7 +330,10 @@
         "purpose": "Åbn tekniske kontroller, du har adgang til.",
         "aliases": "udvikler udbydere gateway API"
       }
-    }
+    },
+    "restricted": "Begrænset adgang. Rettigheder kontrolleres ved åbning.",
+    "matches_one": "{{count}} indstilling matcher.",
+    "matches_other": "{{count}} indstillinger matcher."
   },
   "notifications": {
     "mandatory": "E-mails om kontosikkerhed sendes straks og forsinkes ikke af stilleperioder.",

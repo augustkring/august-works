@@ -146,6 +146,26 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     ).toHaveValue("Browser typed draft");
     expect((await json(await request.get(`${base}/issues`))).length).toBe(0);
     await page.keyboard.press("Escape");
+    await page.goto(`/${company.issuePrefix}/company/settings`);
+    await expect(
+      page.getByRole("heading", { name: "Company", exact: true }),
+    ).toBeFocused();
+    await page
+      .getByRole("searchbox", { name: "Search company settings", exact: true })
+      .fill("team invites");
+    await expect(
+      page.getByRole("link", { name: "Members and invitations", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("1 setting matches.", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Restricted access. Permissions are checked when opened.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await page.goto(`/${company.issuePrefix}/work`);
     await trigger.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("combobox")).toBeFocused();

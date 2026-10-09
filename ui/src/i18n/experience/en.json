@@ -330,7 +330,10 @@
         "purpose": "Open authorized technical controls.",
         "aliases": "developer providers gateway API"
       }
-    }
+    },
+    "restricted": "Restricted access. Permissions are checked when opened.",
+    "matches_one": "{{count}} setting matches.",
+    "matches_other": "{{count}} settings match."
   },
   "notifications": {
     "mandatory": "Account safety emails remain immediate and are not delayed by quiet hours.",

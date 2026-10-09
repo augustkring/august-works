@@ -15,6 +15,13 @@ it("purpose-separates native run metadata and rejected requests from generic log
   expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflow-runs/id/experience-other")).toBe(false);
 });
 
+it("minimizes account and Company control metadata on successful and rejected requests", () => {
+  const url = "/api/companies/private-company/experience/company?expectedUserId=private-user";
+  for (const method of ["GET", "POST", "DELETE"]) expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/experience/company");
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/experience/company-other")).toBe(false);
+});
+
 it("purpose-separates workflow review text, account identity and rejected requests from generic logs", () => {
   for (const method of ["GET", "POST", "DELETE"]) {
     const url = "/api/companies/private-company/workflows/private-workflow/experience?expectedUserId=private-user";
