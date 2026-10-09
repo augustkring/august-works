@@ -123,6 +123,10 @@ jobs:
       - name: Prepare workspace build dependencies
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
 
+      - name: Install generated-code sandbox
+        if: startsWith(matrix.partition, 'server-')
+        run: bash scripts/ci-install-native-sandbox.sh
+
       - name: Run stable test suite
         run: pnpm test:run ${{ matrix.args }}
 
