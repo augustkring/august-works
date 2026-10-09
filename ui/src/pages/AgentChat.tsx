@@ -108,7 +108,9 @@ export function AgentChat() {
     );
   return (
     <TaskDetailSurface
-      key={`${agent.id}:${userId}:${chat.data?.id ?? "draft"}`}
+      // Preserve the unsent composer when lazy creation assigns its issue ID.
+      // Source denial unmounts this surface before explicit recovery.
+      key={`${selectedCompanyId}:${agent.id}:${userId}`}
       conversation={{ agent, issue: chat.data ?? null, ensureIssue, refreshConversation }}
     />
   );
