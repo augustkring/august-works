@@ -1,4 +1,6 @@
 import { assertRoadmapFieldOwnership } from "./roadmap-field-ownership.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -948,15 +950,20 @@ export function projectService(db: Db) {
     },
 
     remove: (id: string) =>
-      db
+      db.transaction(async (tx) => {
+        const [owner] = await tx.select({ companyId: projects.companyId }).from(projects).where(eq(projects.id, id));
+        if (owner) {
+          await lockBusinessEventCompany(tx, owner.companyId);
+          await lockMemoryPrivacy(tx as unknown as Db, owner.companyId);
+        }
+        const [row] = await tx
         .delete(projects)
         .where(eq(projects.id, id))
-        .returning()
-        .then((rows) => {
-          const row = rows[0] ?? null;
-          if (!row) return null;
-          return { ...row, urlKey: deriveProjectUrlKey(row.name, row.id) };
-        }),
+        .returning();
+        if (!row) return null;
+        await suppressBusinessEventsForObject(tx, row.companyId, "project", row.id);
+        return { ...row, urlKey: deriveProjectUrlKey(row.name, row.id) };
+      }),
 
     listWorkspaces: async (projectId: string): Promise<ProjectWorkspace[]> => {
       const rows = await db

@@ -1,0 +1,136 @@
+{
+  "checkpoint": "Native source-erased conversation recovery",
+  "parentCommit": "3aaa938e9794edc6096a5d7235ed6e85e87128bf",
+  "recordedAt": "2026-10-07T17:58:49.516421+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/schema/issues.ts",
+      "sha256": "0e0468cab2ad5b77b67b8529ccd59fc5bd2f494725b359f476d298d45f33a29f"
+    },
+    {
+      "path": "packages/db/src/migrations/0416_equal_grandmaster.sql",
+      "sha256": "e06ef423a85179a9d29d2773e7aaea50cd4c9497bc44d93426f26055a3929435"
+    },
+    {
+      "path": "packages/shared/src/types/issue.ts",
+      "sha256": "afde6e48c70d83a73f567432737577994f2f8987cfeb00db57afea042a81d3ab"
+    },
+    {
+      "path": "server/src/services/issues.ts",
+      "sha256": "b802f7460580ed71df342ecae0c10638501a194157d89fb49fe3a8ebba99ce78"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "391fe3dcf186722c80b26b8ee6e352d6e2ba23e2024a329db04a7dea39726280"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "044df3f99a3a26772ce9992ab889a60ee6db619ee9c263ca254d073ff63efb1e"
+    },
+    {
+      "path": "ui/src/pages/AgentChat.tsx",
+      "sha256": "76ddab774b8f258f0b8a196eb8ae9bf508361d9a227d484053af8eb44208bb59"
+    },
+    {
+      "path": "ui/src/pages/IssueDetail.tsx",
+      "sha256": "3678f1802708f49792bc9e559c84850b19ed553dd7d8fdfb9e3773c464664402"
+    },
+    {
+      "path": "ui/src/pages/IssueDetail.test.tsx",
+      "sha256": "98c384b7a6c76db40c4e1da7407040cbf505c7fda154d396be70c706efd8ee0b"
+    },
+    {
+      "path": "tests/e2e/agent-chat-sessions.spec.ts",
+      "sha256": "6c578b4a9c9becaaf90f00bc7217175c5ed1c372578053c16a3840312aafbdfd"
+    }
+  ],
+  "validation": [
+    {
+      "name": "PostgreSQL actual source erasure, read-only resolution, six concurrent opens, irreversible retirement, old SDK denied, new native SDK admitted, native company purge",
+      "tests": 27,
+      "log": "/var/tmp/aw-v8-conversation-recovery-pg-final.log",
+      "exitCode": 0
+    },
+    {
+      "name": "Native conversation regression (same schema; earlier run contained the subsequently corrected analytical assertion)",
+      "tests": 33,
+      "log": "/var/tmp/aw-v8-conversation-recovery-pg.log",
+      "exitCode": 1
+    },
+    {
+      "name": "Native TaskDetailSurface regression including source-loss refresh",
+      "tests": 122,
+      "log": "/var/tmp/aw-v8-conversation-recovery-ui-final.log",
+      "exitCode": 0
+    },
+    {
+      "name": "Browser: real first-open concurrency and controlled source-loss UI response contract",
+      "tests": 2,
+      "log": "/var/tmp/aw-v8-conversation-recovery-browser-release.log",
+      "exitCode": 0
+    },
+    {
+      "name": "server typecheck",
+      "tests": null,
+      "log": "/var/tmp/aw-v8-conversation-recovery-server-types-final.log",
+      "exitCode": 0
+    },
+    {
+      "name": "UI typecheck",
+      "tests": null,
+      "log": "/var/tmp/aw-v8-conversation-recovery-ui-types-final.log",
+      "exitCode": 0
+    },
+    {
+      "name": "migration safety",
+      "tests": null,
+      "log": "/var/tmp/aw-v8-conversation-recovery-safety.log",
+      "exitCode": 0
+    },
+    {
+      "name": "schema snapshot drift",
+      "tests": 1,
+      "log": "/var/tmp/aw-v8-conversation-recovery-snapshot.log",
+      "exitCode": 0
+    },
+    {
+      "name": "UI token gate",
+      "tests": null,
+      "log": "/var/tmp/aw-v8-conversation-recovery-tokens.log",
+      "exitCode": 0
+    }
+  ],
+  "softwareFixtureLimits": [
+    "Browser source denial and null identity responses are controlled response-contract fixtures; actual C7 erasure and new native SDK admission are qualified separately on PostgreSQL.",
+    "The 33-test ordinary conversation file passed in a combined run whose analytical case initially used the wrong wrapped PostgreSQL error assertion; the final analytical file passes all 27.",
+    "No hosted provider, external LLM, customer trial or R0 claim."
+  ],
+  "open": [
+    "Source permission loss without physical C7 erasure still denies the original conversation; fresh recovery for that case remains open.",
+    "Running provider output admission, physical trace-file erasure, remaining typed-tool native conformance, Learning and Routines integration, multi-project Planning and hosted qualification remain open."
+  ],
+  "screenshots": [
+    {
+      "path": "doc/operations/aw-v8-evidence/native-conversation-recovery-screens/source-retained-history.png",
+      "sha256": "6e12f111861d967213796b51733ed10fe9baaffcab9d8581409ff26b5733d531",
+      "visuallyReviewed": true
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-conversation-recovery-screens/source-loss-fresh-draft.png",
+      "sha256": "121f538324ee480bee61fb8f19c29e7610d211c7df515db607ef9a1d02eddd9a",
+      "visuallyReviewed": true
+    }
+  ],
+  "additionalValidation": {
+    "sourceCommit": "e9683a1699516fa9a1e899a0d40eb82beedb4b96",
+    "name": "Final combined PostgreSQL analytical context and ordinary native conversation regression",
+    "tests": 60,
+    "log": "/var/tmp/aw-v8-conversation-recovery-pg-release.log",
+    "exitCode": 0
+  },
+  "wholeBuild": {
+    "sourceCommit": "e9683a1699516fa9a1e899a0d40eb82beedb4b96",
+    "log": "/var/tmp/aw-v8-native-build-conversation-recovery.log",
+    "exitCode": 0
+  }
+}

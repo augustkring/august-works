@@ -22,6 +22,7 @@ import {
 } from "../v7-authorization.js";
 import { verificationService } from "../supervision/verification-service.js";
 import { withV7ActivityTransaction } from "../v7-mutations.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { notFound } from "../../errors.js";
@@ -36,7 +37,7 @@ export async function evaluateSpecialistPackage(
   v7HumanActorId(actor);
   const input = specialistEvaluationSchema.parse(raw);
   return withV7ActivityTransaction(db, async (tx) => {
-    await lockMemoryPrivacy(tx, companyId);
+    await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
     await assertV7Enabled(tx, "agent_packages_v7");
     await assertV7Authorization(tx, actor, companyId, "company_scope:read");
     const [subject] = await tx

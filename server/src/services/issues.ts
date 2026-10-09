@@ -9,7 +9,9 @@ import { executionProjectionsForRuns } from "./execution-projection.js";
 import type { ExecutionProjection } from "@paperclipai/shared";
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
-import { forgetMemoryForDeletedIssue } from "./memory/memory-privacy.js";
+import { suppressAnalyticalSource } from "./analytical-privacy.js";
+import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
 import {
   and,
   asc,
@@ -1972,6 +1974,7 @@ async function assertExecutionTaskParent(db: Db, companyId: string, parentId?: s
 
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type IssueCreateInput = Omit<typeof issues.$inferInsert, "companyId"> & {
+  retireConversationId?: string;
   initialPlan?: string | null;
   labelIds?: string[];
   blockedByIssueIds?: string[];
@@ -4884,6 +4887,7 @@ const issueListSelect = {
   conversationAgentId: issues.conversationAgentId,
   conversationUserId: issues.conversationUserId,
   conversationState: issues.conversationState,
+  conversationRetiredAt: issues.conversationRetiredAt,
   conversationSessionGeneration: issues.conversationSessionGeneration,
   conversationBoundaryCommentId: issues.conversationBoundaryCommentId,
   id: issues.id,
@@ -9751,6 +9755,7 @@ export function issueService(db: Db) {
 
     getConversation: async (companyId: string, agentId: string, userId: string) => db.select().from(issues).where(and(
       eq(issues.companyId, companyId), eq(issues.conversationAgentId, agentId), eq(issues.conversationUserId, userId),
+      sql`not aw_workflow_memory_erased(${companyId}::uuid, null, ${issues.id})`,
     )).then((rows) => rows[0] ?? null),
 
     create: async (
@@ -9760,6 +9765,7 @@ export function issueService(db: Db) {
     ) => {
       const {
         initialPlan,
+        retireConversationId,
         labelIds: inputLabelIds,
         blockedByIssueIds,
         inheritExecutionWorkspaceFromIssueId,
@@ -9803,14 +9809,26 @@ export function issueService(db: Db) {
       const persist = async (tx: DbTransaction) => {
         await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
         if (issueData.conversationAgentId && issueData.conversationUserId) {
+          await lockBusinessEventCompany(tx, companyId);
+          await lockMemoryPrivacy(tx as unknown as Db, companyId);
           const identity = `conversation:${companyId}:${issueData.conversationAgentId}:${issueData.conversationUserId}`;
           await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${identity}, 0))`);
           const [existing] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId),
             eq(issues.conversationAgentId, issueData.conversationAgentId), eq(issues.conversationUserId, issueData.conversationUserId)));
           if (existing) {
-            const [enriched] = await withIssueLabels(tx, [existing]);
-            const [withRelations] = await withIssueRelationSummaries(companyId, [enriched], tx);
-            return withRelations;
+            const [source] = await tx.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${companyId}::uuid, null, ${existing.id}::uuid) as erased`);
+            if (!source?.erased && retireConversationId !== existing.id) {
+              const [enriched] = await withIssueLabels(tx, [existing]);
+              const [withRelations] = await withIssueRelationSummaries(companyId, [enriched], tx);
+              return withRelations;
+            }
+            const {eraseAnalyticalConversationRootsUnderMemory} = await import("./analytical-context-privacy.js");
+            await eraseAnalyticalConversationRootsUnderMemory(tx as unknown as Db,companyId,existing.id);
+            const at = new Date();
+            await tx.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null,
+              conversationRetiredAt: at, status: "cancelled", cancelledAt: at, hiddenAt: at,
+              assigneeAgentId: null, assigneeUserId: null, executionRunId: null, checkoutRunId: null, updatedAt: at,
+            }).where(and(eq(issues.companyId, companyId), eq(issues.id, existing.id)));
           }
         }
         const idempotencyKey = rawIdempotencyKey?.trim() || null;
@@ -10620,6 +10638,7 @@ export function issueService(db: Db) {
         .where(idPredicate)
         .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
       if (!existing) return null;
+      if (existing.conversationRetiredAt) throw conflict("The native conversation is permanently closed");
       await assertRoadmapFieldOwnership(dbOrTx as Db, existing.companyId, existing.projectId, data, existing);
       if (data.parentId !== undefined && data.parentId !== existing.parentId) {
         await assertExecutionTaskParent(dbOrTx, existing.companyId, data.parentId);
@@ -11318,6 +11337,14 @@ export function issueService(db: Db) {
 
     remove: (id: string) =>
       db.transaction(async (tx) => {
+        const [owner] = await tx.select({ companyId: issues.companyId }).from(issues).where(eq(issues.id, id));
+        if (owner) {
+          await lockBusinessEventCompany(tx, owner.companyId);
+          // Memory erasure can update native source payloads. Acquire both
+          // privacy boundaries before deleting the source row, so a holder of
+          // the Memory lock never waits on a row whose deleter waits on Memory.
+          await lockMemoryPrivacy(tx as unknown as Db, owner.companyId);
+        }
         const attachmentAssetIds = await tx
           .select({ assetId: issueAttachments.assetId })
           .from(issueAttachments)
@@ -11347,7 +11374,10 @@ export function issueService(db: Db) {
           throw err;
         }
 
-        if (removedIssue) await forgetMemoryForDeletedIssue(tx as unknown as Db, removedIssue.companyId, removedIssue.id);
+        if (removedIssue) {
+          await suppressBusinessEventsForObject(tx, removedIssue.companyId, "issue", removedIssue.id);
+          await forgetMemoryForDeletedIssue(tx as unknown as Db, removedIssue.companyId, removedIssue.id);
+        }
         if (removedIssue && attachmentAssetIds.length > 0) {
           await tx.delete(assets).where(
             inArray(
@@ -11358,6 +11388,7 @@ export function issueService(db: Db) {
         }
 
         if (removedIssue && issueDocumentIds.length > 0) {
+          for (const document of issueDocumentIds) await suppressAnalyticalSource(tx, removedIssue.companyId, "document", document.documentId);
           await tx.delete(documents).where(
             inArray(
               documents.id,

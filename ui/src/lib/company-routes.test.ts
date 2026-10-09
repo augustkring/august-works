@@ -7,6 +7,17 @@ import {
 } from "./company-routes";
 
 describe("company routes", () => {
+  it.each(["adaptive-planning", "strategy-execution", "process-intelligence", "business-forecasts", "business-scenarios", "business-experiments", "causal-claims", "management-reviews", "business-metrics"])(
+    "keeps V8 %s citations and navigation attached to the current company",
+    (root) => {
+      const reference = `/${root}?reviewId=retained&reviewCompanyId=current#source`;
+      expect(isBoardPathWithoutPrefix(`/${root}`)).toBe(true);
+      expect(extractCompanyPrefixFromPath(`/${root}`)).toBeNull();
+      expect(applyCompanyPrefix(reference, "aw")).toBe(`/AW${reference}`);
+      expect(applyCompanyPrefix(`/OTHER${reference}`, "AW")).toBe(`/OTHER${reference}`);
+      expect(toCompanyRelativePath(`/AW${reference}`)).toBe(reference);
+    },
+  );
   it.each(["readiness", "orchestration", "ai-governance", "work-signals"])(
     "keeps V7 %s navigation and redirects attached to the active company",
     (root) => {

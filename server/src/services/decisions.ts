@@ -13,6 +13,9 @@ import {
   type IssuePostCommitAction,
 } from "./issues.js";
 import { decisionRetentionService, hashAttentionArchiveManifest } from "./decision-retention.js";
+import { freezeDecisionContextForChoice } from "./decision-intelligence.js";
+import { lockAnalyticalCompany } from "./analytical-privacy.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 
 type Snapshot = { status: string; assigneeAgentId: string | null; assigneeUserId: string | null; updatedAt: string;
   descendantCount?: number; descendantIds?: string[]; childCount?: number; attentionArchive?: unknown };
@@ -664,12 +667,24 @@ export function decisionService(db: Db, options: DecisionServiceOptions) {
     if (!current.options.some((option) => option.id === input.optionId)) throw unprocessable("Unknown optionId");
     const values = input.inputValues ?? {};
     for (const field of current.inputs ?? []) { const value = values[field.id] ?? ""; if (field.required && !value.trim()) throw unprocessable(`Input ${field.id} is required`); if (field.maxLength && value.length > field.maxLength) throw unprocessable(`Input ${field.id} is too long`); }
-    const [claimed] = await db.update(decisions).set({ status: "decided", executionStatus: "running", chosenOptionId: input.optionId, inputValues: values,
-      decidedByUserId: input.decidedByUserId, decidedAt: new Date(), updatedAt: new Date(), metadata: { ...metadata,
+    const claimed = await db.transaction(async rawTx => {
+      const tx=rawTx as unknown as Db;
+      await lockAnalyticalCompany(tx,current.companyId);await lockMemoryPrivacy(tx,current.companyId);
+      const [locked]=await tx.select().from(decisions).where(and(eq(decisions.companyId,current.companyId),eq(decisions.id,current.id))).for("update");
+      if(!locked || locked.status!=="open") throw conflict("decision_already_resolved",{code:"decision_already_resolved"});
+      if(locked.expiresAt<=new Date()) throw conflict("decision_expired",{code:"decision_expired"});
+      if(locked.signedSpec!==current.signedSpec || !verifyDecisionSpec(spec({id:locked.id,options:locked.options,targetSnapshots:locked.targetSnapshots as Record<string,Snapshot>}),locked.signedSpec)) throw forbidden("Decision signature changed before choice");
+      for(const field of locked.inputs??[]) {const value=values[field.id]??"";if(field.required&&!value.trim()) throw unprocessable(`Input ${field.id} is required`);if(field.maxLength&&value.length>field.maxLength) throw unprocessable(`Input ${field.id} is too long`);}
+      const chosenAt=new Date();
+      await freezeDecisionContextForChoice(tx,locked,input.userActor,input.optionId,chosenAt);
+      const [result]=await tx.update(decisions).set({ status: "decided", executionStatus: "running", chosenOptionId: input.optionId, inputValues: values,
+      decidedByUserId: input.decidedByUserId, decidedAt: chosenAt, updatedAt: chosenAt, metadata: { ...locked.metadata,
         decideIdempotencyKey: input.idempotencyKey ?? null,
         ...(current.continuationPolicy === "wake_origin_agent" ? { continuationPending: true } : {}),
         ...(input.dismissed ? { dismissed: true, dismissReason: input.dismissReason ?? null } : {}) } })
       .where(and(eq(decisions.id, current.id), eq(decisions.status, "open"))).returning();
+      return result;
+    });
     if (!claimed) throw conflict("decision_already_resolved", { code: "decision_already_resolved" });
     const run = await db.select({ responsibleUserId: heartbeatRuns.responsibleUserId }).from(heartbeatRuns).where(eq(heartbeatRuns.id, claimed.originRunId)).then((rows) => rows[0] ?? null);
     await logActivity(db, { companyId: claimed.companyId, actorType: "system", actorId: "decision-executor", agentId: claimed.originAgentId, runId: claimed.originRunId,

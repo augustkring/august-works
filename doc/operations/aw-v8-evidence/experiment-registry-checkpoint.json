@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "scope": "Native experiment preregistration registry/source ownership and pre-execution human lifecycle. No assignment, exposure, public inference, personal-impact authority, external provider or complete V8/hosted release qualification.",
+  "sourceFiles": [
+    {
+      "path": "packages/shared/src/business-experiments.ts",
+      "sha256": "217ca9c4f53ce53bbc73ac66da6653e51d385cc4ce1cf694f4578f00c48fc885"
+    },
+    {
+      "path": "packages/shared/src/business-experiments.test.ts",
+      "sha256": "d0f9f80c1804d8e3084908ab34e72c8e9ed6dfb6a229ee67884bd8b6f65c3252"
+    },
+    {
+      "path": "packages/db/src/schema/business_experiments.ts",
+      "sha256": "3a6b9686403fb669cae7abf7cefa5b753d2b6ac3adf834a8f31c125648477fcc"
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "19cdb8419b85e1292b4c98a1b176b4b6737fad1c32edbcd2dd7f9d23ce37a54a"
+    },
+    {
+      "path": "packages/db/src/migrations/0403_bizarre_bloodaxe.sql",
+      "sha256": "7452f881eebc35c2d6c16a3ef1375f7fcf9276b2442f25a22e9de977ac8e9a1b"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0403_snapshot.json",
+      "sha256": "ff9865272f847012e23e5f4e92e548ff80b74437a4786c211e4160c01f87c5ad"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "61a56824f1fbdfd7f0fbd1c9aac7445b1073be40df9776112ec59ab90e24da24"
+    },
+    {
+      "path": "server/src/services/business-experiments/service.ts",
+      "sha256": "12cb8c8a22c714e31496343ca03fdd20666008bbc1cc847dbd0524409d8ac8d8"
+    },
+    {
+      "path": "server/src/routes/business-experiments.ts",
+      "sha256": "af9ff2c50b93979947b123b926dbe7dfde07f75bc583ddec4408bd8d35cb49ae"
+    },
+    {
+      "path": "server/src/app.ts",
+      "sha256": "e23c87466ccc36ce4a71f487a3ddaf47ff02769aee476e24b6f87b59376e4eca"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "32f78f5822ca7f1c1e7a5558483d6f11cc299acebbca938c3d236cf6ee6c0634"
+    },
+    {
+      "path": "server/src/__tests__/business-experiments.integration.test.ts",
+      "sha256": "8f0a5262a1a396a88cae893344712c172a77c40b98de8afd4a5d1ea421e5c89a"
+    },
+    {
+      "path": "server/src/__tests__/helpers/business-experiment-fixture.ts",
+      "sha256": "b4b854bc3ee3bd267337fd70ddaca7f89651b8adbc190ca825d97a9cf29d2401"
+    },
+    {
+      "path": "server/src/__tests__/openapi-routes.test.ts",
+      "sha256": "ccf22c048f3a6fbae81624928fd463ef660c4bcad53705eed9c296d834f52489"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native_owner_and_regression",
+      "status": "passed",
+      "checks": 76,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-registry-owner-tests-final-qualified.log",
+      "logSha256": "87c07395fc3fe6e05e0a7b93436dab55ee895a98c2c22d77bbb9b807ec90279b"
+    },
+    {
+      "name": "public_contract",
+      "status": "passed",
+      "checks": 5,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-registry-contract-tests-qualified.log",
+      "logSha256": "e99d6d3fbf05e8746ea89b8226bd8e23935cd6fc4cc95abce10a7838a4bd0f34"
+    },
+    {
+      "name": "server_types",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-registry-types-final-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared_types",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-registry-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "migration_safety",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-registry-migration-checks-final.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "name": "generated_schema_snapshot",
+      "status": "passed",
+      "checks": 1,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-registry-snapshot-qualified.log",
+      "logSha256": "bcc82d24668c04a7e983b1a75b7dd30d8b9d29ec99db1d74aef99b2efcc27ee4"
+    }
+  ],
+  "evidenceClass": "Actual migrated PostgreSQL source-owner/API/erasure checks with synthetic native definitions and sources; fixtures are not collected operational experimental outcomes.",
+  "failedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-registry-owner-tests.log",
+      "logSha256": "d7553bbf1069f7da4ca2ac6d753e49054087195b80724da480f3ea16692c14a5",
+      "resolution": "Normalized loaded lineage rows to exact declared edge fields; registered new route file in native OpenAPI coverage. Corrected fixture use of canonical createVersion return shape."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-registry-owner-tests-qualified.log",
+      "logSha256": "208d7c964313ef0af2b8284ecd9865dd346d7133b01b8abc2a03d2846ee424c5",
+      "resolution": "Corrected fixture call to the existing retention owner signature (db, now); no retention or purge source change."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-registry-snapshot.log",
+      "logSha256": "615b90f1eb6b70f3fb8c6b8c4ebc1174774f00cfee46e02576db7ba15133ab59",
+      "resolution": "Incorrect test path selected no tests; reran the existing actual migration snapshot assertion at its verified native path."
+    }
+  ],
+  "remaining": [
+    "Native immutable assignment/exposure/outcome receipts and complete execution/analysis lifecycle",
+    "Independent ethics/consent/material-AI approval owners for personal-impact execution",
+    "Operator UI and downstream Decision/Causal/Learning/Planning bridges",
+    "Remaining V8 waves and actual hosted qualification"
+  ]
+}

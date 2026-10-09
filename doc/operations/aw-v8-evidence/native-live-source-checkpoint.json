@@ -1,0 +1,135 @@
+{
+  "checkpoint": "Current native source admission at live WebSocket delivery",
+  "parentCommit": "5d1e5d1303f41aa6423e4e4e98e565ae2dff26a4",
+  "recordedAt": "2026-10-07T19:08:50.707383+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/shared/src/constants.ts",
+      "sha256": "8499ca76e8b4f22349a0b0a25986a232238be5ea05812e8511918d5455d2f57c"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "a1276a168f78b0043333c87efab8d7046d02d937105af4d132754b1feb61eba9"
+    },
+    {
+      "path": "server/src/realtime/live-events-ws.ts",
+      "sha256": "911de20b546d57d7a1c4602430b8bf6e63a02e9b97af36f75c4e0f47133cfe8f"
+    },
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "0a1b29f2bd3717a476445fa43269b154e6c170d8bcb183ef9cdd6fd6e2e334e0"
+    },
+    {
+      "path": "tests/e2e/agent-chat-sessions.spec.ts",
+      "sha256": "92ab800132b097adc0a8639c101b03c73f860a86f028eacc0452275c133ebdfb"
+    },
+    {
+      "path": "ui/src/components/TaskChatThread.tsx",
+      "sha256": "6ae56d74d8f7a3d92008dabfffffddd655715ceed07ae53066e3d403688b593d"
+    },
+    {
+      "path": "ui/src/components/transcript/useLiveRunTranscripts.test.tsx",
+      "sha256": "ec28a3ee98a2fa07ca2ad4ea52994c4d10fe86ff72755f1421b8ac13f9631e4a"
+    },
+    {
+      "path": "ui/src/components/transcript/useLiveRunTranscripts.ts",
+      "sha256": "88160559226a71d1f0edfdcf248bbce92c080ce0d132e51ccc3bc930c9e62376"
+    },
+    {
+      "path": "ui/src/components/transcript/useNativeRunTranscripts.test.tsx",
+      "sha256": "d686bb14427b33e43e9a3202cc57fc9aa96aa3b092da90e1019f1f7f5170128a"
+    },
+    {
+      "path": "ui/src/components/transcript/useNativeRunTranscripts.ts",
+      "sha256": "429a236b740ce94d5b7c143465bae73a4efc892514220a558c91a3376b842fc4"
+    },
+    {
+      "path": "ui/src/context/LiveUpdatesProvider.test.ts",
+      "sha256": "8d08abe0fec4554a3072011ef92ff897e4b442bb374448f234c768762ad45ce7"
+    },
+    {
+      "path": "ui/src/context/LiveUpdatesProvider.tsx",
+      "sha256": "6dae445eb998c852e57696f34c4580a1decc1f88db0a83f77162c65257a08f5f"
+    },
+    {
+      "path": "server/src/services/analytical-live-events.ts",
+      "sha256": "e6a04a28cc21e8bc3fbf2d74a0a896155b57c3a5495a41e1338f99637f0425e3"
+    }
+  ],
+  "checks": [
+    {
+      "check": "PostgreSQL, real WebSocket and canonical allocator",
+      "passedTests": 42,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-live-source-pg-final.log",
+      "logSha256": "5bb5aef875f808bd6ee98f346a17d9111fe56f11d4ab3798473e409131a564d6"
+    },
+    {
+      "check": "UI and native transcript regressions",
+      "passedTests": 282,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-live-source-ui-final-qualified.log",
+      "logSha256": "255ae6da339a30259e5d9025d13a8f5f714b95e2143ac16a6a91e8fc57387080"
+    },
+    {
+      "check": "Final typed log-transcript regression",
+      "passedTests": 18,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-live-source-log-transcript-release.log",
+      "logSha256": "8206a0d7dfc1efcab4f8facd6b20835a32ff769fe8146532e2a4730ee127d57f"
+    },
+    {
+      "check": "Chromium: live UI contract and actual visibility recovery",
+      "passedTests": 2,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-live-source-browser.log",
+      "logSha256": "556ff96520d42e5bf606da3f157f407f3ee4a4a006f4355c6660e636456f4cce"
+    },
+    {
+      "check": "Server types",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-live-source-server-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "UI types",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-live-source-ui-types-release.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "Token gates",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-live-source-tokens.log",
+      "logSha256": "44d37a3d2d776f153783c20b1c6e9f45366ecf0e1c85688ba0cb460408cbc793"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "doc/operations/aw-v8-evidence/native-live-source-screens/live-source-admitted-history.png",
+      "sha256": "19ce58798681febf650590e8ebcba1be313a68855e4b8cddd1a42054d027ef04",
+      "reviewed": true
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-live-source-screens/live-source-hidden-history.png",
+      "sha256": "cac74842a0febc6d2b5f1c185ce6b3bdb3966fe59c8a0231ca299285175442f4",
+      "reviewed": true
+    }
+  ],
+  "qualified": [
+    "Current native credentials are re-resolved for each ordered WebSocket delivery; company membership revocation closes the actual connection.",
+    "Native persisted run ownership determines the conversation; all earlier conversation roots are checked before any run output reaches the reader.",
+    "Static agent keys retain their actual agent identity and cannot acquire native analytical reader authority.",
+    "Source denial contains only native company/event/run/issue identities and a fixed code. UI caches and native/log transcript buffers are removed immediately; stale pre-denial responses cannot restore them.",
+    "The shared heartbeat event publisher and runtime projection consume the actually committed C7-scrubbed row."
+  ],
+  "limits": [
+    "The live browser denial is a controlled UI response-contract fixture. The second browser case uses actual source visibility and recovery with a seeded historical private root. Actual recipient admission and IAM revocation are independently qualified with PostgreSQL and a real WebSocket.",
+    "Model-input admission, source-root inheritance in later native turns, active provider cancellation and further application-owned trace bytes remain open.",
+    "Serial per-recipient delivery is bounded at 64 pending events and falls back to native REST reconciliation after reconnect; large-history throughput and hard revocation/deletion latency are unqualified.",
+    "No whole-brief, R0, hosted operations or customer trial completion is claimed."
+  ]
+}

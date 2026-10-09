@@ -1,0 +1,12 @@
+{
+  "sourceCommit": "3cc6c51e1bea615609200a90345c9fc799d2cab5",
+  "recordedAt": "2026-10-07T11:53:42.836360+00:00",
+  "command": "pnpm build",
+  "workspace": "/workspace/august-works",
+  "exitCode": 0,
+  "logPath": "/var/tmp/aw-v8-native-build-3cc6c51e1.log",
+  "logSha256": "0257bac7700d96b648d1ab3c251dd1f6be29dff49af229c2e1364c24a3df5efc",
+  "limits": [
+    "Integrated local production build; no live application health, hosting or complete brief acceptance is implied."
+  ]
+}

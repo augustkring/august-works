@@ -1,4 +1,5 @@
-import { applyConnectorSkills, prepareConnectorSkillDelivery, resolveConnectorAssignments, annotateConnectorSkills } from "../services/connector-runtime.js";
+import { applyConnectorSkills, prepareRetainedConnectorSkills, prepareConnectorSkillDelivery, resolveConnectorAssignments, annotateConnectorSkills } from "../services/connector-runtime.js";
+import { removeRuntimeStorageTree } from "../services/runtime-skill-cache.js";
 import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
 import { renderPaperclipWakePrompt, resolvePaperclipDesiredSkillNames, resolveLegacyPaperclipDesiredSkillNames } from "@paperclipai/adapter-utils/server-utils";
 import express from "express";
@@ -14,7 +15,7 @@ import type { StorageService } from "../storage/types.js";
 import * as remoteHttp from "../services/remote-http-fetch.js";
 import { MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
 import { Webhook } from "svix";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -69,8 +70,10 @@ describe("AgentMail durable email pipeline", () => {
   let db: ReturnType<typeof createDb>;
   const folder = mkdtempSync(path.join(os.tmpdir(), "paperclip-email-"));
   const previous = process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
+  const previousHome = process.env.PAPERCLIP_HOME, previousInstance = process.env.PAPERCLIP_INSTANCE_ID;
   const services: EmailChannelService[] = [];
   beforeAll(async () => {
+    process.env.PAPERCLIP_HOME = folder; process.env.PAPERCLIP_INSTANCE_ID = "email-connector-fixture";
     process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(
       folder,
       "master.key",
@@ -107,16 +110,19 @@ describe("AgentMail durable email pipeline", () => {
     if (previous === undefined)
       delete process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
     else process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = previous;
-    rmSync(folder, { recursive: true, force: true });
+    if (previousHome === undefined) delete process.env.PAPERCLIP_HOME; else process.env.PAPERCLIP_HOME = previousHome;
+    if (previousInstance === undefined) delete process.env.PAPERCLIP_INSTANCE_ID; else process.env.PAPERCLIP_INSTANCE_ID = previousInstance;
+    await removeRuntimeStorageTree(folder);
   });
   it("installs one connector skill and provider tools only for the assigned agent", async () => {
     const f = await fixture();
-    const binding = { companyId: f.companyId, agentId: f.agentId };
+    const binding = { companyId: f.companyId, agentId: f.agentId, runId: randomUUID() };
+    await db.insert(heartbeatRuns).values({ id: binding.runId, companyId: f.companyId, agentId: f.agentId, status: "running" });
     const assignments = await resolveConnectorAssignments(db, binding);
     expect(assignments).toHaveLength(1);
     expect(assignments[0].resources[0].id).toBe(f.endpointId);
     const base = { paperclipSkillSync: { desiredSkills: [] } };
-    const configured = await applyConnectorSkills(base, [], assignments);
+    const { config: configured } = await prepareRetainedConnectorSkills(db, binding, base, []);
     expect(base.paperclipSkillSync.desiredSkills).toEqual([]);
     expect(resolvePaperclipDesiredSkillNames(configured, configured.paperclipRuntimeSkills)).toEqual(["paperclipai/paperclip/agentmail"]);
     expect(resolveLegacyPaperclipDesiredSkillNames(configured, configured.paperclipRuntimeSkills)).toContain("paperclipai/paperclip/agentmail");
@@ -158,7 +164,8 @@ describe("AgentMail durable email pipeline", () => {
     const first = await fixture();
     const second = await fixture();
     const binding = { companyId: first.companyId, agentId: first.agentId };
-    const before = await applyConnectorSkills({}, [], await resolveConnectorAssignments(db, binding));
+    const owner = { companyId: first.companyId, runId: randomUUID() };
+    const before = await applyConnectorSkills({}, [], await resolveConnectorAssignments(db, binding), owner);
     await second.service.control(second.endpointId, "remove", { userId: "email-board" });
     const extra = await second.service.setup(first.companyId, {
       assignedAgentId: first.agentId, apiKey: "test-key", inboxId: second.address,
@@ -167,7 +174,7 @@ describe("AgentMail durable email pipeline", () => {
     const assignments = await resolveConnectorAssignments(db, binding);
     expect(assignments).toHaveLength(1);
     expect(assignments[0].resources).toHaveLength(2);
-    const after = await applyConnectorSkills(before, before.paperclipRuntimeSkills, assignments);
+    const after = await applyConnectorSkills(before, before.paperclipRuntimeSkills, assignments, owner);
     expect(after.paperclipRuntimeSkills).toHaveLength(1);
     expect(after.paperclipConnectorSkillDigest).not.toBe(before.paperclipConnectorSkillDigest);
     expect(after.paperclipRuntimeSkills[0].source).not.toBe(before.paperclipRuntimeSkills[0].source);

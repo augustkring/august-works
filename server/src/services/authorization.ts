@@ -1,5 +1,6 @@
 import { isSaasDeployment } from "../deployment-profile.js";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, is, isNull, sql } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -540,6 +541,56 @@ export function authorizationDeniedDetails(decision: AuthorizationDecision) {
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 export function authorizationService(db: Db | DbTransaction) {
+  return createAuthorizationService(db);
+}
+
+type ReadSourceDecisionInput = {
+  actor: AuthorizationActor;
+  action: AuthorizationAction;
+  resource: AuthorizationResource;
+  scope?: Record<string, unknown> | null;
+  enforceResponsibleUserIntersection?: boolean;
+};
+type ReadSourceOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
+type ReadSourceRows = {
+  companyId: string;
+  issues: Map<string, IssueAuthorizationRow | null>;
+  projects: Map<string, ProjectAuthorizationRow | null>;
+  active: boolean;
+};
+const issueReadColumns = {
+  id: issues.id, companyId: issues.companyId, projectId: issues.projectId, parentId: issues.parentId,
+  assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId, checkoutRunId: issues.checkoutRunId,
+  status: issues.status, executionPolicy: issues.executionPolicy, originKind: issues.originKind, originId: issues.originId,
+};
+const projectReadColumns = { id: projects.id, companyId: projects.companyId, executionWorkspacePolicy: projects.executionWorkspacePolicy };
+
+// Only this native owner can construct the private row context. Caller DTOs
+// cannot supply row facts, policies, authorization results or a read capability.
+function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows) {
+  async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>): Promise<T> {
+    const locked = is(db, PgTransaction);
+    const requestedIssues = [...new Set(issueIds)], requestedProjects = [...new Set(projectIds)];
+    if (requestedIssues.length + requestedProjects.length > 20065) throw new Error("Native Source row transport exceeds its complete-population bound");
+    const issueRows = locked && requestedIssues.length ? await db.select(issueReadColumns).from(issues)
+      .where(and(eq(issues.companyId, companyId), inArray(issues.id, requestedIssues))).for("share") : [];
+    const projectRefs = [...new Set([...requestedProjects, ...issueRows.map(row => row.projectId).filter((id): id is string => id !== null)])];
+    if (requestedIssues.length + projectRefs.length > 20065) throw new Error("Native Source row transport exceeds its complete-population bound");
+    const projectRows = locked && projectRefs.length ? await db.select(projectReadColumns).from(projects)
+      .where(and(eq(projects.companyId, companyId), inArray(projects.id, projectRefs))).for("share") : [];
+    const context: ReadSourceRows = {
+      companyId, active: true,
+      // Outside a real transaction, keep the original per-call reads. An
+      // autocommit FOR SHARE cannot qualify reusable current Source facts.
+      issues: new Map((locked ? requestedIssues : []).map(id => [id, null])),
+      projects: new Map((locked ? projectRefs : []).map(id => [id, null])),
+    };
+    for (const row of issueRows) context.issues.set(row.id, row);
+    for (const row of projectRows) context.projects.set(row.id, row);
+    const owner = createAuthorizationService(db, context);
+    try { return await read({ decide: owner.decide }); }
+    finally { context.active = false; }
+  }
   async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
     if (!userId) return false;
     if (
@@ -746,6 +797,7 @@ export function authorizationService(db: Db | DbTransaction) {
   }
 
   async function loadProject(projectId: string): Promise<ProjectAuthorizationRow | null> {
+    if (readSources?.projects.has(projectId)) return readSources.projects.get(projectId) ?? null;
     return db
       .select({
         id: projects.id,
@@ -758,6 +810,7 @@ export function authorizationService(db: Db | DbTransaction) {
   }
 
   async function loadIssue(issueId: string): Promise<IssueAuthorizationRow | null> {
+    if (readSources?.issues.has(issueId)) return readSources.issues.get(issueId) ?? null;
     return db
       .select({
         id: issues.id,
@@ -837,6 +890,7 @@ export function authorizationService(db: Db | DbTransaction) {
   }
 
   async function loadProjectAuthorizationPolicy(companyId: string, projectId: string) {
+    if (readSources?.companyId === companyId && readSources.projects.has(projectId)) return readPolicyObject(readSources.projects.get(projectId)?.executionWorkspacePolicy, "authorizationPolicy");
     const row = await db
       .select({ executionWorkspacePolicy: projects.executionWorkspacePolicy })
       .from(projects)
@@ -846,6 +900,7 @@ export function authorizationService(db: Db | DbTransaction) {
   }
 
   async function loadIssueAuthorizationPolicy(companyId: string, issueId: string) {
+    if (readSources?.companyId === companyId && readSources.issues.has(issueId)) return readPolicyObject(readSources.issues.get(issueId)?.executionPolicy, "authorizationPolicy");
     const row = await db
       .select({ executionPolicy: issues.executionPolicy })
       .from(issues)
@@ -2410,6 +2465,12 @@ export function authorizationService(db: Db | DbTransaction) {
     scope?: Record<string, unknown> | null;
     enforceResponsibleUserIntersection?: boolean;
   }): Promise<AuthorizationDecision> {
+    if (readSources) {
+      if (!readSources.active) throw new Error("Native Source read scope has ended");
+      if (companyIdForResource(input.resource) !== readSources.companyId || !["issue:read", "project:read"].includes(input.action)) {
+        return deny({ action: input.action, reason: "deny_scope", explanation: "This native Source row scope admits same-company reads only." });
+      }
+    }
     // A V5 run remains subject to strict human intersection even during a
     // rollout rollback or while legacy authorization runs in shadow mode.
     if (!input.enforceResponsibleUserIntersection && responsibleUserAuthzShadowMode()
@@ -2419,11 +2480,14 @@ export function authorizationService(db: Db | DbTransaction) {
       if (manifest) input = { ...input, enforceResponsibleUserIntersection: true };
     }
     const agentDecision = await decideBase(input);
-    return applyResponsibleUserIntersection(input, agentDecision);
+    const decision = await applyResponsibleUserIntersection(input, agentDecision);
+    if (readSources && !readSources.active) throw new Error("Native Source read scope has ended");
+    return decision;
   }
 
   return {
     decide,
     decidePrincipalGrant,
+    withReadSources,
   };
 }

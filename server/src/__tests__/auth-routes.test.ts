@@ -91,11 +91,20 @@ describe.sequential("auth routes", () => {
       session: {
         id: "paperclip:session:user-1",
         userId: "user-1",
+        localImplicit: false,
       },
       user: baseUser,
       sentryDsn: null,
       sentryEnvironment: null,
     });
+  });
+
+  it.each(["local_implicit", "session"] as const)("reports actual %s provenance even when the user is named local-board", async source => {
+    const app = createApp({ type: "board", userId: "local-board", source }, { ...baseUser, id: "local-board" });
+    const res = await request(app).get("/api/auth/get-session");
+    expect(res.status).toBe(200);
+    expect(res.body.session.localImplicit).toBe(source === "local_implicit");
+    expect(res.body.user.id).toBe("local-board");
   });
 
   it("sends sentryDsn for a board actor when SENTRY_DSN is set", async () => {

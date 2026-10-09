@@ -1,0 +1,61 @@
+{
+  "checkpoint": "Complete current native Source admission before Process readiness and actual SDK metric lineage",
+  "recordedAt": "2026-10-08T12:36:38.220428+00:00",
+  "parentCommit": "e96bcf9a0cf93601b5a2c0e871909c042c3c910c",
+  "primaryParentCommit": "c01fb6f6e91b982116e797152d5eb5ffe3154572",
+  "sourceFiles": [
+    {
+      "path": "server/src/services/process-data-readiness.ts",
+      "sha256": "089519f726a742998b6921d54845368c9934f9bf4e7e2b9061c618603b825ca8"
+    },
+    {
+      "path": "server/src/__tests__/process-analysis.integration.test.ts",
+      "sha256": "84f8ba69f1c4198c8ecbe51c5aa3a55ab88e24c9217c3d95030667575c9ea0fc"
+    },
+    {
+      "path": "server/src/__tests__/business-events.integration.test.ts",
+      "sha256": "7ab1075a6536a6d59867034d294487af110c9068044832fcd03525b93656e9ba"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "9333d41ecff14c2892cb1bf29e212df5ff44a8a3113370c5f1414d8c23f3e549"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "27599663cee5d2c77fe0f00ddb483c683a52dee50630e11fe50f090ece5e690c"
+    }
+  ],
+  "validation": {
+    "fullNativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sdk-fresh-source-final-tests.log",
+      "sha256": "fa96da5a2c95799b71292b6d540422beeae681f3c9397d1057909bcdf28c4086",
+      "tests": 103,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sdk-fresh-source-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-sdk-remaining-owners.log",
+      "sha256": "433189c7f43c8f419e22469418a19f08e5d863f3ff85ab35434ce688882ff01a"
+    }
+  },
+  "qualified": [
+    "Fresh actual native SDK Process call after hidden Source is denied before readiness derivation and creates no new retained answer root",
+    "Original snapshot admits every valid projected Source and overflow sentinel through existing current Business Event Source owner before deriving any findings",
+    "Retained original Process results and Human findings reject hidden Sources; original readiness rejects erased Sources",
+    "Actual SDK explains exact native metric lineage, rejects substituted version pins without another root and refuses hidden Source",
+    "All 103 full original Context/SDK/privacy, Process, Business Event and kernel checks pass without skips"
+  ],
+  "limitations": [
+    "Initial fresh-SDK disclosure failure and old readiness expectation after actual Source erasure are diagnostic, excluded from final qualification",
+    "Original Source-denial responses in this checkpoint are Process403 and SDK metric lineage403; earlier checkpoint42 Process409 describes historical source only",
+    "No new authority cache, ledger, Process engine, source facts or raw identity/body disclosure",
+    "Native software identities, Human declarations and source-owner actions are fixture prerequisites, not performed Human/customer/provider/hosted trials",
+    "Whole maximum-volume, indirect Source, historical recovery and hosted acceptance remain in progress; no whole-brief completion or release promotion claim"
+  ]
+}

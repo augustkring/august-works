@@ -15,6 +15,11 @@ export class ApiError extends Error {
   }
 }
 
+export function isAnalyticalSourceAccessLost(error: unknown): boolean {
+  return error instanceof ApiError &&
+    (error.body as { details?: { code?: unknown } } | null)?.details?.code === "analytical_source_access_lost";
+}
+
 export interface RequestOptions {
   /** Abort signal wired through to `fetch` and coalescing (per-caller). */
   signal?: AbortSignal;

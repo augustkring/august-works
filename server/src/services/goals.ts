@@ -1,6 +1,7 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { goals } from "@paperclipai/db";
+import { lockAnalyticalCompany, suppressAnalyticalSource } from "./analytical-privacy.js";
 
 type GoalReader = Pick<Db, "select">;
 
@@ -70,11 +71,15 @@ export function goalService(db: Db) {
         .returning()
         .then((rows) => rows[0] ?? null),
 
-    remove: (id: string) =>
-      db
-        .delete(goals)
-        .where(eq(goals.id, id))
-        .returning()
-        .then((rows) => rows[0] ?? null),
+    remove: async (id: string) => {
+      const [source] = await db.select({ companyId: goals.companyId }).from(goals).where(eq(goals.id, id));
+      if (!source) return null;
+      return db.transaction(async tx => {
+        await lockAnalyticalCompany(tx, source.companyId);
+        await suppressAnalyticalSource(tx, source.companyId, "goal", id);
+        const [deleted] = await tx.delete(goals).where(and(eq(goals.id, id), eq(goals.companyId, source.companyId))).returning();
+        return deleted ?? null;
+      });
+    },
   };
 }

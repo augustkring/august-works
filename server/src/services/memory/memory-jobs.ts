@@ -1,5 +1,6 @@
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { providerTraceStore } from "../provider-trace-store.js";
 import { getRunLogStore, type RunLogStore } from "../run-log-store.js";
 import { isDeepStrictEqual } from "node:util";
 import { executeMemoryMaintenance, memoryMaintenanceInputSchema, memoryMaintenanceSources } from "./memory-maintenance.js";
@@ -392,6 +393,72 @@ export function memoryJobService(
 
   async function executeRetention(job: MemoryJob, now: Date) {
     const source = record(job.sourceRefJson);
+    if (source.kind === "workflow_artifact_source_erasure") {
+      if (typeof source.versionId !== "string" || !/^[a-f0-9-]{36}$/i.test(source.versionId) ||
+        job.jobKey !== `workflow-artifact-source-erasure:v1:${source.versionId}`) throw unprocessable("Invalid native Workflow Artifact erasure binding");
+      const { lockAnalyticalCompany } = await import("../analytical-privacy.js");
+      const { lockMemoryPrivacy, purgeDerivedWorkflowMemory } = await import("./memory-privacy.js");
+      await db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db;
+        await lockAnalyticalCompany(tx, job.companyId); await lockMemoryPrivacy(tx, job.companyId);
+        const [receipt] = await tx.execute<{ erased: boolean }>(sql`select aw_artifact_version_source_erased(${job.companyId}::uuid,${source.versionId as string}::uuid) as erased`);
+        if (!receipt?.erased) throw unprocessable("Native Workflow Artifact has no Source erasure receipt");
+        await purgeDerivedWorkflowMemory(tx, job.companyId, [], now, { workflowRevisionIds: [], artifactVersionIds: [source.versionId as string] });
+      });
+      return { summary: "Erased the native Artifact's Workflow copies.", result: { processedVersionCount: 1 } };
+    }
+    if (source.kind === "artifact_workspace_erasure") {
+      if (typeof source.versionId !== "string" || job.jobKey !== `artifact-workspace-erasure:v1:${source.versionId}`) {
+        throw unprocessable("Invalid native Artifact workspace erasure binding");
+      }
+      const { eraseArtifactWorkspace } = await import("../automation-artifacts/automation-artifact-workspace.js");
+      await eraseArtifactWorkspace(db, { companyId: job.companyId, versionId: source.versionId });
+      return { summary: "Erased the native Artifact version's sandbox workspace.", result: { processedVersionCount: 1 } };
+    }
+    if (source.kind === "runtime_skill_source_erasure") {
+      if (typeof source.runId !== "string" || typeof source.versionId !== "string" ||
+        job.jobKey !== `runtime-skill-source-erasure:v1:${source.runId}:${source.versionId}`) throw unprocessable("Invalid native Skill runtime erasure binding");
+      const { eraseSkillRuntimeCopies } = await import("../learning/skill-file-erasure.js");
+      await eraseSkillRuntimeCopies(db, job.companyId, source.runId, source.versionId);
+      return { summary: "Erased the deleted Skill version's actual runtime copies.", result: { processedRunCount: 1 } };
+    }
+    if (source.kind === "runtime_asset_erasure") {
+      if (typeof source.runId !== "string" || !Array.isArray(source.legacyDigests) || source.legacyDigests.some(value => typeof value !== "string")) throw unprocessable("Invalid native runtime asset erasure binding");
+      const digests = source.legacyDigests as string[];
+      const suffix = digests.length ? `:${createHash("sha256").update([...new Set(digests)].sort().join(",")).digest("hex")}` : "";
+      if (job.jobKey !== `runtime-asset-erasure:v1:${source.runId}${suffix}`) throw unprocessable("Invalid native runtime asset erasure binding");
+      const { eraseNativeRuntimeAssets } = await import("../native-runtime/runtime-asset-retention.js");
+      await eraseNativeRuntimeAssets(db, { companyId: job.companyId, runId: source.runId }, source.legacyDigests as string[]);
+      return { summary: "Erased the native run's generated runtime assets.", result: { processedRunCount: 1 } };
+    }
+    if (source.kind === "skill_version_file_erasure") {
+      if (typeof source.skillId !== "string" || typeof source.versionId !== "string" ||
+        job.jobKey !== `skill-version-file-erasure:v1:${source.versionId}`) throw unprocessable("Invalid native Skill file erasure binding");
+      const { eraseSkillVersionFiles } = await import("../learning/skill-file-erasure.js");
+      await eraseSkillVersionFiles(db, job.companyId, source.skillId, source.versionId);
+      return { summary: "Erased the native Skill version snapshot.", result: { processedVersionCount: 1 } };
+    }
+    if(source.kind === "learning_analytical_erasure") {
+      if(typeof source.cycleId!=="string"||!/^[a-f0-9-]{36}$/i.test(source.cycleId)||job.jobKey!==`learning-analytical-erasure:v1:${source.cycleId}`)throw unprocessable("Invalid native Learning erasure binding");
+      const {lockAnalyticalCompany}=await import("../analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory-privacy.js"),{invalidateLearningCycles}=await import("../learning/learning-privacy.js");
+      await db.transaction(async rawTx=>{
+        const tx=rawTx as unknown as Db;await lockAnalyticalCompany(tx,job.companyId);await lockMemoryPrivacy(tx,job.companyId);
+        const {learningCycles}=await import("@paperclipai/db");
+        const [cycle]=await tx.select().from(learningCycles).where(and(eq(learningCycles.companyId,job.companyId),eq(learningCycles.id,source.cycleId as string))).for("update");
+        if(cycle?.erasedAt)await invalidateLearningCycles(tx,job.companyId,[cycle.id],true);
+      });
+      return {summary:"Erased the native Learning cycle's retained analytical derivatives.",result:{processedCycleCount:1}};
+    }
+    if (source.kind === "provider_trace_erasure") {
+      if (typeof source.traceId !== "string" || !/^[a-f0-9-]{36}$/i.test(source.traceId) ||
+        typeof source.runId !== "string" || !/^[a-f0-9-]{36}$/i.test(source.runId) ||
+        typeof source.traceRef !== "string" || !/^[a-f0-9-]{36}\.ndjson$/.test(source.traceRef) ||
+        job.jobKey !== `provider-trace-erasure:v1:${source.traceId}`) {
+        throw unprocessable("Invalid provider trace erasure binding", {code:"memory_trace_erasure_binding_invalid"});
+      }
+      await providerTraceStore(db).eraseSourceFiles(source.traceRef);
+      return {summary:"Erased the application-owned provider trace sidecars.",result:{erasedTraceCount:1}};
+    }
     if (source.kind === "run_log_erasure") {
       if (typeof source.runId !== "string" || typeof source.agentId !== "string" ||
         source.logRef !== `${job.companyId}/${source.agentId}/${source.runId}.ndjson` ||
@@ -574,6 +641,12 @@ export function memoryJobService(
     processed: number;
   }> {
     const now = input.now ?? new Date();
+    // Privacy cleanup survives disabled features, archived tenants and a failed
+    // filesystem attempt. The existing reconciliation tick supplies the retry.
+    await db.update(memoryJobs).set({status:"queued",finishedAt:null,error:null,errorCode:null,updatedAt:now})
+      .where(and(eq(memoryJobs.operationType,"retention"),eq(memoryJobs.status,"failed"),
+        lte(memoryJobs.updatedAt,new Date(now.getTime()-60000)),
+        sql`(${memoryJobs.sourceRefJson}->>'kind' in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure','runtime_skill_source_erasure','artifact_workspace_erasure','workflow_artifact_source_erasure') or (${memoryJobs.sourceRefJson}->>'kind'='retention_sweep' and ${memoryJobs.jobKey} like 'analytical-context-erasure:v1:%'))`));
     const recovered = await recoverExpiredLeases(now);
     const [backfilled, retentionQueued] = await Promise.all([
       enqueueMissingPostRunCaptures(),

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "formatVersion": "OCEL 2.0",
+  "sources": [
+    {
+      "url": "https://www.ocel-standard.org/specification/formats/json/",
+      "retrievedAt": "2026-10-07",
+      "retrievedContentSha256": "fd9a31b93737abce42809d687fb63b84089da2345616d0fec359e0e820514955",
+      "mappingVersion": "OCEL 2.0",
+      "use": "Official JSON/SQLite mapping description; does not qualify a third-party consumer or provider."
+    },
+    {
+      "url": "https://www.ocel-standard.org/specification/formats/sqlite/",
+      "retrievedAt": "2026-10-07",
+      "retrievedContentSha256": "76c6e2595addcace847ec6ddc21a487bb82bf5a4dbfa65a1315f603c9d5cc85c",
+      "mappingVersion": "OCEL 2.0",
+      "use": "Official JSON/SQLite mapping description; does not qualify a third-party consumer or provider."
+    }
+  ],
+  "limits": [
+    "Only native issue/project events and recorded event-object qualifiers.",
+    "No OCEL 2.1 CSV/Parquet implementation or claim.",
+    "No external-consumer interoperability or hosted deletion qualification."
+  ]
+}

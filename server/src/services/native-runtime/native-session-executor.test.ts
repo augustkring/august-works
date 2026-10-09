@@ -52,6 +52,14 @@ import { nativeToolContractFingerprintForTarget } from "./native-session-resume.
 import { buildNativeHeartbeatPreparationSpans } from "./native-run-trace.js";
 import { NativeRunnerOwnershipUnverifiedError } from "./native-runner-ownership.js";
 import type { AdapterRuntimeEvent } from "../../adapters/index.js";
+import { HttpError } from "../../errors.js";
+
+// These executor fixtures model ordinary runs without analytical roots. Real
+// source admission is exercised against PostgreSQL in analytical-context privacy.
+const analyticalAdmission = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock("../analytical-context-authority.js", () => ({
+  assertNativeAnalyticalRunPayloadAccess: analyticalAdmission,
+}));
 
 const githubAccess = vi.hoisted(() => ({
   activate: vi.fn((_binding: { runId: string }) => vi.fn()),
@@ -310,6 +318,7 @@ import {
 } from "./native-session-executor.js";
 
 beforeEach(() => {
+  analyticalAdmission.mockReset().mockResolvedValue(undefined);
   state.createAssignedMcpTools.mockReset();
   state.resolveRunnerBinary.mockReset().mockReturnValue("/tmp/paperclip-runnerd");
   state.resolveCurrentWakeCommentsBinding.mockReset().mockResolvedValue(null);
@@ -4678,6 +4687,7 @@ function leaseDb(
       const query = {
         then: Promise.resolve(rows).then.bind(Promise.resolve(rows)),
         where: () => query,
+        innerJoin: () => query,
         orderBy: () => query,
         for: () => query,
         limit: () => Promise.resolve(rows),
@@ -4688,7 +4698,13 @@ function leaseDb(
   const insert = (table: unknown) => ({
     values: (values: Record<string, unknown>) => {
       updates.push({ table, values });
-      return { returning: async () => [values] };
+      const query = {
+        returning: async () => [values],
+        onConflictDoUpdate: () => query,
+        onConflictDoNothing: () => query,
+        then: Promise.resolve([values]).then.bind(Promise.resolve([values])),
+      };
+      return query;
     },
   });
   const tx = {
@@ -4696,14 +4712,11 @@ function leaseDb(
     execute: async () => [],
     select,
     update,
-  };
-  return {
-    insert,
-    select,
+    delete: () => ({where: async () => []}),
     transaction: async (operation: (transaction: Db) => Promise<unknown>) =>
       operation(tx as unknown as Db),
-    update,
-  } as unknown as Db;
+  };
+  return tx as unknown as Db;
 }
 
 function cancellationDb(options?: {
@@ -5215,6 +5228,28 @@ describe("native session cancellation", () => {
     ).resolves.toBe(false);
   });
 
+  it("uses the existing lease timer to cancel a session after analytical source loss", async () => {
+    vi.useFakeTimers({toFake: ["setInterval", "clearInterval"]});
+    const outcome = executePaperclipNativeSession({db: leaseDb(), execution, runnerInstanceId: "runner"})
+      .catch(error => error);
+    try {
+      await vi.waitFor(() => expect(state.release).toBeTypeOf("function"));
+      analyticalAdmission.mockRejectedValue(new HttpError(403, "Source access lost", {
+        code: "analytical_source_access_lost",
+      }));
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(state.cancel).toHaveBeenCalledWith({
+        reason: "native analytical source access lost", signal: expect.any(AbortSignal),
+      });
+      state.release?.();
+      expect(await outcome).toMatchObject({details: {code: "analytical_source_access_lost"}});
+    } finally {
+      state.release?.();
+      await outcome;
+      vi.useRealTimers();
+    }
+  });
+
   it("allows cancellation to be retried when the session dispatch fails", async () => {
     state.cancel.mockImplementationOnce(() => {
       throw new Error("transport unavailable");
@@ -5522,6 +5557,22 @@ describe("native runtime request resolution", () => {
         highestContiguousSourceSeq: 1,
       };
     });
+  });
+
+  it("rejects lost analytical sources before creating a provider or transport", async () => {
+    state.execute.mockClear();
+    state.createBackend.mockClear();
+    state.createTransport.mockClear();
+    analyticalAdmission.mockRejectedValueOnce(new HttpError(403, "Source access lost", {
+      code: "analytical_source_access_lost",
+    }));
+    await expect(executePaperclipNativeSession({
+      db: leaseDb(), execution, runnerInstanceId: "runner",
+    })).rejects.toMatchObject({details: {code: "analytical_source_access_lost"}});
+    expect(analyticalAdmission).toHaveBeenCalledWith(expect.anything(), execution.binding.companyId, execution.binding.runId);
+    expect(state.execute).not.toHaveBeenCalled();
+    expect(state.createBackend).not.toHaveBeenCalled();
+    expect(state.createTransport).not.toHaveBeenCalled();
   });
 
   it("revalidates lifecycle after provider reads and blocks stale dispatch", async () => {

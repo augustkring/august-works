@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createDb, instanceSettings } from "@paperclipai/db";
-import { assertV7FeatureDependencies, V7FeatureDependencyError } from "@paperclipai/shared";
+import { assertV7FeatureDependencies, V7FeatureDependencyError, assertV8FeatureDependencies, V8FeatureDependencyError } from "@paperclipai/shared";
 import { HttpError } from "../errors.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -23,6 +23,31 @@ suite("V7 admission against migrated PostgreSQL", () => {
     await db.delete(instanceSettings).where(eq(instanceSettings.singletonKey, "default"));
   });
   const service = () => instanceSettingsService(db, { runtimeEnv: {} });
+
+  it("enforces V8 dependencies on effective reads, writes and repairing rollback", async () => {
+    await expect(service().updateExperimental({ business_forecasting_v8: true }))
+      .rejects.toMatchObject({ status: 400, details: { code: "V8_FEATURE_DEPENDENCY_INVALID" } });
+    expect((await service().getExperimental()).business_forecasting_v8).toBe(false);
+    await service().updateExperimental({ analytical_lineage_v8: true, business_metrics_v8: true, business_forecasting_v8: true });
+    const managed = instanceSettingsService(db, { runtimeEnv: { PAPERCLIP_MANAGED_CONFIG: JSON.stringify({
+      v: 1, mode: "cloud", catalogVersion: "v8-test", features: { analytical_lineage_v8: false }, plugins: { autoInstall: [] },
+    }) } });
+    await expect(managed.getExperimental()).rejects.toBeInstanceOf(V8FeatureDependencyError);
+    await expect(service().updateExperimental({ analytical_lineage_v8: false })).rejects.toMatchObject({ status: 400 });
+    await service().updateExperimental({ business_forecasting_v8: false, business_metrics_v8: false, analytical_lineage_v8: false });
+    expect((await service().getExperimental()).business_metrics_v8).toBe(false);
+  });
+
+  it("serializes V8 prerequisite revocation against a dependent enable", async () => {
+    await service().updateExperimental({ analytical_lineage_v8: true, business_metrics_v8: true });
+    const results = await Promise.allSettled([
+      service().updateExperimental({ business_forecasting_v8: true }),
+      service().updateExperimental({ business_metrics_v8: false }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const persisted = await service().getExperimental();
+    expect(() => assertV8FeatureDependencies(persisted)).not.toThrow();
+  });
 
   it("rejects invalid admission before persistence and accepts a dependency-complete patch", async () => {
     const svc = service();

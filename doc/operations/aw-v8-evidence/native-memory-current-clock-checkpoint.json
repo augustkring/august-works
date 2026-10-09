@@ -1,0 +1,63 @@
+{
+  "checkpoint": "Current retained Memory clock during native Artifact execution",
+  "parentCommit": "c7f828f84086a8ef126e726d14d7ccd409526048",
+  "recordedAt": "2026-10-08T04:36:37.982695+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "94520c0e76c3c34cd78d7e855d8de2f2635378ace847cd576a5c3a5205ffbf3b"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0433_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "089282e8d0f9b0f9c87ac1e65279f5f1ea819d417e2e38d9550fd705a03e296f"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "667243cdb54aafa16ffc2b5ca1f1e1aadd5ede9f2f7fb9fef0403c673ad4c6b1"
+    },
+    {
+      "path": "packages/db/src/migrations/0438_native_learning_current_memory_clock.sql",
+      "sha256": "9dc06dc746c05e54bbaf149527eb27a8fd5e1d12b5e28509bea0c14c22be934d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0438_snapshot.json",
+      "sha256": "16a7ad4c566da7169ba38aa86723f4881787c8044345778627fe1a3a1176501a"
+    }
+  ],
+  "validation": {
+    "nativeOwners": {
+      "tests": 216,
+      "files": 9,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-native-memory-expiry-final-tests.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-memory-expiry-migrations.log"
+    },
+    "unchangedProductionServerTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sourceful-optimizer-agent-final-types.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "c154e308e3db40672b9ca538c4df3786c95cdf83",
+      "log": "/var/tmp/aw-v8-native-build-sourceful-optimizer-agent.log"
+    }
+  },
+  "qualified": [
+    "Actual TypeScript sandbox executes before a software Memory expiry boundary in the same native consumer transaction",
+    "Pre-fix diagnostic confirms returned expired runtime copy, with original later checkpoint already refusing persisted output",
+    "Shared original Learning admission uses advancing wall time for valid-from/valid-until/expiry without changing other gates",
+    "Post-fix native consumer returns no expired copy, failed step output remains null, transaction boundary write rolls back and actual version workspace is cleaned"
+  ],
+  "limits": [
+    "Explicit software expiry-boundary mutation, not actual timer/crash/provider/Human/latency qualification",
+    "Native no-wait Workflow revision/Memory erasure, planning/Routine/action/remaining Source/provider/hosted work remains open",
+    "No hard latency, maximum-volume, hosted backfill or whole-brief acceptance"
+  ]
+}

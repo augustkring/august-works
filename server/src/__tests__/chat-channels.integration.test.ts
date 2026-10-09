@@ -4331,7 +4331,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     const assignments = await resolveConnectorAssignments(db, binding);
     expect(assignments.map(a => a.key)).toEqual(["slack"]);
     expect(assignments[0].resources[0].metadata?.channelId).toBe("CTOOLS");
-    const skillConfig = await applyConnectorSkills({}, [], assignments);
+    const skillConfig = await applyConnectorSkills({}, [], assignments, binding);
     const runnerDelivery = await prepareConnectorSkillDelivery(skillConfig, "paperclip_runner");
     expect(runnerDelivery.instructions).toContain('"channelId": "CTOOLS"');
     expect(runnerDelivery.instructions).toContain("untrusted source material");

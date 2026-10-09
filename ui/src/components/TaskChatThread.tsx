@@ -95,6 +95,7 @@ import { TaskChatQueuedMessages } from "@/components/task-chat/TaskChatQueuedMes
 import { TaskChatWindowScroll } from "@/components/task-chat/useWindowAutoFollow";
 import { useSidebar } from "@/context/SidebarContext";
 import { useStreamlinedUiEnabled } from "@/hooks/useStreamlinedUiEnabled";
+import { isAnalyticalSourceAccessLost } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -403,6 +404,7 @@ export type TaskChatThreadProps = ComponentProps<typeof IssueChatThread> & {
   creationActivity?: ActivityEvent[];
   initialHistoryPending?: boolean;
   initialHistoryError?: boolean;
+  sourceAccessLost?: boolean;
   onRetryInitialHistory?: () => void;
   onOpenSkill?: (skillId: string, name: string) => void;
 };
@@ -474,6 +476,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
   const {
     initialHistoryPending = false,
     initialHistoryError = false,
+    sourceAccessLost = false,
     onRetryInitialHistory,
     comments,
     interactions,
@@ -895,7 +898,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     isInitialHydrating: nativeEventsAreInitiallyHydrating,
     hydratedRunIds: hydratedNativeRunIds,
     retry: retryNativeEvents,
-  } = useNativeRunTranscripts(nativeRuns);
+  } = useNativeRunTranscripts(nativeRuns, { companyId, issueId });
   const fallbackByRunRef = useRef(
     new Map<string, NonNullable<ReturnType<typeof logTranscriptByRun.get>>>(),
   );
@@ -2779,6 +2782,13 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     retryNativeEvents?.();
     void retryPlan();
   };
+
+  if (sourceAccessLost || [...nativeTranscriptErrorsByRun.values()].some(error => error.sourceAccessLost) || [...(logErrorsByRun?.values() ?? [])].some(isAnalyticalSourceAccessLost)) {
+    return <div role="alert" className="p-4 text-sm text-destructive">
+      Conversation source access is unavailable.
+      <Button variant="ghost" size="sm" onClick={retryHistory}>Retry</Button>
+    </div>;
+  }
 
   return (
     <TaskChatExpansionState.Provider value={expansionState.current}>

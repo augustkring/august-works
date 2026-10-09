@@ -1,0 +1,162 @@
+{
+  "checkpoint": "Original analytical signals in native V7 Learning",
+  "parentCommit": "2f7375831e679065a1697ae1ec27af15ddd8a1a7",
+  "recordedAt": "2026-10-07T20:36:45.483845+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0419_red_skrulls.sql",
+      "sha256": "311b5c5980fe593deb9d035581d4a7e40d889df11bc9b3ff7c13db2a1dc7dc68"
+    },
+    {
+      "path": "packages/db/src/migrations/0420_learning_analytical_source_privacy.sql",
+      "sha256": "b5a25358a26638ce16a66bff6af3c1cd75a8c8399908c355c0935e33907a0c5a"
+    },
+    {
+      "path": "packages/db/src/schema/learning.ts",
+      "sha256": "fba85dd7f78f27a9e3d7e53256ffe3437ff7397f31f003069d19d26352c01dca"
+    },
+    {
+      "path": "packages/shared/src/learning.ts",
+      "sha256": "186af6be4313272b6b30d7f7be76c165ca8a22d046d6d44917faaef1e59f9cdb"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "a0481cc2df2adeb440fcce611a858460ca097decee75221c7ec046711737656f"
+    },
+    {
+      "path": "server/src/routes/foundation.ts",
+      "sha256": "266619878c84925aebadebdbd2b8923d384af0c0236c39a4d63609bbff8c9ed3"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "2b148900e0313484487b38f7c717e089fb0eb80a4b2fc3926e7c59e5741ea0af"
+    },
+    {
+      "path": "server/src/services/analytical-evidence.ts",
+      "sha256": "6c57fe326f77c27a1cb6d4a7a2501022a3e502e171fdccf70cab139d02e7e73d"
+    },
+    {
+      "path": "server/src/services/analytical-retention.ts",
+      "sha256": "f0cb859420a0690170b9dddbfd44077cf16b9886cc022fb01bd708d3bd0b744b"
+    },
+    {
+      "path": "server/src/services/business-metrics/definition-disclosure.ts",
+      "sha256": "2e4062d3b474cd1d9e75b7ed0f7a53bb93df9ba118aa0a5f9f2c92ce8014a721"
+    },
+    {
+      "path": "server/src/services/foundation/foundation-service.ts",
+      "sha256": "77687bc2efad1f20905558481fa19d5e17d1ab7a3eed1c72031123c6ffdb0e7e"
+    },
+    {
+      "path": "server/src/services/learning/learning-analytical-sources.ts",
+      "sha256": "0689d9ed22ae8a7b1544455d305a041143bf6eec9f02b92e7a7799e116cb341a"
+    },
+    {
+      "path": "server/src/services/learning/learning-assets.ts",
+      "sha256": "ba9c244bbae99a3c7c176352e5f8435c67875fefb609de6e9477128f5fe69d7f"
+    },
+    {
+      "path": "server/src/services/learning/learning-privacy.ts",
+      "sha256": "ce65df25881c481430467f972fb66653e3d311aa2f139d7048e598cc3f3e6d03"
+    },
+    {
+      "path": "server/src/services/learning/learning-service.ts",
+      "sha256": "4248b574098e274ad5ba9a73b3f31e8c597f2693a6ddc1d3f776d11f0d2f0cb9"
+    },
+    {
+      "path": "server/src/services/memory/memory-jobs.ts",
+      "sha256": "b7ba91082dec06065343f75a2db4454f201cfb602e400b88282cd67c1dab6218"
+    },
+    {
+      "path": "server/src/services/playbook-resolver.ts",
+      "sha256": "9df1c2bd917c598bd3a12b5b40eb15c655764cb11942bc9bb34d990bc7a772fe"
+    },
+    {
+      "path": "server/src/services/project-control.ts",
+      "sha256": "29a7ea1d96d71a45e71850d5d83bbbc8b3e79becad0d514867c65bfaa4076454"
+    },
+    {
+      "path": "server/src/services/role-packs.ts",
+      "sha256": "b0d9666a4062c64e309c3c336ac603306e206490e064815ef944fde470eb8642"
+    },
+    {
+      "path": "server/src/services/saas/company-purge.ts",
+      "sha256": "0c161546e35c969df99c1a29ef8602f4baa88f136fc4d5ac1a1ece24b57cff49"
+    },
+    {
+      "path": "server/src/services/skill-resolver.ts",
+      "sha256": "6eeb938e29f2a442ee6cc3845299f4227535dd45d5362b3f50de7f8121ee4adb"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewSourcePicker.tsx",
+      "sha256": "453f7b9ac167e09e2eeb07fe54dcd6250c708d255da887d4dd9518385e405f12"
+    },
+    {
+      "path": "ui/src/pages/OrganizationalLearning.test.tsx",
+      "sha256": "c55cabc79c3b3f874f5683a1c9abaf0029c50a7fad8b4726a1646f236720bc40"
+    },
+    {
+      "path": "ui/src/pages/OrganizationalLearning.tsx",
+      "sha256": "e4cf1489b3667fa814a9e24b159db09f184bcceadd8365fae7837c0c19dc6386"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Original V7 Learning and V8 signal admission/erasure",
+      "passedTests": 23,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-sources-pg-final.log",
+      "logSha256": "9bcd3a7112fe7d74fae4c9cf8ac576649286b865125266252c11dedb881f5137"
+    },
+    {
+      "check": "Foundation/Role Packs/Playbooks/Skills, V6/V8 purge and snapshot drift",
+      "passedTests": 50,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-sources-regressions-final.log",
+      "logSha256": "a5e355d5d549f66f36186b29334df25a024e67ca12ad94b536c5e95864ca7702"
+    },
+    {
+      "check": "Learning and source-picker UI response contracts",
+      "passedTests": 25,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-sources-ui-progress.log",
+      "logSha256": "9a86c11228a86447834f22664c8268f1be1588a597eb3c638d27187fd2260580"
+    },
+    {
+      "check": "Server types",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-sources-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "UI types",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-sources-ui-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "Migration safety and native design-token gates",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-sources-migrations-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "qualified": [
+    "Optional original source pins supplement existing verified Task outcomes; no new Learning engine or automatic promotion.",
+    "Actual PostgreSQL verifies current source visibility, original sensitivity and Human Foundation proposal admission, acceptance and reads.",
+    "Native deferred complete-graph checks, immutable source bindings, source-row deletion and C7 scrub Learning hypotheses/evaluations, including late INSERTs.",
+    "The existing Memory outbox erases native Learning proposals with flags disabled and company paused while independent verified outcomes survive.",
+    "Native retention consumes the original analytical freshness cutoff without rewriting immutable source timestamps.",
+    "The source picker uses native source identities; UI clears cached hypotheses on an observed access-loss response and selected pins on company switch."
+  ],
+  "limits": [
+    "No Chromium Learning case is qualified by this checkpoint; UI tests are explicit response contracts.",
+    "The retention test supplies the native cutoff; it is not a real-time expiry/deletion SLA qualification.",
+    "Current-source propagation through every remaining native domain owner and downstream Context consumer remains open; missing actual actor fails closed in integrated asset consumers.",
+    "Planning-outcome source pins, direct outcome-review-to-cycle links, native Routine cadence, action materialization, full source-family closure, cross-project Planning, provider conformance and hosted release gates remain open.",
+    "This source checkpoint is not whole-brief completion."
+  ]
+}

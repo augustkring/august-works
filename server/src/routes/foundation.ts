@@ -161,7 +161,7 @@ export function foundationRoutes(db: Db) {
     await assertFoundationEnabled();
     const companyId = req.params.companyId as string;
     await assertFoundationPermission(req, companyId, "foundation:read");
-    const items = await svc.list(companyId);
+    const items = await svc.list(companyId,req.actor);
     if (req.actor.type === "agent") {
       res.json(items.flatMap((item) => {
         const approved = approvedFoundationView(item);
@@ -217,7 +217,7 @@ export function foundationRoutes(db: Db) {
         query: query.q,
         limit: query.limit,
         scope: query.scope,
-      }),
+      },req.actor),
     );
   });
 
@@ -225,7 +225,7 @@ export function foundationRoutes(db: Db) {
     await assertFoundationEnabled();
     const companyId = req.params.companyId as string;
     await assertFoundationPermission(req, companyId, "foundation:read");
-    const result = await svc.get(companyId, req.params.foundationDocumentId as string);
+    const result = await svc.get(companyId, req.params.foundationDocumentId as string,req.actor);
     const visible =
       req.actor.type === "agent" && result ? approvedFoundationView(result) : result;
     if (!visible) {
@@ -244,7 +244,7 @@ export function foundationRoutes(db: Db) {
       await assertFoundationPermission(req, companyId, "foundation:read");
       const revisions = await svc.listRevisions(
         companyId,
-        req.params.foundationDocumentId as string,
+        req.params.foundationDocumentId as string,req.actor,
       );
       if (!revisions) {
         res.status(404).json({ error: "Foundation document not found" });
@@ -383,12 +383,12 @@ export function foundationRoutes(db: Db) {
       const companyId = req.params.companyId as string;
       assertBoard(req);
       await assertFoundationPermission(req, companyId, "foundation:read");
-      const foundation = await svc.get(companyId, req.params.foundationDocumentId as string);
+      const foundation = await svc.get(companyId, req.params.foundationDocumentId as string,req.actor);
       if (!foundation) {
         res.status(404).json({ error: "Foundation document not found" });
         return;
       }
-      res.json(await svc.listProposals(companyId, foundation.id));
+      res.json(await svc.listProposals(companyId, foundation.id,req.actor));
     },
   );
 

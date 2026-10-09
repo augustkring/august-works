@@ -1,0 +1,199 @@
+{
+  "reference": "SciPy 1.17.0 stats.binomtest (probability ordering) and stats.beta.ppf (Clopper-Pearson inversion), generated independently of native TypeScript implementation; synthetic mathematical vectors only.",
+  "srm": [
+    {
+      "n": 4,
+      "treatment": 0,
+      "probability": 0.5,
+      "pValue": 0.125
+    },
+    {
+      "n": 4,
+      "treatment": 2,
+      "probability": 0.5,
+      "pValue": 1.0
+    },
+    {
+      "n": 10,
+      "treatment": 8,
+      "probability": 0.5,
+      "pValue": 0.109375
+    },
+    {
+      "n": 10,
+      "treatment": 0,
+      "probability": 0.1,
+      "pValue": 0.6125795109999999
+    },
+    {
+      "n": 10,
+      "treatment": 3,
+      "probability": 0.3,
+      "pValue": 1.0
+    },
+    {
+      "n": 100,
+      "treatment": 30,
+      "probability": 0.3,
+      "pValue": 1.0
+    },
+    {
+      "n": 100,
+      "treatment": 50,
+      "probability": 0.3,
+      "pValue": 2.7720542263007482e-05
+    },
+    {
+      "n": 4000,
+      "treatment": 2000,
+      "probability": 0.5,
+      "pValue": 1.0
+    },
+    {
+      "n": 4000,
+      "treatment": 3900,
+      "probability": 0.5,
+      "pValue": 0.0
+    },
+    {
+      "n": 4000,
+      "treatment": 400,
+      "probability": 0.1,
+      "pValue": 1.0
+    },
+    {
+      "n": 4000,
+      "treatment": 2400,
+      "probability": 0.6,
+      "pValue": 1.0
+    },
+    {
+      "n": 4000,
+      "treatment": 3800,
+      "probability": 0.9,
+      "pValue": 1.1811657639733555e-30
+    }
+  ],
+  "interval": [
+    {
+      "n": 1,
+      "successes": 0,
+      "tailAlpha": 0.0125,
+      "lower": 0.0,
+      "upper": 0.9875
+    },
+    {
+      "n": 1,
+      "successes": 1,
+      "tailAlpha": 0.0125,
+      "lower": 0.0125,
+      "upper": 1.0
+    },
+    {
+      "n": 5,
+      "successes": 2,
+      "tailAlpha": 0.0125,
+      "lower": 0.03668898201290747,
+      "upper": 0.8856660255367991
+    },
+    {
+      "n": 20,
+      "successes": 10,
+      "tailAlpha": 0.00625,
+      "lower": 0.22427607137783034,
+      "upper": 0.7757239286221698
+    },
+    {
+      "n": 500,
+      "successes": 250,
+      "tailAlpha": 0.00625,
+      "lower": 0.4433601080711004,
+      "upper": 0.5566398919288997
+    },
+    {
+      "n": 4000,
+      "successes": 0,
+      "tailAlpha": 0.0001,
+      "lower": 0.0,
+      "upper": 0.002299936177446711
+    },
+    {
+      "n": 4000,
+      "successes": 1,
+      "tailAlpha": 0.0001,
+      "lower": 2.5001249770808336e-08,
+      "upper": 0.002935144367484955
+    },
+    {
+      "n": 4000,
+      "successes": 3999,
+      "tailAlpha": 0.0001,
+      "lower": 0.9970648556325151,
+      "upper": 0.9999999749987503
+    },
+    {
+      "n": 4000,
+      "successes": 4000,
+      "tailAlpha": 0.0001,
+      "lower": 0.9977000638225533,
+      "upper": 1.0
+    }
+  ],
+  "assignment": {
+    "reference": "Python stdlib HMAC-SHA256 over sorted canonical JSON and a 48-bit draw; synthetic fixed test key, never an instance credential.",
+    "keyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "companyId": "00000000-0000-4000-8000-000000000001",
+    "versionId": "00000000-0000-4000-8000-000000000002",
+    "probability": 0.5,
+    "units": [
+      {
+        "unitId": "00000000-0000-4000-8000-000000001000",
+        "arm": "treatment"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001001",
+        "arm": "control"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001002",
+        "arm": "control"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001003",
+        "arm": "treatment"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001004",
+        "arm": "treatment"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001005",
+        "arm": "treatment"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001006",
+        "arm": "control"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001007",
+        "arm": "treatment"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001008",
+        "arm": "control"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001009",
+        "arm": "treatment"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001010",
+        "arm": "treatment"
+      },
+      {
+        "unitId": "00000000-0000-4000-8000-000000001011",
+        "arm": "control"
+      }
+    ]
+  }
+}

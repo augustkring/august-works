@@ -1,0 +1,90 @@
+{
+  "checkpoint": "Native Skill Source loss fences actual consuming runs through the original Source and Memory owners",
+  "parentCommit": "8fe3b702ba7929be79e4b764a5fc26cc2deeb2fa",
+  "recordedAt": "2026-10-08T00:54:55.968068+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "6828b419d312b6d89390d922a9ac9574de84f64010aef1c5d9ca3475ca96e3a2"
+    },
+    {
+      "path": "packages/db/src/migrations/0431_native_skill_source_run_erasure.sql",
+      "sha256": "662fc415b171cb2d831d60d8c3dd6c3f15e7457ec685b6cea95248008657dd09"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0426_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0431_snapshot.json",
+      "sha256": "ece7d40e22019392c9ab795aafc41797f4e36c82f00bdd42d9a03715136e0d26"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "a8111a05bd091a7a7a66ebbd35e09fa7e4e8a0bda2aa40c3b269652669152c71"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "f0bc15bf2c418bc537f1715ec8494b237b603367f754137039430ad0fa4ba1a9"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "2476b8724b4ab8ab0b792e6ecc7d5be7ac51f89948e6c5942520e482bf5e4c40"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "6610bc291d68630247645dd90c5c864e71ec2e9f1236e13ca265dfb898e830df"
+    },
+    {
+      "path": "server/src/services/learning/skill-file-erasure.ts",
+      "sha256": "540473d77db7c1784b83d7e915540eafee0503b634bf9492487304d0a026635e"
+    },
+    {
+      "path": "server/src/services/memory/memory-jobs.ts",
+      "sha256": "9433c49d4c8adc8ea6335360fcaa76de827368a42bb1041c9304b4f234fd37d4"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "434a682d86fc7ae8ad82e606e79c76a4bbe15e897b702a6b6dff2b9b105b3058"
+    },
+    {
+      "path": "server/src/services/saas/company-purge.ts",
+      "sha256": "cd85dcef6a5802824858c6b7620f0e858d5fb0103a438c0831a7cad06c361b9d"
+    }
+  ],
+  "validation": {
+    "nativeRuntimeAndPostgresAndSnapshot": {
+      "tests": 621,
+      "files": 10,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-skill-source-run-final-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-skill-source-run-final-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-skill-source-run-final-migrations.log"
+    },
+    "parentWholeNativeProductionBuild": {
+      "commit": "e0324dd58d5d27c6bf6f65e92349a75c2a6e7c4e",
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-runtime-asset-erasure.log"
+    }
+  },
+  "qualified": [
+    "Actual Skill version deletion fences native consumers identified by runtime profile or immutable execution inventory",
+    "Actual Learning Source erasure fences consumers while the version row remains retained",
+    "Native run and Task admission reject Source loss even without analytical Roots",
+    "Original outbox erases private run/Task/Context copies and generated bundles with flags off/company paused",
+    "Independent accepted or Human-verified outcome records survive",
+    "Late native run payload publication is fenced by the original Source predicate"
+  ],
+  "limits": [
+    "Candidate preparation and persisted provider capability prerequisites are explicit software fixtures, not performed promotion/provider/Human trials",
+    "Historical usage/evaluation foreign keys may retain physical versions; actual Learning payload C7 is covered independently",
+    "Complete Orchestration verified Task document payload closure remains open",
+    "No historical orphan disposition, external provider/workspace copies, maximum-volume, hard latency, hosted backfill or whole-brief completion claim"
+  ]
+}

@@ -1,4 +1,6 @@
 import { publicChatTaskUrl } from "../chat-task-url.js";
+import {MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS,isManagementAnalyticalTool,executeManagementAnalyticalTool} from "./management-analytical-tools.js";
+import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
 import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent } from "../orchestration/native-tool-boundary.js";
 import type { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
@@ -110,6 +112,8 @@ type Binding = {
   connectorAssignments?: ConnectorAssignment[];
   assignedMcpTools?: Awaited<ReturnType<typeof createAssignedMcpTools>>;
   apiToolsEnabled?: boolean;
+  /** Server-derived native private-conversation opt-in, never tool input. */
+  managementToolsEnabled?: boolean;
   workMode?: "standard" | "planning" | "ask";
   workspaceRoot?: string;
   executionTargetKind?: "local" | "remote";
@@ -228,6 +232,7 @@ export class PaperclipRunnerToolAuthority {
     definitions.push(LIST_CHAT_ATTACHMENTS_TOOL_DEFINITION);
     definitions.push(REUSE_CHAT_ATTACHMENT_TOOL_DEFINITION);
     definitions.push(READ_CHAT_ATTACHMENT_TOOL_DEFINITION);
+    if(this.binding.managementToolsEnabled)definitions.push(...MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS);
     const connectionTools = [...RUNTIME_CONNECTION_TOOL_DEFINITIONS,
       ...(this.binding.connectorAssignments ?? []).flatMap((assignment) => assignment.tools)];
     const assignedTools = this.binding.assignedMcpTools?.definitions((tools) =>
@@ -305,7 +310,8 @@ export class PaperclipRunnerToolAuthority {
       call.tool !== READ_CURRENT_WAKE_COMMENTS_TOOL_NAME &&
       call.tool !== LIST_CHAT_ATTACHMENTS_TOOL_NAME &&
       call.tool !== REUSE_CHAT_ATTACHMENT_TOOL_NAME &&
-      call.tool !== READ_CHAT_ATTACHMENT_TOOL_NAME
+      call.tool !== READ_CHAT_ATTACHMENT_TOOL_NAME &&
+      !(this.binding.managementToolsEnabled&&isManagementAnalyticalTool(call.tool))
     ) {
       throw new Error("paperclip_runner_tool_not_advertised");
     }
@@ -319,6 +325,7 @@ export class PaperclipRunnerToolAuthority {
       throw new Error("paperclip_runner_tool_not_advertised");
     }
     const context = await this.#boundContext();
+    if(isManagementAnalyticalTool(call.tool))return executeManagementAnalyticalTool(this.db,this.binding.companyId,{type:"agent",source:"agent_jwt",companyId:this.binding.companyId,agentId:this.binding.agentId,runId:this.binding.runId,onBehalfOfUserId:context.run.responsibleUserId},call.tool,call.arguments);
     const input = record(call.arguments);
     if (call.tool === READ_CHAT_ATTACHMENT_TOOL_NAME) {
       const scope = this.binding.chatAttachmentReadScope;
@@ -682,6 +689,7 @@ export class PaperclipRunnerToolAuthority {
       }
     }
     this.binding.authoritySignal?.throwIfAborted();
+    await assertAnalyticalContextPayloadAccess(this.db,this.binding.companyId,{type:"agent",source:"agent_jwt",companyId:this.binding.companyId,agentId:this.binding.agentId,runId:this.binding.runId,onBehalfOfUserId:row.run.responsibleUserId},{issueId:this.binding.issueId});
     return row;
   }
 

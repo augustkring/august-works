@@ -1,0 +1,232 @@
+{
+  "checkpoint": "Mounted native Management review operator and historical cited presentation",
+  "parentCommit": "b4f14fdc03cf9f2ba5f8f0e7671f83dc0bd51f99",
+  "recordedAt": "2026-10-07T12:48:52.838962+00:00",
+  "sourceFiles": [
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "9d37ab71c7ba17b54245a9d157842258d7c5503d133e5bf437a5f7665943495d"
+    },
+    {
+      "path": "ui/src/components/Sidebar.tsx",
+      "sha256": "7c88f77fca20a9c7c69e53e666f4f7aed45129b027c1223bb3baf37ab540b714"
+    },
+    {
+      "path": "ui/src/components/StrategySourcePicker.tsx",
+      "sha256": "a6e02987634a7a841bd48c52f902209de61041e7fb16c25a91bc9e2e590bdeec"
+    },
+    {
+      "path": "tests/storybook-visual/management-reviews.config.ts",
+      "sha256": "b531e26234347386d277e7549d47e97b3e575a48d364a0dafc9144c8429b48f9"
+    },
+    {
+      "path": "tests/storybook-visual/management-reviews.spec.ts",
+      "sha256": "3a1784cbe86d720c9afb76060343a7b8f56609b39066b99cf1b4a0f1002f542b"
+    },
+    {
+      "path": "ui/src/api/management-reviews.ts",
+      "sha256": "90b891a36d2b5590b71cbd2016c9f964fbbc4c490b33b997dbd6b873d7625826"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewDefinitionForm.tsx",
+      "sha256": "2384b0ecd7244cee823c42b05c89f8e4d47a04bdaa695cc08b9d75e69eed54d7"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewResult.tsx",
+      "sha256": "391ae6bda8de63e786b380d5ef4a004ceb38d09f64ea00337ca802366ad18ec4"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewSourcePicker.tsx",
+      "sha256": "21fa380f3d807f96edc57e0684ba62aeead08e73c67385dd3f92581d4a5b4584"
+    },
+    {
+      "path": "ui/src/pages/ManagementReviews.test.tsx",
+      "sha256": "8ca88e6a28dddccb733c3685698dd0e40bc7b372a4a28701d36586a7f48f0152"
+    },
+    {
+      "path": "ui/src/pages/ManagementReviews.tsx",
+      "sha256": "6cc48f629390a7ab60ff8c13e1558879b22176c1409f7edcc3d20e5ea2d386e8"
+    },
+    {
+      "path": "ui/storybook/stories/management-review-fixtures.ts",
+      "sha256": "39808f23ed303908fffca3ee1a9672c8eb205076a639857e85dc7c72b9a23f85"
+    },
+    {
+      "path": "ui/storybook/stories/management-reviews.stories.tsx",
+      "sha256": "0f4c9dae32c5f4332087ee1ee58228225e451206153ed5d99227916e2bfe700f"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "operator-and-native-picker-regression",
+      "checks": 16,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-ui-tests-corrected.log",
+      "logSha256": "86ffcd5c1c4d601130ca13a4820495e2bc670ec869b4a64b8890ba8ef0aacc60"
+    },
+    {
+      "name": "ui-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-ui-types-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "token-gates",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-ui-tokens.log",
+      "logSha256": "4ace44276894c22596ef2d7c39115bb12eae33e08d100ee72e060ecd83331f69"
+    },
+    {
+      "name": "native-storybook",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-storybook.log",
+      "logSha256": "2a68dec240e776a3a5373bfd592f6d3db38564c3ea2592729d37f43ab20afd7b"
+    },
+    {
+      "name": "chromium-keyboard-wcag22-layout",
+      "checks": 24,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-browser-qualified.log",
+      "logSha256": "3a6d4461678a87f2a44647410538d2e0aa2a96bb3ca227c6873f52af45c2915b"
+    },
+    {
+      "name": "integrated-native-owner-build",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-build-b4f14fdc0.log",
+      "logSha256": "c7200d34bbfa3ef0c8b42d7afd6d6ce1b896f0a3c9d635d9f47adf376cbc5b8a"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-0a272--intervals-and-source-grade/management-prediction-light-1200.png",
+      "sha256": "2ba955f15d0c492dd1ada4420d62c51a5b1615d1b291c198988593b7f6bd1f6e",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-1cb71--intervals-and-source-grade/management-prediction-dark-1200.png",
+      "sha256": "1d4ca68a4b2c399afd129097c3718620e93151c63345887c7c09bc022002b4bb",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-1fb94-tations-and-human-due-dates/management-declarations-dark-1200.png",
+      "sha256": "22c555b0c894844acdf39e20b6333345aa3d77488a69d38bc12a8f026cf31024",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-2b1da-erves-cited-human-authority/management-current-light-1200.png",
+      "sha256": "3fd5f6808374c39b02c3ce220f2e982ac880818110d7259aff36e8cebbe9311e",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-32641-erves-cited-human-authority/management-retained-light-1200.png",
+      "sha256": "b1d8119120c8a46294d107e75ae35966dbb65b700a5da48a06af05e0eba5e84f",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-448b6-erves-cited-human-authority/management-disabled-light-1200.png",
+      "sha256": "a73f456bf4a2fd27c7ec1e8763d5ea629769462101ccdaba09f73f9c73306bd3",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-4f7a0-erves-cited-human-authority/management-published-dark-390.png",
+      "sha256": "a306902802cb1f4a931ce55eef86db064b9e70043c823badc6885b44cbe72e2e",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-520a8-erves-cited-human-authority/management-published-light-1200.png",
+      "sha256": "065a72d5445baf4934d510595983f79598ba45de727506b5bad1d505a4c43d50",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-5dd2a-erves-cited-human-authority/management-disabled-dark-390.png",
+      "sha256": "ecb653763daf82f673cc032af8477590c6d21634f54cca26b622f73e93880e8b",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-87359--intervals-and-source-grade/management-prediction-dark-390.png",
+      "sha256": "f614d3b097b5f856b781fbcdf05f57c642dc68ea40fe6ed826cd322df9a141b6",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-9c751-erves-cited-human-authority/management-published-dark-1200.png",
+      "sha256": "b80763d2e1e0e83b2902281a847b833703562bcd18126f354cfbee9c9c55f9e5",
+      "visuallyInspected": true
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-a8f0d-erves-cited-human-authority/management-retained-dark-1200.png",
+      "sha256": "077a87399ca05b1fa9266dbf540282b40c71e099a9c1803f28bd7518a39ae81f",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-c0a83-tations-and-human-due-dates/management-declarations-light-390.png",
+      "sha256": "845241236771afa9fcf245566e8259328124c97963619cc0ea25bac9f87257d6",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-cbd7c-tations-and-human-due-dates/management-declarations-light-1200.png",
+      "sha256": "81b8c9fb16ac87df9882bc90ff96eb9ae5b31c6650e41b8fa6b05cc22e84f3fa",
+      "visuallyInspected": true
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-d0d81-erves-cited-human-authority/management-disabled-light-390.png",
+      "sha256": "ab6dfa54c7fa8d8cdbca840dc16ae9070b15e5e7a678bff9c1d442362f1b0192",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-d216b-erves-cited-human-authority/management-disabled-dark-1200.png",
+      "sha256": "9b04395e080d0512f899402ae393e395fdc8f2c73a70b054fe7648310b519eb2",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-d382b-erves-cited-human-authority/management-current-light-390.png",
+      "sha256": "d398ca6a25d15b728092de0f793f4ac9d4c1ec12c6ad07da4f371f12280ae3bc",
+      "visuallyInspected": true
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-d778e-tations-and-human-due-dates/management-declarations-dark-390.png",
+      "sha256": "ad4bb4abc075e46c5e2e69fb0eea2fbf15b801dd30ccfb26c5f955fd5bf91dca",
+      "visuallyInspected": true
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-dbe66-erves-cited-human-authority/management-current-dark-1200.png",
+      "sha256": "1255c822e98882b01930a7885ef62a2138c23725db22fc8f7528485498b5c074",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-e48eb-erves-cited-human-authority/management-retained-dark-390.png",
+      "sha256": "7cf989546addf85d210143497c4debbddd75315ca9b3d91d9b55c32d28200fce",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-f4205-erves-cited-human-authority/management-published-light-390.png",
+      "sha256": "471ec102a07e8a3a2781d3b6ce39ecdc1d53fc6defff1f0fd98dde1bc0a0bc32",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-f4cba--intervals-and-source-grade/management-prediction-light-390.png",
+      "sha256": "3727c30813938985d81f63033118533141e9ea2f9effa36b7ce3ee6f73537451",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-f9869-erves-cited-human-authority/management-retained-light-390.png",
+      "sha256": "611107a2de7201c4de2cca8b97fad1cc686e1acea65a8aae5b795636d142fd2c",
+      "visuallyInspected": false
+    },
+    {
+      "path": "tests/storybook-visual/test-results/management-reviews/management-reviews-managem-ffa6e-erves-cited-human-authority/management-current-dark-390.png",
+      "sha256": "e9b9f1a3f930df193601ff81dde5008309200cd497bd5b7759b04525e9072aaa",
+      "visuallyInspected": false
+    }
+  ],
+  "limits": [
+    "Nine operator boundary checks plus seven unchanged Native analytical-picker regressions.",
+    "All 24 browser fixtures are cached synthetic presentation and abort every API call; they do not qualify live outcomes or business impact.",
+    "No official visual baseline is claimed.",
+    "Integrated build qualifies the exact preceding b4f14fdc03cf9f2ba5f8f0e7671f83dc0bd51f99 native owner commit; the mounted UI still needs its integrated build.",
+    "Target/trend/risk enrichment, complete dedicated source fixtures, Native Routines/Chat, analytical Learning bridge, cross-project Planning, providers and hosted full-release acceptance remain open."
+  ]
+}

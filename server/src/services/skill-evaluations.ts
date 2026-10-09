@@ -1,3 +1,7 @@
+import {assertLearningAssetCurrent} from "./learning/learning-assets.js";
+import {assertAnalyticalContextPayloadAccess} from "./analytical-context-authority.js";
+import {lockAnalyticalCompany} from "./analytical-privacy.js";
+import {lockMemoryPrivacy} from "./memory/memory-privacy.js";
 import { companySkillService } from "./company-skills.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { companySkills, companySkillVersions, companySkillEvalSuites, companySkillEvalCases, companySkillEvalRuns, agentExecutionManifests, companySkillEvalScores, companySkillTestRuns, companySkillUsageEvents, costEvents, heartbeatRuns, toolInvocations, type Db } from "@paperclipai/db";
@@ -44,11 +48,20 @@ export function skillEvaluationService(db: Db) {
     const query = tx.select().from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, id))).limit(1);
     const [row] = await (lock ? query.for("update") : query); if (!row) throw notFound("Skill not found"); return row;
   }
+  async function currentSources(reader:Db,actor:AuthorizationActor,companyId:string,evaluation:typeof companySkillEvalRuns.$inferSelect){
+    const [source]=await reader.execute<{erased:boolean}>(sql`select aw_skill_evaluation_source_erased(${companyId}::uuid,${evaluation.id}::uuid) as erased`);
+    if(source?.erased)throw forbidden("Skill evaluation Source access is unavailable",{code:"analytical_source_access_lost"});
+    for(const id of new Set([evaluation.candidateVersionId,evaluation.championVersionId].filter((id):id is string=>Boolean(id))))await assertLearningAssetCurrent(reader,companyId,"skill_version",id,actor);
+    const traces=await reader.select({issueId:companySkillTestRuns.issueId}).from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId,companyId),sql`(${companySkillTestRuns.evaluationContext}->>'evaluationRunId'=${evaluation.id} or exists(select 1 from company_skill_eval_scores s where s.company_id=${companyId}::uuid and s.eval_run_id=${evaluation.id}::uuid and s.test_run_id=${companySkillTestRuns.id}))`)).limit(1001);
+    if(traces.length>1000)throw conflict("The complete Skill evaluation Source exceeds its retained trace budget");
+    for(const trace of traces)await assertAnalyticalContextPayloadAccess(reader,companyId,actor,{issueId:trace.issueId});
+  }
   return {
     list: async (actor: AuthorizationActor, companyId: string, id: string) => {
       await authorize(actor, companyId, false, id); await skill(db, companyId, id);
       const suites = await db.select().from(companySkillEvalSuites).where(and(eq(companySkillEvalSuites.companyId, companyId), eq(companySkillEvalSuites.skillId, id))).orderBy(asc(companySkillEvalSuites.createdAt));
       const runs = await db.select().from(companySkillEvalRuns).where(and(eq(companySkillEvalRuns.companyId, companyId), eq(companySkillEvalRuns.skillId, id))).orderBy(asc(companySkillEvalRuns.createdAt));
+      for(const run of runs)await currentSources(db,actor,companyId,run);
       return { suites, runs };
     },
     createSuite: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof createSkillEvalSuiteSchema>) => {
@@ -85,10 +98,13 @@ export function skillEvaluationService(db: Db) {
     start: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof createSkillEvalRunSchema>) => {
       await authorize(actor, companyId, true, id); const input = createSkillEvalRunSchema.parse(raw);
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
         const row = await skill(tx, companyId, id, true);
         if (row.activeVersionId !== input.championVersionId || input.candidateVersionId === input.championVersionId) throw conflict("Compare a challenger against the current champion");
         const [candidate] = await tx.select().from(companySkillVersions).where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, id), eq(companySkillVersions.id, input.candidateVersionId))).limit(1);
         if (!candidate || candidate.visibility !== "company" || !["candidate", "validated"].includes(candidate.state)) throw conflict("Evaluation requires a shared immutable candidate");
+        await assertLearningAssetCurrent(tx,companyId,"skill_version",candidate.id,actor);
+        if(input.championVersionId)await assertLearningAssetCurrent(tx,companyId,"skill_version",input.championVersionId,actor);
         const [suite] = await tx.select().from(companySkillEvalSuites).where(and(eq(companySkillEvalSuites.companyId, companyId), eq(companySkillEvalSuites.skillId, id), eq(companySkillEvalSuites.id, input.suiteId))).limit(1);
         if (!suite) throw notFound("Evaluation suite not found");
         const policy = skillPromotionPolicySchema.parse(row.promotionPolicy);
@@ -100,9 +116,11 @@ export function skillEvaluationService(db: Db) {
     observe: async (actor: AuthorizationActor, companyId: string, id: string, evalRunId: string, raw: z.infer<typeof attachSkillEvalObservationSchema>) => {
       await authorize(actor, companyId, true, id); const input = attachSkillEvalObservationSchema.parse(raw);
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);
         const row = await skill(tx, companyId, id, true);
         const [evaluation] = await tx.select().from(companySkillEvalRuns).where(and(eq(companySkillEvalRuns.companyId, companyId), eq(companySkillEvalRuns.skillId, id), eq(companySkillEvalRuns.id, evalRunId))).limit(1).for("update");
         if (!evaluation || evaluation.status !== "running") throw conflict("A running evaluation is required");
+        await currentSources(tx,actor,companyId,evaluation);
         if (input.trial >= evaluation.trials) throw conflict("Observation is outside the pinned trial set");
         const versionId = input.arm === "candidate" ? evaluation.candidateVersionId : evaluation.championVersionId;
         if (!versionId) throw conflict("This evaluation has no champion arm");

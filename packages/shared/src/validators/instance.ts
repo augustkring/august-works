@@ -1,3 +1,4 @@
+import { v8FeatureFlagShape } from "../v8-feature-flags.js";
 import { v6FeatureFlagShape } from "../v6-feature-flags.js";
 import { v7FeatureFlagShape } from "../v7-feature-flags.js";
 import { v5FeatureFlagShape } from "../v5-feature-flags.js";
@@ -46,6 +47,7 @@ export const instanceExperimentalSettingsSchema = z.object({
   ...v5FeatureFlagShape,
   ...v6FeatureFlagShape,
   ...v7FeatureFlagShape,
+  ...v8FeatureFlagShape,
   enableEnvironments: z.boolean().default(false),
   enableNativeRunner: z.boolean().default(true),
   enableManagedSandboxOnly: z.boolean().default(false),

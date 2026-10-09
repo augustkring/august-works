@@ -1,3 +1,4 @@
+import {createAutomationArtifactsApi} from "@/api/automationArtifacts";
 import { Activity, createContext, useContext, useMemo, type ComponentType } from "react";
 import { useIsFetching, useQuery } from "@tanstack/react-query";
 import { useAccountIdentity } from "@/api/companies-query";
@@ -22,6 +23,7 @@ function createScope(principalId: BoardPrincipal) {
   const client = createAccountClient(principalId);
   return {
     principalId,
+    automationArtifactsApi:createAutomationArtifactsApi(client),
     foundationBootstrapApi: createFoundationBootstrapApi(client),
     cognitiveMemoryApi: createCognitiveMemoryApi(client),
     derivedMemoryApi: createDerivedMemoryApi(client),
@@ -58,6 +60,7 @@ export function withV7AccountScope(Page: ComponentType) {
       retry: false,
     });
     const principalId: BoardPrincipal | null = !identity.settled || identity.failed ? null
+      : identity.localImplicit ? "local-board"
       : identity.userId ? `user:${identity.userId}`
       : health.isSuccess && health.data.deploymentMode === "local_trusted" ? "local-board" : null;
     const scope = useMemo(() => principalId ? createScope(principalId) : null, [principalId]);

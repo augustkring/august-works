@@ -1,0 +1,94 @@
+{
+  "checkpoint": "Native private conversation analytical read principal",
+  "parentCommit": "4a0c7dae87d644858585d7557224406b106e6349",
+  "recordedAt": "2026-10-07T15:02:28.959231+00:00",
+  "sourceFiles": [
+    {
+      "path": "server/src/services/business-experiments/service.ts",
+      "sha256": "ca0db0e6897d52a3daeda6ae6b8bd44511d787ad2d97319eb2b293ed08ded518"
+    },
+    {
+      "path": "server/src/services/business-forecasting/service.ts",
+      "sha256": "bfff7e28922c1d0eb3b39e68c871c6d8e2bd7bdf9efb4e6bea4ee6fd00ebc4d9"
+    },
+    {
+      "path": "server/src/services/business-metrics/service.ts",
+      "sha256": "e7f013300323a434eec36517886337ce27ebf6cabdd5a4616df67c35c5c5d9d5"
+    },
+    {
+      "path": "server/src/services/business-scenarios/service.ts",
+      "sha256": "516932b979a0538b329517b241985e36c7e5b171c0cc8dc90815bbf42be3ad24"
+    },
+    {
+      "path": "server/src/services/causal-claims/service.ts",
+      "sha256": "e3990a976f4d85d883643e3337e0f8a6d342b83cce3061239758477ccc2b3a3b"
+    },
+    {
+      "path": "server/src/services/decision-intelligence.ts",
+      "sha256": "d9b1b9bd80db27c583864642cad4d899cbfe22318c15257647ed7c82f6e65705"
+    },
+    {
+      "path": "server/src/services/process-analysis.ts",
+      "sha256": "a2bd3d047101a63c06a4c73cd39cdfc17e5bc99238c6aaad76f172b40edbe8de"
+    },
+    {
+      "path": "server/src/services/process-findings.ts",
+      "sha256": "6dd0b6690c64ca50476a2a5852c64a784a5a88083e1cceb2142519b3fb0a7948"
+    },
+    {
+      "path": "server/src/services/analytical-reader.ts",
+      "sha256": "c6629cf8ff84d73bd658b86bd92bb97cff18314520d1372495e9f97de87c3fe7"
+    },
+    {
+      "path": "server/src/__tests__/analytical-reader.integration.test.ts",
+      "sha256": "c491c5d8c73ff385811ff704e8fd799c6c83481a0ba43cd51e14bac2506d1b9b"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "final-native-metric-api",
+      "checks": 50,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-reader-final-native-qualified.log",
+      "logSha256": "a6943be835c472fcb9a581af786de0e0e8793a9a4d2dfd4ce8582ad726784773"
+    },
+    {
+      "name": "native-process-boundary",
+      "checks": 49,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-reader-qualified-native.log",
+      "logSha256": "6b96f3c1e445089f36310263e414769cbd77c804faab3da33f516e1f8b160d12"
+    },
+    {
+      "name": "final-server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-analytical-reader-final-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "integrated-parent",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-build-analytical-history.log",
+      "logSha256": "c05bb646b6be1f13e3574d6516b08f4ee7e8089965ef8739136e1265b3b7583e"
+    }
+  ],
+  "coverage": [
+    "Actual agent-JWT native run, conversation owner, assignment/execution pointer, current agent, current user membership and active management Chat rollout are mandatory.",
+    "External channel conversations and restricted external question responses are excluded. No board principal, Local Board fallback or human permission override is constructed.",
+    "Native analytical source owners retain source flags/purpose/ACL and agent \u00d7 responsible-human checks; human publication, preparation, choice and experiment/causal interpretations stay human-only.",
+    "Agent metric list/detail disclose admitted published definitions, excluding unpublished metrics and later human draft prose.",
+    "Agent-derived observation/request audits retain the agent identity. Hidden contributing tasks cause whole-population abstention and transaction rollback.",
+    "Exact 4a0c7dae8 parent integrated production build passes."
+  ],
+  "correctedQualification": [
+    "First new reader fixture omitted the native conversationState required by the canonical issue identity constraint; the actual guard correctly rejected it. Final fixture uses active native conversation state without changing the owner constraint."
+  ],
+  "limits": [
+    "Final 50 native/API checks cover final metric metadata filtering. The preceding 49-check run additionally covers Process owner boundaries before the isolated metadata filter.",
+    "Typed SDK management tool dispatch and source retention/erasure inheritance are the next implementation steps; this checkpoint alone does not complete Management Chat.",
+    "Scenario artifact-backed agent reads remain conservative until their canonical artifact principal is wired and qualified.",
+    "Whole-brief work, native Routines, analytical Learning, cross-project Planning, optional providers and operational qualification remain open."
+  ]
+}

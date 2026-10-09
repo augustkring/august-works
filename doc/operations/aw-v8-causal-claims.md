@@ -1,0 +1,105 @@
+# Native causal evidence
+
+This checkpoint specifies strict human causal questions, model graphs,
+assumptions, exact registered experiment references and conditional interpretation.
+The persistent native owner now admits exact signed experiment analysis and human
+interpretation receipts. The typed operator UI is qualified separately; Native Decision consumption is qualified separately; Learning/Planning consumers
+and optional provider qualification remain open. All qualification fixtures are software evidence only.
+
+The declared sequence is question → human model/assumptions → identification →
+estimation or abstention → robustness → conditional interpretation. Graph edges
+are human assumptions, with bounded unique nodes/edges and acyclicity. No model
+or public caller can approve them as causal truth or supply copied effects,
+confidence probabilities, provider qualification or source hashes.
+
+The native interpreter consumes only an internally admitted exact experiment
+result. It preserves the original registered primary endpoint, meaningful-effect
+threshold, population, period and conservative interval. It does not recompute a
+new analysis or choose a favorable endpoint. Changes to those pins, missing data,
+unknown/violated assumptions, unavailable current source qualification or quality
+gates withhold estimation. Unsupported observational/quasi-experimental methods
+return inconclusive with no estimate rather than manufacturing identification.
+
+Evidence grades retain design class separately from result status. Randomized
+source evidence remains conditional on human interference/measurement/population
+assumptions and native status as an operational proxy. Robustness distinguishes
+registered SRM, pretreatment balance, complete outcome/exposure receipts and safety
+bounds. Sensitivity is unknown and independent provider refutations have not run.
+Support requires the registered meaningful primary result and every safety bound;
+detected harm cannot become a supported winner. Refutation concerns the exact
+registered minimum meaningful benefit, not proof of zero effect. No verified
+business/task outcome, intervention delivery, execution or policy authority follows.
+
+The native four-table owner records immutable versions, separate human review and
+one fixed registered-primary interpretation run per version. Commands use company
+and account authority, expected revisions and existing analytical purpose and
+Memory policies. Database guards require complete material, exact tenant-bound
+source/review pins and the original registered effect/interval before a supported
+run. A changed metric publication preserves history but blocks new reliance.
+
+Version admission signs the complete captured lineage with the existing native
+signing authority. Experiment inheritance includes recorded assignment/final
+source ancestry and current native project ancestry at the new downstream capture.
+Subsequent source changes retain the original capture. Native erasure of any
+captured source removes dependent causal prose, graph, review and run history;
+revocation remains available with experimental flags disabled or the company
+paused. The same current-ancestry correction applies to new decision captures.
+
+PostgreSQL qualification exercises actual owner transitions, revision races,
+immutable receipts, deferred completeness, cross-company denial, strict public
+commands, source erasure and native company purge. An explicitly synthetic balanced
+experiment fixture also traverses the real experiment → human interpretation →
+causal review → conditional supported result, copying the original primary
+interval. This demonstrates software behavior, not collected trial evidence or
+verified business impact. No independent sensitivity or provider refutation has
+run, and the full V8 release remains open.
+
+The operator workbench supports typed questions, exact native outcome/experiment
+pickers, a bounded node/arrow editor, explicit unknown/assumed/violated human
+conditions, separate acknowledged review, one interpretation, immutable history
+and source revalidation warnings. Revoked claims withhold the dependent result.
+Account/source/Memory changes clear sensitive drafts and source namespaces. The
+independent administrator revocation endpoint discloses only bounded identities,
+revision and status with no source graph, question, metric or result prose.
+
+All 40 Chromium presentation checks pass in light/dark at 390/1200 pixels, including
+WCAG 2.2 AA, keyboard interaction and no horizontal overflow; screenshots are
+synthetic cached presentations with API access aborted, not a visual release
+baseline or operational source qualification. The current workbench/experiment
+UI selection has 23 passing tests.
+
+Qualification correction: earlier test fixtures used an empty experimental
+settings patch when intending to disable rollout. That API preserves existing
+flags. The shared fixture now explicitly writes and verifies all V8 flags false.
+The affected causal/experiment/outcome-review erasure, stopping, revocation and
+purge suites were rerun: 47 PostgreSQL tests and 16 API contracts pass under the
+corrected fixtures. This supersedes earlier flags-off claims for those checks;
+the original logs remain available.
+
+Native prospective Decision evidence now accepts an exact causal run, claim
+version and human graph review. The owner replays signed model/review/run receipts
+and registered experiment source before returning an internally captured result;
+public proposals carry only identities. Dedicated tenant-bound pins, immutable
+material guards and deferred completeness bind the exact parent review and run.
+Captured graph, human assumptions, interval, evidence design and abstention remain
+separate from actual measured outcomes and the canonical choice authority.
+
+New capture also inherits every original causal source edge and current native
+experiment ancestry. Erasure removes the complete dependent Decision context
+prose and pins, preserving already chosen canonical Decisions and their effects.
+Human model amendment or revocation retains original authorized historical bytes
+with explicit revalidation, blocks new preparation/choice using that source and
+allows a reasoned replacement context. Revocation is not privacy erasure.
+
+Qualification includes actual PostgreSQL abstention and a synthetic balanced
+experiment → human interpretation → reviewed causal support → prospective
+Decision capture, copying the original registered interval. New reliance never
+turns this proxy into a verified task/business outcome or execution permission.
+UI captures expose the graph/review and reuse the native conditional result view.
+The completed source checkpoint still does not establish independent sensitivity,
+DoWhy conformance, Learning/Planning integration or a complete hosted release.
+
+A captured model owner losing current company membership also marks the original
+authorized Decision capture for revalidation and blocks new reliance. Historical
+source hashes and human prose remain unchanged; this is distinct from source
+erasure, which removes the complete dependent analytical context.

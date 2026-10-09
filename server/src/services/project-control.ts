@@ -1,4 +1,6 @@
+import {assertLearningCandidateAnalyticalSources} from "./learning/learning-analytical-sources.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { lockAnalyticalCompany } from "./analytical-privacy.js";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { agents, approvals, companyMemberships, goals, issues, issueApprovals, issueRelations, projects, projectMilestones, projectRoadmapProposals, projectScheduleBaselines, type Db } from "@paperclipai/db";
 import { updateMilestoneSchema, createMilestoneSchema, roadmapPolicySchema, roadmapProposalSchema, taskForecastPatchSchema, type ProjectRoadmap, type RoadmapTask } from "@paperclipai/shared";
@@ -44,7 +46,10 @@ export function projectControlService(db: Db) {
     const milestones = (await tx.select().from(projectMilestones).where(and(eq(projectMilestones.companyId, companyId), eq(projectMilestones.projectId, projectId))).orderBy(asc(projectMilestones.sortOrder), asc(projectMilestones.id)).limit(500)).map((m) => ({ id: m.id, name: m.name, description: m.description, status: m.status as ProjectRoadmap["milestones"][number]["status"], targetDate: m.targetDate, plannedStartAt: iso(m.plannedStartAt), plannedEndAt: iso(m.plannedEndAt), completedAt: iso(m.completedAt), updatedAt: m.updatedAt.toISOString() }));
     const allowedIds = new Set(ids);
     const baselines = (await tx.select().from(projectScheduleBaselines).where(and(eq(projectScheduleBaselines.companyId, companyId), eq(projectScheduleBaselines.projectId, projectId))).orderBy(desc(projectScheduleBaselines.createdAt)).limit(50)).map((b) => ({ id: b.id, name: b.name, createdAt: b.createdAt.toISOString(), snapshot: { tasks: b.snapshot.tasks.filter((t) => allowedIds.has(t.id)), milestones: b.snapshot.milestones, dependencies: b.snapshot.dependencies.filter((e) => allowedIds.has(e.issueId) && allowedIds.has(e.relatedIssueId)) } }));
-    const proposals = (await tx.select().from(projectRoadmapProposals).where(and(eq(projectRoadmapProposals.companyId, companyId), eq(projectRoadmapProposals.projectId, projectId))).orderBy(desc(projectRoadmapProposals.createdAt)).limit(100)).filter((p) => p.patch.changes.every((c) => allowedIds.has(c.issueId))).map((p) => ({ id: p.id, reason: p.reason, risk: p.risk, status: p.status, patch: p.patch, createdAt: p.createdAt.toISOString() }));
+    // Analytical proposals can inherit source authority outside the task list.
+    // Their governed owner admits source prose; the V5 view cannot project it.
+    const proposals = (await tx.select().from(projectRoadmapProposals).where(and(eq(projectRoadmapProposals.companyId, companyId), eq(projectRoadmapProposals.projectId, projectId), isNull(projectRoadmapProposals.planningManifestId))).orderBy(desc(projectRoadmapProposals.createdAt)).limit(100)).filter((p) => p.patch.changes.every((c) => allowedIds.has(c.issueId))).map((p) => ({ id: p.id, reason: p.reason, risk: p.risk, status: p.status, patch: p.patch, createdAt: p.createdAt.toISOString() }));
+    for(const proposal of proposals)await assertLearningCandidateAnalyticalSources(tx,companyId,"project",proposal.id,actor);
     const waitingApprovals = ids.length ? await tx.select({ issueId: issueApprovals.issueId }).from(issueApprovals)
       .innerJoin(approvals, and(eq(approvals.companyId, companyId), eq(approvals.id, issueApprovals.approvalId), eq(approvals.status, "pending")))
       .where(and(eq(issueApprovals.companyId, companyId), inArray(issueApprovals.issueId, ids))).limit(5001) : [];
@@ -115,6 +120,7 @@ export function projectControlService(db: Db) {
     propose: async (actor: AuthorizationActor, companyId: string, projectId: string, raw: z.infer<typeof roadmapProposalSchema>, parentPublications?: ActivityPublication[]) => {
       const input = roadmapProposalSchema.parse(raw);
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
         const row = await project(tx, actor, companyId, projectId, true), policy = roadmapPolicySchema.parse(row.roadmapPolicy ?? {});
         if (row.updatedAt.toISOString() !== input.expectedProjectUpdatedAt) throw conflict("Project changed; refresh before proposing");
         const inspected = await inspectChanges(tx, actor, companyId, projectId, input, policy);
@@ -124,15 +130,19 @@ export function projectControlService(db: Db) {
         await logActivity(tx, { companyId, actorType: actor.type === "agent" ? "agent" : "user", actorId: actor.agentId ?? v5HumanActorId(actor), action: autoApply ? "project.low_risk_plan_applied" : "project.roadmap_proposed", entityType: "project", entityId: projectId, details: { proposalId: proposal!.id, risk: inspected.risk, changedTaskIds: input.changes.map((c) => c.issueId) } }, publications); return proposal!;
       }, parentPublications);
     },
-    review: async (actor: AuthorizationActor, companyId: string, projectId: string, proposalId: string, accept: boolean, rationale: string) => {
+    review: async (actor: AuthorizationActor, companyId: string, projectId: string, proposalId: string, accept: boolean, rationale: string, parentPublications?: ActivityPublication[]) => {
       const userId = v5HumanActorId(actor); if (rationale.trim().length < 10 || rationale.length > 4000) throw unprocessable("Review rationale must contain 10–4000 characters");
       if (accept) {
         const { workSignalService } = await import("./work-signals/work-signal-service.js");
         await workSignalService(db).validateProposal(actor, companyId, proposalId);
       }
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx, companyId);
         await lockMemoryPrivacy(tx, companyId);
+        await assertLearningCandidateAnalyticalSources(tx,companyId,"project",proposalId,actor);
         if (accept) {
+          const { inspectCurrentProjectPlanningProposal } = await import("./adaptive-planning/project-owner.js");
+          await inspectCurrentProjectPlanningProposal(tx, actor, companyId, projectId, proposalId);
           const { workSignalService } = await import("./work-signals/work-signal-service.js");
           await workSignalService(db).pinProposalSource(tx, actor, companyId, proposalId);
         }
@@ -146,8 +156,12 @@ export function projectControlService(db: Db) {
         const status = stale ? "stale" : accept ? "accepted" : "rejected";
         if (status === "accepted") { const inspected = await inspectChanges(tx, actor, companyId, projectId, proposal.patch, roadmapPolicySchema.parse(row.roadmapPolicy ?? {})); for (const change of inspected.prepared) await tx.update(issues).set({ ...change.patch, updatedAt: new Date() }).where(eq(issues.id, change.row.id)); await tx.update(projects).set({ updatedAt: new Date() }).where(eq(projects.id, projectId)); }
         const [reviewed] = await tx.update(projectRoadmapProposals).set({ status, reviewedByUserId: userId, reviewRationale: rationale, updatedAt: new Date() }).where(eq(projectRoadmapProposals.id, proposalId)).returning();
-        await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: `project.roadmap_${status}`, entityType: "project", entityId: projectId, details: { proposalId, changedTaskIds: proposal.patch.changes.map((c) => c.issueId) } }, publications); return reviewed!;
-      });
+        await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: `project.roadmap_${status}`, entityType: "project", entityId: projectId, details: { proposalId, changedTaskIds: proposal.patch.changes.map((c) => c.issueId) } }, publications);
+        // Rejection needs planning authority, not inherited analytical disclosure.
+        // Returning the raw row would expose copied evidence through the V5 API.
+        if (reviewed!.planningManifestId) return { id: reviewed!.id, companyId, projectId, status: reviewed!.status, updatedAt: reviewed!.updatedAt };
+        return reviewed!;
+      }, parentPublications);
     },
     forecast: async (actor: AuthorizationActor, companyId: string, projectId: string, issueId: string, raw: z.infer<typeof taskForecastPatchSchema>) => {
       await assertV5Enabled(db, "project_forecast_v5"); const input = taskForecastPatchSchema.parse(raw);

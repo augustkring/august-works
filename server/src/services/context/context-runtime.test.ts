@@ -71,6 +71,7 @@ describe("fresh native governed context", () => {
       companyId: baseInput.companyId,
       agentId: baseInput.agentId,
       responsibleUserId: "user-1",
+      enforceResponsibleUserIntersection: true,
       runId: baseInput.runId,
       issueId: baseInput.issueId,
       projectId: baseInput.projectId,

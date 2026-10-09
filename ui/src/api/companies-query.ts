@@ -73,9 +73,9 @@ const sessionQueryOptions = {
  * So: settled on success only. A failed session lookup leaves the list unfetched
  * until the query recovers, which it does on the next refetch.
  */
-export function useAccountIdentity(): { userId: string | null; settled: boolean; failed: boolean } {
+export function useAccountIdentity(): { userId: string | null; localImplicit: boolean; settled: boolean; failed: boolean } {
   const { data: session, isSuccess, isError } = useQuery(sessionQueryOptions);
-  return { userId: session?.user.id ?? null, settled: isSuccess, failed: isError };
+  return { userId: session?.user.id ?? null, localImplicit: session?.session.localImplicit === true, settled: isSuccess, failed: isError };
 }
 
 /**

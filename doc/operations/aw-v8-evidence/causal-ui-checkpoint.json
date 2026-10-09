@@ -1,0 +1,360 @@
+{
+  "checkpoint": "Typed human causal workbench and independent revocation; corrected explicit V8 rollout-off fixtures",
+  "parentCommit": "3adc098db6bbed7cae9709d8dbdff221e6e545c2",
+  "recordedAt": "2026-10-07T09:59:50.125816+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-causal-claims.md",
+      "sha256": "9b535f9bbb62d81c0c0616befd793ed82c6fdc70d8517f4efdac0eb8232844b2"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-3adc098.json",
+      "sha256": "182a75c6b07965a9da514fb165d3197c834507b169d43dc3adbbf3d9f0046e54"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "fc7086f828ab99351933003f0a137812b9326f8e14810bc60c60a2c0fbf638a7"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+      "sha256": "ba37d8e1759927fe3ac669da040bcd7b86167fd949443abc2565fdf35ab1342a"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-recording.integration.test.ts",
+      "sha256": "097696b63400c9e46b0369c7ac7a0a216fefa0b69c5e433e05a354905e1ceb92"
+    },
+    {
+      "path": "server/src/__tests__/causal-claims.integration.test.ts",
+      "sha256": "d0200e1618751ccef6e64afe0ca08b6147de4a0089be5b266d492f5fb051df8b"
+    },
+    {
+      "path": "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
+      "sha256": "ae5cc914aa438668e4b6164a5e83632e18156d8c053ac813503d3b18d1c4524c"
+    },
+    {
+      "path": "server/src/__tests__/helpers/v8-rollout.ts",
+      "sha256": "b372713a6ba185199b1016219df8949a260067094e0073b16d8eb3d65037a910"
+    },
+    {
+      "path": "server/src/routes/causal-claims.ts",
+      "sha256": "83c734b33eb9edd40cf171651e4619a0b1d3905c823fa7aa491aef839e43c0b9"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "b966047ab9bb856a3901faaa66a32fb03b5efaa8b51e29eaf3351027f73969de"
+    },
+    {
+      "path": "server/src/services/causal-claims/service.ts",
+      "sha256": "58b851f8b7bd4b9aee51500baad46c6fdae849413ffa68970cf1a6eec8596f83"
+    },
+    {
+      "path": "tests/storybook-visual/causal-claims.config.ts",
+      "sha256": "b3449b5aaa6bbca242b5e211f5119f3d2aaad8ab6608a89676594e17d6d9eb8d"
+    },
+    {
+      "path": "tests/storybook-visual/causal-claims.spec.ts",
+      "sha256": "9f8a0139189cd8c161197f7641b3a255573710320ce678347b697969d7e22c2a"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "3f335b22f1c60bb32ce9fdd39c040e95c960f5da94c2ac8a016001ad40747bf7"
+    },
+    {
+      "path": "ui/src/api/causal-claims.ts",
+      "sha256": "1eb1820fa91318ae176436cd01fc4b3afef9785203f2dd81dc038ea2a61dbb22"
+    },
+    {
+      "path": "ui/src/components/CausalClaimDefinitionForm.tsx",
+      "sha256": "06237e5bb610d6850cd048ea0322bd6080aa2c297bb5e2b748a54f8d0ce44ade"
+    },
+    {
+      "path": "ui/src/components/CausalClaimResult.tsx",
+      "sha256": "0cf6bd1088eeaf6f5f6942b9d17ef867a7ba1ef10aa09aeb8f473a7a41c7b584"
+    },
+    {
+      "path": "ui/src/components/CausalClaimSafetyControls.tsx",
+      "sha256": "cfad4d3cb16589a67316f0c3f3f20903ab740a9c00490cb96e43d9e6cb1955f0"
+    },
+    {
+      "path": "ui/src/components/CausalExperimentPicker.tsx",
+      "sha256": "4d24e157d8541fa559883a344e882be01c2f8d1602c670645a82180641d626f5"
+    },
+    {
+      "path": "ui/src/components/CausalGraphEditor.tsx",
+      "sha256": "b36dde65eab777cc3c5af8214b60b67515eb35c4a043f380f69b4aeec380274c"
+    },
+    {
+      "path": "ui/src/components/Sidebar.tsx",
+      "sha256": "8f5e64929fcb739a5bdf43f00a09bdae6730298e785777bc3816578f847945a8"
+    },
+    {
+      "path": "ui/src/components/causal-claim-draft.ts",
+      "sha256": "8239deb7a8a5deb4bb83470cc33e5ebefd66d4b7e42d06169f82defedc24e1ce"
+    },
+    {
+      "path": "ui/src/pages/CausalClaims.test.tsx",
+      "sha256": "b3c4d437dacdbfcca5ab8e79edd688d84e1f2ed2ea4936a65a7de1a78b63a712"
+    },
+    {
+      "path": "ui/src/pages/CausalClaims.tsx",
+      "sha256": "443fccbef210c7b4c4f5026b5151a7234853394f31b8a4c8b8b07126f433bb9f"
+    },
+    {
+      "path": "ui/storybook/stories/causal-claim-fixtures.ts",
+      "sha256": "19d32da29e65da4e0842acac220b8405c8c2e29a0edf5ec46fe9416fa5c74c00"
+    },
+    {
+      "path": "ui/storybook/stories/causal-claims.stories.tsx",
+      "sha256": "8468072c5a72fd0d19307e29404f85903f37d44a12540d1b2a647f1602f7d9e2"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "postgresql_and_openapi",
+      "checks": 63,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-ui-erasure-rollout.log",
+      "logSha256": "fa9f6971688e879fe84f78c62317a161950e64ad1859b36f2e9246d795cd506e"
+    },
+    {
+      "name": "causal_and_experiment_operator",
+      "checks": 23,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-ui-tests-final.log",
+      "logSha256": "507cb1100b5afed5d8b9e936fea365f9b863e12d52c2f4ecc6bdec8f00daee64"
+    },
+    {
+      "name": "ui_types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-ui-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "server_types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-ui-server-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "native_tokens",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-ui-token-gates.log",
+      "logSha256": "ff43742bf3756e1429f51a52fc57742b36945f75a24d204f689c75f2be972533"
+    },
+    {
+      "name": "storybook",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-ui-storybook-final.log",
+      "logSha256": "0f75dbfeff8765fe73e5f0b779687801ac9bff93b3b6520b2b38e2618e61b4a0"
+    },
+    {
+      "name": "chromium_wcag22aa_keyboard_mobile_desktop_light_dark",
+      "checks": 40,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-ui-browser.log",
+      "logSha256": "e830ac220498a9bc9d0f19f900c010045d2fd7fc9bd46f044d3bc18ea372dde5"
+    }
+  ],
+  "distinctPostgresqlTests": 47,
+  "browserEvidence": {
+    "apiAccess": "aborted",
+    "officialVisualBaseline": "not_available",
+    "screenshots": [
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-indep-280a2-loses-only-control-metadata/causal-revocation-light-1200.png",
+        "sha256": "c14b7951ba60309977cf937f9fc1a5f5cb7b9eefb70e57d4443acf81e320f25b"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-indep-90bb3-loses-only-control-metadata/causal-revocation-dark-1200.png",
+        "sha256": "ff9bcd3914aacd29d099748f822dc5ec74f2a7642376901c3392bc11618dde7a"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-indep-ed79c-loses-only-control-metadata/causal-revocation-dark-390.png",
+        "sha256": "90fbfc4de80105774d61120db4877f451c1ed46e317a7c7db3b4c555fa139c8d"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-indep-f8ed9-loses-only-control-metadata/causal-revocation-light-390.png",
+        "sha256": "2c49e7afb52538c133e5f6e1764287adb1bde386505bc8105a7d9ddb1cda575d"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-06cba-nd-source-reliance-distinct/causal-model-revoked-light-390.png",
+        "sha256": "bab87b0555aa3fafd0a057e509bb39cc40413b7c0964188e7a97848ed2c5d3fb"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-0756f-nd-source-reliance-distinct/causal-model-revoked-dark-390.png",
+        "sha256": "6ae7db5b30cc28873ac539a3a674f2ed97996edfcaa858d049979a07ca7f58cd"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-238d3-nd-source-reliance-distinct/causal-model-reviewed-light-390.png",
+        "sha256": "1c376dcbc7e9a9e68bebbc04f66930bc5ef7917fee6a23e1d6a84954bf189605"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-28a75-nd-source-reliance-distinct/causal-model-retained-light-390.png",
+        "sha256": "9830cfcefa6ded661dcd46d8408db5f213ed0441b6c1abcd67e21fd4e61cc121"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-2add2-nd-source-reliance-distinct/causal-model-retained-light-1200.png",
+        "sha256": "065f4647df617f8e6530112ca287b96a6707d6e2238fb18af2727baed20ee6fd"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-36c9c-nd-source-reliance-distinct/causal-model-revoked-dark-1200.png",
+        "sha256": "0ac5a318bf411dbee7292d714d2da5e8b0194c21322872f1d139b046ad93c5b0"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-611c0-nd-source-reliance-distinct/causal-model-draft-dark-390.png",
+        "sha256": "8bd3b86bfd6b11f659651298b9c8edb9c9cb41d2d7ad089f3327100b3df019b3"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-80194-nd-source-reliance-distinct/causal-model-reviewed-light-1200.png",
+        "sha256": "bcc02750e74ee244308dc7c1f330e34e92e667837a6622cae5219397db9b31d3"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-8d2ec-nd-source-reliance-distinct/causal-model-retained-dark-1200.png",
+        "sha256": "97a799456b387089865d6af5b4d7a47fac3e7c966707bf0bc3632c329f4a833d"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-98c17-nd-source-reliance-distinct/causal-model-retained-dark-390.png",
+        "sha256": "a0067b8817ff1f896bbbbdc07dbc5ddb3c7cdd0129cebbae0a7aad9f49016c90"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-b1d10-nd-source-reliance-distinct/causal-model-draft-light-1200.png",
+        "sha256": "78a9371199b5d06a51550ea72910c27a292923657f68fd25c378e787262b2733"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-c3657-nd-source-reliance-distinct/causal-model-draft-light-390.png",
+        "sha256": "a261bdcca34bb2a12a1e583b4c878925ce98dda9bf50769f9a3ad8b156758f3f"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-c9b83-nd-source-reliance-distinct/causal-model-reviewed-dark-1200.png",
+        "sha256": "799e127938f6123ea9457353cfaa1032d7fa215a032a3dcd89e6eb8a46e6b456"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-d95d5-nd-source-reliance-distinct/causal-model-reviewed-dark-390.png",
+        "sha256": "0adc55b2535d9ea1f196a42a562865766ee2858b4549be4aede628061063c464"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-e02b9-nd-source-reliance-distinct/causal-model-revoked-light-1200.png",
+        "sha256": "cfabf083ceb6d1ea9b658751ed6fa922c94e9846065ea3936ea10d13dbd4f859"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-model-e1b86-nd-source-reliance-distinct/causal-model-draft-dark-1200.png",
+        "sha256": "ff6c2ab6a01bbe35c549730557ce84e7f28857793766ca76b00e8d763edfd3af"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-16e68-n-and-conditional-authority/causal-result-refuted-dark-1200.png",
+        "sha256": "2f2ff3f8b49097c90fb900f3aa6e9bbe6229a1b10c1daf7a53b90200dfeba760"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-1be42-n-and-conditional-authority/causal-result-inconclusive-dark-1200.png",
+        "sha256": "bc63d5bcd94a347e02b3e76541ec214585dde6a999370c907af00d61b12b7079"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-38643-n-and-conditional-authority/causal-result-supported-dark-1200.png",
+        "sha256": "5046808d10f9477e5c12662f3234b6d5150f981f26542fcb8cec7b9b31a7663a"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-438b0-n-and-conditional-authority/causal-result-supported-dark-390.png",
+        "sha256": "c0b5c4d6a73e55b4cb8bf65226f131457eff59c921e6b0bc75469a2209d39526"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-4afc4-n-and-conditional-authority/causal-result-stale-light-1200.png",
+        "sha256": "01b3e6cbca62e439130f15c9bc5ee81809e9f27a190dcf7c551b3dca93f92766"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-5b99b-n-and-conditional-authority/causal-result-stale-light-390.png",
+        "sha256": "ecffcfd3a0acb4606e3fc24189baf48b211ff186bdedb32c29d2aa2177a84615"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-5c19f-n-and-conditional-authority/causal-result-stale-dark-1200.png",
+        "sha256": "6f27964d55c1383e2c2830443afb6acc6d448b66fc26165df4ef3ae1c8d38f67"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-65c8a-n-and-conditional-authority/causal-result-refuted-dark-390.png",
+        "sha256": "ec0ddc3a90a15456d3300ee5e95d29ef87c70620416537863422ed926a5f9ec7"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-6cfd5-n-and-conditional-authority/causal-result-refuted-light-1200.png",
+        "sha256": "98816a07d9a89e4ad751fd16b8c8f77f1d63ada4876bd40e8d4649a438acf6df"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-70106-n-and-conditional-authority/causal-result-refuted-light-390.png",
+        "sha256": "833101aa0a4a4bf92134c2fba317dca28eea30d3ed561ad8c1179cc907b54184"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-9fe63-n-and-conditional-authority/causal-result-supported-light-1200.png",
+        "sha256": "28445482e7685e31783a658e72f86d3ff1e0941aa741a22cdbe1713b1098e0ac"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-cd73c-n-and-conditional-authority/causal-result-supported-light-390.png",
+        "sha256": "0fcf978e88f68a530ab502a05c921454d8267076dd0fef8ac766ed0d68f2fa41"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-d2178-n-and-conditional-authority/causal-result-stale-dark-390.png",
+        "sha256": "bc61098c953848f9fa2c64b3bc8a9b32d8ee3240f27d97dac923a141b1710746"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-d932f-n-and-conditional-authority/causal-result-inconclusive-light-390.png",
+        "sha256": "ce3db6984b0d7f4bcb7f4cabee0f3040bad47e49813d1c200fe461ddf9ca0479"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-ec0e3-n-and-conditional-authority/causal-result-inconclusive-dark-390.png",
+        "sha256": "0a3d0d8484baf00476c4e22ea645c827f9d8caface46f921defff5f812fabcd9"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-resul-f32e9-n-and-conditional-authority/causal-result-inconclusive-light-1200.png",
+        "sha256": "4486ee85d85f466755a4722abe4176a85eea9f706353dea43ab9808c2650d078"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-typed-0d36c-act-pins-and-refuses-cycles/causal-proposal-light-1200.png",
+        "sha256": "c4ae47f3941d939cae7841efb517c16429b8e820d907a7c9cec870caa08b33b5"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-typed-97223-act-pins-and-refuses-cycles/causal-proposal-light-390.png",
+        "sha256": "5861c3f255805ebfd30e918280af16b1a8012fb13ecd7f7177d01ea7c91e69a5"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-typed-a5d32-act-pins-and-refuses-cycles/causal-proposal-dark-390.png",
+        "sha256": "18efb444203aa3779fbdf3256944f802bf242837b3b19ab911db51225776fb6e"
+      },
+      {
+        "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/causal-claims/causal-claims-causal-typed-ff589-act-pins-and-refuses-cycles/causal-proposal-dark-1200.png",
+        "sha256": "5869e5bafd2da7067326057f9b2dc4cca24351556675d1455bc9c22fab000fa1"
+      }
+    ],
+    "visuallyInspected": [
+      "causal-result-supported-dark-1200.png",
+      "causal-proposal-light-390.png"
+    ]
+  },
+  "resolvedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-causal-ui-api.log",
+      "reason": "Flags-off assertion exposed empty patch fixtures preserving rollout; explicit all-V8-false writes and readback now qualify all affected suites."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-causal-ui-tests.log",
+      "reason": "Authority-loss message disappeared when the sensitive source selection was cleared; retain authority-loss state until explicit refresh."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-causal-ui-types-complete.log",
+      "reason": "Synthetic presentation status union narrowed explicitly to native claim statuses."
+    }
+  ],
+  "evidenceClass": "Native PostgreSQL/API software qualification and cached synthetic browser presentation; no collected trial, independent causal refutation, verified business impact, official visual release baseline or hosted release.",
+  "remaining": [
+    "Causal native downstream consumers",
+    "Planning/Management/Learning and optional analytical providers",
+    "Complete V8 source integration and hosted release qualification"
+  ]
+}

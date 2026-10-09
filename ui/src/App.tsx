@@ -56,6 +56,16 @@ import { IssueChatLongThreadPerf } from "./pages/IssueChatLongThreadPerf";
 import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
 import { Readiness } from "./pages/Readiness";
+import { StrategyExecution } from "./pages/StrategyExecution";
+import { ProcessIntelligence } from "./pages/ProcessIntelligence";
+import { BusinessMetrics } from "./pages/BusinessMetrics";
+import { BusinessForecasts } from "./pages/BusinessForecasts";
+import { BusinessExperiments } from "./pages/BusinessExperiments";
+import { CausalClaims } from "./pages/CausalClaims";
+import { CrossProjectPlanning } from "./pages/CrossProjectPlanning";
+import { ManagementReviews } from "./pages/ManagementReviews";
+import { BusinessScenarios } from "./pages/BusinessScenarios";
+import { V8FeatureGate } from "./components/V8FeatureGate";
 import { DerivedMemory } from "./pages/DerivedMemory";
 import { Orchestration } from "./pages/Orchestration";
 import { AIGovernance } from "./pages/AIGovernance";
@@ -373,6 +383,15 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       ) : null}
       <Route path="foundation/discovery" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
       <Route path="foundation/discovery/:bootstrapRunId" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
+      <Route path="strategy-execution" element={<V8FeatureGate feature="strategy_execution_v8"><V7FeatureGate feature="governance_evidence_v7"><StrategyExecution /></V7FeatureGate></V8FeatureGate>} />
+      <Route path="process-intelligence" element={<V8FeatureGate feature="process_intelligence_v8"><V7FeatureGate feature="governance_evidence_v7"><ProcessIntelligence /></V7FeatureGate></V8FeatureGate>} />
+      <Route path="business-forecasts" element={<V8FeatureGate feature="business_forecasting_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessForecasts /></V7FeatureGate></V8FeatureGate>} />
+      <Route path="business-scenarios" element={<V8FeatureGate feature="scenario_planning_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessScenarios /></V7FeatureGate></V8FeatureGate>} />
+      <Route path="business-experiments" element={<BusinessExperiments />} />
+      <Route path="causal-claims" element={<CausalClaims />} />
+      <Route path="management-reviews" element={<ManagementReviews />} />
+      <Route path="adaptive-planning" element={<CrossProjectPlanning />} />
+      <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessMetrics /></V7FeatureGate></V8FeatureGate>} />
       <Route path="readiness" element={<V7FeatureGate feature="readiness_engine_v7"><Readiness /></V7FeatureGate>} />
       <Route
         path="foundation"
@@ -888,7 +907,16 @@ export function App() {
           <Route path="routines" element={<UnprefixedBoardRedirect />} />
           <Route path="routines/:routineId" element={<UnprefixedBoardRedirect />} />
           <Route path="review-queue" element={<UnprefixedBoardRedirect />} />
-          <Route path="readiness" element={<UnprefixedBoardRedirect />} />
+          <Route path="strategy-execution" element={<V8FeatureGate feature="strategy_execution_v8"><V7FeatureGate feature="governance_evidence_v7"><StrategyExecution /></V7FeatureGate></V8FeatureGate>} />
+      <Route path="process-intelligence" element={<V8FeatureGate feature="process_intelligence_v8"><V7FeatureGate feature="governance_evidence_v7"><ProcessIntelligence /></V7FeatureGate></V8FeatureGate>} />
+          <Route path="business-forecasts" element={<V8FeatureGate feature="business_forecasting_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessForecasts /></V7FeatureGate></V8FeatureGate>} />
+          <Route path="business-scenarios" element={<V8FeatureGate feature="scenario_planning_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessScenarios /></V7FeatureGate></V8FeatureGate>} />
+          <Route path="business-experiments" element={<BusinessExperiments />} />
+      <Route path="causal-claims" element={<CausalClaims />} />
+      <Route path="management-reviews" element={<ManagementReviews />} />
+      <Route path="adaptive-planning" element={<CrossProjectPlanning />} />
+      <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessMetrics /></V7FeatureGate></V8FeatureGate>} />
+      <Route path="readiness" element={<UnprefixedBoardRedirect />} />
           <Route path="orchestration" element={<UnprefixedBoardRedirect />} />
           <Route path="work-signals" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/packages" element={<UnprefixedBoardRedirect />} />

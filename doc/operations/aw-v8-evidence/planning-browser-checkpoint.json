@@ -1,0 +1,141 @@
+{
+  "checkpoint": "Native project planning browser qualification",
+  "sourceCommit": "3cc6c51e1bea615609200a90345c9fc799d2cab5",
+  "recordedAt": "2026-10-07T11:53:42.836360+00:00",
+  "softwareEvidenceOnly": true,
+  "checks": 24,
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "viewportWidths": [
+    390,
+    1200
+  ],
+  "standards": [
+    "wcag2a",
+    "wcag2aa",
+    "wcag21aa",
+    "wcag22aa"
+  ],
+  "keyboard": "Independent human acknowledgement, disclosures and explicit no-demand declaration exercised by keyboard",
+  "overflow": "Every check asserts document width within viewport",
+  "api": "Every browser API request aborted; cached synthetic presentation only",
+  "officialVisualBaseline": false,
+  "logPath": "/var/tmp/aw-v8-planning-browser.log",
+  "logSha256": "1dec8ae71ec5c453f783163cbecd2af961cb094723dab788ecef7a71ac0a2a50",
+  "exitCode": 0,
+  "storybook": {
+    "logPath": "/var/tmp/aw-v8-planning-storybook-release.log",
+    "logSha256": "e119f3bf94b8a0637a9c710a2f8c30476144bb00b4e12d192e1a64e78de9ef4b",
+    "exitCode": 0
+  },
+  "screenshots": [
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--12d63-thholds-unestablished-dates/planning-infeasible-dark-1200.png",
+      "sha256": "a5803c95ab25604c5acb90da8046eef74c867f53952d0a1fd2d584c7c2800d7e"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--1ef19-s-canonical-human-authority/planning-review-disabled-light-1200.png",
+      "sha256": "342e7c80eba3a6d31964f9cf0adedd79301b7c1bdcca97dcc1ea3a2d6c2b03f0"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--21671-xplicit-no-demand-authority/planning-declarations-light-390.png",
+      "sha256": "8aa3a632bd34838607e43bef2793a91302e90735cbfd5be31159dc2d4e7ccf6f"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--3d3f9-thholds-unestablished-dates/planning-inconclusive-dark-1200.png",
+      "sha256": "8d7e3af78ae39476ee25e1cdfee522047c4df131937d93ae9d757f01b022ccc3"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--528b6-thholds-unestablished-dates/planning-inconclusive-light-1200.png",
+      "sha256": "1bd463a8554d21b14c75cadd97a169df8e98aeb5a7c83f3829e561fa3c62bb41"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--54cd7-s-canonical-human-authority/planning-review-current-dark-1200.png",
+      "sha256": "406d52d6a09890a3c3e7cebdc677c308588817b219c4f8c83a4e6c8467fa1cdd"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--59b2d-s-canonical-human-authority/planning-review-disabled-light-390.png",
+      "sha256": "049f01dd8fc8288af700ca791f9abc355cfab105f739a52c9c8783e872ef84b5"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--5efe7-s-canonical-human-authority/planning-review-retained-light-1200.png",
+      "sha256": "e4670fea31d6ac722c675dc90ca2dd7196c025810dde9dbecedad92bd506fc6e"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--615bd-s-canonical-human-authority/planning-review-retained-light-390.png",
+      "sha256": "1eb9cf6043fe8b7c74c743acfa0f05119743b7e7f59a4b74f7a17ab91d7f5451"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--72ba6-s-canonical-human-authority/planning-review-disabled-dark-1200.png",
+      "sha256": "27b9368abbe97329edbf536c236a94615ca79fbbe8c31c41f89bedb7524d254a"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--73433-xplicit-no-demand-authority/planning-declarations-light-1200.png",
+      "sha256": "324b3d406a3b07943ae651be0a9fb4abd66ebd345b24891e0b55e277f9abfff9"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--78e3b-thholds-unestablished-dates/planning-infeasible-dark-390.png",
+      "sha256": "09d0fb8ddea4d02cc3e681f70e166d0f84e4f9e789e021086ddcd7ed1eb1632d"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--802a6-s-canonical-human-authority/planning-review-current-light-1200.png",
+      "sha256": "b23a4dd33557af9b16cc89257310601fd04b4b39e976a1e0fe170bea55f7d42c"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--81005-s-canonical-human-authority/planning-review-disabled-dark-390.png",
+      "sha256": "0d2d543f57791562540743bc9e033bea89e481fb57b44f270b58128757021042"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--866d7-s-canonical-human-authority/planning-review-current-light-390.png",
+      "sha256": "cf0e7c96926c59bd8af01556a44966807f66921be97455b9cc48ee1335b04db8"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--989dd-xplicit-no-demand-authority/planning-declarations-dark-390.png",
+      "sha256": "bc8e3865d4a5c0d748744d7a2107d2fb440f98ab2a71cced3d35d88e91214d3e"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--9e34e-s-canonical-human-authority/planning-review-retained-dark-390.png",
+      "sha256": "885d508f8674c3c6709bcb769a23f8118922097158139448d335356553661eb1"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--cc4cf-thholds-unestablished-dates/planning-inconclusive-light-390.png",
+      "sha256": "6fddfd5cd7b5dc2c3855ffeff7b0371b45f30e6917cfb915e9dadfadd03e2dab"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--d5230-xplicit-no-demand-authority/planning-declarations-dark-1200.png",
+      "sha256": "8e565d7832165bc1d989d9398a5c5f8e8c5d40a7151e86b4a95ed66cb6206a11"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--dbb33-thholds-unestablished-dates/planning-infeasible-light-1200.png",
+      "sha256": "963b0e9e4cf6c8bf93ad6cbec96b2d9e96183837f1428a1152677374daae3bba"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--edc81-s-canonical-human-authority/planning-review-current-dark-390.png",
+      "sha256": "684c8ebfe70d303a1e6cf930e73cad7d5239b6ee728bd48cf27687b1e168e614"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--f1995-thholds-unestablished-dates/planning-infeasible-light-390.png",
+      "sha256": "6c8000a09fa90f39984d6c8571d9eeea880e9f3643103e8f18bbc0547b963c8e"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--f2a60-s-canonical-human-authority/planning-review-retained-dark-1200.png",
+      "sha256": "0c647567e6da49a50b9bace669a9e0513e0870a805029338be9f1c0f08116017"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/project-planning/project-planning-planning--f68c0-thholds-unestablished-dates/planning-inconclusive-dark-390.png",
+      "sha256": "2ae90864edd7344fa1fb94f9265e46e39966ebd14e56b0f8f6976f532e7d40da"
+    }
+  ],
+  "manualInspection": [
+    "planning-review-current-light-390.png",
+    "planning-declarations-dark-390.png",
+    "planning-declarations-light-1200.png",
+    "planning-review-retained-dark-1200.png"
+  ],
+  "limits": [
+    "Screenshots and browser checks are synthetic UI software qualification, not native source admission or verified business impact.",
+    "Full brief and hosted release acceptance remain open."
+  ]
+}

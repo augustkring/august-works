@@ -1,0 +1,95 @@
+{
+  "checkpoint": "Native analytical conversation continuity and provider admission",
+  "parentCommit": "33b0cca3092c75e65a745e24d7f37f0e26a9807d",
+  "recordedAt": "2026-10-07T19:40:34.547210+00:00",
+  "sourceFiles": [
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "c8dc80065e9d46d4575fa7fb5ee9e124c401ff3b626a7c5b59611eec2134849f"
+    },
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "729dc6c95d173a1f7a3552dd842923677b54b2a43015e52220b69e3a67df3e06"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "sha256": "b8d7ae5a0360d6d3dd9fada6fe45edbae0c435169fef84e48a978c1cac8f205d"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.test.ts",
+      "sha256": "ff503510502bb2661a1652d41c0d3823f10babe4e37b5b9bbdc8f2194943129a"
+    },
+    {
+      "path": "server/src/services/native-runtime/paperclip-control-plane-port.ts",
+      "sha256": "7b8e0714df83b053b89d721f99b92ad1f5234699043f97eb97f9dd634ab64f53"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "12863a2ad5cf983cc1ba61e39cdb8404fae3b10a5c098514777a24f5c9163ce3"
+    },
+    {
+      "path": "packages/db/src/migrations/0418_native_conversation_source_scope.sql",
+      "sha256": "cb2b66b156061a523cab21c3abcc5ce4a7c47e5619a5324b0eae947db4f47634"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Native executor, actual PostgreSQL source and provider capacity",
+      "passedTests": 504,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-source-continuity-final.log",
+      "logSha256": "9faee142bd0edf6cf68f7a1dadeaa593505440339e687956f2c7a266cbfe6646"
+    },
+    {
+      "check": "Final actual PostgreSQL native entry and source boundary",
+      "passedTests": 36,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-source-continuity-entry.log",
+      "logSha256": "1c903e5da7f320edbf02b586bd82c2b61de43e9abc1ac89cef30fb5067441a29"
+    },
+    {
+      "check": "Native control-plane and PostgreSQL source boundary",
+      "passedTests": 50,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-source-continuity-pg.log",
+      "logSha256": "9167ab0ed792990c0fd1bdc2c19bff25cb39f8795143136f94534a1152c0898e"
+    },
+    {
+      "check": "V6/V8 company purge, V7 derived Memory and generated snapshot drift",
+      "passedTests": 11,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-source-continuity-regressions.log",
+      "logSha256": "6b9e80fe9ffe7e00b2b8a38022d8c32d125e591ec9b9ce52d8052b61ca3fa3ef"
+    },
+    {
+      "check": "Server types after final native execution fixture",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-source-continuity-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "Migration numbering and safety",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-source-continuity-migrations.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    }
+  ],
+  "qualified": [
+    "Actual native conversation binding makes later native turns inherit all earlier private analytical retention roots without creating new roots.",
+    "Existing C7 function, late INSERT guard, Memory erasure and provider-trace erasure paths consume the same native binding. Independent ordinary native runs remain admitted.",
+    "Actual PostgreSQL source visibility loss denies the real native session entry before provider startup. An isolated executor test also asserts that no backend, transport or provider executes.",
+    "Actual PostgreSQL control-plane append rejects provider and internal-draft original bytes before persistence and committed/duplicate callbacks. Server-owned cancellation mechanics remain available.",
+    "A native session executor fixture qualifies cancellation dispatch through the existing lease timer and active-session owner after source admission fails."
+  ],
+  "limits": [
+    "Lease-based source checks reuse the existing five-minute interval; no immediate revocation or eight-second cancellation SLA is qualified.",
+    "The cancellation test uses a mock native backend and accelerated interval, not an external LLM, actual hosted runner or provider account.",
+    "Heartbeat raw log admission is connected before sanitizer, local log and live publication; this checkpoint does not independently qualify its raw-file cancellation callback seam.",
+    "A running runner can still write raw provider sidecar bytes before finalization or cancellation; external-provider erasure and a hard physical-deletion SLA remain open.",
+    "The legacy reference executeNativeCodexRunner has no production caller; this checkpoint qualifies the actual executePaperclipNativeSession production entry.",
+    "Generic SDK writes to another task, complete remaining analytical source-family closure, Learning, Routines, cross-project Planning, external provider conformance and hosted release gates remain open.",
+    "This is a source checkpoint, not whole-brief completion."
+  ]
+}

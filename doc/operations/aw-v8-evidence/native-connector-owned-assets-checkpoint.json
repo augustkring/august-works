@@ -1,0 +1,121 @@
+{
+  "checkpoint": "Original run-owned connector assignment copies and shared original runtime Source fence",
+  "recordedAt": "2026-10-08T15:32:46.686634+00:00",
+  "parentCommit": "ab53bc3d2a9499edd0371e97fce9445ca683b3dd",
+  "primaryParentCommit": "0e3e89af8fb7883c728a37ee91466d49b8e889d8",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-source-and-data-register.md",
+      "sha256": "faaf1bc18a628cf1e062ae473c6dd5e2595d4336b02ff96bf19783ea160d8494"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "76fab650e6b2fd4c9b9cbd783171e8bc940870b0b23d577c6781f959972249d4"
+    },
+    {
+      "path": "server/src/__tests__/agent-skills-routes.test.ts",
+      "sha256": "6673df6f14d9347f0b4356b9254ec343b527ab55c808c55d473c4d6b8683659a"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "86df777f88778fc3c13078ea8e8557cb089c3de5cb0b5f1fb0c1f28b21f9b73c"
+    },
+    {
+      "path": "server/src/__tests__/chat-channels.integration.test.ts",
+      "sha256": "e12bbca3a7c383f4b504250e880519beb7019cb0d06f435791bb12dc1c5831d7"
+    },
+    {
+      "path": "server/src/__tests__/codex-local-execute.test.ts",
+      "sha256": "f0deb2d4f6cb03ebb9da7dc2ebbc4f4822d8539f6a7e8a1ef4a0dbaacbf9de26"
+    },
+    {
+      "path": "server/src/__tests__/email-channels.integration.test.ts",
+      "sha256": "8448e5e475a4962215c746da6e18876b15a9a539ac47ad75cf7f55a056944604"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-direct-adapter-native-isolation.test.ts",
+      "sha256": "432e40c904f627baae0126367dc985f424911b5e61281ab9954e845f489b25d4"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
+      "sha256": "f9b843a8f418c8e486d9dade394e0ba14a4df4fceb2e4826eee53336365adcd2"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-native-runner-selection.test.ts",
+      "sha256": "668921aeeb755b3e32d803701f98c23c5ff6879a049dd58a5f58c27b145f982b"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-native-status-context.test.ts",
+      "sha256": "38b4421ebb2a67bc5dbd043b18d8faf0815118b952e017b163128bbabf8f2e86"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-runtime-skills.test.ts",
+      "sha256": "e22d4d2a329148aa2eb277cdcf2ccd80365ba7b30af171a6841b9cb4f2dcfc8a"
+    },
+    {
+      "path": "server/src/services/connector-runtime.ts",
+      "sha256": "b04b27cda820737c1e3d03881613786a517bae8faad59b225be6e898a862af54"
+    },
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "ec838740f88cbc18e226e958ea7414c59c1e08786e99ddd4168215c969f64dad"
+    },
+    {
+      "path": "server/src/services/native-runtime/runtime-context.test.ts",
+      "sha256": "41cf9dde8a0af21f93b7f462937ac2d71090afdfecee0702e7c27fa065141e8e"
+    },
+    {
+      "path": "server/src/services/native-runtime/runtime-context.ts",
+      "sha256": "4c872ed9401e326d56bc5991bd2c76b78e9c34d99b01842130712df8e02f9f34"
+    }
+  ],
+  "validation": {
+    "completeNativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-connector-owned-assets-native-regression-tests.log",
+      "sha256": "3e750464d3c3c56e389f7dca782f90fc78adff76e2910179f9caad8e826e8a03",
+      "tests": 1213,
+      "files": 9,
+      "skipped": 0
+    },
+    "completeConstructorAndEmailRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-connector-owned-assets-constructor-email-tests.log",
+      "sha256": "f44f2b2b667dcff272a30329d5587d93f933a860fd2c6c9f8e18f605d8be8970",
+      "tests": 38,
+      "files": 2,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-connector-owned-assets-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "sourceCommit": "0e3e89af8fb7883c728a37ee91466d49b8e889d8",
+      "log": "/var/tmp/aw-v8-native-build-maximum-outcome.log",
+      "sha256": "ce2dec99e948f0cb99d1a429c2dc3428af360e4805db361a66cb573e862a50b1"
+    }
+  },
+  "qualified": [
+    "Two original filesystem failures reproduce private connector assignments published in unowned global bundles",
+    "Configuration previews use the public bundled skill and publish no private assignment files",
+    "Actual heartbeat resolves current connector assignments inside the original company to Memory exclusion, exact running company/agent/run owner, erasure marker and before/after current analytical Source checks",
+    "Original runtime context and connector preparation reuse that same existing Source fence; no new authority, caller-selected Source or permission cache",
+    "Private runtime bundles are owned by the exact company/run namespace, including copies prepared before final profile persistence",
+    "Identical connector revisions preserve the original content-addressed compatibility hash across physical run paths; reassignment changes the revision",
+    "Original per-call connector authorization, shared-home prompt delivery, Native tool binding and Human skill-card/sync boundaries remain",
+    "Actual retained Context C7 erases a declared synthetic private connector copy with flags off/company paused, retries filesystem failure and preserves another tenant referenced files",
+    "Original connector preparation resolves a persisted assigned inbox under a real running run owner; provider responses remain software fixtures",
+    "All 1251 checks across eleven complete original native/constructor/email/chat/heartbeat/privacy/card/Codex suites pass without skips"
+  ],
+  "limitations": [
+    "Bulk identities/grants, assigned inboxes, software labels, provider responses and connector tool calls are declared software fixtures; no actual external message or customer/provider/Human trial",
+    "Pure filesystem constructors use declared readable fixture owners; the production publication path separately checks real persisted native run identity and current Source",
+    "Synthetic private connector material in the C7 test is a trusted constructor prerequisite, not an actual customer connector assignment",
+    "Earlier two failing ownership checks are diagnostic and excluded from final qualification",
+    "Global files left by historical unowned publishers, archive/remote/multi-restore reconciliation and provider/workspace/home copies beyond application-owned namespaces remain unfinished",
+    "Current whole branch release qualification and hosted predecessor/pilot acceptance remain open; no whole-brief completion or release promotion"
+  ]
+}

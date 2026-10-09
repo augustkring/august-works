@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "d9dc96c85e68bbde818cbcd60b84ff0fc66b6f95",
+  "scope": "Internal conditional numerical experiment and strict protocol qualification only. No native registry/receipt ownership, source authority, live exposure, ethical approval, causal identification, production/hosted or complete V8 release qualification.",
+  "sourceFileSha256": {
+    "packages/shared/src/business-experiments.ts": "6bbda693d99568e06bd5f8bd7ae9a727cab1d5ef38660eae2a8667b82b2663c4",
+    "packages/shared/src/business-experiments.test.ts": "7eef01d4a182096cd766de9f46c86a6625fcb575118629faa7980e3652ba6896",
+    "packages/shared/src/index.ts": "4d078c52967a57fc21344b90ba7b3586d46f18f07826a0288c458769ccf2c15c",
+    "server/src/services/business-experiments/kernel.ts": "54061b897817a40e876ce60a27cdfc9433fde6aba0f4c17b709ac2b636a8ad45",
+    "server/src/__tests__/business-experiments-kernel.test.ts": "116a6a6ef37eba077298bfd885c473164680ac0e7fc941f65c64f9b3dbcd8876",
+    "server/src/__tests__/fixtures/business-experiment-binomial-reference.json": "5613e01c1670c492978833acb967495a888a69d76de8e7861a7f332aa07299c5"
+  },
+  "checks": [
+    {
+      "name": "native-experiment-scenario-forecast-kernels",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 29,
+      "logPath": "/var/tmp/aw-v8-experiment-kernel-tests-qualified-final.log",
+      "logSha256": "898ddce7daa0651e9e8a74e959d6fa808d79487a392a3581a6533ef0e9002d51"
+    },
+    {
+      "name": "shared-experiment-scenario-forecast-contracts",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 12,
+      "logPath": "/var/tmp/aw-v8-experiment-contract-tests-final.log",
+      "logSha256": "167595fede99e5c1af2e7bbb4237c3e902d2b0ba0fb534adfad0fd6f06249539"
+    },
+    {
+      "name": "server-types",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-experiment-kernel-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared-types",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-experiment-contract-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "failedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-kernel-tests-first.log",
+      "logSha256": "06dd6557e4cdf2f2eff5abbeb62f2bf84a63200521b9dfc351007d3af56465b8",
+      "reason": "Synthetic fixture incorrectly supplied boolean rather than numeric binary outcomes. Numerical boundary rejected it; fixture now supplies explicit 0/1."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-kernel-tests-final.log",
+      "logSha256": "cc7d90f92d3294781bed8f4150716854a1bb01aae308884f4c3074eb2f8ebc9e",
+      "reason": "Short SRM assertion incorrectly expected n=10/all-treatment to cross alpha=0.001; exact two-sided p=0.001953125 does not. Changed vector to n=11 (p=0.0009765625) and reran all kernels; mathematical gate unchanged."
+    }
+  ]
+}

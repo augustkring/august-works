@@ -9,6 +9,8 @@ import type { AwDeploymentProfile, DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import { logger } from "../middleware/logger.js";
 import { subscribeCompanyLiveEvents } from "../services/live-events.js";
+import { analyticalLiveEventForReader } from "../services/analytical-live-events.js";
+import type { AuthorizationActor } from "../services/authorization.js";
 
 interface WsSocket {
   readyState: number;
@@ -23,6 +25,7 @@ interface WsSocket {
 
 interface WsServer {
   clients: Set<WsSocket>;
+  close(callback?: () => void): void;
   on(event: "connection", listener: (socket: WsSocket, req: IncomingMessage) => void): void;
   on(event: "close", listener: () => void): void;
   handleUpgrade(
@@ -44,6 +47,7 @@ interface UpgradeContext {
   companyId: string;
   actorType: "board" | "agent";
   actorId: string;
+  actor: AuthorizationActor;
 }
 
 /** Cloud-proxied browser identity resolved from trusted x-paperclip-cloud-* headers. */
@@ -143,7 +147,8 @@ async function authorizeUpgrade(
       return {
         companyId,
         actorType: "board",
-        actorId: "board",
+        actorId: "local-board",
+        actor: { type: "board", userId: "local-board", source: "local_implicit", isInstanceAdmin: true },
       };
     }
 
@@ -162,6 +167,7 @@ async function authorizeUpgrade(
           companyId,
           actorType: "board",
           actorId: cloudActor.userId,
+          actor: { type: "board", userId: cloudActor.userId, source: "cloud_tenant", companyIds: cloudActor.companyIds },
         };
       }
     }
@@ -199,6 +205,7 @@ async function authorizeUpgrade(
       companyId,
       actorType: "board",
       actorId: userId,
+      actor: { type: "board", userId, source: "session", companyIds: memberships.map(row => row.companyId), isInstanceAdmin: !!roleRow, ignoreInstanceAdmin: opts.deploymentProfile === "saas" },
     };
   }
 
@@ -222,6 +229,7 @@ async function authorizeUpgrade(
     companyId,
     actorType: "agent",
     actorId: key.agentId,
+    actor: { type: "agent", source: "agent_key", agentId: key.agentId, companyId: key.companyId, keyId: key.id, keyScope: key.scopeConfig, onBehalfOfUserId: key.responsibleUserId },
   };
 }
 
@@ -262,9 +270,29 @@ export function setupLiveEventsWebSocketServer(
       return;
     }
 
+    let delivery = Promise.resolve();
+    let pending = 0;
     const unsubscribe = subscribeCompanyLiveEvents(context.companyId, (event) => {
       if (socket.readyState !== WebSocket.OPEN) return;
-      socket.send(JSON.stringify(event));
+      // ponytail: bounded serial delivery; reconnect uses native REST snapshots
+      // if a slow source review accumulates more than 64 events.
+      if (++pending > 64) {
+        socket.close(1013, "live delivery backlog");
+        return;
+      }
+      delivery = delivery.then(async () => {
+        if (socket.readyState !== WebSocket.OPEN) return;
+        const current = await authorizeUpgrade(db, req, context.companyId, new URL(req.url!, "http://localhost"), opts);
+        if (!current || current.actorType !== context.actorType || current.actorId !== context.actorId) {
+          socket.close(1008, "live access changed");
+          return;
+        }
+        const admitted = await analyticalLiveEventForReader(db, event, current.actor);
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(admitted));
+      }).catch((err) => {
+        logger.warn({ err, companyId: context.companyId }, "live event admission failed");
+        socket.close(1011, "live admission unavailable");
+      }).finally(() => { pending -= 1; });
     });
 
     cleanupByClient.set(socket, unsubscribe);

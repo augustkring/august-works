@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import {ApiError,isAnalyticalSourceAccessLost} from "@/api/client";
+import {Button} from "@/components/ui/button";
 import { agentChatsApi } from "@/api/agentChats";
 import { agentsApi } from "@/api/agents";
 import { authApi } from "@/api/auth";
@@ -36,11 +38,25 @@ export function AgentChat() {
     queryKey: chatKey,
     queryFn: () => agentChatsApi.get(selectedCompanyId!, agent!.id),
     enabled: enabled && !!agent && session.isFetched,
+    retry: (count,error) => !isAnalyticalSourceAccessLost(error) && count < 3,
   });
+  const surfaceOwner = `${selectedCompanyId}:${agent?.id}:${userId}`;
+  const surfaceIssueId = chat.data?.id ?? null;
+  const [surface, setSurface] = useState({ owner: surfaceOwner, issueId: surfaceIssueId, version: 0 });
+  if (surface.owner !== surfaceOwner || surface.issueId !== surfaceIssueId) {
+    setSurface({
+      owner: surfaceOwner,
+      issueId: surfaceIssueId,
+      // Initial lazy creation keeps the unsent composer. Replacing a real
+      // conversation or changing its owner clears it before children render.
+      version: surface.owner === surfaceOwner && surface.issueId === null
+        ? surface.version : surface.version + 1,
+    });
+  }
   const creating = useRef<Promise<Issue> | null>(null);
   useEffect(() => {
     creating.current = null;
-  }, [selectedCompanyId, userId, agent?.id]);
+  }, [selectedCompanyId, userId, agent?.id, chat.data?.id]);
   useEffect(() => {
     if (enabled && agent && session.isFetched)
       recordAgentChatVisit(agent.companyId, userId, agent.id);
@@ -62,6 +78,21 @@ export function AgentChat() {
       throw error;
     }
   }, [agent, selectedCompanyId, chat.data, client, userId]);
+  const recoveryIssueId = chat.error instanceof ApiError
+    ? (chat.error.body as {details?:{conversationIssueId?:unknown}})?.details?.conversationIssueId : undefined;
+  const restart = useMutation({
+    mutationFn: () => {
+      if (!agent || !selectedCompanyId || typeof recoveryIssueId !== "string") throw new Error("Conversation recovery is unavailable");
+      return agentChatsApi.restart(selectedCompanyId,agent.id,recoveryIssueId);
+    },
+    onSuccess: issue => {
+      creating.current=null;
+      client.setQueryData(queryKeys.issues.detail(issue.id),issue);
+      client.setQueryData(chatKey,issue);
+      void chat.refetch();
+    },
+  });
+  const refreshConversation = useCallback(() => { void chat.refetch(); }, [chat.refetch]);
   if (!loaded || agents.isPending || session.isPending)
     return (
       <p className="text-sm text-muted-foreground">Loading conversation…</p>
@@ -75,9 +106,12 @@ export function AgentChat() {
     );
   if (agents.error || chat.error)
     return (
-      <p className="text-sm text-destructive">
-        {(agents.error ?? chat.error)?.message}
-      </p>
+      <div role="alert" className="space-y-3 text-sm text-destructive">
+        <p>{(restart.error ?? agents.error ?? chat.error)?.message}</p>
+        {enabled && agent && isAnalyticalSourceAccessLost(chat.error) && typeof recoveryIssueId === "string" && (
+          <Button variant="outline" disabled={restart.isPending} onClick={() => restart.mutate()}>Start a new conversation</Button>
+        )}
+      </div>
     );
   if (!agent)
     return <p className="text-sm text-destructive">Agent not found.</p>;
@@ -87,8 +121,8 @@ export function AgentChat() {
     );
   return (
     <TaskDetailSurface
-      key={`${agent.id}:${userId}`}
-      conversation={{ agent, issue: chat.data ?? null, ensureIssue }}
+      key={`${surface.owner}:${surface.version}`}
+      conversation={{ agent, issue: chat.data ?? null, ensureIssue, refreshConversation }}
     />
   );
 }

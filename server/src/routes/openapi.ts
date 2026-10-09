@@ -9,6 +9,55 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import {
+  createManagementReviewTaskSchema, recordPlanningOutcomeSchema, startPlanningOutcomeLearningSchema, startDecisionReviewLearningSchema,
+  crossProjectPlanningProfileSchema, portfolioPlanningProfileSchema, proposeCrossProjectPlanningSchema, proposeInitiativePlanningSchema, reviewCrossProjectPlanningSchema,
+  statisticalForecastProfileSchema, doWhyCausalProfileSchema,
+  managementReviewDefinitionSchema, managementSourceOptionsQuerySchema, publishManagementReviewSchema, recordManagementReviewEventSchema,
+  projectPlanningProfileSchema, proposeProjectPlanningSchema, reviewRoadmapProposalSchema,
+  createStrategyExecutionLinkSchema,
+  reviseStrategyExecutionLinkSchema,
+  approveStrategyExecutionLinkSchema,
+  retireStrategyExecutionLinkSchema,
+  createBusinessMetricTargetSchema,
+  reviseBusinessMetricTargetSchema,
+  approveBusinessMetricTargetSchema,
+  retireBusinessMetricTargetSchema,
+  createBusinessForecastSpecSchema,
+  reviseBusinessForecastSpecSchema,
+  backtestBusinessForecastSchema,
+  publishBusinessForecastSpecSchema,
+  retireBusinessForecastSpecSchema,
+  createBusinessScenarioSchema,
+  createCausalClaimSchema, reviseCausalClaimSchema, reviewCausalClaimSchema, analyzeCausalClaimSchema, revokeCausalClaimSchema,
+  createBusinessExperimentSchema, amendBusinessExperimentSchema, transitionBusinessExperimentSchema,
+  startBusinessExperimentSchema, assignBusinessExperimentUnitSchema, recordBusinessExperimentExposureSchema, controlBusinessExperimentExecutionSchema, analyzeBusinessExperimentSchema, interpretBusinessExperimentSchema,
+  reviseBusinessScenarioSchema,
+  publishBusinessScenarioSchema,
+  runBusinessScenarioSchema,
+  retireBusinessScenarioSchema,
+  createBusinessMetricSchema,
+  createBusinessMetricVersionSchema,
+  publishBusinessMetricSchema,
+  transitionBusinessMetricSchema,
+  queryBusinessMetricSchema,
+  businessEventBackfillSchema,
+  businessEventExportSchema,
+  assessProcessDataSchema,
+  createProcessAnalysisDefinitionSchema,
+  reviseProcessAnalysisDefinitionSchema,
+  publishProcessAnalysisDefinitionSchema,
+  retireProcessAnalysisDefinitionSchema,
+  runProcessAnalysisSchema,
+  proposeDecisionContextSchema,
+  prepareDecisionContextSchema,
+  withdrawPreparedDecisionContextSchema,
+  scheduleDecisionOutcomeReviewSchema,
+  transitionDecisionOutcomeReviewSchema,
+  finishDecisionOutcomeReviewSchema,
+  createProcessFindingSchema,
+  transitionProcessFindingSchema,
+  businessEventCursorSchema,
+  businessEventListSchema,
   workerModelCallSchema,
   workerModelResultSchema,
   createAiConnectionSchema,
@@ -1347,6 +1396,10 @@ const BOARD_ONLY_PREFIXES = [
 ];
 
 const BOARD_ONLY_OPERATIONS = new Set([
+  "GET /api/companies/{companyId}/causal-claims/provider-profile",
+  "POST /api/companies/{companyId}/management-reviews/{reviewId}/tasks",
+  "POST /api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes",
+  "POST /api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes/learning",
   "GET /api/companies/{companyId}/ai-connections",
   "POST /api/companies/{companyId}/ai-connections",
   "POST /api/companies/{companyId}/ai-connections/local",
@@ -1580,6 +1633,7 @@ const BOARD_ONLY_OPERATIONS = new Set([
 ]);
 
 const INSTANCE_ADMIN_OPERATIONS = new Set([
+  "DELETE /api/companies/{companyId}/business-events/sources/{sourceRef}",
   "POST /api/companies",
   "POST /api/plugins/install",
   "POST /api/instance/database-backups",
@@ -1589,6 +1643,10 @@ const INSTANCE_ADMIN_OPERATIONS = new Set([
 ]);
 
 const CREATED_OPERATIONS = new Set([
+  "POST /api/companies/{companyId}/experiments/{experimentId}/assignments",
+  "POST /api/companies/{companyId}/experiments/{experimentId}/exposures",
+  "POST /api/companies/{companyId}/experiments",
+  "POST /api/companies/{companyId}/experiments/{experimentId}/versions",
   "POST /api/adapters/install",
   "POST /api/chat-endpoints/{endpointId}/setup-secret",
   "POST /api/companies/{companyId}/agent-hires",
@@ -1684,6 +1742,9 @@ function resolveOperationAuthLevel(
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
   if (RUNTIME_TOOLS_OPERATIONS.has(key)) return "runtime_tools";
   if (INSTANCE_ADMIN_OPERATIONS.has(key)) return "instance_admin";
+  if (path.startsWith("/api/companies/{companyId}/adaptive-planning/") || path.startsWith("/api/companies/{companyId}/management-reviews") || path.startsWith("/api/companies/{companyId}/causal-claims") || path.startsWith("/api/companies/{companyId}/projects/{projectId}/roadmap/planning/")) return "board";
+  if(path.startsWith("/api/companies/{companyId}/decisions/{decisionId}/context")) return "board";
+  if (key === "POST /api/companies/{companyId}/business-events/backfill" || key === "POST /api/companies/{companyId}/business-events/export" || key === "POST /api/companies/{companyId}/process-data-readiness" || (path.startsWith("/api/companies/{companyId}/experiments") || path.startsWith("/api/companies/{companyId}/business-scenarios") || path.startsWith("/api/companies/{companyId}/business-forecasts") || path.startsWith("/api/companies/{companyId}/business-metrics") || path.startsWith("/api/companies/{companyId}/business-metric-targets") || path.startsWith("/api/companies/{companyId}/strategy-execution-links") || path.startsWith("/api/companies/{companyId}/process-definitions"))) return "board";
   if (
     isBoardOnlyOperation(method, path) ||
     experimentalApiMetadata[`${method.toUpperCase()} ${path}`]?.boardOnly
@@ -1788,6 +1849,10 @@ function applyDocumentFixups(document: any): any {
                 : { actor: "public" };
 
       const key = operationKey(method, path);
+      if (key === "GET /api/companies/{companyId}/runs/{runId}/playbooks/{playbookId}/body") {
+        operation.security = [securityRequirement(AGENT_BEARER_AUTH_SCHEME)];
+        operation["x-paperclip-authorization"] = { actor: "agent", heartbeatBound: true, executionManifestBound: true, currentNativeAuthority: true };
+      }
       if (authLevel !== "public") {
         const responses = (operation.responses ??= {}) as Record<
           string,
@@ -2113,20 +2178,21 @@ registry.registerPath({
 
 // V4 governance endpoints share their validation contracts with the services.
 function registerV4Operation(method: string, path: string, summary: string, params: z.ZodTypeAny,
-  options: { body?: z.ZodTypeAny; status?: number; board?: boolean; headers?: z.ZodTypeAny; description?: string } = {}) {
+  options: { body?: z.ZodTypeAny; status?: number; board?: boolean; headers?: z.ZodTypeAny; query?: z.ZodTypeAny; description?: string } = {}) {
   if (options.board) BOARD_ONLY_OPERATIONS.add(operationKey(method, path));
   registry.registerPath({ method, path, tags: [path.includes("/memory/") ? "memory" : path.includes("/automation-artifacts") ? "automation-artifacts" : "workflows"],
     summary, ...(options.description ? { description: options.description } : {}),
-    request: { params, ...(options.body ? { body: jsonBody(options.body) } : {}), ...(options.headers ? { headers: options.headers } : {}) },
+    request: { params, ...(options.body ? { body: jsonBody(options.body) } : {}), ...(options.headers ? { headers: options.headers } : {}), ...(options.query ? { query: options.query } : {}) },
     responses: { [options.status ?? 200]: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict, 422: r.unprocessable },
   });
 }
 const v4CompanyParams = z.object({ companyId: z.string().uuid() });
 const v4ArtifactParams = v4CompanyParams.extend({ artifactId: z.string().uuid() });
 const artifactBase = "/api/companies/{companyId}/automation-artifacts";
-registerV4Operation("get", artifactBase, "List governed Automation Artifacts", v4CompanyParams, { board: true });
+const artifactAccountQuery = z.object({ expectedUserId: z.string().optional() }).strict();
+registerV4Operation("get", artifactBase, "List governed Automation Artifacts", v4CompanyParams, { board: true, query: artifactAccountQuery });
 registerV4Operation("post", artifactBase, "Create an immutable versioned Automation Artifact", v4CompanyParams, { board: true, body: createAutomationArtifactSchema, status: 201 });
-registerV4Operation("get", `${artifactBase}/{artifactId}`, "Get an Automation Artifact and its versions", v4ArtifactParams, { board: true });
+registerV4Operation("get", `${artifactBase}/{artifactId}`, "Get an Automation Artifact and its versions", v4ArtifactParams, { board: true, query: artifactAccountQuery });
 registerV4Operation("post", `${artifactBase}/{artifactId}/versions`, "Append an immutable artifact version", v4ArtifactParams, { board: true, body: appendAutomationArtifactVersionSchema, status: 201 });
 registerV4Operation("post", `${artifactBase}/{artifactId}/evaluate`, "Evaluate the current artifact version security gates", v4ArtifactParams, { board: true });
 registerV4Operation("post", `${artifactBase}/{artifactId}/status`, "Transition a qualified artifact status", v4ArtifactParams, { board: true, body: transitionAutomationArtifactStatusSchema });
@@ -11773,6 +11839,101 @@ for (const operation of v6ApiPaths) {
 
 // ─── Spec builder ─────────────────────────────────────────────────────────────
 
+registerCurrentRoute({
+  method: "get", path: "/api/companies/{companyId}/business-events", tags: ["V8"],
+  summary: "Read current authorized native Business Events within an explicit window",
+  query: z.object({ from: businessEventListSchema.shape.from, until: businessEventListSchema.shape.until,
+    limit: businessEventListSchema.shape.limit, cursorAt: businessEventCursorSchema.shape.at.optional(),
+    cursorId: businessEventCursorSchema.shape.id.optional() }).strict(),
+});
+registerCurrentRoute({
+  method: "post", path: "/api/companies/{companyId}/business-events/backfill", tags: ["V8"],
+  summary: "Project one bounded native activity batch with current board audit authority",
+  body: businessEventBackfillSchema,
+});
+registerCurrentRoute({
+  method: "post", path: "/api/companies/{companyId}/business-events/export", tags: ["V8"],
+  summary: "Export one current authorized native event page with pinned format and lineage",
+  body: businessEventExportSchema,
+});
+registerCurrentRoute({
+  method: "post", path: "/api/companies/{companyId}/process-data-readiness", tags: ["V8"],
+  summary: "Inspect current native process data dimensions without granting process analysis or execution authority",
+  body: assessProcessDataSchema,
+});
+registerCurrentRoute({
+  method: "delete", path: "/api/companies/{companyId}/business-events/sources/{sourceRef}", tags: ["V8"],
+  summary: "Suppress a native source projection under instance administration and board audit authority",
+});
+
+for (const operation of [
+  { method: "get" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context", summary: "Inspect retained native decision context with current source authority", query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "post" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context/versions", summary: "Propose immutable prospective context around an existing native Decision", body: proposeDecisionContextSchema, query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "post" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context/prepare", summary: "Record explicit human preparation of the exact prospective context", body: prepareDecisionContextSchema, query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "post" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context/withdraw", summary: "Withdraw prospective preparation without choosing a native option", body: withdrawPreparedDecisionContextSchema, query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context/outcome-review", summary: "Inspect immutable outcome review with current native baseline and source authority", query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "post" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context/outcome-review", summary: "Schedule human review of the prospective chosen-option expectations", body: scheduleDecisionOutcomeReviewSchema, query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "post" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context/outcome-review/transition", summary: "Begin or cancel a human outcome review using its exact revision", body: transitionDecisionOutcomeReviewSchema, query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "post" as const, path: "/api/companies/{companyId}/decisions/{decisionId}/context/outcome-review/finish", summary: "Record six separate human judgments and native expected-versus-actual comparisons", body: finishDecisionOutcomeReviewSchema, query: z.object({expectedUserId:z.string().optional()}).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/process-definitions", summary: "List bounded current governed process definitions", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}", summary: "Inspect native immutable process definitions and effective publication" },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions", summary: "Propose a governed native process definition", body: createProcessAnalysisDefinitionSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/versions", summary: "Append a proposed process revision without replacing human publication", body: reviseProcessAnalysisDefinitionSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/publish", summary: "Publish the latest process definition after current human review", body: publishProcessAnalysisDefinitionSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/retire", summary: "Retire a process definition including after rollout rollback", body: retireProcessAnalysisDefinitionSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/runs", summary: "Calculate a bounded current native process snapshot under intrinsic readiness", body: runProcessAnalysisSchema },
+  { method: "get" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/runs", summary: "List bounded retained runs after current source reauthorization", query: z.object({ cursor:z.string().uuid().optional() }).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/runs/{runId}", summary: "Read a retained process result only after current source and purpose admission" },
+  { method: "get" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/runs/{runId}/findings", summary: "List material process findings after current run and source admission", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/runs/{runId}/findings", summary: "Freeze a human process interpretation of admitted native aggregate evidence", body: createProcessFindingSchema },
+  { method: "get" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/runs/{runId}/findings/{findingId}", summary: "Inspect a process finding and immutable human transition receipts" },
+  { method: "post" as const, path: "/api/companies/{companyId}/process-definitions/{definitionId}/runs/{runId}/findings/{findingId}/transition", summary: "Advance a human process finding with expected version and a reason", body: transitionProcessFindingSchema },
+  { method: "get" as const, path: "/api/companies/{companyId}/strategy-execution-links", summary: "List a bounded page of current authorized native strategy links", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}", summary: "Inspect immutable strategic pins and current source drift" },
+  { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links", summary: "Propose a governed native strategy relationship", body: createStrategyExecutionLinkSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}/versions", summary: "Propose a strategy revision without replacing approval", body: reviseStrategyExecutionLinkSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}/approve", summary: "Human approval of current pinned strategy and native source authority", body: approveStrategyExecutionLinkSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/strategy-execution-links/{linkId}/retire", summary: "Withdraw a strategy link without cancelling native work", body: retireStrategyExecutionLinkSchema },
+  { method: "get" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}/observations", summary: "List currently fresh observations only after native source reauthorization", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/business-metric-targets", summary: "List native company commitments under current human authority", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}", summary: "Inspect target versions and current review status" },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets", summary: "Create a commitment draft without approval or an observation", body: createBusinessMetricTargetSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}/versions", summary: "Revise a target with native expected-revision control", body: reviseBusinessMetricTargetSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}/approve", summary: "Approve a pinned metric commitment under current purpose authority", body: approveBusinessMetricTargetSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}/retire", summary: "Retire a commitment including after rollout rollback", body: retireBusinessMetricTargetSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metric-targets/{targetId}/compare", summary: "Observe the pinned population and compare a closed period; open periods remain provisional", body: z.object({}).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/business-metrics", summary: "List company metric definitions with current human authority", query: z.object({ cursor: z.string().uuid().optional() }).strict() },
+  { method: "get" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}", summary: "Inspect a metric and its immutable definition history" },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metrics", summary: "Register an explicitly governed metric draft", body: createBusinessMetricSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}/versions", summary: "Append an immutable definition with expected revision", body: createBusinessMetricVersionSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}/publish", summary: "Publish a pinned definition under current governance and native permission authority", body: publishBusinessMetricSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metrics/{metricId}/lifecycle", summary: "Deprecate or revoke a metric under native authority, including after rollout rollback", body: transitionBusinessMetricSchema },
+  { method: "post" as const, path: "/api/companies/{companyId}/business-metrics/query", summary: "Observe a complete authorized bounded metric population with source lineage", body: queryBusinessMetricSchema },
+]) registerCurrentRoute({ ...operation, tags: ["V8"], query: operation.query?.extend({ expectedUserId: z.string().optional() }) ?? z.object({ expectedUserId: z.string().optional() }) });
+
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts", tags: ["V8"], summary: "List currently authorized forecast specifications", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}", tags: ["V8"], summary: "Inspect retained forecast specification versions", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts", tags: ["V8"], summary: "Create a governed native forecast draft", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: createBusinessForecastSpecSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts/{specId}/versions", tags: ["V8"], summary: "Append a human-proposed immutable forecast version", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: reviseBusinessForecastSpecSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts/{specId}/backtests", tags: ["V8"], summary: "Capture exact native observations for a time-safe rolling-origin backtest", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: backtestBusinessForecastSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts/{specId}/publish", tags: ["V8"], summary: "Publish with a human rationale and an exact current qualified native backtest", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: publishBusinessForecastSpecSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts/{specId}/runs", tags: ["V8"], summary: "Run the current human-published forecast without changing commitments", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: backtestBusinessForecastSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-forecasts/{specId}/retire", tags: ["V8"], summary: "Retire a forecast with expected revision", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: retireBusinessForecastSpecSchema });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}/backtests", tags: ["V8"], summary: "List a bounded page of currently authorized retained native backtests", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}/runs", tags: ["V8"], summary: "List retained forecasts with current source qualification", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}/backtests/{artifactId}", tags: ["V8"], summary: "Inspect retained backtest facts after current source reauthorization", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-forecasts/{specId}/runs/{artifactId}", tags: ["V8"], summary: "Inspect a retained forecast with explicit current qualification", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-scenarios", tags: ["V8"], summary: "List bounded currently source-authorized scenarios", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}", tags: ["V8"], summary: "Inspect retained conditional scenario versions", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-scenarios", tags: ["V8"], summary: "Propose a governed scenario with exact native source pins", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: createBusinessScenarioSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/versions", tags: ["V8"], summary: "Append an immutable human scenario proposal", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: reviseBusinessScenarioSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/publish", tags: ["V8"], summary: "Publish the latest exact conditional model with human rationale", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: publishBusinessScenarioSchema });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/runs", tags: ["V8"], summary: "Calculate the published conditional scenario without granting execution authority", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: runBusinessScenarioSchema });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/runs", tags: ["V8"], summary: "List retained currently authorized scenario runs", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/runs/{runId}", tags: ["V8"], summary: "Inspect retained scenario arithmetic under current source authority", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/business-scenarios/{scenarioId}/retire", tags: ["V8"], summary: "Retire a scenario with human revision and rationale", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: retireBusinessScenarioSchema });
+
 for (const operation of v7ApiPaths) {
   registry.registerPath({
     method: operation.method, path: operation.path, tags: ["V7"], summary: operation.summary,
@@ -11847,4 +12008,99 @@ registerCurrentRoute({
   tags: ["ai-connections"], summary: "Check the local operator's subscription sign-in without saving a connection",
   body: localAiConnectionSchema,
   responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 422: r.unprocessable },
+});
+
+// Governed native business experiment preregistration. Execution receipts are
+// admitted by their own owner; the protocol cannot grant exposure authority.
+registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "get", path: "/api/companies/{companyId}/experiments", tags: ["V8"], summary: "List current-authorized preregistered business experiments", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() });
+registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "post", path: "/api/companies/{companyId}/experiments", tags: ["V8"], summary: "Propose a governed native business experiment", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: createBusinessExperimentSchema });
+registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "get", path: "/api/companies/{companyId}/experiments/{experimentId}", tags: ["V8"], summary: "Inspect exact experiment protocol and lifecycle history under current source authority", query: z.object({ expectedUserId: z.string().optional() }).strict() });
+registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/versions", tags: ["V8"], summary: "Append an explicit reasoned amendment to an unstarted experiment", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: amendBusinessExperimentSchema });
+registerCurrentRoute({ responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, protocol or review revision changed; reload and review the exact current state" } }, method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/transition", tags: ["V8"], summary: "Human review, readiness or cancellation of the exact registered protocol", query: z.object({ expectedUserId: z.string().optional() }).strict(), body: transitionBusinessExperimentSchema });
+
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/start", tags: ["V8"], summary: "Begin bookkeeping for an exact human-reviewed native process protocol without dispatching exposure", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } }, body: startBusinessExperimentSchema });
+
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/assignments", tags: ["V8"], summary: "Record a secret-key-stable native unit allocation with actual pretreatment source receipts", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } }, body: assignBusinessExperimentUnitSchema });
+
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/exposures", tags: ["V8"], summary: "Record immutable human exposure attestation; this is not verified workflow execution", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } }, body: recordBusinessExperimentExposureSchema });
+
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/stop", tags: ["V8"], summary: "Pause, resume, cancel or complete recording under the registered stopping policy", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } }, body: controlBusinessExperimentExecutionSchema });
+
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/experiments/{experimentId}/versions/{versionId}/receipts", tags: ["V8"], summary: "Inspect retained assignment, human attestation and stopping receipts under current source authority", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } } });
+
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/analyze", tags: ["V8"], summary: "Capture every assigned native outcome once and evaluate the preregistered fixed protocol", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } }, body: analyzeBusinessExperimentSchema });
+
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/experiments/{experimentId}/interpret", tags: ["V8"], summary: "Retain explicit human advisory interpretation without dispatch or policy execution authority", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: { description: "Source, account, recording state or review revision changed; reload the exact current protocol" } }, body: interpretBusinessExperimentSchema });
+
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/experiments/recording-controls", tags: ["V8"], summary: "Inspect only exact active recording control identities under human stop authority, including with rollout disabled", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict(), responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 404: r.notFound, 409: r.conflict } });
+
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/causal-claims/controls",tags:["V8"],summary:"List minimal human revocation controls independently of rollout and source disclosure",query:z.object({expectedUserId:z.string().optional(),cursor:z.string().uuid().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Account or control revision changed"}}});
+
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/causal-claims",tags:["V8"],summary:"List bounded currently admitted native causal evidence",query:z.object({expectedUserId:z.string().optional(),cursor:z.string().uuid().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, account, model or human review changed"}}});
+
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/causal-claims/{claimId}",tags:["V8"],summary:"Inspect exact retained human causal model and signed native results",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, account, model or human review changed"}}});
+
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/causal-claims",tags:["V8"],summary:"Propose a human causal question and model",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{201:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, account, model or human review changed"}},body:createCausalClaimSchema});
+
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/causal-claims/{claimId}/versions",tags:["V8"],summary:"Append a reasoned causal model amendment and reset review",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{201:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, account, model or human review changed"}},body:reviseCausalClaimSchema});
+
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/causal-claims/{claimId}/review",tags:["V8"],summary:"Human review of the exact causal graph and assumptions",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, account, model or human review changed"}},body:reviewCausalClaimSchema});
+
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/causal-claims/{claimId}/analyze",tags:["V8"],summary:"Identify or abstain before native conditional registered-primary interpretation",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, account, model or human review changed"}},body:analyzeCausalClaimSchema});
+
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/causal-claims/{claimId}/revoke",tags:["V8"],summary:"Revoke a claim independently of rollout and source disclosure",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, account, model or human review changed"}},body:revokeCausalClaimSchema});
+
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/controls",tags:["V8"],summary:"Inspect minimal native planning proposal controls independently of analytical rollout",query:z.object({expectedUserId:z.string().optional(),cursor:z.string().uuid().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current account or source authority changed"}}});
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/preview",tags:["V8"],summary:"Inspect a bounded native constraint solve over the complete authorized project source population",query:z.object({expectedUserId:z.string().optional()}).strict(),body:projectPlanningProfileSchema,responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source or purpose is not ready for reliance"}}});
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals",tags:["V8"],summary:"Create a source-pinned pending canonical Roadmap proposal requiring separate human review",query:z.object({expectedUserId:z.string().optional()}).strict(),body:proposeProjectPlanningSchema,responses:{201:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Preview, source, company constraints or authority changed"}}});
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}",tags:["V8"],summary:"Inspect signed native planning source and original mathematical result with current source qualification",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Source or purpose needs fresh review"}}});
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/review",tags:["V8"],summary:"Review through canonical human Roadmap authority with current account binding and a metadata-only result",query:z.object({expectedUserId:z.string().optional()}).strict(),body:reviewRoadmapProposalSchema,responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Source, account, native task or planning revision changed"}}});
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/projects/{projectId}/roadmap/planning/source",tags:["V8"],summary:"Read the canonical authorized Roadmap source with current account binding for native planning",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current account or native source is unavailable"}}});
+
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/decision-context-source-options",tags:["V8"],summary:"Choose bounded native Decision scope with current account and source authority",query:z.object({kind:z.enum(["project","issue"]),expectedUserId:z.string().min(1).max(300).optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,403:r.forbidden,404:r.notFound,409:{description:"Current account or native source changed"}}});
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/management-reviews/source-options",tags:["V8"],summary:"Choose bounded currently authorized native review sources with account binding",query:managementSourceOptionsQuerySchema,responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,403:r.forbidden,404:r.notFound,409:{description:"Current account or native source changed"}}});
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/management-reviews/controls",tags:["V8"],summary:"List independent bounded native review metadata",query:z.object({expectedUserId:z.string().optional(),cursor:z.string().uuid().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
+
+registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/management-reviews/{reviewId}",tags:["V8"],summary:"Inspect an admitted historical cited management packet",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
+
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/management-reviews",tags:["V8"],summary:"Capture a deterministic native management review draft",query:z.object({expectedUserId:z.string().optional()}).strict(),body:managementReviewDefinitionSchema,responses:{201:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
+
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/management-reviews/{reviewId}/publish",tags:["V8"],summary:"Publish an exact current packet after separate human review",query:z.object({expectedUserId:z.string().optional()}).strict(),body:publishManagementReviewSchema,responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
+
+registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/management-reviews/{reviewId}/events",tags:["V8"],summary:"Record an explicit human-reported agenda event without asserting verified impact",query:z.object({expectedUserId:z.string().optional()}).strict(),body:recordManagementReviewEventSchema,responses:{201:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
+
+// These supplemental outcomes and joint plans stay with their native owners.
+for (const operation of [
+  { method: "get", path: "/api/companies/{companyId}/business-forecasts/provider-profile", summary: "Inspect the exact optional statistical software profile; company forecast qualification remains separate", result: z.object({ companyId: z.string().uuid(), profile: statisticalForecastProfileSchema, models: z.array(z.enum(["auto_ets", "auto_arima"])), qualification: z.literal("synthetic_software_conformance"), limitations: z.array(z.string()) }).strict(), unavailable: true },
+  { method: "get", path: "/api/companies/{companyId}/causal-claims/provider-profile", summary: "Inspect the exact optional causal software profile under current Human authority", result: doWhyCausalProfileSchema },
+  { method: "post", path: "/api/companies/{companyId}/decisions/{decisionId}/context/outcome-review/learning", summary: "Start a separate Learning draft from the exact current human outcome review", body: startDecisionReviewLearningSchema, status: 201 },
+  { method: "post", path: "/api/companies/{companyId}/management-reviews/{reviewId}/tasks", summary: "Create an original native Task after separate human acknowledgement of an exact published agenda item", body: createManagementReviewTaskSchema, status: 201 },
+  { method: "post", path: "/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes", summary: "Record immutable descriptive completion facts without verified business impact", body: recordPlanningOutcomeSchema, status: 201 },
+  { method: "get", path: "/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes/{manifestId}", summary: "Inspect descriptive outcome facts after current native Source admission" },
+  { method: "post", path: "/api/companies/{companyId}/projects/{projectId}/roadmap/planning/proposals/{proposalId}/outcomes/learning", summary: "Start a separate Learning draft from an exact descriptive outcome manifest", body: startPlanningOutcomeLearningSchema, status: 201 },
+  { method: "get", path: "/api/companies/{companyId}/adaptive-planning/source-options", summary: "Choose bounded currently authorized native projects", query: z.object({ expectedUserId: z.string().optional(), q: z.string().trim().max(120).optional() }).strict() },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/preview", summary: "Preview one governed same-company cross-project constraint problem", body: crossProjectPlanningProfileSchema },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/proposals", summary: "Propose exact source-pinned cross-project Roadmap changes for separate human review", body: proposeCrossProjectPlanningSchema, status: 201 },
+  { method: "get", path: "/api/companies/{companyId}/adaptive-planning/controls", summary: "List bounded independent cross-project proposal controls", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() },
+  { method: "get", path: "/api/companies/{companyId}/adaptive-planning/proposals/{proposalId}", summary: "Inspect the signed joint plan after current Source and account admission" },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/proposals/{proposalId}/review", summary: "Apply separately acknowledged joint changes through original native Roadmap owners", body: reviewCrossProjectPlanningSchema },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/initiatives/preview", summary: "Preview native initiative choices with separate explicit business dimensions", body: portfolioPlanningProfileSchema },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/initiatives/proposals", summary: "Propose source-pinned initiative dispositions requiring separate human review", body: proposeInitiativePlanningSchema, status: 201 },
+  { method: "get", path: "/api/companies/{companyId}/adaptive-planning/initiatives/controls", summary: "List bounded independent initiative proposal controls", query: z.object({ expectedUserId: z.string().optional(), cursor: z.string().uuid().optional() }).strict() },
+  { method: "get", path: "/api/companies/{companyId}/adaptive-planning/initiatives/proposals/{proposalId}", summary: "Inspect current native initiative, goal and accounting source pins" },
+  { method: "post", path: "/api/companies/{companyId}/adaptive-planning/initiatives/proposals/{proposalId}/review", summary: "Apply acknowledged dispositions through original Project, Goal, Budget and Human owners", body: reviewCrossProjectPlanningSchema },
+]) {
+  registerCurrentRoute({ ...operation, tags: ["V8"],
+    query: operation.query ?? z.object({ expectedUserId: z.string().optional() }).strict(),
+    responses: { [operation.status ?? 200]: { ...r.ok(operation.result), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } },
+      400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
+      409: { description: "Current account, native Source, retained revision or separate Human review changed" },
+      ...(operation.unavailable ? { 422: { description: "Exact qualified statistical runtime unavailable" } } : {}),
+    },
+  });
+}
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/runs/{runId}/playbooks/{playbookId}/body", tags: ["V5"],
+  summary: "Load the bounded exact approved Playbook body from the current authenticated execution pins",
+  responses: { 200: { ...r.ok(z.object({ playbookId: z.string().uuid(), revisionId: z.string().uuid(), markdown: z.string() }).strict()), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } },
+    401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 422: { description: "Pinned body exceeds the 32000-byte UTF-8 budget" } },
 });

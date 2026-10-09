@@ -6,6 +6,7 @@ import { agentRuntimeFabricService } from "./agent-runtime-fabric.js";
 import { agentProviderBindingService } from "./agent-provider-bindings.js";
 import { workflowDirectAgentPrompt } from "./workflows/workflow-direct-agent.js";
 import { heartbeatMemoryPayloadRetained, heartbeatMemoryPayloadVisible } from "./memory/memory-privacy.js";
+import { assertNativeAnalyticalRunPayloadAccess } from "./analytical-context-authority.js";
 import { applyWorkspaceRestoreFailure } from "@paperclipai/adapter-utils/workspace-restore-result";
 import { hasWorkspaceRestoreFailure } from "@paperclipai/shared";
 import { externalConversationStateSql, nonIdleSlackIssueCondition } from "./slack-conversation-state.js";
@@ -20,7 +21,7 @@ import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopI
 import { legacyControllerBootId, legacyControllerClaim, renewLegacyControllerLease, hasLiveLegacyController, revokeExpiredLegacyController, watchLegacyControllerLease } from "./legacy-controller-lease.js";
 import { completeTerminatedRemoteNativeSessionCleanup } from "../vendor/paperclip-runner/index.js";
 import { hasRemoteTerminationReceipt, remoteExecutionHasStopped, remoteTerminationReceipt, stoppedRemoteCleanupScopes } from "./remote-execution-termination.js";
-import { applyConnectorSkills, prepareConnectorSkillDelivery, resolveConnectorAssignments } from "./connector-runtime.js";
+import { prepareRetainedConnectorSkills, prepareConnectorSkillDelivery } from "./connector-runtime.js";
 import { admitExplicitNativeContinuation, undeliveredLegacyUserCommentIds } from "./explicit-native-continuation.js";
 import { connectionIntentService } from "./connection-intents.js";
 import { managedAiSessionFingerprintConfig, prepareManagedAiRuntime, assertManagedAiProjectAuth, stripAiAuthBindings, isAiConnectionBusy, AI_AUTH_ENV_KEYS } from "./ai-connection-runtime.js";
@@ -212,7 +213,7 @@ import {
   buildNativeProviderEnvironment,
   buildNativeExecutionInput,
   buildNativeExecutionWithCheckpoint,
-  buildNativeRuntimeContext,
+  buildRetainedNativeRuntimeContext,
   cancelNativeSession,
   claimNativeRestartRecoveries,
   closeWarmNativeSessionsForEnvironment,
@@ -13753,12 +13754,6 @@ export function heartbeatService(
         )
       : secretSanitizedPayload;
     const issueId = readRuntimeStatusIssueIdCandidate(run) ?? null;
-    const progress = buildRunEventRuntimeProgress({
-      eventType: event.eventType,
-      message: sanitizedMessage ?? null,
-      payload: sanitizedPayload ?? null,
-      at: eventAt,
-    });
     const persistedEvent = await appendHeartbeatRunEvent(db, {
       companyId: run.companyId,
       runId: run.id,
@@ -13772,7 +13767,16 @@ export function heartbeatService(
       retryExhaustion: event.retryExhaustion,
     });
     if (persistedEvent.disposition === "duplicate") return;
-    const seq = persistedEvent.row.seq;
+    // Native C7 SQL may scrub a late write. Only its committed row may supply
+    // live text or the runtime cache; the original input is no longer authority.
+    const stored = persistedEvent.row;
+    const seq = stored.seq;
+    const progress = buildRunEventRuntimeProgress({
+      eventType: stored.eventType,
+      message: stored.message,
+      payload: stored.payload,
+      at: stored.createdAt,
+    });
 
     publishLiveEvent({
       companyId: run.companyId,
@@ -13782,15 +13786,15 @@ export function heartbeatService(
         agentId: run.agentId,
         issueId,
         seq,
-        eventType: event.eventType,
-        stream: event.stream ?? null,
-        level: event.level ?? null,
-        color: event.color ?? null,
-        message: sanitizedMessage ?? null,
+        eventType: stored.eventType,
+        stream: stored.stream,
+        level: stored.level,
+        color: stored.color,
+        message: stored.message,
         currentToolName: progress?.currentToolName ?? null,
         lastAssistantSnippet: progress?.lastAssistantSnippet ?? null,
         lastEventAt: (progress?.lastEventAt ?? eventAt).toISOString(),
-        payload: sanitizedPayload ?? null,
+        payload: stored.payload,
       },
     });
     if (progress && isHeartbeatRunRuntimeStatusActive(run.status)) {
@@ -21380,7 +21384,7 @@ export function heartbeatService(
       const runtimeSkillEntries = await (async () => {
         try {
           return await companySkills.listRuntimeSkillEntries(agent.companyId, {
-            ...(v5Fabric ? { selectedSkillKeys: new Set(eagerV5Skills!.map((pin) => pin.key)), allowCandidateVersionsForTest: Boolean(pinnedSkillTestContext), versionSelections: new Map(eagerV5Skills!.map((pin) => [pin.key, pin.versionId])) } : {}),
+            ...(v5Fabric ? { actor:{type:"agent" as const,source:"agent_jwt" as const,companyId:agent.companyId,agentId:agent.id,runId:run.id,onBehalfOfUserId:run.responsibleUserId},readScope:"task" as const,selectedSkillKeys: new Set(eagerV5Skills!.map((pin) => pin.key)), allowCandidateVersionsForTest: Boolean(pinnedSkillTestContext), versionSelections: new Map(eagerV5Skills!.map((pin) => [pin.key, pin.versionId])) } : {}),
             versionSelections: v5Fabric ? new Map(eagerV5Skills!.map((pin) => [pin.key, pin.versionId])) : skillVersionSelectionMap(
               runtimeSkillPreference.desiredSkillEntries,
               {
@@ -21410,8 +21414,8 @@ export function heartbeatService(
         startedAtMs: skillsPrepareStartedAtMs,
         endedAtMs: Date.now(),
       });
-      const connectorAssignments = await resolveConnectorAssignments(db, { companyId: agent.companyId, agentId: agent.id, runId: run.id, issueId: typeof context.issueId === "string" ? context.issueId : undefined });
-      const connectorSkillConfig = await applyConnectorSkills(effectiveResolvedConfig, runtimeSkillEntries, connectorAssignments);
+      const { assignments: connectorAssignments, config: connectorSkillConfig } = await prepareRetainedConnectorSkills(db,
+        { companyId: agent.companyId, agentId: agent.id, runId: run.id, issueId: typeof context.issueId === "string" ? context.issueId : undefined }, effectiveResolvedConfig, runtimeSkillEntries);
       // Both CLI adapters and native context materialization use the same resolved set.
       runtimeSkillEntries.splice(0, runtimeSkillEntries.length, ...connectorSkillConfig.paperclipRuntimeSkills);
       const connectorDelivery = await prepareConnectorSkillDelivery(connectorSkillConfig, agent.adapterType);
@@ -22881,6 +22885,18 @@ export function heartbeatService(
         const currentUserRedactionOptions =
           await getCurrentUserRedactionOptions();
         const onLog = async (stream: "stdout" | "stderr", chunk: string) => {
+          try {
+            await assertNativeAnalyticalRunPayloadAccess(db, run.companyId, run.id);
+          } catch (error) {
+            clearHeartbeatRunRuntimeStatus(run.id);
+            if (error instanceof HttpError && (error.details as {code?:unknown}|undefined)?.code === "analytical_source_access_lost") {
+              // Do not await the existing stop owner inside its output callback:
+              // process settlement can itself be waiting for this callback.
+              void cancelRunInternal(run.id, "Analytical source access lost", { errorCode: "analytical_source_access_lost" })
+                .catch(err => logger.warn({ err, runId: run.id }, "source-loss run cancellation failed"));
+            }
+            throw error;
+          }
           const sanitizedChunk = compactRunLogChunk(
             redactCurrentUserText(chunk, currentUserRedactionOptions),
           );
@@ -23539,7 +23555,7 @@ export function heartbeatService(
                   safeWakeCommentContext?.body ??
                   null,
               });
-            const nativeRuntimeContext = await buildNativeRuntimeContext({
+            const nativeRuntimeContext = await buildRetainedNativeRuntimeContext({
               db,
               agent,
               runId: run.id,

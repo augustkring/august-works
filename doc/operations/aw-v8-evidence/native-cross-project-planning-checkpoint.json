@@ -1,0 +1,100 @@
+{
+  "checkpoint": "Same-company complete cross-project constraint proposal through original Human Roadmap application",
+  "parentCommit": "c3ea316cb7be3f6d9d17d55c2c3aa206ef1a226b",
+  "recordedAt": "2026-10-08T07:06:56.833828+00:00",
+  "migration": "0441_brief_the_leader.sql",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "441c01b494c7a12beb52c1dc9da40ccf2e4439cebbde99945bb78115d27929f1"
+    },
+    {
+      "path": "packages/db/src/migrations/0441_brief_the_leader.sql",
+      "sha256": "1ffad68c9aef67717aab36367f60701b2a8aa22e59cd7103cdb74ca531f2776c"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0441_snapshot.json",
+      "sha256": "51930d1087d2898adbc729b375d6f34297c77d5323069afe9f9f1696ac9c232b"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "b74ba4eb142fbb4069797c4dd15b76b61af5b0a73841a1c077fd60727f965f6c"
+    },
+    {
+      "path": "packages/db/src/schema/adaptive_planning.ts",
+      "sha256": "2245a4699f8082c1cff0bb08e8c49f700322c36e5d34923b0418ae720c19538b"
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "c14dc26d1d84b64b0079e5609814ade0422032eb157bd8e181853504d50db535"
+    },
+    {
+      "path": "packages/shared/src/adaptive-planning.ts",
+      "sha256": "45deb57e45987bc96c9c9a649088b6c636fd0d930e84862225bbd82cb726740b"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-cross-project.integration.test.ts",
+      "sha256": "fc02ebbd9f053639f678a39042aec3f6a020c80b506b2990685174b58b0e374c"
+    },
+    {
+      "path": "server/src/app.ts",
+      "sha256": "a394d74179394d764acce98ae37ee1f8b818ab15a9b4152f40f371381746bef7"
+    },
+    {
+      "path": "server/src/routes/cross-project-planning.ts",
+      "sha256": "1e6114e122d535e50d3086bf9ff2fc9032bb55389c498759c8e0cf624702803f"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/cross-project.ts",
+      "sha256": "7a5c2e2ef86b54a32462a48f8213fa09f200c273091d3332e387fc91e0de2f01"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/project-owner.ts",
+      "sha256": "e366f4e0623af8a4d3268190f4686bafb35a1dd28b4adc0ab154fa2ad2bccf50"
+    },
+    {
+      "path": "server/src/services/project-control.ts",
+      "sha256": "4d5cc3a1d44dd959b121fb2f2c6a169cfd1763fcaffd5e9e7336054c88b62f46"
+    }
+  ],
+  "validation": {
+    "nativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-final-native-tests.log",
+      "tests": 64,
+      "files": 6,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-final-server-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-migration-checks.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "4934305d2a66cdbeaedcdfd70bfc2e171255236a",
+      "log": "/var/tmp/aw-v8-native-build-review-task.log"
+    }
+  },
+  "qualified": [
+    "Complete current active populations across 2\u201320 same-company projects; exact native versions and real cross-project dependencies",
+    "One bounded native constraint problem with shared explicitly maintained Human capacity and separate policy dimensions; infeasible/unknown states preserved",
+    "Original per-project capture and original mathematical provider; joint snapshot binds original complete Source lineage including governance",
+    "Generated native immutable signed proposal, same-company manifest cascade, metadata-only controls, revision/CAS and separate Human review",
+    "Actual original Roadmap proposal/review creates canonical Task dates only after exact current joint admission",
+    "Late failure after an earlier project application rolls back every canonical date, proposal and audit and emits no private live event",
+    "Account binding, malformed commands, generic Agent authors, missing original mutation authority and withdrawn Human refused",
+    "Native Source Task erasure removes copied joint proposal through original manifest with rollout disabled and company paused",
+    "Original single-project, Roadmap, Work Signal and schema snapshot regressions pass without skips"
+  ],
+  "limits": [
+    "Current Human identities, grants and explicit capacity/duration declarations are software fixtures, not performed Human/provider/pilot trials or business-impact evidence",
+    "Late native-write fault is an explicit isolated local PostgreSQL software prerequisite",
+    "Joint operator UI is the next milestone; additional initiative dispositions and authoritative budget/goal constraint profiles remain open",
+    "No global optimality, inferred Human performance, minted budget/entitlement/execution capacity, maximum-volume/hard-latency or whole-brief acceptance",
+    "Readonly provider conformance, remaining Source closure and live hosted qualification remain open"
+  ]
+}

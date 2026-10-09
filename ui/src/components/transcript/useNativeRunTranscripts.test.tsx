@@ -5,6 +5,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useNativeRunTranscripts } from "./useNativeRunTranscripts";
 import { TRANSCRIPT_REQUEST_TIMEOUT_MS } from "./read-transcript-request";
+import { ApiError } from "@/api/client";
+import { __liveUpdatesTestUtils } from "@/context/LiveUpdatesProvider";
+import type { LiveEvent } from "@paperclipai/shared";
 
 const eventsMock = vi.hoisted(() => vi.fn());
 
@@ -29,6 +32,13 @@ function MultiRunProbe() {
     { id: "healthy-run", status: "succeeded", runtimeMode: "native" },
   ]);
   return null;
+}
+
+function RetainedProbe() {
+  const { transcriptByRun, errorsByRun } = useNativeRunTranscripts([
+    { id: "native-run", status: "running", runtimeMode: "native" },
+  ]);
+  return <div>{JSON.stringify([...transcriptByRun.values()])}{errorsByRun.get("native-run")?.sourceAccessLost ? "source denied" : ""}</div>;
 }
 
 describe("useNativeRunTranscripts", () => {
@@ -85,6 +95,45 @@ describe("useNativeRunTranscripts", () => {
     });
     expect(eventsMock).toHaveBeenCalledTimes(3);
     expect(eventsMock.mock.calls.at(-1)?.[0]).toBe("failed-run");
+  });
+
+  it("removes retained events on source denial and rereads from the beginning after recovery", async () => {
+    const event = {
+      id: 1, runId: "native-run", seq: 1, eventType: "item.delta", stream: "system", level: "info", createdAt: new Date(),
+      payload: { prpEvent: { schema: "paperclip.prp.event.v1", schemaVersion: 1, runId: "native-run", normalizedSessionId: "session-1", eventType: "item.delta", emittedAt: "2026-10-07T10:00:00Z", payload: { itemId: "answer", kind: "agentMessage", text: "Retained analytical fact" } } },
+    };
+    eventsMock.mockResolvedValueOnce([event]).mockRejectedValueOnce(new ApiError("Source unavailable", 403, { details: { code: "analytical_source_access_lost" } })).mockResolvedValue([event]);
+    await act(async () => { root.render(<RetainedProbe />); await Promise.resolve(); });
+    expect(container.textContent).toContain("Retained analytical fact");
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(container.textContent).not.toContain("Retained analytical fact");
+    expect(container.textContent).toContain("source denied");
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(eventsMock.mock.calls.at(-1)?.[1]).toBe(0);
+    expect(container.textContent).toContain("Retained analytical fact");
+  });
+  it("immediately hides live-denied history and rejects a pre-denial in-flight response", async () => {
+    const event = { id: 1, runId: "native-run", seq: 1, eventType: "item.delta", createdAt: new Date(), payload: { prpEvent: {
+      schema: "paperclip.prp.event.v1", schemaVersion: 1, runId: "native-run", normalizedSessionId: "session-1",
+      eventType: "item.delta", emittedAt: "2026-10-07T10:00:00Z", payload: { itemId: "answer", kind: "agentMessage", text: "Retained live analytical fact" },
+    } } };
+    let resolveLate!: (rows: unknown[]) => void;
+    let receive!: (event: LiveEvent) => void;
+    eventsMock.mockResolvedValueOnce([event]).mockImplementationOnce(() => new Promise(resolve => { resolveLate = resolve; }));
+    const Context = __liveUpdatesTestUtils.LiveEventSubscriptionContext;
+    const subscription = { subscribe: (handler: typeof receive) => { receive = handler; return () => {}; } };
+    await act(async () => { root.render(<Context.Provider value={subscription}><RetainedProbe /></Context.Provider>); });
+    expect(container.textContent).toContain("Retained live analytical fact");
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => receive({ id: 2, companyId: "company-1", type: "analytical.context.access_lost", createdAt: new Date().toISOString(), payload: { runId: "native-run" } }));
+    expect(container.textContent).not.toContain("Retained live analytical fact");
+    expect(container.textContent).toContain("source denied");
+    await act(async () => { resolveLate([{ ...event, seq: 2 }]); });
+    expect(container.textContent).not.toContain("Retained live analytical fact");
+    eventsMock.mockResolvedValue([event]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(eventsMock.mock.calls.at(-1)?.[1]).toBe(0);
+    expect(container.textContent).toContain("Retained live analytical fact");
   });
 });
 

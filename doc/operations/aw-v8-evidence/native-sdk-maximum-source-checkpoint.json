@@ -1,0 +1,104 @@
+{
+  "checkpoint": "Complete default/maximum native SDK populations with one original retention authority owner",
+  "recordedAt": "2026-10-08T13:06:38.399688+00:00",
+  "parentCommit": "311e20c99d02e0f4971c8ff715a7003646655b43",
+  "primaryParentCommit": "08c7559a66ba8694790eea7289d97983b1f3d2db",
+  "sourceFiles": [
+    {
+      "path": "server/src/services/business-metrics/service.ts",
+      "sha256": "19ffcff767ac7d9065d2c7171573f0908cd183adaf1ae7f94313b3ed80958f2b"
+    },
+    {
+      "path": "server/src/services/analytical-context-privacy.ts",
+      "sha256": "4538f5df3f1b1ee3033029ebddef47751455e50c2f65ca8d8de0e7bcf27eee19"
+    },
+    {
+      "path": "server/src/services/native-runtime/management-analytical-tools.ts",
+      "sha256": "23bf3cb3f09ca1b5eb3bbdd88af1b6b13cf2b9e9f6b0f29b90aadeebf93506b0"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "898dba219495fe1dca44ebae35e88423a3fe33c06ae9403b641cc40fa21283e0"
+    },
+    {
+      "path": "server/src/__tests__/business-metrics.integration.test.ts",
+      "sha256": "9da54da6aeccaba30c972b6b8c50df6ea85ffdcf9aa5f58fea8837f6ca5c70c6"
+    },
+    {
+      "path": "server/src/__tests__/business-forecasting.integration.test.ts",
+      "sha256": "c9e8d8460aeddd68f4ca4123bafdb930d5d5c2846c00844292ffa2255d0df9f7"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "3a3825cc57e326093c3868973b6123303606c0f27640616d9aee80c0e0ca62f9"
+    },
+    {
+      "path": "doc/operations/aw-v8-optional-semantic-provider-decision.md",
+      "sha256": "0cc9e52ecd3075f9d7962a3e6ee6dd4826f8922985b24d1c9c345ca3a5f45402"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/semantic-provider-research.json",
+      "sha256": "4671da46785ef2295ce79af1a72c078aba511866ffb71aa86cc1f099452f50d7"
+    }
+  ],
+  "validation": {
+    "actualMaximumSdkFocused": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sdk-maximum-source-batched-tests.log",
+      "sha256": "5a7379289cc3f79b15e5b74d44533dc98be10dd78b395c34563b92ddc5241763",
+      "tests": 2,
+      "excludedByFilter": 48
+    },
+    "sevenUnchangedOwnerFiles": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sdk-maximum-source-reviewed-tests.log",
+      "sha256": "92bab8d25569971d12eac13e7ad92d7c63b6cdc458cce2674eccd36989f49033",
+      "tests": 149,
+      "skipped": 0,
+      "broadSuiteExit": 1,
+      "excluded": "Initial Forecast fixture failure disabling dependent feature flags; all seven other files pass against unchanged production source"
+    },
+    "finalCompleteForecastFile": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sdk-maximum-source-final-forecast-tests.log",
+      "sha256": "13425be039fb6840216ef8a5f8f508b57fbf67ae26e0840cec8fced45e0edbf6",
+      "tests": 24,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-sdk-maximum-source-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-sdk-process-source.log",
+      "sha256": "e47233830e2d2b728104992daf09b20dc70e44e86262a79c133efd7b7c9765f5"
+    }
+  },
+  "combinedQualification": {
+    "tests": 173,
+    "skipped": 0,
+    "boundary": "149 cases across seven original owner files plus complete final 24-case Forecast rerun; not a single all-green initial broad run"
+  },
+  "qualified": [
+    "Actual bound SDK returns complete default 5000 and explicit maximum 10000 Task observations within 30 seconds",
+    "Original metric owner batches current same-company non-hidden share-locked row acquisition only; original current agent \u00d7 Human and project admission still runs per Source",
+    "Exact SDK pins are resolved once by original private retention owner; explicit manifests from existing callers must still equal that authoritative complete set",
+    "One monotonic 30-second deadline covers complete conversation read and retention; controlled late-read test rolls back measurement and root",
+    "SDK retention has a five-minute ceiling bounded by original Source expiry",
+    "Oversized complete lineage rejects above 256000 UTF-8 bytes with no partial answer root or another observation",
+    "Hidden Source withholds disclosure; flags-off/paused-company Source withdrawal erases the complete dependent answer while independent native Tasks remain",
+    "Original native Forecast retains 4000 explicit software Task Sources, publishes/runs exact arithmetic, denies hidden Source and erases dependent forecasts with rollout fully disabled",
+    "Both MetricFlow and Cube remain unqualified and cannot substitute native counts; actual version-tagged readonly public research and demand decision are recorded"
+  ],
+  "limitations": [
+    "Initial 55-second SDK call and first timing-only correction are diagnostics excluded from qualification",
+    "Initial complete Forecast computations passed but its rollout-disable fixture violated feature dependencies; the original full-rollout helper corrects it before all 24 final cases pass",
+    "Controlled performance clock is a software deadline prerequisite, not an actual delayed provider or hosted latency trial",
+    "Chronological Forecast observation rows and maximum Task populations are explicit synthetic software prerequisites, not collected customer history, performed tasks/Human attestations or business impact",
+    "Public provider research performs no install, connection/auth, customer/warehouse or hosted provider trial; actual customer adapters remain conditional on supplied governed models and current connection qualification",
+    "Separate 68000-outcome maximum, remaining indirect Source/historical recovery and complete current branch/hosted acceptance remain ongoing",
+    "No whole-brief completion, hosted p95, release promotion, empirical interval coverage or named acceptance claim"
+  ]
+}

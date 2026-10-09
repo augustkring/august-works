@@ -1,0 +1,83 @@
+{
+  "checkpoint": "Native Optimizer Workflow Source copy and observation owner",
+  "parentCommit": "e4df7d1c757d6bb5dec66c9b27a892f4aabab58e",
+  "recordedAt": "2026-10-08T04:07:50.312746+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "5085e39d77c090cea49f3af666207702079eaa012fae7c1cfffb296608b78198"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0432_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "e2477e34c413e6d8f0e8b45ea5af1f71e5f702ca1d824e335d9d05c5df90ceba"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "bbce53eae0998fee96b039dfe8288b152fffbc7914461e1c7b855cef4f4ca94d"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-workflow-source.ts",
+      "sha256": "15d546e3d58ffebe7733c374f925b2adeb74eeddaafd5b3ed447eea9b365e0bb"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-evaluation.ts",
+      "sha256": "1cbfff3f1219023b22f5843ad9729622a05d9e851d8ac9504d3fde8dd3b77c73"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-live-drift.ts",
+      "sha256": "cbd02b98c7aed1f9144475e1b87f99fdc71e1d664a7cfe52cbe3ba931481182b"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+      "sha256": "aa17b9c883670804aa900a4d8127254499db85528240e4eab1d8519159ca62a5"
+    },
+    {
+      "path": "server/src/services/workflows/workflow-executor.ts",
+      "sha256": "2ea50d86fe0b285913b2be4118155371a9daab8f369f6bb9fdb869fdd6037537"
+    },
+    {
+      "path": "packages/db/src/migrations/0437_native_optimizer_observation_source_owner.sql",
+      "sha256": "e51864002ee1f43b1b4e56fbdcba5dce0c7caa0edd64c311086c0586a4b865fa"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0437_snapshot.json",
+      "sha256": "1cf167053f94e7725821be4fd40f4314a32a7f4a9c984708eb876da7e0014de2"
+    }
+  ],
+  "validation": {
+    "nativeOwners": {
+      "tests": 214,
+      "files": 9,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-optimizer-workflow-source-final-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-optimizer-workflow-source-final-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-optimizer-workflow-source-migrations.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "b9e70c59f7ce240a6c1fec881895824e879480fe",
+      "log": "/var/tmp/aw-v8-native-build-artifact-consumer.log"
+    }
+  },
+  "qualified": [
+    "Actual running native transform/evaluation/revision/root/node/current principal/agent run/lease/version admission before and after Source use",
+    "Shadow copies pinned before candidate execution; actual observation identities immutable and actual association required",
+    "Original Source/Memory C7 clears shadow payloads and rejects late restoration while preserving receipt metadata",
+    "Original revoked-binding and new-input-shape fallback behavior retains degradation; native code filesystem owner unchanged"
+  ],
+  "limits": [
+    "TypeScript classification and local identities are software prerequisites; no model suggestion/browser/JWT or Human/provider trial qualification",
+    "Sourceful promotion and dedicated Agent \u00d7 Human end-to-end consumer remain unqualified",
+    "Planning/Routine/action/remaining Source/provider/hosted work remains open; no hard latency/maximum-volume/hosted backfill or whole-brief acceptance"
+  ]
+}

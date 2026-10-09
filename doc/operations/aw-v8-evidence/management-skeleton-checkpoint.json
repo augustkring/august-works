@@ -1,0 +1,51 @@
+{
+  "checkpoint": "Strict management contracts and deterministic cited skeleton; native owner remains in progress",
+  "parentCommit": "28ced029f06569311da2dd9e4208f392a43d19fe",
+  "recordedAt": "2026-10-07T11:57:48.006224+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/shared/src/management-reviews.ts",
+      "sha256": "0eed8f6c31c25ddaec2a94286da8dcf5083c610a76b60216e6f64c414b5620c6"
+    },
+    {
+      "path": "packages/shared/src/index.ts",
+      "sha256": "aa1fcff8f33c90ac4893278bb8dd64483c72f38861b8f39abb0c4e601e52b1db"
+    },
+    {
+      "path": "server/src/services/management-reviews/kernel.ts",
+      "sha256": "cd9030ea6fb25646a800d5e90768594ddc8572006e9b7ebd10dc40cccba4d2e6"
+    },
+    {
+      "path": "server/src/__tests__/management-review-kernel.test.ts",
+      "sha256": "98b7fed8b6991df961bd5fa45c5419d133a3a8ab349d39062d7811e0babf850c"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "bounded-management-skeleton",
+      "checks": 6,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-kernel-tests.log",
+      "logSha256": "80c22223e54d6b7a7e98b7854a2c066f716453a989c73aac4c46620d9ab4f4d4"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-kernel-server-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-kernel-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "limits": [
+    "Pure formatting of already admitted owner captures; it does not admit authority, publish, dispatch or schedule.",
+    "Synthetic unit fixtures are software qualification, not operational source or business-impact evidence.",
+    "Native Management persistence/publication, Learning, cross-project Planning, providers and hosted acceptance remain open."
+  ]
+}

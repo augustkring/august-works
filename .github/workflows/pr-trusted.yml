@@ -576,6 +576,10 @@ jobs:
           pnpm install --frozen-lockfile
           git diff --exit-code -- pnpm-lock.yaml
 
+      - name: Install generated-code sandbox
+        if: matrix.group == 'general-server-without-chat'
+        run: bash scripts/ci-install-native-sandbox.sh
+
       - name: Run grouped general test suites
         run: |
           if [ -n "${{ matrix.shard_count }}" ]; then
@@ -1193,16 +1197,70 @@ jobs:
           }
           CONF
 
+      - name: Select e2e suites
+        id: e2e_suites
+        run: |
+          specs="$(node ./scripts/e2e-shard.mjs \
+            --shard-index ${{ matrix.shard_index }} --shard-count ${{ matrix.shard_count }})"
+          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+
+      - name: Set up pinned optional numerical interpreter
+        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts')
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12.14'
+
+      - name: Install selected native numerical sandbox
+        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts')
+        run: bash scripts/ci-install-native-sandbox.sh
+
+      - name: Install selected hash-locked numerical runtimes
+        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts')
+        env:
+          AW_E2E_SPECS: ${{ steps.e2e_suites.outputs.specs }}
+        run: |
+          set -euo pipefail
+          # The production worker clears ambient loader variables as well.
+          env -i PATH=/usr/bin:/bin "$pythonLocation/bin/python" -I \
+            -c 'import platform; print(platform.python_version())'
+          if [[ " $AW_E2E_SPECS " == *" tests/e2e/statistical-forecast.spec.ts "* ]]; then
+            python -m venv "$RUNNER_TEMP/aw-statistical-runtime"
+            "$RUNNER_TEMP/aw-statistical-runtime/bin/pip" install --only-binary=:all: --require-hashes \
+              -r server/src/services/scripts/statsforecast-requirements.lock
+            echo "PAPERCLIP_STATSFORECAST_PYTHON=$RUNNER_TEMP/aw-statistical-runtime/bin/python" >> "$GITHUB_ENV"
+          fi
+          if [[ " $AW_E2E_SPECS " == *" tests/e2e/causal-dowhy.spec.ts "* ]]; then
+            python -m venv "$RUNNER_TEMP/aw-causal-runtime"
+            "$RUNNER_TEMP/aw-causal-runtime/bin/pip" install --only-binary=:all: --require-hashes \
+              -r server/src/services/scripts/dowhy-requirements.lock
+            echo "PAPERCLIP_DOWHY_PYTHON=$RUNNER_TEMP/aw-causal-runtime/bin/python" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify selected numerical workers in the native sandbox
+        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts')
+        env:
+          AW_E2E_SPECS: ${{ steps.e2e_suites.outputs.specs }}
+        run: |
+          set -euo pipefail
+          suites=()
+          if [[ " $AW_E2E_SPECS " == *" tests/e2e/statistical-forecast.spec.ts "* ]]; then
+            suites+=(server/src/__tests__/business-forecasting-statistical-worker.integration.test.ts)
+          fi
+          if [[ " $AW_E2E_SPECS " == *" tests/e2e/causal-dowhy.spec.ts "* ]]; then
+            suites+=(server/src/__tests__/causal-dowhy-worker.integration.test.ts)
+          fi
+          pnpm exec vitest run "${suites[@]}" --maxWorkers=1
+
       - name: Run e2e tests
         env:
           PAPERCLIP_E2E_SKIP_LLM: "true"
           PAPERCLIP_PLAYWRIGHT_CHANNEL: "chrome"
+          AW_E2E_SPECS: ${{ steps.e2e_suites.outputs.specs }}
         run: |
           # Playwright's own --shard balances by test count, and one spec
           # (smoke-lab) is ~40% of the lane's wall clock. Partition by recorded
           # spec duration instead so both runners finish together.
-          specs="$(node ./scripts/e2e-shard.mjs \
-            --shard-index ${{ matrix.shard_index }} --shard-count ${{ matrix.shard_count }})"
+          specs="$AW_E2E_SPECS"
           echo "shard ${{ matrix.shard_label }} specs: $specs"
           # specs is an intentional argument list.
           # shellcheck disable=SC2086

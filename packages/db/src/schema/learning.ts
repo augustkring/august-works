@@ -1,15 +1,29 @@
 import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, timestamp, integer, jsonb, unique, foreignKey, check, index } from "drizzle-orm/pg-core";
-import type { LearningHypothesisInput, LearningEvaluationInput, LearningPolicyPayload } from "@paperclipai/shared";
+import type { LearningHypothesisInput, LearningEvaluationInput, LearningPolicyPayload, AnalyticalContextAuthorityPin } from "@paperclipai/shared";
 import { companies } from "./companies.js";
 import { memoryRecords } from "./memory.js";
+import { analyticalLineageManifests } from "./analytical_lineage.js";
 const times = () => ({ createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow() });
 export const learningCycles = pgTable("learning_cycles", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   scopeType: text("scope_type").notNull(), scopeId: text("scope_id"), purpose: text("purpose").notNull(), trigger: text("trigger").notNull(), status: text("status").notNull().default("hypothesizing"), version: integer("version").notNull().default(1),
   maxHypotheses: integer("max_hypotheses").notNull(), maxEvaluations: integer("max_evaluations").notNull(), outcomeVersions: jsonb("outcome_versions").$type<Record<string, string>>().notNull(), createdBy: text("created_by").notNull(), erasedAt: timestamp("erased_at", { withTimezone: true }), ...times(),
+  analyticalSourcePins: jsonb("analytical_source_pins").$type<AnalyticalContextAuthorityPin[]>().notNull().default([]),
+  analyticalSourceCount: integer("analytical_source_count").notNull().default(0),
+  analyticalSourceExpiresAt: timestamp("analytical_source_expires_at", {withTimezone: true}),
 }, (t) => ({ tenantUq: unique("learning_cycles_tenant_uq").on(t.companyId, t.id), scopeCheck: check("learning_cycle_scope_check", sql`(${t.scopeType}='company' and ${t.scopeId} is null) or (${t.scopeType}='project' and ${t.scopeId} is not null)`),
-  statusCheck: check("learning_cycle_status_check", sql`${t.status} in ('hypothesizing','evaluating','proposing','completed','failed','cancelled')`), limits: check("learning_cycle_limits_check", sql`${t.version}>0 and ${t.maxHypotheses} between 1 and 20 and ${t.maxEvaluations} between 1 and 40`), companyIdx: index("learning_cycles_company_idx").on(t.companyId, t.createdAt) }));
+  statusCheck: check("learning_cycle_status_check", sql`${t.status} in ('hypothesizing','evaluating','proposing','completed','failed','cancelled')`), limits: check("learning_cycle_limits_check", sql`${t.version}>0 and ${t.maxHypotheses} between 1 and 20 and ${t.maxEvaluations} between 1 and 40`), companyIdx: index("learning_cycles_company_idx").on(t.companyId, t.createdAt),
+  analyticalCheck: check("learning_cycle_analytical_sources_check",sql`jsonb_typeof(${t.analyticalSourcePins})='array' and ((${t.analyticalSourceCount}=0 and jsonb_array_length(${t.analyticalSourcePins})=0 and ${t.analyticalSourceExpiresAt} is null) or (${t.analyticalSourceCount} between 1 and 26200 and jsonb_array_length(${t.analyticalSourcePins}) between 1 and 8 and ${t.analyticalSourceExpiresAt} is not null))`),
+}));
+/** Original analytical provenance only; these edges are not verified outcomes. */
+export const learningAnalyticalDependencies=pgTable("learning_analytical_dependencies",{
+ companyId:uuid("company_id").notNull(),cycleId:uuid("cycle_id").notNull(),sourceManifestId:uuid("source_manifest_id").notNull(),
+},t=>({sourceUq:unique("learning_analytical_dependencies_uq").on(t.cycleId,t.sourceManifestId),
+ cycleFk:foreignKey({name:"learning_analytical_dependencies_cycle_fk",columns:[t.companyId,t.cycleId],foreignColumns:[learningCycles.companyId,learningCycles.id]}).onDelete("cascade"),
+ sourceFk:foreignKey({name:"learning_analytical_dependencies_source_fk",columns:[t.companyId,t.sourceManifestId],foreignColumns:[analyticalLineageManifests.companyId,analyticalLineageManifests.id]}).onDelete("cascade"),
+ sourceIdx:index("learning_analytical_dependencies_source_idx").on(t.companyId,t.sourceManifestId),
+}));
 export const learningEvidence = pgTable("learning_evidence", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), cycleId: uuid("cycle_id").notNull(), memoryRecordId: uuid("memory_record_id").notNull(), sourceVersion: text("source_version").notNull(),
 }, (t) => ({ cycleFk: foreignKey({ name: "learning_evidence_cycle_fk", columns: [t.companyId, t.cycleId], foreignColumns: [learningCycles.companyId, learningCycles.id] }).onDelete("cascade"), memoryFk: foreignKey({ name: "learning_evidence_memory_fk", columns: [t.companyId, t.memoryRecordId], foreignColumns: [memoryRecords.companyId, memoryRecords.id] }).onDelete("cascade"), rootUq: unique("learning_evidence_root_uq").on(t.cycleId, t.memoryRecordId) }));

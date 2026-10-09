@@ -1,0 +1,377 @@
+{
+  "sourceCommit": "2dd6edb37eb48bcc4d491da94811f1bcd307f584",
+  "worktree": "/workspace/august-works",
+  "scope": "Native root test runner partitions; this is not qualification of later worktree commits",
+  "chatShardCount": 8,
+  "generalServerShardCount": 12,
+  "passed": [
+    {
+      "group": "general-chat",
+      "shard": 0,
+      "passed": 131,
+      "selectionTotal": 1042,
+      "log": "/var/tmp/aw-v8-general-chat-0.log",
+      "logSha256": "2dc7d26c8b264c6b61707e88467d22d980557981d7f98bb42759527ed8740423"
+    },
+    {
+      "group": "general-chat",
+      "shard": 1,
+      "passed": 131,
+      "selectionTotal": 1042,
+      "log": "/var/tmp/aw-v8-general-chat-1.log",
+      "logSha256": "bb2b7dccf8834f1b366be0da1233b29d6141f04fd624461118a6350b33a2a7e8"
+    },
+    {
+      "group": "general-chat",
+      "shard": 2,
+      "passed": 130,
+      "selectionTotal": 1042,
+      "log": "/var/tmp/aw-v8-general-chat-2.log",
+      "logSha256": "4187177f5d9453834a1dabc1bbca78446c311ae4223f0d1a06a17769b1e48418"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 0,
+      "files": 37,
+      "passed": 374,
+      "skipped": 2,
+      "log": "/var/tmp/aw-v8-general-server-0.log",
+      "logSha256": "5a75a560750d285d37ccf16c82ad6ba646b1542834f36d18a5755332531a472b"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 1,
+      "files": 63,
+      "passed": 804,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-general-server-1.log",
+      "logSha256": "e3b50d7923c6eee73035484c8b1961cad9dba94614082bc842abb066e1adb303"
+    },
+    {
+      "group": "general-chat",
+      "shard": 3,
+      "passed": 130,
+      "selectionTotal": 1042,
+      "log": "/var/tmp/aw-v8-general-chat-3.log",
+      "logSha256": "cbf43eb1ca472e7e418019155d980b741c55e04cc9122a27decf0d8a3db4d2b5"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 2,
+      "files": 70,
+      "filesSkipped": 1,
+      "passed": 1051,
+      "skipped": 2,
+      "log": "/var/tmp/aw-v8-general-server-2.log",
+      "logSha256": "69a260a99d434340d5e63dbbdf96dc395f7934a4accf91b34658cfd8fc67bf63"
+    },
+    {
+      "group": "general-chat",
+      "shard": 4,
+      "passed": 130,
+      "selectionTotal": 1042,
+      "log": "/var/tmp/aw-v8-general-chat-4.log",
+      "logSha256": "bb363475918730defc79df5cf4732837af9a109812500c18f59cbc6146792cfa"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 3,
+      "files": 71,
+      "filesSkipped": 1,
+      "passed": 1361,
+      "skipped": 7,
+      "log": "/var/tmp/aw-v8-general-server-3.log",
+      "logSha256": "38f095495b3247f6247e03d3a979f7d4610971a6d7e88a8db0792e671303fc39"
+    },
+    {
+      "group": "general-chat",
+      "shard": 5,
+      "passed": 130,
+      "selectionTotal": 1042,
+      "log": "/var/tmp/aw-v8-general-chat-5.log",
+      "logSha256": "39c15b665a41810a4f5384eed6d6a5c5d1cc4526abb08f8c38c2038c48cff51e"
+    },
+    {
+      "group": "general-chat",
+      "shard": 6,
+      "passed": 130,
+      "selectionTotal": 1042,
+      "log": "/var/tmp/aw-v8-general-chat-6.log",
+      "logSha256": "73878e1f2464f147389e1e3c5765fb8e57a7445a6f0a38381659d79c24dfc441"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 4,
+      "files": 71,
+      "passed": 1065,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-general-server-4.log",
+      "logSha256": "8b53fd9cf309246e439a6bdf99f630119b567a46da5929757e7553e44d283f42"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 5,
+      "files": 73,
+      "passed": 1088,
+      "skipped": 9,
+      "log": "/var/tmp/aw-v8-general-server-5.log",
+      "logSha256": "47111b2f9465c40dc2276237d3ec2ed412539199b1b34d179f1366debd940b3b"
+    },
+    {
+      "group": "general-chat",
+      "shard": 7,
+      "passed": 130,
+      "selectionTotal": 1042,
+      "log": "/var/tmp/aw-v8-general-chat-7.log",
+      "logSha256": "00a1c9ad99b09a869ab89834d221ecd7cf46a1e63b87d2937665f9ddfb93122e"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 6,
+      "files": 72,
+      "filesSkipped": 1,
+      "passed": 3863,
+      "skipped": 35,
+      "log": "/var/tmp/aw-v8-general-server-6.log",
+      "logSha256": "cce787bc001d294cdd920abc45e1bf3335330ba4c2a31a3c89a54f5a71a01696"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 7,
+      "files": 73,
+      "passed": 1048,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-general-server-7.log",
+      "logSha256": "1b852d3b9c4f57f9c1f45049ee3237d85248b60fbda2da41908d330cc2808c05"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 8,
+      "files": 72,
+      "filesSkipped": 1,
+      "passed": 1059,
+      "skipped": 1,
+      "log": "/var/tmp/aw-v8-general-server-8.log",
+      "logSha256": "4934890a72716957abf26eb6394a275a53505c8e06934a0b942914acc9aca43b"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 9,
+      "files": 72,
+      "filesSkipped": 1,
+      "passed": 753,
+      "skipped": 3,
+      "log": "/var/tmp/aw-v8-general-server-9.log",
+      "logSha256": "c9047377710f14d39693792b8b05b0d2357be2f1d3d1a956a130aeba4e39df8a"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 10,
+      "files": 72,
+      "filesSkipped": 1,
+      "passed": 954,
+      "skipped": 1,
+      "log": "/var/tmp/aw-v8-general-server-10.log",
+      "logSha256": "f9eb4c3acbd8272348d4c505f4c8f2f7454c5bcb5a9c58a1b734e3d81e0cc673"
+    },
+    {
+      "group": "general-server-without-chat",
+      "shard": 11,
+      "files": 72,
+      "filesSkipped": 1,
+      "passed": 945,
+      "skipped": 5,
+      "log": "/var/tmp/aw-v8-general-server-11.log",
+      "logSha256": "cb86778ff5f4942dc8bea22c86343202b19e068edce1bf9804ac62e012094da9"
+    },
+    {
+      "group": "general-workspaces-a",
+      "shard": 0,
+      "uiPassed": 1546,
+      "cliPassed": 171,
+      "log": "/var/tmp/aw-v8-general-workspaces-a-0.log",
+      "logSha256": "346ed3d46b9958eaaaf7551fa9d9c92490bf93806a45f388865103fb8e35ed73"
+    },
+    {
+      "group": "general-workspaces-a",
+      "shard": 1,
+      "uiPassed": 1636,
+      "cliPassed": 97,
+      "log": "/var/tmp/aw-v8-general-workspaces-a-1.log",
+      "logSha256": "087a96ce64a855d5d26ed125f63083f9fde3b50458ac4b4dda66f13fbb0edc66"
+    },
+    {
+      "group": "general-workspaces-a",
+      "shard": 2,
+      "uiPassed": 1702,
+      "cliPassed": 129,
+      "log": "/var/tmp/aw-v8-general-workspaces-a-2.log",
+      "logSha256": "00dbf39b2bfbd159ad06fa886f9231b658380c30bbe7ac0f3731afe007338795"
+    },
+    {
+      "group": "general-workspaces-a",
+      "shard": 3,
+      "uiPassed": 1961,
+      "cliPassed": 105,
+      "log": "/var/tmp/aw-v8-general-workspaces-a-3.log",
+      "logSha256": "895e502b797aa5fd01abaff53160a2a2b55f20ee3d6dcc93e66827349a59c196"
+    },
+    {
+      "group": "general-workspaces-b",
+      "projects": [
+        {
+          "name": "@paperclipai/shared",
+          "passed": 865,
+          "skipped": 0
+        },
+        {
+          "name": "@paperclipai/skills-catalog",
+          "passed": 20,
+          "skipped": 0
+        },
+        {
+          "name": "@paperclipai/db",
+          "passed": 162,
+          "skipped": 0
+        },
+        {
+          "name": "@paperclipai/adapter-utils",
+          "passed": 1293,
+          "skipped": 5
+        },
+        {
+          "name": "@paperclipai/adapter-claude-local",
+          "passed": 314,
+          "skipped": 1
+        },
+        {
+          "name": "@paperclipai/adapter-codex-local",
+          "passed": 465,
+          "skipped": 0
+        },
+        {
+          "name": "@paperclipai/adapter-grok-local",
+          "passed": 141,
+          "skipped": 0
+        },
+        {
+          "name": "@paperclipai/adapter-openclaw-gateway",
+          "passed": 23,
+          "skipped": 0
+        },
+        {
+          "name": "@paperclipai/adapter-opencode-local",
+          "passed": 48,
+          "skipped": 0
+        },
+        {
+          "name": "@paperclipai/plugin-daytona",
+          "passed": 284,
+          "skipped": 6
+        },
+        {
+          "name": "@paperclipai/plugin-sdk",
+          "passed": 92,
+          "skipped": 0
+        },
+        {
+          "name": "@paperclipai/create-paperclip-plugin",
+          "passed": 2,
+          "skipped": 0
+        }
+      ],
+      "log": "/var/tmp/aw-v8-general-workspaces-b.log",
+      "logSha256": "8d2ad50ffccf85221288825ce689076bfd740cd3def3a65300f32fcad36670ef"
+    },
+    {
+      "group": "serialized",
+      "shard": 0,
+      "selectedSuites": 13,
+      "passed": 405,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-serialized-0.log",
+      "logSha256": "378b540849723e570c590f0f1372f985f87803b1fb7e60d5ff6509c75507f7dd"
+    },
+    {
+      "group": "serialized",
+      "shard": 1,
+      "selectedSuites": 19,
+      "passed": 397,
+      "log": "/var/tmp/aw-v8-serialized-1.log",
+      "logSha256": "065af55789a7d2f3c2fbfe985617db75342a8fba03761829ec5f9c79404ae954"
+    },
+    {
+      "group": "serialized",
+      "shard": 2,
+      "selectedSuites": 20,
+      "passed": 363,
+      "log": "/var/tmp/aw-v8-serialized-2.log",
+      "logSha256": "1ff389016d9c20a0690b68eb66223e681ac7dc86ffff4029fb7baccc8b5a518e"
+    },
+    {
+      "group": "serialized",
+      "shard": 3,
+      "selectedSuites": 22,
+      "passed": 272,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-serialized-3.log",
+      "logSha256": "9bfcf73d7b0052cb524011fac1ee769c9924b9d6a75a7ad7c652e5b102047129"
+    },
+    {
+      "group": "serialized",
+      "shard": 4,
+      "selectedSuites": 20,
+      "passed": 297,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-serialized-4.log",
+      "logSha256": "6f6f0dc66e468693adf079bd600607f5fe32414475227619f9df92c59a08ccf1"
+    },
+    {
+      "group": "serialized",
+      "shard": 5,
+      "selectedSuites": 20,
+      "passed": 450,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-serialized-5-verified.log",
+      "logSha256": "793f3a0807e4b07d64914a5049bb3a12921acd3c391289be9cb91066d12d3af8"
+    },
+    {
+      "group": "serialized",
+      "shard": 6,
+      "selectedSuites": 20,
+      "passed": 269,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-serialized-6-verified.log",
+      "logSha256": "84c752df52221733d483b917b4a19265b03842db70ff7cf1f913c0909ed5a5c5"
+    },
+    {
+      "group": "serialized",
+      "shard": 7,
+      "selectedSuites": 20,
+      "passed": 341,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-serialized-7-verified.log",
+      "logSha256": "29b2bf2ffe6a2b9c75e2f883fd360898b9e9bdd13e24716bd4ea95f9b8b08201"
+    }
+  ],
+  "running": [],
+  "open": [
+    "Final verification after integrating later source commits"
+  ],
+  "otherChecks": {
+    "wholeMonorepoTypecheck": "passed at sourceCommit",
+    "wholeProductionBuild": "passed with exact Node headers at sourceCommit"
+  },
+  "abandonedWholeRun": "Interrupted before test completion; raw wrapper exit code is not a passed test result",
+  "interrupted": [
+    {
+      "group": "serialized",
+      "shard": 5,
+      "completedSuites": 11,
+      "selectedSuites": 20,
+      "reason": "Execution environment restart removed the running process; no completion/exit proof",
+      "log": "/var/tmp/aw-v8-serialized-5.log"
+    }
+  ],
+  "baselineRegressionStatus": "passed_all_native_selected_partitions"
+}

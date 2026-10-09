@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "f77dc24c17e06c4e7149d582b0b92141925d1a32",
+  "command": "pnpm build",
+  "status": "passed",
+  "exitCode": 0,
+  "logPath": "/var/tmp/aw-v8-integrated-f77dc24-build.log",
+  "logSha256": "83454189c2bbfa071c13971c1aae426565e429ac180d36c180132f7df02df052",
+  "scope": "Integrated native production build at exact experiment preregistration registry source commit. Does not qualify later recording/receipt source, external providers, actual deployment or complete V8 release."
+}

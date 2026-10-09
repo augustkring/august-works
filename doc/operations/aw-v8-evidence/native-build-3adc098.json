@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "3adc098db6bbed7cae9709d8dbdff221e6e545c2",
+  "command": "pnpm build",
+  "status": "passed",
+  "exitCode": 0,
+  "logPath": "/var/tmp/aw-v8-native-build-3adc098db.log",
+  "logSha256": "87040d639d08e5bf634297d8e6017317bf726aaa9c6a70860fac870a595efad7",
+  "scope": "Exact integrated native causal owner checkpoint. Does not qualify subsequent UI, optional providers, remaining V8 domains or actual hosted release."
+}

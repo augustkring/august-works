@@ -153,6 +153,13 @@ describe("RoutineOverview", () => {
     vi.restoreAllMocks();
   });
 
+  it("links an original Routine review reference to a company-bound Human review without copying its evidence", () => {
+    const value = contextFixture(), linked = { ...run, linkedManagementReviewId: "native-review", linkedWorkflowRunId: "native-workflow-run", linkedWorkflowId: "native-workflow" };
+    value.routineRuns = [linked]; value.routine = { ...routine, recentRuns: [linked] };
+    flushSync(() => root.render(<RoutineDetailContext.Provider value={value}><RoutineOverview /></RoutineDetailContext.Provider>));
+    expect(container.querySelector<HTMLAnchorElement>('a[href*="reviewId=native-review"]')?.getAttribute("href")).toContain("reviewCompanyId=company-1");
+    expect(container.textContent).toContain("Open Workflow run");
+  });
   it("summarizes enabled schedules and their next run", () => {
     expect(summarizeRoutineSchedule(routine.triggers)).toMatchObject({
       label: "1 active schedule",

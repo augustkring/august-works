@@ -1,7 +1,8 @@
+import type {NativeReadScope} from "./analytical-reader.js";
 import { assertLearningAssetCurrent } from "./learning/learning-assets.js";
 import { skillDependencyStates } from "./skill-dependencies.js";
-import { and, asc, eq, inArray, or } from "drizzle-orm";
-import { agents, companySkills, companySkillVersions, companySkillDependencies, type Db } from "@paperclipai/db";
+import { and, asc, eq } from "drizzle-orm";
+import { companySkills, companySkillVersions, companySkillDependencies, type Db } from "@paperclipai/db";
 import type { ExecutionManifestSkill, RolePackItem } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -24,13 +25,13 @@ export function skillTaskMatches(query: string, triggers: readonly string[], exc
 }
 
 export function skillResolverService(db: Db) {
-  async function authorizedVersion(actor: AuthorizationActor, companyId: string, skillId: string, versionId: string, test = false) {
+  async function authorizedVersion(actor: AuthorizationActor, companyId: string, skillId: string, versionId: string, test = false,readScope?:NativeReadScope) {
     await assertV5Authorization(db, actor, companyId, "company_scope:read");
     const [row] = await db.select({ skill: companySkills, version: companySkillVersions }).from(companySkills)
       .innerJoin(companySkillVersions, and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, companySkills.id), eq(companySkillVersions.id, versionId)))
       .where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId))).limit(1);
-    if (!row || !(await companySkillService(db).canReadSkill(companyId, skillId, actor))) throw notFound("Skill version not found");
-    await assertLearningAssetCurrent(db, companyId, "skill_version", versionId);
+    if (!row || !(await companySkillService(db).canReadSkill(companyId, skillId, actor,readScope,versionId))) throw notFound("Skill version not found");
+    await assertLearningAssetCurrent(db, companyId, "skill_version", versionId,actor,readScope);
     if (!test && (row.skill.lifecycleState !== "active" || row.skill.activeVersionId !== versionId || row.version.state !== "active" || row.version.visibility !== "company")) throw conflict("The pinned Skill is no longer active; revalidation is required");
     if (row.skill.compatibility !== "compatible" || (!test && row.skill.nextReviewAt && row.skill.nextReviewAt <= new Date())) throw conflict("Skill compatibility or review is overdue");
     const policy = companySkillPolicyService(db);
@@ -44,18 +45,19 @@ export function skillResolverService(db: Db) {
   }
   return {
     authorizedVersion,
-    resolve: async (actor: AuthorizationActor, companyId: string, query: string, requirements: readonly RolePackItem[], testSelection?: { skillId: string; versionId: string }) => {
+    resolve: async (actor: AuthorizationActor, companyId: string, query: string, requirements: readonly RolePackItem[], testSelection?: { skillId: string; versionId: string },readScope?:NativeReadScope) => {
       await assertV5Enabled(db, "skill_resolver_v5");
       await assertV5Authorization(db, actor, companyId, "company_scope:read");
       // ponytail: deterministic, bounded descriptors; bodies are loaded only
       // for selected pins. This ceiling is explicit rather than silent paging.
-      const rows = await db.select().from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.lifecycleState, "active"))).orderBy(asc(companySkills.key)).limit(501);
+      const descriptorColumns={id:companySkills.id,key:companySkills.key,slug:companySkills.slug,name:companySkills.name,description:companySkills.description,metadata:companySkills.metadata,activeVersionId:companySkills.activeVersionId};
+      const rows = await db.select(descriptorColumns).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.lifecycleState, "active"))).orderBy(asc(companySkills.key)).limit(501);
       if (rows.length > 500) throw conflict("Skill resolver catalog exceeds 500 entries; narrow the company catalog");
       if (testSelection && !rows.some((r) => r.id === testSelection.skillId)) {
-        const [row] = await db.select().from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, testSelection.skillId))).limit(1);
+        const [row] = await db.select(descriptorColumns).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, testSelection.skillId))).limit(1);
         if (row) rows.push(row);
       }
-      for (let index = rows.length - 1; index >= 0; index--) if (!(await companySkillService(db).canReadSkill(companyId, rows[index]!.id, actor))) rows.splice(index, 1);
+      for (let index = rows.length - 1; index >= 0; index--) if (!(await companySkillService(db).canReadSkill(companyId, rows[index]!.id, actor,readScope,testSelection?.skillId===rows[index]!.id?testSelection.versionId:rows[index]!.activeVersionId??undefined))) rows.splice(index, 1);
       const skills: ExecutionManifestSkill[] = [], warnings: string[] = [];
       for (const required of requirements.filter((r) => r.type === "required_skill")) {
         if (required.loadPoint !== "always" && required.triggerTerms.length && !skillTaskMatches(query, required.triggerTerms, required.excludeTerms)) continue;
@@ -76,7 +78,7 @@ export function skillResolverService(db: Db) {
         if (excluded || (!matched && (!required || requirement?.loadPoint !== "always"))) continue;
         const versionId = testSelection?.skillId === row.id ? testSelection.versionId : requirement?.versionId ?? row.activeVersionId;
         if (!versionId) { if (required) throw conflict(`Required Skill has no active version: ${row.slug}`); continue; }
-        try { await authorizedVersion(actor, companyId, row.id, versionId, testSelection?.skillId === row.id); }
+        try { await authorizedVersion(actor, companyId, row.id, versionId, testSelection?.skillId === row.id,readScope); }
         catch (error) { if (required) throw error; warnings.push(`Optional Skill unavailable: ${row.slug}`); continue; }
         const tokens = Math.ceil(Buffer.byteLength(JSON.stringify({ key: row.key, name: row.name, description: row.description?.slice(0, 600) ?? "" }), "utf8") / 4);
         skills.push({ skillId: row.id, versionId, key: row.key, name: row.name, selection: required ? "required" : testSelection?.skillId === row.id ? "task_required" : "recommended", loadPoint: requirement?.loadPoint ?? "task_relevant", estimatedDescriptorTokens: tokens });

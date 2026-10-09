@@ -1,0 +1,93 @@
+{
+  "checkpoint": "Current original Source authority at Human native Optimizer transitions and compiler inheritance",
+  "parentCommit": "27d0cafe2aafc56adbf9762d347b307293591fb1",
+  "primaryParentBuildCommit": "159de556e6d9d520b834dcee5c4d673b502b6237",
+  "recordedAt": "2026-10-07T22:05:52.485672+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "ccc392f0ea7c7002907a285e81f0b9a23bbb49418a03cf078e2433b24298df5c"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "983910661328950f79ae763de7f343cb2c8cfbd37ab1d90fda5be84b008753a2"
+    },
+    {
+      "path": "server/src/routes/workflows.ts",
+      "sha256": "33da043d4e08fd6abcc0cb2adc6dd69dfcd471c46240be3e15c689d8060e8179"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-security.ts",
+      "sha256": "a41f95f43d75a4d3b50a30c68d29a057ac4e6a2d6fcfcc3fedfac7945c862f87"
+    },
+    {
+      "path": "server/src/services/learning/learning-service.ts",
+      "sha256": "dcac19938d6e743ecb685b913472e432c0d453df85d0215bc3b7fa76c12ea1d1"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-candidate-proposal.ts",
+      "sha256": "09dd2a16dd49415b6c8c860066834dd2791659ac88ee713f248dd9c99fff40a2"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-evaluation.ts",
+      "sha256": "ecdc19f086708168b2b4bf9f2e8523eae17671fcdf540ac3eb2d026f3b7313c8"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-promotion.ts",
+      "sha256": "e2d884415c892990c249eaaf1013636a42569bbbcc4ddfd2cab07df6da994100"
+    },
+    {
+      "path": "packages/db/src/migrations/0424_optimizer_workflow_source_inheritance.sql",
+      "sha256": "6e2350a842cb4dbbc8c029e70021601e241377bbf1256385c77d4d5d7b71af22"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0424_snapshot.json",
+      "sha256": "747d8571bc19daf34d8a293f120f65f172a5823eefcfceea79dee325bc76e958"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Final native Learning, Optimizer lifecycle, immutable Artifact and migration snapshot regressions",
+      "passedTests": 48,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-optimizer-source-native-release.log",
+      "logSha256": "7b39e5bbf42f6c112d53f0dea881a2f596668a9870915ed1c313f6b41d8c8aaa"
+    },
+    {
+      "check": "Final server typecheck",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-optimizer-source-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "Native migration safety",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-optimizer-source-migrations.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "check": "Full native production build of exact primary Decision Learning parent",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-build-decision-learning.log",
+      "logSha256": "19650cfbd686de9813639e9fcb685e5f70e834efa3235edd4329dc23db363b09"
+    }
+  ],
+  "qualified": [
+    "Original native Optimizer proposal, compiler, summaries, replay, shadow, approval request, canary and activation carry the actual current reader and recheck original learned Workflow/artifact source authority.",
+    "Current authority is repeated inside existing company -> Memory transactions before persisted changes. Stored reviewer IDs and approval receipts do not replace the current reader.",
+    "The low-level native system promotion owner independently requires current Source admission for derived assets; it retains the original shadow, human approval and canary gates.",
+    "The existing native optimizer lineage guard inherits original retained Learning links from the actual pinned Workflow into its artifact version, bounded to 20 original links for new bindings.",
+    "Actual PostgreSQL covers direct artifact signals and inherited Workflow signals: missing reader, current Source loss, allowed restoration, denied compiler publication with no extra artifact, flags-off/company-paused C7 cleanup and late compiler/artifact write fencing. Independent verified Memory survives analytical Source erasure.",
+    "Immutable native Artifact gate receipts are reused only after the actual content and both stored receipt hashes match; repeated replay does not rewrite finalized qualification timestamps."
+  ],
+  "limitations": [
+    "The historical migration backfill follows persisted relationships but was not tested against a populated hosted database.",
+    "Ordinary Artifact detail/list and direct Artifact lifecycle Source readers are the next checkpoint; this check covers original Optimizer owners.",
+    "Actual ordinary source-derived runtime remains closed without its qualified Context/runtime retention bridge. No source-derived shadow/canary execution or external provider invocation is claimed.",
+    "No new Chromium, measured hard latency or whole-brief completion is claimed. Planning outcome pins, native Routine review cadence, action materialization, remaining source closure, cross-project Planning, provider conformance and hosted gates remain open.",
+    "Early runs exposed finalized gate receipt rewrites and an invalid feature-dependency fixture. Both are corrected; only the final passing run is counted."
+  ]
+}

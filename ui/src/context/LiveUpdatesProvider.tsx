@@ -36,6 +36,7 @@ import { issuesApi } from "../api/issues";
 import { authApi } from "../api/auth";
 import type { CompanyListResult } from "../api/companies-query";
 import { healthApi } from "../api/health";
+import { ApiError } from "../api/client";
 import { useCompany } from "./CompanyContext";
 import type { ToastInput } from "./ToastContext";
 import { useToastActions } from "./ToastContext";
@@ -1267,6 +1268,12 @@ function invalidateActivityQueries(
   const actorType = readString(payload.actorType);
   const actorId = readString(payload.actorId);
   const details = readRecord(payload.details);
+  // Reauthorize retained process payloads when native source, purpose or access
+  // owners change. This invalidates only this company's analytical cache.
+  if (["issue", "project", "governance_obligation", "process_analysis_definition", "company_membership"].includes(entityType ?? "")
+    || ["memory.", "learning.", "resource_membership."].some(prefix => action?.startsWith(prefix))) {
+    queryClient.invalidateQueries({ queryKey: ["process-definitions",companyId] });
+  }
   const ownActorActivity =
     (actorType === "user" &&
       !!currentActor.userId &&
@@ -1644,6 +1651,34 @@ function gatedPushToast(
   if (id !== null) recordToastHit(gate, category);
 }
 
+function hideAnalyticalLivePayload(queryClient: QueryClient, event: LiveEvent) {
+  const issueId = readString(event.payload.issueId);
+  const runId = readString(event.payload.runId);
+  const issueRefs = new Set(issueId ? resolveIssueQueryRefs(queryClient, event.companyId, issueId, null) : []);
+  const runIds = new Set(runId ? [runId] : []);
+  for (const ref of issueRefs) {
+    for (const run of queryClient.getQueryData<RunForIssue[]>(queryKeys.issues.runs(ref)) ?? []) runIds.add(run.runId);
+    for (const run of queryClient.getQueryData<LiveRunForIssue[]>(queryKeys.issues.liveRuns(ref)) ?? []) runIds.add(run.id);
+  }
+  const error = new ApiError("Analytical conversation source access is unavailable", 403,
+    { details: { code: "analytical_source_access_lost", ...(issueId ? { conversationIssueId: issueId } : {}) } });
+  for (const query of queryClient.getQueryCache().getAll()) {
+    const key = query.queryKey;
+    const chat = key[0] === "agent-chat" && key[1] === event.companyId && issueRefs.has((query.state.data as Issue | undefined)?.id ?? "");
+    const affected = chat || (key[0] === "issues" && issueRefs.has(String(key[2]))) ||
+      (["heartbeat-run", "run-issues"].includes(String(key[0])) && runIds.has(String(key[1]))) ||
+      (key[0] === "provider-trace-metadata" && key[1] === event.companyId && Array.isArray(key[2]) && key[2].some(id => runIds.has(id)));
+    if (!affected) continue;
+    // Cancel without reverting to the old success state. A later successful
+    // native API read, rather than a subsequent live event, restores access.
+    void queryClient.cancelQueries({ queryKey: key, exact: true }, { revert: false });
+    query.setState({ data: undefined, status: "error", error, errorUpdatedAt: Date.now(), dataUpdatedAt: 0, fetchStatus: "idle" });
+  }
+  queryClient.setQueryData(queryKeys.liveRuns(event.companyId), (runs: LiveRunForIssue[] | undefined) =>
+    runs?.map(run => runIds.has(run.id) || (run.issueId && issueRefs.has(run.issueId))
+      ? { ...run, currentStatusMessage: null, currentToolName: null, lastAssistantSnippet: null } : run));
+}
+
 function handleLiveEvent(
   queryClient: QueryClient,
   expectedCompanyId: string,
@@ -1654,6 +1689,11 @@ function handleLiveEvent(
   currentActor: { userId: string | null; agentId: string | null },
 ) {
   if (event.companyId !== expectedCompanyId) return;
+
+  if (event.type === "analytical.context.access_lost") {
+    hideAnalyticalLivePayload(queryClient, event);
+    return;
+  }
 
   const nameOf = (id: string) =>
     resolveAgentName(queryClient, expectedCompanyId, id);
@@ -1827,6 +1867,7 @@ function closeSocketQuietly(
 }
 
 export const __liveUpdatesTestUtils = {
+  hideAnalyticalLivePayload,
   applyRunLifecycleToCompanyLiveRuns,
   buildAgentStatusToast,
   buildRunStatusToast,

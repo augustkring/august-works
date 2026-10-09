@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "d9dc96c85e68bbde818cbcd60b84ff0fc66b6f95",
+  "command": "pnpm build",
+  "status": "passed",
+  "exitCode": 0,
+  "logPath": "/var/tmp/aw-v8-integrated-d9dc96c-build.log",
+  "logSha256": "f0137e8a8a2f72a7e8f187d9ae43d666aa68a4d8f77ccb3f75029662f2b76316",
+  "scope": "Integrated native artifact-scenario source production build at this exact commit. Does not qualify later experiment source, external providers, deployed runtime or complete V8 release."
+}

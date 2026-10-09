@@ -9,17 +9,21 @@ import { automationArtifactSecurityService } from "../services/automation-artifa
 import { accessService } from "../services/access.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { validate } from "../middleware/validate.js";
-import { forbidden, notFound, unauthorized } from "../errors.js";
+import { conflict, forbidden, notFound, unauthorized } from "../errors.js";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
 
 export function automationArtifactRoutes(db: Db) {
   const router = Router();
+  router.use("/companies/:companyId/automation-artifacts", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   const artifacts = automationArtifactService(db);
   const security = automationArtifactSecurityService(db);
   const access = accessService(db);
   const settings = instanceSettingsService(db);
   async function authorize(req: Request, permission: "workflows:read" | "workflows:edit" | "workflows:publish") {
     const companyId = req.params.companyId as string;
+    if (req.query.expectedUserId !== undefined && (typeof req.query.expectedUserId !== "string" || req.actor.type !== "board" || req.actor.userId !== req.query.expectedUserId)) {
+      throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    }
     if ((await settings.getExperimental()).enableAutomationArtifactsV1 !== true) {
       throw notFound("Automation Artifacts are not enabled", { code: "automation_artifacts_disabled" });
     }
@@ -61,7 +65,7 @@ export function automationArtifactRoutes(db: Db) {
     // The caller requests evaluation; it cannot supply or mark gate reports passed.
     if (!(await artifacts.getDetail(companyId, artifactId, actor))) throw notFound("Automation Artifact not found");
     res.json(await security.evaluateLatestVersion(companyId, artifactId,
-      { principal: { type: "system", service: "artifact-security-evaluator" } }));
+      { principal: { type: "system", service: "artifact-security-evaluator" },sourceActor:req.actor }));
   });
   router.post("/companies/:companyId/automation-artifacts/:artifactId/status", validate(transitionAutomationArtifactStatusSchema), async (req, res) => {
     const actor = await authorize(req, "workflows:publish");

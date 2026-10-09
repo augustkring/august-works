@@ -18,9 +18,9 @@ import {
 } from "./automation-artifact-declarative.js";
 import {
   AutomationArtifactCodeRuntimeError,
-  executeAutomationArtifactTypeScriptSandbox,
   scanAndTranspileAutomationArtifactTypeScript,
 } from "./automation-artifact-code-runtime.js";
+import { executeNativeArtifactCode } from "./automation-artifact-workspace.js";
 import {
   automationArtifactService,
   automationArtifactVersionContentHash,
@@ -125,7 +125,7 @@ function assertSchema(
   }
 }
 
-async function executeCase(input: {
+async function executeCase(db: Db, owner: { companyId: string; versionId: string }, actor: AutomationArtifactMutationActor, input: {
   kind: AutomationArtifactKind;
   sourceCode: string;
   dependencyManifest: Record<string, unknown>;
@@ -144,12 +144,12 @@ async function executeCase(input: {
       input.value,
     );
   } else if (input.kind === "typescript") {
-    output = await executeAutomationArtifactTypeScriptSandbox({
+    output = await executeNativeArtifactCode(db, owner, actor, {
       sourceCode: input.sourceCode,
       dependencyManifest: input.dependencyManifest,
       value: input.value,
       timeoutMs: input.timeoutMs,
-    });
+    }, false);
   } else {
     throw new Error(
       `Automation Artifact runtime is not qualified for ${input.kind}.`,
@@ -209,6 +209,13 @@ export function automationArtifactSecurityService(db: Db) {
         dependencyManifest: version.dependencyManifest,
         testSpec: version.testSpec,
       });
+
+      // Native gate receipts are finalized once for this immutable content hash.
+      // Re-evaluation verifies content integrity and reuses the original
+      // receipts instead of changing their checkedAt values.
+      if (recomputedHash === version.contentHash &&
+        version.validationReport?.contentHash === version.contentHash &&
+        version.securityReport?.contentHash === version.contentHash) return detail;
 
       const validationChecks: AutomationArtifactGateCheck[] = [];
       const securityChecks: AutomationArtifactGateCheck[] = [];
@@ -329,7 +336,7 @@ export function automationArtifactSecurityService(db: Db) {
         let failed = 0;
         for (const testCase of tests.cases) {
           try {
-            const output = await executeCase({
+            const output = await executeCase(db, { companyId, versionId: version.id }, actor, {
               kind: artifact.kind,
               sourceCode: version.sourceCode,
               dependencyManifest: version.dependencyManifest,

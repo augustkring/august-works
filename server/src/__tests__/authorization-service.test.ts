@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   agents,
   authUsers,
@@ -2733,4 +2733,53 @@ describeEmbeddedPostgres("authorization service", () => {
         .resolves.toMatchObject({ allowed: false, reason: "deny_scope" });
     }
   });
+  it("bounds native Source row reuse to one transaction read scope and rejects escaped or write authority", async () => {
+    const company = await createCompany(db, "ReadSourceLifetime"), foreign = await createCompany(db, "ReadSourceForeign");
+    const agent = await createAgent(db, company.id), issue = await createIssue(db, company.id);
+    const input = {actor:{type:"agent" as const,agentId:agent.id,companyId:company.id,source:"agent_key" as const},action:"issue:read" as const,resource:{type:"issue" as const,companyId:company.id,issueId:issue.id}};
+    let escaped: Pick<ReturnType<typeof authorizationService>, "decide"> | undefined;
+    await db.transaction(async tx => {
+      const ordinary = await authorizationService(tx).decide(input);
+      expect(ordinary.allowed).toBe(true);
+      await authorizationService(tx).withReadSources(company.id,[issue.id],[],async owner => {
+        escaped=owner;
+        expect(await owner.decide(input)).toEqual(ordinary);
+        expect(await owner.decide({...input,resource:{...input.resource,companyId:foreign.id}})).toMatchObject({allowed:false,reason:"deny_scope"});
+        expect(await owner.decide({...input,action:"issue:mutate"})).toMatchObject({allowed:false,reason:"deny_scope"});
+        await expect(db.transaction(async writer => {
+          await writer.execute(sql`set local lock_timeout='100ms'`);
+          await writer.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,issue.id));
+        })).rejects.toMatchObject({cause:{code:"55P03"}});
+      });
+      await expect(escaped!.decide(input)).rejects.toThrow("Native Source read scope has ended");
+    });
+    await expect(escaped!.decide(input)).rejects.toThrow("Native Source read scope has ended");
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,issue.id));
+    expect((await db.select().from(issues).where(eq(issues.id,issue.id)))[0].hiddenAt).not.toBeNull();
+  });
+
+  it("keeps current actor policy admission independent for every Source read in the locked scope", async () => {
+    const company=await createCompany(db,"ReadSourceActorPolicy"),agent=await createAgent(db,company.id),issue=await createIssue(db,company.id);
+    const input={actor:{type:"agent" as const,agentId:agent.id,companyId:company.id,source:"agent_key" as const},action:"issue:read" as const,resource:{type:"issue" as const,companyId:company.id,issueId:issue.id}};
+    await db.transaction(async tx=>authorizationService(tx).withReadSources(company.id,[issue.id],[],async owner=>{
+      expect((await owner.decide(input)).allowed).toBe(true);
+      await tx.update(agents).set({permissions:{trustPreset:"unsupported_native_test_preset"}}).where(eq(agents.id,agent.id));
+      const ordinary=await authorizationService(tx).decide(input);
+      expect(ordinary.allowed).toBe(false);
+      expect(await owner.decide(input)).toEqual(ordinary);
+    }));
+  });
+
+  it("does not reuse autocommit Source rows after their actual policy changes", async () => {
+    const company=await createCompany(db,"ReadSourceAutocommit"),agent=await createAgent(db,company.id),issue=await createIssue(db,company.id);
+    const input={actor:{type:"agent" as const,agentId:agent.id,companyId:company.id,source:"agent_key" as const},action:"issue:read" as const,resource:{type:"issue" as const,companyId:company.id,issueId:issue.id}};
+    await authorizationService(db).withReadSources(company.id,[issue.id],[],async owner=>{
+      expect((await owner.decide(input)).allowed).toBe(true);
+      await db.update(issues).set({executionPolicy:{trustPreset:"unsupported_native_test_preset"}}).where(eq(issues.id,issue.id));
+      const ordinary=await authorizationService(db).decide(input);
+      expect(ordinary.allowed).toBe(false);
+      expect(await owner.decide(input)).toEqual(ordinary);
+    });
+  });
+
 });

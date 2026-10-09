@@ -1,0 +1,64 @@
+{
+  "checkpoint": "Metadata-only canonical planning review responses and strict account-bound review route",
+  "parentCommit": "aba1d61934f666848e7446b21a4e32c98abf6b49",
+  "recordedAt": "2026-10-07T11:19:53.217200+00:00",
+  "sourceFiles": [
+    {
+      "path": "server/src/services/project-control.ts",
+      "sha256": "1aac96fad6c7aea3e13adcf7372795c08890f04495f75925f39ee1e95695981d"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/project-owner.ts",
+      "sha256": "ec7cb1c467e86ab6529e05993c5bc77dfbdd3ba200d025b09b498568c1c66a2e"
+    },
+    {
+      "path": "server/src/routes/project-control.ts",
+      "sha256": "3cfb5199804df827e2258442f15b8c24deefa94e1e829ed1650e55bea6385e40"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "a58ffa1591447151c5ea474a2685c9c53b16d473c73b27b60f7a7375019e1ee8"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-project.integration.test.ts",
+      "sha256": "cde43d96952044067980491be4548ce9d1c201cabe2aaa44354d7f3b9233d127"
+    },
+    {
+      "path": "doc/operations/aw-v8-adaptive-planning.md",
+      "sha256": "224ab8688ac460486b30ae5c9887ea07bbdb1b0cfdf48a4c16285b6988f7d892"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "871d8775cd4ac47634e3b54142df59949c553dc732a2c81a92d0727ddc8b4b52"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-aba1d619.json",
+      "sha256": "a40725facd02f8c39e041a1054f4a3621c8e38bc746e6bc66bc59664bc1e6584"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "tests-final",
+      "checks": 46,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-review-disclosure-tests-final.log",
+      "logSha256": "ec54b515d0a1600085ed60bb48dcff886fde36c18e9010fa9969f4946317fbf3"
+    },
+    {
+      "name": "types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-review-disclosure-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "distinctPostgresqlTests": 29,
+  "evidenceClass": "Actual native PostgreSQL and API software qualification; no operator UI or complete hosted release.",
+  "remaining": [
+    "Project planning operator UI",
+    "Cross-project planning, Management/Learning and optional analytical providers",
+    "Complete V8 integration and hosted release qualification"
+  ]
+}

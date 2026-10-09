@@ -24,6 +24,9 @@ import type {
   FoundationSearchScope,
 } from "@paperclipai/shared";
 import { notFound, unprocessable } from "../../errors.js";
+import type {AuthorizationActor} from "../authorization.js";
+import {assertLearnedAssetAnalyticalSources} from "../learning/learning-analytical-sources.js";
+import type {NativeReadScope} from "../analytical-reader.js";
 
 export interface ExtractedFoundationSection {
   headingPath: string[];
@@ -320,6 +323,8 @@ export function foundationIndexService(db: Db) {
     search: async (
       companyId: string,
       input: { query: string; limit: number; scope: FoundationSearchScope },
+      actor?:AuthorizationActor,
+      readScope?:NativeReadScope,
     ): Promise<FoundationSearchResult[]> => {
       const query = input.query.trim();
       if (!query) throw unprocessable("Foundation search query is required");
@@ -343,6 +348,7 @@ export function foundationIndexService(db: Db) {
 
       const rows = await db
         .select({
+          sectionId: foundationSections.id,
           foundationDocumentId: foundationDocuments.id,
           foundationKey: foundationDocuments.foundationKey,
           category: foundationDocuments.category,
@@ -407,7 +413,9 @@ export function foundationIndexService(db: Db) {
         )
         .limit(input.limit);
 
+      for(const revisionId of new Set(rows.map(row=>row.documentRevisionId)))await assertLearnedAssetAnalyticalSources(db,companyId,"document_revision",revisionId,actor,readScope);
       return rows.map((row) => ({
+        sectionId: row.sectionId,
         foundationDocumentId: row.foundationDocumentId,
         foundationKey: row.foundationKey,
         category: row.category as FoundationSearchResult["category"],

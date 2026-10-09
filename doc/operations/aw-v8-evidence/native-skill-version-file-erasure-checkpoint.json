@@ -1,0 +1,99 @@
+{
+  "checkpoint": "Native Skill version snapshot Source erasure through the original Memory outbox",
+  "parentCommit": "d16f62f785aab5e34e5486d8593c59ec8ee70a99",
+  "recordedAt": "2026-10-08T00:11:28.124769+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0429_skill_version_file_erasure.sql",
+      "sha256": "b6bb2db23abb285e373e10323c6efb0d6a5b2514aa0ece3b8d3b10966db6d1d5"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0424_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0429_snapshot.json",
+      "sha256": "342971162b57fdf07fe08d142dfd6f84e167987b3fecb1f771f6fd3c6e28af5b"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "445259d9a47cd40d5d4eef92e86c2248c3437fef5123d313b6b891f0865f66a3"
+    },
+    {
+      "path": "server/src/__tests__/runtime-skill-cache.test.ts",
+      "sha256": "267eab5b7cf62c3f2a217cd66261b7bd221be246ae93a1f68dc424aca573bb55"
+    },
+    {
+      "path": "server/src/__tests__/skill-version-file-erasure.integration.test.ts",
+      "sha256": "551f66ba01fbfc27cc5c60ab96cffb6855b3bea344450cd3cd4dcd1d7ac8bfea"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "4d1f76a2a8d79d3b8b1830f8a2867e77a0a23e2722ee4fbfa30c46421f8b59f9"
+    },
+    {
+      "path": "server/src/services/company-skills.ts",
+      "sha256": "1997a466691349e7dbf7235f7a0da3f9d1a750d365b43521e32023488b7924f6"
+    },
+    {
+      "path": "server/src/services/learning/learning-privacy.ts",
+      "sha256": "3957c77e6ec536c4fc71a3fbf6b786633e5cd4de91b16faa4e1d2856894081fb"
+    },
+    {
+      "path": "server/src/services/learning/skill-file-erasure.ts",
+      "sha256": "44a727b4072e53f41f1b7e9e444aa322e90c689eab00852b0e410a99225f9879"
+    },
+    {
+      "path": "server/src/services/memory/memory-jobs.ts",
+      "sha256": "3efae609b0093673a9f6dd026ccada087f42ba40b1be51c370d43cca0d917465"
+    },
+    {
+      "path": "server/src/services/runtime-skill-cache.ts",
+      "sha256": "b0f8143684e0c5145e588c5b36e4388932546f02d1d34ddedb0f37de1c732e62"
+    },
+    {
+      "path": "server/src/services/saas/company-purge.ts",
+      "sha256": "d2deb0c46116b31585b1ce2cea54bbbf471636cb858d8694de56607cb1d29cd2"
+    }
+  ],
+  "validation": {
+    "nativePostgresAndFilesystemAndSnapshot": {
+      "tests": 132,
+      "files": 6,
+      "skipped": 0,
+      "logs": [
+        "/var/tmp/aw-v8-skill-file-final-tests.log",
+        "/var/tmp/aw-v8-skill-file-owner-tests.log"
+      ]
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-skill-file-final-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-skill-file-final-migrations.log"
+    },
+    "parentWholeNativeProductionBuild": {
+      "commit": "2583aa6c9fbff152d19d082cdf40084e0f993c03",
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-runtime-playbook-source.log"
+    }
+  },
+  "qualified": [
+    "native candidate test preparation materializes exact stored version without promoting it",
+    "company -> Memory locks re-read native version and complete original current Source predicates before filesystem publication",
+    "actual native immutable Skill version C7 permits only fixed markers while preserving other fields; late bodies are coerced and timestamp mutation denied",
+    "Source-erased candidate and retained asset owners queue only native company/skill/version identities",
+    "original outbox erases generated version snapshots with Memory off and company paused, retries unsafe directory ancestors after 60 seconds",
+    "native Skill deletion and native company purge preserve the scoped outbox after version rows disappear; independent tenant snapshots remain intact",
+    "readonly filesystem cleanup and symlink/path-identity rejection preserve neighboring versions"
+  ],
+  "limits": [
+    "analytical Source Skill runtime admission remains closed; native runtime-context bundle copies are next",
+    "fixture candidate test preparation is not a promoted Skill, provider run, performed Human evaluation or trial",
+    "native fresh migrations pass; populated historical backfill and hosted data are not qualified",
+    "existing managed storage root is trusted; no proof of arbitrary same-UID filesystem race resistance",
+    "no maximum-volume, hard latency or whole-brief completion claim"
+  ]
+}

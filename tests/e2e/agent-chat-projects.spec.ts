@@ -224,8 +224,18 @@ test("first upload creates the chat without invoking its agent; shared attachmen
             .length,
       )
       .toBe(1);
+    const [attachment] = await json(
+      await request.get(`/api/issues/${chat.id}/attachments`),
+    );
+    await expect(page.getByTestId("task-chat-composer-attachments"))
+      .toContainText("chat-notes.txt");
     await send(page, "Read these notes later; just acknowledge.");
     await idle(request, f.chatPath);
+    const comments = await json(
+      await request.get(`/api/issues/${chat.id}/comments`),
+    );
+    expect(comments.find((comment: any) => !comment.authorAgentId)?.body)
+      .toContain(`[chat-notes.txt](${attachment.contentPath})`);
     await page.reload();
     await expect(
       page.getByRole("tab", { name: "Properties", exact: true }),

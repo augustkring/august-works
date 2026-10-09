@@ -1,0 +1,152 @@
+{
+  "checkpoint": "Native final experiment outcome/analysis and separate human advisory interpretation",
+  "parentCommit": "9378e4208d65b996a150fd5adb980dd87f2f3d48",
+  "recordedAt": "2026-10-07T07:51:14.686473+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/adr/V8-ARCHITECTURE-DECISIONS.md",
+      "sha256": "47405441d242f3414a31edfc74efb207792e7f734b7024b7e7a3f37f9e786e5b"
+    },
+    {
+      "path": "doc/operations/aw-v8-business-experiments.md",
+      "sha256": "944ea4c9fcad48c10f1e0c9474330b037802693623a85a3455ca931d5329b415"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "284db9c41bc910cf88fefe8877daf6be16db80bc5c280b386cc01e2cbf381520"
+    },
+    {
+      "path": "packages/db/src/migrations/0406_youthful_hairball.sql",
+      "sha256": "9c982edb2162caff1bfb86147ee9196100e9c8ffa61e43ba523bc2a0322fb924"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0406_snapshot.json",
+      "sha256": "45df8d3b73aa95648a3fd4ce6634b8a861ebc607141bf4e721751faf2d1fdf10"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "adc01bd265f7aeb871929bd1bc34a9692084e7ff0f59391312f4ee4b87b5c0e0"
+    },
+    {
+      "path": "packages/db/src/schema/business_experiments.ts",
+      "sha256": "5b6f2217018916e8dbe3afcf9879589e4cf019ef701128342eeec99acd51f897"
+    },
+    {
+      "path": "packages/shared/src/business-experiments.test.ts",
+      "sha256": "410f4499a58acf1962e07bd7d65d5666b7e0dec705362542c1e0497871840a2d"
+    },
+    {
+      "path": "packages/shared/src/business-experiments.ts",
+      "sha256": "3ca776ef6e716784ed8f543f2de0686c5531100b56a68f6938c9181ea2a8a2c8"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+      "sha256": "8c82ea2d7bb8c23c917d34640989298da5fe351dd61bd471dfb944cfa75084bc"
+    },
+    {
+      "path": "server/src/__tests__/business-experiments-kernel.test.ts",
+      "sha256": "829a846f09006672995294b53fbd5856a627470fc37d9901ea461eb9f18c1ac5"
+    },
+    {
+      "path": "server/src/__tests__/helpers/business-experiment-fixture.ts",
+      "sha256": "2542022c6f633756404af61ee075c5a1c7bda81784c52264da57dd40f9a29d32"
+    },
+    {
+      "path": "server/src/routes/business-experiments.ts",
+      "sha256": "0196f298d46318f806aabd909c2f32dff0d13690e15ff50de04278ce21275f44"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "61e53bbf1c770ee84def46689385f25845ba7cebd30633f4ca39d7e0e76bc7e8"
+    },
+    {
+      "path": "server/src/services/business-experiments/analysis.ts",
+      "sha256": "332a24af5e7839b922fe8e434743aa8096010021506507cc6324bc33282ea3f4"
+    },
+    {
+      "path": "server/src/services/business-experiments/kernel.ts",
+      "sha256": "733c22157acef7c7298c0cf62c4e3a0a2d3b6779bf3db95ec5b3a6f2d9cef618"
+    },
+    {
+      "path": "server/src/services/business-experiments/receipts.ts",
+      "sha256": "3bc299c03de91ddbd097517bff2d0a6faf99e10dda5ab23eb6fdfcd2e696cb01"
+    },
+    {
+      "path": "server/src/services/business-experiments/recording.ts",
+      "sha256": "24bcc6a57c31c4b61e83a1b24f8bcec95da569d565a5070327d834aa125cb1b8"
+    },
+    {
+      "path": "server/src/services/business-experiments/results.ts",
+      "sha256": "e58142128bdefdc6e945fb18abf9e54da84be1e4a93732dd74d8ad87c1af203e"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native_owner_and_contract_regression",
+      "status": "passed",
+      "checks": 71,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-analysis-owner-tests-final.log",
+      "logSha256": "023dd9b0a300ce6eae47b26a7c9b9149bfddebd55c26a0396fbddb048c527d40"
+    },
+    {
+      "name": "server_types",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-analysis-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared_types",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-analysis-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "migration_safety",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-analysis-migration-checks.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "name": "generated_schema_snapshot",
+      "status": "passed",
+      "checks": 1,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-analysis-snapshot.log",
+      "logSha256": "49dbad8c8ea9f4387848f6b08a012e8cc6d832b92ebc11d6f9e70367ce72298f"
+    }
+  ],
+  "evidenceClass": "Actual migrated PostgreSQL source-owner/API/erasure and independent exact numerical checks using explicitly synthetic fixtures, including a deliberately balanced positive test frame. No collected operational trial, verified exposure or deployment claim.",
+  "failedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-analysis-types.log",
+      "logSha256": "5ce680a55c612bfabb6f7ec544d5c6ef3aede1bebaa8a55fcdba884a6a9ddc54",
+      "resolution": "Added the strict analysis/interpretation schema imports to native OpenAPI registration."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-analysis-contracts.log",
+      "logSha256": "4354d54ca232d54217be0ef699958f4c47ec9686c635c54055b13c2389a4f741",
+      "resolution": "Added missing native OpenAPI schema imports; final selection passes every API and contract assertion."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-analysis-owner-tests.log",
+      "logSha256": "0c837d9bc5ef4b6862e952fb2f7c7c9f1a46702aeac76b5e8d9a092a0f5e70b7",
+      "resolution": "Fixed test handling of actual PostgreSQL transaction aborts and used canonical erasure helper signature; no outcome or erasure owner assertions weakened."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-analysis-owner-tests-qualified.log",
+      "logSha256": "4bb703f64020001607f15d5a3a8b0e8beb547124f82c254a6843753e4e5455ea",
+      "resolution": "Asserted actual unwrapped deferred-commit PostgreSQL error shape while retaining exact 23514 constraint requirement; verified no-result lifecycle advance cannot commit."
+    }
+  ],
+  "remaining": [
+    "Operator UI and Decision/Causal/Learning/Planning bridges",
+    "Remaining V8 waves and actual provider/hosted qualification"
+  ]
+}

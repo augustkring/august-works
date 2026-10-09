@@ -1,0 +1,137 @@
+{
+  "checkpoint": "Native Management source capture, signed immutable publication and complete inherited erasure",
+  "parentCommit": "8be8398cf213d18ac533ccf66e6d80082a2217f2",
+  "recordedAt": "2026-10-07T12:31:43.652235+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "35d8b0654d5f1e5431ae2e5272b5536f484dc3113790fab3551ca67dce14a400"
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "00a26bbfc74a44bd9a251d842285665197fda6ba490a04219d83557db20f1251"
+    },
+    {
+      "path": "packages/shared/src/management-reviews.ts",
+      "sha256": "58e80dccfb1ee2548cdecfa44b0315137fef6fd55d1fe8c559797243321bde5d"
+    },
+    {
+      "path": "server/src/__tests__/openapi-routes.test.ts",
+      "sha256": "10796de2969035c5a511293dd0df5661fbf29854daf864c92f472a93e7f45460"
+    },
+    {
+      "path": "server/src/app.ts",
+      "sha256": "b2df9a8ae1821aa4473b935809d745f146b64d37c497558e764d7f93eeb01093"
+    },
+    {
+      "path": "server/src/routes/index.ts",
+      "sha256": "c9fd3cfa17ddfd1534bef64b2bc9f6793a9af9b98a504d4b0099ec0955c4aece"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "656b742958df8cd144c4d9035e2802a1a49029ba5ffe521459683f4cadfa2242"
+    },
+    {
+      "path": "server/src/services/analytical-evidence.ts",
+      "sha256": "dfb720385fb6d9b94bd705ef1773c678e22bb665969ce198858a650ea4e6b7d2"
+    },
+    {
+      "path": "server/src/services/analytical-source-erasure.ts",
+      "sha256": "ce84549628aaf79e26406680546d87f3ef8ad651dea7ddd0b1ff8a63f438e2f7"
+    },
+    {
+      "path": "server/src/services/business-experiments/evidence.ts",
+      "sha256": "e4b187954ca56e23a3e82e37ee7b34caa9c9f21aed49e63d7679ad39fc352464"
+    },
+    {
+      "path": "server/src/services/causal-claims/service.ts",
+      "sha256": "6a1ab55f0a5f1fc2b632f4399f8d6c58699052c9437b984b29ac9d26e8bf6b4a"
+    },
+    {
+      "path": "server/src/services/learning/learning-privacy.ts",
+      "sha256": "c3b154731521779e63bba88606f14d4617a3596d15b9aba6caff643d96cec4ce"
+    },
+    {
+      "path": "packages/db/src/migrations/0411_lively_kingpin.sql",
+      "sha256": "5c5e3c2053e572aa7c8921cb46f1653c0a119546c0da7ef7cfc2655f660ce8f5"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0411_snapshot.json",
+      "sha256": "f49f4bb2b7dbd8e0c66ca2d4d5df59bbe8e375435e3721e51123379e29f4fe49"
+    },
+    {
+      "path": "packages/db/src/schema/management_reviews.ts",
+      "sha256": "db829451c941703e36a013930fcf347a63131c4d37028a44b1d7190c3f10b02f"
+    },
+    {
+      "path": "server/src/__tests__/management-reviews.integration.test.ts",
+      "sha256": "9ec4e2bf7011b7413c31faa711ce1f535a8cec9eb6bdb906675d9c92fd2113a1"
+    },
+    {
+      "path": "server/src/routes/management-reviews.ts",
+      "sha256": "89e553182ebe9c0247836bd2da450f99539709a378e48e84437f69b9d2a6488b"
+    },
+    {
+      "path": "server/src/services/management-reviews/capture.ts",
+      "sha256": "35bb3b5df7c5bb64107dc066d324816d071c72347d6aab089238dd15c35f59e9"
+    },
+    {
+      "path": "server/src/services/management-reviews/privacy.ts",
+      "sha256": "cbb8e89b5f5d16865128ff9cad6171c86792db78e38ce31d93dc69b08aec21ed"
+    },
+    {
+      "path": "server/src/services/management-reviews/service.ts",
+      "sha256": "56eaec76a749e14d8389427ec09966ea5f6454aed6c5fa06434b282afda86ae2"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native-owner-api-kernel",
+      "checks": 35,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-owner-tests-final-source.log",
+      "logSha256": "45b4b3fd08b91ac4f14658d4017ea04ad5a1f938e406eb721b3613bf46e12711"
+    },
+    {
+      "name": "native-source-owner-regression",
+      "checks": 73,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-source-regression.log",
+      "logSha256": "c872dce2add5fd5edcd398dbc74bf94dd160a56a0207524e1ae845b817659cd3"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-owner-types-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-owner-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "native-snapshot",
+      "checks": 1,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-snapshot.log",
+      "logSha256": "90d683a7c27a35ddd2925d5b1bf26484c293ee6c6e5380117b8ba53e6461a7f9"
+    },
+    {
+      "name": "migration-safety",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-migration-safety.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    }
+  ],
+  "limits": [
+    "Thirteen Management PostgreSQL cases qualify goal, authorized project, metric-observation and actual verified-task Learning fixtures, publication, supersession, events, account admission and erasure. Other source branches have type checks and upstream regressions but still need dedicated Management fixtures.",
+    "Synthetic software fixtures do not establish collected operational or business-impact evidence.",
+    "Human-reported acted-on events are not verified intervention or outcome receipts.",
+    "Management UI, target/trend enrichment, native Routines, Chat and analytical Learning bridge remain open; cross-project Planning, optional providers and hosted whole-release acceptance remain open."
+  ]
+}

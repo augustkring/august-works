@@ -1,0 +1,297 @@
+import { createHash, randomUUID } from "node:crypto";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { activityLog, analyticalLineageManifests, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, issues, projects, type Db } from "@paperclipai/db";
+import { BUSINESS_EVENT_PROJECTOR_VERSION, businessEventAttributesSchema, businessEventBackfillSchema, businessEventListSchema, businessEventObjectSchema, businessEventPurposeSchema, v7FeatureEnabled, v8FeatureEnabled, type BusinessEvent, type BusinessEventAttributes, type BusinessEventBackfill, type BusinessEventList, type BusinessEventObject } from "@paperclipai/shared";
+import { conflict, forbidden, notFound } from "../errors.js";
+import { currentAnalyticalPurpose } from "./analytical-purpose.js";
+import { nativeSha256 } from "./native-runtime/canonical.js";
+import { accessService } from "./access.js";
+import type { AuthorizationActor } from "./authorization.js";
+import { logActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
+import { instanceSettingsService } from "./instance-settings.js";
+import { lockBusinessEventSource, suppressBusinessEventSource } from "./business-event-privacy.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { lockAnalyticalCompany, assertAnalyticalSourcesNotErased } from "./analytical-privacy.js";
+import { retainNativeEventLineage } from "./business-event-lineage.js";
+
+type ActivitySource = typeof activityLog.$inferSelect;
+const ACTIONS = new Set(["issue.created", "issue.updated", "issue.checked_out", "issue.released", "project.created", "project.updated"]);
+
+/** Only observed, typed facts enter the projection. No message, identity,
+ * credential or current-state enrichment becomes historical evidence. */
+export function projectBusinessEvent(source: Pick<ActivitySource,"action" | "entityType" | "entityId" | "createdAt" | "details">, occurredAt = source.createdAt.toISOString()) {
+  if (!ACTIONS.has(source.action) || !source.action.startsWith(`${source.entityType}.`)) return null;
+  const primary = businessEventObjectSchema.safeParse({ objectType: source.entityType, objectId: source.entityId, qualifier: "primary" });
+  if (!primary.success) return null;
+  const attributes: BusinessEventAttributes = {};
+  for (const key of ["status", "previousStatus", "priority"] as const) {
+    const field = businessEventAttributesSchema.shape[key].safeParse(source.details?.[key]);
+    if (field.success && field.data !== undefined) Object.assign(attributes, { [key]: field.data });
+  }
+  const objects: BusinessEventObject[] = [primary.data];
+  // This relation is included only when recorded in the source event, never
+  // inferred from the issue's current project assignment.
+  if (source.entityType === "issue") {
+    const related = businessEventObjectSchema.safeParse({ objectType: "project", objectId: source.details?.projectId, qualifier: "related" });
+    if (related.success) objects.push(related.data);
+  }
+  const lifecycle = source.action.slice(source.action.indexOf(".") + 1);
+  const content = { eventType: source.action, activity: source.action, lifecycle, occurredAt, objects, attributes, version: BUSINESS_EVENT_PROJECTOR_VERSION };
+  const sourceHash = createHash("sha256").update(JSON.stringify(content)).digest("hex");
+  return { ...content, sourceHash };
+}
+
+export function businessEventService(db: Db) {
+  async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, flagsRequired = true) {
+    const access = accessService(tx);
+    if (!(await access.decide({ actor, action: "company_scope:read", resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true })).allowed)
+      throw forbidden("Business events are outside this actor's authorization boundary");
+    if (write && (actor.type !== "board" || !(await access.decide({ actor, action: "audit:view_agent_actions", resource: { type: "company", companyId } })).allowed))
+      throw forbidden("Business event projection requires board audit authority");
+    const flags = await instanceSettingsService(tx).getExperimental();
+    if (flagsRequired && (!v8FeatureEnabled(flags, "business_events_v8") || !v7FeatureEnabled(flags, "governance_evidence_v7")))
+      throw notFound("Business events are not enabled");
+  }
+  async function purpose(tx: Db, companyId: string, input: { governanceObligationRefs: string[]; retentionDays: number }) {
+    const parsed = businessEventPurposeSchema.parse({ governanceObligationRefs: input.governanceObligationRefs, retentionDays: input.retentionDays });
+    return currentAnalyticalPurpose(tx, companyId, { ...parsed, sensitivity: "internal", purpose: "process_intelligence" }, "process");
+  }
+  async function readable(tx: Db, companyId: string, actor: AuthorizationActor, objects: BusinessEventObject[]) {
+    const access = accessService(tx);
+    const deadline = performance.now()+30_000;
+    if (!objects.length) return false;
+    try {
+      await assertAnalyticalSourcesNotErased(tx, companyId, objects.filter(o => o.objectType === "issue").map(o => o.objectId), objects.filter(o => o.objectType === "project").map(o => o.objectId));
+    } catch (error) {
+      if (!error || typeof error !== "object" || !("status" in error) || error.status !== 409) throw error;
+      return false;
+    }
+    for (const object of objects) {
+      if (performance.now()>=deadline) throw conflict("Native event-object authorization exceeded its bounded budget");
+      if (object.objectType === "issue") {
+        const [issue] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, object.objectId))).for("share");
+        if (!issue || issue.hiddenAt || !(await access.decide({ actor, action: "issue:read", enforceResponsibleUserIntersection: true, resource: {
+          type: "issue", companyId, issueId: issue.id, projectId: issue.projectId, parentIssueId: issue.parentId,
+          assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId, status: issue.status, originKind: issue.originKind, originId: issue.originId,
+        } })).allowed) return false;
+        if (issue.projectId) {
+          const [currentProject] = await tx.select({ id: projects.id }).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, issue.projectId))).for("share");
+          if (!currentProject || !(await access.decide({ actor, action: "project:read", enforceResponsibleUserIntersection: true, resource: { type: "project", companyId, projectId: currentProject.id } })).allowed) return false;
+        }
+      } else {
+        const [project] = await tx.select({ id: projects.id }).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, object.objectId))).for("share");
+        if (!project || !(await access.decide({ actor, action: "project:read", enforceResponsibleUserIntersection: true, resource: { type: "project", companyId, projectId: project.id } })).allowed) return false;
+      }
+    }
+    return true;
+  }
+  function auditActor(actor: AuthorizationActor) {
+    return actor.type === "agent" ? { actorType: "agent" as const, actorId: actor.agentId!, agentId: actor.agentId }
+      : { actorType: "user" as const, actorId: actor.userId ?? "local-board" };
+  }
+  return {
+    /** Internal retained-lineage consumers use the same native object owner,
+     * including current Task ancestry. This is not a separate source registry. */
+    async inspectCurrentObjectSources(companyId: string, actor: AuthorizationActor, objects: BusinessEventObject[]) {
+      if (objects.length>8032) throw conflict("Native event lineage exceeds its bounded object inspection");
+      const parsed=objects.map(object=>businessEventObjectSchema.parse(object));
+      return db.transaction(async rawTx=>{
+        const tx=rawTx as unknown as Db;await tx.execute(sql`set local statement_timeout='8s'`);
+        await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx,companyId);await admit(tx,companyId,actor);
+        if(parsed.length && !await readable(tx,companyId,actor,parsed)) throw forbidden("Retained native event sources are outside current authority");
+      });
+    },
+    async backfill(companyId: string, actor: AuthorizationActor, input: BusinessEventBackfill) {
+      const deadline = performance.now()+30_000;
+      await admit(db, companyId, actor, true);
+      const query = businessEventBackfillSchema.parse(input);
+      query.governanceObligationRefs = [...new Set(query.governanceObligationRefs)].sort();
+      const cursor = query.cursor;
+      const rows = await db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db; await tx.execute(sql`set local statement_timeout='8s'`);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+        await admit(tx, companyId, actor, true); await purpose(tx, companyId, query);
+        return tx.select({ id: activityLog.id,
+        // PostgreSQL source timestamps may have microseconds. A JS Date would
+        // truncate the cursor and replay the same row at a page boundary.
+        cursorAt: sql<string>`to_char(${activityLog.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+      }).from(activityLog).where(and(
+        eq(activityLog.companyId, companyId), sql`${activityLog.createdAt} >= ${query.from}::timestamptz`, sql`${activityLog.createdAt} <= ${query.until}::timestamptz`,
+        cursor ? sql`(${activityLog.createdAt}, ${activityLog.id}) > (${cursor.at}::timestamptz, ${cursor.id}::uuid)` : undefined,
+      )).orderBy(asc(activityLog.createdAt), asc(activityLog.id)).limit(query.limit);
+      });
+      let projected = 0;
+      let unchanged = 0;
+      let scanned = 0;
+      const contributedSources: string[] = [];
+      for (const row of rows) {
+        // Always process one row so a budget-limited batch has a resumable cursor.
+        if (scanned > 0 && performance.now() >= deadline) break;
+        const publications: ActivityPublication[] = [];
+        const result = await db.transaction(async (tx) => {
+          await tx.execute(sql`set local statement_timeout='8s'`);
+          await lockBusinessEventSource(tx, companyId, row.id);
+          await admit(tx as unknown as Db, companyId, actor, true);
+          await purpose(tx as unknown as Db, companyId, query);
+          const [suppressed] = await tx.select().from(businessEventSuppressions).where(and(eq(businessEventSuppressions.companyId, companyId), eq(businessEventSuppressions.sourceRef, row.id)));
+          if (suppressed) return "ignored";
+          const [record] = await tx.select({ source: activityLog, exactTime: sql<string>`to_char(${activityLog.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` }).from(activityLog).where(and(eq(activityLog.companyId, companyId), eq(activityLog.id, row.id))).for("share");
+          if (!record) return "ignored";
+          const source = record.source;
+          const event = projectBusinessEvent(source, record.exactTime);
+          if (!event || !await readable(tx as unknown as Db, companyId, actor, event.objects)) return "ignored";
+          const [previous] = await tx.select().from(businessEvents).where(and(eq(businessEvents.companyId, companyId), eq(businessEvents.sourceRef, source.id))).orderBy(desc(businessEvents.revision)).limit(1);
+          const now = new Date();
+          if (previous && (!previous.expiresAt || !previous.governanceObligationRefs || previous.expiresAt <= now)) {
+            await suppressBusinessEventSource(tx, companyId, source.id, now); return "ignored";
+          }
+          if (previous?.sourceHash === event.sourceHash && previous.retentionDays === query.retentionDays
+            && nativeSha256(previous.governanceObligationRefs) === nativeSha256(query.governanceObligationRefs)) return "unchanged";
+          const expiresAt = new Date(Math.min(now.getTime()+query.retentionDays*86400000, previous?.expiresAt?.getTime() ?? Infinity));
+          const [created] = await tx.insert(businessEvents).values({
+            ...(previous ? {} : { id: source.id }), companyId,
+            eventType: event.eventType, activity: event.activity, lifecycle: event.lifecycle,
+            occurredAt: sql`${record.exactTime}::timestamptz`, observedAt: now, sourceClass: "aw_native", sourceProvider: "activity_log",
+            sourceRef: source.id, sourceVersion: BUSINESS_EVENT_PROJECTOR_VERSION, sourceHash: event.sourceHash,
+            revision: (previous?.revision ?? 0) + 1, attributes: event.attributes,
+            purpose: "process_intelligence", sensitivity: "internal", trustLevel: "observed", supersedesEventId: previous?.id ?? null,
+            governanceObligationRefs: query.governanceObligationRefs, retentionDays: query.retentionDays, expiresAt,
+          }).returning();
+          await tx.insert(businessEventObjects).values(event.objects.map((object) => ({ ...object, companyId, eventId: created.id })));
+          if (previous) await tx.update(businessEvents).set({ tombstonedAt: now }).where(and(eq(businessEvents.companyId, companyId), eq(businessEvents.id, previous.id)));
+          await logActivity(tx as unknown as Db, { companyId, ...auditActor(actor), action: "business_event.projected", entityType: "business_event", entityId: created.id, details: { projector: BUSINESS_EVENT_PROJECTOR_VERSION, revision: created.revision } }, publications);
+          return "projected";
+        });
+        publications.forEach(publishActivity);
+        if (result === "projected") projected++;
+        if (result === "unchanged") unchanged++;
+        if (result === "projected" || result === "unchanged") contributedSources.push(row.id);
+        scanned++;
+      }
+      const last = rows[scanned-1];
+      const lastSourceCursor = last ? { at: last.cursorAt, id: last.id } : null;
+      const hasMore = scanned < rows.length || rows.length === query.limit;
+      const publications: ActivityPublication[] = [];
+      const run = await db.transaction(async (tx) => {
+        await tx.execute(sql`set local statement_timeout='8s'`);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx as unknown as Db, companyId);
+        await admit(tx as unknown as Db, companyId, actor, true);
+        const policies = await purpose(tx as unknown as Db, companyId, query);
+        // Re-enter the original current reader. The earlier projection commits
+        // confer no authority on a later metadata publication.
+        const events = contributedSources.length ? (await businessEventService(tx as unknown as Db).list(companyId, actor,
+          { from: query.from, until: query.until, limit: 200 }, contributedSources)).items : [];
+        if (events.length !== contributedSources.length) throw conflict("Backfill Sources changed before metadata publication; retry the bounded window");
+        const cursorEvent = query.cursor ? (await businessEventService(tx as unknown as Db).list(companyId, actor,
+          { from: query.cursor.at, until: query.cursor.at, limit: 1 }, [query.cursor.id])).items[0] : undefined;
+        const retainedEvents = cursorEvent && !events.some(event => event.source.ref === cursorEvent.source.ref) ? [...events, cursorEvent] : events;
+        const now = new Date();
+        const expiresAt = new Date(Math.min(now.getTime() + query.retentionDays * 86400000, ...retainedEvents.map(event => Date.parse(event.expiresAt))));
+        if (expiresAt <= now || performance.now() >= deadline) throw conflict("Backfill metadata exceeded its bounded retention or work budget; retry a smaller window");
+        const id = randomUUID(), lineageManifestId = randomUUID();
+        const parameters = { from: query.from, until: query.until, limit: query.limit, projected, unchanged,
+          governanceObligationRefs: query.governanceObligationRefs, retentionDays: query.retentionDays };
+        await tx.insert(analyticalLineageManifests).values({ id: lineageManifestId, companyId, analysisType: "business_event_backfill", analysisRef: id,
+          engineVersion: BUSINESS_EVENT_PROJECTOR_VERSION, inputHash: nativeSha256({ events: retainedEvents, parameters }), definitionHash: nativeSha256({ projector: BUSINESS_EVENT_PROJECTOR_VERSION, parameters }),
+          requestedBy: auditActor(actor).actorId, sourceWatermark: events.at(-1)?.occurredAt ?? "empty_authorized_batch", sourceCount: retainedEvents.length,
+          parameters, createdAt: now, expiresAt });
+        await retainNativeEventLineage(tx as unknown as Db, companyId, lineageManifestId, retainedEvents, policies);
+        const [record] = await tx.insert(businessEventBackfillRuns).values({ id, companyId, lineageManifestId, projectorVersion: BUSINESS_EVENT_PROJECTOR_VERSION,
+          windowFrom: new Date(query.from), windowUntil: new Date(query.until), startCursor: cursorEvent ? query.cursor : null,
+          lastSourceCursor: lastSourceCursor && events.some(event => event.source.ref === lastSourceCursor.id) ? lastSourceCursor : null,
+          batchLimit: query.limit, projected, unchanged, status: hasMore ? "batch_limit_reached" : "window_scan_exhausted" }).returning({ id: businessEventBackfillRuns.id });
+        await logActivity(tx as unknown as Db, { companyId, ...auditActor(actor), action: "business_event.backfill_recorded", entityType: "business_event_backfill", entityId: record.id, details: { projector: BUSINESS_EVENT_PROJECTOR_VERSION } }, publications);
+        await purpose(tx as unknown as Db, companyId, query);
+        if (expiresAt <= new Date() || performance.now() >= deadline) throw conflict("Backfill metadata expired before publication; retry a smaller window");
+        return record;
+      });
+      publications.forEach(publishActivity);
+      return { runId: run.id, projectorVersion: BUSINESS_EVENT_PROJECTOR_VERSION, from: query.from, until: query.until, projected, unchanged,
+        nextCursor: hasMore ? lastSourceCursor : null,
+        coverage: "bounded_source_window" as const };
+    },
+    async list(companyId: string, actor: AuthorizationActor, input: BusinessEventList, onlySourceRefs?: readonly string[]) {
+      const query = businessEventListSchema.parse(input);
+      return db.transaction(async rawTx => {
+        const deadline = performance.now()+30_000;
+        const tx = rawTx as unknown as Db;
+        await tx.execute(sql`set local statement_timeout='8s'`);
+        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+        await admit(tx, companyId, actor);
+        const rows = await tx.select({ event: businessEvents, cursorAt: sql<string>`to_char(${businessEvents.occurredAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` }).from(businessEvents).where(and(eq(businessEvents.companyId, companyId), isNull(businessEvents.tombstonedAt),
+          onlySourceRefs ? inArray(businessEvents.sourceRef, [...onlySourceRefs]) : undefined,
+          sql`${businessEvents.expiresAt}>now()`,
+          sql`not exists (select 1 from ${businessEventSuppressions} where ${businessEventSuppressions.companyId} = ${businessEvents.companyId} and ${businessEventSuppressions.sourceRef} = ${businessEvents.sourceRef})`,
+          sql`${businessEvents.occurredAt} >= ${query.from}::timestamptz`, sql`${businessEvents.occurredAt} <= ${query.until}::timestamptz`,
+          query.cursor ? sql`(${businessEvents.occurredAt}, ${businessEvents.id}) > (${query.cursor.at}::timestamptz, ${query.cursor.id}::uuid)` : undefined,
+        )).orderBy(asc(businessEvents.occurredAt), asc(businessEvents.id)).limit(query.limit);
+        const items: BusinessEvent[] = [];
+        for (const scanned of rows) {
+          if (performance.now() >= deadline) throw conflict("This event page exceeded its bounded admission budget; reduce the page size");
+          const row = scanned.event;
+          if (!row.governanceObligationRefs || !row.retentionDays || !row.expiresAt || row.sourceVersion !== BUSINESS_EVENT_PROJECTOR_VERSION) continue;
+          const policy = businessEventPurposeSchema.safeParse({ governanceObligationRefs: row.governanceObligationRefs, retentionDays: row.retentionDays });
+          if (!policy.success) continue;
+          try { await purpose(tx, companyId, policy.data); } catch (error) {
+            if (error && typeof error === "object" && "status" in error && error.status === 409) continue;
+            throw error;
+          }
+          const [record] = await tx.select({ source: activityLog, exactTime: sql<string>`to_char(${activityLog.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` }).from(activityLog).where(and(eq(activityLog.companyId, companyId), eq(activityLog.id, row.sourceRef))).for("share");
+          const projected = record && projectBusinessEvent(record.source, record.exactTime);
+          if (!projected || projected.sourceHash !== row.sourceHash || row.eventType !== projected.eventType
+            || row.activity !== projected.activity || row.lifecycle !== projected.lifecycle || scanned.cursorAt !== projected.occurredAt
+            || nativeSha256(row.attributes) !== nativeSha256(projected.attributes)) continue;
+          const objects = await tx.select({ objectType: businessEventObjects.objectType, objectId: businessEventObjects.objectId, qualifier: businessEventObjects.qualifier })
+            .from(businessEventObjects).where(and(eq(businessEventObjects.companyId, companyId), eq(businessEventObjects.eventId, row.id))).orderBy(asc(businessEventObjects.qualifier), asc(businessEventObjects.objectType), asc(businessEventObjects.objectId));
+          const objectKey = (object: BusinessEventObject) => `${object.objectType}:${object.objectId}:${object.qualifier}`;
+          if (nativeSha256([...objects].sort((a,b) => objectKey(a).localeCompare(objectKey(b))))
+            !== nativeSha256([...projected.objects].sort((a,b) => objectKey(a).localeCompare(objectKey(b))))) continue;
+          if (!await readable(tx, companyId, actor, objects)) continue;
+          items.push({ id: row.id, companyId, eventType: row.eventType, activity: row.activity, lifecycle: row.lifecycle,
+            occurredAt: scanned.cursorAt, observedAt: row.observedAt.toISOString(), sourceUpdatedAt: row.sourceUpdatedAt?.toISOString() ?? null, receivedAt: row.receivedAt?.toISOString() ?? null,
+            source: { class: "aw_native", provider: "activity_log", ref: row.sourceRef, version: row.sourceVersion, contentHash: row.sourceHash },
+            revision: row.revision, objects, attributes: businessEventAttributesSchema.parse(row.attributes), purpose: "process_intelligence", sensitivity: "internal", trustLevel: "observed", supersedesEventId: row.supersedesEventId, tombstonedAt: null,
+            governanceObligationRefs: row.governanceObligationRefs, retentionDays: row.retentionDays, expiresAt: row.expiresAt.toISOString() });
+        }
+        // The source scan position is operational pagination, never a denominator
+        // or assertion that this page covers the actor's entire event population.
+        const last = rows.at(-1);
+        return { items, nextCursor: rows.length === query.limit && last ? { at: last.cursorAt, id: last.event.id } : null };
+      });
+    },
+    /** Retention is independent of rollout and company state. Legacy ungoverned
+     * payloads receive no invented purpose or retrospective retention period. */
+    async expireDueSources(now = new Date()) {
+      const due = await db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db; await tx.execute(sql`set local statement_timeout='8s'`);
+        return tx.select({ companyId: businessEvents.companyId, sourceRef: businessEvents.sourceRef }).from(businessEvents)
+          .where(or(isNull(businessEvents.expiresAt), lte(businessEvents.expiresAt, now)))
+          .groupBy(businessEvents.companyId, businessEvents.sourceRef)
+          .orderBy(sql`min(${businessEvents.expiresAt}) nulls first`, asc(businessEvents.companyId), asc(businessEvents.sourceRef)).limit(100);
+      });
+      let erased = 0;
+      for (const source of due) await db.transaction(async tx => {
+        await tx.execute(sql`set local statement_timeout='8s'`);
+        await lockBusinessEventSource(tx, source.companyId, source.sourceRef);
+        const [expired] = await tx.select({ id: businessEvents.id }).from(businessEvents).where(and(
+          eq(businessEvents.companyId, source.companyId), eq(businessEvents.sourceRef, source.sourceRef),
+          or(isNull(businessEvents.expiresAt), lte(businessEvents.expiresAt, now)))).limit(1);
+        if (!expired) return;
+        await suppressBusinessEventSource(tx, source.companyId, source.sourceRef, now); erased++;
+      });
+      return { checkedSources: due.length, erasedSources: erased };
+    },
+    async suppressSource(companyId: string, actor: AuthorizationActor, sourceRef: string) {
+      await admit(db, companyId, actor, true, false);
+      const publications: ActivityPublication[] = [];
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`set local statement_timeout='8s'`);
+        await suppressBusinessEventSource(tx, companyId, sourceRef);
+        await admit(tx as unknown as Db, companyId, actor, true, false);
+        await logActivity(tx as unknown as Db, { companyId, ...auditActor(actor), action: "business_event.source_suppressed", entityType: "business_event_source", entityId: sourceRef, details: { projector: BUSINESS_EVENT_PROJECTOR_VERSION } }, publications);
+      });
+      publications.forEach(publishActivity);
+      return { suppressed: true as const };
+    },
+  };
+}

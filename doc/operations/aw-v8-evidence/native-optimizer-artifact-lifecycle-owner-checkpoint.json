@@ -1,0 +1,66 @@
+{
+  "checkpoint": "Original Optimizer lifecycle owner for optimizer-origin native Artifact live status",
+  "parentCommit": "3d701c2687e978a82a262876d1e71c7b5b5ae953",
+  "recordedAt": "2026-10-07T22:33:53.562108+00:00",
+  "sourceFiles": [
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "18880e1d87ca1d373cde32c19b5b488f3c4cb4025f2e020613bbfcbafc70447c"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-service.ts",
+      "sha256": "e4889df1402da29e8d3dad4485e471c53306fe3fc7dd4eed841225b70d36d697"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-evaluation.ts",
+      "sha256": "ac553bc9aa7e1534a6d5639196bf73059ca2b7e408af8794859c3dbbf01eeb06"
+    },
+    {
+      "path": "ui/src/pages/AutomationArtifacts.test.tsx",
+      "sha256": "27a36edc92473c7637e96a58e2cb0827bc28365a73fc1eaefeefcd16c576d260"
+    },
+    {
+      "path": "ui/src/pages/AutomationArtifacts.tsx",
+      "sha256": "2b4de33780b1f9204d9d35a9f67545aa7dc16b2d4407ba1195b37dc14ab4c20c"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Native PostgreSQL/Learning/Optimizer/Artifact/account and UI checks",
+      "passedTests": 49,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-optimizer-artifact-owner-final.log",
+      "logSha256": "26419f7d7516c94db11ff75c6187e026b5aeb7afb48ec625a4b4749e5de1ebfa"
+    },
+    {
+      "check": "Final sequential UI/server types",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-optimizer-artifact-owner-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "Native UI token gates",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-optimizer-artifact-owner-tokens.log",
+      "logSha256": "780e5a2042770b4b6a7c84983ba8f2055e3d712811be034a700c7f7d3bd2f43b"
+    }
+  ],
+  "parentWholeNativeBuild": {
+    "sourceCommit": "6ab6c8e1d9509497659a3b9f9982329f726b66d9",
+    "exitCode": 0,
+    "log": "/var/tmp/aw-v8-native-build-artifact-source-owner.log",
+    "logSha256": "397e4b19c0eb98ccaf73aea5670a5e4d773eee06e9b78fc3fe2a2b094374f5d7"
+  },
+  "qualified": [
+    "Generic Artifact shadow/active transitions for optimizer-origin artifacts require the original internal workflow-optimizer writer. Actual human and unrelated system writers cannot bypass replay, shadow review, approval or canary.",
+    "Original native Optimizer startShadow carries the actual current reader separately from its system mutation identity; original company admission remains enforced.",
+    "Actual PostgreSQL covers all three analytical Source fixtures, denied generic human/system transitions without persisted changes, unrelated user denial and allowed original native shadow transition.",
+    "The original Artifact page links optimizer candidates to their native workflow review and withholds generic activation."
+  ],
+  "limitations": [
+    "No new external provider or Chromium invocation is claimed. UI uses explicit response-contract fixtures.",
+    "Source-derived ordinary Context/runtime retention, planning outcomes, Routines, action materialization, remaining Source closure, cross-project Planning, provider conformance and hosted acceptance remain open. No whole-brief completion is claimed."
+  ]
+}

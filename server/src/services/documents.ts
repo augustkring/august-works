@@ -8,6 +8,9 @@ import { isUniqueViolation } from "../db-errors.js";
 import { insertRowsInChunks } from "./batch-insert.js";
 import type { ImportIssueDocumentRow } from "./import-write-types.js";
 
+import { lockAnalyticalCompany, suppressAnalyticalSource } from "./analytical-privacy.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+
 function normalizeDocumentKey(key: string) {
   const normalized = key.trim().toLowerCase();
   const parsed = issueDocumentKeySchema.safeParse(normalized);
@@ -783,13 +786,20 @@ export function documentService(db: Db) {
     deleteIssueDocument: async (issueId: string, rawKey: string) => {
       const key = normalizeDocumentKey(rawKey);
       return db.transaction(async (tx) => {
-        const existing = await tx
+        let existing = await tx
           .select(issueDocumentSelect)
           .from(issueDocuments)
           .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
           .where(and(eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, key)))
           .then((rows) => rows[0] ?? null);
 
+        if (!existing) return null;
+        await lockAnalyticalCompany(tx, existing.companyId);
+        await lockMemoryPrivacy(tx as unknown as Db, existing.companyId);
+        existing = await tx.select(issueDocumentSelect).from(issueDocuments)
+          .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
+          .where(and(eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, key)))
+          .for("update").then(rows => rows[0] ?? null);
         if (!existing) return null;
         if (existing.lockedAt) {
           throw conflict("Document is locked", {
@@ -799,6 +809,7 @@ export function documentService(db: Db) {
           });
         }
 
+        await suppressAnalyticalSource(tx, existing.companyId, "document", existing.id);
         await tx.delete(issueDocuments).where(eq(issueDocuments.documentId, existing.id));
         await tx.delete(documents).where(eq(documents.id, existing.id));
 

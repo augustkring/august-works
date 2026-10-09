@@ -1,0 +1,76 @@
+{
+  "checkpoint": "Native instance maintenance reclaims only unreferenced historical global runtime assets",
+  "recordedAt": "2026-10-08T16:07:52.906203+00:00",
+  "parentCommit": "b0c7cd960ed664b10c53a01774abb60f10b0ebb7",
+  "primaryParentCommit": "6741384f8110d832ae5ee4364187600825973627",
+  "sourceFiles": [
+    {
+      "path": "server/src/index.ts",
+      "sha256": "fde74da0c4c0150d690eda2fbe027b09c2716ab933ee6fbe420fc4f7db549970"
+    },
+    {
+      "path": "server/src/services/native-runtime/runtime-asset-retention.ts",
+      "sha256": "a19a71bb4bc7fb614a86cb0bc22d57cdc1d9f2cb87826f87ac9c42a9eb911e3c"
+    },
+    {
+      "path": "server/src/__tests__/legacy-runtime-assets.integration.test.ts",
+      "sha256": "42201ce11260d5f6b31018d2f096322a90b268ec49bca9713e923da4077ceafc"
+    },
+    {
+      "path": "server/src/services/native-runtime/runtime-context.test.ts",
+      "sha256": "41cf9dde8a0af21f93b7f462937ac2d71090afdfecee0702e7c27fa065141e8e"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "86df777f88778fc3c13078ea8e8557cb089c3de5cb0b5f1fb0c1f28b21f9b73c"
+    },
+    {
+      "path": "server/src/services/memory/memory-jobs.test.ts",
+      "sha256": "4eabb17ec0b75cdd698a10de1ce3d8d80f6f37057db67be0a55776ff56c60c30"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "74b9ffc87b4c58d33e76101ad6d5b25f9665342d1f4df733acd538d88238116d"
+    },
+    {
+      "path": "doc/operations/aw-v8-source-and-data-register.md",
+      "sha256": "353cf142c5085e9cca232f024984dab7dac236818b918ea81ec511a4e087af0b"
+    }
+  ],
+  "validation": {
+    "completeOriginalPrivacyAndMemoryRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-legacy-assets-final-regression.log",
+      "sha256": "492cfb9f486238ab1be42077c294909d6b561fb06425117752e7482e1ce23b5a",
+      "tests": 74,
+      "files": 4,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-legacy-assets-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "sourceCommit": "6741384f8110d832ae5ee4364187600825973627",
+      "log": "/var/tmp/aw-v8-native-build-owned-conformance-assets.log",
+      "sha256": "ca4295f2bb4d296d82681092ad84985255e7568c7be77ac32e5dc6e3eb1f9f5b"
+    }
+  },
+  "qualified": [
+    "Original persisted references across all companies and terminal run states preserve both instruction and skill legacy bundles",
+    "Queued/running/scheduled_retry rows defer every deletion; an actual concurrent instance sweep defers without writes",
+    "At most sixteen actual orphan removals per tick; subsequent ticks reclaim seventeen orphan copies plus incomplete staging",
+    "Manifest-only and bundle-only historical copies are reclaimed; owned run copies, canonical files and native rows remain unchanged",
+    "Original no-symlink storage admission fails closed and safely retries after the unsafe entry is removed",
+    "Original native C7/outbox and Memory regressions pass without skips"
+  ],
+  "limitations": [
+    "Isolated PostgreSQL and temporary filesystem software fixtures only; no customer files are swept",
+    "The instance must become idle; a large retained prefix, mixed historical publisher fleet and hosted latency are unqualified",
+    "Provider/workspace/home/archive copies outside this fixed application cache and general multi-restore Source qualification remain open",
+    "No live provider, message, cloud deployment, spend, customer/Human/pilot trial or business-impact evidence",
+    "Release-wide current source qualification and all hosted predecessor gates remain open"
+  ]
+}

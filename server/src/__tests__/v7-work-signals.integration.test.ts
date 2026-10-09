@@ -9,7 +9,10 @@ import { workSignalService } from "../services/work-signals/work-signal-service.
 import { projectControlService } from "../services/project-control.js";
 import { registerSlackTaskAuthority, type SlackTaskAuthority } from "../services/connectors/slack-authority.js";
 import { executeGovernedSlackTool } from "../services/connectors/slack.js";
-vi.mock("../services/connectors/slack.js", () => ({ executeGovernedSlackTool: vi.fn() }));
+vi.mock("../services/connectors/slack.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../services/connectors/slack.js")>(),
+  executeGovernedSlackTool: vi.fn(),
+}));
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)("V7 source-bound coordination candidates (local protocol fixtures)", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;

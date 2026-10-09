@@ -1,0 +1,82 @@
+{
+  "checkpoint": "Native backfill metadata Source lineage, retention and actual prior-schema/archive qualification",
+  "recordedAt": "2026-10-08T18:25:59.361175+00:00",
+  "testedDevelopmentCommit": "869ca61274753e1f0cc27174c32ea286ebf0f87e",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/schema/business_events.ts",
+      "sha256": "cd0b05af527a655d051eaf5614d219c9c5d76df380dd9bb4b49c9d3a0502c2b4"
+    },
+    {
+      "path": "packages/db/src/migrations/0450_native_backfill_legacy_metadata_erasure.sql",
+      "sha256": "1b547c312864d02ca9fff08a737d4a5eca7ca66c5990164399c60616549e5468"
+    },
+    {
+      "path": "packages/db/src/migrations/0451_light_silver_fox.sql",
+      "sha256": "d56675c11ffa53f52e8400d475260e0fd70940cd1159ae47a80115642c71048e"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "06d2285946447ada8db7ce1ba49af1fddbc0413cb09e0829210ad3cbc4c2e894"
+    },
+    {
+      "path": "server/src/services/business-events.ts",
+      "sha256": "565b0458df1a839c062b93411214d7cbcbf1493e339d74676c10fafd10f3a242"
+    },
+    {
+      "path": "server/src/services/business-event-lineage.ts",
+      "sha256": "baeaaeebe9a75d8190f0c8a0f2f74d0a6c807b0c8b51672f18369974a263350b"
+    },
+    {
+      "path": "server/src/__tests__/business-events.integration.test.ts",
+      "sha256": "93347ca615bdce7d28e070cfe45ad929469c8cefd90b9c5d8e09997d41951576"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "24801e9f62aa67297ec4404e38293a5f681d6ec6df278e304eea7975ffc27f6b"
+    },
+    {
+      "path": "doc/operations/aw-v8-business-events.md",
+      "sha256": "7c0d80bb0f8517b2850f89be2761e3296135eccc4b2a8a42eedf40da99b2e6bc"
+    },
+    {
+      "path": "doc/operations/aw-v8-source-and-data-register.md",
+      "sha256": "24c447056cb512e6edf1888f4b17943cbc304cb495a08897a67c9e24472b3868"
+    }
+  ],
+  "validation": {
+    "completeNativeRegression": {
+      "result": "passed",
+      "tests": 45,
+      "files": 4,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-backfill-metadata-final-regression.log",
+      "sha256": "d26f76efdd97dea17d468b6036407a70336abf0562dbc4501ef4e018f3cf954f"
+    },
+    "normalMigrationGeneration": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-backfill-metadata-migration.log",
+      "sha256": "f74f4e7a70d04616cc0434723f0cb3d010f801b4e6df283b48a32faf7e05202f"
+    },
+    "currentWholeTypesTestsBuild": {
+      "result": "pending_new_production_source",
+      "olderWorkflowSource": "3a21cb334ca21bbb7ad6f47e17b889c1a587ee09",
+      "olderWorkflowBoundary": "Still active; maximum-experiment diagnostic pending group summary. It does not test this newer metadata production source."
+    }
+  },
+  "qualified": [
+    "Original current event owner re-admits all contributing Sources before bounded metadata publication; no authority cache",
+    "Same-company native manifest FK shares original purpose/Source lineage and expiry/erasure/quarantine owners",
+    "Flags-off/paused Source erasure and expiry remove metadata and refuse late copies while independent metadata/native facts remain",
+    "Actual original pre-0450 migrations build an empty historical DB and normal production upgrade removes legacy metadata/counters without changing other canonical audit fields",
+    "Actual native local gzip archive/restore and quarantine remove Source-dependent metadata and retain unrelated metadata",
+    "Original public pagination remains unchanged; ignored/unreadable cursor identities are not persisted",
+    "No redundant derived counters in new audit publications"
+  ],
+  "limitations": [
+    "Synthetic native Source/Human/operator fixtures, not a hosted/provider/customer/Human trial",
+    "Current complete types/workflow/build for this production change pending; initial failed/focused/24-case runs are diagnostic",
+    "Minimal suppression identities must remain until actual historical replay/backups are retired; named retention/operating acceptance is missing",
+    "No complete Source/claim manifest, release identity, risk acceptance, CI/Greptile, hosted DR or promotion"
+  ]
+}

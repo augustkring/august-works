@@ -1,0 +1,49 @@
+{
+  "checkpoint": "Native local account provenance at current browser account binding",
+  "parentCommit": "0f17fb32e860ce90b1263be0af93ef690175b487",
+  "recordedAt": "2026-10-07T21:50:41.856313+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/shared/src/validators/access.ts",
+      "sha256": "52cb71da9632f50e8db11bc94ed9d4da7d1a9d085bf9500a2f275771b805ab12"
+    },
+    {
+      "path": "server/src/routes/auth.ts",
+      "sha256": "9131bd552f78f7e54a9b413add8c6c1f9fe949e27566b8a3b7a9394fcad51812"
+    },
+    {
+      "path": "server/src/__tests__/auth-routes.test.ts",
+      "sha256": "05adfa68f9d30a87d4e25821be68a59180097d09ba0bec5297422b171958c8c2"
+    },
+    {
+      "path": "ui/src/api/companies-query.ts",
+      "sha256": "27755789255e7de5f706f895c9a020dee3f10d9e2f9b6f650558b93dca30308d"
+    },
+    {
+      "path": "ui/src/context/V7AccountScope.tsx",
+      "sha256": "00edf586d10c896a765df07a247c2f976349230d7020178fa552ffa176a0d492"
+    },
+    {
+      "path": "ui/src/context/V7AccountScope.test.tsx",
+      "sha256": "5dea9bcf047afd842009e7ab8989edf6ada22e414c39faf10342e134cd2a5cf8"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Native auth route, current account binding, UI session and profile contracts",
+      "passedTests": 81,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-local-account-provenance.log",
+      "logSha256": "ace2917f26d80bfc47596fc50939db2b62062051ff85d22fabf8d2fdeebf8707"
+    }
+  ],
+  "qualified": [
+    "The native session explicitly identifies server-resolved local_implicit provenance; the persisted profile ID does not grant local authority.",
+    "The UI binds the actual local operator as local-board and authenticated profiles as user:<id>.",
+    "A same-profile provenance change remounts current forms and mutation observers. The existing server account binding guard remains unchanged."
+  ],
+  "limitations": [
+    "The real Chromium Decision review flow is running and is not counted by this checkpoint.",
+    "No full resulting production build or whole-brief completion is claimed."
+  ]
+}

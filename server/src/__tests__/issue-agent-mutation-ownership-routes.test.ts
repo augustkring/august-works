@@ -160,8 +160,14 @@ const mockExternalObjectService = vi.hoisted(() => ({
 const mockIssueTreeControlService = vi.hoisted(() => ({ getActivePauseHoldGate: vi.fn(async () => null) }));
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockObserveCrossIssueInfluence = vi.hoisted(() => vi.fn(async () => null));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
 
 function registerRouteMocks() {
+  // The legacy route stub models checkout/recovery ownership, not a real
+  // PostgreSQL Source graph. Keep Source admission explicit and deny-tested.
+  vi.doMock("../services/analytical-context-authority.js", () => ({
+    assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+  }));
   vi.doMock("@paperclipai/shared/telemetry", () => ({
     trackAgentTaskCompleted: vi.fn(),
     trackErrorHandlerCrash: vi.fn(),
@@ -457,6 +463,7 @@ describe("agent issue mutation checkout ownership", () => {
     // by an earlier test.
     routeModules.value.__clearIssueListResponseCacheForTests();
     vi.clearAllMocks();
+    mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockIssueTreeControlService.getActivePauseHoldGate.mockReset().mockResolvedValue(null);
     mockChatRunRetries.prepareFailedChatRunRetry.mockReset();
     mockChatRunRetries.processFailedChatRunRetry.mockReset();
@@ -1009,6 +1016,15 @@ describe("agent issue mutation checkout ownership", () => {
       order: "desc",
       limit: null,
     });
+  });
+
+  it("withholds comments when the current analytical Source denies the otherwise authorized peer", async () => {
+    const { HttpError: CurrentHttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    mockAnalyticalPayloadAccess.mockRejectedValue(new CurrentHttpError(403, "Analytical Source unavailable"));
+    const res = await request(createApp(peerActor())).get(`/api/issues/${issueId}/comments`);
+    expect(res.status).toBe(403);
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ agentId: peerAgentId }), { issueId });
+    expect(mockIssueService.listComments).not.toHaveBeenCalled();
   });
 
   it("rejects peer agents from reading a specific comment when issue read is outside their boundary", async () => {

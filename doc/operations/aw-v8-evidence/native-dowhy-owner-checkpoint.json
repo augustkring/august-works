@@ -1,0 +1,298 @@
+{
+  "checkpoint": "Fixed pinned DoWhy through original native Human causal model, review and retained replay",
+  "recordedAt": "2026-10-08T11:42:01.001952+00:00",
+  "parentCommit": "cdb1759cad11b58bce29c3f9310c3b0958c443c5",
+  "primaryParentCommit": "28dc109a77019d771df7bd48f2229167ea197086",
+  "sourceFiles": [
+    {
+      "path": "deploy/v8/causal-worker/README.md",
+      "sha256": "36e914da5c02444086000f61c7b7922c5f25ea1572bca53a9464b49efe424ddc",
+      "state": "present"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "ee4c955f9633ae8bb3c1d3657cb57cbd11915ab714b341f056770234df57704e",
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/0446_spooky_joseph.sql",
+      "sha256": "cc6bda547c7f41811a30dc2f37f0d5d7b09416450dc35a76b02a7460d3a79805",
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0441_snapshot.json",
+      "sha256": null,
+      "state": "normal_snapshot_prune"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0446_snapshot.json",
+      "sha256": "ca3ce637e7c3a9574383fb99cbe352ce382f06a6f4fceabd0918cff61be6b116",
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "3fb5fc599f2cb42d9c82bbcbea78078742b0714798ad49247d602b79cfa211b1",
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/schema/causal_claims.ts",
+      "sha256": "b689970f005fd8043c45b7863086ee5326f76c719d756c7da44f75044f28a945",
+      "state": "present"
+    },
+    {
+      "path": "packages/shared/src/causal-claims.ts",
+      "sha256": "964aa24e0ac8ea56a3a501a2414fe45f4f8b878b2c6f5afe26f95badbe7802fb",
+      "state": "present"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+      "sha256": "8813d8962dc6c0ac5a6160bb6307e5aba5c36f7eb924f645784b84db742936ef",
+      "state": "present"
+    },
+    {
+      "path": "server/src/__tests__/business-forecasting.integration.test.ts",
+      "sha256": "cf2bda0d2ea2815a26b840407ad46c8536c682165f3594c0690b5a1612cd3bc5",
+      "state": "present"
+    },
+    {
+      "path": "server/src/__tests__/causal-claims.integration.test.ts",
+      "sha256": "c8ab67f052006821ee9b9eb3580ab23f87e6c88d17dde05a0eabc9702f6ea3d3",
+      "state": "present"
+    },
+    {
+      "path": "server/src/__tests__/causal-dowhy-provider.test.ts",
+      "sha256": "27f9cd18c2646aae84b40ffd18b9f61724d9fc47eb149576ed6e0a3ef6a87ea2",
+      "state": "present"
+    },
+    {
+      "path": "server/src/routes/causal-claims.ts",
+      "sha256": "bd3a6627c556ca7b6105d17a2cf1c211c75147ba01c42047b4757258539140c1",
+      "state": "present"
+    },
+    {
+      "path": "server/src/services/business-forecasting/service.ts",
+      "sha256": "cebf6e5c01041ecea3bb0de67c46e38245d3cdf33435f1822c3b7bc8c6b26bd2",
+      "state": "present"
+    },
+    {
+      "path": "server/src/services/causal-claims/dowhy-provider.ts",
+      "sha256": "0c2aa40603c33f53bf805c20d1d1335169902cea4143cf41247ffc58e0c209b2",
+      "state": "present"
+    },
+    {
+      "path": "server/src/services/causal-claims/dowhy-worker.ts",
+      "sha256": "e4c8b74d0515b1d308b2b1988334ef227490b6a09a678f2cc82afd31f4f2960d",
+      "state": "present"
+    },
+    {
+      "path": "server/src/services/causal-claims/service.ts",
+      "sha256": "08cb90239506c856f6a227852caf36b128053b0b790511a239b81895b4286955",
+      "state": "present"
+    },
+    {
+      "path": "tests/e2e/causal-dowhy.spec.ts",
+      "sha256": "eee3886b3aa6fe0f34976a064da1c8d872f5b8cc5cfebb0027d4ee34c7068c20",
+      "state": "present"
+    },
+    {
+      "path": "tests/storybook-visual/causal-claims.spec.ts",
+      "sha256": "cad3586cae0aecf58427f54da8b44ecdda99568412a86484b72461a76e113316",
+      "state": "present"
+    },
+    {
+      "path": "ui/src/api/causal-claims.ts",
+      "sha256": "7a693020b7efd484b01b391fc95f38f75d99bcb478a196a3b2484695c469d639",
+      "state": "present"
+    },
+    {
+      "path": "ui/src/components/CausalClaimDefinitionForm.tsx",
+      "sha256": "391986f2d997f5671600429629f2a58cfea9f87c046722902a54fb04d759846d",
+      "state": "present"
+    },
+    {
+      "path": "ui/src/components/CausalClaimResult.tsx",
+      "sha256": "89cb747d5d6e58b7168d1a444ab4e7c7b2d058c4aaf6d5de926ac2a23f48cce4",
+      "state": "present"
+    },
+    {
+      "path": "ui/src/pages/CausalClaims.test.tsx",
+      "sha256": "5826c60808ade333ae7fbe8a3f4ea6b73b90ca462ad9b5cf07d7d57caad3e2a4",
+      "state": "present"
+    },
+    {
+      "path": "ui/src/pages/CausalClaims.tsx",
+      "sha256": "5f2c23222c62017157723c68bdb6ee3b1b81485646832db26894260003d5f385",
+      "state": "present"
+    },
+    {
+      "path": "ui/storybook/stories/causal-claim-fixtures.ts",
+      "sha256": "e8ac8ee04fd4689cb000b0fc108873117ab2bc4ce559f518af179ead645eaffe",
+      "state": "present"
+    },
+    {
+      "path": "ui/storybook/stories/causal-claims.stories.tsx",
+      "sha256": "cf9fe79f6f6a1c1fdcedbaeb120196123c57775d1046887bf94817fab39944fe",
+      "state": "present"
+    }
+  ],
+  "validation": {
+    "nativeOwnerWorkerKernelSnapshot": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-owner-final-source-tests.log",
+      "sha256": "ce03e792b82a5c5680657dbacb70c1af4c94d74f5187c353c8b8ae06546bae54",
+      "tests": 94,
+      "skipped": 0
+    },
+    "uiAndPureContracts": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-owner-final-aligned-ui-contract-tests.log",
+      "sha256": "6e3989a1755e52c91d452aa3677ed4911d44b2ad86861e8c240af7c19426f42e",
+      "tests": 19,
+      "skipped": 0
+    },
+    "nativeDraftBrowser": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-owner-final-aligned-native-browser.log",
+      "sha256": "602989b3aa07fd0b9311b91275e13055f1fdcabb0a21b1ac921f3d32129950ba",
+      "tests": 1,
+      "skipped": 0
+    },
+    "presentationBrowser": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-owner-settled-story-browser.log",
+      "sha256": "9f6a56dd347d9b7bc7de852d0ff95e1c980c79b527e23881769515045fd280ef",
+      "tests": 56,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-owner-final-isolated-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-owner-final-aligned-ui-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-owner-reviewed-migrations.log",
+      "sha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-owner-final-aligned-tokens.log",
+      "sha256": "1898a9427dcd361ced77ef33872a3b1787486212a3ac87a1cfacd87a3d0252fe"
+    },
+    "storybookBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-owner-final-storybook-build.log",
+      "sha256": "81de9eaaf1ad24442570dbee558d47063b1ca57f5b1d4c344bc765248d8261c6"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "commit": "28dc109a77019d771df7bd48f2229167ea197086",
+      "log": "/var/tmp/aw-v8-native-build-dowhy-worker.log",
+      "sha256": "b21fe97de06b0f5e214053fd88a63c9657632287c2890ad20a562006f6d43a46"
+    }
+  },
+  "screenshots": [
+    {
+      "path": "tests/e2e/test-results/causal-dowhy-a-native-oper-a0cdb-out-reviewing-or-running-it-chromium/native-dowhy-proposal-dark-1200.png",
+      "sha256": "7bfe17e4bffcef1eabebb82b7afd1e8adccb79b1ccb35ef6f9a1b1aca7dc697d"
+    },
+    {
+      "path": "tests/e2e/test-results/causal-dowhy-a-native-oper-a0cdb-out-reviewing-or-running-it-chromium/native-dowhy-proposal-dark-390.png",
+      "sha256": "6c9004e21ecd39b0ede6e4aff578f2c124da11cade3677f75b87c8bb31290051"
+    },
+    {
+      "path": "tests/e2e/test-results/causal-dowhy-a-native-oper-a0cdb-out-reviewing-or-running-it-chromium/native-dowhy-proposal-light-1200.png",
+      "sha256": "979ec783002698242d2eeeadb8779313c1a67fd2ea87b53736752088fed37ca0"
+    },
+    {
+      "path": "tests/e2e/test-results/causal-dowhy-a-native-oper-a0cdb-out-reviewing-or-running-it-chromium/native-dowhy-proposal-light-390.png",
+      "sha256": "0081fe3e8965c5d851dde0b4cedbadc9fa8261ca60a5fe34b038a5f37ec59583"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-failed-295f6-tics-and-native-uncertainty/dowhy-failed-dark-1200.png",
+      "sha256": "bd0876de82300d999cf8b59ab3e3122c6a5ed119e32ef7703e20b65997fa01b0"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-failed-52195-tics-and-native-uncertainty/dowhy-failed-dark-390.png",
+      "sha256": "44dd3f61d206305dc0bb60fbfafc6e5bead2fd9b4b0f4cdbef4ebc25a2620470"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-failed-963c1-tics-and-native-uncertainty/dowhy-failed-light-1200.png",
+      "sha256": "601d69f1916750c918937414fb3983224939fe37e9d22514975fdbaf0bbc855f"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-failed-cf265-tics-and-native-uncertainty/dowhy-failed-light-390.png",
+      "sha256": "a25de21226bf452afbb9d68ff318b13a283d2abd5574ff5a6f6e60c3fb739b18"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-passed-08e08-tics-and-native-uncertainty/dowhy-passed-dark-390.png",
+      "sha256": "b20e2b95c684ba59f43a0aea3323755e9bf1c56760f2a7742deb537609d33090"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-passed-30f5c-tics-and-native-uncertainty/dowhy-passed-light-390.png",
+      "sha256": "e0c3a184a5220236a49b4c84c0d5bad63185da319034539711a9c88706e4d837"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-passed-3bc29-tics-and-native-uncertainty/dowhy-passed-light-1200.png",
+      "sha256": "3a0b25e1a61a2a59ccf72412ef062cfe9da2911190c0cfe77c4466d4fa2a6707"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-passed-a222e-tics-and-native-uncertainty/dowhy-passed-dark-1200.png",
+      "sha256": "6a07ea226039b0e3ec963f0961b3fdebcd322c787373cc97b07fd37e1ef92966"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-propos-8be93-eparately-from-human-review/dowhy-proposal-dark-1200.png",
+      "sha256": "104ba94a23df07555ead672ce45a3ab7ca1464a828ac8c3efb5f6219995eb103"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-propos-b4e4f-eparately-from-human-review/dowhy-proposal-light-1200.png",
+      "sha256": "655d87434295c69033ec530d9dace100068b9ffd66074b39a6ec810c0a3a043c"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-propos-d6456-eparately-from-human-review/dowhy-proposal-light-390.png",
+      "sha256": "b43a69b34ca75de6b8247b35e0f3c6c2217e9fa36422f67dcefa551e014448d8"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-propos-e9aed-eparately-from-human-review/dowhy-proposal-dark-390.png",
+      "sha256": "ebfc913b94a0abe777884b845cd616ce455e1a24f64df87a1333a7113bbc17c5"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-unknow-08c32-tics-and-native-uncertainty/dowhy-unknown-dark-1200.png",
+      "sha256": "983661d7694d87dc09ccadda0883f41bdff4a235b624c56da32034bd2196764e"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-unknow-41805-tics-and-native-uncertainty/dowhy-unknown-dark-390.png",
+      "sha256": "4fddcb55f8b83fd9f35ea40101df6eed4ac5d0b546e30fcbd444f026b908dfc0"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-unknow-7ebbe-tics-and-native-uncertainty/dowhy-unknown-light-1200.png",
+      "sha256": "26d68035b917487085eea8fbf34e87fd651d24813361556cae0259b92b8a432c"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/causal-claims/causal-claims-DoWhy-unknow-ae595-tics-and-native-uncertainty/dowhy-unknown-light-390.png",
+      "sha256": "bea8103676c10ba0ee7e8951480fa8afd3a80546e274862dbeb536fe2675c2ef"
+    }
+  ],
+  "qualified": [
+    "Default-off exact fixed runtime/software-conformance profile; native historical JSON profile omission preserves old signatures",
+    "Original current company, Human/Source/purpose/graph/interpretation admission and native interval retained",
+    "Actual registered software Source final analysis, separate Human interpretation/model review, actual DoWhy run, downstream original Decision/Review captures",
+    "Exact current profile rollback/cancelled run and hidden Source denial; whole Source erasure with flags off and company paused preserves independent native Task/open Decision",
+    "Pure retained numerical replay binds strict ordered finite diagnostics, fixed profile and native result hash; failed/unknown synthetic DTOs withhold reliance",
+    "Shipped native draft-only workflow records exact provider profile with unknown Human assumptions and no review/run",
+    "All four theme/width combinations retain WCAG/overflow checks and opposite-side one-row footer geometry"
+  ],
+  "limitations": [
+    "Synthetic software identities, reviewed purpose, allocation balancing and registered Source frame are explicit prerequisites, not collected trial or business-impact evidence",
+    "Browser tiny registered frame is deliberately not qualified causal evidence; presentation fixtures and pure failed/unknown DTOs are not actual failed-provider receipts",
+    "Retained numerical replay does not rerun tenant analysis; current public runtime/software health qualification is a separate optional check",
+    "No arbitrary observational graph, expanded adjustment, external-validity/interference/sensitivity calibration, refutation-power guarantee or provider interval",
+    "Initial missing company admission/import resolution, interrupted static rebuild, hanging animation waits and concurrent 16-GiB typecheck termination are diagnostic and excluded; final separate reruns passed",
+    "No authenticated JWT/Human/pilot/commercial/hosted trial or built-image qualification; full Source graph, SDK/indirect closure, cadence and hosted acceptance remain ongoing"
+  ]
+}

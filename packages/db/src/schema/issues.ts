@@ -33,6 +33,7 @@ export const issues = pgTable(
     // Conversation identity and session boundaries are owned by the server.
     conversationAgentId: uuid("conversation_agent_id").references(() => agents.id),
     conversationUserId: text("conversation_user_id"),
+    conversationRetiredAt: timestamp("conversation_retired_at", { withTimezone: true }),
     conversationState: text("conversation_state").$type<"active" | "waiting">(),
     conversationSessionGeneration: integer("conversation_session_generation").notNull().default(0),
     conversationBoundaryCommentId: uuid("conversation_boundary_comment_id"),
@@ -102,6 +103,12 @@ export const issues = pgTable(
   },
   (table) => ({
     conversationIdentityIdx: uniqueIndex("issues_conversation_identity_idx").on(table.companyId, table.conversationAgentId, table.conversationUserId),
+    conversationRetirementCheck: check("issues_conversation_retirement_check", sql`${table.conversationRetiredAt} is null or (
+      ${table.conversationAgentId} is null and ${table.conversationUserId} is null and ${table.conversationState} is null
+      and ${table.status} = 'cancelled' and ${table.hiddenAt} is not null
+      and ${table.assigneeAgentId} is null and ${table.assigneeUserId} is null
+      and ${table.executionRunId} is null and ${table.checkoutRunId} is null
+    )`),
     conversationIdentityCheck: check("issues_conversation_identity_check", sql`(
       ${table.conversationAgentId} is null and ${table.conversationUserId} is null and ${table.conversationState} is null
     ) or (

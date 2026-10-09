@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "9378e4208d65b996a150fd5adb980dd87f2f3d48",
+  "command": "pnpm build",
+  "status": "passed",
+  "exitCode": 0,
+  "logPath": "/var/tmp/aw-v8-integrated-9378e42-build.log",
+  "logSha256": "f42076865b3542125a7028eb2b623acf21a8bfd14eb511a9f4b6b71cb8d72bd5",
+  "scope": "Integrated native production build at the exact experiment recording source checkpoint. Does not qualify later analysis/UI, providers, actual deployment or complete V8 release."
+}

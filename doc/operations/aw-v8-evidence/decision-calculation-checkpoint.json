@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "16c80238f5e9054cec802e4ae126c8b7a54d284b",
+  "scope": "Exact source-owned native Forecast/Scenario evidence in prospective Decisions. Actual PostgreSQL choice/privacy/restore gates and synthetic presentation qualified. No collected operational forecast history, causal identification, official maintainer visual baseline, deployed runtime or complete V8 release qualification.",
+  "sourceFileSha256": {
+    "packages/db/src/migrations/0402_volatile_princess_powerful.sql": "0298ba7132066831e591db6b72c9dd8765cfeafb066c32b233700953fe35c174",
+    "packages/db/src/migrations/meta/0402_snapshot.json": "4cfb1d4830cfc3911777713d612e8c109a8a9cc75749931866bdde4567f788de",
+    "packages/db/src/migrations/meta/_journal.json": "6624891dd500070bdc286259062890f615d7e135aaad360f4901c21b4c2973b3",
+    "packages/db/src/schema/decision_intelligence.ts": "0a34e76fd47affc5c9058408479219e29836837f701ca096dd2136079756dc54",
+    "packages/db/src/schema/index.ts": "f368e31e156b706d2f90a34a709838d47dfd968c43f107f9001bb7acfb711478",
+    "packages/shared/src/decision-intelligence.test.ts": "54f99110317852980e63dcfeb886fe1ba6572929032d2aa2a9b1d40611ca1a43",
+    "packages/shared/src/decision-intelligence.ts": "ad2ae32d63fa99043dc75d7c2246a9430efe61ac4084281d30709374315d38d1",
+    "server/src/__tests__/business-forecasting.integration.test.ts": "c170a13280824c002ba66c008fac603a895fe38e63eff3d92651cad35c8468b2",
+    "server/src/services/business-scenarios/service.ts": "fb41e9f1429ad29a60f9fb62f40b6100bbdb1da2eb5f433b4b3d62ed0b6cf265",
+    "server/src/services/decision-intelligence.ts": "6d7d629f66282bdd987c736577307fde5b0de2e43c1faf17f004eb86590bea92",
+    "tests/storybook-visual/decision-intelligence.spec.ts": "7c809c22fedf1ed02877d294edd46b90f3b95dde20890a83ccc295171deb305b",
+    "tests/storybook-visual/decision-outcome-reviews.spec.ts": "e9e4c72ad912e616433051e97b86c8409dbc91be1575b06a301a411084ab2587",
+    "ui/src/components/DecisionContextForm.tsx": "dfff54ce8067d08a7375fea689942d3c890d5d470b3649a846d97890fc156985",
+    "ui/src/components/DecisionContextPanel.tsx": "37a6e0b9795d93ea85b1cadf539ff62007f654419221a5dcdee3077f41ad8382",
+    "ui/src/components/DecisionEvidencePicker.test.tsx": "5f0e46c7e22ae2bff3b3013d2760cc1a809c085c6d262fb08aadcf0b89c50f9f",
+    "ui/src/components/DecisionEvidencePicker.tsx": "00c9fd9343d8bd8a531984e5903e175b78b0b53a6f04f69061fbbc03a7897c2b",
+    "ui/storybook/stories/decision-intelligence.stories.tsx": "094a040b1ea305997032e611d9fdec332a51bf188b0f536db47266dbbc80bdf0"
+  },
+  "checks": [
+    {
+      "name": "native-source-owners-and-openapi",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 63,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-owner-api-tests-final.log",
+      "logSha256": "fd08b81234ee443405174951b4ac425bb0f137fa1b6927a12a5b75f106c33faf"
+    },
+    {
+      "name": "native-artifact-and-company-erasure",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 10,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-artifact-erasure-tests.log",
+      "logSha256": "e55da814489eca271aa6e5371634d56a0266d587ec4b1f54d9a1b3ea441afc1a"
+    },
+    {
+      "name": "public-context-outcome-contracts",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 8,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-contract-tests.log",
+      "logSha256": "0fd474ae215b950b4f89a32b7fb20d9e0f10dc7694ccc9eca2e63466e1f0d256"
+    },
+    {
+      "name": "ui-source-context-outcome-components",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 13,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-ui-tests-qualified.log",
+      "logSha256": "f78ff5b8696d995e404b58f22fd12ecab227c49d050d1c4b1c4cbbcb6c2131eb"
+    },
+    {
+      "name": "server-types",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-server-types-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-types",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-ui-types-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "native-snapshot-drift",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 1,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-snapshot.log",
+      "logSha256": "4ee5abdc16edb5e739e7283c61c6da81d2a6d7265cab681f3ef4260ca6e06c93"
+    },
+    {
+      "name": "native-migration-gates",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-migration-checks.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "name": "native-token-gates",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-token-gates.log",
+      "logSha256": "b48737704eb05e0631508876352d98484a6beeb9eb6283db678ba70cb46357ab"
+    },
+    {
+      "name": "storybook",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": null,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-storybook.log",
+      "logSha256": "6b426223a81bb17b055d3ea427f7d4c682710dd9063c8ac49eb2429e87bf4be7"
+    },
+    {
+      "name": "chromium-native-context-and-outcome",
+      "status": "passed",
+      "exitCode": 0,
+      "testsPassed": 66,
+      "logPath": "/var/tmp/aw-v8-decision-calculation-browser-qualified.log",
+      "logSha256": "82a806ba73993013349f535c3d33836a2673453b9220214939343d522009cdc7"
+    }
+  ],
+  "visuallyInspectedScreenshots": [
+    {
+      "path": "tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-7625f-ins-exact-advisory-evidence/decision-calculation-scenario_run-light-390.png",
+      "sha256": "5b16e121664b47266ef6fc98bb433063395cf241b447b869b0bf57bb2abae437"
+    },
+    {
+      "path": "tests/storybook-visual/test-results/decision-intelligence/decision-intelligence-deci-b7409-ozen-basis-and-revalidation/decision-historical-calculation-dark-1200.png",
+      "sha256": "801aecd2d69a93b6a84b98c81c5c81d7f82b69971b8ac8c7887df5a804d60d5e"
+    }
+  ],
+  "failedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-decision-calculation-owner-tests-qualified.log",
+      "logSha256": "feebacdb285ba54b8a791923d5f3f1812030bc46ca3be0d10e7a6a53f762ef55",
+      "reason": "One test expected a new draft to invalidate the existing human publication. Native publication is preserved when drafting; test now explicitly human-publishes the replacement before checking rejection. Full 63-check owner/API selection passes."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-decision-calculation-browser.log",
+      "logSha256": "03fcc88246ca7b07941a9e846f2d3d106b9cac57356f45eb39829bc7d4631345",
+      "reason": "One existing outcome-review accessibility scan raced with native Storybook axe addon (65 pass, one Axe is already running). Bounded waiting only for the explicit concurrency error preserves actual violation/error assertions; full 66-case rerun passes."
+    }
+  ]
+}

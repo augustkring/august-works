@@ -770,6 +770,8 @@ export type IssueChanges = Record<string, IssueChangeReceiptEntry>;
 export interface Issue {
   conversationAgentId?: string | null;
   conversationUserId?: string | null;
+  /** Permanently closed native conversation; never an ordinary Task. */
+  conversationRetiredAt?: Date | string | null;
   /** Server-owned Slack lifecycle projection; not writable through task updates. */
   externalConversationState?: "active" | "waiting" | null;
   conversationState?: "active" | "waiting" | null;

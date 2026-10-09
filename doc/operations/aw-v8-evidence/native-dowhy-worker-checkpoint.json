@@ -1,0 +1,86 @@
+{
+  "checkpoint": "Optional fixed pinned numerical DoWhy worker in original native sandbox",
+  "recordedAt": "2026-10-08T11:05:59.914974+00:00",
+  "parentCommit": "7920149f74875fe84956b427ed5911b13e39c570",
+  "primaryParentCommit": "de7b1640340c8eca8bda621b84e6135b1d033757",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "a8a771353839f63f444c35e5bfbd2e4f03fb5973fa5f1f9ecf08662a5b97b4d6"
+    },
+    {
+      "path": "deploy/v8/causal-worker/README.md",
+      "sha256": "5957a78051889a80dd0f2f5143ac8b72551efcd7de691fc18a4aec3ef71de339"
+    },
+    {
+      "path": "server/src/__tests__/causal-dowhy-worker.integration.test.ts",
+      "sha256": "49166231d72e618f5bf63e9e0b1e74d636877cae90bab9717eb81ced4d2c17ab"
+    },
+    {
+      "path": "server/src/services/business-forecasting/statistical-worker.ts",
+      "sha256": "2122f3a490327bbedd5bdb8753bc6585a166f6873a75a1b486841772c09c560e"
+    },
+    {
+      "path": "server/src/services/causal-claims/dowhy-worker.ts",
+      "sha256": "8e1beb82cdeacfc8ee26e936376ade559f1f537318a2a60613429cddd34022d0"
+    },
+    {
+      "path": "server/src/services/native-runtime/numerical-worker.ts",
+      "sha256": "44bc3cf7bd1fdc3e453bd7ab32e00bdd280b12dc75cd7d69128601df495f8a63"
+    },
+    {
+      "path": "server/src/services/scripts/dowhy-worker.py",
+      "sha256": "7b3f5150d8d3de3aeb3bec72d1cf38c78d3a24cf4186b10c2af94ecd70bb9aa7"
+    },
+    {
+      "path": "server/src/services/scripts/dowhy-dependencies.json",
+      "sha256": "31c7ab6ae32fd9bf9a75b623f7305ea0de32d6e5cf6d59475e44c7957e807701"
+    },
+    {
+      "path": "server/src/services/scripts/dowhy-requirements.lock",
+      "sha256": "c9e63ae1a3f127c3079359797fa97b2195d16ffebfc05928d93861addf99d766"
+    }
+  ],
+  "validation": {
+    "runtimeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-worker-reviewed-tests.log",
+      "sha256": "d101bc2b817ec4655fc646be3b1da060009464424f7bfd1cf308270e68a8e61b",
+      "tests": 69,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-worker-server-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "lockedFreshInstallation": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-dowhy-locked-install.log",
+      "sha256": "1c7eee1a58006ebdf5b9419c33a006114f32f622a73666162e18a2359a432f3f"
+    },
+    "primaryParentWholeBuild": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-learning-proposal-erasure.log",
+      "sha256": "52abfa1f57927835f6bdbd561a5241b9e95c687b3a8459e2cd9e5f854062e97b",
+      "commit": "de7b1640340c8eca8bda621b84e6135b1d033757"
+    }
+  },
+  "qualified": [
+    "Actual fresh hash-locked Python 3.12.14 / DoWhy 0.14 installation with 48 exact binary distributions and retained transitive license notices",
+    "Original denied-network native sandbox reused by both fixed numerical workers; statistical DTO/bundle unchanged",
+    "Fixed anonymous sufficient counts, 16..4000 total units, registered binary unadjusted ITT point parity",
+    "Actual identification, positive/negative/null known-count software fixtures and native interval-required provenance",
+    "Three reproducible seeded refutations with advancing subset randomness; undefined constant p-values remain unknown",
+    "Actual 4000-unit numeric envelope, cleared credentials, deadline/cancellation process closure and private workspace cleanup",
+    "Original statistical/kernel/causal/Artifact-runtime regression"
+  ],
+  "limitations": [
+    "Public causal owner integration, exact profile pins and separate Human review are next; no public provider use is admitted yet",
+    "Synthetic numerical conformance is not customer trial, causal truth, business impact, external validity, sensitivity calibration or hosted availability",
+    "Sixteen-simulation p-value diagnostics have not been calibrated for general refutation power; sensitivity remains unknown",
+    "No observational adjustment, clustered assignment, heterogeneous effect, arbitrary graph/notebook or provider interval admitted",
+    "No built-container image or hosted qualification; whole brief/Source closure/acceptance remain ongoing",
+    "Initial metadata lock-generation failure fixed before fresh locked installation; library integer-seed/degenerate-p-value research is diagnostic"
+  ]
+}

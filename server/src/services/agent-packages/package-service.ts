@@ -499,6 +499,7 @@ export function agentPackageService(
       row.companyId,
       "agent_package_installation",
       row.id,
+      actor,
     );
     return {
       status: reasons.length

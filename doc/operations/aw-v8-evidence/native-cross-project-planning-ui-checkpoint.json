@@ -1,0 +1,141 @@
+{
+  "checkpoint": "Current cross-project operator UI through native Sources and separate Human Roadmap approval",
+  "parentCommit": "f9588b573dbab595d2d2ad9054ff56b4cb2cc9a6",
+  "recordedAt": "2026-10-08T07:32:13.623614+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "4a9a4e6073ac7b2018c79d93fff6fafe55bf6f44b078d67bb8ea7f5f94b29f7c"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-cross-project.integration.test.ts",
+      "sha256": "50ff31de36d1c5232d439b5494fb08d066d774cb3187235ce3583dc50e2d13cb"
+    },
+    {
+      "path": "server/src/routes/cross-project-planning.ts",
+      "sha256": "fe539758f87b27021006fda0c05b98c2f305a79748d0244b736bb40c529c48dd"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/cross-project.ts",
+      "sha256": "a1714718b1236e9439001a1efa12b97f3252cba9e69ed48d9e8f5fcc8b1b7471"
+    },
+    {
+      "path": "tests/e2e/cross-project-planning.spec.ts",
+      "sha256": "486d3018eb81c25ebe9e8d64b85b58be325cb541673214eaa0b8e664d5931118"
+    },
+    {
+      "path": "tests/storybook-visual/project-planning.spec.ts",
+      "sha256": "81df3d17d5ceb60e7425f86d0802fbf8035a3c5a05b36ac2906ed95036a47778"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "558895820a3a481a3dc7378e3ba72202aff24600a6c425dfaedc33422d5013ca"
+    },
+    {
+      "path": "ui/src/api/cross-project-planning.ts",
+      "sha256": "b0c8d2bb2174122de26c8acf64df16fb364b8b638fc373210e42e608ff2fc77e"
+    },
+    {
+      "path": "ui/src/components/ProjectPlanningBasis.tsx",
+      "sha256": "f75270b0f1f25347b4a790cd21fe2acfccd676b0149a61d6ae647fb3870e720d"
+    },
+    {
+      "path": "ui/src/components/ProjectPlanningForm.tsx",
+      "sha256": "f1593892d9f93b964a0e752ff9d978c15677062395922a6cc2d424d9aa7295cc"
+    },
+    {
+      "path": "ui/src/components/Sidebar.tsx",
+      "sha256": "0e82b4555c159d3e02531e36697ca05093d47abfbc9953a6fa0c0a6ef2f20259"
+    },
+    {
+      "path": "ui/src/lib/company-routes.test.ts",
+      "sha256": "fd42aaf76487278501b2b30d404dd5624979c485ccd07350f8f647b6f1646682"
+    },
+    {
+      "path": "ui/src/lib/company-routes.ts",
+      "sha256": "a885aa13429524a997557479690bc781e442ae2ab6e1133d00e7d355f9943310"
+    },
+    {
+      "path": "ui/src/pages/CrossProjectPlanning.test.tsx",
+      "sha256": "5d584fb5f80103261a9087de00a316033394b99aac14461562da590942492e56"
+    },
+    {
+      "path": "ui/src/pages/CrossProjectPlanning.tsx",
+      "sha256": "9bf0c3f5f0e66d6d511deac637a1765de95705bd1a3f5e7ef8be2c605dccc869"
+    },
+    {
+      "path": "ui/storybook/stories/cross-project-planning-fixtures.ts",
+      "sha256": "b47edfbefa0bf335dd1eba9b33990363b2d68dfa3a78e1e4f4de55f0ba1744a3"
+    },
+    {
+      "path": "ui/storybook/stories/cross-project-planning.stories.tsx",
+      "sha256": "44b5f99d8ffb59c53073696d6d380a5312ac082787e459858659b63e73adc10d"
+    }
+  ],
+  "validation": {
+    "nativeRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-ui-native-tests.log",
+      "tests": 64,
+      "files": 6,
+      "skipped": 0
+    },
+    "uiRegression": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-ui-qualified-tests.log",
+      "tests": 55,
+      "files": 4,
+      "skipped": 0
+    },
+    "nativeBrowser": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-ui-final-native-browser.log",
+      "tests": 1,
+      "files": 1,
+      "skipped": 0
+    },
+    "presentationBrowser": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-ui-final-visual.log",
+      "tests": 44,
+      "files": 1,
+      "skipped": 0
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-ui-server-types.log"
+    },
+    "uiTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-ui-final-types.log"
+    },
+    "storybook": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-ui-final-storybook.log"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-cross-project-ui-token-gates.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "57e48c86921cf8f61f83451365aaaa8feea452a8",
+      "log": "/var/tmp/aw-v8-native-build-cross-project.log"
+    }
+  },
+  "qualified": [
+    "Actual current native bounded project selection and original complete Roadmap Source",
+    "Original shared Human planning form with explicit unknowns and no-demand acknowledgment",
+    "Exact preview invalidation on amendments and Source/account/permission changes",
+    "Separate proposal, begin-review and fresh acknowledgment before canonical approval",
+    "Disabled-rollout metadata cancellation and private cache purge on Source denial and account unmount",
+    "Real local-trusted shipped-UI/API joint native blocking dependency, no early Task date mutation and actual accepted Roadmap children"
+  ],
+  "limits": [
+    "Storybook cached synthetic Sources with API requests aborted qualify presentation only",
+    "Local-trusted native identities and explicit purpose/declarations are software prerequisites, not Human/provider/pilot trials or JWT authentication",
+    "No canonical status/execution, new scheduler, runtime budget, global optimality or commercial authority",
+    "Additional initiative dispositions, authoritative budget/goal profiles, remaining Source closure, readonly providers, maximum-volume/hard-latency and hosted acceptance remain open",
+    "No whole-brief completion claim"
+  ]
+}

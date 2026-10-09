@@ -494,15 +494,11 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
     );
   }
 
-  return {
-    projectSummary: async (companyId: string, projectId: string): Promise<BudgetPolicySummary[] | null> => {
-      const rows = await db.select().from(budgetPolicies).where(and(
-        eq(budgetPolicies.companyId, companyId), eq(budgetPolicies.scopeType, "project"),
-        eq(budgetPolicies.scopeId, projectId), eq(budgetPolicies.metric, "billed_cents"), eq(budgetPolicies.isActive, true),
-      )).limit(3);
+  async function summarizePlanningRows(rows: PolicyRow[], companyId: string, projectId?: string): Promise<BudgetPolicySummary[] | null> {
       for (const row of rows) {
         if (row.amount <= 0) continue;
-        const conditions = [eq(costEvents.companyId, companyId), eq(costEvents.projectId, projectId), eq(costEvents.costStatus, "unknown")];
+        const conditions = [eq(costEvents.companyId, companyId), eq(costEvents.costStatus, "unknown")];
+        if (projectId) conditions.push(eq(costEvents.projectId, projectId));
         if (row.windowKind === "calendar_month_utc") {
           const { start, end } = resolveWindow(row.windowKind);
           conditions.push(gte(costEvents.occurredAt, start), lt(costEvents.occurredAt, end));
@@ -511,6 +507,27 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
         if (unknown) return null;
       }
       return Promise.all(rows.map((row) => buildPolicySummary(row)));
+  }
+
+  return {
+    // Read-only use of the original budget accounting owner. These bounds do
+    // not reserve funds, resume a scope or grant authority to dispatch work.
+    planningSummary: async (companyId: string, scopeType: "company" | "project", scopeId: string) => {
+      const rows = await db.select().from(budgetPolicies).where(and(
+        eq(budgetPolicies.companyId, companyId), eq(budgetPolicies.scopeType, scopeType),
+        eq(budgetPolicies.scopeId, scopeId), eq(budgetPolicies.metric, "billed_cents"), eq(budgetPolicies.isActive, true),
+      )).limit(3).for("share");
+      if (rows.length > 2) throw unprocessable("Native planning budget policy coverage exceeds its bound");
+      return Promise.all(rows.filter(row => row.amount > 0 && row.hardStopEnabled).sort((a, b) => a.id.localeCompare(b.id)).map(async policy => ({
+        policy, window: resolveWindow(policy.windowKind as BudgetWindowKind), summary: (await summarizePlanningRows([policy], companyId, scopeType === "project" ? scopeId : undefined))?.[0] ?? null,
+      })));
+    },
+    projectSummary: async (companyId: string, projectId: string): Promise<BudgetPolicySummary[] | null> => {
+      const rows = await db.select().from(budgetPolicies).where(and(
+        eq(budgetPolicies.companyId, companyId), eq(budgetPolicies.scopeType, "project"),
+        eq(budgetPolicies.scopeId, projectId), eq(budgetPolicies.metric, "billed_cents"), eq(budgetPolicies.isActive, true),
+      )).limit(3);
+      return summarizePlanningRows(rows, companyId, projectId);
     },
     listPolicies: async (companyId: string): Promise<BudgetPolicy[]> => {
       const rows = await listPolicyRows(companyId);
@@ -838,6 +855,7 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
           id: projects.id,
           name: projects.name,
           companyId: projects.companyId,
+          status: projects.status,
           pauseReason: projects.pauseReason,
           pausedAt: projects.pausedAt,
         })
@@ -846,6 +864,12 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
         .then((rows) => rows[0] ?? null);
 
       if (!project || project.companyId !== companyId) return null;
+      // The existing dispatch gate must respect canonical Human project holds
+      // as well as budget holds. This grants no cancellation or resume action.
+      if (project.status === "cancelled" || project.pausedAt && project.pauseReason !== "budget") return {
+        scopeType: "project" as const, scopeId: project.id, scopeName: project.name,
+        reason: project.status === "cancelled" ? "Project is stopped and cannot start new work." : "Project is paused and cannot start new work.",
+      };
       const projectPolicy = await db
         .select()
         .from(budgetPolicies)

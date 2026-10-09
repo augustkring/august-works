@@ -1,0 +1,204 @@
+{
+  "checkpoint": "Eight optional human Decision templates and current-account native scope menu",
+  "parentCommit": "61e0398dc638d894ac4ae1f1dc9afd0957a59b0d",
+  "recordedAt": "2026-10-07T14:34:02.110832+00:00",
+  "sourceFiles": [
+    {
+      "path": "server/src/__tests__/decision-intelligence.integration.test.ts",
+      "sha256": "29d8d129208b04d54bcc49e1b34aacff4d89ddd9473fcff9dd1f552909d35064"
+    },
+    {
+      "path": "server/src/routes/decision-intelligence.ts",
+      "sha256": "3800bf0a4a6656fa7b67e04a5754885582ea7ddc8eecc1d970e90456d9f3745b"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "57be96077e25c20f0697cb6f0314a3b7da3a62e14ed5571840e0c19fefd81c3c"
+    },
+    {
+      "path": "server/src/services/decision-intelligence.ts",
+      "sha256": "75a55ce82c991bfb77945cf16028fea7cf037aea4d47c730689726ce66cf686f"
+    },
+    {
+      "path": "tests/storybook-visual/decision-intelligence.spec.ts",
+      "sha256": "73cdb1b065703f4db9ec6be55c25e01e4681060b6e642da2fa90b252601f7621"
+    },
+    {
+      "path": "ui/src/api/decision-intelligence.ts",
+      "sha256": "51c3c7834c0b4c1ecc6622b9f55723c7869f341161f0d59d4f2dbb482decf540"
+    },
+    {
+      "path": "ui/src/components/DecisionContextForm.tsx",
+      "sha256": "67239aa2a7c579935c45e746604528a4f35db1c208fb822520f6c28bcd58ecc6"
+    },
+    {
+      "path": "ui/src/components/DecisionContextPanel.test.tsx",
+      "sha256": "829db16507fe2acdbfd66eb75f5fa1e4d75bd38346857664a72ed282cd1045d2"
+    },
+    {
+      "path": "ui/src/components/DecisionContextPanel.tsx",
+      "sha256": "8f5466089f085aa541ae290cd8fb5b97666101440ce788505595c2a5242b5b05"
+    },
+    {
+      "path": "ui/src/components/DecisionTemplateGuidance.tsx",
+      "sha256": "fa8f5a2ba3c48eac9bd31e403fb77d62d9071a1e36178b6af7baf884855e2fe5"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native",
+      "checks": 35,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-decision-templates-native.log",
+      "logSha256": "98f79b1ac125969c8d5fea8f9d6aeb76b8d6a9aed0e613f64ef7e3e504e65a91"
+    },
+    {
+      "name": "api",
+      "checks": 16,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-decision-templates-api.log",
+      "logSha256": "4212f1932ad34ec2688ba957588b75cf9e70e595f35e4b6e0b579713f9d8ccc1"
+    },
+    {
+      "name": "ui",
+      "checks": 21,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-decision-templates-ui.log",
+      "logSha256": "3bd5804a97be4ca680f6607568adf4171240d402474b257e945248dfc81cc02f"
+    },
+    {
+      "name": "final-server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-decision-templates-final-server-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "final-ui-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-decision-templates-final-ui-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tokens",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-decision-templates-tokens.log",
+      "logSha256": "44d37a3d2d776f153783c20b1c6e9f45366ecf0e1c85688ba0cb460408cbc793"
+    },
+    {
+      "name": "story",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-decision-templates-story.log",
+      "logSha256": "a1ce48bdb168a2ba6e287f053b4a3c94313251dabb248165ea168f0bbb00e6ea"
+    },
+    {
+      "name": "browser",
+      "checks": 20,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-decision-templates-browser.log",
+      "logSha256": "1936451ddd5b0a41912c079f8640e6bf79d2e176f80f83d31cf73efea7f3c558"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-calculation-scenario_run-dark-390.png",
+      "sha256": "67205cd1ae87589307817284ea98e7af78ef07fdc1ab31b7bc6b34b2bded6b98"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-calculation-forecast_run-light-1200.png",
+      "sha256": "d1a00ec48151f20ad55ce2438573654f0cfbfef4db13ad802dbc55c2a4b15467"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-templates-light-1200.png",
+      "sha256": "40aca92ec9c1d4ffc5f76975ff8d8a3cb0bb7db71062ef20e7d143bc1a276d3b"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-calculation-scenario_run-light-1200.png",
+      "sha256": "fe9c29f2be7340ee673c63613db5d8d9bc9dc2823e47bdc694666741a578e861"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-templates-dark-1200.png",
+      "sha256": "11d2753ce5312ba0aeb40f3a9146d94f36bd55a3717757fb1bd23cb72eabde92"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-experiment-dark-1200.png",
+      "sha256": "de0e0f301431bc8073ccffe204752494fac83625bb93e74aacc783edf1b1a947"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-calculation-forecast_run-light-390.png",
+      "sha256": "b708d60ba5f0e6e168cc5cfb5fa6f2ef89ec7d08414de9f0c8281a0669fb904a"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-calculation-scenario_run-light-390.png",
+      "sha256": "164796a9928f37a61d5087a76fcc465dcac796e7fd8e849a866e0f339a1650b6"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-templates-dark-390.png",
+      "sha256": "167ae609d7e90b79765a7cf66e7286499a399d3408ee016090db20db7d6ac42c"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-calculation-forecast_run-dark-1200.png",
+      "sha256": "465f3d6562549a781915fd1385a3703c7c3cb892ad3dedd73e5ca47c72128d48"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-calculation-forecast_run-dark-390.png",
+      "sha256": "4a2e5060550e925b15f74b8f7dfafcaa0e126943f651996e1688e0afecac374a"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-causal-picker-dark-1200.png",
+      "sha256": "e92f43dea58cc015653671db941f2743117d4552f64b7fe68eadfbc08df74c66"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-experiment-light-390.png",
+      "sha256": "78a33acc47a3082a06a5bead513edd772f503a0bc9730278abf974249b32f722"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-experiment-light-1200.png",
+      "sha256": "68271d533a25f57a0b55c4cd4ab1c27b9e642074ed2ecfdc586b4b6a3078707c"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-experiment-dark-390.png",
+      "sha256": "0c13817932916bf5cc4d65ea2c717c3b80c5ecc28a81b00dd6bf18c46a86bbf2"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-causal-picker-light-1200.png",
+      "sha256": "5847d7828678fc9e3c75a54642ae2dae415ee9bc8274826fae3af77740a6a0b4"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-causal-picker-light-390.png",
+      "sha256": "d24394bdbaf92ee886d4ba426737338eda589be6878defaa490942f5039be4fd"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-templates-light-390.png",
+      "sha256": "d9d67ca9944c847b8499030447c19e73b1b370550c06c31652f6e866afba6521"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-causal-picker-dark-390.png",
+      "sha256": "3c8c04abdc78866045e918b817f40c01aeb9835e0cc1edd5d8b4a8ec47a083af"
+    },
+    {
+      "path": "/var/tmp/aw-v8-decision-templates-screens/decision-calculation-scenario_run-dark-1200.png",
+      "sha256": "4fbd371ffd071af2712f3085a7a09d97387339c277832efe79bd7402f478f2b2"
+    }
+  ],
+  "visuallyInspected": [
+    "decision-templates-light-390.png",
+    "decision-templates-dark-390.png"
+  ],
+  "coverage": [
+    "Eight optional writing guides do not mutate or persist the human context and create no backend decision types.",
+    "Current-account strict/no-store native scope options reuse canonical source authorization, suppression, tenant and lifecycle owners.",
+    "Decision scope remains available with management rollout disabled.",
+    "Current source failure, account changes and Memory events cancel and remove draft source namespaces.",
+    "20 affected browser presentations include WCAG 2.2 AA, keyboard and no-overflow checks."
+  ],
+  "limits": [
+    "Browser fixtures are cached synthetic presentation, not live source or operational qualification.",
+    "Storybook build includes template and account-scope changes; the subsequent duplicate fallback-option guard is separately covered by final UI typecheck and the next integrated production build.",
+    "Integrated production build of this new source checkpoint remains pending.",
+    "Whole V8 build, native Chat/Routines, analytical Learning inheritance, cross-project planning and optional providers remain in progress."
+  ]
+}

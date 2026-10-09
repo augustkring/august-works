@@ -1,0 +1,79 @@
+import { expect, test, type Page } from "@playwright/test";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url), axePath = require.resolve("axe-core/axe.min.js"), reviewId = "00000000-0000-4000-8000-000000002301", goalId = "00000000-0000-4000-8000-000000002302";
+async function accessibility(page: Page) {
+  await page.addScriptTag({ path: axePath });
+  const violations = await page.evaluate(async () => {
+    const w = window as unknown as { axe: { run: (context: string, options: unknown) => Promise<{ violations: unknown[] }> } };
+    // Storybook's native accessibility addon may already own an axe scan.
+    // Wait only for that explicit concurrency condition; real violations and
+    // other scanner errors still fail this check immediately.
+    const deadline = performance.now() + 5000;
+    while (true) {
+      try { return (await w.axe.run("#storybook-root", { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] } })).violations; }
+      catch (error) {
+        if (!(error instanceof Error) || !error.message.includes("Axe is already running") || performance.now() >= deadline) throw error;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+    }
+  });
+  expect(violations).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+}
+
+async function story(page: Page, state: string, theme: string, width: number) { await page.route("**/api/**", route => route.abort()); await page.setViewportSize({ width, height: 1100 }); await page.goto(`/iframe.html?id=business-intelligence-management-reviews--${state}&viewMode=story&globals=theme:${theme}`); }
+for (const theme of ["light", "dark"]) for (const width of [390, 1200]) {
+  test(`management native Task form ${theme} ${width}px requires independent Human acknowledgement`, async ({ page }, info) => {
+    await story(page, "published", theme, width);
+    await page.getByRole("combobox", { name: "Review reference", exact: true }).selectOption(reviewId);
+    await page.getByRole("button", { name: "Prepare native follow-up Task", exact: true }).click();
+    const form = page.getByRole("form", { name: "Cited native Task follow-up", exact: true });
+    const create = form.getByRole("button", { name: "Create reviewed native Task", exact: true });
+    await expect(create).toBeDisabled();
+    await form.getByRole("combobox", { name: "Task original agenda item", exact: true }).selectOption("agenda_1");
+    await form.getByRole("textbox", { name: "Review follow-up Task title", exact: true }).fill("Human investigates the cited uncertainty");
+    await form.getByRole("textbox", { name: "Review follow-up Task description", exact: true }).fill("Human requests an independent investigation before changing canonical plans");
+    await expect(create).toBeDisabled();
+    const ack = form.getByRole("checkbox"); await ack.focus(); await page.keyboard.press("Space");
+    await expect(create).toBeEnabled();
+    await accessibility(page);
+    await page.screenshot({ path: info.outputPath(`management-native-task-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
+    await form.getByRole("textbox", { name: "Review follow-up Task title", exact: true }).fill("Human revises the intended investigation");
+    await expect(ack).not.toBeChecked(); await expect(create).toBeDisabled();
+  });
+  test(`management governance risk ${theme} ${width}px preserves original human declaration`, async ({ page }, info) => { await story(page, "declared-governance-risk", theme, width); const review = page.getByRole("region", { name: "Cited management review", exact: true }); await expect(review).toContainText("not verified"); await expect(review).toContainText("uncertain"); const original = review.getByText("Original declared controls and required evidence", { exact: true }); await original.focus(); await page.keyboard.press("Enter"); await expect(review.getByRole("heading", { name: "Required evidence", exact: true })).toBeVisible(); await expect(review).toContainText("Independent evidence of control effectiveness remains required"); await expect(review.getByRole("button")).toHaveCount(0); await accessibility(page); await page.screenshot({ path: info.outputPath(`management-governance-risk-${theme}-${width}.png`), fullPage: true, animations: "disabled" }); });
+  test(`management original outcome ${theme} ${width}px keeps six independent judgments read only`, async ({ page }, info) => { await story(page, "original-outcome-judgments", theme, width); const review = page.getByRole("region", { name: "Cited management review", exact: true }), original = review.getByText("Original outcome judgments, lessons and measurements", { exact: true }); await original.focus(); await page.keyboard.press("Enter"); for (const label of ["Decision process quality", "Assumption accuracy", "Execution fidelity", "External change", "Observed outcome", "Causal confidence"]) await expect(review.locator("dt", { hasText: label }).last()).toBeVisible(); await expect(review).toContainText("Human retains explicitly incomplete observed evidence"); await expect(review).toContainText("Execution status does not establish business success"); await expect(review.getByRole("button")).toHaveCount(0); await accessibility(page); await page.screenshot({ path: info.outputPath(`management-original-outcome-${theme}-${width}.png`), fullPage: true, animations: "disabled" }); });
+  for (const state of ["current", "retained", "published", "disabled"]) test(`management ${state} ${theme} ${width}px preserves cited human authority`, async ({ page }, info) => {
+    await story(page, state, theme, width); await page.getByRole("combobox", { name: "Review reference", exact: true }).selectOption(reviewId);
+    const result = page.getByRole("region", { name: "Cited management review", exact: true });
+    if (state === "disabled") { await expect(result).toHaveCount(0); await expect(page.getByRole("button", { name: "Prepare a cited management review", exact: true })).toHaveCount(0); await expect(page.getByRole("region", { name: "Management review workspace", exact: true })).not.toContainText("Review onboarding evidence"); }
+    else { await expect(result).toContainText("Human hypothesis, unverified"); await expect(result).toContainText("Unknown / not established"); const citation = result.getByRole("link", { name: "source 1", exact: true }); await citation.focus(); await page.keyboard.press("Enter"); await expect(page.locator("#management-source-source_1")).toBeVisible();
+      if (state === "published") { const report = page.getByRole("button", { name: "Record human event report", exact: true }); await expect(report).toBeDisabled(); await page.getByRole("combobox", { name: "Original agenda item", exact: true }).selectOption("agenda_1"); await page.getByRole("textbox", { name: "Human event rationale", exact: true }).fill("Human reports an investigation without claiming a verified effect"); await expect(report).toBeEnabled(); await expect(result).toContainText("do not verify an intervention"); }
+      else { const publish = page.getByRole("button", { name: "Publish this reviewed packet", exact: true }); await expect(publish).toBeDisabled(); await page.getByRole("textbox", { name: "Publication rationale", exact: true }).fill("Human reviews exact cited content and uncertainty before publication"); const ack = page.getByRole("checkbox"); await ack.focus(); await page.keyboard.press("Space"); if (state === "current") await expect(publish).toBeEnabled(); else { await expect(publish).toBeDisabled(); await expect(result).toContainText("Retained historical review"); } }
+    }
+    await accessibility(page); await page.screenshot({ path: info.outputPath(`management-${state}-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
+  });
+  test(`management declarations ${theme} ${width}px require exact citations and human due dates`, async ({ page }, info) => {
+    await story(page, "current", theme, width); await page.getByRole("button", { name: "Prepare a cited management review", exact: true }).click(); const form = page.getByRole("form", { name: "Cited management review proposal", exact: true }), save = form.getByRole("button", { name: "Capture management review draft", exact: true }); await expect(save).toBeDisabled();
+    await form.getByRole("textbox", { name: "Review name", exact: true }).fill("Human onboarding review"); await form.getByLabel("Review period start (UTC)", { exact: true }).fill("2026-10-01T00:00"); await form.getByLabel("Review period end (UTC)", { exact: true }).fill("2026-10-07T00:00"); await form.getByRole("combobox", { name: "Source 1 canonical native source", exact: true }).selectOption(JSON.stringify({ type: "goal", id: goalId })); await form.getByRole("combobox", { name: "Approved review purpose", exact: true }).selectOption({ index: 1 }); await form.getByRole("textbox", { name: "Agenda 1 proposed next action", exact: true }).fill("Human investigates these exact sources before proposing any canonical change"); await expect(save).toBeDisabled(); await form.getByLabel("Agenda 1 due date (UTC)", { exact: true }).fill("2099-10-08T00:00"); await expect(save).toBeEnabled(); const cite = form.getByRole("checkbox", { name: "source_1", exact: true }); await cite.focus(); await page.keyboard.press("Space"); await expect(save).toBeDisabled(); await page.keyboard.press("Space"); await expect(save).toBeEnabled(); await accessibility(page); await page.screenshot({ path: info.outputPath(`management-declarations-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
+  });
+  test(`management prediction ${theme} ${width}px retains unknown intervals and source grade`, async ({ page }, info) => { await story(page, "prediction", theme, width); const review = page.getByRole("region", { name: "Cited management review", exact: true }); await expect(review).toContainText("Prediction"); await expect(review).toContainText("42"); await expect(review).toContainText("prediction is not a measured result"); await expect(review.getByRole("button")).toHaveCount(0); await accessibility(page); await page.screenshot({ path: info.outputPath(`management-prediction-${theme}-${width}.png`), fullPage: true, animations: "disabled" }); });
+  test(`management comparison ${theme} ${width}px keeps both native citations and unknown math`, async ({ page }, info) => { await story(page, "cited-comparison", theme, width); const comparison = page.locator("#management-claim-comparison_native_change"); await expect(comparison).toContainText("Unknown / not established"); await expect(comparison).toContainText("Incompatible native sources"); const citations = comparison.getByRole("link"); await expect(citations).toHaveCount(2); for (let index = 0; index < 2; index++) { await citations.nth(index).focus(); await page.keyboard.press("Enter"); await expect(page.locator((await citations.nth(index).getAttribute("href"))!)).toBeVisible(); } await accessibility(page); await page.screenshot({ path: info.outputPath(`management-comparison-${theme}-${width}.png`), fullPage: true, animations: "disabled" }); });
+}
+
+for (const theme of ["light", "dark"]) for (const width of [390, 1200]) test(`Routine review links ${theme} ${width}px retain separate Human review`, async ({ page }, info) => {
+ await page.route("**/api/**", route => route.abort());await page.setViewportSize({width,height:1100});
+ await page.goto(`/iframe.html?id=${encodeURIComponent("product-routines-·-detail-variation-c--review-draft")}&viewMode=story&globals=theme:${theme}`);
+ const review = page.getByRole("link", {name:"Open review draft",exact:true});await expect(review).toHaveAttribute("href", /reviewCompanyId=company-storybook/);await expect(page.getByRole("link",{name:"Open Workflow run",exact:true})).toBeVisible();
+ await accessibility(page);await page.screenshot({path:info.outputPath(`routine-review-${theme}-${width}.png`),fullPage:true,animations:"disabled"});
+});
+
+for (const theme of ["light", "dark"]) for (const width of [390, 1200]) test(`Routine template ${theme} ${width}px requires fresh selectors and a Human agenda`, async ({ page }, info) => {
+  await story(page, "routine-review-template", theme, width); await page.getByRole("button", { name: "Edit recurring review template", exact: true }).click();
+  const form = page.getByRole("form", { name: "Routine review template", exact: true }), save = form.getByRole("button", { name: "Save Routine review template", exact: true }); await expect(save).toBeDisabled();
+  const kind = form.getByRole("combobox", { name: "Source 1 canonical source kind", exact: true }); await expect(kind.locator('option[value="metric_observation"]')).toHaveCount(0);
+  await kind.selectOption("metric"); await form.getByRole("combobox", { name: "Source 1 canonical native source", exact: true }).selectOption({ index: 1 });
+  await form.getByLabel("Source 1 metric window offset (days)", { exact: true }).fill("7"); await form.getByLabel("Agenda 1 due after capture (days)", { exact: true }).fill("2"); await expect(form.locator('input[type="datetime-local"]')).toHaveCount(0); await expect(save).toBeEnabled();
+  const cite = form.getByRole("checkbox", { name: "source_1", exact: true }); await cite.focus(); await page.keyboard.press("Space"); await expect(save).toBeDisabled(); await page.keyboard.press("Space"); await expect(save).toBeEnabled();
+  await accessibility(page); await page.screenshot({ path: info.outputPath(`routine-template-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
+});

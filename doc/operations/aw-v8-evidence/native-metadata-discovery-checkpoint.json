@@ -1,0 +1,136 @@
+{
+  "checkpoint": "Native published-definition discovery with original metadata provenance",
+  "parentCommit": "919c2b881fd83ee870a92883b618a9a45abf34a9",
+  "recordedAt": "2026-10-07T17:13:08.791750+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0415_nice_marrow.sql",
+      "sha256": "810f523520a1189be4bd1b5c07c65496368a8d91269f170d76a54c9183c94e5e"
+    },
+    {
+      "path": "packages/db/src/schema/analytical_context_roots.ts",
+      "sha256": "02733a951d7f351f586ad72f64480758806bcf90fcf7844671b0de885daf5af1"
+    },
+    {
+      "path": "packages/shared/src/analytical-context.ts",
+      "sha256": "dc05182cb0743bf9ab1d4cbf8fc33aef03f3205b17fc0c1b3472066297440a8f"
+    },
+    {
+      "path": "packages/shared/src/management-chat-tools.ts",
+      "sha256": "cab90d1a36ecfdf4271c9c910c6849494200d999d8e70d34d305294044af1cfe"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "617d8fbff821061e9102114f577a56fef87dd8b233cd783ebbb14647d0b566c4"
+    },
+    {
+      "path": "server/src/__tests__/analytical-reader.integration.test.ts",
+      "sha256": "5d4b5a6059190509035a970cacfaf0221fc1e5223a9ab47fdcdeef3937ce4822"
+    },
+    {
+      "path": "server/src/__tests__/business-forecasting.integration.test.ts",
+      "sha256": "81d40fb5a816963e7ed97e8a8451a8b388c540dd2593c5a9082a9a64b5734bd1"
+    },
+    {
+      "path": "server/src/__tests__/business-metrics.integration.test.ts",
+      "sha256": "14450e83851eeee26c4ffa56a3df56aae4e075091823afc9cbc327d1d358dc31"
+    },
+    {
+      "path": "server/src/middleware/error-handler.ts",
+      "sha256": "692011333f7b82174f05509043ce1058820bd3409a65dcdd3cd40788b6711f74"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "47dd44d7f4286e08223ac9d384e256d471a1c548e94cb2cc65dd07a2befa9482"
+    },
+    {
+      "path": "server/src/services/analytical-context-privacy.ts",
+      "sha256": "00be9eb4c9ec3e093eaf459eb3aa225d6ddcd88b5d20d4c666457146ba10c6dd"
+    },
+    {
+      "path": "server/src/services/analytical-purpose.ts",
+      "sha256": "a9d8767de8c50c30d277fd987a7174307d7a891fa1ff370f017e66560735d500"
+    },
+    {
+      "path": "server/src/services/analytical-reader.ts",
+      "sha256": "7fde9b47f3f41bcb3430e17c81b10fa234872bd1774bd9e95d5347abba1aaa58"
+    },
+    {
+      "path": "server/src/services/business-forecasting/service.ts",
+      "sha256": "d10221e619c1ceda9d9004c1c8cb21b41230095d0b53c13082339d79972eff0b"
+    },
+    {
+      "path": "server/src/services/business-metrics/definition-disclosure.ts",
+      "sha256": "cfb25fece81eb9841069229b0cb4b3eb8aecc17502f203b305c730d0067a658f"
+    },
+    {
+      "path": "server/src/services/business-metrics/service.ts",
+      "sha256": "ed70db8f631277d8f9d069ec414410f56c101f737ebac6f3aa8d589a76745791"
+    },
+    {
+      "path": "server/src/services/native-runtime/management-analytical-tools.ts",
+      "sha256": "cb4a1e88826f0680109f9588920ff31d4336910cbff1b78cef86e895095a1af6"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "actual-sdk-metadata-source-closure-and-reader-lifetime",
+      "checks": 56,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-metadata-pg-release.log",
+      "logSha256": "4f49a95c4c97fd25616450f41201f49b35b923f1272aa842a0c6f887d096efdf"
+    },
+    {
+      "name": "metrics-scenario-experiment-causal-management-regression",
+      "checks": 89,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-metadata-family-regression.log",
+      "logSha256": "931b5e7e3bb7ba3e4918391ba1ef4afcc826b378e74741fcd5ae61b17b50b6c0"
+    },
+    {
+      "name": "sdk-and-http-error-contract",
+      "checks": 31,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-metadata-sdk-api.log",
+      "logSha256": "099b0ab6d78c472786f24e9f4b5af5482a46459f8954a29ab12c8ed76115abce"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-metadata-release-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "migration-safety",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-metadata-migration-safety.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "name": "generated-snapshot-drift",
+      "checks": 1,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-metadata-snapshot.log",
+      "logSha256": "1cee6be0014fc2cd5b67e24bcf1461c82ca5142abb7db1cae4b3f08a2f234bb9"
+    }
+  ],
+  "behavior": [
+    "All twelve exact section 30.4 tool names are connected to the actual SDK. Published metric and Forecast discovery use bounded current-authorized pages, defaults of five and a maximum of twenty. Later unpublished human definitions are not disclosed.",
+    "Metric definition disclosure uses the existing immutable analytical lineage owner, with native_definition grade, null measurement and zero measured population. It preserves the exact immutable published version, original governing policies, declared project scope and earliest review/retention expiry without creating an observation or parallel metric table.",
+    "Published Forecast discovery retains its original specification, human publication backtest and every supporting measurement manifest. The actual ten-point software fixture retains all twelve original manifests, and deletion of a supporting measurement immediately closes the consumer payload.",
+    "Native definition and permitted governance deletion reuse the content-free C7 input/source ledger; restored original manifest IDs and late erased input edges are refused. A new actual native consumer cannot reuse a restored original definition.",
+    "Immutable governance evidence cannot be ordinarily deleted. A subsequent native purpose review is reauthorized on copied metadata reads; it does not overwrite original canonical evidence.",
+    "An empty authorized discovery returns an exact empty array without fabricated measurements, provenance or Memory roots. It describes this bounded authorized page only.",
+    "The private in-process permit expires on return, including detached callbacks that inherited its asynchronous context. Original source facts remain excluded from verified Task outcome roots."
+  ],
+  "limitations": [
+    "Final 56 migrated PostgreSQL checks cover 13 reader, 26 Context/actual SDK/HTTP and 17 Forecast cases; 89 source-family regression and 31 SDK/error contract cases pass. Exact parent 919c2b881fd83ee870a92883b618a9a45abf34a9 production build passed. Historical 486 SDK/session regression checks qualify the preceding tool-dispatch checkpoint, not a new complete metadata session batch.",
+    "Intermediate tests attempted an ordinary immutable governance deletion and expected restored manifests to insert before a later edge rejection. Native guards were preserved; corrected checks verify the immutable owner, superseding purpose review, immediate manifest rejection and independent late-edge rejection. Failed batches are not passing qualification.",
+    "Empty discovery carries no next cursor; it does not claim that the company has no definitions outside the bounded authorized page. Complete large-history performance and the 4000-unit Experiment runtime remain unqualified.",
+    "Other analytical domain dispatch is connected and type checked, but full actual SDK source-family conformance remains open. Human action proposals are advisory previews; native proposal materialization is not claimed.",
+    "Native erased-conversation recovery, contextual model/stream admission, physical provider trace-file erasure, unmanifested source-row closure and remaining complete source dependency inheritance are open.",
+    "Analytical Learning, native Routines, cross-project Planning, optional providers and hosted operations remain open. This is neither whole-brief nor R0 release qualification."
+  ]
+}

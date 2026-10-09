@@ -1,0 +1,169 @@
+{
+  "checkpoint": "Native exact target/actual and explicitly paired two-window descriptive change",
+  "parentCommit": "3d977e94616e17fb31ec565c4c0de30612564a3a",
+  "recordedAt": "2026-10-07T13:26:08.871086+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/shared/src/management-reviews.ts",
+      "sha256": "ed88cc0ce39dbf64e36d2e7bc2cf250523cb287217935b633f236215fe4127ac"
+    },
+    {
+      "path": "server/src/__tests__/management-review-kernel.test.ts",
+      "sha256": "a33f57ac4dd847abb43e07e98df3b40e4b5f8752ffa3ea5985670d08cb3bd9ab"
+    },
+    {
+      "path": "server/src/__tests__/management-reviews.integration.test.ts",
+      "sha256": "c767eff48e8b1fdfca7d160f5b488a8399abe1adc06fd85cee5b5954044b1120"
+    },
+    {
+      "path": "server/src/services/management-reviews/capture.ts",
+      "sha256": "3f674da27ac5841e261f4e245791fa9a283437b517995f37f2e55b488006af64"
+    },
+    {
+      "path": "server/src/services/management-reviews/kernel.ts",
+      "sha256": "85449d9527b31d3fa5a347ecc8dc8b63232ad254d8c7bbbb1380a5723619f898"
+    },
+    {
+      "path": "tests/storybook-visual/management-reviews.spec.ts",
+      "sha256": "a4e854a32eb1ef531412f26f7a3259b91d2da641d9f7e8595c49b7ee487aff3a"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewDefinitionForm.tsx",
+      "sha256": "9e02ffc573c30d1734966d87106b334c059cdc493d58174228342ef28962f3bc"
+    },
+    {
+      "path": "ui/src/components/ManagementReviewResult.tsx",
+      "sha256": "0530c6f4794ddcfe19b7d431a4c9acb674951d2a8e9f678e9798bfe76968a6af"
+    },
+    {
+      "path": "ui/src/pages/ManagementReviews.test.tsx",
+      "sha256": "29828b21e47837f4b45bdbd24e03a99bbafead979590608ac129fe10ff82907b"
+    },
+    {
+      "path": "ui/storybook/stories/management-reviews.stories.tsx",
+      "sha256": "eb1ac2f8cc3cfbf016feac204568e8fba2ec3138199e7d1fc2cd7982ab96539f"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native-owner-kernel-target-api",
+      "checks": 50,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-comparison-tests.log",
+      "logSha256": "f1b2404c565a3bf413e279f0409ec1a61eb9f72539f8cdcc00026b44908ac1af"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-comparison-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-comparison-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-operator-and-picker",
+      "checks": 18,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-comparison-ui-tests-labels.log",
+      "logSha256": "f203819964f41f9d20867854647134660fd58ba411b08bff2affe96d37df0ce9"
+    },
+    {
+      "name": "ui-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-comparison-ui-types-labels.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "token-gates",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-comparison-tokens.log",
+      "logSha256": "4ace44276894c22596ef2d7c39115bb12eae33e08d100ee72e060ecd83331f69"
+    },
+    {
+      "name": "final-storybook",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-comparison-storybook-labels.log",
+      "logSha256": "bbbbd85f20ee48f263c78ff284021f988f19f6dfa7d1fa750921ce506f4ac950"
+    },
+    {
+      "name": "full-browser-before-readable-labels",
+      "checks": 28,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-comparison-browser.log",
+      "logSha256": "7dc9b7c8f14b4f9827160a9888b113a9178b70e8d4fa9ea2016132f1dde7acfe"
+    },
+    {
+      "name": "final-affected-browser-labels-and-form",
+      "checks": 8,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-management-comparison-browser-labels.log",
+      "logSha256": "c27b80b0c5bb4b3e0b5e4bc799c8e1987f2b3251ebdeb1fe81ade450b381bea4"
+    },
+    {
+      "name": "integrated-native-ui-parent-build",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-build-3d977e946.log",
+      "logSha256": "ad1774e1fb2bb9fe4204c226e25774ab5b1b585366642193e3c9acde2f5b3fe3"
+    }
+  ],
+  "finalScreenshots": [
+    {
+      "path": "/var/tmp/aw-v8-management-comparison-final-screens/management-declarations-dark-1200.png",
+      "sha256": "34d259367ba45e92f2f458fce904080c583fc28c462eff42edfc68bbe530ed12",
+      "visuallyInspected": false
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-comparison-final-screens/management-comparison-light-1200.png",
+      "sha256": "db9e7d137833853d43d854ad178efef9cbc6783a89fb3e29a9b165d23599dd4b",
+      "visuallyInspected": false
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-comparison-final-screens/management-comparison-dark-1200.png",
+      "sha256": "0fd74a04d0755f152a2fcb8b73401cd25f1d2eefb0fc27de0054b6c5a1129844",
+      "visuallyInspected": true
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-comparison-final-screens/management-comparison-dark-390.png",
+      "sha256": "ae638c0b0e564be4db089c8f99a73f75ab44e4d1ec0b2c4c20d233fb2b181fb6",
+      "visuallyInspected": false
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-comparison-final-screens/management-declarations-light-390.png",
+      "sha256": "da1790c74426d1fc53444e528bf6c055f1c40ec773d6af2d07990ab910b86e14",
+      "visuallyInspected": false
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-comparison-final-screens/management-declarations-light-1200.png",
+      "sha256": "4fdfb5bf0de7e1e9361f8bbacadf8c9f2bfb19ec87cea11037dc9e3a24c4f857",
+      "visuallyInspected": true
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-comparison-final-screens/management-declarations-dark-390.png",
+      "sha256": "0879d29613c9a6fc168c3b4d0e0e7184c4d1ca4b809c5f6f4a2d73b9ca50b51d",
+      "visuallyInspected": true
+    },
+    {
+      "path": "/var/tmp/aw-v8-management-comparison-final-screens/management-comparison-light-390.png",
+      "sha256": "750d5f07b8e653a2209226bde4cc3aa020b0372e1e0dbd447e79fbb7a70e1e8a",
+      "visuallyInspected": true
+    }
+  ],
+  "limits": [
+    "Fifty backend checks comprise 16 Management PostgreSQL cases, ten pure kernel cases, eight upstream target PostgreSQL cases and 16 API contracts. Eighteen UI checks comprise eleven Management boundaries and seven existing analytical-picker regressions.",
+    "The full 28 browser checks passed, followed by eight affected form/comparison checks after readable value labels; all cached fixtures abort every API request. Four representative final layouts were inspected; no official baseline or operational/business-impact evidence is claimed.",
+    "Two consecutive equal windows establish a descriptive change, not trend significance or a causal effect; distinct current-state cohorts and capture times remain explicit. Relative change with zero baseline is unknown.",
+    "Canonical observation recapture no longer hashes fresh helper timestamps.",
+    "The exact preceding 3d977e946 integrated build passes; the new comparison source still requires its integrated build.",
+    "Governance-risk/outcome enrichment, source menu account hardening, remaining dedicated Management source fixtures, native Routines/Chat, analytical Learning bridge, cross-project Planning, providers and hosted full-release acceptance remain open."
+  ]
+}

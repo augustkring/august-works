@@ -1,4 +1,5 @@
 import { queuedInteractionId, readQueuedInteractionResponse, hasQueuedInteractionResponse } from "../services/queued-interaction-response.js";
+import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
 import { deliverConversationComments, isConversation } from "../services/agent-conversations.js";
 import { issueRecoveryActionReadModel } from "../services/issue-recovery-actions.js";
 import { getExecutionBlocker } from "../services/execution-blocker.js";
@@ -59,6 +60,7 @@ import {
 } from "@paperclipai/db";
 import {
   addIssueCommentSchema,
+  agentChatOpenSchema,
   acceptIssueThreadInteractionSchema,
   attachmentArtifactWorkProductMetadataSchema,
   cancelIssueThreadInteractionSchema,
@@ -3510,6 +3512,10 @@ export function issueRoutes(
   const router = Router();
   const svc = issueService(db);
   const runRedactions = createRunSecretRedactionRegistry(db);
+  async function redactIssueResponse<T>(req:Request,companyId:string,issueId:string,value:T) {
+    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{issueId});
+    return runRedactions.redactForIssue(companyId,issueId,value);
+  }
   const access = accessService(db);
   const secretProposals = createSecretProposalsService(db);
   const heartbeat = heartbeatService(db, {
@@ -5117,7 +5123,10 @@ export function issueRoutes(
       decideIssueAccess(req, issue, "issue:read"),
     );
     const decision = await value;
-    if (decision.allowed) return true;
+    if (decision.allowed) {
+      await assertAnalyticalContextPayloadAccess(db,issue.companyId,req.actor,{issueId:issue.id});
+      return true;
+    }
     res
       .status(403)
       .json({ error: "Issue is outside this actor's authorization boundary" });
@@ -8701,7 +8710,7 @@ export function issueRoutes(
       ),
     };
     res.json(
-      await runRedactions.redactForIssue(issue.companyId, issue.id, response),
+      await redactIssueResponse(req, issue.companyId, issue.id, response),
     );
   });
 
@@ -11937,6 +11946,7 @@ export function issueRoutes(
         details: {
           title: issue.title,
           identifier: issue.identifier,
+          projectId: issue.projectId,
           ...(watchdogProductBugFollowUp
             ? {
                 watchdogDiscovery: {
@@ -13652,6 +13662,9 @@ export function issueRoutes(
             details: {
               ...updateFields,
               identifier: updated.identifier,
+              projectId: updated.projectId,
+              ...(changes.status || updateFields.status !== undefined ? { status: updated.status } : {}),
+              ...(changes.status ? { previousStatus: changes.status.from } : {}),
               authorizationReason: issueMutationAuthorizationReason,
               changes,
               ...(reviewInteractionId ? { reviewInteractionId } : {}),
@@ -14027,6 +14040,9 @@ export function issueRoutes(
           details: {
             ...updateFields,
             identifier: issue.identifier,
+            projectId: issue.projectId,
+            ...(issueChanges.status || updateFields.status !== undefined ? { status: issue.status } : {}),
+            ...(issueChanges.status ? { previousStatus: issueChanges.status.from } : {}),
             authorizationReason: issueMutationAuthorizationReason,
             changes: issueChanges,
             ...(reviewInteractionId ? { reviewInteractionId } : {}),
@@ -15349,7 +15365,7 @@ export function issueRoutes(
       limit,
     });
     res.json(
-      await runRedactions.redactForIssue(issue.companyId, issue.id, comments),
+      await redactIssueResponse(req, issue.companyId, issue.id, comments),
     );
   });
 
@@ -15405,7 +15421,7 @@ export function issueRoutes(
       actor: getActorInfo(req),
     });
     res.json(
-      await runRedactions.redactForIssue(issue.companyId, issue.id, queue),
+      await redactIssueResponse(req, issue.companyId, issue.id, queue),
     );
   });
 
@@ -15437,7 +15453,7 @@ export function issueRoutes(
         }),
       );
       publishActivity(activityPublication as ActivityPublication);
-      res.json(await runRedactions.redactForIssue(issue.companyId, issue.id, queue));
+      res.json(await redactIssueResponse(req, issue.companyId, issue.id, queue));
     },
   );
 
@@ -15467,7 +15483,7 @@ export function issueRoutes(
         }),
       );
       publishActivity(activityPublication as ActivityPublication);
-      res.json(await runRedactions.redactForIssue(issue.companyId, issue.id, queue));
+      res.json(await redactIssueResponse(req, issue.companyId, issue.id, queue));
     },
   );
 
@@ -15537,7 +15553,7 @@ export function issueRoutes(
         executor: db, issue: currentIssue ?? issue,
         activeRun: await resolveActiveIssueRun(currentIssue ?? issue), actor,
       });
-      res.json(await runRedactions.redactForIssue(issue.companyId, issue.id, queue));
+      res.json(await redactIssueResponse(req, issue.companyId, issue.id, queue));
     },
   );
 
@@ -15807,7 +15823,7 @@ export function issueRoutes(
         },
       });
       res.json(
-        await runRedactions.redactForIssue(issue.companyId, issue.id, queue),
+        await redactIssueResponse(req, issue.companyId, issue.id, queue),
       );
     },
   );
@@ -15845,7 +15861,7 @@ export function issueRoutes(
       if (result.cancelledRun) {
         void emitAgentTaskRunById(db, { runId: result.cancelledRun.id, companyId: issue.companyId });
       }
-      res.json(await runRedactions.redactForIssue(issue.companyId, issue.id, result.queue));
+      res.json(await redactIssueResponse(req, issue.companyId, issue.id, result.queue));
     },
   );
 
@@ -16932,7 +16948,7 @@ export function issueRoutes(
       return;
     }
     res.json(
-      await runRedactions.redactForIssue(issue.companyId, issue.id, comment),
+      await redactIssueResponse(req, issue.companyId, issue.id, comment),
     );
   });
 
@@ -17274,13 +17290,23 @@ export function issueRoutes(
       if (resolved.ambiguous) throw conflict("Agent reference is ambiguous");
       if (!resolved.agent) throw notFound("Agent not found");
       const agent = resolved.agent;
+      const input = method === "post" ? agentChatOpenSchema.parse(req.body ?? {}) : {};
       const existing = await svc.getConversation(companyId, agent.id, req.actor.userId);
-      if (existing && !(await assertIssueReadAllowed(req, res, existing))) return;
-      if (existing || method === "get") { res.json(existing); return; }
+      let retireConversationId: string | undefined;
+      if (existing) {
+        try { if (!(await assertIssueReadAllowed(req,res,existing))) return; }
+        catch (error) {
+          if (!(error instanceof HttpError) || (error.details as {code?:unknown}|undefined)?.code !== "analytical_source_access_lost") throw error;
+          if (method === "post" && input.replaceInaccessibleIssueId === existing.id) retireConversationId=existing.id;
+          else throw new HttpError(error.status,error.message,{code:"analytical_source_access_lost",conversationIssueId:existing.id});
+        }
+        if (input.replaceInaccessibleIssueId === existing.id && !retireConversationId) throw conflict("The current conversation does not require source recovery");
+      }
+      if ((existing && !retireConversationId) || method === "get") { res.json(existing); return; }
       const issue = await svc.create(companyId, {
         title: `Chat with ${agent.name}`, assigneeAgentId: agent.id,
         conversationAgentId: agent.id, conversationUserId: req.actor.userId,
-        conversationState: "waiting", status: "in_review", createdByUserId: req.actor.userId,
+        conversationState: "waiting", status: "in_review", createdByUserId: req.actor.userId, retireConversationId,
       });
       await logActivity(db, { companyId, actorType: "user", actorId: req.actor.userId,
         action: "issue.conversation_opened", entityType: "issue", entityId: issue.id,

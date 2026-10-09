@@ -1,0 +1,59 @@
+{
+  "checkpoint": "Current original Learning source authority at native Workflow child readers",
+  "parentCommit": "e81c0ad39bcbe1fb7e729f06718b28c2d9d7f868",
+  "primaryParentBuildCommit": "8ba964e5c9860da92a0c9de3da332db5d7197034",
+  "recordedAt": "2026-10-07T21:17:11.142089+00:00",
+  "sourceFiles": [
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "6a0c30547a30f0d787ca0b600a35043e136c3cdb14b743eb7fe4c54446d92f32"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "8f741e008c304062670d77567b4a620861365a4e72f57e5cff924a7788f9d817"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Source/Learning/private-context/WebSocket/Chat regressions",
+      "passedTests": 74,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-child-readers.log",
+      "logSha256": "a82f3468554338f284e7486b057f6bb587b0bbd2adb461bea26cc6b49be71bef"
+    },
+    {
+      "check": "Final actual PostgreSQL source/Learning guards",
+      "passedTests": 62,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-child-readers-final.log",
+      "logSha256": "d4e6ddf3734250b33794ccf2d16040970d3f59878235d5b912dc9e809538985f"
+    },
+    {
+      "check": "Final server types",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-learning-child-readers-final-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "Whole native production build of exact parent on primary branch",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-native-build-learning-workflow.log",
+      "logSha256": "696ebae4452d570932c1e50cc7787699713207dd938113fda131bbef2874ae9a"
+    }
+  ],
+  "qualified": [
+    "The existing shared copied-payload reader follows only actual persisted Workflow Step/run/wait/wakeup/Native Task relationships to original learned revision and artifact owners.",
+    "The actual current reader repeats original signal authority before child Task/run/log/transcript/source-event consumers can use copied payloads.",
+    "Actual PostgreSQL checks admit original Human reads, deny missing readers and source visibility loss, admit allowed visibility restoration and preserve unrelated original verified Task access.",
+    "Source relationships are checked as a complete bounded set: at most 256 distinct owner pairs and a shared 30-second deadline; overflow returns no copied payload."
+  ],
+  "limitations": [
+    "Counts overlap. No new Chromium or external provider invocation is claimed.",
+    "The historical-child qualification is native PostgreSQL; actual source-derived ordinary worker execution remains closed without its qualified source-retention bridge.",
+    "No measured hard latency or immediate role-change notification guarantee is claimed.",
+    "Optimizer human promotion, Context/runtime source-retention bridges, direct Decision review conversion, planning outcomes, Routines, action materialization, other source closure, cross-project Planning, provider conformance and hosted gates remain open.",
+    "No whole-brief completion is claimed."
+  ]
+}

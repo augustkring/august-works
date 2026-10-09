@@ -46,7 +46,7 @@ import {
   usePublishSharedQueryData,
   useSharedPollingQuery,
 } from "@/hooks/useSharedPolling";
-import { ApiError } from "../api/client";
+import { ApiError, isAnalyticalSourceAccessLost } from "../api/client";
 import { issuesApi } from "../api/issues";
 import { CommentSubmissionUnknownError } from "../lib/comment-submit-result";
 import { approvalsApi } from "../api/approvals";
@@ -1218,6 +1218,7 @@ type IssueDetailChatTabProps = {
   commentsInitialLoading?: boolean;
   initialHistoryPending?: boolean;
   initialHistoryError?: boolean;
+  sourceAccessLost?: boolean;
   onRetryInitialHistory?: () => void;
   locallyQueuedCommentRunIds: ReadonlyMap<string, string>;
   interactions: IssueThreadInteraction[];
@@ -1358,6 +1359,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
   commentsInitialLoading = false,
   initialHistoryPending = false,
   initialHistoryError = false,
+  sourceAccessLost = false,
   onRetryInitialHistory,
   locallyQueuedCommentRunIds,
   interactions,
@@ -2274,6 +2276,13 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
     [resolvedActivity],
   );
 
+  if (sourceAccessLost) {
+    return <div role="alert" className="p-4 text-sm text-destructive">
+      Conversation source access is unavailable.
+      <Button variant="ghost" size="sm" onClick={onRetryInitialHistory}>Retry</Button>
+    </div>;
+  }
+
   const loadOlderButton = hasOlderComments ? (
     <div className="flex justify-center">
       <Button
@@ -2333,6 +2342,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
               liveRunsError ||
               (activeRunQueryEnabled && activeRunError)
             }
+            {...(!classicTaskInterfaceEnabled ? { sourceAccessLost } : {})}
             onRetryInitialHistory={() => {
               onRetryInitialHistory?.();
               void refetchActivity();
@@ -2848,7 +2858,7 @@ export function IssueDetail({ tasksTab }: { tasksTab?: TaskSidePanelProps["tasks
 
 /** One controller and surface for both task URLs and agent conversations. */
 export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskSidePanelProps["tasksTab"]; conversation?: {
-  agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>;
+  agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>; refreshConversation?: () => void;
 } }) {
   const { issueId: routeIssueId, companyPrefix } = useParams<{ issueId: string; companyPrefix: string }>();
   const issueId = conversation ? conversation.issue?.id : routeIssueId;
@@ -3097,6 +3107,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       });
     },
   });
+  useEffect(() => {
+    if (isAnalyticalSourceAccessLost(error)) conversation?.refreshConversation?.();
+  }, [error, conversation?.refreshConversation]);
   const externalObjectsState = useIssueExternalObjects(conversation && !conversation.issue ? null : issue?.id ?? null);
   // A closed isolated workspace no longer blocks the composer. The server reopens
   // the workspace when the next comment or resume arrives, so the composer stays
@@ -3114,6 +3127,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     data: commentPages,
     isLoading: commentsLoading,
     isError: commentsError,
+    error: commentsReadError,
     isFetchingNextPage: commentsLoadingOlder,
     hasNextPage: hasOlderComments,
     fetchNextPage: fetchOlderComments,
@@ -3127,6 +3141,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         ...(pageParam ? { after: pageParam } : {}),
       }),
     enabled: !!issueId,
+    retry: (count, error) => !isAnalyticalSourceAccessLost(error) && count < 3,
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) =>
       getNextIssueCommentPageParam(lastPage, ISSUE_COMMENT_PAGE_SIZE),
@@ -3134,6 +3149,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       InfiniteData<IssueComment[], string | null>
     >(issueId ?? "pending"),
   });
+  useEffect(() => {
+    if (isAnalyticalSourceAccessLost(commentsReadError)) conversation?.refreshConversation?.();
+  }, [commentsReadError, conversation?.refreshConversation]);
   const comments = useMemo(
     () => flattenIssueCommentPages(commentPages?.pages),
     [commentPages?.pages],
@@ -7921,6 +7939,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                     attachmentsError ||
                     workProductsError
                   }
+                  sourceAccessLost={isAnalyticalSourceAccessLost(commentsReadError)}
                   onRetryInitialHistory={() => {
                     void refetchComments();
                     void refetchInteractions();

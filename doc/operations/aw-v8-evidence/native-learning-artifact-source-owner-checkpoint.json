@@ -1,0 +1,108 @@
+{
+  "checkpoint": "Current Source admission at the ordinary native Artifact owner and account-scoped browser caches",
+  "parentCommit": "c1dc0cb83168dbdbe1e25cecbaf8ad548ed5933c",
+  "recordedAt": "2026-10-07T22:22:59.385201+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "cefec789234471a05ac5123a2c9f1286d1098523ce9185078875e3e4af9ff255"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "5f6ab9fdcc7fa5cf50f037e1408393c8dcc4a4691712aa6917e9b1cd5477dff4"
+    },
+    {
+      "path": "server/src/routes/automation-artifacts.ts",
+      "sha256": "5979ca91c1ce4689424b286c1ae6ca3a2b10e78b12c474eaed570cde9794f55c"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-runtime.ts",
+      "sha256": "a13e05c1e1e567fdbe2d8c34e91c0a9e2f4e17563f77d50de62e4408f906f0cb"
+    },
+    {
+      "path": "server/src/services/automation-artifacts/automation-artifact-service.ts",
+      "sha256": "46eb7f63506a078ee2c7e720c42480d053dae4eead5554bbb314623db143c387"
+    },
+    {
+      "path": "server/src/services/optimizer/optimizer-evaluation.ts",
+      "sha256": "aa818ce9624d7253f35e986ecb3398fd20f22733e952f373c969e5b126e86f7c"
+    },
+    {
+      "path": "ui/src/api/automationArtifacts.ts",
+      "sha256": "b8ba6a3dfe406fb5af2dd4cafc730e8f60e9e31c3b88533deddffd74d7e4b468"
+    },
+    {
+      "path": "ui/src/context/V7AccountScope.tsx",
+      "sha256": "6ca6248acd8af0a49932059df58cf9ade4cc790e8189fd7548c6beb99b6a164e"
+    },
+    {
+      "path": "ui/src/pages/AutomationArtifacts.tsx",
+      "sha256": "b985c11d8648896599cec147cb79a29f8c8f3f69c935a5b99f597dc30a2c00bc"
+    },
+    {
+      "path": "packages/db/src/migrations/0425_artifact_native_learning_inheritance.sql",
+      "sha256": "18fecbbcd8907ab3892f69317d92c75f4386f86aa8ebd68f62c1b102463d8cd9"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0425_snapshot.json",
+      "sha256": "c82b6b9845033e380fe8bb1d2292ef9fbb50459ce402b61408ca88cf9f609f35"
+    },
+    {
+      "path": "ui/src/pages/AutomationArtifacts.test.tsx",
+      "sha256": "a6aa71eff0733e0fc1ae19f87a3ab7d7cecbfa7738162051d061588aaf3525c0"
+    }
+  ],
+  "checks": [
+    {
+      "check": "Native Learning/Optimizer/Artifact/account routes/Scenario and migration snapshot regression",
+      "passedTests": 56,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-artifact-source-native.log",
+      "logSha256": "76dc7acbd5cc0ca63d1f2b4a729530e4a4a4d3e35205ca55a67d8513d65f19c8"
+    },
+    {
+      "check": "Actual shared account-client UI response contracts",
+      "passedTests": 12,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-artifact-source-ui-qualified.log",
+      "logSha256": "778dbb907d5982234596e29baf8f91af7229a62e97d046c25c9f66cda5075437"
+    },
+    {
+      "check": "Final sequential UI/server types",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-artifact-source-types-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "Native migration safety",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-artifact-source-migrations.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "check": "Native UI token gates",
+      "passedTests": null,
+      "exitCode": 0,
+      "log": "/var/tmp/aw-v8-artifact-source-tokens.log",
+      "logSha256": "780e5a2042770b4b6a7c84983ba8f2055e3d712811be034a700c7f7d3bd2f43b"
+    }
+  ],
+  "qualified": [
+    "Original native Artifact detail and catalogue repeat current original Learning analytical Source admission. Denied catalogue entries are withheld; original Memory-erased metadata remains redacted.",
+    "The existing Artifact lock owner acquires company -> Memory before the artifact and checks Source before append, gate reports, lifecycle changes and archive.",
+    "Internal security callers carry the actual current read actor independently of the original native system gate-writer identity.",
+    "The existing native version inheritance function extends to Artifact versions, preserving up to 20 actual retained Learning links before new immutable payload validation; stale/erased Source cannot mint an unretained successor.",
+    "Actual PostgreSQL covers current detail/list/lifecycle/archive denial, allowed read restoration, a later native appended version and flags-off/company-paused C7 erasure of both original and successor payloads.",
+    "The actual shared UI account wrapper/client partitions all Artifact queries and mutations by account/company, hides known-denied cached content and clears copied drafts. Response contracts retain independent catalogue entries and prevent prior account code from answering the next account."
+  ],
+  "limitations": [
+    "Counts overlap. No new Chromium or external provider invocation is claimed. UI tests exercise real shared account wrapper/client with explicit response-contract fixtures.",
+    "Source-derived standalone Artifact runtime copying remains closed without its qualified native retention bridge, including Human inspection-to-execution. Ordinary verified-Memory-only execution keeps existing native regression coverage.",
+    "No instant permission-change notification or measured hard latency is claimed; browser refetch is periodic and on known denial.",
+    "Generic Artifact live-status changes of optimizer-origin assets need explicit native Optimizer-owner enforcement; Source admission alone does not qualify a bypass of shadow/approval/canary.",
+    "Context/runtime retention, planning outcome pins, native Routine review cadence, action materialization, remaining Source graph closure, cross-project Planning, provider conformance and hosted acceptance remain open. No whole-brief completion is claimed.",
+    "Initial UI syntax failures are fixed and only final passing checks are counted. The resulting primary commit full production build is queued next."
+  ]
+}

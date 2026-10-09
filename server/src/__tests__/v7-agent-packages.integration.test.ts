@@ -1,3 +1,8 @@
+import {businessMetricService} from "../services/business-metrics/service.js";
+import {aiGovernanceService} from "../services/ai-governance/governance-service.js";
+import {memoryJobService} from "../services/memory/memory-jobs.js";
+import {metricDefinition,analyticalPurpose} from "./helpers/business-metric-fixture.js";
+import {businessMetricObservations,companies} from "@paperclipai/db";
 import {
   maintainFoundationFindings,
   maintainPackageUpdates,
@@ -631,7 +636,7 @@ const support = await getEmbeddedPostgresTestSupport();
         (await db.select().from(agents).where(eq(agents.id, f.presence.id)))[0],
       ).toBeTruthy();
     });
-    it("Learning proposes a native update, requires human review and erases retained source prose with rollout disabled", async () => {
+    it.each([false,true])("Learning proposes a native update with analytical signal %s, requires human review and erases derived prose with rollout disabled", async (withSignal) => {
       await instanceSettingsService(db).updateExperimental({
         enableCollectiveMemoryV1: true,
         readiness_engine_v7: true,
@@ -714,12 +719,22 @@ const support = await getEmbeddedPostgresTestSupport();
             reason: "Retained source recommends this evaluated internal update",
           },
         });
+      let signal:{sourceId:string;observationId:string;pin:{kind:"analytical_evidence";source:{type:"metric_observation";id:string;metricId:string;metricVersionId:string}}}|undefined;
+      if(withSignal){
+        await instanceSettingsService(db).updateExperimental({analytical_lineage_v8:true,business_metrics_v8:true,ai_use_cases_v7:true,governance_evidence_v7:true});
+        const purpose=analyticalPurpose(),policy=await aiGovernanceService(db).obligation(f.actor,f.home,purpose),metrics=businessMetricService(db),metric=await metrics.create(f.home,f.actor,{key:"package_analytical_signal",definition:{...metricDefinition(policy.id),ownerUserId:f.userId}});
+        await metrics.publish(f.home,f.actor,metric.metric.id,{expectedRevision:1,versionId:metric.version.id});
+        const sourceId=randomUUID();await db.insert(issues).values({id:sourceId,companyId:f.home,title:"Independent native package analytical Source",status:"done",completedAt:new Date()});
+        const now=Date.now(),observation=await metrics.query(f.home,f.actor,{metricId:metric.metric.id,versionId:metric.version.id,from:new Date(now-86400000).toISOString(),until:new Date(now+1000).toISOString(),dimensions:[],maxRows:100});
+        signal={sourceId,observationId:observation.id,pin:{kind:"analytical_evidence",source:{type:"metric_observation",id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}}};
+      }
       const cycle = await learning.create(f.actor, f.home, {
         scope: { type: "company", id: null },
         purpose: "native_task_execution",
         trigger:
           "Repeated local review suggests evaluating an updated internal package",
         memoryRecordIds: roots,
+        ...(signal?{analyticalSources:[signal.pin]}:{}),
       });
       const hypothesis = await learning.addHypothesis(
         f.actor,
@@ -785,6 +800,12 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(
         (await service.get(f.actor, f.home, installed.id)).installedVersionId,
       ).toBe(versionId);
+      if(signal){
+        expect((await service.proposals(f.actor,f.home)).some(proposal=>proposal.id===link.candidateId)).toBe(true);
+        await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));
+        expect(await service.proposals(f.actor,f.home)).toEqual([]);await expect(service.reviewProposal(f.actor,f.home,link.candidateId,"accept")).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+        expect((await service.get(f.actor,f.home,installed.id)).installedVersionId).toBe(versionId);await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));
+      }
       await service.reviewProposal(f.actor, f.home, link.candidateId, "accept");
       const updated = await service.get(f.actor, f.home, installed.id);
       expect(updated.status).toBe("configuring");
@@ -793,7 +814,10 @@ const support = await getEmbeddedPostgresTestSupport();
         learning_engine_v7: false,
         agent_packages_v7: false,
       });
-      await db.transaction((tx) =>
+      if(signal){
+        await instanceSettingsService(db).updateExperimental({business_metrics_v8:false,analytical_lineage_v8:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,f.home));await db.delete(businessMetricObservations).where(eq(businessMetricObservations.id,signal.observationId));await memoryJobService(db).tick({limit:10});
+        expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id,roots[0]!)))[0]!.content).toContain("Local reviewed output fixture");expect((await db.select().from(issues).where(eq(issues.id,tasks[0]!)))[0]!.status).toBe("done");
+      }else await db.transaction((tx) =>
         purgeMemoryRecords(tx as unknown as typeof db, f.home, [roots[0]!]),
       );
       const [p] = await db

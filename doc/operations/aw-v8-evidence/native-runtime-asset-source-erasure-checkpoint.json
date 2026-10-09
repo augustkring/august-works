@@ -1,0 +1,95 @@
+{
+  "checkpoint": "Native run-owned runtime bundles and retained legacy Source erasure through the original Memory outbox",
+  "parentCommit": "971434c860dda6e9eaaf73156253f3570373efee",
+  "recordedAt": "2026-10-08T00:27:56.810996+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0430_native_runtime_asset_erasure.sql",
+      "sha256": "9f870792360a3d73b874ab4591e8539c3d72d26d83393c6b6982e7c675fadfd1"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0425_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0430_snapshot.json",
+      "sha256": "862f2868b70c5ed4f78f842b7c13a71a8742619dc1c85d3cd2cf1b9f7b27d85f"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "79111757b2607d35da46358da103b3ed90c03935712b7dc993235070c459da36"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "ce536bef49f978df979d188bb6916f4edb25310520e6694f815c73bc9302baf0"
+    },
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "22e80cbc6c631d21b057e04bd7ba42fb4fef734b20fd3dde875956dfba49f92d"
+    },
+    {
+      "path": "server/src/services/memory/memory-jobs.ts",
+      "sha256": "5c613b99c8d9282716108e689df2b050049019f377ec5bf3b6d13212ebe3f6b6"
+    },
+    {
+      "path": "server/src/services/native-runtime/runtime-asset-retention.ts",
+      "sha256": "729796d06df3f7a1e0757af194e823d183f5996b257986f2bf31d1d5deb6a8ba"
+    },
+    {
+      "path": "server/src/services/native-runtime/runtime-context.ts",
+      "sha256": "4baaaf7527b7b4ceacb199b21e2f1cba43088c6c77d659675f4541d471ba93ab"
+    },
+    {
+      "path": "server/src/services/orchestration/native-draft-runtime.ts",
+      "sha256": "ecbdc54f1261ec88cccac67ae9818f765c639d66bfb608b6853ab0c60847da74"
+    },
+    {
+      "path": "server/src/services/runtime-skill-cache.ts",
+      "sha256": "10b0edf52c9d1ffe0e35b0efab8fd525c4928e8a7828e3c3b4af1786d79ea3da"
+    },
+    {
+      "path": "server/src/services/saas/company-purge.ts",
+      "sha256": "a9a72aedfc7e3f8a078adc8f8572b63644004f1272cf9135b9ccfbc5d2cfaf6c"
+    }
+  ],
+  "validation": {
+    "nativeRuntimeAndPostgresAndSnapshot": {
+      "tests": 593,
+      "files": 8,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-runtime-asset-final-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-runtime-asset-initial-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-runtime-asset-migrations.log"
+    },
+    "parentWholeNativeProductionBuild": {
+      "commit": "df2ed666ed28d5110aa123d3afc1832a27b0f81b",
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-skill-version-files.log"
+    }
+  },
+  "qualified": [
+    "actual native production builder takes company -> Memory locks, binds actual persisted running agent/run and repeats Source admission before and after publication",
+    "new instruction and selected Skill bundles are namespaced by company/run even before final profile publication",
+    "bounded text reader accepts only actual owner namespace or original verified legacy bundle root",
+    "native Source/delete callback captures legacy references before original payload guard clears profiles; original outbox holds only run ID and digests",
+    "actual private analytical Source loss denies rebuilding immediately; original asynchronous worker clears profile and filesystem copies with flags off/company paused",
+    "filesystem symlink ancestor failure retries on original tick; user-owned original source directories remain unchanged",
+    "other tenant retained legacy reference and run-owned bundle survive; native company purge removes last reference and the shared bundle",
+    "actual native run deletion batches all 513 explicit digest metadata fixtures into three jobs of at most 256 without truncation",
+    "native session executor, Learning, Orchestration, draft conformance, purge and snapshot regressions pass"
+  ],
+  "limits": [
+    "runtime context publication and body read are service/PostgreSQL/filesystem fixtures, not a performed provider run or Human trial",
+    "legacy reference profiles and the 513-reference batch are explicitly persisted metadata fixtures",
+    "legacy files whose profiles were already erased before this migration lack a retained ownership reference; historical orphan disposition remains open",
+    "provider/workspace/home copies beyond the application-owned runtime asset namespace are not qualified",
+    "Skill version deletion must still fence actual consuming runs before analytical Skill Source admission",
+    "no concurrent historical cross-tenant restore/publication, maximum-volume, hard latency, hosted historical backfill or whole-brief completion claim"
+  ]
+}

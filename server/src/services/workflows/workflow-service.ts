@@ -1,3 +1,6 @@
+import {lockAnalyticalCompany} from "../analytical-privacy.js";
+import {assertLearnedAssetAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
+import type {AuthorizationActor} from "../authorization.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { isDeepStrictEqual } from "node:util";
@@ -92,6 +95,7 @@ async function getRevisionById(
   companyId: string,
   workflowId: string,
   revisionId: string | null,
+  actor?:AuthorizationActor,
 ) {
   if (!revisionId) return null;
   return db.select().from(workflowRevisions)
@@ -100,15 +104,15 @@ async function getRevisionById(
       eq(workflowRevisions.workflowId, workflowId),
       eq(workflowRevisions.id, revisionId),
     ))
-    .then((rows) => rows[0] ?? null);
+    .then(async(rows) => {const row=rows[0]??null;if(row)await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",row.id,actor);return row;});
 }
 
-async function getDetail(db: WorkflowDb, companyId: string, workflowId: string): Promise<WorkflowDetail | null> {
+async function getDetail(db: WorkflowDb, companyId: string, workflowId: string, actor?:AuthorizationActor): Promise<WorkflowDetail | null> {
   const workflow = await getWorkflowRow(db, companyId, workflowId);
   if (!workflow) return null;
   const [draft, published] = await Promise.all([
-    getRevisionById(db, companyId, workflowId, workflow.draftRevisionId),
-    getRevisionById(db, companyId, workflowId, workflow.publishedRevisionId),
+    getRevisionById(db, companyId, workflowId, workflow.draftRevisionId,actor),
+    getRevisionById(db, companyId, workflowId, workflow.publishedRevisionId,actor),
   ]);
   return {
     ...mapWorkflow(workflow),
@@ -174,14 +178,14 @@ export function workflowService(db: Db) {
       return row ? mapWorkflow(row) : null;
     },
 
-    getDetail: async (companyId: string, workflowId: string) => getDetail(db, companyId, workflowId),
+    getDetail: async (companyId: string, workflowId: string, actor?:AuthorizationActor) => getDetail(db, companyId, workflowId,actor),
 
-    listRevisions: async (companyId: string, workflowId: string) => {
+    listRevisions: async (companyId: string, workflowId: string, actor?:AuthorizationActor) => {
       if (!(await getWorkflowRow(db, companyId, workflowId))) return null;
       return db.select().from(workflowRevisions)
         .where(and(eq(workflowRevisions.companyId, companyId), eq(workflowRevisions.workflowId, workflowId)))
         .orderBy(desc(workflowRevisions.revisionNumber))
-        .then((rows) => rows.map(mapRevision));
+        .then(async(rows) => {for(const row of rows)await assertLearnedAssetAnalyticalSources(db,companyId,"workflow_revision",row.id,actor);return rows.map(mapRevision);});
     },
 
     create: async (
@@ -195,7 +199,7 @@ export function workflowService(db: Db) {
       const input = parsed.data;
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
-        await lockMemoryPrivacy(txDb, companyId);
+        await lockAnalyticalCompany(txDb,companyId);await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         await assertProjectReference(txDb, companyId, input.projectId);
@@ -231,7 +235,7 @@ export function workflowService(db: Db) {
         await txDb.update(workflows)
           .set({ draftRevisionId: draft!.id, updatedAt: now })
           .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflow!.id)));
-        const detail = await getDetail(txDb, companyId, workflow!.id);
+        const detail = await getDetail(txDb, companyId, workflow!.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (!detail) throw new Error("Workflow disappeared after creation");
         return detail;
       });
@@ -248,14 +252,14 @@ export function workflowService(db: Db) {
       const patch = parsed.data;
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
-        await lockMemoryPrivacy(txDb, companyId);
+        await lockAnalyticalCompany(txDb,companyId);await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         const workflow = await lockWorkflow(tx, companyId, workflowId);
         if (!workflow) throw notFound("Workflow not found");
         assertMutableWorkflow(workflow);
         assertDraftPointer(workflow, patch.expectedRevisionId);
-        const currentDraft = await getRevisionById(txDb, companyId, workflowId, workflow.draftRevisionId);
+        const currentDraft = await getRevisionById(txDb, companyId, workflowId, workflow.draftRevisionId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (!currentDraft || currentDraft.state !== "draft") {
           throw conflict("Workflow draft pointer is invalid", {
             code: "revision_conflict",
@@ -270,7 +274,7 @@ export function workflowService(db: Db) {
           isDeepStrictEqual(currentDraft.inputSchema, nextInputSchema) &&
           isDeepStrictEqual(currentDraft.outputSchema, nextOutputSchema)
         ) {
-          const detail = await getDetail(txDb, companyId, workflowId);
+          const detail = await getDetail(txDb, companyId, workflowId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
           if (!detail) throw new Error("Workflow disappeared after no-op update");
           return detail;
         }
@@ -299,7 +303,7 @@ export function workflowService(db: Db) {
         await txDb.update(workflows)
           .set({ draftRevisionId: nextDraft!.id, updatedAt: now })
           .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId)));
-        const detail = await getDetail(txDb, companyId, workflowId);
+        const detail = await getDetail(txDb, companyId, workflowId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (!detail) throw new Error("Workflow disappeared after draft update");
         return detail;
       });
@@ -322,7 +326,7 @@ export function workflowService(db: Db) {
       }
       const publishedDetail = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
-        await lockMemoryPrivacy(txDb, companyId);
+        await lockAnalyticalCompany(txDb,companyId);await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         const workflow = await lockWorkflow(tx, companyId, workflowId);
@@ -330,7 +334,7 @@ export function workflowService(db: Db) {
         assertMutableWorkflow(workflow);
         assertDraftPointer(workflow, input.expectedDraftRevisionId);
         assertPublishedPointer(workflow, input.expectedPublishedRevisionId);
-        const draft = await getRevisionById(txDb, companyId, workflowId, workflow.draftRevisionId);
+        const draft = await getRevisionById(txDb, companyId, workflowId, workflow.draftRevisionId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (!draft || draft.state !== "draft") {
           throw conflict("Workflow draft pointer is invalid", {
             code: "revision_conflict",
@@ -343,6 +347,7 @@ export function workflowService(db: Db) {
           companyId,
           workflowId,
           workflow.publishedRevisionId,
+          learningActorFromPrincipal(companyId,actor.principal,actor.runId),
         );
         if (workflow.publishedRevisionId && (!previousPublished || previousPublished.state !== "published")) {
           throw conflict("Workflow published pointer is invalid", {
@@ -394,7 +399,7 @@ export function workflowService(db: Db) {
           draftRevisionId: nextDraft!.id,
           updatedAt: now,
         }).where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId)));
-        const detail = await getDetail(txDb, companyId, workflowId);
+        const detail = await getDetail(txDb, companyId, workflowId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (!detail) throw new Error("Workflow disappeared after publish");
         return detail;
       });

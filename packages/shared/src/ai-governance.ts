@@ -168,6 +168,20 @@ export const governanceObligationSchema = z
     reviewTrigger: prose,
     sourceVersionOrDate: z.string().trim().min(5).max(200),
     sourceUrl,
+    // Optional for existing legal records. Analytical admission requires this
+    // explicit human-approved purpose; a legal citation alone grants no use.
+    analyticalPurpose: z.object({
+      status: z.enum(["approved", "suspended"]),
+      purpose: z.enum(["management_intelligence", "process_intelligence"]),
+      capabilities: z.array(z.enum(["metrics", "strategy", "process", "decision", "forecast", "scenario", "experiment", "causal", "planning", "reviews"])).min(1).max(10),
+      populationUnits: z.literal("business_objects"),
+      peopleImpact: z.literal("none"),
+      decisionBoundary: z.literal("advisory_only"),
+      maxRetentionDays: z.number().int().min(1).max(3650),
+      permittedSensitivity: z.array(z.enum(["internal", "confidential"])).min(1).max(2),
+      prohibitedUses: labels.min(1),
+      approvalRationale: prose,
+    }).strict().optional(),
   })
   .strict()
   .refine(

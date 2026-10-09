@@ -4,6 +4,11 @@ import { reconcileAgentPackages, deliverAgentPackageStops } from "./services/age
 import { maintainFoundationFindings, maintainPackageUpdates } from "./services/stewards/core-stewards.js";
 import { reconcileGovernanceDeployments, deliverGovernanceStops } from "./services/ai-governance/governance-jobs.js";
 import { supervisionService } from "./services/supervision/supervision-service.js";
+import { strategyExecutionService } from "./services/strategy-execution/service.js";
+import { businessEventService } from "./services/business-events.js";
+import { processAnalysisService } from "./services/process-analysis.js";
+import { eraseExpiredAnalyticalLineage } from "./services/analytical-retention.js";
+import { reconcileLegacyNativeRuntimeAssets } from "./services/native-runtime/runtime-asset-retention.js";
 import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network-policy.js";
 /// <reference path="./types/express.d.ts" />
 // Kicks off the OTel bootstrap as early as possible (no-op unless
@@ -1232,6 +1237,26 @@ async function startServerWithDatabaseTeardown(
     ["supervision", () => supervisor.tick(20)],
     ["security_event_export", () => securityEventExportService(db).tick(10)],
     ["work_signal_retention", () => workSignalService(db).expire(20)],
+    ["strategy_retention", async () => {
+      const result = await strategyExecutionService(db).sweepExpired();
+      if (result.erasedLinks > 0) logger.info(result, "Strategy retention sweep removed expired histories");
+    }],
+    ["business_event_retention", async () => {
+      const result = await businessEventService(db).expireDueSources();
+      if (result.erasedSources > 0) logger.info(result, "Business Event retention sweep removed source histories");
+    }],
+    ["process_definition_retention", async () => {
+      const result = await processAnalysisService(db).sweepExpired();
+      if (result.erasedDefinitions > 0) logger.info(result, "Process retention sweep removed expired definitions and runs");
+    }],
+    ["analytical_retention", async () => {
+      const result = await eraseExpiredAnalyticalLineage(db);
+      if (result.erasedManifests > 0) logger.info(result, "Analytical retention sweep removed expired manifests and dependent payloads");
+    }],
+    ["legacy_runtime_asset_retention", async () => {
+      const result = await reconcileLegacyNativeRuntimeAssets(db);
+      if (result.removed > 0) logger.info(result, "Runtime asset retention removed unreferenced legacy cache entries");
+    }],
     ["work_signal_followups", () => workSignalService(db).deliverFollowups(20)],
     ["finalization", () => reconcileAbandonedExecutionControl(db)],
     ["replacement", () => heartbeat ? reconcileSafeNativeReplacements(db, new Date(), { verifyStoppedSession: run => verifyStoppedNativeSessionForReplacement(db, run) }) : undefined],

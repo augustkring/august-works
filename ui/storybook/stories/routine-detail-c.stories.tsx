@@ -32,6 +32,7 @@ import {
   RunsSection,
   ActivitySection,
 } from "@/components/routine-sections/operate-sections";
+import { RoutineOverview } from "@/components/RoutineOverview";
 import { queryKeys } from "@/lib/queryKeys";
 import { storybookAgents, storybookProjects } from "../fixtures/paperclipData";
 
@@ -473,3 +474,12 @@ export const Secrets: Story = { args: { initialSection: "secrets" } };
 export const Delivery: Story = { args: { initialSection: "delivery" } };
 export const Runs: Story = { args: { initialSection: "runs" } };
 export const Activity: Story = { args: { initialSection: "activity" } };
+
+// Synthetic metadata presentation; no review contents or execution authority are supplied.
+export const ReviewDraft: Story = { render: () => {
+  const context = makeContext(false, () => {});
+  if (!context.routine) return <p>No Routine metadata was supplied.</p>;
+  const runs = (context.routineRuns ?? []).map((run, index) => index ? run : { ...run, linkedIssue: null, linkedManagementReviewId: "00000000-0000-4000-8000-000000002301", linkedWorkflowRunId: "native-workflow-run", linkedWorkflowId: "native-workflow", linkedWorkflowRunStatus: "succeeded" as const });
+  context.routineRuns = runs;context.routine = { ...context.routine, recentRuns: runs };
+  return <RoutineDetailContext.Provider value={context}><div className="mx-auto max-w-3xl p-4"><RoutineOverview /></div></RoutineDetailContext.Provider>;
+} };

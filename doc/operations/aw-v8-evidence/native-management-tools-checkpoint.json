@@ -1,0 +1,88 @@
+{
+  "checkpoint": "Retained native analytical tool dispatch through the actual SDK",
+  "parentCommit": "af468c149b78eabb2f286d6c42c0585311733741",
+  "recordedAt": "2026-10-07T16:39:48.051513+00:00",
+  "sourceFiles": [
+    {
+      "path": "packages/shared/src/index.ts",
+      "sha256": "4b494c8c55cd58b8e11b81b6bf303cfe674b62b9f2ecb19a901db5247fee88f6"
+    },
+    {
+      "path": "packages/shared/src/management-chat-tools.ts",
+      "sha256": "3b850cc63b73974ea702d0af7a34e56a938441b670ea2e65fc52fc243df40a6f"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "e9d80c1fac856198c93974baea3e2b91c34ec828fe4f38e8d00df74d72f01e30"
+    },
+    {
+      "path": "server/src/__tests__/analytical-reader.integration.test.ts",
+      "sha256": "f65fb95c53f3ee8cce393aebef9e08e18e9f073b959b2528195a2f9e48e64f71"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "d5320f9ae9fdcd09a72821c80078754e3efa734aebe419373d02acc26bd8447f"
+    },
+    {
+      "path": "server/src/services/analytical-context-privacy.ts",
+      "sha256": "21d5ae90929a98601677a161401bfe345a5bc4d37c58eb94d3cbb4954e506e1d"
+    },
+    {
+      "path": "server/src/services/analytical-reader.ts",
+      "sha256": "6dc8d411d9801113b8e0a3bd47486e12d0e0e1b9697778af1b39e55210b782d5"
+    },
+    {
+      "path": "server/src/services/management-reviews/kernel.ts",
+      "sha256": "403d11db37b535dd53fb674bff92d82db1bcecf2f9cb158fa51f4ab9e0e18167"
+    },
+    {
+      "path": "server/src/services/native-runtime/management-analytical-tools.ts",
+      "sha256": "df04876d0ceca223e584a8d428252699d453fb8168c55f46ec5a47f8a9624339"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "sha256": "b0775a6838120181887b69ee0af73e6d0a77142459a80063d589a8e743611c13"
+    },
+    {
+      "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "sha256": "e6ae428d3bf3d8d13945d36ac1b722c95b1c1d73f8b95641f3392b87cd99ef80"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "actual-native-tools-readers-context-and-comparison",
+      "checks": 43,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-management-tools-pg.log",
+      "logSha256": "134a7a932f53d3e518d29eb48f98c36101cd3bf4dd3a38eccb7a373bb0419f0e"
+    },
+    {
+      "name": "actual-sdk-and-session-regression",
+      "checks": 486,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-management-tools-sdk-regression.log",
+      "logSha256": "db2592c091db388758b8a644f5ba66415d0e0cb5d453548399d065fa2f3aa0cc"
+    },
+    {
+      "name": "server-types",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-native-management-tools-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "behavior": [
+    "Actual native-session construction derives management tool availability from the persisted private native conversation and current responsible human. SDK dispatch derives the actor from its exact current Task/run/agent binding; public arguments contain no actor, company, run, user, SQL, measurement or approval fields.",
+    "Ten bounded typed tools invoke existing native Metrics, Process, Decision, Outcome, Scenario and Experiment owners. Human action proposals are source-retained advisory previews that neither create nor publish business work.",
+    "A private AsyncLocalStorage permit admits source reads only within the server-owned analytical retention or retained-copy read boundary, repeating actual identity and source-owner admission. Ordinary agent service/API reads do not inherit this permit; it is released after return.",
+    "Original complete provenance commits through native C7 Context retention before typed results return. Results above 256000 UTF-8 bytes abort the complete transaction.",
+    "Metric comparison reuses the existing Management Review kernel. Empty ratio denominators remain unknown; a count may describe a zero-baseline absolute change while its relative change stays unknown."
+  ],
+  "limitations": [
+    "43 final checks cover 12 native-reader cases, 21 Context cases including actual SDK metric/comparison/action-preview execution and native comment HTTP, and 10 pure Management Review cases. The 486 SDK/session regression tests also pass. Other domain tools are connected and type checked but their complete actual SDK source-family conformance remains open.",
+    "An initial comparison fixture incorrectly expected zero from an undefined empty-denominator ratio. Native behavior was preserved; corrected fixtures independently qualify both the ratio abstention and count change. The failed batches are not passing qualification.",
+    "Published metric-definition listing and published Forecast listing still need metadata-specific original lineage and authority pins; they are not advertised yet. All twelve requested tool capabilities are not yet complete.",
+    "Human proposal materialization, native erased-conversation recovery, model-context/output-stream admission, provider trace-file physical erasure and unmanifested source-row closure remain open.",
+    "Analytical Learning inheritance, native Routines, cross-project Planning, optional providers and hosted operations remain open. No whole-brief or R0 release completion is claimed."
+  ]
+}

@@ -11,6 +11,7 @@ import {
   heartbeatRuns,
   issueCreateIdempotencyKeys,
   issues,
+  projects,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -23,6 +24,7 @@ import {
   ISSUE_CREATE_IDEMPOTENCY_KEY_RETENTION_DAYS,
   issueService,
 } from "../services/issues.js";
+import { projectBusinessEvent } from "../services/business-events.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -50,6 +52,7 @@ describeEmbeddedPostgres("issue create deduplication routes", () => {
     await db.delete(issues);
     await db.delete(heartbeatRuns);
     await db.delete(agents);
+    await db.delete(projects);
     await db.delete(companies);
   });
 
@@ -86,6 +89,25 @@ describeEmbeddedPostgres("issue create deduplication routes", () => {
     }).returning();
     return parent;
   }
+
+  it("records the mutation's project and status receipt for native projection without turning metadata edits into transitions",async()=>{
+    const companyId=await seedCompany(),projectId=randomUUID();
+    await db.insert(projects).values({id:projectId,companyId,name:"Recorded project"});
+    const app=createApp();
+    const created=await request(app).post(`/api/companies/${companyId}/issues`).send({title:"Private process task",projectId,status:"todo"}).expect(201);
+    await request(app).patch(`/api/issues/${created.body.id}`).send({status:"done"}).expect(200);
+    await request(app).patch(`/api/issues/${created.body.id}`).send({title:"Private metadata update"}).expect(200);
+    const rows=(await db.select().from(activityLog).where(eq(activityLog.entityId,created.body.id))).filter(row=>row.action==="issue.created" || row.action==="issue.updated");
+    expect(rows).toHaveLength(3);
+    const creation=rows.find(row=>row.action==="issue.created")!,transition=rows.find(row=>row.details?.previousStatus==="todo")!,metadata=rows.find(row=>row.details?.title==="Private metadata update")!;
+    expect(projectBusinessEvent(creation)).toMatchObject({attributes:{status:"todo"},objects:[{objectType:"issue",objectId:created.body.id,qualifier:"primary"},{objectType:"project",objectId:projectId,qualifier:"related"}]});
+    expect(projectBusinessEvent(transition)?.attributes).toEqual({status:"done",previousStatus:"todo"});
+    expect(projectBusinessEvent(metadata)?.attributes).toEqual({});
+    expect(JSON.stringify(rows.map(row=>projectBusinessEvent(row)))).not.toMatch(/Private process task|Private metadata update/);
+    // A later reassignment cannot rewrite the relationship recorded at creation.
+    await db.update(issues).set({projectId:null}).where(eq(issues.id,created.body.id));
+    expect(projectBusinessEvent(creation)?.objects[1].objectId).toBe(projectId);
+  });
 
   it("replays the existing issue for the same company idempotency key", async () => {
     const companyId = await seedCompany();

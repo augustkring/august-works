@@ -1,0 +1,80 @@
+{
+  "checkpoint": "Actual native Skill pins retain complete candidate and asset analytical Source before body and snapshot copies",
+  "parentCommit": "8f9dcff5a3cb170cc412d2d00677326548cba5d3",
+  "recordedAt": "2026-10-08T01:06:42.955672+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "4c7ad8c5ac172c90125f0cffbb1b5e71a158a81d708daa1b115ddfcf68003727"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "332514a198abc8312c8ab8c3d444e2745d3c6fc909be79079b13427d9976a92c"
+    },
+    {
+      "path": "server/src/routes/agent-runtime-fabric.ts",
+      "sha256": "6a7ecccf8404fc24ab618aab13756e23dc514f970bb95622e1995f78cc7441bd"
+    },
+    {
+      "path": "server/src/services/agent-runtime-fabric.ts",
+      "sha256": "e19e9c2833713ad17bda207d69a717844e94cf77ebe2596b23daa66cf0489f9f"
+    },
+    {
+      "path": "server/src/services/company-skills.ts",
+      "sha256": "55904268cb6e8ef913f9348fd1d009586a32a2e6a999d73f58fb3d6c3b29d5d1"
+    },
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "f6b2f9ab3ea527941339e90efde7c9b2fa2a31cad5b288899c435ac01f81e6e4"
+    },
+    {
+      "path": "server/src/services/learning/learning-analytical-sources.ts",
+      "sha256": "18bec47782df48593c9256df32cbb4fbd4a60484dc44243326904da3aaf5d6df"
+    },
+    {
+      "path": "server/src/services/learning/learning-assets.ts",
+      "sha256": "26e4ae845e746eecdaa61e23f68a4452a88329277f7b0209423530b628087113"
+    },
+    {
+      "path": "server/src/services/skill-resolver.ts",
+      "sha256": "fefcc6ac038789d8f032890ea2cf192fe480930bbccefb0cc8520edd4113dada"
+    }
+  ],
+  "validation": {
+    "nativeRuntimeAndPostgresAndSnapshot": {
+      "tests": 652,
+      "files": 13,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-skill-runtime-final-tests.log"
+    },
+    "originalSkillOwners": {
+      "tests": 130,
+      "files": 4,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-skill-runtime-original-owner-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-skill-runtime-final-types.log"
+    },
+    "parentWholeNativeProductionBuild": {
+      "commit": "d1b46949f48f2f2378566cc3af6450a74b5323db",
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-native-build-skill-source-runs.log"
+    }
+  },
+  "qualified": [
+    "Original native Fabric retains complete candidate and retained-asset signal cycles plus independent verified Memory roots before immutable inventory commit",
+    "Original configuration and missing-Actor readers remain closed for analytical Source",
+    "Actual native body and snapshot owner requires current immutable Skill pin and complete Source coverage",
+    "Actual test binding supersession closes candidate body and eager snapshot publication",
+    "Actual active pin remains exact when a newer private draft exists",
+    "Original C7 erases native version snapshots and run-owned copies with flags off/company paused, preserving independent verified outcomes"
+  ],
+  "limits": [
+    "Active Skill state, native test/task binding and provider discovery checks are explicit software prerequisites, not performed promotion/evaluation/provider/Human trials",
+    "Original Skill harness/evaluation payload copies and their read/late-write boundaries remain open for the next checkpoint",
+    "HTTP wiring is typechecked; new body behavior is direct native service/PostgreSQL/filesystem coverage, not HTTP/JWT/browser qualification",
+    "No maximum-volume, hard latency, historical orphan disposition, hosted backfill or whole-brief completion claim"
+  ]
+}

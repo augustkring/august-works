@@ -1,8 +1,15 @@
+import {assertAnalyticalContextPayloadAccess} from "./analytical-context-authority.js";
+import type {NativeReadScope} from "./analytical-reader.js";
+import {assertRuntimeSkillSourceRetained} from "./learning/learning-assets.js";
+import { enqueueSkillVersionFileErasure } from "./learning/skill-file-erasure.js";
+import { lockAnalyticalCompany } from "./analytical-privacy.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import {assertLearnedAssetAnalyticalSources,assertLearningCandidateAnalyticalSources} from "./learning/learning-analytical-sources.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { v5FeatureEnabled } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { logger } from "../middleware/logger.js";
-import { removeRuntimeSkillCache, resolveRuntimeSkillCache, runtimeSkillCacheSpec } from "./runtime-skill-cache.js";
+import { prepareRuntimeSkillVersionDirectory, removeRuntimeSkillCache, resolveRuntimeSkillCache, runtimeSkillCacheSpec } from "./runtime-skill-cache.js";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -374,6 +381,8 @@ export type ProjectSkillScanTarget = {
 };
 
 type RuntimeSkillEntryOptions = {
+  actor?: AuthorizationActor;
+  readScope?: NativeReadScope;
   selectedSkillKeys?: Set<string>;
   allowCandidateVersionsForTest?: boolean;
   materializeMissing?: boolean;
@@ -3236,9 +3245,13 @@ export function companySkillService(db: Db) {
     return and(sql`coalesce(${companySkills.metadata}->>'sensitivity', 'internal') in ('public', 'internal')`, or(ne(companySkills.sharingScope, "private"), !v5Enabled ? isNull(companySkills.headVersionId) : undefined, ownership));
   }
 
-  async function canReadSkill(companyId: string, skillId: string, actor: AuthorizationActor) {
+  async function canReadSkill(companyId: string, skillId: string, actor: AuthorizationActor,readScope?:NativeReadScope,pinnedVersionId?:string) {
     const condition = await privateSkillCondition(companyId, actor);
-    const [row] = await db.select({ id: companySkills.id }).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId), condition)).limit(1);
+    const [row] = await db.select({ id: companySkills.id,activeVersionId:companySkills.activeVersionId,currentVersionId:companySkills.currentVersionId }).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId), condition)).limit(1);
+    if(row)for(const id of new Set((pinnedVersionId?[pinnedVersionId]:[row.activeVersionId,row.currentVersionId]).filter((id):id is string=>Boolean(id)))){
+      try{await assertLearningCandidateAnalyticalSources(db,companyId,"skill",id,actor,readScope);await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",id,actor,readScope);}
+      catch(error){if(error instanceof Error&&"status" in error&&error.status===403)return false;throw error;}
+    }
     return Boolean(row);
   }
 
@@ -3322,7 +3335,9 @@ export function companySkillService(db: Db) {
       }
       return true;
     });
-    const items = filtered.map((skill) => {
+    const admitted=[];
+    for(const skill of filtered)if(!actor||await canReadSkill(companyId,skill.id,actor))admitted.push(skill);
+    const items = admitted.map((skill) => {
       const attachedAgentCount = agentRows.filter((agent) => {
         const desiredSkills = resolveDesiredSkillKeys(rows, agent.adapterConfig as Record<string, unknown>);
         return desiredSkills.includes(skill.key);
@@ -3428,8 +3443,12 @@ export function companySkillService(db: Db) {
     return (await authorizationService(db).decide({ actor, action: "users:manage_permissions", resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true })).allowed;
   }
 
-  async function getVersion(companyId: string, skillId: string, versionId: string, actor?: AuthorizationActor): Promise<CompanySkillVersion | null> {
-    if (actor && !(await canReadSkill(companyId, skillId, actor))) return null;
+  async function getVersion(companyId: string, skillId: string, versionId: string, actor?: AuthorizationActor,readScope?:NativeReadScope): Promise<CompanySkillVersion | null> {
+    if(actor){
+      const condition=await privateSkillCondition(companyId,actor);
+      const [visible]=await db.select({id:companySkills.id}).from(companySkills).where(and(eq(companySkills.companyId,companyId),eq(companySkills.id,skillId),condition)).limit(1);
+      if(!visible)return null;
+    }
     const row = await db
       .select()
       .from(companySkillVersions)
@@ -3440,11 +3459,12 @@ export function companySkillService(db: Db) {
       ))
       .then((rows) => rows[0] ?? null);
     if (row && actor && !(await canReadPrivateVersion(companyId, row, actor))) return null;
+    if(row){await assertLearningCandidateAnalyticalSources(db,companyId,"skill",row.id,actor,readScope);await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",row.id,actor,readScope);}
     return row ? toCompanySkillVersion(row) : null;
   }
 
-  async function getCurrentVersion(skill: CompanySkill): Promise<CompanySkillVersion | null> {
-    return skill.currentVersionId ? getVersion(skill.companyId, skill.id, skill.currentVersionId) : null;
+  async function getCurrentVersion(skill: CompanySkill, actor?:AuthorizationActor): Promise<CompanySkillVersion | null> {
+    return skill.currentVersionId ? getVersion(skill.companyId, skill.id, skill.currentVersionId,actor) : null;
   }
 
   async function isStarredByActor(companyId: string, skillId: string, actor: SkillActor | null | undefined) {
@@ -3562,7 +3582,7 @@ export function companySkillService(db: Db) {
     return summaries;
   }
 
-  async function detail(companyId: string, id: string, actor?: SkillActor | null): Promise<CompanySkillDetail | null> {
+  async function detail(companyId: string, id: string, actor?: SkillActor | null, reader?:AuthorizationActor): Promise<CompanySkillDetail | null> {
     await ensureSkillInventoryCurrent(companyId);
     const skill = await getByRouteRef(companyId, id);
     if (!skill) return null;
@@ -3572,7 +3592,7 @@ export function companySkillService(db: Db) {
       skill,
       usedByAgents.length,
       usedByAgents,
-      await getCurrentVersion(skill),
+      await getCurrentVersion(skill,reader),
       await isStarredByActor(companyId, skill.id, actor),
       existingForks,
     );
@@ -3623,7 +3643,9 @@ export function companySkillService(db: Db) {
       .where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, skillId)))
       .orderBy(desc(companySkillVersions.revisionNumber));
     const allowed = actor ? await Promise.all(rows.map(async (row) => (await canReadPrivateVersion(companyId, row, actor)) ? row : null)) : rows;
-    return allowed.filter((row): row is CompanySkillVersionRow => row !== null).map(toCompanySkillVersion);
+    const retained=allowed.filter((row):row is CompanySkillVersionRow=>row!==null);
+    for(const row of retained){await assertLearningCandidateAnalyticalSources(db,companyId,"skill",row.id,actor);await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",row.id,actor);}
+    return retained.map(toCompanySkillVersion);
   }
 
   async function createVersion(
@@ -5922,31 +5944,46 @@ export function companySkillService(db: Db) {
     return true;
   }
 
-  async function materializeVersionSnapshot(companyId: string, skill: CompanySkill, version: CompanySkillVersion) {
-    const runtimeRoot = path.resolve(resolveManagedSkillsRoot(companyId), "__versions__");
-    const skillDir = path.resolve(runtimeRoot, skill.id, version.id);
-    if (await materializedVersionSnapshotMatches(skillDir, version)) {
-      return skillDir;
-    }
-    await fs.rm(skillDir, { recursive: true, force: true });
-    await fs.mkdir(skillDir, { recursive: true });
-
-    let wroteSkillFile = false;
-    for (const entry of version.fileInventory) {
-      const resolved = resolveVersionSnapshotPath(skillDir, entry.path);
-      if (!resolved) continue;
-      const { normalizedPath, targetPath } = resolved;
-      await fs.mkdir(path.dirname(targetPath), { recursive: true });
-      await fs.writeFile(targetPath, entry.content, "utf8");
-      if (normalizedPath === "SKILL.md") wroteSkillFile = true;
-    }
-
-    if (!wroteSkillFile) {
+  async function materializeVersionSnapshot(companyId: string, skill: CompanySkill, selectedVersion: CompanySkillVersion,options:RuntimeSkillEntryOptions) {
+    return db.transaction(async rawTx => {
+      const tx = rawTx as unknown as Db;
+      await lockAnalyticalCompany(tx, companyId);
+      await lockMemoryPrivacy(tx, companyId);
+      const [source] = await tx.execute<{ current: boolean }>(sql`select
+        not aw_skill_version_source_erased(${companyId}::uuid,${selectedVersion.id}::uuid)
+        and aw_learning_asset_current(${companyId}::uuid,'skill_version',${selectedVersion.id}::uuid)
+        and not exists(select 1 from learning_domain_candidates l where l.company_id=${companyId}::uuid
+          and l.target_domain='skill' and l.candidate_id=${selectedVersion.id}::uuid
+          and not aw_learning_link_current(l.company_id,l.id)) as current`);
+      if (!source?.current) throw unprocessable("Skill version Source was erased or changed");
+      // Re-read after acquiring privacy locks; pre-lock inventory may be stale.
+      if(options.actor&&options.readScope==="task")await assertRuntimeSkillSourceRetained(tx,companyId,options.actor,skill.id,selectedVersion.id);
+      const version = await companySkillService(tx).getVersion(companyId, skill.id, selectedVersion.id,options.actor,options.readScope);
+      if (!version) throw unprocessable("Skill version no longer exists");
+      const skillDir = await prepareRuntimeSkillVersionDirectory(resolveManagedSkillsRoot(companyId), skill.id, version.id);
+      if (await materializedVersionSnapshotMatches(skillDir, version)) {
+        return skillDir;
+      }
       await fs.rm(skillDir, { recursive: true, force: true });
-      throw unprocessable("Company skill version could not be materialized because its SKILL.md snapshot is missing.");
-    }
+      await prepareRuntimeSkillVersionDirectory(resolveManagedSkillsRoot(companyId), skill.id, version.id);
 
-    return skillDir;
+      let wroteSkillFile = false;
+      for (const entry of version.fileInventory) {
+        const resolved = resolveVersionSnapshotPath(skillDir, entry.path);
+        if (!resolved) continue;
+        const { normalizedPath, targetPath } = resolved;
+        await fs.mkdir(path.dirname(targetPath), { recursive: true });
+        await fs.writeFile(targetPath, entry.content, "utf8");
+        if (normalizedPath === "SKILL.md") wroteSkillFile = true;
+      }
+
+      if (!wroteSkillFile) {
+        await fs.rm(skillDir, { recursive: true, force: true });
+        throw unprocessable("Company skill version could not be materialized because its SKILL.md snapshot is missing.");
+      }
+
+      return skillDir;
+    });
   }
 
   function resolveRuntimeSkillMaterializedPath(companyId: string, skill: Pick<CompanySkill, "key" | "slug">) {
@@ -5962,7 +5999,7 @@ export function companySkillService(db: Db) {
     const selectedVersionId = options.versionSelections?.get(skill.key) ?? null;
     if (selectedVersionId) {
       const versionPath = path.resolve(resolveManagedSkillsRoot(companyId), "__versions__", skill.id, selectedVersionId);
-      const version = await getVersion(companyId, skill.id, selectedVersionId);
+      const version = await getVersion(companyId, skill.id, selectedVersionId,options.actor,options.readScope);
       if (!version) {
         return {
           status: "missing",
@@ -5974,7 +6011,7 @@ export function companySkillService(db: Db) {
       // with the real cause — a silent drop makes the skill vanish from the
       // runtime while the library still shows it installed.
       try {
-        const versionSource = await materializeVersionSnapshot(companyId, skill, version);
+        const versionSource = await materializeVersionSnapshot(companyId, skill, version,options);
         if (versionSource) return { status: "available", source: versionSource };
         return { status: "missing", source: versionPath, detail: "The selected skill version produced no files." };
       } catch (error) {
@@ -6042,6 +6079,7 @@ export function companySkillService(db: Db) {
     companyId: string,
     options: RuntimeSkillEntryOptions = {},
   ): Promise<PaperclipSkillEntry[]> {
+    if(options.selectedSkillKeys?.size===0)return [];
     const skills = await listFull(companyId);
 
     const lifecycleEnabled = v5FeatureEnabled(await instanceSettingsService(db).getExperimental(), "skill_lifecycle_v5");
@@ -6051,7 +6089,7 @@ export function companySkillService(db: Db) {
       const selectedVersionId = options.versionSelections?.get(skill.key) ?? (lifecycleEnabled ? skill.activeVersionId : null);
       if (lifecycleEnabled) {
         if (!selectedVersionId) continue;
-        const selected = await getVersion(companyId, skill.id, selectedVersionId);
+        const selected = await getVersion(companyId, skill.id, selectedVersionId,options.actor,options.readScope);
         if (!selected || selected.visibility === "private") continue;
         if (!options.allowCandidateVersionsForTest && (skill.lifecycleState !== "active" || selected.state !== "active" || selectedVersionId !== skill.activeVersionId)) continue;
       }
@@ -6615,7 +6653,26 @@ export function companySkillService(db: Db) {
       : []));
   }
 
-  async function hydrateTestRuns(companyId: string, rows: CompanySkillTestRunRow[]): Promise<CompanySkillTestRun[]> {
+  async function testRunSourceAvailable(companyId:string,row:CompanySkillTestRunRow,actor?:AuthorizationActor){
+    const [source]=await db.execute<{erased:boolean}>(sql`select aw_skill_harness_source_erased(${companyId}::uuid,${row.skillVersionId}::uuid,${row.issueId}::uuid) as erased`);
+    if(source?.erased)return false;
+    try{
+      if(!await getVersion(companyId,row.skillId,row.skillVersionId,actor))return false;
+      if(actor)await assertAnalyticalContextPayloadAccess(db,companyId,actor,{issueId:row.issueId});
+      return true;
+    }catch(error){if(error instanceof Error&&"status" in error&&[403,404,409,422].includes(error.status as number))return false;throw error;}
+  }
+
+  async function hydrateTestRuns(companyId: string, rows: CompanySkillTestRunRow[],actor?:AuthorizationActor): Promise<CompanySkillTestRun[]> {
+    // Internal completion callbacks need status/identity; missing Source authority
+    // never returns the learned body they have just persisted.
+    const admitted:CompanySkillTestRunRow[]=[];
+    for(const row of rows){
+      if(await testRunSourceAvailable(companyId,row,actor))admitted.push(row);
+      else if(actor)throw forbidden("Skill test Source access is unavailable",{code:"analytical_source_access_lost"});
+      else admitted.push({...row,inputSnapshot:"",agentConfigSnapshot:{},templateName:null,templateBody:null,renderedTemplateBody:null,harnessIssueDescription:"",outputSnapshot:"",error:"Source payload erased"});
+    }
+    rows=admitted;
     const costByIssueId = await testRunCostByIssueIds(companyId, rows.map((row) => row.issueId));
     return rows.map((row) => toCompanySkillTestRun(
       row,
@@ -6645,6 +6702,7 @@ export function companySkillService(db: Db) {
       wakeHarnessIssue: (issueId: string, agentId: string) => Promise<unknown>;
       cleanupHarnessIssue?: (issueId: string) => Promise<unknown>;
       retentionDays?: number;
+      sourceActor?:AuthorizationActor;
     },
   ): Promise<CompanySkillTestRun> {
     const skill = await getById(companyId, skillId);
@@ -6672,7 +6730,7 @@ export function companySkillService(db: Db) {
     // Re-run pins the viewed run's version so the new run reproduces the same
     // snapshots; a plain run auto-snapshots the live head.
     const version = input.skillVersionId
-      ? await getVersion(companyId, skillId, input.skillVersionId)
+      ? await getVersion(companyId, skillId, input.skillVersionId,deps.sourceActor)
       : await ensureRunSkillVersion(companyId, skill, actor);
     if (!version) throw notFound("Skill version not found");
     if (version.visibility === "private") throw forbidden("Submit this private candidate for company review before running a shared test harness");
@@ -6782,13 +6840,14 @@ export function companySkillService(db: Db) {
       throw notFound("Failed to persist skill test run");
     }
     await deps.wakeHarnessIssue(issueId, agent.id);
-    return (await hydrateTestRuns(companyId, [row]))[0]!;
+    return (await hydrateTestRuns(companyId, [row],deps.sourceActor))[0]!;
   }
 
   async function listTestRuns(
     companyId: string,
     skillId: string,
     query: CompanySkillTestRunListQuery = {},
+    actor?:AuthorizationActor,
   ): Promise<CompanySkillTestRun[]> {
     const skill = await getById(companyId, skillId);
     if (!skill) throw notFound("Skill not found");
@@ -6803,10 +6862,17 @@ export function companySkillService(db: Db) {
       .from(companySkillTestRuns)
       .where(and(...conditions))
       .orderBy(desc(companySkillTestRuns.createdAt), desc(companySkillTestRuns.id));
-    return hydrateTestRuns(companyId, rows);
+    return hydrateTestRuns(companyId, rows,actor);
   }
 
-  async function getTestRunDetail(companyId: string, skillId: string, runId: string): Promise<CompanySkillTestRunDetail | null> {
+  // Cancellation/deletion authorize native assignment metadata without loading
+  // a private or erased harness body merely to learn its Task identity.
+  async function getTestRunAssignmentScope(companyId:string,skillId:string,runId:string){
+    const [row]=await db.select({issueId:companySkillTestRuns.issueId,agentId:companySkillTestRuns.agentId}).from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId,companyId),eq(companySkillTestRuns.skillId,skillId),eq(companySkillTestRuns.id,runId))).limit(1);
+    return row??null;
+  }
+
+  async function getTestRunDetail(companyId: string, skillId: string, runId: string,actor?:AuthorizationActor): Promise<CompanySkillTestRunDetail | null> {
     const row = await db
       .select()
       .from(companySkillTestRuns)
@@ -6818,11 +6884,11 @@ export function companySkillService(db: Db) {
       ))
       .then((rows) => rows[0] ?? null);
     if (!row) return null;
-    const [run] = await hydrateTestRuns(companyId, [row]);
+    const [run] = await hydrateTestRuns(companyId, [row],actor);
     if (!run) return null;
     const harnessIssueGone = Boolean(row.harnessIssueDeletedAt);
     const [version, issue, documentRows, interactionRows, attachmentRows, workProductRows] = await Promise.all([
-      getVersion(companyId, skillId, row.skillVersionId),
+      getVersion(companyId, skillId, row.skillVersionId,actor),
       harnessIssueGone
         ? Promise.resolve(null)
         : db
@@ -7157,6 +7223,8 @@ export function companySkillService(db: Db) {
     await removeRuntimeSkillCache(managedRoot, initial.id, async () => {
       try {
         deleted = await db.transaction(async (tx) => {
+          await lockAnalyticalCompany(tx as unknown as Db, companyId);
+          await lockMemoryPrivacy(tx as unknown as Db, companyId);
           // Share creation's name lock and re-read the ID, so a second delete
           // cannot remove a newly recreated skill with the same name.
           await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${initial.slug}`}, 0))`);
@@ -7182,6 +7250,9 @@ export function companySkillService(db: Db) {
                 movedSource = { source, quarantine };
               }
             }
+            const versions = await tx.select({ id: companySkillVersions.id }).from(companySkillVersions)
+              .where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, skillId)));
+            await enqueueSkillVersionFileErasure(tx as unknown as Db, companyId, versions.map(version => version.id));
             await tx.delete(companySkills).where(and(eq(companySkills.id, skillId), eq(companySkills.companyId, companyId)));
           } catch (error) {
             // Restore before releasing the name lock on a failed write.
@@ -7254,6 +7325,7 @@ export function companySkillService(db: Db) {
     deleteTestRunTemplate,
     createTestRun,
     listTestRuns,
+    getTestRunAssignmentScope,
     getTestRunDetail,
     completeTestRunForIssue,
     markTestRunRunning,

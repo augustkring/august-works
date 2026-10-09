@@ -9,8 +9,9 @@ import { supervisionService } from "../services/supervision/supervision-service.
 import { orchestrationRuntimeControl } from "../services/orchestration/orchestration-runtime-control.js";
 export function orchestrationRoutes(db: Db) {
   const router = Router(), service = orchestrationService(db);
+  router.use((_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   router.get("/companies/:companyId/orchestration/plans", async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.list(req.actor, companyId)); });
-  router.get("/companies/:companyId/orchestration/plans/:id", async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.get(req.actor, companyId, req.params.id as string)); });
+  router.get("/companies/:companyId/orchestration/plans/:id", async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.get(req.actor, companyId, req.params.id as string, true)); });
   router.post("/companies/:companyId/orchestration/plans", validate(createOrchestrationPlanSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.create(req.actor, companyId, req.body)); });
   router.post("/companies/:companyId/orchestration/plans/:id/decisions", validate(orchestrationDecisionSchema), async (req, res) => {
     const companyId = req.params.companyId as string, id = req.params.id as string; assertCompanyAccess(req, companyId);

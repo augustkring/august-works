@@ -1,0 +1,156 @@
+{
+  "checkpoint": "Native single-project planning source inheritance and canonical human Roadmap application",
+  "parentCommit": "bb08aa3dcaa029c129f855c6935a71069dddd797",
+  "recordedAt": "2026-10-07T11:13:04.238710+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-adaptive-planning.md",
+      "sha256": "cd01321ded0728b0784c8d0519f9465921cb60236a23324c88f4552477ebd125"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "6b04e07f37d6d3eef5caa62a5643a2a4932723a48f33f695a56ba04acb156f11"
+    },
+    {
+      "path": "packages/db/src/migrations/0410_rapid_stellaris.sql",
+      "sha256": "e9535ac645c88bcd2ee0ec8dfae52fbc164b5508acfd2e63bd7a3e21a8243138"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0410_snapshot.json",
+      "sha256": "bc5dd8ce12b23d33b279a0f7cf43f31a401b5ac21556351135c1a5dd56d288cd"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "63a6bf383646b075d93e00f8c0a4eea7b052e9b44c95c69d86c1e2fbeeac1a53"
+    },
+    {
+      "path": "packages/db/src/schema/project_control.ts",
+      "sha256": "80156447f00f9945f1b8f07062509e13ccbd2bb58116ed70eccce6334c5d0faa"
+    },
+    {
+      "path": "packages/shared/src/adaptive-planning.ts",
+      "sha256": "b78b1cfc843e3a18c9c866f7c0f3ce56b6a05b5dc4ff7a6067907f33f367ec69"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-project.integration.test.ts",
+      "sha256": "7e48580ad63df22376a029b00750fa1b242e2e5241b2603e4bf7da956f51e0d7"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "5c870a995bd0eacac03ff3ec8f0f9e4035592348ecb75824af1d01e57529808e"
+    },
+    {
+      "path": "server/src/routes/project-control.ts",
+      "sha256": "72a0a57ea730fb19698af5f794ea8b431611d5b56c125fbd4b8faffa4ec47d35"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/project-owner.ts",
+      "sha256": "8ded947d27a3c2bac1d04f13197a9f0b88a979fbf6c3509e1a0bceaaaaf9e0d6"
+    },
+    {
+      "path": "server/src/services/analytical-evidence.ts",
+      "sha256": "f68327bc3514a4c748af28937ce59e2140bff5eed6feecd9455ded6329506457"
+    },
+    {
+      "path": "server/src/services/decision-intelligence.ts",
+      "sha256": "428a6a9a52f6a3bbf00d90f6cb9b493ee041c464c4ecd8d35bfea7151396f995"
+    },
+    {
+      "path": "server/src/services/project-control.ts",
+      "sha256": "f6a93f934759f59023368a8f91ead6518eb597adb135d1103c8d7b1268116721"
+    },
+    {
+      "path": "server/src/services/saas/company-purge.ts",
+      "sha256": "91b9ebe1153fdd502434b6e62648a7ff77b2b5a6760a1c7ccf2eb693a320774f"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native-release",
+      "checks": 58,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-project-native-release.log",
+      "logSha256": "de98ed69ab9ab8c6c5c53b568d7025198355da1675e4af25641831459457f72c"
+    },
+    {
+      "name": "source-regression-final",
+      "checks": 86,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-project-source-regression-final.log",
+      "logSha256": "1bdde93d51b62ae8ad939451c974af5329e27b61a6c63cbf92f77aa9d74c4dfd"
+    },
+    {
+      "name": "server-types-release",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-project-server-types-release.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared-types-final",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-project-shared-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-project-ui-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "snapshot",
+      "checks": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-project-snapshot.log",
+      "logSha256": "ccfe615fab2cf69f79a420c12016f5201765a875cc7b49e871fbea483861c969"
+    },
+    {
+      "name": "migration-safety",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-planning-project-migration-safety.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    }
+  ],
+  "distinctPostgresqlTests": 115,
+  "pureSoftwareTests": 13,
+  "openApiContracts": 16,
+  "resolvedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-planning-project-native.log",
+      "reason": "Fixture lacked ai_use_cases_v7 prerequisite; explicitly enabled before rerun."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-planning-project-native-final.log",
+      "reason": "Preserve precise canonical Roadmap creation timestamp in database manifest rather than round through JavaScript Date."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-planning-project-native-qualified.log",
+      "reason": "Correct native Drizzle property in control query; public rollout-off controls now qualify."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-planning-project-server-types-complete.log",
+      "reason": "Import schemas from shared owner and use native camelCase column property."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-planning-project-native-final-complete.log",
+      "reason": "Company purge must delete frozen planning proposals before generic nullable-FK unlinking, preserving immutable source ownership."
+    }
+  ],
+  "evidenceClass": "Actual native PostgreSQL, mathematical/provider and API software qualification, including synthetic human capacity/duration and native source fixtures. No collected business outcome, inferred employee productivity, project UI/browser release, cross-project optimizer, external provider or hosted release.",
+  "remaining": [
+    "Project planning operator UI and cross-project native prioritization/constraints",
+    "Management/Learning and optional analytical providers",
+    "Complete V8 integration and hosted release qualification"
+  ]
+}

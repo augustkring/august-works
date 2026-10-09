@@ -122,6 +122,7 @@ import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
@@ -151,6 +152,7 @@ import {
   type NativeStatusDecision,
 } from "./status-arbiter.js";
 import { HttpError } from "../../errors.js";
+import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
 import { redactSensitiveText } from "../../redaction.js";
 import { resolvePaperclipRunnerBinary } from "./native-codex-runner.js";
 import {
@@ -7066,7 +7068,10 @@ function startNativeSessionExecutionLeaseRenewal(input: {
   const renew = () => {
     if (leaseLost) return;
     renewal = renewal
-      .then(() => renewNativeSessionExecutionLease(input))
+      .then(async () => {
+        await assertNativeAnalyticalRunPayloadAccess(input.db, input.companyId, input.runId);
+        await renewNativeSessionExecutionLease(input);
+      })
       .then(() => undefined)
       .catch(async (error: unknown) => {
         leaseLost =
@@ -7075,7 +7080,8 @@ function startNativeSessionExecutionLeaseRenewal(input: {
             : new Error("native_session_lease_lost");
         await cancelNativeSession(
           input.runId,
-          "native session execution lease lost",
+          leaseLost instanceof HttpError && (leaseLost.details as {code?:unknown}|undefined)?.code === "analytical_source_access_lost"
+            ? "native analytical source access lost" : "native session execution lease lost",
         ).catch(() => undefined);
       });
   };
@@ -7171,6 +7177,7 @@ export async function executePaperclipNativeSession(input: {
   let ownsSessionScope = false;
   let executionFailure: unknown;
   try {
+    await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
     if (!input.useRunnerd) {
       return await executePaperclipNativeSessionWithinScope(input);
     }
@@ -10490,7 +10497,7 @@ async function createRunnerdBackendWithinSessionClaim(
   const pinnedSkills = new Set("runtimeContext" in input.execution ? input.execution.runtimeContext.skills.map((skill) => skill.key) : []);
   const connectorAssignments = [...pinnedSkills].some(isConnectorSkill)
     ? await resolveConnectorAssignments(input.db, input.execution.binding) : [];
-  const reviewRun = await input.db.select({ contextSnapshot: heartbeatRuns.contextSnapshot })
+  const reviewRun = await input.db.select({ contextSnapshot: heartbeatRuns.contextSnapshot, responsibleUserId: heartbeatRuns.responsibleUserId })
     .from(heartbeatRuns).where(and(
       eq(heartbeatRuns.id, input.execution.binding.runId),
       eq(heartbeatRuns.companyId, input.execution.binding.companyId),
@@ -10525,6 +10532,7 @@ async function createRunnerdBackendWithinSessionClaim(
       })
     : undefined;
   const authority = new PaperclipRunnerToolAuthority(input.db, {
+    managementToolsEnabled: !nativeReview && await nativeManagementToolsAvailable(input.db,input.execution.binding,reviewRun?.responsibleUserId??null),
     ...(nativeReview ? { nativeReview } : {}),
     connectorAssignments: connectorAssignments.filter((assignment) => pinnedSkills.has(assignment.skillKey)),
     assignedMcpTools,

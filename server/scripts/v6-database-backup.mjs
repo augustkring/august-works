@@ -249,6 +249,10 @@ if (mode === "backup") {
             await tx`select company_id from company_deletion_operations limit 100001`,
           memory:
             await tx`select company_id,key,kind,record_id,deleted_at from memory_deletion_markers limit 100001`,
+          analyticalSources:
+            await tx`select company_id,input_type,input_ref,suppressed_at from analytical_source_suppressions limit 100001`,
+          businessEvents:
+            await tx`select company_id,source_ref,suppressed_at from business_event_suppressions limit 100001`,
           identityHomes:
             await tx`select id,home_company_id from agent_identities limit 100001`,
           users:
@@ -259,6 +263,8 @@ if (mode === "backup") {
     if (
       payload.companies.length +
         payload.memory.length +
+        payload.businessEvents.length +
+        payload.analyticalSources.length +
         payload.identityHomes.length +
         payload.users.length >
       100000

@@ -1,4 +1,4 @@
-import { v5FeatureEnabled, v7FeatureEnabled } from "@paperclipai/shared";
+import { v5FeatureEnabled, v7FeatureEnabled, v8FeatureEnabled } from "@paperclipai/shared";
 import {
   Inbox,
   ListChecks,
@@ -7,6 +7,8 @@ import {
   LayoutDashboard,
   DollarSign,
   History,
+  Waypoints,
+  FlaskConical,
   Search,
   SquarePen,
   Network,
@@ -189,6 +191,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           {v5FeatureEnabled(experimentalSettings ?? {}, "org_units_v5") && <SidebarNavItem to="/org-units" label="Organization units" icon={Users} />}
           {v5FeatureEnabled(experimentalSettings ?? {}, "company_relationships_v5") && <SidebarNavItem to="/relationships" label="Company relationships" icon={GitBranch} />}
           {v5FeatureEnabled(experimentalSettings ?? {}, "role_packs_v5") && <SidebarNavItem to="/role-packs" label="Role Packs" icon={Layers} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "planning_optimizer_v8") && <SidebarNavItem to="/adaptive-planning" label="Cross-project planning" icon={GanttChartSquare} />}
           {v5FeatureEnabled(experimentalSettings ?? {}, "portfolio_view_v5") && <SidebarNavItem to="/portfolio" label="August OS" icon={LayoutGrid} />}
           {v5FeatureEnabled(experimentalSettings ?? {}, "portfolio_skill_sharing_v5") && <SidebarNavItem to="/portfolio-capabilities" label="Shared capabilities" icon={Package} />}
           {streamlinedUiEnabled ? (
@@ -226,6 +229,14 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           <SidebarNavItem to="/issues" label="Tasks" icon={CircleCheck} />
           <SidebarNavItem to="/routines" label="Routines" icon={Repeat} />
           {v7FeatureEnabled(experimentalSettings ?? {}, "orchestration_v7") && <SidebarNavItem to="/orchestration" label="Orchestration" icon={Network} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "strategy_execution_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/strategy-execution" label="Strategy and execution" icon={Network} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "process_intelligence_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/process-intelligence" label="Process intelligence" icon={GitBranch} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "business_forecasting_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/business-forecasts" label="Business forecasts" icon={History} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "scenario_planning_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/business-scenarios" label="Business scenarios" icon={Waypoints} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "business_experiments_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/business-experiments" label="Business experiments" icon={FlaskConical} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "causal_claims_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/causal-claims" label="Causal claims" icon={FlaskConical} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "management_reviews_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/management-reviews" label="Management reviews" icon={ListChecks} />}
+          {v8FeatureEnabled(experimentalSettings ?? {}, "business_metrics_v8") && v7FeatureEnabled(experimentalSettings ?? {}, "governance_evidence_v7") && <SidebarNavItem to="/business-metrics" label="Business metrics" icon={Target} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "ai_use_cases_v7") && <SidebarNavItem to="/ai-governance" label="AI Governance" icon={BookOpen} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "enterprise_identity_v7") && <SidebarNavItem to="/company/settings/enterprise" label="Enterprise" icon={BookOpen} />}
           {v7FeatureEnabled(experimentalSettings ?? {}, "security_event_export_v7") && <SidebarNavItem to="/company/settings/security-events" label="Security event export" icon={BookOpen} />}

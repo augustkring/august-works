@@ -64,6 +64,7 @@ export const decisions = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    tenantIdUq: uniqueIndex("decisions_tenant_id_uq").on(table.companyId, table.id),
     companyStatusExpiresAtIdx: index("decisions_company_status_expires_at_idx").on(
       table.companyId,
       table.status,

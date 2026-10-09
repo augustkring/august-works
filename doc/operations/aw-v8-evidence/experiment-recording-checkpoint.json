@@ -1,0 +1,159 @@
+{
+  "checkpoint": "Native source-owned experiment recording, pretreatment invariants, human-attested exposure and stopping",
+  "parentCommit": "f77dc24c17e06c4e7149d582b0b92141925d1a32",
+  "recordedAt": "2026-10-07T07:36:29.829923+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/adr/V8-ARCHITECTURE-DECISIONS.md",
+      "sha256": "4b7f31006af55ff514f8a68c0b03e9c8d1a46120ae84b06aede6a9eb65a56bb9"
+    },
+    {
+      "path": "doc/operations/aw-v8-business-experiments.md",
+      "sha256": "2d422ac0f4de7d8d367ea0800589c213e75a4db2ff3ee3dad3197edf3e10c435"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "ebd5f74964cea232c23bd0a7e7ef4a50c6ea103d680295c9a38103aa24f4c7fd"
+    },
+    {
+      "path": "packages/db/src/migrations/0404_long_union_jack.sql",
+      "sha256": "e1b3656530a81e4bd828a649dd6aae72b31ed00bafcc9b75dd8e25ce3c7aecbd"
+    },
+    {
+      "path": "packages/db/src/migrations/0405_spooky_salo.sql",
+      "sha256": "579b8438ed94db2fae949c8903493e2937dbe49254903a671479862120035c9e"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0404_snapshot.json",
+      "sha256": "1ebca7c2150c0f1f7d3c38f8a0387dbd30c839a69bbaa18883315b8c263ffd03"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0405_snapshot.json",
+      "sha256": "a462a3658d0fcce745a7a1359eab49400e88ca7326d73cc8ede03cbb0b77bffc"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "d97ea15f152f4b07c4a04531225b6af77699746f0e277a5435d822527745cf60"
+    },
+    {
+      "path": "packages/db/src/schema/business_experiments.ts",
+      "sha256": "c2e5b8a4e407eaec9d92a4c12dde0875d0e14401b44a004452c3f6f1a13f596a"
+    },
+    {
+      "path": "packages/shared/src/business-experiments.test.ts",
+      "sha256": "b8b83fb52b39f5d27b8ff09700aaf84d359bfbb7cd917377a5369589949699a4"
+    },
+    {
+      "path": "packages/shared/src/business-experiments.ts",
+      "sha256": "3deaeba9fddd6d07ba05670ef5bcb07c71323235196f61c9f87c287eba7eac65"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-recording.integration.test.ts",
+      "sha256": "27f1520f83d6e3210af40a0e888d4ed6cca8722f5f691dc87fa741ee0a8dbfab"
+    },
+    {
+      "path": "server/src/__tests__/business-experiments-kernel.test.ts",
+      "sha256": "00c059c90f76c1b05cf945dc6e454a4b4bc8a0accb717761f0d7cfb960eddcc0"
+    },
+    {
+      "path": "server/src/__tests__/fixtures/business-experiment-invariant-reference.json",
+      "sha256": "9b20c9d7faa4d20960680aa9c2f2791cb7ca91de654d52017a5c06900d5ddf14"
+    },
+    {
+      "path": "server/src/__tests__/helpers/business-experiment-fixture.ts",
+      "sha256": "c5ffda90e1003a587fc324dccd5fb9d674b2484f874b7a5c81d730b64ae8bd9c"
+    },
+    {
+      "path": "server/src/routes/business-experiments.ts",
+      "sha256": "55a5d9a49091e2818413aef2a5baa5c49e91242fd425feed5e9905cd5688d3ba"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "e4856058c805302cb1b97fb005967ceaeea047c6ef4a0eef9ea7a9a0efa83d31"
+    },
+    {
+      "path": "server/src/services/business-experiments/kernel.ts",
+      "sha256": "372360f4dfb64ccc541abc53ae684af11f102a1910fb6b41e4dd7e2abd396b8b"
+    },
+    {
+      "path": "server/src/services/business-experiments/receipts.ts",
+      "sha256": "500f1aaba3c3b243f1dab03fdeed103f04b4a305d08825b3dc6db971eb968af3"
+    },
+    {
+      "path": "server/src/services/business-experiments/recording.ts",
+      "sha256": "b1b049fa941ad3272a061d935fe589b42775d6cb7a4f4721f74e35d8cf0d79f6"
+    },
+    {
+      "path": "server/src/services/business-experiments/service.ts",
+      "sha256": "44dec33f78d339cb07f92901d4c4875b29ce6f26de59c8b13bcdd9fbff942977"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native_owner_and_regression",
+      "status": "passed",
+      "checks": 89,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-receipts-owner-tests-final-qualified.log",
+      "logSha256": "436d5854c1d9cbb2a9948bf976cc11a83b7818b316fbeab0653b59f094c9d054"
+    },
+    {
+      "name": "kernel_and_contracts",
+      "status": "passed",
+      "checks": 18,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-receipts-kernel-contracts-final.log",
+      "logSha256": "2bb482fe5576d86efb86e5041b502871bab1d6e1cc42d105436cb3d5150b0f88"
+    },
+    {
+      "name": "server_types",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-receipts-types-final-qualified-complete.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared_types",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-receipts-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "migration_safety",
+      "status": "passed",
+      "checks": null,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-receipts-migration-checks-final.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    },
+    {
+      "name": "generated_schema_snapshot",
+      "status": "passed",
+      "checks": 1,
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-experiment-receipts-snapshot.log",
+      "logSha256": "3052d28c46bbef5a9d66b809a787932721f09ba169798365eb7bf6d93ebf7490"
+    }
+  ],
+  "evidenceClass": "Actual migrated PostgreSQL owner/API/erasure checks and independent numerical reference vectors using synthetic native fixtures; no collected operational trial or verified exposure claim.",
+  "failedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-receipts-owner-tests.log",
+      "logSha256": "cf70dbb3c2891ceff5ab31fa773de1a1458af0e58ccaa3ad93aeb251e7fb6db5",
+      "resolution": "Corrected ambiguous PL/pgSQL metric declaration alias; owner semantics unchanged."
+    },
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-receipts-owner-tests-qualified.log",
+      "logSha256": "7216824f57d4d86b3db74909324f0b388a6416233669bc89ada8449e27ba83de",
+      "resolution": "Ordered generated composite FK after its required unique constraint; native generated journal/snapshots unchanged, successful reruns boot actual migrated PostgreSQL."
+    }
+  ],
+  "remaining": [
+    "Actual common-time outcome receipts and analysis/result interpretation owner",
+    "Operator UI and downstream Decision/Causal/Learning/Planning bridges",
+    "Remaining V8 waves and actual provider/hosted qualification"
+  ]
+}

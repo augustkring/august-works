@@ -1129,6 +1129,7 @@ export function accessService(db: Db) {
   return {
     isInstanceAdmin,
     decide,
+    withReadSources: authorization.withReadSources,
     canUser,
     hasPermission,
     getMembership,

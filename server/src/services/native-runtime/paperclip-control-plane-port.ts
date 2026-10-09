@@ -26,6 +26,7 @@ import {
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { publishChatPublicationCommitSignal } from "../chat-publication-reconciliation.js";
 import { nativeSha256 } from "./canonical.js";
+import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
 
 export interface PaperclipControlPlaneBinding {
   companyId: string;
@@ -196,6 +197,9 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
         !(event.sourceKind === "control_plane" && this.#binding.internalDraftSourceInstanceId &&
           event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId)) {
       throw new Error("native_event_source_binding_mismatch");
+    }
+    if (event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId) {
+      await assertNativeAnalyticalRunPayloadAccess(this.#db, this.#binding.companyId, this.#binding.runId);
     }
     const persisted = await appendHeartbeatRunEvent(this.#db, {
       companyId: this.#binding.companyId,

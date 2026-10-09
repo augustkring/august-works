@@ -1,0 +1,559 @@
+{
+  "checkpoint": "Exact signed experiment analysis and separate human interpretation as native Decision evidence",
+  "parentCommit": "04f9da2a5116bc77173e281209169694b67240e1",
+  "recordedAt": "2026-10-07T09:09:11.754117+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/adr/V8-ARCHITECTURE-DECISIONS.md",
+      "sha256": "8c5a13afb643ae16b2cfb1198f435197308755ad8d4cc8e41aa5dc46b7f63a64",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "doc/operations/aw-v8-decision-context.md",
+      "sha256": "0aa92cb13408e5fa6f69775c9cbc00ff225baefc298e55830209ff92e488c9d4",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-04f9da2.json",
+      "sha256": "05ce852bcfab14d67cb2d4ecf0b72db9b5719841cdab717580cd5cb02c434527",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "3c2af999498ad28842f4e1d9c1592a2e2efbe5b7e6147b5f9351f99b604274fd",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/0407_large_betty_brant.sql",
+      "sha256": "903869b3db3a4dfc2776e8158a50b37c21c3234fb212c07521c35725e7c282ee",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0402_snapshot.json",
+      "sha256": null,
+      "previousSha256": "4cfb1d4830cfc3911777713d612e8c109a8a9cc75749931866bdde4567f788de",
+      "state": "removed_by_native_snapshot_pruning"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0407_snapshot.json",
+      "sha256": "94a226e842b7e65c8ce166de0fcfc0092b1c01eb3d9ae3b32a665858533bb2e1",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "a64c18138bbc01d2b849f63bbc7e285cd4a3da302d5210f2db8fdd8892ffff59",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/schema/business_experiments.ts",
+      "sha256": "83b9153fa7a4a22e07cd24b55dc08f16d11a1d0b04dfd1891141016793e56c22",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/schema/decision_intelligence.ts",
+      "sha256": "a51cd0876c07a6bfcc2c1408928a4e4f775a4c33590aa3be91bafd8c7634c785",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "bcefcd54c77537166240989d508292f97b84ea3ad6cb9b491dfa65620e92214e",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "packages/shared/src/decision-intelligence.test.ts",
+      "sha256": "11848d8b2d8e4e0268fc05a17a7052785f39cb50279bcfe6605a1ac4060aee26",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "packages/shared/src/decision-intelligence.ts",
+      "sha256": "bba53c6be0838d6334b5f6ee3bbd5249973b149a203feee1323c8ef1de80ab07",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+      "sha256": "ff4e8c643c39a9d73f6c85045b7eada179bd9287cc150f9ac752718c78419fda",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "server/src/services/business-experiments/evidence.ts",
+      "sha256": "181848a4ca334fd23596dcb4a4c41283436bb715f9e7fcd8ee10a8f8cae9faa9",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "server/src/services/decision-intelligence.ts",
+      "sha256": "99061e55e0acd81be75c459a01429e60cd341119f036381c10126e7e9840175b",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "tests/storybook-visual/decision-intelligence.spec.ts",
+      "sha256": "cbe87f381ec2fba59dd319f92d2cabaaa936c6519811a631adc4ec7aa6f03d1a",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "ui/src/components/BusinessExperimentResult.tsx",
+      "sha256": "c94a7c9fece5f512f3d74c1b9d0607481762116861ec1ae4860b9141a772bbd8",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "ui/src/components/DecisionContextForm.tsx",
+      "sha256": "4c7f6ca53b07823bdcc68f037394d175f60b16795c444b328d8c2c1319c5f7b5",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "ui/src/components/DecisionContextPanel.tsx",
+      "sha256": "81cc53cfb25b1235b5224950181870234eb954a0574e1c480c78bd65e3ca843e",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "ui/src/components/DecisionEvidencePicker.test.tsx",
+      "sha256": "a6a8a3d6e4131ee4fd4f308f2568b6d9fe73f1f46618b84ccf71f468bb4d9ba5",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "ui/src/components/DecisionEvidencePicker.tsx",
+      "sha256": "69e99044b82f92500131afd409fd82b6891b734199bf0faf4a2c09c186eee507",
+      "previousSha256": null,
+      "state": "present"
+    },
+    {
+      "path": "ui/storybook/stories/decision-intelligence.stories.tsx",
+      "sha256": "7bb4d2a59c94e647ab87ae886f3fb6dd379427f023eededcc6393d025cd9cab1",
+      "previousSha256": null,
+      "state": "present"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "native_experiment_decision_and_outcome_regression",
+      "checks": 33,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-owner-tests-qualified.log",
+      "logSha256": "070c77c249c7bd106dbfbe0f8653c6136ae2e105a870b87a6ff5b8cdc07bd01d"
+    },
+    {
+      "name": "final_experiment_analysis_with_republication",
+      "checks": 14,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-analysis-final.log",
+      "logSha256": "474b186472c5fe595a2f8ddcd87e1423062cc12936bf05e8250c8aa8a75a16c5"
+    },
+    {
+      "name": "native_openapi",
+      "checks": 16,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-openapi.log",
+      "logSha256": "2787be04c00df1a6a550b04bc327ed3717d7ef02d503f5da3f643983682db2a4"
+    },
+    {
+      "name": "shared_contracts",
+      "checks": 5,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-contracts.log",
+      "logSha256": "34e245e5e022c9a82f0c58f25856ac0b5f9f31d7e28ab4f46f2eb2e93da2280d"
+    },
+    {
+      "name": "native_ui_regression",
+      "checks": 22,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-ui-tests-qualified.log",
+      "logSha256": "ee7ecb775f5c1a38c9c0cdcc0ff814c4d1288aee1d5aaf6fcc3ee7f2a8dc2f0a"
+    },
+    {
+      "name": "chromium_keyboard_accessibility_responsive",
+      "checks": 74,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-browser.log",
+      "logSha256": "208680864d338e5883dcd1c44bc9780fe2a9f25c91fb12101fd1407e2d7cbc89"
+    },
+    {
+      "name": "server_types",
+      "checks": null,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-types-complete.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui_types",
+      "checks": null,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-ui-types-qualified.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared_types",
+      "checks": null,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "compiled_storybook",
+      "checks": null,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-storybook-final.log",
+      "logSha256": "86bf32969b1f8ff17911ba9cae4c6100122b35c9c7e815b3c5d4f5019d3e8a2a"
+    },
+    {
+      "name": "native_tokens",
+      "checks": null,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-token-checks.log",
+      "logSha256": "5e2bd3bc4a49194a297495e1ce2b5363c2a11a3b8fea3bf91a47b231365db94b"
+    },
+    {
+      "name": "generated_snapshot",
+      "checks": 1,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-snapshot.log",
+      "logSha256": "25ac29c17431574a0633667df4a32c11466da2f04010ea162d5217b93f61f569"
+    },
+    {
+      "name": "migration_safety",
+      "checks": null,
+      "exitCode": 0,
+      "status": "passed",
+      "logPath": "/var/tmp/aw-v8-experiment-decision-migration-checks.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    }
+  ],
+  "qualificationScope": "The 33-test selection overlaps the final 14 experiment analysis tests; 34 distinct native owner tests pass overall, plus 16 OpenAPI. New Decision/experiment browser views include WCAG 2.2 AA; existing outcome browser regression retains its prior WCAG 2.1 AA scope.",
+  "evidenceClass": "Actual migrated PostgreSQL/API/deferred constraint/source-erasure checks using explicitly synthetic source fixtures, plus API-blocked synthetic Storybook/browser presentation. No collected operational trial, verified intervention/business outcome, official visual baseline or hosted deployment claim.",
+  "failedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-experiment-decision-types.log",
+      "logSha256": "4012e612a41c944be89cb224900b3be2f3c42a35bd926c08d40e837369d8f969",
+      "resolution": "Keep a narrowed local experiment reference within the nested source-pin callback; final server types pass."
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-01509-ins-exact-advisory-evidence/decision-calculation-scenario_run-dark-390.png",
+      "sha256": "4f9f7894c85734e44cfcb37b9697234e4eefaac1245b5e9e97a23485dec9fdd9"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-02787-ins-exact-advisory-evidence/decision-calculation-forecast_run-light-1200.png",
+      "sha256": "50bfe367e4b8545f62c1a1529a19cbe0802cd29c8f7fec8c567f4811c66d7571"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-067b6-es-prospective-human-review/decision-context-prepared-dark-1200.png",
+      "sha256": "f6d21df9f2d84a127db8dbb38ac6524d6c59716bc73d41c656d799ec0126ff50"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-147c1-es-prospective-human-review/decision-context-frozen-light-1200.png",
+      "sha256": "f018b1cc651338958e1951d9082d173919686df132afb04facbc1c7187bb6ec0"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-18e5c-es-prospective-human-review/decision-context-empty-dark-390.png",
+      "sha256": "51ab5ff9b20dc8636800fd4d589ec29517789c5a4a0530ef9452a4e375fa9f5c"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-1d27c-ins-exact-advisory-evidence/decision-calculation-scenario_run-light-1200.png",
+      "sha256": "e511b8cf43ae98a59c61d16c6a5c9814570349b495db02484cec31ad4fe184c7"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-22fb2-dgment-without-copied-facts/decision-proposal-dark-390.png",
+      "sha256": "663c623ed88ea3d8409f68ac2c8167ba3f2ccd5d82e87c92eb2f78867f6f4b0a"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-2408e-es-prospective-human-review/decision-context-frozen-dark-1200.png",
+      "sha256": "8b20bfa578f5aecbf5be3fc6440dab2b6225f9a8f242f1a1bf5bc3b9000894c9"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-2bbc1-es-prospective-human-review/decision-context-prepared-light-1200.png",
+      "sha256": "b3177f841bc6ee384c1cb9c1357d405231a1fb0fd6623bce4b320c00925a33de"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-2c890-man-advisory-interpretation/decision-experiment-dark-1200.png",
+      "sha256": "dd01655afe5613f2ad08e163deb7c8699e7495543f12c98ecfd565e5205fd658"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-389e5-es-prospective-human-review/decision-context-empty-light-390.png",
+      "sha256": "e79054b586dfb34b17fa187b515cc6e62d71dc2b5780e94fccf3c2851a0203d4"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-3f012-ozen-basis-and-revalidation/decision-historical-calculation-dark-390.png",
+      "sha256": "8285cee8c92968dd41753f8cf32d17c1396f94b41c3938b1b64216e9505ad5d9"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-40441-dgment-without-copied-facts/decision-proposal-light-1200.png",
+      "sha256": "427b61bc68d6d386d1ff4f8a788ca0273b5156dc64c077f2c64e9e948ba73665"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-52aba-es-prospective-human-review/decision-context-proposal-dark-390.png",
+      "sha256": "bad53309e8ce93ebe49bca90d2c8a56c94a1d35cea3d67437acd2fedd3adf676"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-52f06-es-prospective-human-review/decision-context-expired-dark-1200.png",
+      "sha256": "927af4a303544f6ef6e156382aca07eacc20648dd4a92ac47189b05a7c769bb4"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-55a14-es-prospective-human-review/decision-context-proposal-dark-1200.png",
+      "sha256": "49c5b3ccc359846d8ffaf34e0be9da9c33d2aef9a7673760beb7a964dbf40b35"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-5e007-es-prospective-human-review/decision-context-empty-dark-1200.png",
+      "sha256": "927af4a303544f6ef6e156382aca07eacc20648dd4a92ac47189b05a7c769bb4"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-6b5fd-es-prospective-human-review/decision-context-expired-dark-390.png",
+      "sha256": "51ab5ff9b20dc8636800fd4d589ec29517789c5a4a0530ef9452a4e375fa9f5c"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-6b99c-ins-exact-advisory-evidence/decision-calculation-forecast_run-light-390.png",
+      "sha256": "a2d1e21089986443e035dac522c7490df096ee2b0ef2088c64416a8fec2050ed"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-6e08e-ozen-basis-and-revalidation/decision-historical-calculation-light-390.png",
+      "sha256": "aa241cc8d3d3b268737cb7acd1c2a3f2a73e20d36080156166ee169ff365d76b"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-6e306-es-prospective-human-review/decision-context-prepared-light-390.png",
+      "sha256": "31ec516ca269556d2402661f318b4973b140c608341265c96f63dbde8da8c74d"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-6e845-es-prospective-human-review/decision-context-proposal-light-1200.png",
+      "sha256": "07636e0094e4639865b17aee221f86c9298c09ae76fe5de350128f11e89527d2"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-7625f-ins-exact-advisory-evidence/decision-calculation-scenario_run-light-390.png",
+      "sha256": "5b16e121664b47266ef6fc98bb433063395cf241b447b869b0bf57bb2abae437"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-79886-es-prospective-human-review/decision-context-proposal-light-390.png",
+      "sha256": "05bec4ff4a25b85ce7a0044eca436f27c3dd12eaa2185e3eb15914552a9b41c9"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-79c7f-ins-exact-advisory-evidence/decision-calculation-forecast_run-dark-1200.png",
+      "sha256": "f5d71309ee57e8cf27d2393f189cd6095bfe57dc452a9568527c365b838c105d"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-7c27c-ins-exact-advisory-evidence/decision-calculation-forecast_run-dark-390.png",
+      "sha256": "b8ff802e06366313d6dd91b56e5a143d87a17f0a3937fb6a906d778343c4f796"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-810b8-es-prospective-human-review/decision-context-expired-light-390.png",
+      "sha256": "e79054b586dfb34b17fa187b515cc6e62d71dc2b5780e94fccf3c2851a0203d4"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-8a46d-ozen-basis-and-revalidation/decision-historical-calculation-light-1200.png",
+      "sha256": "9929f75866c7e3c9b145a64075598e4a990e909f04390833265bfa11461e282f"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-921d9-rvals-and-every-safety-gate/decision-captured-experiment-dark-390.png",
+      "sha256": "e8c0fb158f1f8a81c884454eda64e1f61d589033fc20ad12711243d6a30d98b8"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-9a5e3-rvals-and-every-safety-gate/decision-captured-experiment-light-1200.png",
+      "sha256": "43a5a5bfad8e58d52310f1462ce45fb41ddda76c3e00ace81ce8165adea60d8f"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-9a81c-man-advisory-interpretation/decision-experiment-light-390.png",
+      "sha256": "9fda710705a2f7d7e2df478218084761043260c10e284cf1d22aadc8c5c8921f"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-9e9f6-rvals-and-every-safety-gate/decision-captured-experiment-light-390.png",
+      "sha256": "e7cf071b5779890543ce9ee19d207099ebd63dcfa69de5fc82f2b1e6dea3b442"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-a2648-man-advisory-interpretation/decision-experiment-light-1200.png",
+      "sha256": "ff0ef8fa832ea29d1e27ae48316f1c1224762236632a01ba8af152f4b789f8ca"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-a6c85-man-advisory-interpretation/decision-experiment-dark-390.png",
+      "sha256": "0c6f69f988c89adcaf4c5b9a4210686e7e92c3a932a93827bbad1bd3b3b9c002"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-b7409-ozen-basis-and-revalidation/decision-historical-calculation-dark-1200.png",
+      "sha256": "801aecd2d69a93b6a84b98c81c5c81d7f82b69971b8ac8c7887df5a804d60d5e"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-b9c68-es-prospective-human-review/decision-context-expired-light-1200.png",
+      "sha256": "bca57ff369d8fd6aa97d695781672a6f0c3233a205b5e2e6564fe6d6a5927ec2"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-cba74-rvals-and-every-safety-gate/decision-captured-experiment-dark-1200.png",
+      "sha256": "f6604ae6cfdb5b9d6ebbf49872e7d9e5d52a19aec44a3623eff5919949f32a91"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-cda0c-es-prospective-human-review/decision-context-frozen-dark-390.png",
+      "sha256": "ff16e63089fb4cf51d91bd28beb8b389b1f8136436730acbd48284f29bdc9f42"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-d78a9-es-prospective-human-review/decision-context-prepared-dark-390.png",
+      "sha256": "1d44be33436a595ceb1495f3a7518897aed0848cdae27b011b65d1b6cef27afd"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-e09ee-es-prospective-human-review/decision-context-frozen-light-390.png",
+      "sha256": "aa96a49ef698c3308781aa2300b1340b021585c9157238b4ab51775c07293e6a"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-e195d-dgment-without-copied-facts/decision-proposal-dark-1200.png",
+      "sha256": "695f11fc9beccb9271a4c392c3a58cd5a134cc2d0d65501acd82d60839500e3f"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-edb67-dgment-without-copied-facts/decision-proposal-light-390.png",
+      "sha256": "ea84c2140999c64898e7a59f55607bbb857b18a4b29eb717f5179f233750a31f"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-f522e-es-prospective-human-review/decision-context-empty-light-1200.png",
+      "sha256": "bca57ff369d8fd6aa97d695781672a6f0c3233a205b5e2e6564fe6d6a5927ec2"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-intelligence-deci-f877c-ins-exact-advisory-evidence/decision-calculation-scenario_run-dark-1200.png",
+      "sha256": "ee9b50eaae6a8f20c54a4901134ae00dd7719ea8f86197fa668edd4c1980664a"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-11509--separate-human-assessments/decision-outcome-scheduled-light-1200.png",
+      "sha256": "bad8dd6c5dd9a5b49f9ddfd086a0b7c019811d97aa3920436dfe8202e377be2e"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-13d13--separate-human-assessments/decision-outcome-cancelled-dark-1200.png",
+      "sha256": "6b7bfb69940f666a34c60370af3e2a03591b102c08d95ed2c7a9b5ea6ecf22bc"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-1d29c--separate-human-assessments/decision-outcome-completed-light-390.png",
+      "sha256": "25eeeaff15f890a858cf46a9777312ed153faf406110046a978a335a33fa3790"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-1e9b9--separate-human-assessments/decision-outcome-due-light-390.png",
+      "sha256": "87d4fd23516da9348aea80b385d40c86493fa4780d3533563832a36008375743"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-2b16c--separate-human-assessments/decision-outcome-due-dark-390.png",
+      "sha256": "7190bce61fadd5da60e772d0749adf447929d4d04edfc884b61b79e486aa4f44"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-37789--separate-human-assessments/decision-outcome-cancelled-light-390.png",
+      "sha256": "254abb69cf372c1aeb645ba289ad1a6f94d41a152497a78c4b7e43f6ed9ecbd7"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-52cca--separate-human-assessments/decision-outcome-cancelled-dark-390.png",
+      "sha256": "3f7243e193274db6dd06643775e202d9ef5bdc44ef7a11d044a19185ac50d50d"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-534fe--separate-human-assessments/decision-outcome-scheduled-light-390.png",
+      "sha256": "dc6c092a1c3d16482ca051e5f177bbdaea9c64ca9d400071b4969671b33139a9"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-56268--separate-human-assessments/decision-outcome-inconclusive-light-1200.png",
+      "sha256": "f8c41d480a036a57ab45591546266e02aa7c5a76e74b191be982c61c02afde78"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-57b62--separate-human-assessments/decision-outcome-completed-dark-390.png",
+      "sha256": "763f67baa4d93fa3044b34c8d34ba06499c883a2db879e3dd7ea6900f65ce612"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-70013--separate-human-assessments/decision-outcome-completed-light-1200.png",
+      "sha256": "0ca7f0251951a9e798dc6ffbe59925f24db51a95b721612c7d9cb174d70a6ee4"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-79ed1--separate-human-assessments/decision-outcome-in-progress-dark-390.png",
+      "sha256": "dc4d707cead6ba196b5307bbf1c431546ddca8aaba0200f48eb6f07baf2c409d"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-8a223--separate-human-assessments/decision-outcome-due-dark-1200.png",
+      "sha256": "893689de1612a6b79eab32a4c1ea35d4f133d7f10b788dbdcc49b5375f1a87f8"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-9757a--separate-human-assessments/decision-outcome-scheduled-dark-390.png",
+      "sha256": "b8ed7d9c702778eb547fb8a2ba1cb03fd4cb890445763a22b965ffdd37d85359"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-9f8bc--separate-human-assessments/decision-outcome-in-progress-light-1200.png",
+      "sha256": "eef4ee0e40a7004cd14ec36c02012f5204c1afbedfa3af7651ce5e18671d4781"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-a4685--separate-human-assessments/decision-outcome-in-progress-dark-1200.png",
+      "sha256": "8ede2cee553c574f53ecdb095c9faac6d3f04083184dd4829a6e99d530c9e019"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-ab4d4--separate-human-assessments/decision-outcome-cancelled-light-1200.png",
+      "sha256": "c251aa8b0b7a83365dc4b9e95604b722fa39bcd489ff0231f6fed4466e96267f"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-b3702--separate-human-assessments/decision-outcome-inconclusive-dark-390.png",
+      "sha256": "85d62bd71197f706f7c92512eae58378db9bbe6fb471cbe63481c7016f4ad5d1"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-be06b--separate-human-assessments/decision-outcome-completed-dark-1200.png",
+      "sha256": "24fd2c96fa73ec2fa4e94e6180ab9d667867af0d66b455d3f78e382062c51756"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-d77af--separate-human-assessments/decision-outcome-inconclusive-light-390.png",
+      "sha256": "57c55cabe51d3ba1c269a1b1c0b47d441678d7b6e392c82f86974173d57a3210"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-da918--separate-human-assessments/decision-outcome-inconclusive-dark-1200.png",
+      "sha256": "a17e7e80bd4175f0930fa6f280dad0aeb08dad03ab15618f11f38294d4393f67"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-f535f--separate-human-assessments/decision-outcome-due-light-1200.png",
+      "sha256": "142684637344add4917e596e7dcee0830343c5f8af67d787a3dfc26254c34edd"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-f7a85--separate-human-assessments/decision-outcome-scheduled-dark-1200.png",
+      "sha256": "73e61c017454e8e5a8f9528fac4e59dabb90fe681cc27c4ff8bc92f92e16452d"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-d-fe518--separate-human-assessments/decision-outcome-in-progress-light-390.png",
+      "sha256": "e237eac0ee17c31cf82c688f076fcea69ab81cf777469ff3370aca62ae81ae1b"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-h-790e6--inventing-numeric-evidence/decision-outcome-form-light-1200.png",
+      "sha256": "7b2e2116d9adb963ef353cd8fd26ad71c8ff0b2747ffb69299f39c7b3ece84ce"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-h-d1396--inventing-numeric-evidence/decision-outcome-form-dark-390.png",
+      "sha256": "14fa152b9861ea5eb90ce22788d024be0ab1934493cc9bd7a143869ce0511255"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-h-ef664--inventing-numeric-evidence/decision-outcome-form-dark-1200.png",
+      "sha256": "0c160669786a83574eb12c65365359a9162d73aa03b62b10ce1ac50e9856abf9"
+    },
+    {
+      "path": "/workspace/august-works-v8-process-model/tests/storybook-visual/test-results/experiment-decision-qualified/decision-outcome-reviews-h-ef8e8--inventing-numeric-evidence/decision-outcome-form-light-390.png",
+      "sha256": "9eadcbcd6e46a33ab4a0e37519f9e4fe8f610d4c7c15d6b839e93bc5b65728ea"
+    }
+  ],
+  "visuallyInspected": [
+    "decision-captured-experiment-light-390.png",
+    "decision-experiment-dark-1200.png"
+  ],
+  "remaining": [
+    "Causal, Learning and Planning experiment consumers",
+    "Causal/planning/management and remaining whole V8 domains",
+    "Optional providers and actual hosted/release qualification"
+  ]
+}

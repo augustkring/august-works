@@ -278,7 +278,7 @@ export function companySkillRoutes(db: Db) {
     skillId: string,
     runId: string,
   ): Promise<SkillTestRunAssignmentAuthorizationScope> {
-    const run = await svc.getTestRunDetail(companyId, skillId, runId);
+    const run=await svc.getTestRunAssignmentScope(companyId,skillId,runId);
     if (!run?.issueId) return {};
     const issue = await issues.getById(run.issueId);
     if (!issue || issue.companyId !== companyId) {
@@ -354,7 +354,7 @@ export function companySkillRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     const skillId = req.params.skillId as string;
     assertCompanyAccess(req, companyId);
-    const result = await svc.detail(companyId, skillId, skillActor(req));
+    const result = await svc.detail(companyId, skillId, skillActor(req),req.actor);
     if (!result) {
       res.status(404).json({ error: "Skill not found" });
       return;
@@ -573,7 +573,7 @@ export function companySkillRoutes(db: Db) {
     const query = companySkillTestRunListQuerySchema.parse({
       inputId: firstQueryString(req.query.inputId),
     });
-    res.json(await svc.listTestRuns(companyId, skillId, query));
+    res.json(await svc.listTestRuns(companyId, skillId, query,req.actor));
   });
 
   router.get("/companies/:companyId/skills/:skillId/test-runs/:runId", async (req, res) => {
@@ -581,7 +581,7 @@ export function companySkillRoutes(db: Db) {
     const skillId = req.params.skillId as string;
     const runId = req.params.runId as string;
     assertCompanyAccess(req, companyId);
-    const result = await svc.getTestRunDetail(companyId, skillId, runId);
+    const result = await svc.getTestRunDetail(companyId, skillId, runId,req.actor);
     if (!result) {
       res.status(404).json({ error: "Test run not found" });
       return;
@@ -601,6 +601,7 @@ export function companySkillRoutes(db: Db) {
       });
       const actor = getActorInfo(req);
       const result = await svc.createTestRun(companyId, skillId, req.body, skillActor(req), {
+        sourceActor:req.actor,
         createHarnessIssue: async (harnessIssue) => {
           const created = await issues.create(companyId, {
             ...harnessIssue,

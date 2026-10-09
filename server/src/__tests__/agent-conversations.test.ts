@@ -212,8 +212,9 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(
         await issueService(db).getConversation(companyId, agentId, owner),
       ).toBeNull();
+      expect((await request(app).post(path).send({ conversationUserId: "spoof" })).status).toBe(400);
       const resolved = await Promise.all([
-        request(app).post(path).send({ conversationUserId: "spoof" }),
+        request(app).post(path),
         request(app).post(path),
       ]);
       expect(resolved.every((response) => response.status === 200)).toBe(true);

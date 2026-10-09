@@ -119,7 +119,10 @@ function byteLength(value: string): number {
 function assertEmptyDependencyManifest(
   dependencyManifest: Record<string, unknown>,
 ): void {
-  if (Object.keys(dependencyManifest).length > 0) {
+  // The native compiler records empty package/capability lists as provenance.
+  // Their presence grants no imports or runtime capabilities.
+  if (Object.entries(dependencyManifest).some(([key, value]) =>
+    !["packages", "capabilityRefs"].includes(key) || !Array.isArray(value) || value.length !== 0)) {
     throw new AutomationArtifactCodeRuntimeError(
       "automation_artifact_code_dependency_denied",
       "Generated-code artifacts cannot install or declare runtime dependencies.",
@@ -500,7 +503,7 @@ function boundedSandboxDiagnostic(stderr: string): string | null {
     : redacted;
 }
 
-async function resolveSandboxProcessLimit(): Promise<number> {
+export async function resolveSandboxProcessLimit(): Promise<number> {
   const uid = process.getuid?.();
   if (uid === undefined) {
     throw new AutomationArtifactCodeRuntimeError(
@@ -708,6 +711,9 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
   dependencyManifest: Record<string, unknown>;
   value: unknown;
   timeoutMs?: number;
+  deterministic?: boolean;
+  /** Private native owner supplies a checked directory and owns its cleanup. */
+  workspaceDirectory?: string;
 }): Promise<unknown> {
   if (process.platform !== "linux") {
     throw new AutomationArtifactCodeRuntimeError(
@@ -737,7 +743,7 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     Math.min(input.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS),
   );
 
-  const workspaceDir = await fs.mkdtemp(
+  const workspaceDir = input.workspaceDirectory ?? await fs.mkdtemp(
     path.join(os.tmpdir(), "aw-artifact-runtime-"),
   );
   try {
@@ -746,10 +752,25 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     await fs.writeFile(artifactPath, scanned.transpiledSource, {
       encoding: "utf8",
       mode: 0o400,
+      flag: "wx",
     });
-    await fs.writeFile(runnerPath, RUNNER_SOURCE, {
+    const importMarker = 'try {\n  const module = await import';
+    if (input.deterministic && RUNNER_SOURCE.split(importMarker).length !== 2) {
+      throw new AutomationArtifactCodeRuntimeError("automation_artifact_code_runtime_unavailable", "Deterministic artifact runner boundary is unavailable.");
+    }
+    const runnerSource = input.deterministic ? RUNNER_SOURCE.replace(
+      importMarker,
+      `for (const key of ["Date", "performance", "crypto", "Intl", "Temporal", "setTimeout", "setInterval", "setImmediate", "AbortController", "AbortSignal"]) {
+  Object.defineProperty(globalThis, key, { value: undefined, writable: false, configurable: false });
+}
+Object.defineProperty(Math, "random", { value: () => { throw new Error("ambient_random_denied"); }, writable: false, configurable: false });
+Object.freeze(Math);
+try {\n  const module = await import`,
+    ) : RUNNER_SOURCE;
+    await fs.writeFile(runnerPath, runnerSource, {
       encoding: "utf8",
       mode: 0o400,
+      flag: "wx",
     });
 
     let target: Awaited<ReturnType<typeof buildLocalProcessSandboxSpawnTarget>>;
@@ -862,6 +883,6 @@ export async function executeAutomationArtifactTypeScriptSandbox(input: {
     }
     return (envelope as Record<string, unknown>).output;
   } finally {
-    await fs.rm(workspaceDir, { recursive: true, force: true });
+    if (!input.workspaceDirectory) await fs.rm(workspaceDir, { recursive: true, force: true });
   }
 }

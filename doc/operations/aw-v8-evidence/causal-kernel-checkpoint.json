@@ -1,0 +1,75 @@
+{
+  "checkpoint": "Strict human causal graph/question and registered-primary abstention contract",
+  "parentCommit": "90e6520faf8ba34af9f60863b758b9fb3e3091c7",
+  "recordedAt": "2026-10-07T09:16:12.504663+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-causal-claims.md",
+      "sha256": "7b3169c0eaacb16294f1104ea385747a14bab4c79a2b3557cf300bd47a57b279"
+    },
+    {
+      "path": "doc/operations/aw-v8-evidence/native-build-90e6520.json",
+      "sha256": "4c8722b12f6777cf2674ce0123d7829e3471e62c10f7091f1633df6bea4544f9"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "3e739bee606bc91a4aa5ebf83a01ce6000be8c68ef3a14ea810f16a61d065394"
+    },
+    {
+      "path": "packages/shared/src/causal-claims.ts",
+      "sha256": "9f5676c0fd137ddbbc404c643db0207dc8d753f015a96caae39da13cab32831f"
+    },
+    {
+      "path": "packages/shared/src/decision-intelligence.ts",
+      "sha256": "8391f37b127f7d7b049e9062a2f196fda9dbca8046ea963137b7a5325d725270"
+    },
+    {
+      "path": "packages/shared/src/index.ts",
+      "sha256": "2f6b19d3d87a76bb7a0297caca1a31ad8d4748d0d237f20ea230be05b65761f6"
+    },
+    {
+      "path": "server/src/__tests__/causal-claims-kernel.test.ts",
+      "sha256": "d145a5cff930c182bb6e97e97cba2e9ef062fa679c5e96d9ffc0eb6760772d5b"
+    },
+    {
+      "path": "server/src/__tests__/helpers/causal-claim-fixture.ts",
+      "sha256": "78506b04a95469003e867068944b14359c79b9d6f005c4be61874bb5de6eb4f9"
+    },
+    {
+      "path": "server/src/services/causal-claims/kernel.ts",
+      "sha256": "b93c9da4e14f259278e8c8b3a2ff3004a10a455a9216f7350407ea31aa3190f3"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "causal_and_experiment_kernel_contracts",
+      "checks": 23,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-kernel-tests.log",
+      "logSha256": "8c3dfc25d223cabe306723f3831a8a943179023b4bfb1c3b7c82fb56c02baf2e"
+    },
+    {
+      "name": "server_types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-kernel-server-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "shared_types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-kernel-shared-types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "evidenceClass": "Pure software contract/kernel checks with synthetic prequalified presentation of prior experiment receipts; no new source admission, collected trial, independent provider refutation or verified business impact.",
+  "remaining": [
+    "Persistent native causal source owner, human review and erasure",
+    "Causal UI, downstream consumers and optional DoWhy qualification",
+    "Remaining Planning/Management/Learning and complete hosted V8 release"
+  ]
+}

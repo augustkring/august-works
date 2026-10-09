@@ -78,6 +78,7 @@ const mockAccessDecide = vi.hoisted(() => vi.fn(async (input: { action?: string 
 })));
 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
 const mockReviewTransition = vi.hoisted(() => ({
   value: null as null | { actorType: string; actorId: string; details: Record<string, unknown> },
 }));
@@ -159,6 +160,11 @@ vi.mock("../services/trust-preset-resolver.js", () => ({
 }));
 
 function registerModuleMocks() {
+  // This interaction route stub has no PostgreSQL analytical Source graph;
+  // explicitly control its current Source boundary, including denial below.
+  vi.doMock("../services/analytical-context-authority.js", () => ({
+    assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+  }));
   vi.doMock("../services/question-response-delivery.js", () => ({
     questionResponseDeliveryService: () => mockQuestionResponseDeliveries,
   }));
@@ -326,6 +332,7 @@ describe.sequential("issue thread interaction routes", () => {
     // queue. That gap once let a leftover queued value deny an unrelated
     // later test.
     vi.resetAllMocks();
+    mockAnalyticalPayloadAccess.mockResolvedValue(undefined);
     // mockRunAttribution.value is a plain object, not a vi.fn().
     // resetAllMocks() does not reset it. createApp() overwrites it for an
     // agent actor. A board actor leaves whatever value a prior test set here.
@@ -624,6 +631,16 @@ describe.sequential("issue thread interaction routes", () => {
       .expect(200);
 
     expect(mockInteractionService.expireRequestConfirmationsSupersededByHistoricalComments).not.toHaveBeenCalled();
+    expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+  });
+
+  it("withholds interaction history when the current analytical Source denies an authorized board reader", async () => {
+    const { HttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
+    const response = await request(await createApp()).get(`/api/issues/${ISSUE_ID}/interactions`);
+    expect(response.status).toBe(403);
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(mockDb, "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: ISSUE_ID });
+    expect(mockInteractionService.listForIssue).not.toHaveBeenCalled();
     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
   });
 

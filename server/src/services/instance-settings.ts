@@ -1,3 +1,4 @@
+import { assertV8FeatureDependencies, v8FeatureFlagsSchema, V8FeatureDependencyError } from "@paperclipai/shared";
 import { assertV7FeatureDependencies, v5FeatureFlagsSchema, v6FeatureFlagsSchema, v7FeatureFlagsSchema, V7FeatureDependencyError } from "@paperclipai/shared";
 import { badRequest } from "../errors.js";
 import type { Db } from "@paperclipai/db";
@@ -259,6 +260,7 @@ export function normalizeExperimentalSettings(raw: unknown): InstanceExperimenta
       ...v5FeatureFlagsSchema.parse(parsed.data),
       ...v6FeatureFlagsSchema.parse(parsed.data),
       ...v7FeatureFlagsSchema.parse(parsed.data),
+      ...v8FeatureFlagsSchema.parse(parsed.data),
       enableFoundationV1: parsed.data.enableFoundationV1 ?? false,
       enableContextEngineV1: parsed.data.enableContextEngineV1 ?? false,
       enableWorkflowsV1: parsed.data.enableWorkflowsV1 ?? false,
@@ -326,6 +328,7 @@ export function normalizeExperimentalSettings(raw: unknown): InstanceExperimenta
     ...v5FeatureFlagsSchema.parse({}),
     ...v6FeatureFlagsSchema.parse({}),
     ...v7FeatureFlagsSchema.parse({}),
+    ...v8FeatureFlagsSchema.parse({}),
     enableFoundationV1: false,
     enableContextEngineV1: false,
     enableWorkflowsV1: false,
@@ -483,6 +486,7 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       managedConfig,
     );
     assertV7FeatureDependencies(experimental);
+    assertV8FeatureDependencies(experimental);
     // Self-hosted responses stay byte-identical: no managedKeys field at all.
     return managedConfig ? { ...experimental, managedKeys } : experimental;
   }
@@ -620,6 +624,9 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
           // The effective managed overlay must also satisfy the dependency graph.
           toExperimentalView(nextExperimental);
         } catch (error) {
+          if (error instanceof V8FeatureDependencyError) {
+            throw badRequest(error.message, { code: "V8_FEATURE_DEPENDENCY_INVALID", issues: error.issues });
+          }
           if (error instanceof V7FeatureDependencyError) {
             throw badRequest(error.message, { code: "V7_FEATURE_DEPENDENCY_INVALID", issues: error.issues });
           }

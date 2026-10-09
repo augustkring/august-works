@@ -7,11 +7,11 @@ import { validate } from "../middleware/validate.js";
 import { assertCompanyAccess } from "./authz.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
 import { capabilityResolverService } from "../services/capability-resolver.js";
-import { skillResolverService } from "../services/skill-resolver.js";
+import {assertRuntimeSkillSourceRetained} from "../services/learning/learning-assets.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { assertV5Enabled } from "../services/v5-authorization.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
-import { forbidden, notFound, unprocessable } from "../errors.js";
+import { forbidden, notFound } from "../errors.js";
 
 export function agentRuntimeFabricRoutes(db: Db) {
   const router = Router(), svc = agentRuntimeFabricService(db);
@@ -30,6 +30,11 @@ export function agentRuntimeFabricRoutes(db: Db) {
     const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId);
     res.json(await svc.getManifest(req.actor, companyId, req.params.runId as string));
   });
+  router.get("/companies/:companyId/runs/:runId/playbooks/:playbookId/body",async(req,res)=>{
+    const companyId=req.params.companyId as string;assertCompanyAccess(req,companyId);
+    res.set("Cache-Control","no-store");
+    res.json(await svc.loadPlaybook(req.actor,companyId,req.params.runId as string,req.params.playbookId as string));
+  });
   router.get("/companies/:companyId/runtime/capabilities", async (req, res) => {
     const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId);
     await assertV5Enabled(db, "agent_runtime_fabric_v5");
@@ -37,18 +42,8 @@ export function agentRuntimeFabricRoutes(db: Db) {
   });
   router.get("/companies/:companyId/runs/:runId/skills/:skillId/body", async (req, res) => {
     const companyId = req.params.companyId as string, runId = req.params.runId as string; assertCompanyAccess(req, companyId);
-    if (req.actor.type !== "agent" || req.actor.runId !== runId) throw forbidden("Skill loading requires the current authenticated execution");
-    const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId), eq(heartbeatRuns.agentId, req.actor.agentId!))).limit(1);
-    if (!run || !["running", "queued"].includes(run.status)) throw notFound("Active execution not found");
-    const record = await svc.getManifest(req.actor, companyId, runId), pin = record.manifest.skills.find((p) => p.skillId === req.params.skillId);
-    if (!pin) throw forbidden("Skill is outside the pinned execution manifest");
-    await agentProviderBindingService(db).assertRuntime(companyId, run.agentId);
-    const { version } = await skillResolverService(db).authorizedVersion(req.actor, companyId, pin.skillId, pin.versionId);
-    const body = version.fileInventory.find((file) => file.path === "SKILL.md")?.content;
-    if (!body) throw notFound("Pinned Skill body not found");
-    if (Buffer.byteLength(body, "utf8") > 32_000) throw unprocessable("This Skill exceeds the on-demand body budget; split it into bounded procedures");
-    await db.insert(companySkillUsageEvents).values({ companyId, runId, agentId: run.agentId, skillId: pin.skillId, skillVersionId: pin.versionId, stage: "loaded", selectionReason: pin.selection }).onConflictDoNothing();
-    res.json({ skillId: pin.skillId, versionId: pin.versionId, markdown: body });
+    res.set("Cache-Control","no-store");
+    res.json(await svc.loadSkill(req.actor,companyId,runId,req.params.skillId as string));
   });
   router.post("/companies/:companyId/runs/:runId/skill-usage", validate(skillUsageInputSchema), async (req, res) => {
     const companyId = req.params.companyId as string, runId = req.params.runId as string; assertCompanyAccess(req, companyId);
@@ -58,7 +53,7 @@ export function agentRuntimeFabricRoutes(db: Db) {
     const record = await svc.getManifest(req.actor, companyId, runId), pin = record.manifest.skills.find((item) => item.skillId === req.body.skillId && item.versionId === req.body.skillVersionId);
     if (!pin) throw forbidden("Skill is outside the execution pins");
     await agentProviderBindingService(db).assertRuntime(companyId, run.agentId);
-    await skillResolverService(db).authorizedVersion(req.actor, companyId, pin.skillId, pin.versionId);
+    await assertRuntimeSkillSourceRetained(db,companyId,req.actor,pin.skillId,pin.versionId);
     const loaded = await db.select({ id: companySkillUsageEvents.id }).from(companySkillUsageEvents).where(and(eq(companySkillUsageEvents.companyId, companyId), eq(companySkillUsageEvents.runId, runId), eq(companySkillUsageEvents.skillVersionId, pin.versionId), eq(companySkillUsageEvents.stage, "loaded"))).limit(1);
     if (!loaded.length) throw forbidden("Load the pinned procedure before reporting use");
     await db.insert(companySkillUsageEvents).values({ ...req.body, companyId, agentId: run.agentId, selectionReason: `agent_report:${pin.selection}` }).onConflictDoNothing();

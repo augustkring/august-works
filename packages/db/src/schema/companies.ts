@@ -9,6 +9,9 @@ export const companies = pgTable(
     description: text("description"),
     status: text("status").notNull().default("active"),
     pauseReason: text("pause_reason"),
+    // Native offboarding binds immutable-evidence deletion to its own database
+    // transaction. A committed receipt cannot authorize a later transaction.
+    contentErasureTransactionId: text("content_erasure_transaction_id"),
     pausedAt: timestamp("paused_at", { withTimezone: true }),
     issuePrefix: text("issue_prefix").notNull().default("PAP"),
     issueCounter: integer("issue_counter").notNull().default(0),

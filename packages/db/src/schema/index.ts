@@ -1,4 +1,6 @@
 export { companies } from "./companies.js";
+export { decisionContexts, decisionContextVersions, decisionContextPreparations, decisionContextBindings,
+  decisionEvidenceLinks, decisionCalculationPins, decisionExperimentPins, decisionCausalPins, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes } from "./decision_intelligence.js";
 export { companyLogos } from "./company_logos.js";
 export { companyTransferRuns } from "./company_transfer_runs.js";
 export { companyOnboardingSeeds } from "./company_onboarding_seeds.js";
@@ -274,3 +276,21 @@ export * from "./agent_packages.js";
 export * from "./enterprise_identity.js";
 
 export * from "./security_event_exports.js";
+export * from "./business_events.js";
+export * from "./business_metrics.js";
+export * from "./analytical_lineage.js";
+export * from "./analytical_context_roots.js";
+export * from "./business_metric_targets.js";
+
+export { strategyExecutionLinks, strategyExecutionLinkVersions, strategyExecutionLinkApprovals, strategyExecutionSourceBindings } from "./strategy_execution.js";
+export * from "./process_analysis.js";
+export * from "./process_findings.js";
+export * from "./decision_outcome_reviews.js";
+export * from "./business_forecasting.js";
+export * from "./business_scenarios.js";
+export * from "./business_experiments.js";
+
+export {causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns} from "./causal_claims.js";
+export { managementReviewSnapshots, managementReviewSourceLinks, managementReviewManifestDependencies, managementReviewGovernanceDependencies, managementReviewEvents } from "./management_reviews.js";
+
+export { adaptivePlanningProposals } from "./adaptive_planning.js";

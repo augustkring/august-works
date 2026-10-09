@@ -52,6 +52,7 @@ const mockCompanySkillService = vi.hoisted(() => ({
   createTestRun: vi.fn(),
   listTestRuns: vi.fn(),
   getTestRunDetail: vi.fn(),
+  getTestRunAssignmentScope: vi.fn(),
   cancelTestRun: vi.fn(),
   deleteTestRun: vi.fn(),
   pruneExpiredTestHarnessIssues: vi.fn(),
@@ -220,6 +221,7 @@ describe("company skill mutation permissions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCompanySkillService.getTestRunAssignmentScope.mockImplementation(async(companyId,skillId,runId)=>{const row=await mockCompanySkillService.getTestRunDetail(companyId,skillId,runId);return row?{issueId:row.issueId,agentId:row.agentId}:null;});
     mockGetTelemetryClient.mockReturnValue({ track: vi.fn() });
     mockCompanySkillService.importFromSource.mockResolvedValue({
       imported: [],
@@ -2200,11 +2202,12 @@ describe("company skill mutation permissions", () => {
       .get("/api/companies/company-1/skills/skill-1/test-runs/22222222-2222-4222-8222-222222222222");
     expect(detail.status, JSON.stringify(detail.body)).toBe(200);
 
-    expect(mockCompanySkillService.listTestRuns).toHaveBeenCalledWith("company-1", "skill-1", {});
+    expect(mockCompanySkillService.listTestRuns).toHaveBeenCalledWith("company-1", "skill-1", {},expect.objectContaining({type:"board",source:"local_implicit"}));
     expect(mockCompanySkillService.getTestRunDetail).toHaveBeenCalledWith(
       "company-1",
       "skill-1",
       "22222222-2222-4222-8222-222222222222",
+      expect.objectContaining({type:"board",source:"local_implicit"}),
     );
     expect(mockCompanySkillService.pruneExpiredTestHarnessIssues).not.toHaveBeenCalled();
   });

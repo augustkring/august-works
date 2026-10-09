@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "577d6f77d9ef46305ed6bd0a188bd78cf4821d5a",
+  "command": "pnpm build",
+  "status": "passed",
+  "exitCode": 0,
+  "logPath": "/var/tmp/aw-v8-native-build-577d6f77d.log",
+  "logSha256": "35a87cfcf432df38d459fcbb2975da7b4d686f4b0f827e7759b644cca9dded44",
+  "scope": "Exact native planning metadata-only review checkpoint. Does not qualify subsequent project operator UI, remaining full-brief domains, external providers or hosted release."
+}

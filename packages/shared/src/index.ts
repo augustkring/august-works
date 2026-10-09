@@ -1977,6 +1977,8 @@ export {
   issueCommentMetadataSectionSchema,
   issueCommentMetadataSchema,
   addIssueCommentSchema,
+  agentChatOpenSchema,
+  type AgentChatOpenInput,
   issueThreadInteractionStatusSchema,
   issueThreadInteractionKindSchema,
   issueThreadInteractionContinuationPolicySchema,
@@ -3296,3 +3298,25 @@ export * from "./enterprise.js";
 export * from "./security-events.js";
 export * from "./sandbox-host-contracts.js";
 export * from "./model-broker.js";
+
+export * from "./v8-feature-flags.js";
+export * from "./v8-assurance.js";
+export * from "./business-events.js";
+export * from "./process-data-readiness.js";
+export * from "./process-analysis.js";
+export * from "./process-findings.js";
+export * from "./process-conformance.js";
+export * from "./decision-intelligence.js";
+export * from "./decision-outcome-reviews.js";
+export * from "./business-forecasting.js";
+export * from "./business-scenarios.js";
+export * from "./business-experiments.js";
+export * from "./business-metrics.js";
+export * from "./business-metric-targets.js";
+export * from "./strategy-execution.js";
+
+export * from "./causal-claims.js";
+export * from "./adaptive-planning.js";
+export * from "./management-reviews.js";
+export * from "./analytical-context.js";
+export * from "./management-chat-tools.js";

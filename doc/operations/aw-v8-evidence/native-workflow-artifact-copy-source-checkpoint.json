@@ -1,0 +1,91 @@
+{
+  "checkpoint": "Original native Artifact version owns whole-Workflow copied payloads and C7",
+  "parentCommit": "93c1355a388b4e2d15da68771071d62acd67097e",
+  "recordedAt": "2026-10-08T03:03:58.733822+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "a033b0b251b2bd73309c336d25348e100afef006790056d8bbadcaa4888f41c9"
+    },
+    {
+      "path": "packages/db/src/migrations/0435_native_workflow_artifact_copy_owner.sql",
+      "sha256": "ca0a9420185f82d6c416c17155615770eb19fb76b3156849982e61aa98a09ef5"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0430_snapshot.json",
+      "deleted": true
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0435_snapshot.json",
+      "sha256": "05f69fb368839680866f7224b44caac993b7b8f52ecb70aa1102362a3cec0797"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "6b7f9619e9f386a38a93b6eb2a8fa91d6b66381f2cb3dc61ff6b5b2f6c7e162e"
+    },
+    {
+      "path": "server/src/__tests__/business-scenario-artifacts.integration.test.ts",
+      "sha256": "1210532950968420565cf6afb1abcad935cf13749e0a22d4a92c4e722756243e"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "d97919fe4e256a7719e3efe31c92900d038bdf0cb6b85f235032193248b08f75"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "616414a732c725a3728e03618fd82e78d8a29eba9639c3b8f8e0c2090f5d93ce"
+    },
+    {
+      "path": "server/src/services/memory/memory-jobs.ts",
+      "sha256": "786591cb3d094a730a3cd6ea50077153d562d3b4db9f0d3aee30f3110ae246bf"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "c82d9a36aea26febbbb4aacb56e66f74658525b399c471652bd48a67ea3078a5"
+    },
+    {
+      "path": "server/src/services/saas/company-purge.ts",
+      "sha256": "02d628af0371c07cc8ea3ff9f66bbeadefb56c120bf874cd8b0b1d50e32c2884"
+    }
+  ],
+  "validation": {
+    "nativeOwners": {
+      "tests": 73,
+      "files": 4,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-artifact-workflow-copy-final-tests.log"
+    },
+    "sourceReadersAndPrivacy": {
+      "tests": 102,
+      "files": 3,
+      "skipped": 0,
+      "log": "/var/tmp/aw-v8-artifact-workflow-copy-source-tests.log"
+    },
+    "serverTypes": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-artifact-workflow-copy-types.log"
+    },
+    "migrationSafety": {
+      "result": "passed",
+      "log": "/var/tmp/aw-v8-artifact-workflow-copy-migrations.log"
+    },
+    "parentWholeNativeBuild": {
+      "result": "passed",
+      "commit": "98b53da976bef33a5a9b0741de3f83c291573f49",
+      "log": "/var/tmp/aw-v8-native-build-artifact-workspace.log"
+    }
+  },
+  "qualified": [
+    "Actual Artifact -> transform -> Task execution, with and without waits",
+    "Current private Source access loss/restoration through original native Workflow child identities",
+    "Immutable original Artifact step binding and new-pin same-company validation",
+    "Original version C7/DELETE outbox, flags-off/paused complete Run copy cleanup and late-write fencing",
+    "Foreign company and independent verified Memory outcome preservation"
+  ],
+  "limits": [
+    "Historical private child associations are software prerequisites, not promoted Artifact/provider/Human trials",
+    "Source-derived standalone runtime remains closed pending qualified current native consumer admission",
+    "No hosted populated backfill, hard latency, maximum-volume or whole-brief acceptance qualification",
+    "Remaining Planning/Routine/action/provider/hosted and Source closure work stays open"
+  ]
+}

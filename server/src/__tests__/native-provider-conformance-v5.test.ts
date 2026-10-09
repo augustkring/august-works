@@ -9,6 +9,7 @@ vi.mock("../vendor/paperclip-runner/index.js", async (original) => ({ ...await o
 vi.mock("../services/native-runtime/native-session-executor.js", () => ({ buildNativeProviderEnvironment: (configured: unknown) => configured, nativeUsageCostUsd: mocked.money, normalizeNativeUsage: () => ({ inputTokens: 2, outputTokens: 3 }) }));
 import { makeProviderCapabilitySnapshot } from "../services/provider-capabilities.js";
 import { discoverNativeCapabilities, executeNativeProviderConformance } from "../services/native-provider-conformance.js";
+import { nativeRuntimeAssetsRoot } from "../services/native-runtime/runtime-asset-retention.js";
 let root = ""; const originalHome = process.env.PAPERCLIP_HOME;
 beforeEach(async () => { root = await fs.mkdtemp(path.join(os.tmpdir(), "aw-native-conformance-")); process.env.PAPERCLIP_HOME = root; mocked.factory.mockReset(); });
 afterEach(async () => { if (originalHome === undefined) delete process.env.PAPERCLIP_HOME; else process.env.PAPERCLIP_HOME = originalHome; for (const entry of await fs.readdir(root, { recursive: true, withFileTypes: true })) if (entry.isDirectory()) await fs.chmod(path.join(entry.parentPath, entry.name), 0o700); await fs.rm(root, { recursive: true, force: true }); });
@@ -18,6 +19,7 @@ async function context(controller = new AbortController()): Promise<AdapterExecu
 }
 function backendFixture(input: Record<string, any>, options: Record<string, any>, controller?: AbortController, foreign = false, brokenClose = false) {
   expect(input.credentialBindings).toEqual([]); expect(input.runtimeContext.skills).toEqual([]); expect(options.dynamicTools).toEqual([]);
+  expect(input.runtimeContext.instructions.bundle.rootPath.startsWith(nativeRuntimeAssetsRoot({ companyId: input.binding.companyId, runId: input.binding.runId }) + path.sep)).toBe(true);
   let identity = { ...input.binding, sessionId: input.session.normalizedSessionId }; delete identity.executionWorkspaceId;
   const snapshot = (): PersistedNativeSession => ({ backendKind: "runner", sessionId: identity.sessionId, providerSessionId: "actual-provider-session", identity: { ...identity } } as PersistedNativeSession);
   const session: NativeSession = {
@@ -38,6 +40,8 @@ it("uses the retained native backend, keeps synthetic tools empty and resumes it
   ctx.runId = "run-2"; ctx.runtime.sessionParams = first.sessionParams!; ctx.runtime.sessionId = first.sessionId!;
   const resumed = await executeNativeProviderConformance(ctx);
   expect(resumed.exitCode).toBe(0); expect(last.recoverSession).toHaveBeenCalledTimes(1); expect(last.openSession).not.toHaveBeenCalled(); expect(last.session.identity().runId).toBe("run-2");
+  expect(mocked.factory.mock.calls[1][0].runtimeContext.aggregateDigest).toBe(mocked.factory.mock.calls[0][0].runtimeContext.aggregateDigest);
+  await expect(fs.stat(path.join(nativeRuntimeAssetsRoot(), "bundles"))).rejects.toMatchObject({ code: "ENOENT" });
 });
 it.each([true, false])("requires provider close acknowledgement on cancel (confirmed=%s)", async (confirmed) => {
   const controller = new AbortController(), ctx = await context(controller); let last!: ReturnType<typeof backendFixture>;

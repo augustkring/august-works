@@ -1,0 +1,2 @@
+ALTER TABLE "process_findings" DROP CONSTRAINT "process_findings_scope_check";--> statement-breakpoint
+ALTER TABLE "process_findings" ADD CONSTRAINT "process_findings_scope_check" CHECK ("process_findings"."finding_type" in ('missing_process_data','rework','avoidable_wait','bottleneck','unusual_variant','conformance_deviation') and ("process_findings"."finding_type"='missing_process_data')=("process_findings"."object_type" is null) and ("process_findings"."object_type" is null or "process_findings"."object_type" in ('issue','project')));

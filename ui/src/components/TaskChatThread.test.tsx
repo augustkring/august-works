@@ -7,13 +7,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TaskChatThread } from "./TaskChatThread";
+import { TaskChatThread, type TaskChatThreadProps } from "./TaskChatThread";
 import type {
   IssueDocument,
   IssueQueuedCommentQueue,
   IssueThreadInteraction,
 } from "@paperclipai/shared";
 import { heartbeatsApi } from "@/api/heartbeats";
+import { ApiError } from "@/api/client";
 import { nativeRunEventsToTranscript } from "./transcript/native-run-events";
 import type { HeartbeatRunEvent } from "@paperclipai/shared";
 
@@ -21,6 +22,7 @@ const transcriptState = vi.hoisted(() => ({
   transcriptByRun: new Map(),
   isInitialHydrating: false,
   hydratedRunIds: undefined as Set<string> | undefined,
+  errorsByRun: new Map(),
 }));
 const nativeTranscriptState = vi.hoisted(() => ({
   transcriptByRun: new Map(),
@@ -50,6 +52,7 @@ vi.mock("@/components/transcript/useLiveRunTranscripts", () => ({
       transcriptByRun: new Map(transcriptState.transcriptByRun),
       isInitialHydrating: transcriptState.isInitialHydrating,
       hydratedRunIds: transcriptState.hydratedRunIds,
+      errorsByRun: new Map(transcriptState.errorsByRun),
     };
   },
 }));
@@ -109,6 +112,7 @@ let queryClient: QueryClient;
 beforeEach(() => {
   localStorage.clear();
   transcriptState.transcriptByRun.clear();
+  transcriptState.errorsByRun.clear();
   transcriptState.isInitialHydrating = false;
   transcriptState.hydratedRunIds = undefined;
   nativeTranscriptState.transcriptByRun.clear();
@@ -148,6 +152,21 @@ function render(ui: ReactElement) {
     ),
   );
 }
+
+it.each(["comments", "native", "log"])("withholds cached history and fallback output after %s source denial", (source) => {
+  const props: TaskChatThreadProps = {
+    issueId: "source-dependent-issue",
+    comments: [{ id: "retained-comment", companyId: "company-1", issueId: "source-dependent-issue", authorType: "agent", body: "Previously authorized analytical answer.", authorAgentId: "agent-1", authorUserId: null, presentation: null, metadata: null, createdAt: new Date("2026-10-07T10:00:00Z"), updatedAt: new Date("2026-10-07T10:00:00Z") }],
+    onAdd: async () => {},
+  };
+  render(<TaskChatThread {...props} />);
+  expect(container.textContent).toContain("Previously authorized analytical answer.");
+  if (source === "native") nativeTranscriptState.errorsByRun.set("native-run", { sourceAccessLost: true });
+  if (source === "log") transcriptState.errorsByRun.set("native-run", new ApiError("Source unavailable", 404, { details: { code: "analytical_source_access_lost" } }));
+  render(<TaskChatThread {...props} sourceAccessLost={source === "comments"} />);
+  expect(container.textContent).not.toContain("Previously authorized analytical answer.");
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("Conversation source access is unavailable");
+});
 
 it("coordinates first reveal while keeping the composer and visible history mounted through refresh", async () => {
   const props = {

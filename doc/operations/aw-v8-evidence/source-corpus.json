@@ -1,0 +1,538 @@
+{
+  "uploadedFiles": 38,
+  "uniqueFiles": 37,
+  "sources": [
+    {
+      "name": "august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
+      "sha256": "bc9602a5fd8fff088b2ba287cc49e67398ad5d709bc32ca1eae3d6e8de76c48d",
+      "bytes": 260966,
+      "lines": 10239,
+      "words": 31976,
+      "path": "/workspace/attachments/4afd3ee6-efa4-4d9e-a173-4fd190c6ebf7/august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 10239
+      },
+      "applicability": "Complete V8 V2 brief read with contiguous untruncated coverage; duplicate upload is byte-identical. Preserve native V4-V7 authority, immutable governed analytical identities, current authorization before aggregation, process readiness, forecasting baselines/backtests, scenario assumptions, experiment trust gates, causal abstention, proposal-only planning and cited management reviews. Source completion and exact-environment hosted qualification remain separate. Current upload includes 36 playbooks including standalone Security, unlike the brief historical 35-file corpus; external legal/provider/version statements require independent current validation before reliance."
+    },
+    {
+      "name": "august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
+      "sha256": "bc9602a5fd8fff088b2ba287cc49e67398ad5d709bc32ca1eae3d6e8de76c48d",
+      "bytes": 260966,
+      "lines": 10239,
+      "words": 31976,
+      "path": "/workspace/attachments/3de26f50-5e7d-4dd8-af3d-76793ff33ca4/august-works-organizational-decision-process-intelligence-adaptive-management-master-build-brief-v8-v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 10239
+      },
+      "applicability": "Complete V8 V2 brief read with contiguous untruncated coverage; duplicate upload is byte-identical. Preserve native V4-V7 authority, immutable governed analytical identities, current authorization before aggregation, process readiness, forecasting baselines/backtests, scenario assumptions, experiment trust gates, causal abstention, proposal-only planning and cited management reviews. Source completion and exact-environment hosted qualification remain separate. Current upload includes 36 playbooks including standalone Security, unlike the brief historical 35-file corpus; external legal/provider/version statements require independent current validation before reliance."
+    },
+    {
+      "name": "03_engineering_workflow_sdlc_configuration_management_v2.md",
+      "sha256": "66d7afea2dbc7b035f034e6984addd774d732ad892b7629099901d1d0441f6d1",
+      "bytes": 121918,
+      "lines": 3822,
+      "words": 15789,
+      "path": "/workspace/attachments/1cd31b57-10ef-4413-b756-8685f6910ff3/03_engineering_workflow_sdlc_configuration_management_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3822
+      },
+      "applicability": "Explicit intent, risk-proportionate assurance and canonical configuration authority; small coherent commits with immutable revision identity. Source tests and CI remain evidence rather than release authorization. Bind artifact, configuration and schema before promotion; state-compatible recovery, independent review and actual operating verification remain separate."
+    },
+    {
+      "name": "01_requirements_specification_domain_engineering_master_playbook_v2.2.md",
+      "sha256": "ed1a535e40a62e0e3bf7f55ad0eb4a3275090a91727c2b775c8e3063136b6a54",
+      "bytes": 158850,
+      "lines": 4769,
+      "words": 20093,
+      "path": "/workspace/attachments/2058f039-87fa-4165-bfc5-dbba7ee7dff9/01_requirements_specification_domain_engineering_master_playbook_v2.2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4769
+      },
+      "applicability": "Separate intended outcomes, requirements, constraints, assumptions and acceptance evidence. Preserve all requested invariants and native authority; specify bounded failure, privacy, time and concurrency behavior. Risk-proportionate traceability, four distinct verification/validation questions, and no invented completeness or causal qualification."
+    },
+    {
+      "name": "02_software_architecture_system_design_v2.1_research_audited_golden_master.md",
+      "sha256": "42b8612fa4942ffde2efa90254f3d3d45c879c8e2ae70a7764d8287fa41eaa0f",
+      "bytes": 163435,
+      "lines": 6070,
+      "words": 20593,
+      "path": "/workspace/attachments/c9b3426b-77f7-43f8-93c5-89e7f1d0ac55/02_software_architecture_system_design_v2.1_research_audited_golden_master.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 6070
+      },
+      "applicability": "Prefer native modular boundaries and PostgreSQL authority; explicit write owners, derived-state reconciliation, tenancy and privacy lifecycle; invariant-driven consistency, bounded retries/queues and observable recovery. Architecture descriptions and reference patterns do not establish implementation or operating qualification."
+    },
+    {
+      "name": "04_software_construction_code_quality_v2.md",
+      "sha256": "c185f38376976b7e80f289fb039188e503d450cd7af9d159b079475d850733f5",
+      "bytes": 100560,
+      "lines": 2783,
+      "words": 13915,
+      "path": "/workspace/attachments/a9f75c2c-da51-4177-be60-56fd9c35cd12/04_software_construction_code_quality_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 2783
+      },
+      "applicability": "Coherent native implementations, explicit state and mutation authority, runtime boundary validation and failure semantics, justified dependencies, and risk-relevant verification; no arbitrary size thresholds or claims of independent review from author tests."
+    },
+    {
+      "name": "06_security_engineering_v2_golden_master.md",
+      "sha256": "6ee0530424263b86e33ded1f09132f3e7adaed90711903fa4fc401f58bd7873e",
+      "bytes": 279064,
+      "lines": 6992,
+      "words": 35785,
+      "path": "/workspace/attachments/1f6a132f-c49e-4217-997f-35d4a0d095a4/06_security_engineering_v2_golden_master.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 6992
+      },
+      "applicability": "Reuse current native authorization at every route, source and effect; structural tenant and replay controls; distinguish authorship tests from independent assurance; bounded untrusted attributes; retain explicit recovery and governance gaps. Framework and publication-status claims require current primary-source verification before reliance."
+    },
+    {
+      "name": "05_verification_validation_testing_quality_engineering_v2.md",
+      "sha256": "ce9f27bbb8fb89ede84075f411d4861099618dfa5c36d6829ed05b53bd058236",
+      "bytes": 132218,
+      "lines": 3842,
+      "words": 16954,
+      "path": "/workspace/attachments/8d90df45-db8a-4197-bd51-ea0b71b92bf9/05_verification_validation_testing_quality_engineering_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3842
+      },
+      "applicability": "Claim-driven, risk-proportionate assurance with explicit independent oracles and real boundary semantics. Negative, concurrent, partial-failure, migration and restore reconciliation evidence where material. Tests, coverage, scanners and local fixtures do not certify release, accessibility, provider or hosted behavior; bind evidence to source, configuration and artifact identity."
+    },
+    {
+      "name": "08_reliability_resilience_observability_sre_v2_golden_master.md",
+      "sha256": "1a6e338476890b2b3f2ff9fc8cb0cb29681260eba6f89645ea42c2445760575e",
+      "bytes": 159077,
+      "lines": 5438,
+      "words": 20995,
+      "path": "/workspace/attachments/518f2b72-61b5-40fc-a7f5-10e1d847bd6e/08_reliability_resilience_observability_sre_v2_golden_master.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 5438
+      },
+      "applicability": "Reliability follows critical user outcomes and protected integrity, privacy and authorization invariants. Distinguish healthy from unobserved telemetry, partial or unknown outcomes, and controlled degraded states; bound overload and retry amplification. Backups, replication, copied-database tests and DR documents are different evidence from executed archive restoration and hosted critical-flow recovery. Require state-compatible recovery, actual operating ownership, meaningful stop conditions and verified incident actions; use the least complex adequate failure topology."
+    },
+    {
+      "name": "07_privacy_data_protection_engineering_v2.md",
+      "sha256": "73eec8b3584696f0dec1f706781d007d80c92479aa2d6ca7fa667588674bc264",
+      "bytes": 119003,
+      "lines": 3630,
+      "words": 15442,
+      "path": "/workspace/attachments/5a9ee8d9-c7df-4295-b3ed-4806e61a70a9/07_privacy_data_protection_engineering_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3630
+      },
+      "applicability": "Purpose-bound derived surfaces, minimized typed attributes, authorization before aggregation/export, correction/deletion and restore-safe suppression; implementation evidence remains pending."
+    },
+    {
+      "name": "09_performance_scalability_resource_cost_engineering_v2.md",
+      "sha256": "628f15dcf3499da24c2f8941f0cde630622f13fb68147fb91c5f18bc9bc5d58f",
+      "bytes": 116313,
+      "lines": 3288,
+      "words": 14746,
+      "path": "/workspace/attachments/ae732a52-5bb6-40c2-b719-4705252aaf23/09_performance_scalability_resource_cost_engineering_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3288
+      },
+      "applicability": "Define workload-specific end-to-end success, latency, capacity and economic contracts; separate offered load, useful throughput, concurrency, utilization and saturation. Bound analytical work, queues and retries; preserve tenant access and privacy under load. Use representative reproducible correctness-checked measurements, explicit freshness-bearing cache semantics and governed useful-unit costs; no invented universal percentile, utilization, headroom or hosted performance claims."
+    },
+    {
+      "name": "10_devops_cicd_release_platform_supply_chain_v2.md",
+      "sha256": "4a9ef5835b8cc4948a8f6547b351ed5a563c6cacc3270743f341f8928d5c283c",
+      "bytes": 141225,
+      "lines": 3990,
+      "words": 18062,
+      "path": "/workspace/attachments/c47c5fac-2745-4432-b484-32a868c80ba9/10_devops_cicd_release_platform_supply_chain_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3990
+      },
+      "applicability": "Preserve immutable source, artifact, workflow, configuration and evidence identity through release lineage. Distinguish tests, provenance, signatures, SBOM, vulnerability context and authorized consumer policy; model unavailable gates explicitly. Keep credentials outside untrusted build inputs, use state-compatible migration/recovery and verify actual runtime. Optional provider images require pinned independent supply-chain qualification; local CI and AI self-review do not authorize hosted promotion."
+    },
+    {
+      "name": "12_data_database_storage_engineering_v2_golden_master.md",
+      "sha256": "2e45000659a24de43a6187be8808f3a17807936571bc9248abf44a1697c6a711",
+      "bytes": 150942,
+      "lines": 3608,
+      "words": 18888,
+      "path": "/workspace/attachments/1d03759d-fd89-4b9e-b1e1-a802b867d512/12_data_database_storage_engineering_v2_golden_master.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3608
+      },
+      "applicability": "PostgreSQL authority and tenant-aware keys/constraints, bounded transactions and concurrency evidence, stable resumable backfills, derived-store freshness and reconciliation, mixed-version migrations, and executed restore/deletion evidence. New engine or storage remains unjustified until measured need."
+    },
+    {
+      "name": "11_maintenance_evolution_migration_technical_debt_v2.md",
+      "sha256": "d1da27c2ddde4c6d8b8638257e3d3a0ca82fb7af2f19e191f9bf548d5e14e5f9",
+      "bytes": 109030,
+      "lines": 3666,
+      "words": 14059,
+      "path": "/workspace/attachments/c38827a6-45bb-46cc-9377-ea75551319e5/11_maintenance_evolution_migration_technical_debt_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3666
+      },
+      "applicability": "Preserve protected behavior and one fact authority through every intermediate migration state. Compatibility covers supported producer, consumer, persisted state, replay, authorization and temporal semantics; successful backfill execution needs independent reconciliation. Use bounded resumable migrations with explicit late-write handling, state-dependent recovery and eventual transitional cleanup. Resolve privacy retention/deletion and resource/identity closure; modernization labels, green tests and universal debt scores do not establish correct outcomes."
+    },
+    {
+      "name": "13_api_integration_distributed_systems_engineering_v2_golden_master.md",
+      "sha256": "bfa0e4a9deae39ed3302ea6aa1a915d8c0d771967ae4dfad2c55129e3a5c79da",
+      "bytes": 124805,
+      "lines": 4531,
+      "words": 16359,
+      "path": "/workspace/attachments/1ed8babc-d329-47a8-b7f8-c4757720c065/13_api_integration_distributed_systems_engineering_v2_golden_master.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4531
+      },
+      "applicability": "Behavioral contracts include authority, time, unknown outcomes, repetition, ordering, consistency, bounded capacity, evolution and repair. Use native atomic identity and duplicate safety; timestamps are not causal versions, transport guarantees do not cover external effects. Require semantic runtime conformance, current access, controlled replay and authoritative reconciliation; provider sandbox and API descriptions do not prove deployed behavior. Source protocol-version claims have been read, not independently reverified."
+    },
+    {
+      "name": "15_backend_services_engine_engineering_v2.md",
+      "sha256": "e22a3bc783a3007e186c87da9d5cf69b728cc4e06d722dac971054d4ae71249f",
+      "bytes": 105634,
+      "lines": 2722,
+      "words": 13574,
+      "path": "/workspace/attachments/3402aa33-b275-409d-851f-ec702587c6c0/15_backend_services_engine_engineering_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 2722
+      },
+      "applicability": "Keep native authoritative domain rules and transactional boundaries; stable work identity differs from execution attempts. Bound concurrency, retry, queue growth, scheduling catch-up and repair; require resource-side fencing when leases can expire. Preserve tenant authorization, resource fairness, async privacy lifecycle, mixed-version execution compatibility and crash-safe acknowledgement. Local fixtures do not establish hosted operating readiness."
+    },
+    {
+      "name": "16_mobile_desktop_application_engineering_v2.md",
+      "sha256": "61ac6979672db4c8fc078a9010f5a042ce9832f4471db2b01328bae2eb4559b9",
+      "bytes": 100826,
+      "lines": 2286,
+      "words": 13129,
+      "path": "/workspace/attachments/ac6e6787-b7dd-4272-afca-3982160e7206/16_mobile_desktop_application_engineering_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 2286
+      },
+      "applicability": "The current V8 web product does not justify adding native client platforms. Apply interruption-safe durable intent, versioned state and backend authority, current authorization after reconnection, deletion/no-resurrection and accessible input/recovery. If a native client is later required, platform lifecycle, permissions, signing, updates and real-device evidence need separate qualification; a wrapper, sandbox or signature alone is insufficient."
+    },
+    {
+      "name": "17_cloud_infrastructure_networking_iac_v2.md",
+      "sha256": "31c10af587bb34ac41a38e1102010ebdb4906961a77f178d39037fb2154dab21",
+      "bytes": 106303,
+      "lines": 3328,
+      "words": 13601,
+      "path": "/workspace/attachments/9a3cd7a4-c8cf-46fc-a622-d6c640a48d58/17_cloud_infrastructure_networking_iac_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3328
+      },
+      "applicability": "Keep desired infrastructure, provider state and observed runtime distinct. Private reachability, encryption, identity and authorization provide different controls; qualify effective IAM, networking, pinned images and scoped machine/recovery identities in the actual environment. Bound capacity, retries and cost, protect privacy and backup independence, and test recovery bootstrap, restore, failover/failback and reconciliation. No provider, orchestrator, multi-region or IaC tooling adds operating qualification by name; source version claims were read, not independently checked."
+    },
+    {
+      "name": "18_ai_ml_llm_systems_engineering_master_playbook_v2.md",
+      "sha256": "7b1a948da1cc874c1aec68f30a427ccd10e4136c0a527659af54067a79f0f398",
+      "bytes": 145898,
+      "lines": 3377,
+      "words": 18559,
+      "path": "/workspace/attachments/81f7b25a-5871-4e3a-a584-038fa2f0c49b/18_ai_ml_llm_systems_engineering_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3377
+      },
+      "applicability": "System-level and representative evidence, task-specific acceptance, non-AI baselines and explicit abstention; forecasts, causal claims, recommendations and observed outcomes have different oracles. Hard access, tenant, privacy, spending and commit authority remain deterministic outside the model. Version sources, prompts, models, retrievers, providers and evidence; prevent temporal or evaluation leakage, untrusted-content authority, synthetic-label promotion and self-certification. Bounded execution and cost, governed derived-data deletion, fallback qualification and field monitoring remain necessary; benchmark or local fixture success does not establish production fitness."
+    },
+    {
+      "name": "20_blockchain_smart_contract_engineering_v2.md",
+      "sha256": "66a13d5d4bd7e16e041f4e62f17a16e2feb46742eb2515229ff279f8d87e69f9",
+      "bytes": 101780,
+      "lines": 3137,
+      "words": 12724,
+      "path": "/workspace/attachments/6d9df428-be4f-4b24-8322-e64e3f1b2e84/20_blockchain_smart_contract_engineering_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3137
+      },
+      "applicability": "No blockchain, tokens or smart contracts are required by V8; do not introduce them. Transfer only applicable principles: exact intent and authorization binding, replay domains, key lifecycle and recovery authority, precision/rounding, explicit state invariants, independent state reconciliation and source/build/runtime identity. Signatures and hashes do not prove trust or anonymity; audit, formal scope and operating evidence are distinct. Irreversible effects require literal compensation/recovery rather than fictional rollback."
+    },
+    {
+      "name": "19_agentic_ai_engineering_v2_golden_master.md",
+      "sha256": "6273cbb23263df0383094bd1aa7b303c46b75b8d8c1f699b4b1bb049dc2f3162",
+      "bytes": 190147,
+      "lines": 5048,
+      "words": 24035,
+      "path": "/workspace/attachments/6f195255-14ae-44b4-94a8-ed5f1d162387/19_agentic_ai_engineering_v2_golden_master.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 5048
+      },
+      "applicability": "Preserve initiator, represented principal, agent and execution identity through native controls. Model output, memory, documents, tool metadata and peer messages do not grant authority. Scope current authorization, approvals to exact actions, aggregate budgets and pre-spend controls; no implicit delegation or self-granted privilege. Durable operation identity, unknown-outcome reconciliation, bounded retries, kill/revocation and privacy-safe evidence remain required. Use existing native workflows and the smallest adequate autonomy; sandbox and hosted qualification require actual boundary evidence. Cross-check with Playbook 18 and distinguish protocol/version source claims from independently verified implementation."
+    },
+    {
+      "name": "21_systems_embedded_real_time_engineering_v2.md",
+      "sha256": "1af242f1d68ea672d98ac8d9d51554f8b430409a97960c24a9d51a44bd35779d",
+      "bytes": 161648,
+      "lines": 4629,
+      "words": 20612,
+      "path": "/workspace/attachments/5eafb022-2dec-41dd-a97b-43de0316dc58/21_systems_embedded_real_time_engineering_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4629
+      },
+      "applicability": "V8 does not require hardware, firmware or hard real-time components. Apply explicit concurrent ownership and lock ordering, finite resources and retries, precise clock and deadline semantics, staged readiness and recoverable persistent state. Functional determinism, measured latency and justified worst-case bounds are separate claims. Exact target/runtime/configuration and recovery evidence cannot be inferred from local models. Do not import safety certification processes, hardware mechanisms or universal allocation and scheduling dogma into the web product."
+    },
+    {
+      "name": "22_language_runtime_engineering_standards_v2.md",
+      "sha256": "16a78607ebb0cfe75b5bc199b5bacc962a74b8a3384c75cad77f9a676061e51d",
+      "bytes": 95138,
+      "lines": 1662,
+      "words": 12321,
+      "path": "/workspace/attachments/44da58bd-a3ad-4575-a486-8a66a858c891/22_language_runtime_engineering_standards_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 1662
+      },
+      "applicability": "Use the repository-controlled language, runtime, compiler and locked dependency contract; do not upgrade from unverified version tables. Runtime validation remains necessary beyond static types. Explicit null, time, precision, ownership, cancellation, error and ordering semantics; parameterized SQL and database constraints; bounded transaction retry and state-compatible migrations. Build scripts, native bindings and any optional analytical language introduce executable supply-chain and operational boundaries. Exact release-mode and target-runtime evidence remains separate from compiler success."
+    },
+    {
+      "name": "concept_business_design_master_playbook_v2.md",
+      "sha256": "4a13b027673013d9ab92bc0c71d93239231c0bc3b5f9ffeaafed08b86bb8c794",
+      "bytes": 111559,
+      "lines": 2724,
+      "words": 15080,
+      "path": "/workspace/attachments/5aca0b85-642b-4f9a-8812-c638e7f32e1f/concept_business_design_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 2724
+      },
+      "applicability": "Preserve observed facts, inferences, assumptions, design choices, constraints and unknowns as distinct records with provenance. Strategy and business-model representations do not establish realized outcomes or market demand. Customer, user, payer and approval authority can differ; explicitly map goals, activity dependencies, incentives and rough economic units. Compare coherent alternatives and prioritize falsifiable uncertainty before irreversible commitments. Diagnostic scores, scenarios, generated personas and forecasts are not causal or validation evidence; use native Foundation, Goals, Decisions and Learning owners rather than another business authority store."
+    },
+    {
+      "name": "brand_strategy_positioning_master_playbook_v2.md",
+      "sha256": "2bcbff7f36d6bdd433e18b608e48100cd4ae1ce7793a392fa474b28384365471",
+      "bytes": 115466,
+      "lines": 3400,
+      "words": 14694,
+      "path": "/workspace/attachments/8ea86663-0035-40e1-b902-8c451f4c618f/brand_strategy_positioning_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3400
+      },
+      "applicability": "Separate market memory, associations, identity, perceived difference and commercial outcomes. Claims require product reality and scoped proof; prestige, brand tracking and vendor correlations do not establish causal effect. Preserve stable constructs, method changes, uncertainty and external-validity boundaries. Version positioning and evidence through native owners; no new brand authority, invented research, universal allocation rule or gratuitous rebrand."
+    },
+    {
+      "name": "digital_graphics_illustration_generative_visual_production_master_playbook_v2.1_golden_master.md",
+      "sha256": "4646aba5823f7765dd517a4ab3333ab4c93306ba4f9870e7f455a61b48a6200c",
+      "bytes": 171520,
+      "lines": 4174,
+      "words": 22485,
+      "path": "/workspace/attachments/0dbd84e1-1fa0-48b4-9c5a-eb0bc8fd16ca/digital_graphics_illustration_generative_visual_production_master_playbook_v2.1_golden_master.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4174
+      },
+      "applicability": "Choose the least complex medium that preserves meaning; render factual charts, diagrams, UI, labels and source relationships deterministically from structured data. Provide accessible structured equivalents, responsive transformations and non-color cues. Distinguish provenance from truth and retain exact accepted artifacts; sanitize untrusted SVG and sensitive captures. No decorative GPU runtime or generated product proof; volatile provider/specification and legal claims are not independently verified by source reading."
+    },
+    {
+      "name": "digital_visual_design_art_direction_master_playbook_v2.1_golden_master.md",
+      "sha256": "7e5cd92f82fcc82f91d8eb54121433d7dbd542bacdfdbdc8ff93c70d6695b1d2",
+      "bytes": 189008,
+      "lines": 5358,
+      "words": 25685,
+      "path": "/workspace/attachments/e75d393f-fe83-4e14-aa29-6e5255031211/digital_visual_design_art_direction_master_playbook_v2.1_golden_master.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 5358
+      },
+      "applicability": "Preserve the established product visual grammar and native tokens; calibrate hierarchy, comparison density, numerals, accessible contrast and complete states. Adapt layouts rather than shrinking; review real rendering, fallback fonts, zoom and responsive pressure. A visual regression baseline is change evidence rather than visual acceptance; no gratuitous rebrand or new token system. Reviewed document status and vendor research do not establish independent field validation."
+    },
+    {
+      "name": "google_ads_master_playbook_v2.md",
+      "sha256": "fe9b3fc3221921072ca5244e9c1ebd2233a3fc6c84c7b65f709a97bf589a775f",
+      "bytes": 127430,
+      "lines": 3387,
+      "words": 16369,
+      "path": "/workspace/attachments/40870f99-b48b-4b60-8713-926db34b02a2/google_ads_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3387
+      },
+      "applicability": "Treat platform diagnostics, vendor recommendations, causal evidence and internal business outcomes as separate layers. Privacy-thresholded reports and missing or delayed observations are not zero activity. Preserve explicit exploration budgets, current authority, trustworthy units/value signals, measurement-incident abstention and bounded marginal proposals. Experiment primary outcomes come from compatible raw business evidence rather than overlapping attribution credit. Measurement playbook qualifies the simplified incremental-spend formulas and modern attribution methods. No new paid-media execution, automatic budget changes or reliance on unverified 2026 vendor feature claims."
+    },
+    {
+      "name": "market_validation_pretotyping_master_playbook_v2.md",
+      "sha256": "36b1941aead8b74a55999a3f29952bbb9a26a2ac54593e05796b1fc8e19d4a46",
+      "bytes": 147041,
+      "lines": 3936,
+      "words": 19545,
+      "path": "/workspace/attachments/b283fd92-c92c-4401-8f54-8cdbf1911065/market_validation_pretotyping_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3936
+      },
+      "applicability": "Separate discovery, behavioral validation and comparative causal inference. Predeclare population, units, primary metric, raw denominator, material threshold, stopping and guardrails; verify assignment, SRM, missingness and interference before analysis. INVALID is not FAIL; uncertainty, decision loss, reversibility and transportability constrain conclusions and investment proposals. Evidence quality is multidimensional and a critical gap cannot be averaged away. Initial interest does not prove repeat usage, willingness to pay or realized economics; synthetic participants and diagnostic scores do not supply market evidence. Apply through native Decisions, Experiments, Scenarios and Learning without unsolicited paid campaigns, outreach, fake availability or a parallel validation store."
+    },
+    {
+      "name": "marketing_measurement_attribution_master_playbook_v2.md",
+      "sha256": "4dd41d59a12676830843cef734d300bed1f5dcd89106408a3181b1fc9429bd14",
+      "bytes": 118078,
+      "lines": 3666,
+      "words": 14514,
+      "path": "/workspace/attachments/ae9fd744-75e9-405f-b020-dd0bc5ed356c/marketing_measurement_attribution_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3666
+      },
+      "applicability": "Define the decision, estimand, population and counterfactual before metric selection. Preserve realized, observed, attributed, modeled and causal layers with source, scope, coverage, incidents and uncertainty; reconcile vendor claims without summing overlapping credit. Assignment-based randomized inference, SRM, contamination, stopping and external-validity gates precede conclusions. Average lift is not marginal response; incremental cost denominators must match the contrast. Forecast, scenario and allocator outputs remain conditional proposals, with compatible dated calibration and independent outcome Learning. No new identity graph, tracking provider, marketing execution or unverified platform/legal mechanics."
+    },
+    {
+      "name": "master_playbook_standard_v2.0.md",
+      "sha256": "3d5aa0b87d87ca345402f18dedde7893a67b1af21b23100b8117a082f55ff890",
+      "bytes": 214638,
+      "lines": 6411,
+      "words": 26787,
+      "path": "/workspace/attachments/196bd270-5009-4db5-ba64-642b7c7c7916/master_playbook_standard_v2.0.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 6411
+      },
+      "applicability": "Risk-proportionate controls; requirements-to-tests traceability; separate evidence certainty, recommendation, implementation and real outcomes; no invented independent assurance or permission from reference documents."
+    },
+    {
+      "name": "meta_ads_master_playbook_v2.md",
+      "sha256": "df73a733fab4058af29355584aa84b7d10d36642461f0fb5a759146e03c8ac16",
+      "bytes": 121142,
+      "lines": 3542,
+      "words": 15804,
+      "path": "/workspace/attachments/c0836760-6a8a-4f04-857e-b9a1b7975309/meta_ads_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3542
+      },
+      "applicability": "Use value-relevant outcomes, commercial reconciliation and typed signal quality before performance interpretation. Exploration, adaptive delivery and semantic clustering generate hypotheses; causal confirmation needs a valid predeclared design and contextual outcome evidence. Preserve no-op decisions, mature observation windows, bounded proposals and Learning scope/expiry. Measurement playbook refines incremental denominators when control spend is nonzero; do not copy the simplified total-spend formula outside its contrast. Native V8 contains no automatic paid-media spend, audience tracking or invented testimonials, claims, uplift benchmarks or platform authority."
+    },
+    {
+      "name": "ui_master_playbook_v2.md",
+      "sha256": "863c87a97de488d60eb5cb687da2b85d177095cd59545742c048bb402a1ce656",
+      "bytes": 170427,
+      "lines": 5506,
+      "words": 22737,
+      "path": "/workspace/attachments/cc9f93e7-3066-462d-bf89-b83cf8561915/ui_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 5506
+      },
+      "applicability": "Coherent appearance, semantics, state and behavior; native controls and existing tokens; explicit scope, loading, empty, permission, failure and recovery states. Preserve keyboard focus and responsive task capability; distinguish proposals, execution and evidence; truthful progress and risk-proportionate oversight. Automated checks alone do not establish accessibility or task usability."
+    },
+    {
+      "name": "organic_discoverability_master_playbook_v2.md",
+      "sha256": "ab4d130d89613f302a53aa83896cd1351483dc5d635dc1fc9ac97bd3a479a1fd",
+      "bytes": 172349,
+      "lines": 4979,
+      "words": 22831,
+      "path": "/workspace/attachments/699894fd-abf9-423f-9ef6-b871012c1679/organic_discoverability_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4979
+      },
+      "applicability": "Retrieval eligibility, source selection, citation support, synthesized representation and downstream outcome are distinct. Evidence passages need explicit entity, claim, scope, period, units and supporting source; preserve freshness and factual corrections without fake dates or trust cues. Citation counts and sampled visibility do not establish authority, correctness or causal effect. Robots preferences and public indexing directives never replace native access control for private organizational data. Apply clear accessible information structure and source inspection to reviews and analytical UI; no extra public SEO site, crawler protocol, content factory, paid outreach or unverified provider mechanics."
+    },
+    {
+      "name": "universal_design_principles_master_playbook_v2.md",
+      "sha256": "e1311908de3f296f17d99d5cbaa514b3488cf1cb39e71b6396a3627037aa687f",
+      "bytes": 144109,
+      "lines": 4003,
+      "words": 19270,
+      "path": "/workspace/attachments/82066224-9f22-4b34-8b13-887b7a7e6204/universal_design_principles_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4003
+      },
+      "applicability": "Task-driven hierarchy, grouping, legibility, semantic tokens and controlled density; accessible contrast and non-color meaning. Honest quantitative encodings and axes; no decorative charts, universal aesthetic recipes or invented trust cues. Preference, attention, brand association and causal product outcomes remain distinct."
+    },
+    {
+      "name": "universal_software_ai_engineering_master_playbook_v2.md",
+      "sha256": "df11fe0389acc15df5afe87f873eb726d06b6131d282d20f26472b05e47792e5",
+      "bytes": 201414,
+      "lines": 4324,
+      "words": 25471,
+      "path": "/workspace/attachments/f009c9be-7952-4380-a2d1-266832a25a76/universal_software_ai_engineering_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4324
+      },
+      "applicability": "Explicit native state, authority and invariants; bounded work and failure semantics; independent verification matched to risk; privacy and lifecycle ownership; minimal adequate complexity; local evidence is not hosted or independent acceptance."
+    },
+    {
+      "name": "ux_master_playbook_v2_double_validated_2026-09-21.md",
+      "sha256": "47978d13e56cd7d3dc0e69985f03759161a79e2e4fe3f610ff42b8d2fc86ba49",
+      "bytes": 165540,
+      "lines": 4665,
+      "words": 21580,
+      "path": "/workspace/attachments/c2846df2-ff4b-4915-87cc-ce71649fc767/ux_master_playbook_v2_double_validated_2026-09-21.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 4665
+      },
+      "applicability": "Prioritize the user outcome and whole journey, preserve existing mental models and valid work under failure. Explicit scope, evidence, recoverability, permission and partial completion; accessible native flows and responsive task parity. Assignment and telemetry integrity precede experiment conclusions; subjective preference and explanations do not establish objective usability or correctness."
+    },
+    {
+      "name": "web_frontend_engineering_master_playbook_v2.md",
+      "sha256": "e8b60779a7174ff54b2e95595b9de85f5363b5b61123ff7023dee89383ed8ac3",
+      "bytes": 113728,
+      "lines": 3638,
+      "words": 14673,
+      "path": "/workspace/attachments/ae6b7c49-a8d8-48ee-892e-1a57702cd2df/web_frontend_engineering_master_playbook_v2.md",
+      "reviewStatus": "read_complete",
+      "reviewedLines": {
+        "from": 1,
+        "through": 3638
+      },
+      "applicability": "Use existing native web semantics and component contracts, with trusted server authorization, explicit state/cache ownership and stale-response protection. Preserve URL/history/focus and user input; no sensitive URL or browser persistence. Browser runtime, keyboard, zoom and assistive evidence remain separate from TypeScript/build/token checks."
+    }
+  ]
+}

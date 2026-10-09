@@ -1,0 +1,138 @@
+{
+  "checkpoint": "Native immutable causal source owner, human review, source erasure and current-ancestry inheritance",
+  "qualifiedSourceCommit": "ff256832d7282534824ff0730263a78c1b7a69c4",
+  "recordedAt": "2026-10-07T09:39:23.579718+00:00",
+  "sourceFiles": [
+    {
+      "path": "doc/operations/aw-v8-causal-claims.md",
+      "sha256": "eff9c82570a019a244792e57e238b5fda666a59698e17c58a702becbd752294b"
+    },
+    {
+      "path": "doc/plans/2026-10-06-aw-v8-build.md",
+      "sha256": "b27ae9e411f0314ca10648ce8933fbdcd93c99d8cbfa68c98f72718f7daffccb"
+    },
+    {
+      "path": "packages/db/src/migrations/0408_minor_ulik.sql",
+      "sha256": "407d48320f567e5d39d319ff4509f7d98f1bda651618106d8be4f0cef7d943be"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0408_snapshot.json",
+      "sha256": "d2ce4f4e13d544dde6ab08f3b06eff601cbb95119d585483781f0c704c75ea1f"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "7c4fd86f6bba3ac47e42ce664e9dedcbdac0ef7374fb241bcae1d9e4a7c934ec"
+    },
+    {
+      "path": "packages/db/src/schema/causal_claims.ts",
+      "sha256": "3fa99a8f798a669a2afaca89047cccbbe4d4c5b893b7b76e1726594af59a36a9"
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "912f070ebf036dbf7118e0058da8523186f165317dfcfa9f8c85769cafc18112"
+    },
+    {
+      "path": "server/src/__tests__/business-experiment-analysis.integration.test.ts",
+      "sha256": "fcb9b31a2a120f93d582c99408b633a4b641b6ad89bb1c0ac45c23c96216dfb5"
+    },
+    {
+      "path": "server/src/__tests__/causal-claims.integration.test.ts",
+      "sha256": "f3148a052cb6fa9ddb4a0cbcd1e9d57152dbf21b1c3e5ce9861c49577ac394ea"
+    },
+    {
+      "path": "server/src/__tests__/openapi-routes.test.ts",
+      "sha256": "435fb75cfb3308eb029ac384b0e9dc7a22ab79cb3a10f0820d611a242352931b"
+    },
+    {
+      "path": "server/src/app.ts",
+      "sha256": "fde9e763c16164163fff27ca5b739149eb822b95efc5295d6a7bc915db29c759"
+    },
+    {
+      "path": "server/src/routes/causal-claims.ts",
+      "sha256": "54d084f357b877381039b1603a7d826ef168ca43c408f393a6cac9164095cbe0"
+    },
+    {
+      "path": "server/src/routes/index.ts",
+      "sha256": "a1a79da22ab3515f5ed2841ccd3487a61630329dacd1ee9463175f1bf15471b4"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "4edd1e0548920d726ed60eb9ff2bfbc5ab29ec3bb9204b393cd0ab3ab0a955f9"
+    },
+    {
+      "path": "server/src/services/business-experiments/evidence.ts",
+      "sha256": "a26ea935ade9cbecf1488b4c8b582c88f66344f5bcf66376cfefcb3d7947aa73"
+    },
+    {
+      "path": "server/src/services/causal-claims/service.ts",
+      "sha256": "d02d74710b534ab8e97c2e9743174c4098bbfca922b8443dc62f31534dc082b7"
+    },
+    {
+      "path": "server/src/services/saas/company-purge.ts",
+      "sha256": "a66f3b01d37dc23134d9c7021cf0b22b9cd20ec35cc3aba95c6b55ff0666b681"
+    }
+  ],
+  "qualifications": [
+    {
+      "name": "causal_owner_postgresql",
+      "checks": 23,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-owner-tests.log",
+      "logSha256": "80d8da21c5b6a1bf208738582724e947d5c0bb90ee5f56fd2a2a826d17a0b467"
+    },
+    {
+      "name": "experiment_causal_source_and_current_ancestry_postgresql",
+      "checks": 15,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-experiment-bridge-tests.log",
+      "logSha256": "90faa4ca02eb24aa9f7779818dc60a9f5edc092ea51d976a836017927a54eedc"
+    },
+    {
+      "name": "openapi_and_causal_kernel",
+      "checks": 27,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-owner-contracts-final.log",
+      "logSha256": "bafe47c9bab32298352f041b23035161165538992f8f9390b7f0c2f5cb379f61"
+    },
+    {
+      "name": "server_types",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-owner-types-final.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "generated_snapshot",
+      "checks": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-owner-snapshot.log",
+      "logSha256": "d88471e6aa1c19bca8a67745f1f84dc22d5f7e366886ca9ae04a7173a2b87cb4"
+    },
+    {
+      "name": "migration_safety",
+      "checks": null,
+      "status": "passed",
+      "exitCode": 0,
+      "logPath": "/var/tmp/aw-v8-causal-owner-migration-checks.log",
+      "logSha256": "dac51ae409f24399507dc8f681b4ec2f9f86d49dc45ce0dc4daabec2d635b21f"
+    }
+  ],
+  "distinctPostgresqlTests": 23,
+  "evidenceClass": "Actual native PostgreSQL/API qualification with synthetic sources; balanced registered experiment is a software fixture, not a collected trial or verified business impact.",
+  "resolvedAttempts": [
+    {
+      "logPath": "/var/tmp/aw-v8-causal-owner-contracts.log",
+      "reason": "New mounted route missing from the existing route-coverage test inventory; registered route owner and reran all 27 contracts."
+    }
+  ],
+  "remaining": [
+    "Causal operator UI and native downstream consumers",
+    "Independent sensitivity/provider refutation and optional DoWhy qualification",
+    "Remaining Planning/Management/Learning and complete hosted V8 release"
+  ]
+}

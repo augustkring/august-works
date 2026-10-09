@@ -1,3 +1,4 @@
+import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
 import { resolveAgentAppearance, agentAvatarUrl } from "@paperclipai/shared";
 import { listOpenRouterModels } from "../services/openrouter-models.js";
 import { prepareManagedAiRuntime, assertManagedAiProjectAuth, stripAiAuthBindings } from "../services/ai-connection-runtime.js";
@@ -713,6 +714,14 @@ export function agentRoutes(
   options.onSetupTokenLoginService?.(setupTokenLoginService);
 
   const runRedactions = createRunSecretRedactionRegistry(db);
+  async function redactRunResponse<T>(req:Request,companyId:string,runId:string,value:T) {
+    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId});
+    return runRedactions.redactForRun(companyId,runId,value);
+  }
+  async function redactRunResponses<T extends {id:string}>(req:Request,companyId:string,runs:T[]) {
+    for(const run of runs)await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId:run.id});
+    return runRedactions.redactForRuns(companyId,runs);
+  }
   const heartbeat = heartbeatService(db, {
     pluginWorkerManager: options.pluginWorkerManager,
   });
@@ -6655,7 +6664,7 @@ export function agentRoutes(
     const limit = limitParam ? Math.max(1, Math.min(1000, parseInt(limitParam, 10) || 200)) : undefined;
     const summary = req.query.summary === "true" || req.query.summary === "1";
     const runs = await heartbeat.list(companyId, agentId, limit, { summary });
-    res.json(await runRedactions.redactForRuns(companyId, runs));
+    res.json(await redactRunResponses(req, companyId, runs));
   });
 
   router.get("/companies/:companyId/provider-traces", async (req, res) => {
@@ -6763,7 +6772,7 @@ export function agentRoutes(
 
       const rows = [...liveRuns, ...recentRuns];
       const projections = await executionProjectionsForRuns(db, companyId, rows.map(run => run.id));
-      res.json(await runRedactions.redactForRuns(companyId, await Promise.all(rows.map(async (run) => ({
+      res.json(await redactRunResponses(req, companyId, await Promise.all(rows.map(async (run) => ({
         ...heartbeat.decorateActiveRunStatus(run),
         agentAppearance: resolveAgentAppearance(run.agentAppearance, run.agentId),
         avatarUrl: agentAvatarUrl(resolveAgentAppearance(run.agentAppearance, run.agentId), 512),
@@ -6774,7 +6783,7 @@ export function agentRoutes(
     }
 
     const projections = await executionProjectionsForRuns(db, companyId, liveRuns.map(run => run.id));
-    res.json(await runRedactions.redactForRuns(companyId, await Promise.all(liveRuns.map(async (run) => ({
+    res.json(await redactRunResponses(req, companyId, await Promise.all(liveRuns.map(async (run) => ({
       ...heartbeat.decorateActiveRunStatus(run),
         agentAppearance: resolveAgentAppearance(run.agentAppearance, run.agentId),
         avatarUrl: agentAvatarUrl(resolveAgentAppearance(run.agentAppearance, run.agentId), 512),
@@ -6799,8 +6808,8 @@ export function agentRoutes(
     if (!(await assertRunTelemetryReadAllowed(req, res, run.companyId))) return;
     const retryExhaustedReason = await heartbeat.getRetryExhaustedReason(runId);
     const decoratedRun = heartbeat.decorateActiveRunStatus(run);
-    res.json(await runRedactions.redactForRun(
-      run.companyId,
+    res.json(await redactRunResponse(
+      req, run.companyId,
       run.id,
       redactCurrentUserValue(
         { ...decoratedRun, execution: await executionProjectionForRun(db, run.companyId, run.id), identityHistory: await listRunIdentityContexts(db, run.companyId, run.id), retryExhaustedReason, outputSilence: await heartbeat.buildRunOutputSilence(run) },
@@ -7089,6 +7098,7 @@ export function agentRoutes(
       "Heartbeat run not found",
     );
     if (!run) return;
+    await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
     const inspection = await providerTraces.inspect(run.id, run.companyId);
     await logActivity(db, {
       companyId: run.companyId,
@@ -7118,6 +7128,7 @@ export function agentRoutes(
         "Heartbeat run not found",
       );
       if (!run) return;
+      await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
 
       const trace = await providerTraces.getByRun(run.id, run.companyId);
       let unavailable: WorkspaceDiffReprojectionSkipReason | null = null;
@@ -7181,6 +7192,7 @@ export function agentRoutes(
         "Heartbeat run not found",
       );
       if (!run) return;
+      await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
       const frame = await providerTraces.revealFrame(
         run.id,
         run.companyId,
@@ -7217,6 +7229,7 @@ export function agentRoutes(
         "Heartbeat run not found",
       );
       if (!run) return;
+      await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
       const download = await providerTraces.download(run.id, run.companyId);
       if (!download) throw notFound("Provider trace not found");
       await logActivity(db, {
@@ -7282,7 +7295,7 @@ export function agentRoutes(
         payload: redactEventPayload(event.payload),
       }, currentUserRedactionOptions),
     );
-    res.json(await runRedactions.redactForRun(run.companyId, run.id, redactedEvents));
+    res.json(await redactRunResponse(req, run.companyId, run.id, redactedEvents));
   });
 
   router.get("/heartbeat-runs/:runId/log", async (req, res) => {
@@ -7299,7 +7312,7 @@ export function agentRoutes(
     });
 
     res.set("Cache-Control", "no-cache, no-store");
-    res.json(await runRedactions.redactForRun(run.companyId, run.id, result));
+    res.json(await redactRunResponse(req, run.companyId, run.id, result));
   });
 
   router.get("/heartbeat-runs/:runId/workspace-operations", async (req, res) => {
@@ -7308,6 +7321,7 @@ export function agentRoutes(
     if (!run) return;
     if (!(await assertRunTelemetryReadAllowed(req, res, run.companyId))) return;
 
+    await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
     const context = asRecord(run.contextSnapshot);
     const executionWorkspaceId = asNonEmptyString(context?.executionWorkspaceId);
     const operations = await workspaceOperations.listForRun(runId, executionWorkspaceId);

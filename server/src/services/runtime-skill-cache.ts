@@ -170,6 +170,8 @@ async function removeTree(directory: string): Promise<void> {
   await fs.rm(directory, { recursive: true, force: true });
 }
 
+export { assertDirectories as assertRuntimeStorageDirectories, removeTree as removeRuntimeStorageTree };
+
 export async function resolveRuntimeSkillCache(
   spec: CacheSpec, read: (relativePath: string) => Promise<string>, materialize = true,
   stillInstalled: () => Promise<boolean> = async () => true,
@@ -228,4 +230,25 @@ export async function removeRuntimeSkillCache(
     // Commit deletion while builders remain excluded. Lock/cleanup failures leave the row intact.
     await afterRemove?.();
   });
+}
+
+// The caller holds the native company/Memory locks through publication or erasure.
+export async function prepareRuntimeSkillVersionDirectory(managedRoot: string, skillId: string, versionId: string): Promise<string> {
+  if (![skillId, versionId].every(id => /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))) {
+    throw new Error("Invalid native Skill version identity");
+  }
+  const directory = path.resolve(managedRoot, "__versions__", skillId, versionId);
+  await assertDirectories(directory, managedRoot, true);
+  return directory;
+}
+
+export async function removeRuntimeSkillVersionDirectory(managedRoot: string, skillId: string, versionId: string): Promise<void> {
+  if (![skillId, versionId].every(id => /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))) {
+    throw new Error("Invalid native Skill version identity");
+  }
+  const directory = path.resolve(managedRoot, "__versions__", skillId, versionId);
+  try {
+    await assertDirectories(directory, managedRoot);
+    await removeTree(directory);
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
 }

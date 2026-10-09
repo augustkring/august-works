@@ -1,3 +1,7 @@
+import {lockAnalyticalCompany} from "../analytical-privacy.js";
+import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
+import {learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
+import type {AuthorizationActor} from "../authorization.js";
 import { assertLearningAssetCurrent } from "../learning/learning-assets.js";
 import { performance } from "node:perf_hooks";
 import { isDeepStrictEqual } from "node:util";
@@ -11,7 +15,7 @@ import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { automationArtifactService, automationArtifactVersionContentHash, type AutomationArtifactMutationActor } from "../automation-artifacts/automation-artifact-service.js";
 import { automationArtifactSecurityService } from "../automation-artifacts/automation-artifact-security.js";
 import { executeAutomationArtifactDeclarativeSource } from "../automation-artifacts/automation-artifact-declarative.js";
-import { executeAutomationArtifactTypeScriptSandbox } from "../automation-artifacts/automation-artifact-code-runtime.js";
+import { executeNativeArtifactCode } from "../automation-artifacts/automation-artifact-workspace.js";
 import { assertMemoryRecordsRetained, lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { persistActivity, publishActivity } from "../activity-log.js";
@@ -34,7 +38,8 @@ export function evaluateCandidateInvariant(expression: string, input: unknown, o
 }
 
 /** Executes only the compiled pure candidate through the existing declarative engine or qualified sandbox. */
-export async function executeCompiledOptimizerCandidate(candidate: OptimizerCompiledCandidate, input: unknown) {
+export async function executeCompiledOptimizerCandidate(candidate: OptimizerCompiledCandidate, input: unknown,
+  owner?: { db: Db; companyId: string; versionId: string; expectedStatus?: string; actor: AutomationArtifactMutationActor }) {
   if (candidate.kind !== "artifact" || candidate.artifact.sideEffectClass !== "pure" || candidate.artifact.riskClass !== "C0") {
     throw forbidden("Live optimizer evaluation requires a pure C0 artifact", { code: "optimizer_candidate_effect_denied" });
   }
@@ -42,15 +47,26 @@ export async function executeCompiledOptimizerCandidate(candidate: OptimizerComp
   validateWorkflowOutput(artifact.inputSchema, input);
   let output: unknown;
   if (artifact.kind === "expression" || artifact.kind === "transform") output = executeAutomationArtifactDeclarativeSource(artifact.kind, artifact.sourceCode, input);
-  else if (artifact.kind === "typescript") output = await executeAutomationArtifactTypeScriptSandbox({ sourceCode: artifact.sourceCode,
-    dependencyManifest: artifact.dependencyManifest as unknown as Record<string, unknown>, value: input, timeoutMs: 2_000 });
+  else if (artifact.kind === "typescript") {
+    if (!owner) throw forbidden("Generated-code Optimizer execution requires its actual native version owner", { code: "optimizer_candidate_runtime_unavailable" });
+    output = await executeNativeArtifactCode(owner.db, owner, owner.actor, { sourceCode: artifact.sourceCode,
+      dependencyManifest: artifact.dependencyManifest as unknown as Record<string, unknown>, value: input, timeoutMs: 2_000 }, false);
+  }
   else throw unprocessable("Candidate runtime is not qualified", { code: "optimizer_candidate_runtime_unavailable" });
   validateWorkflowOutput(artifact.outputSchema, output);
   if (Buffer.byteLength(JSON.stringify(output), "utf8") > 1_000_000) throw unprocessable("Candidate output exceeds its bound");
   return output;
 }
 
-export async function assertOptimizerEvaluationBinding(db: Db, companyId: string, evaluationId: string, requireGates = true) {
+export async function assertOptimizerEvaluationBinding(db: Db, companyId: string, evaluationId: string, requireGates = true, sourceActor?:AuthorizationActor) {
+  const [metadata] = await db.select({ revisionId: workflowOptimizerEvaluations.workflowRevisionId, versionId: workflowOptimizerEvaluations.artifactVersionId,
+    memoryRecordIds: workflowOptimizerEvaluations.memoryRecordIds }).from(workflowOptimizerEvaluations)
+    .where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId)));
+  if (!metadata) throw notFound("Optimizer evaluation not found");
+  await assertLearningAssetCurrent(db, companyId, "workflow_revision", metadata.revisionId, sourceActor);
+  await assertLearningAssetCurrent(db, companyId, "automation_artifact_version", metadata.versionId, sourceActor);
+  await assertMemoryRecordsRetained(db, companyId, metadata.memoryRecordIds);
+
   const [evaluation] = await db.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId)));
   if (!evaluation) throw notFound("Optimizer evaluation not found");
   const [workflow, artifact, version] = await Promise.all([
@@ -72,7 +88,8 @@ export async function assertOptimizerEvaluationBinding(db: Db, companyId: string
     !isDeepStrictEqual(candidate.artifact.inputSchema, version.inputSchema) || !isDeepStrictEqual(candidate.artifact.outputSchema, version.outputSchema)) {
     throw conflict("Optimizer candidate content or qualification gates changed", { code: "optimizer_evaluation_gates_changed" });
   }
-  await assertLearningAssetCurrent(db, companyId, "automation_artifact_version", version.id);
+  await assertLearningAssetCurrent(db, companyId, "workflow_revision", evaluation.workflowRevisionId,sourceActor);
+  await assertLearningAssetCurrent(db, companyId, "automation_artifact_version", version.id,sourceActor);
   await assertMemoryRecordsRetained(db, companyId, evaluation.memoryRecordIds);
   return { evaluation, artifact, version };
 }
@@ -100,8 +117,8 @@ export function optimizerEvaluationService(db: Db) {
     return rows.map((item) => item.observation);
   }
 
-  async function promotionEvidence(companyId: string, evaluationId: string) {
-    const bound = await assertOptimizerEvaluationBinding(db, companyId, evaluationId);
+  async function promotionEvidence(companyId: string, evaluationId: string, actor?:AutomationArtifactMutationActor) {
+    const bound = await assertOptimizerEvaluationBinding(db, companyId, evaluationId,true,actor?learningActorFromPrincipal(companyId,actor.principal,actor.runId):undefined);
     const observations = await committedObservations(companyId, evaluationId);
     const shadow = optimizerShadowSummary(observations);
     const canary = observations.filter((item) => item.mode === "canary");
@@ -115,10 +132,12 @@ export function optimizerEvaluationService(db: Db) {
   }
 
   return {
-    list: async (companyId: string, workflowId: string): Promise<WorkflowOptimizerEvaluationSummary[]> => {
+    list: async (companyId: string, workflowId: string, sourceActor?:AuthorizationActor): Promise<WorkflowOptimizerEvaluationSummary[]> => {
       const rows = await db.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.workflowId, workflowId)))
         .orderBy(desc(workflowOptimizerEvaluations.createdAt)).limit(50);
       return Promise.all(rows.map(async (row) => {
+        await assertLearningAssetCurrent(db,companyId,"workflow_revision",row.workflowRevisionId,sourceActor);
+        await assertLearningAssetCurrent(db,companyId,"automation_artifact_version",row.artifactVersionId,sourceActor);
         const observations = await committedObservations(companyId, row.id);
         return { id: row.id, suggestionId: row.suggestionId, nodeId: row.nodeId, workflowRevisionId: row.workflowRevisionId,
           artifactId: row.artifactId, artifactVersionId: row.artifactVersionId, status: row.status as WorkflowOptimizerEvaluationSummary["status"],
@@ -148,6 +167,8 @@ export function optimizerEvaluationService(db: Db) {
       }
       const [revision] = await db.select().from(workflowRevisions).where(and(eq(workflowRevisions.companyId, companyId), eq(workflowRevisions.id, suggestion.workflowRevisionId)));
       if (!revision) throw notFound("Workflow revision not found");
+      const sourceActor=learningActorFromPrincipal(companyId,actor.principal,actor.runId);
+      await assertLearningAssetCurrent(db,companyId,"workflow_revision",revision.id,sourceActor);
       const runs = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowRevisionId, revision.id), eq(workflowRuns.status, "succeeded")))
         .orderBy(desc(workflowRuns.finishedAt)).limit(50);
       const cases: OptimizerReplayCase[] = [];
@@ -156,6 +177,7 @@ export function optimizerEvaluationService(db: Db) {
       const sourceRunIds: string[] = [];
       let nodeId: string | null = null;
       for (const run of runs) {
+        await assertAnalyticalContextPayloadAccess(db,companyId,sourceActor,{runId:run.id});
         const [review] = await db.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, run.id)));
         if (!review) continue;
         const steps = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, run.id)));
@@ -195,7 +217,10 @@ export function optimizerEvaluationService(db: Db) {
       if (compiler.status !== "compiled" || compiler.candidate?.kind !== "artifact") throw unprocessable("Candidate could not be compiled", { code: compiler.reasonCode });
       const candidate = compiler.candidate;
       const prepared = await db.transaction(async (tx) => {
+        await lockAnalyticalCompany(tx,companyId);
         await lockMemoryPrivacy(tx as unknown as Db, companyId);
+        await assertLearningAssetCurrent(tx as unknown as Db,companyId,"workflow_revision",revision.id,sourceActor);
+        for(const runId of sourceRunIds)await assertAnalyticalContextPayloadAccess(tx as unknown as Db,companyId,sourceActor,{runId});
         await assertMemoryRecordsRetained(tx as unknown as Db, companyId, [...references]);
       const detail = await automationArtifactService(tx as unknown as Db).create(companyId, { ...candidate.artifact, originNodeId: nodeId,
         dependencyManifest: candidate.artifact.dependencyManifest as unknown as Record<string, unknown>,
@@ -208,16 +233,17 @@ export function optimizerEvaluationService(db: Db) {
         return { detail, version, evaluation: evaluation! };
       });
       const { detail, version, evaluation } = prepared;
-      return optimizerEvaluationService(db).evaluate(companyId, evaluation.id);
+      return optimizerEvaluationService(db).evaluate(companyId, evaluation.id,actor);
     },
 
-    evaluate: async (companyId: string, evaluationId: string) => {
-      const bound = await assertOptimizerEvaluationBinding(db, companyId, evaluationId, false);
+    evaluate: async (companyId: string, evaluationId: string, actor?:AutomationArtifactMutationActor) => {
+      const sourceActor=actor?learningActorFromPrincipal(companyId,actor.principal,actor.runId):undefined;
+      const bound = await assertOptimizerEvaluationBinding(db, companyId, evaluationId, false,sourceActor);
       const { evaluation, artifact, version } = bound;
       if (artifact.kind === "typescript" && !(await instanceSettingsService(db).getExperimental()).enableAutomationArtifactCodeExecutionV1) throw forbidden("Sandboxed code execution is disabled");
       if (!["testing", "failed"].includes(evaluation.status) || !["candidate", "testing"].includes(artifact.status)) throw conflict("Only a testing candidate can be re-evaluated");
       if (artifact.status === "candidate") await artifacts.transitionStatus(companyId, artifact.id,
-        { expectedLatestVersionId: version.id, expectedStatus: "candidate", status: "testing" }, SYSTEM);
+        { expectedLatestVersionId: version.id, expectedStatus: "candidate", status: "testing" }, {...SYSTEM,sourceActor});
       const compiler = evaluation.compilerResult!;
       const candidate = compiler.candidate!;
       const stored = version.testSpec.cases;
@@ -226,14 +252,17 @@ export function optimizerEvaluationService(db: Db) {
         const item = value as { name: string; input: unknown; expectedOutput: unknown; category: OptimizerReplayCase["category"]; sourceRunId: string | null };
         return { id: item.name, input: item.input, expectedOutput: item.expectedOutput, category: item.category, sourceRunId: item.sourceRunId };
       });
-      const gates = await automationArtifactSecurityService(db).evaluateLatestVersion(companyId, artifact.id, SYSTEM);
+      const gates = await automationArtifactSecurityService(db).evaluateLatestVersion(companyId, artifact.id, {...SYSTEM,sourceActor});
       const replay = await evaluateOptimizerHistoricalReplay({ compilerResult: compiler, cases, executionMode: "pure" }, {
-        execute: async ({ replayCase }) => { const started = performance.now(); const output = await executeCompiledOptimizerCandidate(candidate, replayCase.input); return { output, durationMs: performance.now() - started, costEstimate: 0 }; },
+        execute: async ({ replayCase }) => { const started = performance.now(); const output = await executeCompiledOptimizerCandidate(candidate, replayCase.input,
+          { db, companyId, versionId: version.id, expectedStatus: "testing", actor: { ...SYSTEM, sourceActor } }); return { output, durationMs: performance.now() - started, costEstimate: 0 }; },
         evaluateInvariant: async ({ invariant, replayCase, candidateOutput }) => ({ passed: evaluateCandidateInvariant(evaluation.invariants.find((item) => item.id === invariant.id)!.expression, replayCase.input, candidateOutput) }),
       });
       const passed = replay.status === "passed" && gates.latestVersion?.validationReport?.status === "passed" && gates.latestVersion?.securityReport?.status === "passed";
       await db.transaction(async (tx) => {
+        await lockAnalyticalCompany(tx,companyId);
         await lockMemoryPrivacy(tx as unknown as Db, companyId);
+        await assertOptimizerEvaluationBinding(tx as unknown as Db,companyId,evaluationId,false,sourceActor);
         await assertMemoryRecordsRetained(tx as unknown as Db, companyId, evaluation.memoryRecordIds);
         await tx.update(workflowOptimizerEvaluations).set({ replayEvaluation: replay, status: passed ? "testing" : "failed", updatedAt: new Date() })
           .where(and(eq(workflowOptimizerEvaluations.id, evaluationId), inArray(workflowOptimizerEvaluations.status, ["testing", "failed"])));
@@ -243,15 +272,17 @@ export function optimizerEvaluationService(db: Db) {
 
     startShadow: async (companyId: string, evaluationId: string, actor: AutomationArtifactMutationActor) => {
       if (!(await instanceSettingsService(db).getExperimental()).enableWorkflowOptimizerShadow) throw forbidden("Optimizer shadow is disabled");
-      const { evaluation, artifact, version } = await assertOptimizerEvaluationBinding(db, companyId, evaluationId);
+      const { evaluation, artifact, version } = await assertOptimizerEvaluationBinding(db, companyId, evaluationId,true,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
       if (evaluation.status !== "testing" || evaluation.replayEvaluation?.status !== "passed") throw conflict("A passed evaluation is required before shadow execution");
       await db.transaction(async (tx) => {
+        await lockAnalyticalCompany(tx,companyId);
         await lockMemoryPrivacy(tx as unknown as Db, companyId);
+        await assertOptimizerEvaluationBinding(tx as unknown as Db,companyId,evaluationId,true,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         await assertMemoryRecordsRetained(tx as unknown as Db, companyId, evaluation.memoryRecordIds);
         const [current] = await tx.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id, evaluationId)).for("update");
         if (current?.status !== "testing") throw conflict("Optimizer lifecycle changed");
         await automationArtifactService(tx as unknown as Db).transitionStatus(companyId, artifact.id,
-          { expectedLatestVersionId: version.id, expectedStatus: "testing", status: "shadow" }, actor);
+          { expectedLatestVersionId: version.id, expectedStatus: "testing", status: "shadow" }, {...SYSTEM,sourceActor:learningActorFromPrincipal(companyId,actor.principal,actor.runId)});
         await tx.update(workflowOptimizerEvaluations).set({ status: "shadow", updatedAt: new Date() }).where(eq(workflowOptimizerEvaluations.id, evaluationId));
         await tx.update(workflowOptimizerSuggestions).set({ status: "shadowing", updatedAt: new Date() }).where(eq(workflowOptimizerSuggestions.id, evaluation.suggestionId));
       });
@@ -259,10 +290,13 @@ export function optimizerEvaluationService(db: Db) {
     },
 
     requestPromotionApproval: async (companyId: string, evaluationId: string, actor: AutomationArtifactMutationActor) => {
-      const bound = await promotionEvidence(companyId, evaluationId);
+      const bound = await promotionEvidence(companyId, evaluationId,actor);
       if (bound.evaluation.status !== "shadow" || bound.evidence.shadowEvaluation.status !== "passed") throw conflict("Three successful committed shadow observations are required");
       if (actor.principal.type !== "user") throw forbidden("Promotion requires an identified company member");
       const result = await db.transaction(async (tx) => {
+        await lockAnalyticalCompany(tx,companyId);
+        await lockMemoryPrivacy(tx as unknown as Db,companyId);
+        await assertOptimizerEvaluationBinding(tx as unknown as Db,companyId,evaluationId,true,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         const [current] = await tx.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId))).for("update");
         if (!current || current.status !== "shadow") throw conflict("Optimizer lifecycle changed");
         if (current.approvalId) return { approvalId: current.approvalId, publication: null };
@@ -280,18 +314,20 @@ export function optimizerEvaluationService(db: Db) {
       return { evaluationId, approvalId: result.approvalId };
     },
 
-    prepareCanary: async (companyId: string, evaluationId: string) => {
-      const bound = await promotionEvidence(companyId, evaluationId);
+    prepareCanary: async (companyId: string, evaluationId: string, actor?:AutomationArtifactMutationActor) => {
+      const bound = await promotionEvidence(companyId, evaluationId,actor);
       if (bound.evaluation.status !== "shadow") throw conflict("Candidate is not in shadow state");
       const decision = await db.transaction(async (tx) => {
+        await lockAnalyticalCompany(tx,companyId);
         await lockMemoryPrivacy(tx as unknown as Db, companyId);
+        await assertOptimizerEvaluationBinding(tx as unknown as Db,companyId,evaluationId,true,actor?learningActorFromPrincipal(companyId,actor.principal,actor.runId):undefined);
         await assertMemoryRecordsRetained(tx as unknown as Db, companyId, bound.evaluation.memoryRecordIds);
         const [current] = await tx.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId))).for("update");
         if (current?.status !== "shadow") throw conflict("Optimizer lifecycle changed");
         const result = await optimizerPromotionService(tx as unknown as Db).prepareCanary({ companyId,
           suggestionId: current.suggestionId, artifactId: current.artifactId, expectedArtifactVersionId: current.artifactVersionId,
           policy: { allowLowRiskAutoPromotion: false, fallbackKind: "published_workflow" }, evidence: bound.evidence,
-          actor: SYSTEM, approvalId: current.approvalId, approvedByUserId: bound.approval?.decidedByUserId });
+          actor: SYSTEM, sourceActor:actor?learningActorFromPrincipal(companyId,actor.principal,actor.runId):undefined, approvalId: current.approvalId, approvedByUserId: bound.approval?.decidedByUserId });
         if (result.status === "canary_ready") await tx.update(workflowOptimizerEvaluations).set({ status: "canary",
           shadowEvaluation: bound.evidence.shadowEvaluation, updatedAt: new Date() }).where(eq(workflowOptimizerEvaluations.id, evaluationId));
         return result;
@@ -299,21 +335,23 @@ export function optimizerEvaluationService(db: Db) {
       return { evaluationId, decision };
     },
 
-    activate: async (companyId: string, evaluationId: string) => {
-      const bound = await promotionEvidence(companyId, evaluationId);
+    activate: async (companyId: string, evaluationId: string, actor?:AutomationArtifactMutationActor) => {
+      const bound = await promotionEvidence(companyId, evaluationId,actor);
       if (bound.evaluation.status !== "canary") throw conflict("Candidate has not completed canary evaluation");
       if (!bound.evidence.canaryPassed) return { evaluationId, decision: evaluateOptimizerPromotion({
         riskClass: bound.artifact.riskClass, sideEffectClass: bound.artifact.sideEffectClass,
         policy: { allowLowRiskAutoPromotion: false, fallbackKind: "published_workflow" }, evidence: bound.evidence }) };
       const decision = await db.transaction(async (tx) => {
+        await lockAnalyticalCompany(tx,companyId);
         await lockMemoryPrivacy(tx as unknown as Db, companyId);
+        await assertOptimizerEvaluationBinding(tx as unknown as Db,companyId,evaluationId,true,actor?learningActorFromPrincipal(companyId,actor.principal,actor.runId):undefined);
         await assertMemoryRecordsRetained(tx as unknown as Db, companyId, bound.evaluation.memoryRecordIds);
         const [current] = await tx.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId))).for("update");
         if (current?.status !== "canary") throw conflict("Optimizer lifecycle changed");
         const result = await optimizerPromotionService(tx as unknown as Db).activate({ companyId,
           suggestionId: current.suggestionId, artifactId: current.artifactId, expectedArtifactVersionId: current.artifactVersionId,
           policy: { allowLowRiskAutoPromotion: false, fallbackKind: "published_workflow" }, evidence: bound.evidence,
-          actor: SYSTEM, approvalId: current.approvalId, approvedByUserId: bound.approval?.decidedByUserId });
+          actor: SYSTEM, sourceActor:actor?learningActorFromPrincipal(companyId,actor.principal,actor.runId):undefined, approvalId: current.approvalId, approvedByUserId: bound.approval?.decidedByUserId });
         if (result.status === "promotion_ready") await tx.update(workflowOptimizerEvaluations).set({ status: "active", updatedAt: new Date() }).where(eq(workflowOptimizerEvaluations.id, evaluationId));
         return result;
       });
@@ -324,6 +362,7 @@ export function optimizerEvaluationService(db: Db) {
       const [evaluation] = await db.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId)));
       if (!evaluation) throw notFound("Optimizer evaluation not found");
       await db.transaction(async (tx) => {
+        await lockAnalyticalCompany(tx,companyId);
         await lockMemoryPrivacy(tx as unknown as Db, companyId);
         const [current] = await tx.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId))).for("update");
         if (!current || current.status === "retired") return;

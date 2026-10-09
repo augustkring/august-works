@@ -293,7 +293,7 @@ export async function prepareNativeDraftBackend(
   const read = async (
     reference: typeof execution.runtimeContext.instructions.bundle,
   ) => {
-    const files = await readNativeRuntimeAssetText(reference, remaining);
+    const files = await readNativeRuntimeAssetText(reference, remaining, { companyId: execution.binding.companyId, runId: execution.binding.runId });
     remaining -= reference.totalBytes;
     return files;
   };
