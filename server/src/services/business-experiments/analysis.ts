@@ -58,16 +58,35 @@ export function businessExperimentAnalysisService(db:Db){return {
       Object.assign(analysis,signedExperimentReceipt("analysis",experimentAnalysisMaterial(analysis,receipts.completion.receiptHash)));
       const updated=await transitionExperimentRecording(tx,companyId,actor,row,"analyzing","Native immutable fixed-protocol final analysis awaiting explicit human interpretation",at);
       await tx.insert(businessExperimentAnalyses).values(analysis);
-      for(let offset=0;offset<outcomes.length;offset+=1000){
-        experimentBudget(deadline);const group=outcomes.slice(offset,offset+1000);
-        const manifests=group.map(outcome=>{const lineage=pendingEdges.get(outcome.id)!,edges=lineage.direct;return {id:outcome.lineageManifestId,company_id:companyId,analysis_type:"experiment_outcome",analysis_ref:outcome.id,engine_version:EXPERIMENT_OWNER_ENGINE,definition_hash:version.contentHash,input_hash:outcome.sourceHash,requested_by:v7HumanActorId(actor),source_watermark:outcome.sourceSnapshot.updatedAt,source_count:edges.length,parameters_json:{receiptHash:outcome.receiptHash,lineageHash:lineage.lineageHash,assignmentManifestId:lineage.assignmentManifestId,assignmentLineageHash:lineage.assignmentLineageHash,completeLineageHash:lineage.completeLineageHash},created_at:at,expires_at:version.expiresAt};});
-        await tx.execute(sql`insert into analytical_lineage_manifests select * from json_populate_recordset(null::analytical_lineage_manifests,${JSON.stringify(manifests)}::json)`);
+      // Transport the complete signed capture in bounded groups. Every manifest,
+      // direct edge and outcome still enters its original native table and guards
+      // in the same transaction; no result or source is sampled or omitted.
+      // Bind this capture's already signed tenant/protocol/time constants once
+      // per statement, rather than serializing them into all 68,000 JSON rows.
+      // Per-row identities, snapshots, pins, hashes and signatures remain exact.
+      const outcomeBatchSize=4000;
+      for(let offset=0;offset<outcomes.length;offset+=outcomeBatchSize){
+        experimentBudget(deadline);const group=outcomes.slice(offset,offset+outcomeBatchSize);
+        const manifests=group.map(outcome=>{const lineage=pendingEdges.get(outcome.id)!,edges=lineage.direct;return {id:outcome.lineageManifestId,analysis_ref:outcome.id,input_hash:outcome.sourceHash,source_watermark:outcome.sourceSnapshot.updatedAt,source_count:edges.length,parameters_json:{receiptHash:outcome.receiptHash,lineageHash:lineage.lineageHash,assignmentManifestId:lineage.assignmentManifestId,assignmentLineageHash:lineage.assignmentLineageHash,completeLineageHash:lineage.completeLineageHash}};});
+        await tx.execute(sql`insert into analytical_lineage_manifests
+          (id,company_id,analysis_type,analysis_ref,engine_version,input_hash,definition_hash,requested_by,source_watermark,source_count,parameters_json,created_at,expires_at)
+          select m.id,${companyId}::uuid,'experiment_outcome',m.analysis_ref,${EXPERIMENT_OWNER_ENGINE},m.input_hash,
+            ${version.contentHash},${analysis.analyzedBy},m.source_watermark,m.source_count,m.parameters_json,
+            ${at.toISOString()}::timestamptz,${version.expiresAt.toISOString()}::timestamptz
+          from json_populate_recordset(null::analytical_lineage_manifests,${JSON.stringify(manifests)}::json) m`);
 
-        const batchEdges=group.flatMap(outcome=>pendingEdges.get(outcome.id)!.direct.map(edge=>({company_id:companyId,manifest_id:outcome.lineageManifestId,input_type:edge.inputType,input_ref:edge.inputRef,input_hash:edge.inputHash,relationship:edge.relationship})));
-        await tx.execute(sql`insert into analytical_lineage_edges select * from json_populate_recordset(null::analytical_lineage_edges,${JSON.stringify(batchEdges)}::json)`);
+        const batchEdges=group.flatMap(outcome=>pendingEdges.get(outcome.id)!.direct.map(edge=>({manifest_id:outcome.lineageManifestId,input_type:edge.inputType,input_ref:edge.inputRef,input_hash:edge.inputHash,relationship:edge.relationship})));
+        await tx.execute(sql`insert into analytical_lineage_edges (company_id,manifest_id,input_type,input_ref,input_hash,relationship)
+          select ${companyId}::uuid,e.manifest_id,e.input_type,e.input_ref,e.input_hash,e.relationship
+          from json_populate_recordset(null::analytical_lineage_edges,${JSON.stringify(batchEdges)}::json) e`);
 
-        const rows=group.map(outcome=>({id:outcome.id,company_id:companyId,experiment_id:outcome.experimentId,version_id:outcome.versionId,analysis_id:outcome.analysisId,assignment_id:outcome.assignmentId,metric_key:outcome.key,metric_id:outcome.metricId,metric_version_id:outcome.metricVersionId,value:outcome.value,source_snapshot_json:outcome.sourceSnapshot,input_hash:outcome.inputHash,source_hash:outcome.sourceHash,lineage_manifest_id:outcome.lineageManifestId,receipt_hash:outcome.receiptHash,signature:outcome.signature,captured_at:outcome.capturedAt}));
-        await tx.execute(sql`insert into business_experiment_outcomes select * from json_populate_recordset(null::business_experiment_outcomes,${JSON.stringify(rows)}::json)`);
+        const rows=group.map(outcome=>({id:outcome.id,assignment_id:outcome.assignmentId,metric_key:outcome.key,metric_id:outcome.metricId,metric_version_id:outcome.metricVersionId,value:outcome.value,source_snapshot_json:outcome.sourceSnapshot,input_hash:outcome.inputHash,source_hash:outcome.sourceHash,lineage_manifest_id:outcome.lineageManifestId,receipt_hash:outcome.receiptHash,signature:outcome.signature}));
+        await tx.execute(sql`insert into business_experiment_outcomes
+          (id,company_id,experiment_id,version_id,analysis_id,assignment_id,metric_key,metric_id,metric_version_id,value,source_snapshot_json,input_hash,source_hash,lineage_manifest_id,receipt_hash,signature,captured_at)
+          select o.id,${companyId}::uuid,${id}::uuid,${version.id}::uuid,${analysisId}::uuid,o.assignment_id,
+            o.metric_key,o.metric_id,o.metric_version_id,o.value,o.source_snapshot_json,o.input_hash,o.source_hash,
+            o.lineage_manifest_id,o.receipt_hash,o.signature,${at.toISOString()}::timestamptz
+          from json_populate_recordset(null::business_experiment_outcomes,${JSON.stringify(rows)}::json) o`);
 
       }
       await auditBusinessExperiment(tx,publications,companyId,actor,id,"analyzed",{versionId:version.id,analysisId,receiptHash:analysis.receiptHash,status:result.status});experimentBudget(deadline);

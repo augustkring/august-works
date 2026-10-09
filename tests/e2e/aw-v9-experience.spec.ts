@@ -465,12 +465,14 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
         exact: true,
       }),
     ).toHaveCount(0);
-    await expect(
-      page.getByText(
-        "Effective approval policy has not been verified in this view.",
-        { exact: true },
-      ),
-    ).toBeVisible();
+    const approvalBoundaries = page.getByText(
+      "Effective approval policy has not been verified in this view.",
+      { exact: true },
+    );
+    await expect(approvalBoundaries).toHaveCount(4);
+    for (let step = 0; step < 4; step++) {
+      await expect(approvalBoundaries.nth(step)).toBeVisible();
+    }
     await expect(
       page.getByRole("heading", {
         name: `Draft changes compared with active version ${published.publishedRevision.revisionNumber}`,
@@ -586,9 +588,11 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     await page
       .getByRole("button", { name: "Retry original run request", exact: true })
       .click();
-    await expect(page.getByRole("status").filter({ hasText: "The original run request was accepted" })).toContainText(
-      "The original run request was accepted",
-    );
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "The original run request was accepted" }),
+    ).toContainText("The original run request was accepted");
     expect(originalRuns).toHaveLength(2);
     expect(originalRuns[1]).toEqual(originalRuns[0]);
     expect(admittedRun).toMatchObject({

@@ -1,3 +1,4 @@
+import { settleTheme } from "./theme.shared";
 import {expect,test} from "@playwright/test";
 import {createRequire} from "node:module";
 import {analyticalPurpose,metricDefinition} from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
@@ -27,7 +28,7 @@ test("a native operator proposes an exact statistical version without publicatio
   await page.addScriptTag({path:axePath});
   for(const theme of ["light","dark"] as const) for(const width of [390,1200]) {
    await page.setViewportSize({width,height:844});await page.emulateMedia({colorScheme:theme});await expect.poll(()=>page.evaluate(()=>document.documentElement.style.colorScheme)).toBe(theme);
-   await page.evaluate(async()=>{await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));await Promise.all(document.getAnimations().filter(animation=>Number.isFinite(Number(animation.effect?.getComputedTiming().endTime))).map(animation=>animation.finished.catch(()=>undefined)));});
+   await settleTheme(page);
    const violations=await page.evaluate(async()=>{const w=window as unknown as {axe:{run:(context:string,options:unknown)=>Promise<{violations:unknown[]}>}};return(await w.axe.run('form[aria-label="Forecast definition proposal"]',{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa","wcag22aa"]}})).violations;});expect(violations).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath(`native-statistical-definition-${theme}-${width}.png`),fullPage:true});
   }
   const saved=page.waitForResponse(response=>response.url().includes(endpoint)&&response.request().method()==="POST");await form.getByRole("button",{name:"Save forecast proposal",exact:true}).click();const proposal=await json(await saved);

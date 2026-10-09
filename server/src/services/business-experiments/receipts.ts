@@ -6,7 +6,7 @@ import { conflict, notFound, unprocessable } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { resolveDecisionSigningSecret, signDecisionSpec, verifyDecisionSpec } from "../decision-signing.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { authorizeStrategyReference } from "../strategy-execution/references.js";
+import { authorizeStrategyNativePopulation, authorizeStrategyReference } from "../strategy-execution/references.js";
 import { inspectDecisionSourceAuthority } from "../decision-intelligence.js";
 import { assertAnalyticalSourcesNotErased } from "../analytical-privacy.js";
 import { inspectBusinessExperimentResults, type ExperimentAnalysis, type ExperimentOutcome, type ExperimentInterpretation } from "./results.js";
@@ -37,9 +37,13 @@ export async function loadExperimentLineage(tx: Db, companyId: string, refs: str
   const ids = [...new Set(refs)], manifests = new Map<string, typeof analyticalLineageManifests.$inferSelect>(), edges = new Map<string, ExperimentEdge[]>();
   // 4,000 assignments plus primary/eight guardrail/eight secondary outcomes.
   if (ids.length > 4000 * 18) throw unprocessable("Experiment lineage population exceeds its native outcome bounds");
-  for (let offset = 0; offset < ids.length; offset += 100) {
-    experimentBudget(deadline); const selected = ids.slice(offset, offset + 100);
-    for (const row of await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId, companyId), inArray(analyticalLineageManifests.id, selected))).limit(101).for("share")) manifests.set(row.id, row);
+  // A complete 68,000-outcome replay otherwise makes 1,360 sequential queries
+  // just to transport these rows. Keep the same total population, per-receipt
+  // edge bounds and share locks, but use bounded 1,000-receipt transport batches.
+  const batchSize = 1000;
+  for (let offset = 0; offset < ids.length; offset += batchSize) {
+    experimentBudget(deadline); const selected = ids.slice(offset, offset + batchSize);
+    for (const row of await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId, companyId), inArray(analyticalLineageManifests.id, selected))).limit(selected.length + 1).for("share")) manifests.set(row.id, row);
     const rows = await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), inArray(analyticalLineageEdges.manifestId, selected))).limit(selected.length * 260 + 1).for("share");
     if (rows.length > selected.length * 260) throw notFound("Experiment complete receipt lineage is unavailable");
     for (const row of rows) { const group = edges.get(row.manifestId) ?? []; group.push({ inputType: row.inputType, inputRef: row.inputRef, inputHash: row.inputHash, relationship: row.relationship }); if (group.length > 260) throw notFound("Experiment receipt lineage exceeds its exact bound"); edges.set(row.manifestId, group); }
@@ -90,6 +94,10 @@ async function inspectNativeExperimentUnit(tx: Db, companyId: string, actor: Aut
   const entity = version.definition.population.randomizationUnit;
   const admitted = await authorizeStrategyReference(tx, companyId, actor, { type: entity, id: unitId }, version.definition.sensitivity,true);
   if(checkErasure)await assertAnalyticalSourcesNotErased(tx, companyId, admitted.issueIds, admitted.projectIds);
+  return nativeExperimentSource(version, admitted);
+}
+function nativeExperimentSource(version: ExperimentVersion, admitted: Awaited<ReturnType<typeof authorizeStrategyReference>>) {
+  const entity = version.definition.population.randomizationUnit;
   const current=admitted.nativeObject;
   if(!current||current.archived)throw notFound("Experiment unit is unavailable");
   const snapshot:BusinessExperimentUnitSnapshot=current.snapshot;
@@ -122,16 +130,25 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
   if (assignments.length > version.definition.sampleOrDurationPlan.maximumAssignedUnits) throw unprocessable("Experiment assignment population exceeds preregistered bounds");
   const versionEdges = await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), eq(analyticalLineageEdges.manifestId, version.lineageManifestId))).limit(257);
   const lineage = await loadExperimentLineage(tx, companyId, assignments.map(assignment => assignment.lineageManifestId), deadline), authorityEdges = new Map<string, ExperimentEdge>(), admittedObjectSourceKeys=new Set<string>();
+  // Verify the original immutable assignment material before transporting
+  // current rows. Batch transport never replaces any native source authorization.
+  for (const assignment of assignments) {
+    experimentBudget(deadline); verifyExperimentReceipt("assignment", assignmentMaterial(assignment, execution.receiptHash, version.contentHash), assignment);
+    if (assignment.sourceHash !== nativeSha256({ snapshot: assignment.sourceSnapshot, invariantReceipts: assignment.invariantReceipts })
+      || assignment.arm !== assignNativeBusinessExperimentUnit(assignmentKey, companyId, version.id, assignment.unitId, version.definition.assignment.treatmentProbability)) throw notFound("Experiment assignment source or label integrity is unavailable");
+  }
+  const nativeSources = await authorizeStrategyNativePopulation(tx, companyId, actor, version.definition.population.randomizationUnit,
+    assignments.map(assignment => assignment.unitId), version.definition.sensitivity, deadline);
   // Bound and pipeline transport only: each unit and its complete ancestry
   // still enter the original native owner independently. Drain every in-flight
   // admission before throwing so none can outlive this transaction's locks.
   for (let offset = 0; offset < assignments.length; offset += 32) {
     experimentBudget(deadline);
     const inspected = await Promise.allSettled(assignments.slice(offset, offset + 32).map(async assignment => {
-      experimentBudget(deadline); verifyExperimentReceipt("assignment", assignmentMaterial(assignment, execution.receiptHash, version.contentHash), assignment);
-      if (assignment.sourceHash !== nativeSha256({ snapshot: assignment.sourceSnapshot, invariantReceipts: assignment.invariantReceipts })
-        || assignment.arm !== assignNativeBusinessExperimentUnit(assignmentKey, companyId, version.id, assignment.unitId, version.definition.assignment.treatmentProbability)) throw notFound("Experiment assignment source or label integrity is unavailable");
-      const current = await inspectNativeExperimentUnit(tx, companyId, actor, version, assignment.unitId,false);
+      experimentBudget(deadline);
+      const admitted = nativeSources.get(assignment.unitId);
+      if (!admitted) throw notFound("Experiment native source population is unavailable");
+      const current = nativeExperimentSource(version, admitted);
       currentUnits.set(assignment.id, current);
       for(const edge of current.edges)admittedObjectSourceKeys.add(`${edge.inputType}:${edge.inputRef}`);
       if (current.snapshot.createdAt !== assignment.sourceSnapshot.createdAt) throw conflict("Experiment enrolled unit identity was corrected");

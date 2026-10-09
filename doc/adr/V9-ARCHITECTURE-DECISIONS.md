@@ -540,3 +540,31 @@ The shared/server/client contract adds a strict branchChoice union, deployed
 together behind the default-off shell flag. No migration, checkpoint writer,
 approval or executor owner is introduced. Complete selected-actor inspection,
 executed paths and independent verification remain open.
+
+## ADR-V9-027 — Complete native experiment transport within original bounds
+
+2026-10-09. The existing strategy source owner transports current issue/project
+rows in bounded batches, then performs its original authorization independently
+for each resource and project ancestor. Minimal private row maps come only from
+same-tenant, share-locked native rows in the enclosing company → Memory
+transaction. They accept no caller material and retain no authorization decision.
+Other strategy reference reads continue through the original point-read path.
+
+The experiment owner reads lineage in groups of 1,000 receipts and inserts the
+complete signed capture in groups of 4,000 outcomes. Native tables, triggers,
+tenant/identity filters, limits, signatures and transactional atomicity are
+unchanged. Tenant, protocol and capture-time constants are bound once per insert
+statement. Every original per-row snapshot, hash, pin, signature and identity is
+retained. No sampling, partial result, increased deadline or migration is used.
+
+Replay reuses only immutable lineage calculations inside that inspection. Exact
+assignment manifest and outcome project identify expected comparisons. Each
+outcome still validates its actual retained edges, original signed facts, expiry,
+metric arithmetic and current source authority. Legacy fully copied lineage
+remains supported. No cache survives the transaction or actor boundary.
+
+All 49 native cases in the three affected suites pass. The maximum case captures
+all 68,000 outcomes and replays them within each original 30-second bound; replay
+takes 15.7 seconds in this local fixture. This single software fixture is not a
+hosted percentile, sustained-load or business-outcome claim. Full final-source
+types/build, complete regression and current remote CI remain required.
