@@ -187,6 +187,7 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   for(let start=0;start<rows.length;start+=200)await db.insert(issues).values(rows.slice(start,start+200));
   const tools=toolAuthority(),input={...f.query,until:new Date(Date.now()+1000).toISOString(),maxRows:populationSize===10000?10000:undefined},started=performance.now();
   const payload=await tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:input}) as {result:{observation:BusinessMetricResult}};
+  console.info("Complete native metric query and Context retention",{populationSize,queryAndRetentionMs:Math.round(performance.now()-started),fixture:"explicit_bulk_software_prerequisites"});
   expect(performance.now()-started).toBeLessThan(30000);expect(payload.result.observation.value).toBe(populationSize);
   expect(Buffer.byteLength(JSON.stringify(payload),"utf8")).toBeLessThanOrEqual(256000);expect((await root()).authorityPins).toHaveLength(1);
   const [manifest]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,payload.result.observation.lineageManifestId));expect(manifest!.sourceCount).toBe(populationSize);

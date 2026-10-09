@@ -21,6 +21,22 @@ export function businessMetricService(db: Db) {
   function queryTimeBudget(deadline: number) {
     if (performance.now() > deadline) throw unprocessable("Metric query time budget exceeded; select a smaller population", { code: "metric_query_time_budget_exceeded" });
   }
+  async function inspectSourcePopulation<T>(rows: readonly T[], deadline: number, inspect: (row: T) => Promise<void>) {
+    // Pipeline bounded transport on this transaction's single connection. Every
+    // Source still enters the original current agent × Human ACL independently.
+    // Drain a failed batch before leaving the transaction; no pending admission
+    // may outlive rollback or the company → Memory privacy locks.
+    for (let offset = 0; offset < rows.length; offset += 32) {
+      queryTimeBudget(deadline);
+      const results = await Promise.allSettled(rows.slice(offset, offset + 32).map(async row => {
+        queryTimeBudget(deadline);
+        await inspect(row);
+        queryTimeBudget(deadline);
+      }));
+      for (const result of results) if (result.status === "rejected") throw result.reason;
+    }
+    queryTimeBudget(deadline);
+  }
   async function admit(tx: Db, companyId: string, actor: AuthorizationActor, write = false, checkFlags = true) {
     if(write)v7HumanActorId(actor);else await assertAnalyticalReader(tx,companyId,actor);
     await assertV7Authorization(tx, actor, companyId, write ? "users:manage_permissions" : "company_scope:read");
@@ -92,11 +108,10 @@ export function businessMetricService(db: Db) {
     const currentIssues=new Map(population.entity==="issue"&&rows.length ? (await tx.select(issueAuthorityColumns).from(issues).where(and(eq(issues.companyId,companyId),inArray(issues.id,rows.map(row=>row.id)),isNull(issues.hiddenAt))).for("share")).map(row=>[row.id,row] as const) : []);
     // Never aggregate an actor-filtered subset while calling it the defined
     // population. Every contributing object's current authority is required.
-    for (const row of rows) {
-      queryTimeBudget(deadline);
+    await inspectSourcePopulation(rows, deadline, async row => {
       if (!await permitted(tx, companyId, actor, population.entity, row.id,population.entity==="issue"?currentIssues.get(row.id)??null:undefined)
         || (row.projectId && !await permitted(tx, companyId, actor, "project", row.projectId))) throw forbidden("Metric population is outside the current authorization boundary");
-    }
+    });
     queryTimeBudget(deadline);
     await assertAnalyticalSourcesNotErased(tx, companyId,
       population.entity === "issue" ? rows.map(row => row.id) : [],
@@ -148,14 +163,13 @@ export function businessMetricService(db: Db) {
       // still enters the original agent × Human ACL decision independently.
       const issueIds=edges.filter(edge=>edge.inputType==="issue").map(edge=>edge.inputRef);
       const currentIssues=new Map(issueIds.length ? (await db.select(issueAuthorityColumns).from(issues).where(and(eq(issues.companyId,companyId),inArray(issues.id,issueIds),isNull(issues.hiddenAt))).for("share")).map(row=>[row.id,row] as const) : []);
-      for (const edge of edges) {
-        queryTimeBudget(deadline);
+      await inspectSourcePopulation(edges, deadline, async edge => {
         if ((edge.inputType === "issue" || edge.inputType === "project") && !await permitted(db, companyId, actor, edge.inputType, edge.inputRef,edge.inputType==="issue"?currentIssues.get(edge.inputRef)??null:undefined)) throw forbidden("Metric observation source is outside the current authorization boundary");
         if (edge.inputType === "issue") {
           const issue=currentIssues.get(edge.inputRef);
           if (issue?.projectId && !await permitted(db, companyId, actor, "project", issue.projectId)) throw forbidden("Metric observation source project is outside the current authorization boundary");
         }
-      }
+      });
       await assertAnalyticalSourcesNotErased(db, companyId, edges.filter(e => e.inputType === "issue").map(e => e.inputRef), edges.filter(e => e.inputType === "project").map(e => e.inputRef));
       return observation.result;
     },

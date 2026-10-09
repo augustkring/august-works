@@ -122,25 +122,33 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
   if (assignments.length > version.definition.sampleOrDurationPlan.maximumAssignedUnits) throw unprocessable("Experiment assignment population exceeds preregistered bounds");
   const versionEdges = await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), eq(analyticalLineageEdges.manifestId, version.lineageManifestId))).limit(257);
   const lineage = await loadExperimentLineage(tx, companyId, assignments.map(assignment => assignment.lineageManifestId), deadline), authorityEdges = new Map<string, ExperimentEdge>(), admittedObjectSourceKeys=new Set<string>();
-  for (const assignment of assignments) {
-    experimentBudget(deadline); verifyExperimentReceipt("assignment", assignmentMaterial(assignment, execution.receiptHash, version.contentHash), assignment);
-    if (assignment.sourceHash !== nativeSha256({ snapshot: assignment.sourceSnapshot, invariantReceipts: assignment.invariantReceipts })
-      || assignment.arm !== assignNativeBusinessExperimentUnit(assignmentKey, companyId, version.id, assignment.unitId, version.definition.assignment.treatmentProbability)) throw notFound("Experiment assignment source or label integrity is unavailable");
-    const current = await inspectNativeExperimentUnit(tx, companyId, actor, version, assignment.unitId,false);
-    currentUnits.set(assignment.id, current);
-    for(const edge of current.edges)admittedObjectSourceKeys.add(`${edge.inputType}:${edge.inputRef}`);
-    if (current.snapshot.createdAt !== assignment.sourceSnapshot.createdAt) throw conflict("Experiment enrolled unit identity was corrected");
-    const manifest = lineage.manifests.get(assignment.lineageManifestId), edges = lineage.edges.get(assignment.lineageManifestId) ?? [];
-    const expectedEdges = experimentEdges([...versionEdges,
-      { inputType: assignment.unitType, inputRef: assignment.unitId, inputHash: nativeSha256({ type: assignment.unitType, id: assignment.unitId }), relationship: "source" },
-      ...(assignment.sourceSnapshot.projectId ? [{ inputType: "project" as const, inputRef: assignment.sourceSnapshot.projectId, inputHash: nativeSha256({ type: "project", id: assignment.sourceSnapshot.projectId }), relationship: "source" as const }] : []),
-    ]);
-    if (!manifest || manifest.expiresAt <= new Date() || manifest.engineVersion !== EXPERIMENT_OWNER_ENGINE || manifest.analysisType !== "experiment_assignment" || manifest.analysisRef !== assignment.id
-      || manifest.definitionHash !== version.contentHash || manifest.inputHash !== assignment.sourceHash || manifest.parameters.receiptHash !== assignment.receiptHash
-      || manifest.sourceCount !== edges.length || manifest.parameters.lineageHash !== nativeSha256(experimentEdges(edges)) || nativeSha256(experimentEdges(edges)) !== nativeSha256(expectedEdges)
-      || manifest.createdAt.getTime() !== assignment.assignedAt.getTime() || manifest.expiresAt.getTime() !== version.expiresAt.getTime()
-      || !edges.some(edge => edge.inputType === assignment.unitType && edge.inputRef === assignment.unitId && edge.inputHash === nativeSha256({ type: assignment.unitType, id: assignment.unitId }))) throw notFound("Experiment enrolled source lineage is erased or unavailable");
-    for (const edge of edges) { const key = `${edge.inputType}:${edge.inputRef}`, prior = authorityEdges.get(key); if (prior && prior.inputHash !== edge.inputHash) throw conflict("Experiment enrolled Source pins disagree"); authorityEdges.set(key, edge); }
+  // Bound and pipeline transport only: each unit and its complete ancestry
+  // still enter the original native owner independently. Drain every in-flight
+  // admission before throwing so none can outlive this transaction's locks.
+  for (let offset = 0; offset < assignments.length; offset += 32) {
+    experimentBudget(deadline);
+    const inspected = await Promise.allSettled(assignments.slice(offset, offset + 32).map(async assignment => {
+      experimentBudget(deadline); verifyExperimentReceipt("assignment", assignmentMaterial(assignment, execution.receiptHash, version.contentHash), assignment);
+      if (assignment.sourceHash !== nativeSha256({ snapshot: assignment.sourceSnapshot, invariantReceipts: assignment.invariantReceipts })
+        || assignment.arm !== assignNativeBusinessExperimentUnit(assignmentKey, companyId, version.id, assignment.unitId, version.definition.assignment.treatmentProbability)) throw notFound("Experiment assignment source or label integrity is unavailable");
+      const current = await inspectNativeExperimentUnit(tx, companyId, actor, version, assignment.unitId,false);
+      currentUnits.set(assignment.id, current);
+      for(const edge of current.edges)admittedObjectSourceKeys.add(`${edge.inputType}:${edge.inputRef}`);
+      if (current.snapshot.createdAt !== assignment.sourceSnapshot.createdAt) throw conflict("Experiment enrolled unit identity was corrected");
+      const manifest = lineage.manifests.get(assignment.lineageManifestId), edges = lineage.edges.get(assignment.lineageManifestId) ?? [];
+      const expectedEdges = experimentEdges([...versionEdges,
+        { inputType: assignment.unitType, inputRef: assignment.unitId, inputHash: nativeSha256({ type: assignment.unitType, id: assignment.unitId }), relationship: "source" },
+        ...(assignment.sourceSnapshot.projectId ? [{ inputType: "project" as const, inputRef: assignment.sourceSnapshot.projectId, inputHash: nativeSha256({ type: "project", id: assignment.sourceSnapshot.projectId }), relationship: "source" as const }] : []),
+      ]);
+      if (!manifest || manifest.expiresAt <= new Date() || manifest.engineVersion !== EXPERIMENT_OWNER_ENGINE || manifest.analysisType !== "experiment_assignment" || manifest.analysisRef !== assignment.id
+        || manifest.definitionHash !== version.contentHash || manifest.inputHash !== assignment.sourceHash || manifest.parameters.receiptHash !== assignment.receiptHash
+        || manifest.sourceCount !== edges.length || manifest.parameters.lineageHash !== nativeSha256(experimentEdges(edges)) || nativeSha256(experimentEdges(edges)) !== nativeSha256(expectedEdges)
+        || manifest.createdAt.getTime() !== assignment.assignedAt.getTime() || manifest.expiresAt.getTime() !== version.expiresAt.getTime()
+        || !edges.some(edge => edge.inputType === assignment.unitType && edge.inputRef === assignment.unitId && edge.inputHash === nativeSha256({ type: assignment.unitType, id: assignment.unitId }))) throw notFound("Experiment enrolled source lineage is erased or unavailable");
+      for (const edge of edges) { const key = `${edge.inputType}:${edge.inputRef}`, prior = authorityEdges.get(key); if (prior && prior.inputHash !== edge.inputHash) throw conflict("Experiment enrolled Source pins disagree"); authorityEdges.set(key, edge); }
+      experimentBudget(deadline);
+    }));
+    for (const result of inspected) if (result.status === "rejected") throw result.reason;
   }
   // Batch only the marker lookup, after every actual current native object
   // was admitted. The company → Memory locks prevent erasure between reads.
