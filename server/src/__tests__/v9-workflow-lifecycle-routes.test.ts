@@ -13,6 +13,7 @@ import {
   pipelines,
   principalPermissionGrants,
   routines,
+  routineTriggers,
   toolInvocations,
   workflowRevisions,
   workflowRuns,
@@ -157,6 +158,219 @@ describePg("V9 native workflow lifecycle", () => {
       local,
     ))!;
   }
+
+  it("reads bounded native run status and blockers without exposing copied payloads or errors", async () => {
+    const detail = await seed();
+    const sibling = await seed();
+    const base = new Date("2026-10-09T12:00:00Z");
+    await db.insert(workflowRuns).values(
+      Array.from({ length: 12 }, (_, index) => ({
+        companyId: detail.companyId,
+        workflowId: detail.id,
+        workflowRevisionId: detail.publishedRevisionId!,
+        source: "manual",
+        status: index < 7 ? "waiting" : "succeeded",
+        triggerPayload: { secret: "PRIVATE-TRIGGER" },
+        failureMessage: "PRIVATE-ERROR",
+        createdAt: new Date(base.getTime() + index * 1000),
+        finishedAt: index < 7 ? null : base,
+      })),
+    );
+    await db.insert(workflowRuns).values({
+      companyId: sibling.companyId,
+      workflowId: sibling.id,
+      workflowRevisionId: sibling.publishedRevisionId!,
+      source: "manual",
+      status: "recovering",
+    });
+    const response = await http()
+      .get(
+        `/api/companies/${detail.companyId}/workflows/${detail.id}/experience/operations?expectedUserId=local-board`,
+      )
+      .expect(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.body).toMatchObject({
+      companyId: detail.companyId,
+      workflowId: detail.id,
+      nextTrigger: { state: "request_or_event" },
+      recent: { hasMore: true },
+      blockers: { hasMore: true },
+    });
+    expect(response.body.recent.runs).toHaveLength(10);
+    expect(response.body.blockers.runs).toHaveLength(5);
+    expect(
+      response.body.blockers.runs.every(
+        (run: { status: string }) => run.status === "waiting",
+      ),
+    ).toBe(true);
+    expect(response.body.recent.runs[0].createdAt).toBe(
+      new Date(base.getTime() + 11_000).toISOString(),
+    );
+    const encoded = JSON.stringify(response.body);
+    expect(encoded).not.toContain("PRIVATE-");
+    expect(encoded).not.toContain("triggerPayload");
+    expect(encoded).not.toContain("failureMessage");
+    expect(encoded).not.toContain(sibling.id);
+  });
+
+  it("shows the earliest configured native schedule and stops new triggers after Pause", async () => {
+    const detail = await seed();
+    const [routine] = await db
+      .insert(routines)
+      .values({
+        companyId: detail.companyId,
+        title: "PRIVATE-ROUTINE",
+        executionTargetKind: "workflow",
+        executionTargetRef: detail.id,
+        status: "active",
+      })
+      .returning();
+    const first = new Date("2026-10-10T08:00:00Z");
+    await db.insert(routineTriggers).values([
+      {
+        companyId: detail.companyId,
+        routineId: routine!.id,
+        kind: "schedule",
+        nextRunAt: first,
+      },
+      {
+        companyId: detail.companyId,
+        routineId: routine!.id,
+        kind: "schedule",
+        nextRunAt: new Date("2026-10-10T09:00:00Z"),
+      },
+      {
+        companyId: detail.companyId,
+        routineId: routine!.id,
+        kind: "schedule",
+        enabled: false,
+        nextRunAt: new Date("2026-10-10T06:00:00Z"),
+      },
+      {
+        companyId: detail.companyId,
+        routineId: routine!.id,
+        kind: "schedule",
+        setupPending: true,
+        nextRunAt: new Date("2026-10-10T07:00:00Z"),
+      },
+    ]);
+    const url = `/api/companies/${detail.companyId}/workflows/${detail.id}/experience/operations?expectedUserId=local-board`;
+    const before = await http().get(url).expect(200);
+    expect(before.body.nextTrigger).toEqual({
+      state: "scheduled",
+      at: first.toISOString(),
+    });
+    expect(JSON.stringify(before.body)).not.toContain("PRIVATE-ROUTINE");
+    await http().post(path(detail)).send(command(detail, "pause")).expect(200);
+    expect((await http().get(url).expect(200)).body.nextTrigger).toEqual({
+      state: "stopped",
+    });
+  });
+
+  it("does not present an unpublished workflow as live or invent execution receipts from a read", async () => {
+    await seed();
+    const [company] = await db.select().from(companies);
+    const draft = await workflowService(db).create(
+      company!.id,
+      { name: "Unpublished" },
+      native,
+    );
+    const before = await db.select().from(activityLog);
+    const view = await http()
+      .get(
+        `/api/companies/${company!.id}/workflows/${draft.id}/experience/operations?expectedUserId=local-board`,
+      )
+      .expect(200);
+    expect(view.body).toMatchObject({
+      status: "draft",
+      publishedRevisionId: null,
+      nextTrigger: { state: "not_published" },
+      recent: { runs: [], hasMore: false },
+      blockers: { runs: [], hasMore: false },
+    });
+    expect(await db.select().from(activityLog)).toEqual(before);
+  });
+
+  it("binds operation reads to the current account, company and enabled native rollout", async () => {
+    const detail = await seed();
+    const root = `/api/companies/${detail.companyId}/workflows/${detail.id}/experience/operations`;
+    await http().get(`${root}?expectedUserId=another-user`).expect(409);
+    await http({ type: "agent", source: "agent_key", agentId: randomUUID() })
+      .get(`${root}?expectedUserId=local-board`)
+      .expect(403);
+    await http({
+      type: "board",
+      source: "session",
+      userId: "stranger",
+      companyIds: [],
+    })
+      .get(`${root}?expectedUserId=stranger`)
+      .expect(403);
+    await instanceSettingsService(db).updateExperimental({
+      progressive_shell_v9: false,
+    });
+    await http().get(`${root}?expectedUserId=local-board`).expect(404);
+  });
+
+  it("refuses a foreign historical revision instead of returning a partial healthy overview", async () => {
+    const detail = await seed(),
+      sibling = await seed();
+    await db.insert(workflowRuns).values({
+      companyId: detail.companyId,
+      workflowId: detail.id,
+      workflowRevisionId: sibling.publishedRevisionId!,
+      source: "manual",
+      status: "queued",
+      triggerPayload: { secret: "PRIVATE-FOREIGN" },
+    });
+    const response = await http()
+      .get(
+        `/api/companies/${detail.companyId}/workflows/${detail.id}/experience/operations?expectedUserId=local-board`,
+      )
+      .expect(404);
+    expect(response.body.recent).toBeUndefined();
+    expect(JSON.stringify(response.body)).not.toContain("PRIVATE-FOREIGN");
+  });
+
+  it("rejects an operation read after current membership is revoked despite a stale actor snapshot", async () => {
+    const detail = await seed(),
+      userId = "overview-viewer";
+    await db.insert(companyMemberships).values({
+      companyId: detail.companyId,
+      principalType: "user",
+      principalId: userId,
+      membershipRole: "viewer",
+      status: "active",
+    });
+    await db
+      .insert(principalPermissionGrants)
+      .values({
+        companyId: detail.companyId,
+        principalType: "user",
+        principalId: userId,
+        permissionKey: "workflows:read",
+      });
+    const actor: Express.Request["actor"] = {
+      type: "board",
+      source: "session",
+      userId,
+      companyIds: [detail.companyId],
+      memberships: [
+        {
+          companyId: detail.companyId,
+          membershipRole: "viewer",
+          status: "active",
+        },
+      ],
+    };
+    const url = `/api/companies/${detail.companyId}/workflows/${detail.id}/experience/operations?expectedUserId=${userId}`;
+    await http(actor).get(url).expect(200);
+    await db
+      .update(companyMemberships)
+      .set({ status: "inactive" })
+      .where(eq(companyMemberships.principalId, userId));
+    await http(actor).get(url).expect(403);
+  });
 
   it("confirms pause/resume without changing immutable revisions, and replays the original receipt after later changes", async () => {
     const detail = await seed();
@@ -352,14 +566,12 @@ describePg("V9 native workflow lifecycle", () => {
       .update(workflowStepRuns)
       .set({ status: "failed", finishedAt: new Date() })
       .where(eq(workflowStepRuns.workflowRunId, queued.run.id));
-    await db
-      .insert(toolInvocations)
-      .values({
-        companyId: detail.companyId,
-        workflowRunId: queued.run.id,
-        toolName: "PRIVATE-TOOL",
-        status: "timed_out",
-      });
+    await db.insert(toolInvocations).values({
+      companyId: detail.companyId,
+      workflowRunId: queued.run.id,
+      toolName: "PRIVATE-TOOL",
+      status: "timed_out",
+    });
     await http().post(path(detail)).send(command(detail, "pause")).expect(200);
     await http()
       .post(path(detail))

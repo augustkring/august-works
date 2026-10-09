@@ -12,13 +12,23 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
-    ["POST", "/api/companies/private-company/workflows/private-record/experience/lifecycle?expectedUserId=private-principal"],
+    [
+      "GET",
+      "/api/companies/private-company/workflows/private-record/experience/operations?expectedUserId=private-principal",
+    ],
+    [
+      "POST",
+      "/api/companies/private-company/workflows/private-record/experience/lifecycle?expectedUserId=private-principal",
+    ],
     [
       "POST",
       "/api/saas/companies/private-company/activation?expectedUserId=private-principal",
     ],
     ["POST", "/api/companies//customer-feedback"],
-    ["POST", "/api/companies/private-company/agent-configuration-drafts/private-record/save?expectedUserId=private-principal"],
+    [
+      "POST",
+      "/api/companies/private-company/agent-configuration-drafts/private-record/save?expectedUserId=private-principal",
+    ],
     ["PATCH", "/api/companies//agent-configuration-drafts/private-record"],
     [
       "POST",
@@ -61,10 +71,11 @@ describe("V9 private HTTP purpose", () => {
     const call =
       method === "POST"
         ? request(app).post(url)
-        : method === "PATCH" ? request(app).patch(url)
-        : method === "DELETE"
-          ? request(app).delete(url)
-          : request(app).get(url);
+        : method === "PATCH"
+          ? request(app).patch(url)
+          : method === "DELETE"
+            ? request(app).delete(url)
+            : request(app).get(url);
     await call.send({ body: canary, internalNote: canary }).expect(405);
     const output = chunks.join("");
     expect(output).not.toContain(canary);

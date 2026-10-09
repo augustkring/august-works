@@ -616,6 +616,17 @@ export function workflowRoutes(db: Db) {
     },
   );
 
+  router.get("/companies/:companyId/workflows/:workflowId/experience/operations", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    res.json(await svc.operations(companyId, workflowId, req.actor));
+  });
+
   router.get("/companies/:companyId/workflows/:workflowId/experience", async (req, res) => {
     assertBoard(req);
     const companyId = z.uuid().parse(req.params.companyId);

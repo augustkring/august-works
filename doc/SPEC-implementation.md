@@ -1838,3 +1838,12 @@ versions/run history are retained and the draft deliberately discarded. Receipt
 confirmation remains separate from current status; native state survives shell
 rollback. Complete operation overview, durable recovery, resource cleanup and
 workflow/runtime/human qualification remain open (ADR-V9-023 / SCR-V9-016).
+
+Native workflow operation observations now expose the earliest configured enabled
+routine schedule and bounded recent/waiting/recovering run metadata with current
+revision/copied-source admission. The UI binds its parent status/update/version,
+hides retained observations during rechecks and links native run history. Trigger
+time is configured scheduling, not guaranteed execution; recorded success is not
+independent business verification. Safe Run now, independently verified outcomes,
+complete recovery/cleanup and hosted/human qualification remain open
+(ADR-V9-024 / SCR-V9-017).

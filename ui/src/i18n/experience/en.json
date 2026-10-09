@@ -589,5 +589,23 @@
     "resume": "Resume confirmed for the original request. Review the current workflow status before starting new work.",
     "retire": "Retirement confirmed. No new runs can start. Published versions and run history have been kept."
   },
-  "workflowLifecycleClose": "Close"
+  "workflowLifecycleClose": "Close",
+  "workflowOperationsTitle": "Operation overview",
+  "workflowOperationsFailed": "The current overview could not be verified. Refresh the workflow to try again.",
+  "workflowNextTrigger": "Next trigger",
+  "workflowTriggerScheduled": "Next scheduled request: {{at}}",
+  "workflowTrigger": {
+    "request_or_event": "No enabled routine schedule is recorded. Requests or connected automations may still start a run.",
+    "stopped": "New runs are stopped. Previously admitted work may continue.",
+    "not_published": "Publish a tested revision before starting work."
+  },
+  "workflowTriggerBoundary": "This is the configured routine schedule. Other requests can arrive sooner; access checks, activity gates and execution still apply.",
+  "workflowOpenBlockers": "Waiting for action or recovery",
+  "workflowNoBlockers": "No run is currently waiting or recovering. Review failed runs in the history separately.",
+  "workflowMoreBlockers": "More runs need inspection. Open the full history.",
+  "workflowRecentRuns": "Recent runs",
+  "workflowRecentBoundary": "These are recorded execution statuses. A completed run does not establish an independently verified business result.",
+  "workflowNoRecentRuns": "No runs have been recorded.",
+  "workflowMoreRecentRuns": "Showing the ten most recent runs. Open the full history for more.",
+  "workflowNeedsAttention": "Needs attention"
 }

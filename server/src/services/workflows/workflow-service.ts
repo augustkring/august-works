@@ -46,6 +46,8 @@ import { workflowNodeRegistryService } from "./workflow-node-registry.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { persistActivity, publishActivity } from "../activity-log.js";
+import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
+import { workflowOperationsSchema } from "@paperclipai/shared";
 
 type WorkflowDb = Db;
 
@@ -185,6 +187,63 @@ function assertPublishedPointer(workflow: typeof workflows.$inferSelect, expecte
 
 export function workflowService(db: Db) {
   return {
+    operations: async (companyId: string, workflowId: string, authority: AuthorizationActor) => {
+      v5HumanActorId(authority);
+      return db.transaction(async tx => {
+        const nativeDb = tx as unknown as Db;
+        await lockAnalyticalCompany(nativeDb, companyId);
+        await lockMemoryPrivacy(nativeDb, companyId);
+        await assertV5Authorization(nativeDb, authority, companyId, "workflows:read");
+        const flags = await instanceSettingsService(nativeDb).getExperimental();
+        if (!flags.enableWorkflowsV1 || !v9FeatureEnabled(flags, "progressive_shell_v9"))
+          throw notFound("Workflow overview is not enabled");
+        // The shared lock fences a pointer/status change while this view is assembled.
+        await nativeDb.select({ id: workflows.id }).from(workflows)
+          .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId))).for("share");
+        const detail = await getDetail(nativeDb, companyId, workflowId, authority);
+        if (!detail) throw notFound("Workflow not found");
+        if (Boolean(detail.publishedRevisionId) !== Boolean(detail.publishedRevision) ||
+          Boolean(detail.draftRevisionId) !== Boolean(detail.draftRevision))
+          throw notFound("Workflow revision not found");
+        const scope = and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId));
+        const select = { id: workflowRuns.id, workflowRevisionId: workflowRuns.workflowRevisionId,
+          status: workflowRuns.status, createdAt: workflowRuns.createdAt, finishedAt: workflowRuns.finishedAt };
+        const recent = await nativeDb.select(select).from(workflowRuns).where(scope)
+          .orderBy(desc(workflowRuns.createdAt), desc(workflowRuns.id)).limit(11).for("share");
+        const blockers = await nativeDb.select(select).from(workflowRuns)
+          .where(and(scope, inArray(workflowRuns.status, ["waiting", "recovering"])))
+          .orderBy(desc(workflowRuns.createdAt), desc(workflowRuns.id)).limit(6).for("share");
+        // Even content-free run metadata uses the current native revision and
+        // copied-payload source owners. The extra rows determine pagination only.
+        const inspected = new Map([...recent, ...blockers].map(run => [run.id, run]));
+        const deadline = performance.now() + 30_000;
+        for (const run of inspected.values()) {
+          if (performance.now() > deadline) throw forbidden("Workflow overview source review exceeded its budget");
+          const revision = await getRevisionById(nativeDb, companyId, workflowId, run.workflowRevisionId, authority);
+          if (!revision) throw notFound("Workflow run revision not found");
+          await assertLearnedWorkflowPayloadAccess(nativeDb, companyId, authority, { workflowRunId: run.id });
+        }
+        if (performance.now() > deadline) throw forbidden("Workflow overview source review exceeded its budget");
+        const status = detail.status === "active" && !detail.publishedRevisionId ? "draft" : detail.status;
+        const { routineService } = await import("../routines.js");
+        const scheduled = status === "active" ? await routineService(nativeDb).nextWorkflowSchedule(companyId, workflowId) : null;
+        // Recheck current native authorization/rollout after asynchronous source reads.
+        await assertV5Authorization(nativeDb, authority, companyId, "workflows:read");
+        const currentFlags = await instanceSettingsService(nativeDb).getExperimental();
+        if (!currentFlags.enableWorkflowsV1 || !v9FeatureEnabled(currentFlags, "progressive_shell_v9"))
+          throw notFound("Workflow overview is not enabled");
+        const project = (run: typeof recent[number]) => ({ id: run.id, revisionId: run.workflowRevisionId,
+          status: run.status, createdAt: run.createdAt.toISOString(), finishedAt: run.finishedAt?.toISOString() ?? null });
+        return workflowOperationsSchema.parse({ companyId, workflowId, updatedAt: detail.updatedAt.toISOString(),
+          publishedRevisionId: detail.publishedRevisionId, status,
+          nextTrigger: status === "draft" ? { state: "not_published" }
+            : status !== "active" ? { state: "stopped" }
+            : scheduled ? { state: "scheduled", at: scheduled.toISOString() } : { state: "request_or_event" },
+          recent: { runs: recent.slice(0, 10).map(project), hasMore: recent.length > 10 },
+          blockers: { runs: blockers.slice(0, 5).map(project), hasMore: blockers.length > 5 },
+        });
+      });
+    },
     lifecycle: async (companyId: string, workflowId: string, rawInput: WorkflowLifecycleCommand, authority: AuthorizationActor) => {
       const input = workflowLifecycleCommandSchema.parse(rawInput);
       const principal = v5HumanActorId(authority);

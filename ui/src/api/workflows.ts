@@ -29,10 +29,27 @@ import {
   workflowRunExperienceSchema,
   workflowLifecycleCommandSchema,
   workflowLifecycleReceiptSchema,
+  workflowOperationsSchema,
   type WorkflowLifecycleCommand,
 } from "@paperclipai/shared";
 
 export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
+  operations: async (
+    companyId: string,
+    principal: string,
+    workflowId: string,
+    signal?: AbortSignal,
+  ) => {
+    const result = workflowOperationsSchema.parse(
+      await api.get(
+        `/companies/${companyId}/workflows/${workflowId}/experience/operations?expectedUserId=${encodeURIComponent(principal)}`,
+        { signal, cache: "no-store" },
+      ),
+    );
+    if (result.companyId !== companyId || result.workflowId !== workflowId)
+      throw new Error("Workflow overview context changed");
+    return result;
+  },
   lifecycle: async (
     companyId: string,
     principal: string,

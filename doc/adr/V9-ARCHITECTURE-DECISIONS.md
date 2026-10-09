@@ -460,3 +460,25 @@ it never silently resumes or un-retires work. Full operation overview, safe Run
 now, representative test/publish, independently verified external outcomes,
 inherited runtime gates and hosted/human qualification remain open. These two
 partial Screen Contracts do not upgrade V9 source or release readiness.
+
+## ADR-V9-024 — Native workflow operation observations
+
+The native workflow owner assembles the overview under existing company/memory
+privacy locks and workflow/run share locks. It reads eleven recent and six
+waiting/recovering candidates, exposes at most ten/five and explicitly marks
+additional history. Every candidate uses current native revision and copied
+payload-source admission; a source failure suppresses the whole view. The routine
+owner returns only the earliest enabled, configured schedule for an active
+workflow target. That configured time is not guaranteed execution and does not
+exclude an earlier API, routine, pipeline or parent-workflow request.
+
+Private/no-store reads bind current human/company/resource and recheck native
+permission and rollout after asynchronous work. The UI additionally binds the
+parent's status/update timestamp/published pointer and hides all retained metadata
+while reads run. Recorded execution success does not establish independently
+verified business value. Failed historical runs are separate from current
+waiting/recovering work. No inputs, outputs, errors, prompts, routine labels,
+credentials or execution principals are exposed, and reads create no receipt or
+effect. This direct native view retains native source budgets; cooperative SQL
+cancellation, full orchestration performance qualification, safe Run now,
+independent outcomes and the complete lifecycle remain open.

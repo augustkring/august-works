@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { WorkflowExperience } from "@paperclipai/shared";
 import { workflowsApi } from "../api/workflows";
 import { WorkflowReview } from "./WorkflowReview";
@@ -81,6 +81,18 @@ const data: WorkflowExperience = {
   },
 };
 let root: Root, container: HTMLDivElement, client: QueryClient;
+beforeEach(() => {
+  vi.spyOn(workflowsApi, "operations").mockResolvedValue({
+    companyId: data.companyId,
+    workflowId: data.id,
+    updatedAt: data.updatedAt,
+    publishedRevisionId: data.active!.id,
+    status: "active",
+    nextTrigger: { state: "request_or_event" },
+    recent: { runs: [], hasMore: false },
+    blockers: { runs: [], hasMore: false },
+  });
+});
 afterEach(async () => {
   if (root) await act(async () => root.unmount());
   client?.clear();
@@ -226,6 +238,50 @@ it("hides retained private prose immediately during a permission recheck and rej
   expect(document.activeElement).toBe(
     container.querySelector('[role="alert"]'),
   );
+});
+
+it("rejects late operation metadata after native access loss hides the current parent", async () => {
+  vi.spyOn(workflowsApi, "experience")
+    .mockResolvedValueOnce(data)
+    .mockRejectedValueOnce(new Error("PRIVATE ACCESS LOSS"));
+  let finish!: (
+    value: Awaited<ReturnType<typeof workflowsApi.operations>>,
+  ) => void;
+  const operations = vi
+    .spyOn(workflowsApi, "operations")
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+  await mount();
+  await vi.waitFor(() => expect(operations).toHaveBeenCalledOnce());
+  await act(async () =>
+    live({
+      companyId: data.companyId,
+      type: "analytical.context.access_lost",
+      payload: {},
+    }),
+  );
+  await vi.waitFor(() =>
+    expect(container.querySelector("[role=alert]")).not.toBeNull(),
+  );
+  await act(async () =>
+    finish({
+      companyId: data.companyId,
+      workflowId: data.id,
+      updatedAt: data.updatedAt,
+      publishedRevisionId: data.active!.id,
+      status: "active",
+      nextTrigger: { state: "scheduled", at: "2026-10-10T08:00:00.000Z" },
+      recent: { runs: [], hasMore: false },
+      blockers: { runs: [], hasMore: false },
+    }),
+  );
+  expect(container.textContent).not.toContain("Operation overview");
+  expect(container.textContent).not.toContain("Next scheduled request");
+  expect(container.textContent).not.toContain("PRIVATE ACCESS LOSS");
 });
 
 it("keeps an unavailable comparison separate from an unchanged-flow result", async () => {

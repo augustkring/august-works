@@ -493,6 +493,25 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     ).toBeVisible();
     await page.goto(path);
     const originalChanges: unknown[] = [];
+    const operationOverview = page.getByRole("region", {
+      name: "Operation overview",
+      exact: true,
+    });
+    await expect(
+      operationOverview.getByRole("heading", {
+        name: "Recent runs",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      operationOverview.getByText("Recorded as completed", { exact: false }),
+    ).toBeVisible();
+    await expect(
+      operationOverview.getByText("PRIVATE-V9-RUN-INPUT", { exact: false }),
+    ).toHaveCount(0);
+    await expect(
+      operationOverview.locator(`a[href$='/runs/${run.run.id}']`),
+    ).toBeVisible();
     const lifecycleRoute = `**/api/companies/${company.id}/workflows/${created.id}/experience/lifecycle?**`;
     await page.route(lifecycleRoute, async (route) => {
       originalChanges.push(route.request().postDataJSON());

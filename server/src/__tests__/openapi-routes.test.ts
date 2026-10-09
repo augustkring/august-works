@@ -939,6 +939,10 @@ describe("openapi routes", () => {
     const { spec } = loadSpecRoutes();
     const board = [{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }];
     const root = "/api/companies/{companyId}";
+    const operations = spec.paths[`${root}/workflows/{workflowId}/experience/operations`].get;
+    expect(operations.security).toEqual(board);
+    expect(operations.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(operations.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
     const lifecycle = spec.paths[`${root}/workflows/{workflowId}/experience/lifecycle`].post;
     expect(lifecycle.security).toEqual(board);
     expect(lifecycle.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);

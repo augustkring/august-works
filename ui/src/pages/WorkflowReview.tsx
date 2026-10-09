@@ -10,6 +10,7 @@ import { Button } from "../components/ui/button";
 import { Link, useParams } from "../lib/router";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowLifecycleControls } from "../components/WorkflowLifecycleControls";
+import { WorkflowOperations } from "../components/WorkflowOperations";
 import { queryKeys } from "../lib/queryKeys";
 
 export function WorkflowEntry() {
@@ -160,6 +161,12 @@ export function WorkflowReview({
           <p className="break-words">{detail.description}</p>
         )}
         <p>{t(`workflowStatus.${detail.status}`)}</p>
+        <WorkflowOperations
+          company={company}
+          principal={principal}
+          detail={detail}
+          refresh={() => void query.refetch()}
+        />
         {detail.active && detail.draft && (
           <nav
             aria-label={t("workflowVersions")}

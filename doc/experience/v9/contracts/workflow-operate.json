@@ -2,8 +2,13 @@
   "screenId": "WORKFLOW-OPERATE",
   "journeyId": "workflow",
   "routeOrSurface": "/workflows/:workflowId",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
-  "customerOutcome": "Pause new native run admission or explicitly resume the unchanged published workflow, with a replayable original-request receipt.",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Inspect the next configured native schedule, bounded recent execution statuses and waiting/recovering runs; explicitly Pause or Resume with an original-request receipt.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
     "Effective feature admission is required for new work; native membership and resource authority remain necessary"
@@ -26,7 +31,9 @@
       "Current native workflow status and separate active/draft versions.",
       "Explicit finish-existing policy: Pause blocks new admissions and does not cancel already admitted work.",
       "Confirmation before each action; original unknown request retained across read rechecks and ordinary dialog close/reopen.",
-      "Original native receipt is historical confirmation; refreshed workflow status remains separate."
+      "Original native receipt is historical confirmation; refreshed workflow status remains separate.",
+      "Next configured enabled routine schedule, with request/event and execution-gate limitations; paused/archived workflows do not promise new triggers.",
+      "Ten latest run status records and five current waiting/recovering records, independently bounded with explicit additional-history indicators. Execution success is not independent business verification."
     ]
   },
   "inputs": [],
@@ -48,17 +55,18 @@
   "systemWork": {
     "canonicalReadDomains": [
       "Native workflow/revision/source admission and current workflows:read/publish permissions",
-      "Existing workflow runs, steps, waits, bound heartbeat/tool state and routine/pipeline/parent workflow dependencies"
+      "Existing workflow runs, steps, waits, bound heartbeat/tool state and routine/pipeline/parent workflow dependencies",
+      "workflowService.operations and routineService.nextWorkflowSchedule; bounded native metadata under workflow/run share locks, current source guards and final authorization/rollout recheck."
     ],
     "canonicalWriteOperation": "workflowService.lifecycle under native workflow/privacy/configuration locks, with atomic activity receipt; every native enqueue uses the same workflow row fence.",
     "authorityEffect": "Current human company/source and publication authority are required, including on replay. No new grants, execution, cancellation, approval or external effect. Resume repeats SaaS domain admission.",
-    "asyncWork": "One transaction. Native reads use scoped EXISTS/limit-one dependency queries. No independent projection deadline or cancellation guarantee is invented.",
+    "asyncWork": "Native transactional read with bounded 11 recent/6 blocker candidates and content-free schedule lookup. Current native source owners enforce their existing budgets; SQL cancellation and 1.5-second projection qualification are not claimed.",
     "receipt": "Strict company/workflow/action/request/version-bound native original receipt; current state is refreshed separately. Idempotent replay has no second effect/audit event."
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
     "empty": "An unpublished draft may be paused/retired; Resume requires a published revision.",
-    "partial": "Next trigger, recent outcomes, blocker and safe Run now composition remain open; no healthy complete operation overview is claimed.",
+    "partial": "Run now admission and independently verified business outcomes remain open. Current waiting/recovering runs are distinct from failed historical runs; a source-read failure suppresses the entire overview.",
     "stale": "A stale expected status, timestamp or revision pointer is refused. During private read rechecks all controls and receipts are hidden.",
     "validation_error": "Strict action/request/status/timestamp/revision/finish-existing schema; canonical pre-effect conflicts allow a fresh reviewed request.",
     "system_error": "Transport, authorization and malformed/foreign receipt failures remain unconfirmed. Preserve the original tuple and offer exact retry without new request identity.",
@@ -115,7 +123,7 @@
     "functional": [
       "Prove concurrent version conflict, original receipt replay after later state changes, pause barriers for prepared manual/routine/pipeline/API/task admissions, publication immutability and current authority loss.",
       "Prove retirement refusal for pending native work, active waits/children, unconfirmed external tools and routine/pipeline/parent bindings; preserve published/run history and discard the draft on accepted retirement.",
-      "Complete operation overview, safe Run now, durable navigation recovery, automated owned-resource cleanup and full external reconciliation/customer qualification remain open. Shared resources are not automatically removed."
+      "Safe Run now, independently verified business outcomes, durable navigation recovery, automated owned-resource cleanup and full external reconciliation/customer qualification remain open. Shared resources are not automatically removed."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

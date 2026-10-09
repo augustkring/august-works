@@ -2468,6 +2468,20 @@ export function routineService(
     get: getRoutineById,
     getTrigger: getTriggerById,
 
+    // Read only the earliest enabled, configured native schedule. This is not
+    // a promise that admission, activity gates or execution will succeed.
+    nextWorkflowSchedule: async (companyId: string, workflowId: string): Promise<Date | null> => {
+      const [row] = await db.select({ at: routineTriggers.nextRunAt }).from(routineTriggers)
+        .innerJoin(routines, and(eq(routines.companyId, routineTriggers.companyId), eq(routines.id, routineTriggers.routineId)))
+        .where(and(eq(routines.companyId, companyId), eq(routines.executionTargetKind, "workflow"),
+          eq(routines.executionTargetRef, workflowId), eq(routines.status, "active"),
+          eq(routineTriggers.kind, "schedule"), eq(routineTriggers.enabled, true),
+          eq(routineTriggers.archived, false), eq(routineTriggers.setupPending, false),
+          isNotNull(routineTriggers.nextRunAt)))
+        .orderBy(asc(routineTriggers.nextRunAt), asc(routineTriggers.id)).limit(1);
+      return row?.at ?? null;
+    },
+
     list: async (
       companyId: string,
       filters?: { projectId?: string | null },

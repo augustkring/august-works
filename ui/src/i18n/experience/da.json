@@ -589,5 +589,23 @@
     "resume": "Genoptagelse bekræftet for den oprindelige anmodning. Gennemgå workflowets aktuelle status, før nyt arbejde startes.",
     "retire": "Pensionering bekræftet. Nye kørsler kan ikke starte. Publicerede versioner og kørselshistorik er bevaret."
   },
-  "workflowLifecycleClose": "Luk"
+  "workflowLifecycleClose": "Luk",
+  "workflowOperationsTitle": "Driftsoversigt",
+  "workflowOperationsFailed": "Den aktuelle oversigt kunne ikke verificeres. Opdater workflowet for at prøve igen.",
+  "workflowNextTrigger": "Næste trigger",
+  "workflowTriggerScheduled": "Næste planlagte anmodning: {{at}}",
+  "workflowTrigger": {
+    "request_or_event": "Der er ingen registreret aktiv rutinetidsplan. Anmodninger eller tilknyttede automatiseringer kan stadig starte en kørsel.",
+    "stopped": "Nye kørsler er stoppet. Tidligere godkendt arbejde kan fortsætte.",
+    "not_published": "Udgiv en testet version, før du starter arbejdet."
+  },
+  "workflowTriggerBoundary": "Dette er rutinens konfigurerede tidsplan. Andre anmodninger kan komme tidligere; adgangskontrol, aktivitetsregler og eksekvering gælder stadig.",
+  "workflowOpenBlockers": "Afventer handling eller genopretning",
+  "workflowNoBlockers": "Ingen kørsel venter eller er under genopretning nu. Gennemgå fejlede kørsler separat i historikken.",
+  "workflowMoreBlockers": "Flere kørsler kræver gennemgang. Åbn hele historikken.",
+  "workflowRecentRuns": "Seneste kørsler",
+  "workflowRecentBoundary": "Dette er registrerede eksekveringsstatusser. En afsluttet kørsel dokumenterer ikke et uafhængigt verificeret forretningsresultat.",
+  "workflowNoRecentRuns": "Der er endnu ingen registrerede kørsler.",
+  "workflowMoreRecentRuns": "Viser de ti seneste kørsler. Åbn hele historikken for flere.",
+  "workflowNeedsAttention": "Kræver handling"
 }
