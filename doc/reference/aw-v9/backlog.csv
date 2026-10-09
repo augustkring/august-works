@@ -1,0 +1,121 @@
+id,brief_line,description,implementation_status
+V9-001,2157,ADR + architecture locks + Security Assurance Map + C0–C4 mapping + feature dependency map + Safe Change template,not_started
+V9-002,2159,experience shared types/validators,not_started
+V9-003,2161,Experience Orchestrator read model,not_started
+V9-004,2163,authorization/staleness + Experience Orchestrator degradation/freshness/resilience regression suite,not_started
+V9-005,2165,experience profile resolver,not_started
+V9-006,2167,progressive shell + Advanced entry,not_started
+V9-007,2169,sidebar route compatibility + deep-link tests,not_started
+V9-008,2171,legacy shell usage telemetry,not_started
+V9-009,2173,Home projection service,not_started
+V9-010,2175,Home UI / accessible empty/loading/failure states,not_started
+V9-011,2177,Needs You naming/IA migration over attention,not_started
+V9-012,2179,unified ActionCard renderer base,not_started
+V9-013,2181,attention precision + critical recall/miss/late/duplicate metrics + dismiss reason telemetry,not_started
+V9-014,2183,notification preference schema extension,not_started
+V9-015,2185,quiet hours/digest scheduler,not_started
+V9-016,2187,Slack/Teams/email delivery policy adapters,not_started
+V9-017,2189,notification privacy/redaction tests,not_started
+V9-018,2191,onboarding schema migration,not_started
+V9-019,2193,activation state machine/service,not_started
+V9-020,2195,intent capture UX,not_started
+V9-021,2197,discovery progress + source/provenance/evidence cards + untrusted-content boundary,not_started
+V9-022,2199,material-question resolver + indirect prompt-injection/ingestion policy tests,not_started
+V9-023,2201,activation resume/recovery,not_started
+V9-024,2203,Free Core onboarding commercial gate removal,not_started
+V9-025,2205,first-value task/run binding,not_started
+V9-026,2207,first-value verification + analytics,not_started
+V9-027,2209,first-outcome UI,not_started
+V9-028,2211,Agent Package customer catalog projection,not_started
+V9-029,2213,Hire Package simplified install flow,not_started
+V9-030,2215,package permissions/consequence preview,not_started
+V9-031,2217,advanced package/custom agent path,not_started
+V9-032,2219,Cmd+K intent router,not_started
+V9-033,2221,command palette Ask/Create/Run UI,not_started
+V9-034,2223,deterministic command catalog,not_started
+V9-035,2225,natural-language task/project authoring,not_started
+V9-036,2227,chat workflow draft adapter,not_started
+V9-037,2229,workflow preview/diff/test card,not_started
+V9-038,2231,chat Foundation proposal adapter,not_started
+V9-039,2233,chat agent/package proposal adapter,not_started
+V9-040,2235,chat connection intent adapter,not_started
+V9-041,2237,assistant-ui tool/action component registry,not_started
+V9-042,2239,approval/decision/question cards,not_started
+V9-043,2241,result/progress/recovery cards,not_started
+V9-044,2243,V8 insight cards contracts,not_started
+V9-045,2245,Slack block/modal action-card mapping,not_started
+V9-046,2247,Teams adaptive-card action mapping,not_started
+V9-047,2249,channel semantic parity tests,not_started
+V9-048,2251,AG-UI mapping/conformance spike,not_started
+V9-049,2253,A2UI compatibility/renderer experiment,not_started
+V9-050,2255,MCP Apps stable-spec conformance + AW security ADR,not_started
+V9-051,2257,MCP Apps sandboxed host PoC,not_started
+V9-052,2259,MCP Apps Tool Gateway authorization integration,not_started
+V9-053,2261,MCP Apps security/accessibility acceptance,not_started
+V9-054,2263,maintenance action classification + desired-state/concurrency model,not_started
+V9-055,2265,maintenance policy evaluator + fencing/version guards + blast-radius/kill/loop budgets,not_started
+V9-056,2267,Core Steward/readiness maintenance projection,not_started
+V9-057,2269,connector recovery/re-auth projection,not_started
+V9-058,2271,package/skill/playbook revalidation projection,not_started
+V9-059,2273,workflow/runtime recovery projection,not_started
+V9-060,2275,maintenance receipt UI/history,not_started
+V9-061,2277,maintenance escalation → Needs You,not_started
+V9-062,2279,maintenance cost/retry budgets,not_started
+V9-063,2281,support diagnostic bundle,not_started
+V9-064,2283,self-service error recovery cards,not_started
+V9-065,2285,V6 support session customer UX,not_started
+V9-066,2287,design token audit/consolidation,not_started
+V9-067,2289,Storybook V9 state matrix,not_started
+V9-068,2291,premium shell typography/layout refinement,not_started
+V9-069,2293,card/surface reduction pass,not_started
+V9-070,2295,motion/reduced-motion pass,not_started
+V9-071,2297,dark-mode recomposition audit,not_started
+V9-072,2299,`.production`/legacy parity inventory,not_started
+V9-073,2301,migrate canonical Agents/Skills/Costs surfaces,not_started
+V9-074,2303,retire redundant onboarding variants,not_started
+V9-075,2305,retire streamlined legacy flag after migration,not_started
+V9-076,2307,route-level lazy loading/performance pass,not_started
+V9-077,2309,long-session memory/render performance,not_started
+V9-078,2311,mobile critical action surface,not_started
+V9-079,2313,WCAG automated gates,not_started
+V9-080,2315,keyboard/screen-reader critical journey tests,not_started
+V9-081,2317,accessible auth/onboarding tests,not_started
+V9-082,2319,charts/generative UI nonvisual alternatives,not_started
+V9-083,2321,localization key migration for V9 surfaces,not_started
+V9-084,2323,Danish/English reference locale QA if launch scope requires,not_started
+V9-085,2325,UX event Data Processing Contracts + allow-listed schema/redaction/leakage tests,not_started
+V9-086,2327,Time-to-first-outcome funnel,not_started
+V9-087,2329,interruption/attention telemetry,not_started
+V9-088,2331,maintenance/support effort telemetry,not_started
+V9-089,2333,optional PostHog adapter + DPA/privacy feature gate,not_started
+V9-090,2335,onboarding exploratory usability pilot harness + confirmatory-validation preregistration,not_started
+V9-091,2337,Slack-only employee journey E2E,not_started
+V9-092,2339,manager decision/insight journey E2E,not_started
+V9-093,2341,AI admin advanced setup journey E2E,not_started
+V9-094,2343,failure/recovery + Orchestrator degradation + maintenance concurrency/ambiguous-outcome pilot,not_started
+V9-095,2345,hosted starter-compute experiment (only after V6/V7 gates),not_started
+V9-096,2347,live managed-agent activation qualification,not_started
+V9-097,2349,live channel notification/approval qualification,not_started
+V9-098,2351,enterprise admin/accessibility qualification,not_started
+V9-099,2353,customer support readiness + runbook,not_started
+V9-100,2355,V2 assurance evidence baseline + legacy cleanup prerequisites,not_started
+V9-101,2362,Screen Contract schema + coverage manifest + CI completeness check,not_started
+V9-102,2364,"canonical profile navigation + shell utility area (`Ask August`, `Feedback`, help/profile) + responsive adaptation",not_started
+V9-103,2366,onboarding execution screens ONB-01–ONB-04,not_started
+V9-104,2368,onboarding execution screens ONB-05–ONB-08 + just-in-time connection/permission contract,not_started
+V9-105,2370,onboarding execution screens ONB-09–ONB-12 + resume/recovery/accessibility,not_started
+V9-106,2372,Hire Agent flow + capability/access/authority/test/review/activation receipt,not_started
+V9-107,2374,"Custom Agent builder steps 1–6 (outcome, identity, instructions, knowledge, tools, authority)",not_started
+V9-108,2376,"Custom Agent builder steps 7–13 (memory, collaboration, runtime, test, review, publish, monitor) + draft/live lifecycle",not_started
+V9-109,2378,orchestration decision contract + bounded multi-agent admin projection + takeover/kill propagation,not_started
+V9-110,2380,workflow full lifecycle + plain-language-first review + safe test + immutable publish revision + recovery/retirement,not_started
+V9-111,2382,Company/Settings/Governance canonical IA + contextual governance + settings search/deep-link contracts,not_started
+V9-112,2384,global microcopy/form/confirmation/error/recovery/loading/success receipt standards + component/state QA,not_started
+V9-113,2386,enhanced accessibility targets + dialog/focus/live-status/zoom/touch/authentication critical-flow evidence,not_started
+V9-114,2388,Customer Feedback shared schema/domain/API + tenant/RBAC/privacy contract,not_started
+V9-115,2390,persistent global Feedback trigger + feedback dialog + session draft + confirmation receipt,not_started
+V9-116,2392,feedback safe-context collector + optional diagnostics + screenshot attachment pipeline + malware/privacy controls,not_started
+V9-117,2394,My Feedback status/follow-up UI + AW internal triage/dedupe/linking + notification loop,not_started
+V9-118,2396,migrate `OutputFeedbackButtons` away from Paperclip Labs sharing; tenant-local output feedback + explicit per-submission AW product-sharing path,not_started
+V9-119,2398,feedback security/a11y/privacy/E2E/usability suite + support/security destination tests,not_started
+V9-120,2400,V3 no-guess experience coverage audit + final security/AI/UX/accessibility/privacy/migration/feedback acceptance evidence + release-status decision,not_started

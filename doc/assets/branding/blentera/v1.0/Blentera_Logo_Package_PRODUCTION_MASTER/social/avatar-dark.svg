@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" shape-rendering="geometricPrecision">
+
+<defs>
+  <linearGradient id="topBase" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#0758B3"/><stop offset=".56" stop-color="#2187D0"/><stop offset="1" stop-color="#48BCE3"/>
+  </linearGradient>
+  <linearGradient id="topRibbon" x1="0" y1="0" x2="1" y2=".16">
+    <stop offset="0" stop-color="#13A2CC"/><stop offset=".60" stop-color="#63D0D8"/><stop offset="1" stop-color="#E4F8ED"/>
+  </linearGradient>
+  <linearGradient id="bottomDark" x1="0" y1="0" x2="1" y2=".10">
+    <stop offset="0" stop-color="#067873"/><stop offset=".62" stop-color="#0A887A"/><stop offset="1" stop-color="#15977E"/>
+  </linearGradient>
+  <linearGradient id="bottomBase" x1="0" y1=".48" x2="1" y2=".31">
+    <stop offset="0" stop-color="#0BA28D"/><stop offset=".56" stop-color="#3FC78E"/><stop offset="1" stop-color="#77DD91"/>
+  </linearGradient>
+</defs>
+<rect width="1024" height="1024" fill="#0E1B29"/><g transform="translate(240 165) scale(1.5813953488372092 1.5813953488372092)">
+<path d="M0 0H206 C286 0 340 53 340 131 C340 160 329 181 294 206 C253 170 191 148 132 129 C66 108 9 89 0 40Z" fill="url(#topBase)"/>
+<path d="M0 430V342 C0 295 23 259 63 240 C98 223 139 218 189 218 C237 218 273 220 294 228 C289 252 278 268 258 278 C195 309 72 349 0 430Z" fill="url(#bottomDark)"/>
+<path d="M0 430 C72 349 195 309 258 278 C278 268 289 252 294 228 C327 241 344 276 344 321 C344 378 306 415 260 426 C239 431 214 430 0 430Z" fill="url(#bottomBase)"/>
+<path d="M0 40 C9 89 66 108 132 129 C191 148 253 170 294 206 C312 220 324 239 330 260 C304 241 269 226 222 220 C162 214 112 220 77 205 C31 185 5 151 0 119Z" fill="url(#topRibbon)"/>
+</g>
+</svg>
