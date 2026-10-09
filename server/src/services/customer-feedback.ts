@@ -17,6 +17,7 @@ import {
   createCustomerFeedbackSchema,
   customerFeedbackSchema,
   feedbackFollowUpSchema,
+  feedbackInternalDetailSchema,
   feedbackTriageSchema,
   FEEDBACK_CUSTOMER_STATUS,
   v9FeatureEnabled,
@@ -240,17 +241,41 @@ export function customerFeedbackService(
         .onConflictDoNothing();
   }
   return {
-    async internalList(actor: AuthorizationActor, companyId: string) {
+    async internalList(
+      actor: AuthorizationActor,
+      companyId: string,
+      beforeId?: string,
+    ) {
       await operator(db, actor);
       const [company] = await db
         .select({ id: companies.id })
         .from(companies)
         .where(eq(companies.id, companyId));
       if (!company) throw notFound("Company not found");
+      const [boundary] = beforeId
+        ? await db
+            .select()
+            .from(customerFeedback)
+            .where(
+              and(
+                eq(customerFeedback.companyId, companyId),
+                eq(customerFeedback.id, beforeId),
+              ),
+            )
+            .limit(1)
+        : [];
+      if (beforeId && !boundary) throw notFound("Feedback not found");
       const rows = await db
         .select()
         .from(customerFeedback)
-        .where(eq(customerFeedback.companyId, companyId))
+        .where(
+          and(
+            eq(customerFeedback.companyId, companyId),
+            boundary
+              ? sql`(${customerFeedback.createdAt},${customerFeedback.id}) < (select created_at, id from customer_feedback where company_id = ${companyId}::uuid and id = ${boundary.id}::uuid)`
+              : undefined,
+          ),
+        )
         .orderBy(desc(customerFeedback.createdAt), desc(customerFeedback.id))
         .limit(25);
       await audit(
@@ -276,6 +301,7 @@ export function customerFeedbackService(
       actor: AuthorizationActor,
       companyId: string,
       id: string,
+      beforeEventId?: string,
     ) {
       await operator(db, actor);
       const [row] = await db
@@ -288,6 +314,21 @@ export function customerFeedbackService(
           ),
         );
       if (!row) throw notFound("Feedback not found");
+      const [boundary] = beforeEventId
+        ? await db
+            .select()
+            .from(customerFeedbackEvents)
+            .where(
+              and(
+                eq(customerFeedbackEvents.companyId, companyId),
+                eq(customerFeedbackEvents.feedbackId, id),
+                eq(customerFeedbackEvents.id, beforeEventId),
+              ),
+            )
+            .limit(1)
+        : [];
+      if (beforeEventId && !boundary)
+        throw notFound("Feedback event not found");
       const events = await db
         .select({
           id: customerFeedbackEvents.id,
@@ -303,10 +344,16 @@ export function customerFeedbackService(
           and(
             eq(customerFeedbackEvents.companyId, companyId),
             eq(customerFeedbackEvents.feedbackId, id),
+            boundary
+              ? sql`(${customerFeedbackEvents.createdAt},${customerFeedbackEvents.id}) < (select created_at, id from customer_feedback_events where company_id = ${companyId}::uuid and feedback_id = ${id}::uuid and id = ${boundary.id}::uuid)`
+              : undefined,
           ),
         )
-        .orderBy(desc(customerFeedbackEvents.createdAt))
-        .limit(100);
+        .orderBy(
+          desc(customerFeedbackEvents.createdAt),
+          desc(customerFeedbackEvents.id),
+        )
+        .limit(101);
       await audit(
         db,
         companyId,
@@ -314,15 +361,23 @@ export function customerFeedbackService(
         "customer_feedback.internal_read",
         randomUUID(),
       );
-      await operator(db, actor);
-      return {
+      const page = events.slice(0, 100);
+      const result = feedbackInternalDetailSchema.parse({
         ...(await receipt(db, row)),
         internalState: row.internalState,
-        ...(!row.omitName ? { submittedByUserId: row.submittedByUserId } : {}),
+        ...(!row.omitName && row.submittedByUserId
+          ? { submittedByUserId: row.submittedByUserId }
+          : {}),
         context: row.context,
         diagnostics: row.diagnostics,
-        events,
-      };
+        events: page.reverse().map((event) => ({
+          ...event,
+          createdAt: event.createdAt.toISOString(),
+        })),
+        nextEventCursor: events.length > 100 ? events[99]!.id : null,
+      });
+      await operator(db, actor);
+      return result;
     },
     async create(actor: AuthorizationActor, companyId: string, raw: unknown) {
       await enabled();
@@ -420,7 +475,7 @@ export function customerFeedbackService(
             eq(customerFeedbackAccess.companyId, companyId),
             eq(customerFeedbackAccess.userId, principal),
             boundary
-              ? sql`(${customerFeedback.createdAt},${customerFeedback.id}) < (${boundary.createdAt.toISOString()}::timestamptz,${boundary.id}::uuid)`
+              ? sql`(${customerFeedback.createdAt},${customerFeedback.id}) < (select created_at, id from customer_feedback where company_id = ${companyId}::uuid and id = ${boundary.id}::uuid)`
               : undefined,
           ),
         )

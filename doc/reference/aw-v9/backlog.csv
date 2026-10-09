@@ -30,9 +30,9 @@ V9-028,2211,Agent Package customer catalog projection,in_progress
 V9-029,2213,Hire Package simplified install flow,not_started
 V9-030,2215,package permissions/consequence preview,not_started
 V9-031,2217,advanced package/custom agent path,not_started
-V9-032,2219,Cmd+K intent router,not_started
-V9-033,2221,command palette Ask/Create/Run UI,not_started
-V9-034,2223,deterministic command catalog,not_started
+V9-032,2219,Cmd+K intent router,in_progress
+V9-033,2221,command palette Ask/Create/Run UI,in_progress
+V9-034,2223,deterministic command catalog,in_progress
 V9-035,2225,natural-language task/project authoring,not_started
 V9-036,2227,chat workflow draft adapter,not_started
 V9-037,2229,workflow preview/diff/test card,not_started

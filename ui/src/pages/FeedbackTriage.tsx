@@ -1,8 +1,13 @@
 import { useRef, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   feedbackInternalListSchema,
+  feedbackInternalDetailSchema,
   feedbackInternalStateSchema,
   feedbackTriageSchema,
 } from "@paperclipai/shared";
@@ -36,19 +41,41 @@ function Queue({
     input: ReturnType<typeof feedbackTriageSchema.parse>;
   } | null>(null);
   const path = `/internal/customer-feedback/${companyId}?expectedUserId=${encodeURIComponent(principal)}`;
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: ["feedback-triage", principal, companyId],
-    queryFn: async ({ signal }) =>
+    queryFn: async ({ signal, pageParam }) =>
       feedbackInternalListSchema.parse(
-        await api.get(path, { signal, cache: "no-store" }),
+        await api.get(path + (pageParam ? `&before=${pageParam}` : ""), {
+          signal,
+          cache: "no-store",
+        }),
       ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) =>
+      last.length === 25 ? last.at(-1)!.id : undefined,
     staleTime: 0,
     gcTime: 0,
     retry: false,
   });
-  const current = query.isSuccess
-    ? query.data.find((item) => item.id === selected)
-    : null;
+  const detail = useInfiniteQuery({
+    queryKey: ["feedback-triage", principal, companyId, "detail", selected],
+    queryFn: async ({ signal, pageParam }) =>
+      feedbackInternalDetailSchema.parse(
+        await api.get(
+          `/internal/customer-feedback/${companyId}/${selected}?expectedUserId=${encodeURIComponent(principal)}` +
+            (pageParam ? `&beforeEvent=${pageParam}` : ""),
+          { signal, cache: "no-store" },
+        ),
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextEventCursor ?? undefined,
+    enabled: !!selected && query.isSuccess,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+  const current =
+    query.isSuccess && detail.isSuccess ? detail.data.pages[0] : null;
   const save = useMutation({
     mutationFn: async () => {
       attempted.current ??= {
@@ -102,8 +129,8 @@ function Queue({
   if (query.isLoading) return <p role="status">{t("loading")}</p>;
   return (
     <div className="space-y-6">
-      {!query.data?.length && <p>{t("feedback.triageEmpty")}</p>}
-      {query.data?.map((item) => (
+      {!query.data?.pages[0]?.length && <p>{t("feedback.triageEmpty")}</p>}
+      {query.data?.pages.flat().map((item) => (
         <Button
           key={item.id}
           variant="outline"
@@ -122,6 +149,29 @@ function Queue({
           {item.feedbackId} · {item.internalState}
         </Button>
       ))}
+      {query.hasNextPage && (
+        <Button
+          variant="outline"
+          className="min-h-11"
+          disabled={query.isFetchingNextPage}
+          onClick={() => void query.fetchNextPage()}
+        >
+          {t("feedback.older")}
+        </Button>
+      )}
+      {selected && detail.isLoading && <p role="status">{t("loading")}</p>}
+      {detail.isError && (
+        <div role="alert">
+          <p>{t("feedback.triageHistoryFailed")}</p>
+          <Button
+            variant="outline"
+            className="min-h-11"
+            onClick={() => void detail.refetch()}
+          >
+            {t("tryAgain")}
+          </Button>
+        </div>
+      )}
       {current && (
         <form
           className="space-y-4 rounded-lg border border-border p-4"
@@ -133,6 +183,73 @@ function Queue({
           <h2 className="text-lg font-semibold">{current.feedbackId}</h2>
           <p className="whitespace-pre-wrap break-words">{current.body}</p>
           <p className="whitespace-pre-wrap break-words">{current.goal}</p>
+          <section
+            className="space-y-3"
+            aria-label={t("feedback.triageHistory")}
+          >
+            <h3 className="font-semibold">{t("feedback.triageHistory")}</h3>
+            {detail.hasNextPage && (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11"
+                disabled={detail.isFetchingNextPage}
+                onClick={() => void detail.fetchNextPage()}
+              >
+                {t("feedback.olderMessages")}
+              </Button>
+            )}
+            {detail.data?.pages
+              .slice()
+              .reverse()
+              .flatMap((page) => page.events)
+              .map((event) => (
+                <article
+                  key={event.id}
+                  className="space-y-2 rounded-md border border-border p-3"
+                >
+                  <p className="text-sm text-muted-foreground">
+                    {t(
+                      event.kind === "customer_follow_up"
+                        ? "feedback.customerResponse"
+                        : "feedback.productTeam",
+                    )}{" "}
+                    ·{" "}
+                    <time dateTime={event.createdAt}>
+                      {new Date(event.createdAt).toLocaleString()}
+                    </time>
+                  </p>
+                  {event.body && (
+                    <p className="whitespace-pre-wrap break-words">
+                      {event.body}
+                    </p>
+                  )}
+                  {event.internalNote && (
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">
+                        {t("feedback.internalNote")}
+                      </p>
+                      <p className="whitespace-pre-wrap break-words">
+                        {event.internalNote}
+                      </p>
+                    </div>
+                  )}
+                  {event.linkId && (
+                    <p className="break-words text-sm">
+                      {t(
+                        event.linkType === "issue"
+                          ? "feedback.linkIssue"
+                          : "feedback.linkDuplicate",
+                      )}
+                      : {event.linkId}
+                    </p>
+                  )}
+                </article>
+              ))}
+            {!detail.data?.pages[0]?.events.length && (
+              <p>{t("feedback.noMessages")}</p>
+            )}
+          </section>
           <label className="block space-y-2">
             <span>{t("feedback.triageState")}</span>
             <select

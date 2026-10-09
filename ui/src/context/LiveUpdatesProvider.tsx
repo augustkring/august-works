@@ -1274,9 +1274,12 @@ function invalidateActivityQueries(
     if (entityType === "company_membership" || action?.startsWith("resource_membership.") || action?.endsWith("deleted") || action?.includes("erased")) {
       for (const query of queryClient.getQueryCache().findAll({queryKey:["experience",companyId]})) query.reset();
       for (const query of queryClient.getQueryCache().findAll({queryKey:["experience-company",companyId]})) query.reset();
+      for (const query of queryClient.getQueryCache().findAll({queryKey:["experience-commands",companyId]})) query.reset();
+      queryClient.invalidateQueries({queryKey:["experience-commands",companyId],refetchType: (options?.isForegrounded ?? isPageForegrounded()) ? "active" : "none"});
       queryClient.invalidateQueries({queryKey:["experience-company",companyId],refetchType: (options?.isForegrounded ?? isPageForegrounded()) ? "active" : "none"});
       queryClient.invalidateQueries({queryKey:["experience",companyId],refetchType: (options?.isForegrounded ?? isPageForegrounded()) ? "active" : "none"});
     } else {
+      queryClient.invalidateQueries({queryKey:["experience-commands",companyId],refetchType: (options?.isForegrounded ?? isPageForegrounded()) ? "active" : "none"});
       queryClient.invalidateQueries({queryKey:["experience",companyId],refetchType: (options?.isForegrounded ?? isPageForegrounded()) ? "active" : "none"});
     }
   }

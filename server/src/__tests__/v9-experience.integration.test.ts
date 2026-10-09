@@ -11,6 +11,8 @@ import {
   issues,
   approvals,
   issueApprovals,
+  agents,
+  projects,
   decisionQueues,
 } from "@paperclipai/db";
 import { experienceRoutes } from "../routes/experience.js";
@@ -55,6 +57,7 @@ const support = await getEmbeddedPostgresTestSupport();
         experience_projection_v9: false,
         home_v9: false,
         progressive_shell_v9: false,
+        ambient_commands_v9: false,
       });
     });
     function app(actor: Express.Request["actor"]) {
@@ -73,6 +76,97 @@ const support = await getEmbeddedPostgresTestSupport();
       source: "session" as const,
       userId,
       companyIds: [companyId],
+    });
+    it("admits only deterministic current-scope commands and native-visible resource matches", async () => {
+      const url = `/api/companies/${companyId}/experience/commands`;
+      await request(app(member())).get(url).expect(404);
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+        ambient_commands_v9: true,
+      });
+      const task = randomUUID(),
+        hidden = randomUUID(),
+        foreign = randomUUID(),
+        project = randomUUID(),
+        agent = randomUUID();
+      await db.insert(issues).values([
+        { id: task, companyId, title: "Visible command match" },
+        {
+          id: hidden,
+          companyId,
+          title: "Hidden command match",
+          hiddenAt: new Date(),
+        },
+        { id: foreign, companyId: foreignId, title: "Foreign command match" },
+      ]);
+      await db
+        .insert(projects)
+        .values({ id: project, companyId, name: "Command project" });
+      await db
+        .insert(agents)
+        .values({
+          id: agent,
+          companyId,
+          name: "Command agent",
+          role: "general",
+          adapterType: "process",
+        });
+      const response = await request(app(member()))
+        .get(`${url}?q=command`)
+        .expect(200);
+      expect(response.headers["cache-control"]).toBe("private, no-store");
+      expect(response.body.semanticDrafting).toBe("unqualified");
+      expect(
+        response.body.resources.map((resource: { id: string }) => resource.id),
+      ).toContain(task);
+      expect(JSON.stringify(response.body)).not.toContain(
+        "Hidden command match",
+      );
+      expect(JSON.stringify(response.body)).not.toContain(
+        "Foreign command match",
+      );
+      const ids = response.body.commands.map(
+        (command: { id: string }) => command.id,
+      );
+      expect(ids).toContain("create_task");
+      expect(ids).not.toContain("connect_app");
+      expect(ids).not.toContain("run_workflow");
+      expect(ids).not.toContain("ask_august");
+      expect(ids).not.toContain("company");
+      const scoped = await request(app(member()))
+        .get(`${url}?q=${encodeURIComponent("open agent command")}`)
+        .expect(200);
+      expect(
+        scoped.body.resources.every(
+          (resource: { kind: string }) => resource.kind === "agent",
+        ),
+      ).toBe(true);
+      const semantic = await request(app(member()))
+        .get(`${url}?q=${encodeURIComponent("create workflow sales outreach")}`)
+        .expect(200);
+      expect(semantic.body.resources).toEqual([]);
+      await request(app(member()))
+        .get(`${url}?expectedUserId=previous-account`)
+        .expect(409);
+      await request(app(member()))
+        .get(`${url}?q=${"x".repeat(181)}`)
+        .expect(400);
+      await db
+        .insert(principalPermissionGrants)
+        .values({
+          companyId,
+          principalType: "user",
+          principalId: userId,
+          permissionKey: "tools:manage_connections",
+        });
+      const granted = await request(app(member())).get(url).expect(200);
+      expect(
+        granted.body.commands.map((command: { id: string }) => command.id),
+      ).toContain("connect_app");
+      await db
+        .delete(companyMemberships)
+        .where(eq(companyMemberships.companyId, companyId));
+      await request(app(member())).get(url).expect(403);
     });
     it("keeps ten Company categories stable while filtering current native grants and account context", async () => {
       await instanceSettingsService(db).updateExperimental({

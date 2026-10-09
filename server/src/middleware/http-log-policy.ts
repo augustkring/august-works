@@ -43,6 +43,22 @@ const SECRET_SENSITIVE_HTTP_PATHS = [
 ];
 const SECRET_SENSITIVE_HTTP_METHODS = new Set(["POST", "PUT", "PATCH"]);
 
+/** Feedback and command text has a separate private purpose, including rejected requests. */
+export function isPrivateExperienceHttpRequest(method: string | undefined, url: string | undefined): boolean {
+  if (!method || !url) return false;
+  const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  return /^\/api\/(?:companies\/(?:[^/]*\/)*customer-feedback|internal\/customer-feedback)(?:\/|$)/i.test(pathname)
+    || /^\/api\/saas\/companies\/[^/]+\/(?:activation|onboarding)(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]+\/experience\/commands(?:\/|$)/i.test(pathname);
+}
+export function privateExperienceLogUrl(url: string): string {
+  const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  if (/^\/api\/saas\/companies\//i.test(pathname)) return "/api/saas/companies/:companyId/activation-or-onboarding/:operation";
+  if (/\/experience\/commands(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/commands";
+  if (/^\/api\/internal\//i.test(pathname)) return "/api/internal/customer-feedback/:companyId/:operation";
+  return "/api/companies/:companyId/customer-feedback/:operation";
+}
+
 /** Provider payloads are private even when a method/signature is rejected. */
 export function isPrivateWebhookHttpRequest(
   method: string | undefined,
@@ -79,6 +95,7 @@ export function isSecretSensitiveHttpRequest(
   url: string | undefined,
 ): boolean {
   if (isPrivateWebhookHttpRequest(method, url)) return true;
+  if (isPrivateExperienceHttpRequest(method, url)) return true;
   if (!method || !url) return false;
   if (!SECRET_SENSITIVE_HTTP_METHODS.has(method.toUpperCase())) return false;
   const pathname = normalizePath(url);

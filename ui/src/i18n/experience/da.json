@@ -113,7 +113,12 @@
     "linkId": "Postens ID (valgfrit)",
     "triageFailed": "Behandlingen kunne ikke bekræftes. Opdatér køen før et nyt forsøg.",
     "applyTriage": "Anvend behandling",
-    "submissionsPaused": "Nye feedbackindsendelser er sat på pause. Din historik og dine svar er stadig tilgængelige."
+    "submissionsPaused": "Nye feedbackindsendelser er sat på pause. Din historik og dine svar er stadig tilgængelige.",
+    "triageHistory": "Samtale og interne noter",
+    "triageHistoryFailed": "Feedbackhistorikken kunne ikke indlæses. Kontrollér din aktuelle adgang, før du behandler feedbacken.",
+    "olderMessages": "Indlæs ældre beskeder",
+    "customerResponse": "Kundens svar",
+    "noMessages": "Ingen beskeder eller interne noter endnu."
   },
   "profileView": "Visning",
   "profileFailed": "Din visning kunne ikke ændres. Opdatér for at kontrollere din adgang.",
@@ -369,5 +374,44 @@
     "blocked": "Afventer hjælp"
   },
   "mobileNavigation": "Mobilnavigation",
-  "openNavigation": "Åbn navigation"
+  "openNavigation": "Åbn navigation",
+  "commands": {
+    "title": "Spørg og kommandoer",
+    "input": "Søg eller indtast en kommando",
+    "placeholder": "Søg, åbn en agent eller opret opgave…",
+    "description": "Åbn en side eller forbered en kladde. Udførelse og godkendelse sker i det eksisterende forløb.",
+    "failed": "Kommandoer kunne ikke indlæses. Kontrollér din adgang, og prøv igen.",
+    "semanticUnavailable": "Forfatning med naturligt sprog er endnu ikke kvalificeret i denne instans. Din tekst bevares; der er ikke sendt nogen modelforespørgsel eller handling.",
+    "unavailable": "Denne kommando er ikke tilgængelig med din aktuelle adgang eller konfiguration.",
+    "noMatches": "Ingen tilgængelige poster matcher i disse begrænsede resultater. Åbn den fulde søgning for flere.",
+    "matches": "Matchende arbejde",
+    "recent": "Seneste arbejde",
+    "groups": {
+      "navigate": "Navigation og søgning",
+      "ask": "Spørg",
+      "create": "Opret",
+      "run": "Kør"
+    },
+    "kinds": {
+      "agent": "Agent",
+      "project": "Projekt",
+      "task": "Opgave"
+    },
+    "items": {
+      "home": "Hjem",
+      "needs_you": "Kræver dig",
+      "work": "Arbejde",
+      "agents": "Åbn agenter",
+      "projects": "Åbn projekter",
+      "apps": "Apps",
+      "company": "Virksomhed",
+      "insights": "Indsigter",
+      "advanced": "Avanceret",
+      "search": "Søg i alt arbejde",
+      "create_task": "Forbered en opgave",
+      "connect_app": "Forbind en app",
+      "run_workflow": "Åbn workflows til kørsel",
+      "ask_august": "Spørg August"
+    }
+  }
 }

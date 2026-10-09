@@ -2,7 +2,12 @@
   "screenId": "SHELL",
   "journeyId": "shell",
   "routeOrSurface": "Customer Layout header and navigation",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Reach current company work, feedback, help and personal controls at the permitted presentation depth.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
@@ -15,13 +20,30 @@
   "content": {
     "h1": "August Works",
     "supportingCopy": "Reach current company work, feedback, help and personal controls at the permitted presentation depth.",
-    "customerTerms": ["Company", "Work", "Needs You", "Agent", "Feedback"],
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
     "displayedState": [
       "Current canonical state/version",
       "Missing permission or qualification is explicit; no invented progress or outcomes"
     ]
   },
-  "inputs": [],
+  "inputs": [
+    {
+      "id": "command",
+      "label": "Search or enter a command",
+      "dataType": "Literal search or explicit English/Danish grammar",
+      "required": false,
+      "default": "Empty",
+      "help": "Navigation, search and draft preparation never automatically execute a model or native mutation. Semantic drafting remains explicitly unqualified.",
+      "validation": "At most 180 characters; fixed command IDs and same-company resource destinations",
+      "autofillOrPrefill": "No automatic customer prose collection"
+    }
+  ],
   "actions": {
     "primary": {
       "label": "Ask August",
@@ -38,9 +60,10 @@
     "canonicalReadDomains": [
       "Native company memberships and permission grants",
       "Company/user sidebar preference",
-      "Current auth principal"
+      "Current auth principal",
+      "Native tasks, agents and projects after current resource authorization"
     ],
-    "canonicalWriteOperation": "Native experience/profile operation changes only the current principal’s presentation preference; resource effects remain on native APIs.",
+    "canonicalWriteOperation": "Native experience/profile operation changes only the current principal\u2019s presentation preference; resource effects remain on native APIs. Explicit Create Task opens the existing editable native Task dialog; Run opens the existing workflow owner without executing a run.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
     "asyncWork": "Native reads/mutations only; projection work uses bounded admission and a 1500 ms total deadline. Unknown mutation outcomes retain the original request key for reconciliation.",
     "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
@@ -66,9 +89,9 @@
     "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
     "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
-    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive. Cmd/Ctrl+K opens a labeled listbox/combobox, arrow keys choose a command, Enter selects and Escape restores the invoker. Switching account closes the palette.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."

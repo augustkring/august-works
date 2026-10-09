@@ -176,3 +176,47 @@ export const feedbackInternalSummarySchema = customerFeedbackSchema
 export const feedbackInternalListSchema = z
   .array(feedbackInternalSummarySchema)
   .max(25);
+export const feedbackInternalDetailSchema = customerFeedbackSchema
+  .extend({
+    internalState: feedbackInternalStateSchema,
+    submittedByUserId: z.string().min(1).optional(),
+    context: feedbackContextSchema.extend({
+      routeTemplate: z
+        .enum([
+          "/dashboard",
+          "/needs-you",
+          "/work",
+          "/agents",
+          "/apps",
+          "/company/settings",
+          "/saas/activation/:screen",
+          "/workflows",
+          "/company/settings/support",
+        ])
+        .nullable(),
+      releaseBuildId: z.string().min(1).max(200),
+    }),
+    diagnostics: feedbackDiagnosticsSchema.nullable(),
+    events: z
+      .array(
+        z.strictObject({
+          id: z.uuid(),
+          kind: z.enum(["customer_follow_up", "product_message"]),
+          body: z.string(),
+          internalNote: z.string().nullable(),
+          linkType: z.enum(["issue", "duplicate"]).nullable(),
+          linkId: z.uuid().nullable(),
+          createdAt: z.iso.datetime(),
+        }),
+      )
+      .max(100),
+    nextEventCursor: z.uuid().nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.omitName && value.submittedByUserId !== undefined)
+      ctx.addIssue({
+        code: "custom",
+        path: ["submittedByUserId"],
+        message: "No-name feedback cannot expose its author",
+      });
+  });

@@ -91,6 +91,7 @@ export function customerFeedbackRoutes(
       await service.internalList(
         req.actor,
         z.uuid().parse(req.params.companyId),
+        z.uuid().optional().parse(req.query.before),
       ),
     );
   });
@@ -104,6 +105,7 @@ export function customerFeedbackRoutes(
           req.actor,
           z.uuid().parse(req.params.companyId),
           feedbackId(req),
+          z.uuid().optional().parse(req.query.beforeEvent),
         ),
       );
     },

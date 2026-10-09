@@ -22,6 +22,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     progressive_shell_v9: true,
     home_v9: true,
     customer_feedback_v9: true,
+    ambient_commands_v9: true,
   };
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -74,6 +75,35 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     const trigger = page
       .locator('[aria-label="Global utilities"]')
       .getByRole("button", { name: "Feedback", exact: true });
+    const ask = page
+      .locator('[aria-label="Global utilities"]')
+      .getByRole("button", { name: "Ask August", exact: true });
+    await ask.click();
+    let commands = page.getByRole("dialog");
+    await expect(
+      commands.getByRole("combobox", { name: "Search or enter a command" }),
+    ).toBeFocused();
+    await commands
+      .getByRole("combobox")
+      .fill("create workflow Send outreach every Monday");
+    await expect(
+      commands.getByText(/no model request or action has been sent/),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(ask).toBeFocused();
+    await page.keyboard.press("Control+k");
+    commands = page.getByRole("dialog");
+    await commands
+      .getByRole("combobox")
+      .fill("create task Browser typed draft");
+    await commands
+      .getByRole("option", { name: "Prepare a Task", exact: true })
+      .click();
+    await expect(
+      page.getByRole("dialog").getByRole("textbox").first(),
+    ).toHaveValue("Browser typed draft");
+    expect((await json(await request.get(`${base}/issues`))).length).toBe(0);
+    await page.keyboard.press("Escape");
     await trigger.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("combobox")).toBeFocused();

@@ -131,3 +131,19 @@ quiescing notification workers because older code cannot honor these preferences
 
 This source slice does not qualify Slack/Teams delivery, business deadline/severity
 routing, responsible-owner selection, or a platform-wide interruption policy.
+
+## ADR-V9-011 — Deterministic commands and governed authoring boundary
+
+The fixed command catalog is a read projection over current native authority.
+Cmd/Ctrl+K uses explicit English/Danish grammar for navigation, literal resource
+matching and Task draft preparation. Commands never commit effects or invoke an
+LLM. Resource results are company/principal-scoped, bounded and independently
+filtered by native authorization; no total discloses forbidden records. Account
+switch closes the palette; permission/erasure events reset retained results.
+
+Run opens the existing workflow owner with current read/run grants and feature
+gates. Create Task opens its editable native dialog. Semantic authoring requires
+its own typed proposal/preview/approval/receipt adapter and is currently marked
+unqualified. The legacy experimental Conference Room relay is not an Ask August
+adapter and has no accepted command destination. Disabling the new flag restores
+the legacy palette without dropping canonical work or privacy obligations.

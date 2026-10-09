@@ -113,7 +113,12 @@
     "linkId": "Native record ID (optional)",
     "triageFailed": "Triage could not be confirmed. Refresh the queue before retrying.",
     "applyTriage": "Apply triage",
-    "submissionsPaused": "New feedback submissions are paused. Your history and replies remain available."
+    "submissionsPaused": "New feedback submissions are paused. Your history and replies remain available.",
+    "triageHistory": "Conversation and internal notes",
+    "triageHistoryFailed": "Feedback history could not be loaded. Check your current access before applying triage.",
+    "olderMessages": "Load older messages",
+    "customerResponse": "Customer response",
+    "noMessages": "No messages or internal notes yet."
   },
   "profileView": "View",
   "profileFailed": "Your view could not be changed. Refresh to check your access.",
@@ -369,5 +374,44 @@
     "blocked": "Waiting for help"
   },
   "mobileNavigation": "Mobile navigation",
-  "openNavigation": "Open navigation"
+  "openNavigation": "Open navigation",
+  "commands": {
+    "title": "Ask and commands",
+    "input": "Search or enter a command",
+    "placeholder": "Search, open an agent, or create task…",
+    "description": "Open a destination or prepare a draft. Execution and approval happen in the native workflow.",
+    "failed": "Commands could not be loaded. Check your access and try again.",
+    "semanticUnavailable": "Natural-language authoring is not qualified in this instance yet. Your text is preserved; no model request or action has been sent.",
+    "unavailable": "This command is unavailable for your current access or configuration.",
+    "noMatches": "No matching accessible records in these bounded results. Open full search for more.",
+    "matches": "Matching work",
+    "recent": "Recent work",
+    "groups": {
+      "navigate": "Navigate and search",
+      "ask": "Ask",
+      "create": "Create",
+      "run": "Run"
+    },
+    "kinds": {
+      "agent": "Agent",
+      "project": "Project",
+      "task": "Task"
+    },
+    "items": {
+      "home": "Home",
+      "needs_you": "Needs You",
+      "work": "Work",
+      "agents": "Open Agents",
+      "projects": "Open Projects",
+      "apps": "Apps",
+      "company": "Company",
+      "insights": "Insights",
+      "advanced": "Advanced",
+      "search": "Search all work",
+      "create_task": "Prepare a Task",
+      "connect_app": "Connect an App",
+      "run_workflow": "Open Workflows to run",
+      "ask_august": "Ask August"
+    }
+  }
 }

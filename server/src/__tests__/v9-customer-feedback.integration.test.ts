@@ -215,6 +215,102 @@ const support = await getEmbeddedPostgresTestSupport();
         .get(`/api/companies/${companyId}/customer-feedback/${randomUUID()}`)
         .expect(404);
     });
+    it("pages private queues and operator history without losing PostgreSQL sub-millisecond ties or accepting foreign cursors", async () => {
+      const submitted = await request(app())
+        .post(`/api/companies/${companyId}/customer-feedback`)
+        .send(input())
+        .expect(201);
+      const id = submitted.body.id;
+      const rows = Array.from({ length: 26 }, () => ({
+        id: randomUUID(),
+        companyId,
+        category: "OTHER",
+        body: "Synthetic paging prerequisite",
+        omitName: true,
+        context: {
+          ...input().context,
+          routeTemplate: "/dashboard",
+          releaseBuildId: "unverified:paging-fixture",
+        },
+        createdAt: sql`'2026-10-09 00:00:00.123456+00'::timestamptz`,
+      }));
+      await db.insert(customerFeedback).values(rows);
+      await db.insert(customerFeedbackAccess).values(
+        rows.map((row) => ({
+          companyId,
+          feedbackId: row.id,
+          userId,
+          requestKey: randomUUID(),
+          requestHash: "paging-fixture",
+        })),
+      );
+      for (const url of [
+        `/api/companies/${companyId}/customer-feedback`,
+        `/api/internal/customer-feedback/${companyId}`,
+      ]) {
+        const caller = url.includes("/internal/") ? app(operatorId) : app();
+        const first = await request(caller).get(url).expect(200);
+        const second = await request(caller)
+          .get(`${url}?before=${first.body.at(-1).id}`)
+          .expect(200);
+        const ids = [...first.body, ...second.body].map(
+          (value: { id: string }) => value.id,
+        );
+        expect(ids).toHaveLength(27);
+        expect(new Set(ids).size).toBe(27);
+        expect(new Set(ids)).toEqual(
+          new Set([id, ...rows.map((row) => row.id)]),
+        );
+      }
+      const events = Array.from({ length: 103 }, () => ({
+        id: randomUUID(),
+        companyId,
+        feedbackId: id,
+        kind: "product_message",
+        body: "Customer-visible answer",
+        internalNote: "Private note",
+        customerVisible: true,
+        requestKey: randomUUID(),
+        requestHash: "paging-fixture",
+        createdAt: sql`'2026-10-09 00:00:00.123456+00'::timestamptz`,
+      }));
+      await db.insert(customerFeedbackEvents).values(events);
+      const url = `/api/internal/customer-feedback/${companyId}/${id}`;
+      const first = await request(app(operatorId)).get(url).expect(200);
+      expect(first.body.events).toHaveLength(100);
+      expect(first.body.nextEventCursor).toBeTruthy();
+      const second = await request(app(operatorId))
+        .get(`${url}?beforeEvent=${first.body.nextEventCursor}`)
+        .expect(200);
+      expect(second.body.events).toHaveLength(3);
+      expect(second.body.nextEventCursor).toBeNull();
+      expect(
+        new Set(
+          [...first.body.events, ...second.body.events].map(
+            (event: { id: string }) => event.id,
+          ),
+        ),
+      ).toEqual(new Set(events.map((event) => event.id)));
+      await request(app(operatorId))
+        .get(`${url}?beforeEvent=${randomUUID()}`)
+        .expect(404);
+      await request(app(operatorId))
+        .get(`/api/internal/customer-feedback/${foreignId}?before=${id}`)
+        .expect(404);
+      await request(app(operatorId))
+        .get(`/api/internal/customer-feedback/${foreignId}/${id}`)
+        .expect(404);
+      const customer = await request(app())
+        .get(`/api/companies/${companyId}/customer-feedback/${id}`)
+        .expect(200);
+      expect(JSON.stringify(customer.body)).not.toContain("Private note");
+      expect(customer.body).not.toHaveProperty("events");
+      await db
+        .update(authUsers)
+        .set({ emailVerified: false })
+        .where(eq(authUsers.id, operatorId));
+      await request(app(operatorId)).get(url).expect(403);
+    });
     it("separates verified platform triage and customer messages, uses version fences and appends follow-ups", async () => {
       const response = await request(app())
           .post(`/api/companies/${companyId}/customer-feedback`)
