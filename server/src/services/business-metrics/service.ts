@@ -70,8 +70,8 @@ export function businessMetricService(db: Db) {
   }
   const issueAuthorityColumns={id:issues.id,projectId:issues.projectId,parentId:issues.parentId,assigneeAgentId:issues.assigneeAgentId,assigneeUserId:issues.assigneeUserId,status:issues.status,originKind:issues.originKind,originId:issues.originId};
   type IssueAuthority=Pick<typeof issues.$inferSelect,keyof typeof issueAuthorityColumns>;
-  async function permitted(tx: Db, companyId: string, actor: AuthorizationActor, entity: "issue" | "project", id: string,currentIssue?:IssueAuthority|null) {
-    const access = accessService(tx);
+  async function permitted(tx: Db, companyId: string, actor: AuthorizationActor, entity: "issue" | "project", id: string,currentIssue?:IssueAuthority|null, sourceAccess?: Pick<ReturnType<typeof accessService>, "decide">) {
+    const access = sourceAccess ?? accessService(tx);
     if (entity === "project") {
       const [project] = await tx.select({ id: projects.id }).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).for("share");
       return !!project && (await access.decide({ actor, action: "project:read", enforceResponsibleUserIntersection: true, resource: { type: "project", companyId, projectId: id } })).allowed;
@@ -108,10 +108,13 @@ export function businessMetricService(db: Db) {
     const currentIssues=new Map(population.entity==="issue"&&rows.length ? (await tx.select(issueAuthorityColumns).from(issues).where(and(eq(issues.companyId,companyId),inArray(issues.id,rows.map(row=>row.id)),isNull(issues.hiddenAt))).for("share")).map(row=>[row.id,row] as const) : []);
     // Never aggregate an actor-filtered subset while calling it the defined
     // population. Every contributing object's current authority is required.
-    await inspectSourcePopulation(rows, deadline, async row => {
-      if (!await permitted(tx, companyId, actor, population.entity, row.id,population.entity==="issue"?currentIssues.get(row.id)??null:undefined)
-        || (row.projectId && !await permitted(tx, companyId, actor, "project", row.projectId))) throw forbidden("Metric population is outside the current authorization boundary");
-    });
+    await accessService(tx).withReadSources(companyId, population.entity === "issue" ? rows.map(row => row.id) : [],
+      population.entity === "project" ? rows.map(row => row.id) : [], async sourceAccess => {
+        await inspectSourcePopulation(rows, deadline, async row => {
+          if (!await permitted(tx, companyId, actor, population.entity, row.id,population.entity==="issue"?currentIssues.get(row.id)??null:undefined, sourceAccess)
+            || (row.projectId && !await permitted(tx, companyId, actor, "project", row.projectId, undefined, sourceAccess))) throw forbidden("Metric population is outside the current authorization boundary");
+        });
+      });
     queryTimeBudget(deadline);
     await assertAnalyticalSourcesNotErased(tx, companyId,
       population.entity === "issue" ? rows.map(row => row.id) : [],
@@ -163,12 +166,14 @@ export function businessMetricService(db: Db) {
       // still enters the original agent × Human ACL decision independently.
       const issueIds=edges.filter(edge=>edge.inputType==="issue").map(edge=>edge.inputRef);
       const currentIssues=new Map(issueIds.length ? (await db.select(issueAuthorityColumns).from(issues).where(and(eq(issues.companyId,companyId),inArray(issues.id,issueIds),isNull(issues.hiddenAt))).for("share")).map(row=>[row.id,row] as const) : []);
-      await inspectSourcePopulation(edges, deadline, async edge => {
-        if ((edge.inputType === "issue" || edge.inputType === "project") && !await permitted(db, companyId, actor, edge.inputType, edge.inputRef,edge.inputType==="issue"?currentIssues.get(edge.inputRef)??null:undefined)) throw forbidden("Metric observation source is outside the current authorization boundary");
-        if (edge.inputType === "issue") {
-          const issue=currentIssues.get(edge.inputRef);
-          if (issue?.projectId && !await permitted(db, companyId, actor, "project", issue.projectId)) throw forbidden("Metric observation source project is outside the current authorization boundary");
-        }
+      await accessService(db).withReadSources(companyId, issueIds, edges.filter(edge => edge.inputType === "project").map(edge => edge.inputRef), async sourceAccess => {
+        await inspectSourcePopulation(edges, deadline, async edge => {
+          if ((edge.inputType === "issue" || edge.inputType === "project") && !await permitted(db, companyId, actor, edge.inputType, edge.inputRef,edge.inputType==="issue"?currentIssues.get(edge.inputRef)??null:undefined, sourceAccess)) throw forbidden("Metric observation source is outside the current authorization boundary");
+          if (edge.inputType === "issue") {
+            const issue=currentIssues.get(edge.inputRef);
+            if (issue?.projectId && !await permitted(db, companyId, actor, "project", issue.projectId, undefined, sourceAccess)) throw forbidden("Metric observation source project is outside the current authorization boundary");
+          }
+        });
       });
       await assertAnalyticalSourcesNotErased(db, companyId, edges.filter(e => e.inputType === "issue").map(e => e.inputRef), edges.filter(e => e.inputType === "project").map(e => e.inputRef));
       return observation.result;

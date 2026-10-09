@@ -365,4 +365,34 @@ suite("Native experiment final capture and human interpretation on migrated Post
     const foreign=await request(app).post(`${url}?expectedUserId=someone-else`).send({expectedRevision:5,versionId:d.version.id});expect(foreign.status).toBe(409);expect(foreign.headers["cache-control"]).toBe("no-store");
     const valid=await request(app).post(url).send({expectedRevision:5,versionId:d.version.id});expect(valid.status).toBe(200);expect(valid.body.analysis.exposureProvenance).toBe("human_attestation");expect(valid.headers["cache-control"]).toBe("no-store");
   });
+  it("rejects one forged Source or binary value among otherwise identical inserted outcome inputs", async () => {
+    const d=await running(true);await attested(d);await closure(d);const result=await analyzed(d);
+    const authentic=await db.select().from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id));
+    expect(authentic).toHaveLength(2);expect(authentic[0].assignmentId).toBe(authentic[1].assignmentId);
+    expect(authentic[0].sourceSnapshot).toEqual(authentic[1].sourceSnapshot);
+    const check=async(snapshotPatch:Record<string,unknown>,valuePatch:boolean)=>db.transaction(async tx=>{
+      // Isolated statement-owner regression. These temporary transition rows
+      // reference the actual native parents and authentic captured receipts;
+      // they never replace production receipts or qualify business evidence.
+      await tx.execute(sql`create temporary table outcome_source_probe (like business_experiment_outcomes including all) on commit drop`);
+      await tx.execute(sql`create trigger probe_native_owner after insert on outcome_source_probe referencing new table as inserted_outcomes for each statement execute function aw_experiment_outcomes_admission()`);
+      await tx.execute(sql`insert into outcome_source_probe
+        select (jsonb_populate_record(null::outcome_source_probe,to_jsonb(o) ||
+          case when o.id=${authentic[1].id}::uuid then
+            jsonb_build_object('source_snapshot_json',o.source_snapshot_json || ${JSON.stringify(snapshotPatch)}::jsonb,
+              'value',case when ${valuePatch}::boolean then 1-o.value else o.value end)
+          else '{}'::jsonb end)).*
+        from business_experiment_outcomes o where o.analysis_id=${result.analysis.id}::uuid`);
+    });
+    await check({},false);
+    for(const [patch,message] of [
+      [{status:authentic[1].sourceSnapshot.status==="done"?"cancelled":"done"},"experiment_actual_issue_capture_required"],
+      [{updatedAt:new Date(Date.now()+3600000).toISOString()},"experiment_actual_issue_capture_required"],
+      [{projectId:randomUUID()},"experiment_actual_issue_capture_required"],
+      [{createdAt:new Date(Date.now()+3600000).toISOString()},"experiment_exact_native_outcome_required"],
+    ] as const)await expect(check(patch,false)).rejects.toMatchObject({cause:{code:"23514",message}});
+    await expect(check({},true)).rejects.toMatchObject({cause:{code:"23514",message:"experiment_registered_binary_outcome_required"}});
+    expect(await db.select().from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id))).toEqual(authentic);
+  });
+
 });

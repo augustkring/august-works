@@ -258,7 +258,7 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     expect(replay.assignments).toHaveLength(4000); expect(replay.exposures).toHaveLength(4000);
     expect(replay.analysis!.receiptHash).toBe(result.analysis.receiptHash);
     expect(replay.analysis!.result).toEqual(result.analysis.result);
-    console.info("Maximum native outcome capture/replay",{units:4000,metrics:17,outcomes:stored.total,captureAndReadMs:Math.round(performance.now()-started),readMs:Math.round(performance.now()-readAt),fixture:"explicit_bulk_software_prerequisites"});
+    process.stdout.write(`Maximum native outcome capture/replay ${JSON.stringify({units:4000,metrics:17,outcomes:stored.total,captureAndReadMs:Math.round(performance.now()-started),readMs:Math.round(performance.now()-readAt),fixture:"explicit_bulk_software_prerequisites"})}\n`);
     const last=units[units.length-1];await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,last.id));
     await expect(recording().receipts(companyId,actor,d.experiment.id,d.version.id)).rejects.toMatchObject({status:404});
     await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,last.id));

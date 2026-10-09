@@ -1,4 +1,5 @@
-import { agentIdentities, agentExecutionManifests, agentExecutionManifestItems, contextManifests, memoryBindings } from "@paperclipai/db";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { analyticalLineageEdges, memoryDeletionMarkers, agentIdentities, agentExecutionManifests, agentExecutionManifestItems, contextManifests, memoryBindings } from "@paperclipai/db";
 import { agentExecutionManifestSchema, createGovernedSkillSchema } from "@paperclipai/shared";
 import { skillLifecycleService } from "../services/skill-lifecycle.js";
 import { companySkillService } from "../services/company-skills.js";
@@ -72,6 +73,21 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  async function copied(){await db.update(heartbeatRuns).set({contextSnapshot:{sensitive:"Synthetic analytical context"},resultJson:{body:"Synthetic analytical result"},stdoutExcerpt:"Synthetic analytical output"}).where(eq(heartbeatRuns.id,runId));await db.insert(issueComments).values({companyId,issueId,body:"Synthetic analytical answer"});}
  async function root(){return (await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId)))[0]!;}
  async function erased(){expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);const [run]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId));expect(run!.resultJson).toBeNull();expect(run!.contextSnapshot).toEqual({});expect((await db.select().from(issueComments).where(eq(issueComments.issueId,issueId))).every(c=>c.body==="Source payload erased")).toBe(true);}
+
+ it("rejects a mixed restore population atomically when one manifest or native input was erased",async()=>{
+  const f=await fixture(),captured=await f.capture(),[original]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,captured.lineageManifestId));
+  const validId=randomUUID(),erasedId=randomUUID();
+  await db.insert(memoryDeletionMarkers).values({companyId,kind:"source",key:nativeSha256([companyId,"source",["august_works_analytical",`manifest://${erasedId}`]])});
+  await expect(db.insert(analyticalLineageManifests).values([validId,erasedId].map(id=>({...original!,id})))).rejects.toMatchObject({cause:{code:"23514",constraint_name:"aw_analytical_source_erased"}});
+  expect(await db.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,companyId),sql`${analyticalLineageManifests.id} in (${validId},${erasedId})`))).toHaveLength(0);
+  await db.insert(analyticalLineageManifests).values({...original!,id:validId});
+  await db.insert(memoryDeletionMarkers).values({companyId,kind:"source",key:nativeSha256([companyId,"source",["august_works_analytical_input",`issue://${f.sourceId}`]])});
+  const input=(inputRef:string)=>({companyId,manifestId:validId,inputType:"issue" as const,inputRef,inputHash:nativeSha256(inputRef),relationship:"source" as const});
+  await expect(db.insert(analyticalLineageEdges).values([input(issueId),input(f.sourceId)])).rejects.toMatchObject({cause:{code:"23514",constraint_name:"aw_analytical_source_erased"}});
+  expect(await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,validId))).toHaveLength(0);
+  await db.insert(analyticalLineageEdges).values(input(issueId));
+  expect(await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,validId))).toHaveLength(1);
+ });
 
  const toolAuthority=()=>new PaperclipRunnerToolAuthority(db,{companyId,agentId,issueId,runId,managementToolsEnabled:true});
  it("discovers original published metric metadata without creating a fabricated measurement or disclosing a later human draft",async()=>{
@@ -187,7 +203,7 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   for(let start=0;start<rows.length;start+=200)await db.insert(issues).values(rows.slice(start,start+200));
   const tools=toolAuthority(),input={...f.query,until:new Date(Date.now()+1000).toISOString(),maxRows:populationSize===10000?10000:undefined},started=performance.now();
   const payload=await tools.execute({tool:"query_business_metric",callId:randomUUID(),arguments:input}) as {result:{observation:BusinessMetricResult}};
-  console.info("Complete native metric query and Context retention",{populationSize,queryAndRetentionMs:Math.round(performance.now()-started),fixture:"explicit_bulk_software_prerequisites"});
+  process.stdout.write(`Complete native metric query and Context retention ${JSON.stringify({populationSize,queryAndRetentionMs:Math.round(performance.now()-started),fixture:"explicit_bulk_software_prerequisites"})}\n`);
   expect(performance.now()-started).toBeLessThan(30000);expect(payload.result.observation.value).toBe(populationSize);
   expect(Buffer.byteLength(JSON.stringify(payload),"utf8")).toBeLessThanOrEqual(256000);expect((await root()).authorityPins).toHaveLength(1);
   const [manifest]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,payload.result.observation.lineageManifestId));expect(manifest!.sourceCount).toBe(populationSize);
