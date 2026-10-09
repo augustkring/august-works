@@ -10,6 +10,7 @@ import {
   resolveExperienceProfile,
   authorizedExperienceProfiles,
   experienceProfileSchema,
+  experienceModelSchema,
   v9FeatureEnabled,
   v5FeatureEnabled,
   v7FeatureEnabled,
@@ -251,6 +252,7 @@ export function experienceService(db: Db) {
             });
           }
           const resolved = await context(actor, companyId, preferred);
+          const taskSnapshots = new Map<string, number>();
           admittedSignal.throwIfAborted();
           const advancedLinks: NonNullable<ExperienceModel["advancedLinks"]> =
             [];
@@ -431,8 +433,17 @@ export function experienceService(db: Db) {
                     )
                       visible.push(item);
                   return {
-                    ...(feed.nextCursor ? { coverage: { state: "partial" as const, reason: "more_items_available" as const } } : {}),
-                    needsYou: visible.map((item) => attentionExperienceCard(item, feed.generatedAt)),
+                    ...(feed.nextCursor
+                      ? {
+                          coverage: {
+                            state: "partial" as const,
+                            reason: "more_items_available" as const,
+                          },
+                        }
+                      : {}),
+                    needsYou: visible.map((item) =>
+                      attentionExperienceCard(item, feed.generatedAt),
+                    ),
                   };
                 },
               },
@@ -473,6 +484,10 @@ export function experienceService(db: Db) {
                         },
                       });
                       if (!decision.allowed) continue;
+                      taskSnapshots.set(
+                        task.id,
+                        new Date(task.updatedAt).getTime(),
+                      );
                       const source = {
                         domain: "task" as const,
                         companyId,
@@ -515,14 +530,120 @@ export function experienceService(db: Db) {
               },
             ],
           });
-          // Revocation during fan-out must suppress the whole result, not leak the snapshot.
-          await currentMembership(actor, companyId);
-          admittedSignal.throwIfAborted();
-          return {
-            ...result,
-            availableProfiles: resolved.availableProfiles,
-            advancedLinks,
+          // Native source checks are repeated after fan-out, within the same
+          // admission/deadline. An earlier allowed decision is not a receipt
+          // for a resource that has since become private or changed.
+          const markPartial = (
+            domain: string,
+            reason: "denied" | "source_stale",
+          ) => {
+            const dependency = result.dependencies.find(
+              (entry) => entry.domain === domain,
+            );
+            if (dependency) {
+              dependency.state = "partial";
+              dependency.reason = reason;
+            }
           };
+          for (const section of ["inProgress", "done"] as const) {
+            const currentCards: ExperienceCard[] = [];
+            for (const card of result[section]) {
+              admittedSignal.throwIfAborted();
+              const task = await issueService(db).getById(
+                card.source.resourceId,
+              );
+              if (
+                !task ||
+                task.companyId !== companyId ||
+                task.hiddenAt ||
+                String(task.statusVersion) !== card.source.version ||
+                new Date(task.updatedAt).getTime() !==
+                  taskSnapshots.get(task.id)
+              ) {
+                markPartial("tasks", "source_stale");
+                continue;
+              }
+              const decision = await auth.decide({
+                actor,
+                action: "issue:read",
+                resource: {
+                  type: "issue",
+                  companyId,
+                  issueId: task.id,
+                  projectId: task.projectId,
+                  assigneeAgentId: task.assigneeAgentId,
+                  assigneeUserId: task.assigneeUserId,
+                },
+              });
+              if (!decision.allowed) {
+                markPartial("tasks", "denied");
+                continue;
+              }
+              currentCards.push(card);
+            }
+            result[section] = currentCards;
+          }
+          if (result.needsYou.length) {
+            const feed = await attentionService(db, {
+              materializeQueues: false,
+            }).list(companyId, {
+              userId: actor.userId ?? resolved.principal,
+              limit: 25,
+            });
+            const current = new Map(feed.items.map((item) => [item.id, item]));
+            const cards: ExperienceCard[] = [];
+            for (const card of result.needsYou) {
+              admittedSignal.throwIfAborted();
+              const item = current.get(card.source.resourceId);
+              if (!item || item.updatedAt !== card.source.version) {
+                markPartial("attention", "source_stale");
+                continue;
+              }
+              if (
+                !(await attentionIsVisible(
+                  actor,
+                  companyId,
+                  item,
+                  admittedSignal,
+                ))
+              ) {
+                markPartial("attention", "denied");
+                continue;
+              }
+              cards.push(attentionExperienceCard(item, feed.generatedAt));
+            }
+            result.needsYou = cards;
+          }
+          for (const action of allowed.keys()) {
+            admittedSignal.throwIfAborted();
+            allowed.set(
+              action,
+              (
+                await auth.decide({
+                  actor,
+                  action,
+                  resource: { type: "company", companyId },
+                })
+              ).allowed,
+            );
+          }
+          const currentFlags =
+            await instanceSettingsService(db).getExperimental();
+          if (JSON.stringify(currentFlags) !== JSON.stringify(flags))
+            throw notFound("Experience context changed", {
+              code: "v9_context_changed",
+            });
+          const current = await context(actor, companyId, preferred);
+          admittedSignal.throwIfAborted();
+          return experienceModelSchema.parse({
+            ...result,
+            profile: current.profile,
+            availableProfiles: current.availableProfiles,
+            advancedLinks: advancedLinks.filter((link) => {
+              const entry = entries.find((entry) => entry.id === link.id);
+              return entry && allowed.get(entry.action);
+            }),
+          });
         },
         { signal },
       );

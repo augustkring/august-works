@@ -45,10 +45,10 @@
     "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
   },
   "states": {
-    "loading": "Announce loading only while the current identity/company request is pending.",
+    "loading": "Announce loading while current identity or native read authorization is being checked; hide retained cards and controls during the check.",
     "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
     "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
-    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "stale": "Suppress retained cards after native access/source loss; a company/principal-scoped query epoch rejects late old receipts. Changed sources are partial, never a complete empty queue.",
     "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
     "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
@@ -108,7 +108,8 @@
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
     ],
     "securityPrivacy": [
-      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose.",
+      "Reject foreign company receipts and late old-epoch responses; verify native Task/Attention/grant/flag changes during bounded fan-out."
     ],
     "usability": [
       "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."

@@ -355,3 +355,29 @@ contract, with the updated server needed for final admission rechecks. Feature
 rollback preserves the native Company settings routes. Full settings catalogue,
 native form lifecycle and representative accessibility/usability qualification
 remain open.
+
+## ADR-V9-021 — Current native work projections and read recovery
+
+2026-10-09. Home, Needs You and Work remain read-only projections over native
+Tasks, Attention, authorization and settings. The existing owner repeats bounded
+source checks after fan-out: changed/hidden Tasks are suppressed, current Task
+reads are authorized, Attention is re-read without queue materialization and
+resolved/changed items are suppressed. Suppression marks the relevant dependency
+partial rather than claiming a complete empty queue. Current expert grants and
+profile eligibility are rechecked; a changed native experimental context rejects
+the receipt. All checks stay inside the original four-request admission and
+1500 ms deadline. They establish a checked read snapshot, not a durable grant
+or an atomic lock against future source changes. Effectful destinations continue
+to reauthorize through their canonical owners.
+
+The client binds the validated receipt to its requested company, hides retained
+cards during identity resolution or rechecks, and advances a principal/company
+query epoch on native permission/membership/privacy/source-loss events. Late old
+transports cannot restore a superseded receipt. Loading and safe errors use
+semantic status/alert recovery, with heading/error focus and English/Danish copy.
+Ordinary background refreshes preserve utility focus; open dialogs keep their focus.
+No customer payload or raw error is stored, logged or sent to a new destination.
+There is no new API shape, owner, migration, permission or business mutation.
+Ship the updated server before enabling V9; flag rollback retains the native
+routes. Full source composition, hosted multi-user/assistive-technology and
+representative usability qualification remain open.

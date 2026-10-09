@@ -13,6 +13,7 @@ import {
 } from "vitest";
 import { and, eq } from "drizzle-orm";
 import * as authorization from "../services/authorization.js";
+import * as attention from "../services/attention.js";
 import {
   companies,
   companyMemberships,
@@ -87,6 +88,186 @@ const support = await getEmbeddedPostgresTestSupport();
       source: "session" as const,
       userId,
       companyIds: [companyId],
+    });
+    function afterFirstTaskRead(change: () => Promise<void>) {
+      const real = authorization.authorizationService;
+      let changed = false;
+      vi.spyOn(authorization, "authorizationService").mockImplementation(
+        (connection) => {
+          const native = real(connection);
+          return {
+            ...native,
+            decide: async (input) => {
+              const decision = await native.decide(input);
+              if (!changed && input.action === "issue:read") {
+                changed = true;
+                expect(decision.allowed).toBe(true);
+                await change();
+              }
+              return decision;
+            },
+          };
+        },
+      );
+      return () => expect(changed).toBe(true);
+    }
+    it.each(["hidden", "changed"])(
+      "suppresses a task %s during fan-out and marks the bounded source partial",
+      async (kind) => {
+        await instanceSettingsService(db).updateExperimental({
+          experience_projection_v9: true,
+        });
+        const [task] = await db
+          .insert(issues)
+          .values({
+            companyId,
+            title: "PRIVATE-MIDREAD-TASK",
+            status: "in_progress",
+          })
+          .returning();
+        const assertChanged = afterFirstTaskRead(async () => {
+          await db
+            .update(issues)
+            .set(
+              kind === "hidden"
+                ? { hiddenAt: new Date() }
+                : {
+                    title: "PRIVATE-CHANGED-TASK",
+                    updatedAt: new Date(task!.updatedAt.getTime() + 60_000),
+                  },
+            )
+            .where(eq(issues.id, task!.id));
+        });
+        const response = await request(app(member()))
+          .get(`/api/companies/${companyId}/experience`)
+          .expect(200);
+        assertChanged();
+        expect(response.body.inProgress).toEqual([]);
+        expect(JSON.stringify(response.body)).not.toContain("PRIVATE-");
+        expect(
+          response.body.dependencies.find(
+            (entry: { domain: string }) => entry.domain === "tasks",
+          ),
+        ).toMatchObject({ state: "partial", reason: "source_stale" });
+      },
+    );
+    it("rechecks current expert grants and presentation eligibility after native fan-out", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+        enableFoundationV1: true,
+        enableContextEngineV1: true,
+      });
+      await db
+        .insert(principalPermissionGrants)
+        .values(
+          ["users:invite", "foundation:read"].map((permissionKey) => ({
+            companyId,
+            principalType: "user",
+            principalId: userId,
+            permissionKey,
+          })),
+        );
+      await db
+        .insert(issues)
+        .values({
+          companyId,
+          title: "Authorized unchanged task",
+          status: "in_progress",
+        });
+      const assertChanged = afterFirstTaskRead(async () => {
+        await db
+          .delete(principalPermissionGrants)
+          .where(eq(principalPermissionGrants.companyId, companyId));
+      });
+      const response = await request(app(member()))
+        .get(`/api/companies/${companyId}/experience?profile=admin`)
+        .expect(200);
+      assertChanged();
+      expect(response.body.profile).toBe("member");
+      expect(response.body.availableProfiles).toEqual(["member"]);
+      expect(
+        response.body.advancedLinks.some(
+          (link: { id: string }) => link.id === "foundation",
+        ),
+      ).toBe(false);
+      expect(response.body.inProgress).toHaveLength(1);
+    });
+    it("fails closed when the native feature context changes during fan-out", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+      });
+      await db
+        .insert(issues)
+        .values({
+          companyId,
+          title: "PRIVATE-FLAG-TASK",
+          status: "in_progress",
+        });
+      const assertChanged = afterFirstTaskRead(async () => {
+        await instanceSettingsService(db).updateExperimental({
+          experience_projection_v9: false,
+        });
+      });
+      const response = await request(app(member()))
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(404);
+      assertChanged();
+      expect(JSON.stringify(response.body)).not.toContain("PRIVATE-FLAG-TASK");
+    });
+    it("drops attention resolved during the read without materializing native queues", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+      });
+      const [approval] = await db
+        .insert(approvals)
+        .values({
+          companyId,
+          type: "request_board_approval",
+          status: "pending",
+          payload: { title: "PRIVATE-RESOLVED-APPROVAL" },
+        })
+        .returning();
+      const real = attention.attentionService;
+      let changed = false;
+      vi.spyOn(attention, "attentionService").mockImplementation(
+        (connection, options) => {
+          const native = real(connection, options);
+          return {
+            ...native,
+            list: async (...args) => {
+              const feed = await native.list(...args);
+              if (!changed) {
+                expect(feed.items).toHaveLength(1);
+                changed = true;
+                await db
+                  .update(approvals)
+                  .set({ status: "approved", updatedAt: new Date() })
+                  .where(eq(approvals.id, approval!.id));
+              }
+              return feed;
+            },
+          };
+        },
+      );
+      const response = await request(app(member()))
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(200);
+      expect(changed).toBe(true);
+      expect(response.body.needsYou).toEqual([]);
+      expect(JSON.stringify(response.body)).not.toContain(
+        "PRIVATE-RESOLVED-APPROVAL",
+      );
+      expect(
+        response.body.dependencies.find(
+          (entry: { domain: string }) => entry.domain === "attention",
+        ),
+      ).toMatchObject({ state: "partial", reason: "source_stale" });
+      expect(
+        await db
+          .select()
+          .from(decisionQueues)
+          .where(eq(decisionQueues.companyId, companyId)),
+      ).toEqual([]);
     });
     it("admits only deterministic current-scope commands and native-visible resource matches", async () => {
       const url = `/api/companies/${companyId}/experience/commands`;

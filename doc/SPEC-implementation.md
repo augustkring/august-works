@@ -1811,3 +1811,11 @@ not establish independent verification. Oversized/unbound history is unavailable
 The default-off customer shell retains a native /advanced run route and rollback.
 Full branch/selected-actor/verification inspection and lifecycle acceptance remain
 open (ADR-V9-019 / SCR-V9-012).
+
+Home, Needs You and Work now suppress retained cards during current identity/read
+checks and fence late receipts after native access loss. The native experience
+owner repeats bounded Task/Attention visibility, expert-grant/profile and flag
+checks before reply. Changed sources remain partial; no complete empty queue or
+durable authority is inferred. This is read-only source work within the original
+1500 ms admission/deadline (ADR-V9-021 / SCR-V9-014); full composition and hosted
+or human qualification remain incomplete.

@@ -1,7 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { useCompany } from "../context/CompanyContext";
 import { useExperience } from "../hooks/useExperience";
+import { useExperienceHeading } from "../hooks/useExperienceHeading";
 import { ExperienceCard } from "../components/ExperienceCard";
+import { ExperienceReadError } from "../components/ExperienceReadError";
 import { Button } from "../components/ui/button";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { Dashboard } from "./Dashboard";
@@ -13,18 +15,22 @@ export function DashboardEntry() {
 export function ExperienceHome() {
   const { selectedCompanyId } = useCompany();
   const { t } = useTranslation("experience");
-  const { query, identity, retry } = useExperience(selectedCompanyId);
+  const { query, identity, retry, loading, scope } =
+    useExperience(selectedCompanyId);
+  const heading = useExperienceHeading(
+    scope,
+    loading,
+    query.isError || identity.failed,
+  );
   if (!selectedCompanyId) return <p role="status">{t("selectCompany")}</p>;
   if (query.isError || identity.failed)
     return (
-      <div role="alert" className="space-y-4">
-        <p>{t("loadFailed")}</p>
-        <Button className="min-h-11" onClick={() => void retry()}>
-          {t("tryAgain")}
-        </Button>
-      </div>
+      <ExperienceReadError
+        message={t("loadFailed")}
+        retry={() => void retry()}
+      />
     );
-  if (query.isPending) return <p role="status">{t("loading")}</p>;
+  if (loading || !query.data) return <p role="status">{t("loading")}</p>;
   const model = query.data;
   const unavailable = model.dependencies.filter((d) => d.state !== "fresh");
   const empty = [
@@ -35,7 +41,9 @@ export function ExperienceHome() {
   ].every((cards) => cards.length === 0);
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">{t("home")}</h1>
+      <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
+        {t("home")}
+      </h1>
       <Button
         className="min-h-11"
         onClick={() =>

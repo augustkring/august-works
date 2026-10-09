@@ -45,6 +45,9 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
       page.getByRole("heading", { name: "Home", exact: true }),
     ).toBeVisible();
     await expect(
+      page.getByRole("heading", { name: "Home", exact: true }),
+    ).toBeFocused();
+    await expect(
       page.getByText("Nothing needs your attention right now.", {
         exact: true,
       }),
@@ -58,6 +61,9 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     await expect(
       page.getByRole("heading", { name: "Needs You", exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Needs You", exact: true }),
+    ).toBeFocused();
     await expect(
       page.getByText("Nothing needs your action in the current queue.", {
         exact: true,
@@ -73,6 +79,9 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     await expect(
       page.getByRole("heading", { name: "Work", exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Work", exact: true }),
+    ).toBeFocused();
     const workOwners = page.getByRole("navigation", {
       name: "Company work",
       exact: true,
@@ -105,6 +114,9 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
       page.getByRole("alert").filter({ hasText: "Home could not be loaded" }),
     ).toBeVisible();
     await expect(
+      page.getByRole("alert").filter({ hasText: "Home could not be loaded" }),
+    ).toBeFocused();
+    await expect(
       page.getByText("Nothing needs your attention right now.", {
         exact: true,
       }),
@@ -114,6 +126,9 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     await expect(
       page.getByRole("heading", { name: "Home", exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Home", exact: true }),
+    ).toBeFocused();
     const trigger = page
       .locator('[aria-label="Global utilities"]')
       .getByRole("button", { name: "Feedback", exact: true });

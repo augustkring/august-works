@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useCompany } from "../context/CompanyContext";
 import { useExperience } from "../hooks/useExperience";
+import { useExperienceHeading } from "../hooks/useExperienceHeading";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { ExperienceCard } from "../components/ExperienceCard";
+import { ExperienceReadError } from "../components/ExperienceReadError";
 import { Button } from "../components/ui/button";
 import { Link, useSearchParams } from "../lib/router";
 import { WhatNeedsMe } from "./WhatNeedsMe";
@@ -30,22 +31,22 @@ export function NeedsYouEntry() {
 export function ExperienceNeedsYou() {
   const { selectedCompanyId } = useCompany();
   const { t } = useTranslation("experience");
-  const { query, identity, retry } = useExperience(selectedCompanyId);
-  const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    heading.current?.focus();
-  }, [selectedCompanyId, query.isPending]);
+  const { query, identity, retry, loading, scope } =
+    useExperience(selectedCompanyId);
+  const heading = useExperienceHeading(
+    scope,
+    loading,
+    query.isError || identity.failed,
+  );
   if (!selectedCompanyId) return <p role="status">{t("selectCompany")}</p>;
   if (query.isError || identity.failed)
     return (
-      <div role="alert" className="space-y-4">
-        <p>{t("needsYouLoadFailed")}</p>
-        <Button className="min-h-11" onClick={() => void retry()}>
-          {t("tryAgain")}
-        </Button>
-      </div>
+      <ExperienceReadError
+        message={t("needsYouLoadFailed")}
+        retry={() => void retry()}
+      />
     );
-  if (query.isPending) return <p role="status">{t("loading")}</p>;
+  if (loading || !query.data) return <p role="status">{t("loading")}</p>;
   const attention = query.data.dependencies.find(
     (dependency) => dependency.domain === "attention",
   );
