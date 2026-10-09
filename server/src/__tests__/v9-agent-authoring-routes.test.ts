@@ -7,6 +7,7 @@ import { agentAuthoringRoutes } from "../routes/agent-authoring.js";
 import { errorHandler } from "../middleware/error-handler.js";
 
 const service = vi.hoisted(() => ({
+  admission: vi.fn(),
   hireCapability: vi.fn(),
   hireCatalog: vi.fn(),
   list: vi.fn(),
@@ -44,6 +45,27 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 describe("native authoring HTTP boundary", () => {
+  it("checks current draft admission without creating a proposal or reading authoring options", async () => {
+    service.admission.mockResolvedValue({
+      companyId,
+      agentId: id,
+      canCreateDraft: true,
+    });
+    const url = `/api/companies/${companyId}/agent-configuration-drafts/admission?agentId=${id}`;
+    await request(app()).get(`${url}&expectedUserId=other`).expect(409);
+    expect(service.admission).not.toHaveBeenCalled();
+    await request(app())
+      .get(`${url}&expectedUserId=author`)
+      .expect(200)
+      .expect("Cache-Control", "private, no-store");
+    expect(service.admission).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "author" }),
+      companyId,
+      id,
+    );
+    expect(service.create).not.toHaveBeenCalled();
+    expect(service.options).not.toHaveBeenCalled();
+  });
   it("binds saved Hire capability reads to the current private principal and admits only an explicit version reference on create", async () => {
     const path = `/api/companies/${companyId}/agent-configuration-drafts`;
     service.hireCapability.mockResolvedValue({ available: false });

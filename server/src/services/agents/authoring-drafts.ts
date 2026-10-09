@@ -16,6 +16,7 @@ import {
   agentDraftCreateSchema,
   agentDraftSaveSchema,
   agentDraftDiscardSchema,
+  agentDraftAdmissionSchema,
   CUSTOM_AGENT_STEPS,
   HIRE_AGENT_STEPS,
   hireAgentCatalogSchema,
@@ -105,7 +106,11 @@ export function agentAuthoringService(db: Db) {
       });
     if (agentId) {
       const [target] = await tx
-        .select()
+        .select({
+          id: agents.id,
+          status: agents.status,
+          metadata: agents.metadata,
+        })
         .from(agents)
         .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
       if (
@@ -361,6 +366,21 @@ export function agentAuthoringService(db: Db) {
         }));
       await access(db, actor, companyId, null, false, true);
       return hireAgentCatalogSchema.parse(capabilities);
+    },
+    admission: async (
+      actor: AuthorizationActor,
+      companyId: string,
+      agentId: string | null,
+    ) => {
+      await access(db, actor, companyId, agentId, false, true);
+      await assertSaasDomainAdmission(db, companyId);
+      const result = agentDraftAdmissionSchema.parse({
+        companyId,
+        agentId,
+        canCreateDraft: true,
+      });
+      await access(db, actor, companyId, agentId, false, true);
+      return result;
     },
     options: async (
       actor: AuthorizationActor,

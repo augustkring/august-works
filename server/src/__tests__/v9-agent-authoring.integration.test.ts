@@ -46,6 +46,50 @@ const support = await getEmbeddedPostgresTestSupport();
       f = await seedV5Presences(db);
       service = agentAuthoringService(db);
     });
+    it("checks current revision admission without returning configuration or writing proposals, grants or audits", async () => {
+      const drafts = await db.select().from(agentConfigurationDrafts);
+      const activity = await db.select().from(activityLog);
+      expect(await service.admission(f.actor, f.home, f.presence.id)).toEqual({
+        companyId: f.home,
+        agentId: f.presence.id,
+        canCreateDraft: true,
+      });
+      expect(await db.select().from(agentConfigurationDrafts)).toEqual(drafts);
+      expect(await db.select().from(activityLog)).toEqual(activity);
+      await instanceSettingsService(db).updateExperimental({
+        hire_agent_v9: false,
+      });
+      await expect(
+        service.admission(f.actor, f.home, f.presence.id),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+    it("does not treat instance-admin or stale membership as current verified revision authority", async () => {
+      await db
+        .update(authUsers)
+        .set({ emailVerified: false })
+        .where(eq(authUsers.id, f.actor.userId!));
+      await expect(
+        service.admission(
+          { ...f.actor, isInstanceAdmin: true },
+          f.home,
+          f.presence.id,
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+      await db
+        .update(authUsers)
+        .set({ emailVerified: true })
+        .where(eq(authUsers.id, f.actor.userId!));
+      await db
+        .delete(companyMemberships)
+        .where(eq(companyMemberships.principalId, f.actor.userId!));
+      await expect(
+        service.admission(
+          { ...f.actor, isInstanceAdmin: true },
+          f.home,
+          f.presence.id,
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+    });
     it("reconciles concurrent new-draft creation without creating agents, effective revisions or duplicate audits", async () => {
       const body = { requestId: randomUUID(), agentId: null };
       const agentCount = (await db.select().from(agents)).length;

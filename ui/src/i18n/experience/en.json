@@ -483,5 +483,7 @@
     "live_only": "Live effects only — not a safe test",
     "unavailable": "Test mode unavailable"
   },
-  "workflowOutput": "Declared output: {{output}}"
+  "workflowOutput": "Declared output: {{output}}",
+  "agentRevisionCreate": "New revision draft",
+  "agentRevisionBoundary": "Create a private revised setup. The active agent stays unchanged."
 }

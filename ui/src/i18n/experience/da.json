@@ -483,5 +483,7 @@
     "live_only": "Kun reelle effekter — ikke en sikker test",
     "unavailable": "Testtilstand utilgængelig"
   },
-  "workflowOutput": "Angivet udgang: {{output}}"
+  "workflowOutput": "Angivet udgang: {{output}}",
+  "agentRevisionCreate": "Ny revisionskladde",
+  "agentRevisionBoundary": "Opret et privat revideret setup. Den aktive agent forbliver uændret."
 }

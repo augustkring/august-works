@@ -43,6 +43,17 @@ export function agentAuthoringRoutes(db: Db) {
       ),
     ),
   );
+  router.get(`${root}/admission`, async (req, res) =>
+    res.json(
+      await service.admission(
+        req.actor,
+        company(req),
+        req.query.agentId === undefined
+          ? null
+          : z.uuid().parse(req.query.agentId),
+      ),
+    ),
+  );
   router.get(`${root}/options`, async (req, res) =>
     res.json(
       await service.options(

@@ -144,6 +144,11 @@ export const agentDraftCreateSchema = z.strictObject({
   agentId: z.uuid().nullable().default(null),
   packageVersionId: z.uuid().nullable().default(null),
 });
+export const agentDraftAdmissionSchema = z.strictObject({
+  companyId: z.uuid(),
+  agentId: z.uuid().nullable(),
+  canCreateDraft: z.literal(true),
+});
 export const agentDraftSaveSchema = z.strictObject({
   requestId: z.uuid(),
   expectedVersion: z.number().int().positive(),

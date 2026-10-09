@@ -11,7 +11,8 @@
   "entryConditions": [
     "Current verified authenticated company membership and native agents:create or target agents:configure authority; instance-admin status does not bypass membership.",
     "Draft belongs to the current creator; editing an existing agent requires current native read and configure authority.",
-    "hire_agent_v9 and its effective prerequisites admit new saves; existing reads and content discard survive flag rollback."
+    "hire_agent_v9 and its effective prerequisites admit new saves; existing reads and content discard survive flag rollback.",
+    "Existing-agent entry uses a metadata-only native admission check and the native unsaved-configuration navigation guard. No proposal is created until the existing draft flow confirms creation."
   ],
   "exitConditions": [
     "Only a canonical accepted draft ID/version permits a saved claim.",
@@ -138,7 +139,8 @@
   },
   "acceptance": {
     "functional": [
-      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact.",
+      "Verify verified current create/configure admission, hidden entry after withdrawal/revocation, and preserved unsaved-change guard; navigation creates no active agent or grant."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

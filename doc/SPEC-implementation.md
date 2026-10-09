@@ -1789,3 +1789,11 @@ Operation metadata does not establish effective authority or test success. The
 native graph remains available at `/workflows/:workflowId/advanced`; testing,
 publication, execution and recovery remain native owners. Complete workflow
 authoring and representative lifecycle qualification remain open.
+
+Agent detail exposes a new-revision draft link only after private metadata-only
+admission by the native authoring owner. The read checks current verified
+membership, configuration and target read permission, bound company/principal
+and the V9 feature gate. It creates no draft or active configuration. Navigation
+preserves the existing unsaved-change guard and rejects late confirmation after
+a context change. Active-agent testing/publication and fencing all expert active
+configuration writers remain incomplete.

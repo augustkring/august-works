@@ -5,6 +5,7 @@ import {
   agentDraftCreateSchema,
   agentDraftSaveSchema,
   agentDraftDiscardSchema,
+  agentDraftAdmissionSchema,
   agentAuthoringDraftViewSchema,
   agentAuthoringDraftPageSchema,
   hireAgentCatalogSchema,
@@ -138,6 +139,12 @@ export const v9ApiPaths: V9ApiOperation[] = [
     `${drafts}/options`,
     "Read current authorized owner, approved-knowledge and runtime references",
     undefined,
+    account.extend({ agentId: z.uuid().optional() }),
+  ),
+  read(
+    `${drafts}/admission`,
+    "Recheck current verified create/configure admission without returning proposed or active configuration",
+    agentDraftAdmissionSchema,
     account.extend({ agentId: z.uuid().optional() }),
   ),
   read(

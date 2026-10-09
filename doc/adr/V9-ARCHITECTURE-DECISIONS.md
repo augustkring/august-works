@@ -269,3 +269,21 @@ rollback restores the native graph route; /advanced retains a direct graph link.
 Full actor/input/effect/access review, governed chat authoring, representative
 testing and the remaining lifecycle are open. WORKFLOW-REVIEW remains in progress;
 source tests confer no release or human usability qualification.
+
+## ADR-V9-017 — Agent revision entry uses native metadata-only admission
+
+Agent detail may offer a revised private setup after a bound, private/no-store
+read of the existing agent authoring owner. This read returns only company ID,
+target ID and eligibility. Current verified membership, native create/configure
+and target read, SaaS admission and the same creation flag apply, with a final
+authority recheck. Instance administration does not substitute for membership.
+The target lookup reads identity/status/built-in metadata rather than runtime
+configuration. No proposal, audit mutation, active agent or grant is created.
+
+The existing unsaved-change guard precedes navigation to the exact target's
+Custom draft flow. Company/principal/target query keys and live invalidation
+remove stale admission; late confirmation cannot navigate after unmount or a
+context change. Flag rollback hides the entry while the new native service
+retains private draft reads/discard. New server/shared contracts precede enabled
+clients. No migration or additional business owner is introduced. Testing,
+publication, active receipts and fencing all expert active writers remain open.

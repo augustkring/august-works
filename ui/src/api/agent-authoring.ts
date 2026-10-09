@@ -3,6 +3,7 @@ import {
   agentAuthoringDraftViewSchema,
   hireAgentCatalogSchema,
   hireAgentCapabilityStatusSchema,
+  agentDraftAdmissionSchema,
   type AgentDraftSave,
   type AgentAuthoringReview,
 } from "@paperclipai/shared";
@@ -17,6 +18,23 @@ export interface AgentAuthoringOptions {
   runtimes: Array<{ id: string }>;
 }
 export const agentAuthoringApi = {
+  admission: async (
+    company: string,
+    principal: string,
+    agentId: string,
+    signal?: AbortSignal,
+  ) => {
+    const result = agentDraftAdmissionSchema.parse(
+      await api.get(
+        scope(`${root(company)}/admission`, principal) +
+          `&agentId=${encodeURIComponent(agentId)}`,
+        { signal, cache: "no-store" },
+      ),
+    );
+    if (result.companyId !== company || result.agentId !== agentId)
+      throw new Error("Agent draft context changed");
+    return result;
+  },
   hireCapability: async (
     company: string,
     principal: string,

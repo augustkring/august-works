@@ -387,7 +387,8 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/CustomAgent.tsx",
-        "server/src/services/agents/authoring-drafts.ts"
+        "server/src/services/agents/authoring-drafts.ts",
+        "ui/src/components/AgentRevisionEntry.tsx"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/custom-01.json"
