@@ -51,7 +51,9 @@ RUN node -e ' \
 # ajv is installed in an isolated directory (the runner's own package.json
 # uses workspace: ranges npm cannot install from) and symlinked in so ESM
 # resolution finds it from the scripts' location.
-RUN AJV_RANGE="$(node -p "require('/context/packages/paperclip-runner/package.json').dependencies.ajv")" \
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi \
+ && AJV_RANGE="$(node -p "require('/context/packages/paperclip-runner/package.json').dependencies.ajv")" \
  && mkdir /probe-deps && cd /probe-deps && npm init -y >/dev/null \
  && npm install --ignore-scripts --no-audit --no-fund "ajv@${AJV_RANGE}" \
  && ln -s /probe-deps/node_modules /context/packages/paperclip-runner/node_modules \
