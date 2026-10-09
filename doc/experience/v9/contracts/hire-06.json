@@ -1,22 +1,21 @@
 {
-  "screenId": "HIRE-01",
+  "screenId": "HIRE-06",
   "journeyId": "hire",
-  "routeOrSurface": "/agents/hire",
+  "routeOrSurface": "/agents/hire/drafts/:draftId/hire_review",
   "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
-  "customerOutcome": "Browse current customer-qualified capabilities by outcome.",
+  "customerOutcome": "Inspect the saved proposal and current blockers before any production activation.",
   "entryConditions": [
-    "Current verified account, selected company, active membership and native agents:create authority; no instance-admin bypass.",
-    "Effective hire_agent_v9 and native agent_packages_v7 prerequisites are enabled.",
-    "Only currently published, unexpired and independently qualified customer releases may enter this native projection."
+    "Current verified creator in the selected company with native agents:create authority; no instance-admin bypass.",
+    "The canonical setup pins an immutable native customer package version; historical reads and discard survive flag rollback."
   ],
   "exitConditions": [
-    "Catalog/detail reads create no agent, installation, grant or active receipt.",
-    "Use this agent creates or reconciles one canonical unpublished setup pinned to the exact native package version.",
-    "Withdrawn versions do not permit new setup changes; saved setups remain readable and discardable."
+    "Save & exit and section changes persist only an unpublished canonical proposal with request/version fences.",
+    "No agent, installation, grant, execution result or active receipt is created.",
+    "Native representative test, connection scope assessment, publication and active receipt remain incomplete."
   ],
   "content": {
-    "h1": "Hire agent",
-    "supportingCopy": "Browse current customer-qualified capabilities by outcome.",
+    "h1": "Review setup",
+    "supportingCopy": "Inspect the saved proposal and current blockers before any production activation.",
     "customerTerms": [
       "Agent",
       "Company",
@@ -25,45 +24,37 @@
       "Owner"
     ],
     "displayedState": [
-      "Current release identity and manifest outcome, prerequisites and limits",
-      "Catalog is bounded to 50 capabilities; internal evaluation and raw release evidence are excluded",
-      "Declared automation is conditional on current policy/access; no effective authority or assigned owner is inferred"
+      "Canonical proposal version and exact package version",
+      "Proposed owner, responsibility and approved knowledge only; no effective access inferred",
+      "Current native availability and named qualification blockers; no successful test or active agent inferred"
     ]
   },
-  "inputs": [
-    {
-      "id": "search",
-      "label": "Find a capability",
-      "dataType": "Plain text",
-      "required": false,
-      "default": "Empty",
-      "help": "Match capability name, category or business outcome.",
-      "validation": "Maximum 200 characters; local literal filtering only.",
-      "autofillOrPrefill": "None; search is not persisted or sent to an AI provider."
-    }
-  ],
+  "inputs": [],
   "actions": {
     "primary": {
-      "label": "Review capability",
-      "operation": "Create or reconcile a private unpublished Hire setup using the selected exact version and original request identity."
+      "label": "Hire agent",
+      "operation": "Persist the private proposal before continuing; disabled for unqualified representative test or activation. No active receipt is fabricated."
     },
     "secondary": [
-      "Back to agents",
-      "Back to capabilities on detail",
-      "Retry failed current native catalog read"
+      "Save & exit",
+      "Resume saved section",
+      "Retry the exact unacknowledged save",
+      "Explicitly reload after a version conflict"
     ],
-    "destructiveOrIrreversible": []
+    "destructiveOrIrreversible": [
+      "Discard setup removes authored proposal content; current native authority and exact request/version fences apply."
+    ]
   },
   "systemWork": {
     "canonicalReadDomains": [
-      "Native first-party agent packages and current published release qualification",
-      "Current verified user/company membership and agents:create authorization",
-      "Canonical creator-private agent configuration draft summaries for saved Hire setups"
+      "Native creator-private agent_configuration_drafts",
+      "Pinned native package version and current customer qualification",
+      "Current authorized company members and approved Foundation sources"
     ],
-    "canonicalWriteOperation": "Canonical agent_configuration_drafts create with frozen request ID and native package-version pin; no agent install or production publication.",
+    "canonicalWriteOperation": "Native unpublished draft save/discard only; per-kind step validation, immutable source pins and unmodifiable Hire capability declarations.",
     "authorityEffect": "No grants, activation, agent mutation, external messages or runtime execution.",
-    "asyncWork": "Current principal/company-keyed native catalog query; abort signal and private no-store, immediate hide/recheck on authority events.",
-    "receipt": "Current release version reference only; no active agent or successful representative test claimed."
+    "asyncWork": "Principal/company/draft-keyed no-store queries; immediate hide on authority events; frozen request/body/version retry; late acknowledgements cannot restore private content after revocation.",
+    "receipt": "Saved setup version only. Representative execution, independent verification, publication and active-agent receipts remain unavailable."
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
@@ -79,8 +70,8 @@
   "navigation": {
     "back": "Back to agents or the capability catalog via native links.",
     "cancelOrSaveExit": "Saved setups resume through canonical draft links; authored content is not persisted in browser storage.",
-    "deepLink": "/agents/hire",
-    "resume": "Re-read current company/principal and exact release version; no browser content persistence."
+    "deepLink": "/agents/hire/drafts/:draftId/hire_review",
+    "resume": "Read the current creator-private proposal and its pinned package version. No browser content persistence."
   },
   "accessibility": {
     "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
@@ -100,10 +91,12 @@
   },
   "privacySecurity": {
     "dataShown": [
-      "Authorized customer-facing release name/outcome/prerequisites/action classes/known limits"
+      "Current authorized creator-private proposal, member display names and approved source metadata",
+      "Customer-safe pinned package metadata and current blockers"
     ],
     "dataCollected": [
-      "In-memory search term; explicit canonical package-version reference and idempotent creation request ID."
+      "Explicit proposal fields and bounded source IDs",
+      "Original request ID and expected canonical version"
     ],
     "sensitiveFields": [
       "No company knowledge payload, credentials or raw release evidence is returned"
@@ -122,8 +115,8 @@
   },
   "acceptance": {
     "functional": [
-      "Check customer/internal filtering, withdrawal, literal outcome search and exact-request setup retry.",
-      "Complete connection assessment, representative execution/verification, native publication and active receipt remain open; no complete hiring claim."
+      "Exercise save/resume/discard, exact retries, concurrent versions, immutable package pins, withdrawal, authority revocation and rollback reads.",
+      "Complete representative execution, connection assessment, native publication and active receipt are open; source partial states cannot qualify this journey."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

@@ -356,6 +356,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="agents/custom" element={<CustomAgent />} />
       <Route path="agents/hire" element={<HireAgent />} />
       <Route path="agents/hire/capabilities/:versionId" element={<HireAgent />} />
+      <Route path="agents/hire/drafts/:draftId/:screen?" element={<HireAgent />} />
       <Route path="agents/custom/:draftId/:screen?" element={<CustomAgent />} />
       <Route path="agents/:agentId" element={<AgentDetail />} />
       <Route path="agents/:agentId/:tab" element={<AgentDetail />} />
@@ -986,6 +987,7 @@ export function App() {
           <Route path="agents/custom" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/hire" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/hire/capabilities/:versionId" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/hire/drafts/:draftId/:screen?" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/custom/:draftId/:screen?" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/:agentId" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/:agentId/:tab" element={<UnprefixedBoardRedirect />} />

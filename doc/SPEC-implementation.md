@@ -1754,3 +1754,21 @@ Passing comparisons can create existing Foundation proposals, Skill challengers,
 Every domain candidate retains Learning root lineage. Native document acceptance/publication, Skill promotion and planning acceptance reject stale evidence through database guards. Derived document/Skill descendants inherit lineage. Current human authorization and company/project boundaries apply to reads and writes. Memory correction, revocation and deletion invalidate candidates independently of flags; erasure scrubs Learning prose, evaluations, domain proposal bodies and accepted derived document/Skill versions. Late restored writes into Learning payloads, proposals, document caches and Foundation sections are scrubbed. The `/memory/learning` interface supports company cycles and a guided Foundation hypothesis/comparison/proposal path.
 
 V7 Learning can route supported changes into native Workflow drafts, Role Pack versions and already replayed Optimizer candidates. Live owned Task workers may propose hypotheses; human evaluation and native qualification remain required. Cycle closure observes native current promotion receipts and does not trust model-declared success. Learned Foundation and runtime procedure consumption retains original Memory roots for erasure and reauthorization.
+
+## August Works V9 customer experience (experimental, incomplete)
+
+V9 is implemented incrementally behind default-off native experimental flags;
+[the dated implementation ledger](plans/2026-10-09-aw-v9-build.md) and
+[screen coverage](experience/v9/coverage.json) distinguish partial source from
+exact-artifact acceptance. Profiles and navigation never grant authority.
+
+Hire and Advanced Custom authoring share creator-private canonical
+`agent_configuration_drafts`. Hire setup pins an immutable native customer
+package version; create/save/discard use original request IDs, canonical versions
+and current verified company/resource authorization. Saved proposals grant no
+access and create no active agent. New Hire changes reject withdrawn releases;
+private reads and content discard remain available after flag rollback with the
+new server. Representative execution, independent verification and governed
+native publication are incomplete and reject activation. Migration 0462 and the
+new server must precede enabled clients; older binaries cannot recover Hire
+steps, so rollback retains the recovery-capable service until reconciliation.

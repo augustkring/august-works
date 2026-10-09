@@ -240,8 +240,9 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/HireAgent.tsx",
-        "server/src/services/agents/authoring-drafts.ts",
-        "server/src/services/agent-packages/package-service.ts"
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/hire-01.json"
@@ -260,8 +261,9 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/HireAgent.tsx",
-        "server/src/services/agents/authoring-drafts.ts",
-        "server/src/services/agent-packages/package-service.ts"
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/hire-02.json"
@@ -277,9 +279,15 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/hire-03.json"
     },
     {
       "screenId": "HIRE-04",
@@ -292,9 +300,15 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/hire-04.json"
     },
     {
       "screenId": "HIRE-05",
@@ -307,9 +321,15 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/hire-05.json"
     },
     {
       "screenId": "HIRE-06",
@@ -322,9 +342,15 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/hire-06.json"
     },
     {
       "screenId": "HIRE-07",
@@ -337,9 +363,15 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/hire-07.json"
     },
     {
       "screenId": "CUSTOM-01",

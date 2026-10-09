@@ -17,6 +17,24 @@ export const CUSTOM_AGENT_STEPS = [
   "monitor",
 ] as const;
 export const customAgentStepSchema = z.enum(CUSTOM_AGENT_STEPS);
+export const HIRE_AGENT_STEPS = [
+  "hire_access",
+  "hire_authority",
+  "hire_test",
+  "hire_review",
+  "hire_receipt",
+] as const;
+export const hireAgentStepSchema = z.enum(HIRE_AGENT_STEPS);
+export const agentDraftStepSchema = z.enum([
+  ...CUSTOM_AGENT_STEPS,
+  ...HIRE_AGENT_STEPS,
+]);
+const packagePinSchema = z.strictObject({
+  key: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,119}$/),
+  versionId: z.uuid(),
+  version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+});
 const text = (max: number) =>
   z
     .string()
@@ -124,11 +142,12 @@ export type AgentAuthoringContent = z.infer<typeof agentAuthoringContentSchema>;
 export const agentDraftCreateSchema = z.strictObject({
   requestId: z.uuid(),
   agentId: z.uuid().nullable().default(null),
+  packageVersionId: z.uuid().nullable().default(null),
 });
 export const agentDraftSaveSchema = z.strictObject({
   requestId: z.uuid(),
   expectedVersion: z.number().int().positive(),
-  step: customAgentStepSchema,
+  step: agentDraftStepSchema,
   content: agentAuthoringContentSchema,
 });
 export const agentDraftDiscardSchema = z.strictObject({
@@ -142,7 +161,9 @@ export const agentAuthoringDraftViewSchema = z.strictObject({
   createdByUserId: z.string(),
   version: z.number().int().positive(),
   status: z.enum(["draft", "discarded"]),
-  step: customAgentStepSchema,
+  kind: z.enum(["custom", "hire"]).optional(),
+  package: packagePinSchema.nullable().optional(),
+  step: agentDraftStepSchema,
   // Earlier accepted drafts remain readable; new writes use the tighter byte budget.
   content: storedAgentAuthoringContentSchema.nullable(),
   baselineHash: z
@@ -161,7 +182,8 @@ export const agentAuthoringDraftSummarySchema = z.strictObject({
   agentId: z.uuid().nullable(),
   version: z.number().int().positive(),
   name: text(200),
-  step: customAgentStepSchema,
+  kind: z.enum(["custom", "hire"]).optional(),
+  step: agentDraftStepSchema,
   updatedAt: z.string().datetime(),
 });
 export const agentAuthoringDraftListSchema = z
@@ -188,6 +210,9 @@ export const hireAgentCatalogSchema = z
   .array(hireAgentCapabilitySchema)
   .max(50);
 export type HireAgentCapability = z.infer<typeof hireAgentCapabilitySchema>;
+export const hireAgentCapabilityStatusSchema = hireAgentCapabilitySchema.extend(
+  { available: z.boolean() },
+);
 export interface AgentAuthoringReview {
   draftId: string;
   version: number;

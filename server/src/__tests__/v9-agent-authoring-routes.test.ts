@@ -7,6 +7,7 @@ import { agentAuthoringRoutes } from "../routes/agent-authoring.js";
 import { errorHandler } from "../middleware/error-handler.js";
 
 const service = vi.hoisted(() => ({
+  hireCapability: vi.fn(),
   hireCatalog: vi.fn(),
   list: vi.fn(),
   get: vi.fn(),
@@ -43,6 +44,44 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 describe("native authoring HTTP boundary", () => {
+  it("binds saved Hire capability reads to the current private principal and admits only an explicit version reference on create", async () => {
+    const path = `/api/companies/${companyId}/agent-configuration-drafts`;
+    service.hireCapability.mockResolvedValue({ available: false });
+    await request(app())
+      .get(`${path}/${id}/hire-capability?expectedUserId=other`)
+      .expect(409);
+    expect(service.hireCapability).not.toHaveBeenCalled();
+    const response = await request(app())
+      .get(`${path}/${id}/hire-capability?expectedUserId=author`)
+      .expect(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(service.hireCapability).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "author" }),
+      companyId,
+      id,
+    );
+    service.create.mockResolvedValue({ id });
+    await request(app())
+      .post(`${path}?expectedUserId=author`)
+      .send({ requestId, agentId: null, packageVersionId: id })
+      .expect(201);
+    expect(service.create).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "author" }),
+      companyId,
+      { requestId, agentId: null, packageVersionId: id },
+    );
+    service.create.mockClear();
+    await request(app())
+      .post(`${path}?expectedUserId=author`)
+      .send({
+        requestId,
+        packageVersionId: id,
+        packageContentHash: "a".repeat(64),
+        approved: true,
+      })
+      .expect(400);
+    expect(service.create).not.toHaveBeenCalled();
+  });
   it("binds the customer capability catalog to the current company and account with private no-store responses", async () => {
     service.hireCatalog.mockResolvedValue([]);
     const path = `/api/companies/${companyId}/agent-configuration-drafts/hire-catalog`;

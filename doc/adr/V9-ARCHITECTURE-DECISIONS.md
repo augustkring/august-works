@@ -190,3 +190,30 @@ Catalog/detail are partial HIRE source; missing-access assessment, representativ
 test, production review/publication and active receipt remain open. Declared
 capabilities are conditional on native policy/access and do not grant them.
 Withdrawn exact-version links never fall back to another version automatically.
+
+## ADR-V9-014 — Pinned unpublished Hire setups share the native draft owner
+
+Hire and Custom authoring use the same canonical `agent_configuration_drafts`
+owner. Migration 0462 adds a default-custom journey kind and immutable native
+package version/key/content-hash pins for Hire. Existing Custom rows retain
+null pins; old Custom creation request hashes remain unchanged. Database guards
+validate source pins on insertion, journey-specific steps and immutable scope.
+They do not require current release availability to discard content, so withdrawal
+cannot prevent erasure or rollback recovery.
+
+Use this agent creates one private proposal, not an installation or active agent.
+Owner and approved knowledge selection remain current native references. Hire
+capability declarations cannot be broadened through save. New writes require a
+currently qualified customer release; reads and exact creation reconciliation
+retain the original pin after withdrawal. Frozen request/body/version retries,
+explicit conflict reload and current-principal query keys govern recovery. Current
+membership checks precede and follow private read assembly. Late save responses
+cannot restore a UI after authority revocation.
+
+Missing connected-app scope, representative execution/independent verification,
+effective policy mapping, publication and active receipt remain open. HIRE-03–07
+contracts describe partial source states and confer no release acceptance. Install
+the new migration/server/UI before enabling the flag. Old binaries cannot render
+Hire steps or pins; flag rollback with the new server retains reads/discard, while
+binary downgrade requires draining new clients and retaining the recovery-capable
+server until those setups have been reconciled or discarded.

@@ -102,6 +102,15 @@ export function agentAuthoringRoutes(db: Db) {
       ),
     ),
   );
+  router.get(`${root}/:id/hire-capability`, async (req, res) =>
+    res.json(
+      await service.hireCapability(
+        req.actor,
+        company(req),
+        z.uuid().parse(req.params.id),
+      ),
+    ),
+  );
   router.post(`${root}/:id/publish`, async (req) => {
     const review = await service.review(
       req.actor,

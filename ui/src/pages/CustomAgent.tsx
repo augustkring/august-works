@@ -126,7 +126,7 @@ function DraftStart({
       return agentAuthoringApi.create(company, principal, attempt.current);
     },
     onSuccess: (draft) => {
-      if (alive.current) navigate(`/agents/custom/${draft.id}/${draft.step}`);
+      if (alive.current) navigate(draft.kind === "hire" ? `/agents/hire/drafts/${draft.id}/${draft.step}` : `/agents/custom/${draft.id}/${draft.step}`);
     },
   });
   return (
@@ -197,7 +197,7 @@ function DraftStart({
                 <li key={draft.id}>
                   <Link
                     className="inline-flex min-h-11 items-center underline"
-                    to={`/agents/custom/${draft.id}/${draft.step}`}
+                    to={draft.kind === "hire" ? `/agents/hire/drafts/${draft.id}/${draft.step}` : `/agents/custom/${draft.id}/${draft.step}`}
                   >
                     {draft.name || "Untitled agent"} · Draft v{draft.version}
                   </Link>
@@ -449,6 +449,7 @@ function DraftEditor({
         </Link>
       </main>
     );
+  if (receipt?.kind === "hire") return <p>This is a Hire Agent setup. <Link className="inline-flex min-h-11 items-center underline" to={`/agents/hire/drafts/${receipt.id}/${receipt.step}`}>Open saved setup</Link></p>;
   if (!receipt?.content || !content)
     return (
       <main className="space-y-4 p-6">

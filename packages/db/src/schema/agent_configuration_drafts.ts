@@ -15,6 +15,7 @@ import type { AgentAuthoringContent } from "@paperclipai/shared";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { authUsers } from "./auth.js";
+import { agentPackageVersions } from "./agent_packages.js";
 
 /** Canonical unpublished configuration owner. Applied revisions remain in agent_config_revisions. */
 export const agentConfigurationDrafts = pgTable(
@@ -25,6 +26,12 @@ export const agentConfigurationDrafts = pgTable(
       .notNull()
       .references(() => companies.id, { onDelete: "cascade" }),
     agentId: uuid("agent_id"),
+    kind: text("kind").$type<"custom" | "hire">().notNull().default("custom"),
+    packageVersionId: uuid("package_version_id").references(
+      () => agentPackageVersions.id,
+    ),
+    packageKey: text("package_key"),
+    packageContentHash: text("package_content_hash"),
     createdByUserId: text("created_by_user_id")
       .notNull()
       .references(() => authUsers.id, { onDelete: "cascade" }),
@@ -50,6 +57,10 @@ export const agentConfigurationDrafts = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    package: check(
+      "agent_configuration_drafts_package_check",
+      sql`(${table.kind}='custom' and ${table.packageVersionId} is null and ${table.packageKey} is null and ${table.packageContentHash} is null) or (${table.kind}='hire' and ${table.agentId} is null and ${table.packageVersionId} is not null and ${table.packageKey} is not null and ${table.packageContentHash} is not null and ${table.packageContentHash} ~ '^[a-f0-9]{64}$')`,
+    ),
     request: uniqueIndex("agent_configuration_drafts_request_uq").on(
       table.companyId,
       table.createdByUserId,

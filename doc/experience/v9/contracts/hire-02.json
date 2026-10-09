@@ -2,12 +2,7 @@
   "screenId": "HIRE-02",
   "journeyId": "hire",
   "routeOrSurface": "/agents/hire/capabilities/:versionId",
-  "targetExperienceProfiles": [
-    "member",
-    "manager",
-    "admin",
-    "security_admin"
-  ],
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
   "customerOutcome": "Review what the selected capability does, needs, asks before and cannot do.",
   "entryConditions": [
     "Current verified account, selected company, active membership and native agents:create authority; no instance-admin bypass.",
@@ -15,9 +10,9 @@
     "Only currently published, unexpired and independently qualified customer releases may enter this native projection."
   ],
   "exitConditions": [
-    "Catalog/detail reads create no agent, installation, grant, draft or active receipt.",
-    "Use this agent remains unavailable until HIRE-03\u201307 and representative execution/publication are implemented and qualified.",
-    "Withdrawn deep-linked versions are unavailable; never silently replace the chosen version."
+    "Catalog/detail reads create no agent, installation, grant or active receipt.",
+    "Use this agent creates or reconciles one canonical unpublished setup pinned to the exact native package version.",
+    "Withdrawn versions do not permit new setup changes; saved setups remain readable and discardable."
   ],
   "content": {
     "h1": "Current capability name",
@@ -39,7 +34,7 @@
   "actions": {
     "primary": {
       "label": "Use this agent",
-      "operation": "Disabled with a named unavailable state; no publish or install command"
+      "operation": "Create or reconcile a private unpublished Hire setup using the selected exact version and original request identity."
     },
     "secondary": [
       "Back to agents",
@@ -51,9 +46,10 @@
   "systemWork": {
     "canonicalReadDomains": [
       "Native first-party agent packages and current published release qualification",
-      "Current verified user/company membership and agents:create authorization"
+      "Current verified user/company membership and agents:create authorization",
+      "Canonical creator-private agent configuration draft summaries for saved Hire setups"
     ],
-    "canonicalWriteOperation": "None; read-only partial HIRE source.",
+    "canonicalWriteOperation": "Canonical agent_configuration_drafts create with frozen request ID and native package-version pin; no agent install or production publication.",
     "authorityEffect": "No grants, activation, agent mutation, external messages or runtime execution.",
     "asyncWork": "Current principal/company-keyed native catalog query; abort signal and private no-store, immediate hide/recheck on authority events.",
     "receipt": "Current release version reference only; no active agent or successful representative test claimed."
@@ -71,7 +67,7 @@
   },
   "navigation": {
     "back": "Back to agents or the capability catalog via native links.",
-    "cancelOrSaveExit": "No draft or production write in this catalog/detail checkpoint.",
+    "cancelOrSaveExit": "Saved setups resume through canonical draft links; authored content is not persisted in browser storage.",
     "deepLink": "/agents/hire/capabilities/:versionId",
     "resume": "Re-read current company/principal and exact release version; no browser content persistence."
   },
@@ -96,7 +92,7 @@
       "Authorized customer-facing release name/outcome/prerequisites/action classes/known limits"
     ],
     "dataCollected": [
-      "In-memory local search term only"
+      "In-memory search term; explicit canonical package-version reference and idempotent creation request ID."
     ],
     "sensitiveFields": [
       "No company knowledge payload, credentials or raw release evidence is returned"
@@ -115,8 +111,8 @@
   },
   "acceptance": {
     "functional": [
-      "Check customer/internal filtering, release withdrawal, literal outcome search and absence of any agent/install/write effect on the exact artifact.",
-      "HIRE-03\u201307 remain incomplete; this checkpoint is not a completed hiring journey."
+      "Check customer/internal filtering, withdrawal, literal outcome search and exact-request setup retry.",
+      "Complete connection assessment, representative execution/verification, native publication and active receipt remain open; no complete hiring claim."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

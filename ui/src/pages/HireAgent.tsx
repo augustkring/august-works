@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   v9FeatureEnabled,
   type HireAgentCapability,
@@ -13,6 +13,10 @@ import { queryKeys } from "@/lib/queryKeys";
 import { Link, useParams } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ApiError } from "@/api/client";
+import { useNavigate } from "@/lib/router";
+import { HireAgentSetup } from "./HireAgentSetup";
+import { HireSavedSetups } from "./HireSavedSetups";
 
 const actionNames: Record<
   HireAgentCapability["actionClasses"][number],
@@ -38,6 +42,19 @@ function HireCatalog({
   const [search, setSearch] = useState("");
   const [checkingAccess, setCheckingAccess] = useState(false);
   const securityEpoch = useRef(0);
+  const alive = useRef(true);
+  const attempt = useRef<{
+    requestId: string;
+    agentId: null;
+    packageVersionId: string;
+  } | null>(null);
+  const navigate = useNavigate();
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const heading = useRef<HTMLHeadingElement>(null);
   const client = useQueryClient();
   const key = ["agent-authoring-hire-catalog", company, principal];
@@ -74,6 +91,41 @@ function HireCatalog({
   const selected = checkingAccess
     ? undefined
     : catalog.data?.find((item) => item.versionId === versionId);
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!selected) throw new Error("Choose a current capability");
+      attempt.current ??= {
+        requestId: crypto.randomUUID(),
+        agentId: null,
+        packageVersionId: selected.versionId,
+      };
+      const epoch = securityEpoch.current;
+      return {
+        draft: await agentAuthoringApi.create(
+          company,
+          principal,
+          attempt.current,
+        ),
+        epoch,
+      };
+    },
+    onSuccess: ({ draft, epoch }) => {
+      if (alive.current && epoch === securityEpoch.current)
+        navigate(`/agents/hire/drafts/${draft.id}/${draft.step}`);
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && [400, 422].includes(error.status))
+        attempt.current = null;
+      if (error instanceof ApiError && [401, 403].includes(error.status)) {
+        setCheckingAccess(true);
+        const epoch = ++securityEpoch.current;
+        void client.resetQueries({ queryKey: key, exact: true }).then(() => {
+          if (alive.current && epoch === securityEpoch.current)
+            setCheckingAccess(false);
+        });
+      }
+    },
+  });
   const term = search.trim().toLocaleLowerCase();
   const matches = catalog.data?.filter((item) =>
     `${item.name} ${item.category} ${item.outcome}`
@@ -161,6 +213,9 @@ function HireCatalog({
           </ul>
         </>
       )}
+      {!versionId && (
+        <HireSavedSetups company={company} principal={principal} />
+      )}
       {selected && (
         <>
           <section className="space-y-2" aria-labelledby="capability-does">
@@ -230,10 +285,21 @@ function HireCatalog({
             A company owner has not been assigned. This capability is not active
             in your company.
           </p>
-          <p role="status" id="hire-unavailable">
-            Hiring is not available yet. You can review available capabilities
-            here.
+          <p>
+            Using this capability starts a saved setup. It does not activate an
+            agent or give it access.
           </p>
+          {create.isError && (
+            <p role="alert">
+              {create.error instanceof ApiError &&
+              [400, 422].includes(create.error.status)
+                ? "This capability could not be used. Choose a currently available capability and try again."
+                : create.error instanceof ApiError &&
+                    [401, 403].includes(create.error.status)
+                  ? "Your current access does not permit this setup."
+                  : "The setup request was not acknowledged. Retry the same request to find its saved result."}
+            </p>
+          )}
           <div className="flex items-center justify-between gap-4">
             <Link
               className="inline-flex min-h-11 items-center underline"
@@ -243,10 +309,21 @@ function HireCatalog({
             </Link>
             <Button
               className="min-h-11"
-              disabled
-              aria-describedby="hire-unavailable"
+              disabled={
+                create.isPending ||
+                checkingAccess ||
+                Boolean(
+                  attempt.current &&
+                    attempt.current.packageVersionId !== selected.versionId,
+                )
+              }
+              onClick={() => create.mutate()}
             >
-              Use this agent
+              {create.isPending
+                ? "Preparing setup…"
+                : create.isError && attempt.current
+                  ? "Retry the same setup request"
+                  : "Use this agent"}
             </Button>
           </div>
         </>
@@ -258,12 +335,25 @@ function HireCatalog({
 export function HireAgent() {
   const { selectedCompanyId: company } = useCompany();
   const identity = useAccountIdentity();
+  const { draftId } = useParams<{ draftId?: string }>();
   const settings = useQuery({
     queryKey: queryKeys.instance.experimentalSettings,
     queryFn: () => instanceSettingsApi.getExperimental(),
   });
   if (settings.isPending || !identity.settled)
     return <p role="status">Loading agent hiring options…</p>;
+  if (draftId && company && identity.userId && !identity.localImplicit)
+    return (
+      <HireAgentSetup
+        key={`${company}:${identity.userId}:${draftId}`}
+        company={company}
+        principal={identity.userId}
+        id={draftId}
+        enabled={Boolean(
+          settings.data && v9FeatureEnabled(settings.data, "hire_agent_v9"),
+        )}
+      />
+    );
   if (settings.isError)
     return (
       <div role="alert">
@@ -275,7 +365,16 @@ export function HireAgent() {
     );
   if (!v9FeatureEnabled(settings.data, "hire_agent_v9"))
     return (
-      <p role="status">Agent hiring is not available in this deployment.</p>
+      <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+        <p role="status">New agent hiring is unavailable.</p>
+        {company && identity.userId && !identity.localImplicit && (
+          <HireSavedSetups
+            key={`${company}:${identity.userId}`}
+            company={company}
+            principal={identity.userId}
+          />
+        )}
+      </main>
     );
   if (!company || !identity.userId || identity.localImplicit)
     return (

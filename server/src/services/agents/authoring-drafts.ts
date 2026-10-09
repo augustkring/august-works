@@ -6,6 +6,8 @@ import {
   companyMemberships,
   agentPresenceRuntimeBindings,
   foundationDocuments,
+  agentPackageVersions,
+  agentPackages,
   type Db,
 } from "@paperclipai/db";
 import {
@@ -14,7 +16,10 @@ import {
   agentDraftCreateSchema,
   agentDraftSaveSchema,
   agentDraftDiscardSchema,
+  CUSTOM_AGENT_STEPS,
+  HIRE_AGENT_STEPS,
   hireAgentCatalogSchema,
+  hireAgentCapabilityStatusSchema,
   v9FeatureEnabled,
   type AgentAuthoringContent,
   type AgentAuthoringReview,
@@ -27,6 +32,7 @@ import { readBuiltInAgentMarker } from "../built-in-agent-metadata.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { agentPackageService } from "../agent-packages/package-service.js";
+import { packageReleaseBlockers } from "../agent-packages/package-policy.js";
 import { withV5ActivityTransaction } from "../v5-mutations.js";
 import { logActivity } from "../activity-log.js";
 import {
@@ -135,7 +141,14 @@ export function agentAuthoringService(db: Db) {
     // No effective instructions or credentials are copied to the draft/read response.
     return nativeSha256(target);
   }
-  function view(row: Draft) {
+  async function view(row: Draft, tx: Db = db) {
+    const [pinned] = row.packageVersionId
+      ? await tx
+          .select({ version: agentPackageVersions.version })
+          .from(agentPackageVersions)
+          .where(eq(agentPackageVersions.id, row.packageVersionId))
+          .limit(1)
+      : [];
     return agentAuthoringDraftViewSchema.parse({
       id: row.id,
       companyId: row.companyId,
@@ -143,12 +156,39 @@ export function agentAuthoringService(db: Db) {
       createdByUserId: row.createdByUserId,
       version: row.version,
       status: row.status,
+      kind: row.kind,
+      package: row.packageVersionId
+        ? {
+            key: row.packageKey,
+            versionId: row.packageVersionId,
+            version: pinned?.version,
+            contentHash: row.packageContentHash,
+          }
+        : null,
       step: row.step,
       content: row.content,
       baselineHash: row.baselineHash,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     });
+  }
+  async function hireRelease(
+    tx: Db,
+    actor: AuthorizationActor,
+    versionId: string,
+  ) {
+    const release = (
+      await agentPackageService(tx).catalog(
+        { ...actor, ignoreInstanceAdmin: true },
+        "customer",
+      )
+    ).find((item) => item.versionId === versionId);
+    if (!release)
+      throw unprocessable(
+        "This capability version is unavailable; choose a current capability",
+        { code: "hire_release_unavailable" },
+      );
+    return release;
   }
   async function read(
     tx: Db,
@@ -246,6 +286,49 @@ export function agentAuthoringService(db: Db) {
     }
   }
   return {
+    hireCapability: async (
+      actor: AuthorizationActor,
+      companyId: string,
+      id: string,
+    ) => {
+      const draft = await read(db, actor, companyId, id);
+      if (draft.kind !== "hire" || !draft.packageVersionId)
+        throw notFound("Hire setup not found");
+      const [row] = await db
+        .select({ version: agentPackageVersions, package: agentPackages })
+        .from(agentPackageVersions)
+        .innerJoin(
+          agentPackages,
+          eq(agentPackages.id, agentPackageVersions.packageId),
+        )
+        .where(eq(agentPackageVersions.id, draft.packageVersionId))
+        .limit(1);
+      if (
+        !row ||
+        row.version.contentHash !== draft.packageContentHash ||
+        row.package.key !== draft.packageKey
+      )
+        throw conflict("Capability pin changed");
+      const release = row.version.release;
+      const available =
+        row.version.state === "published" &&
+        row.package.status === "active" &&
+        packageReleaseBlockers(release).length === 0;
+      await access(db, actor, companyId);
+      return hireAgentCapabilityStatusSchema.parse({
+        key: row.package.key,
+        versionId: row.version.id,
+        version: row.version.version,
+        name: row.package.name,
+        category: row.package.category,
+        outcome: release.manifest.purpose,
+        requiredKnowledge: release.manifest.requiredKnowledge,
+        requiredConnections: release.manifest.requiredConnections,
+        limits: release.manifest.knownLimitations,
+        actionClasses: release.manifest.actionClasses,
+        available,
+      });
+    },
     hireCatalog: async (actor: AuthorizationActor, companyId: string) => {
       await access(db, actor, companyId, null, false, true);
       const releases = await agentPackageService(db).catalog(
@@ -361,11 +444,18 @@ export function agentAuthoringService(db: Db) {
       raw: unknown,
     ) => {
       const input = agentDraftCreateSchema.parse(raw);
+      if (input.packageVersionId && input.agentId)
+        throw badRequest("Hire setup starts an unpublished new agent");
       await access(db, actor, companyId, input.agentId, true);
       return withV5ActivityTransaction(db, async (tx, publications) => {
         await lockMemoryPrivacy(tx, companyId);
         const userId = await access(tx, actor, companyId, input.agentId, true),
-          hash = nativeSha256(input);
+          // Preserve the fingerprint of earlier custom-draft creation requests.
+          hash = nativeSha256(
+            input.packageVersionId
+              ? input
+              : { requestId: input.requestId, agentId: input.agentId },
+          );
         const [previous] = await tx
           .select()
           .from(agentConfigurationDrafts)
@@ -382,7 +472,7 @@ export function agentAuthoringService(db: Db) {
             throw conflict("Draft creation request has different content", {
               code: "draft_request_conflict",
             });
-          return view(previous);
+          return view(previous, tx);
         }
         const [{ count }] = await tx
           .select({ count: sql<number>`count(*)::int` })
@@ -400,6 +490,9 @@ export function agentAuthoringService(db: Db) {
         if (count >= 100)
           throw tooManyRequests("Daily agent draft creation limit reached");
         let identity = { name: "", description: "" };
+        const capability = input.packageVersionId
+          ? await hireRelease(tx, actor, input.packageVersionId)
+          : null;
         if (input.agentId) {
           const [target] = await tx
             .select({ name: agents.name, description: agents.capabilities })
@@ -420,6 +513,11 @@ export function agentAuthoringService(db: Db) {
           .values({
             companyId,
             agentId: input.agentId,
+            kind: capability ? "hire" : "custom",
+            packageVersionId: capability?.versionId ?? null,
+            packageKey: capability?.key ?? null,
+            packageContentHash: capability?.contentHash ?? null,
+            step: capability ? "hire_access" : "outcome",
             createdByUserId: userId,
             creationRequestId: input.requestId,
             creationRequestHash: hash,
@@ -427,6 +525,55 @@ export function agentAuthoringService(db: Db) {
             content: agentAuthoringContentSchema.parse({
               ...identity,
               ownerUserId: userId,
+              ...(capability
+                ? {
+                    name: capability.name,
+                    description: capability.description.slice(0, 1000),
+                    outcome: capability.manifest.purpose,
+                    instructions: {
+                      purpose: capability.manifest.purpose,
+                      responsibilities: capability.manifest.purpose,
+                      prohibited: capability.manifest.prohibitedUses
+                        .join("\n")
+                        .slice(0, 3000),
+                      missingInformation:
+                        "Ask the accountable owner when required information is missing.",
+                      escalation:
+                        "Ask the accountable owner before any material action.",
+                    },
+                    capabilities: [
+                      ...(capability.manifest.actionClasses.includes(
+                        "internal_draft",
+                      )
+                        ? [
+                            {
+                              operation: "create_internal_draft",
+                              autonomy: "automatic",
+                            },
+                          ]
+                        : []),
+                      ...(capability.manifest.actionClasses.includes(
+                        "external_communication",
+                      )
+                        ? [
+                            {
+                              operation: "external_send",
+                              autonomy: "ask_first",
+                            },
+                          ]
+                        : []),
+                      ...(capability.manifest.actionClasses.includes(
+                        "financial_commitment",
+                      )
+                        ? [{ operation: "spend", autonomy: "ask_first" }]
+                        : []),
+                      {
+                        operation: "change_permissions",
+                        autonomy: "not_allowed",
+                      },
+                    ],
+                  }
+                : {}),
             }),
           })
           .returning();
@@ -443,13 +590,14 @@ export function agentAuthoringService(db: Db) {
           },
           publications,
         );
-        return view(row!);
+        return view(row!, tx);
       });
     },
     get: async (actor: AuthorizationActor, companyId: string, id: string) => {
       const row = await read(db, actor, companyId, id);
+      const result = await view(row);
       await access(db, actor, companyId, row.agentId);
-      return view(row);
+      return result;
     },
     list: async (
       actor: AuthorizationActor,
@@ -504,6 +652,7 @@ export function agentAuthoringService(db: Db) {
             id: row.id,
             companyId: row.companyId,
             agentId: row.agentId,
+            kind: row.kind,
             version: row.version,
             name: row.content?.name ?? "",
             step: row.step,
@@ -547,13 +696,30 @@ export function agentAuthoringService(db: Db) {
             throw conflict("Draft save request has different content", {
               code: "draft_request_conflict",
             });
-          return view(row);
+          return view(row, tx);
         }
         if (row.status !== "draft" || row.version !== input.expectedVersion)
           throw conflict(
             "The saved draft changed; reload before making a new change",
             { code: "draft_version_conflict" },
           );
+        const allowedSteps: readonly string[] =
+          row.kind === "hire" ? HIRE_AGENT_STEPS : CUSTOM_AGENT_STEPS;
+        if (!allowedSteps.includes(input.step))
+          throw unprocessable("Choose a section from this agent setup", {
+            code: "draft_journey_mismatch",
+          });
+        if (row.kind === "hire") {
+          await hireRelease(tx, actor, row.packageVersionId!);
+          if (
+            nativeSha256(input.content.capabilities) !==
+            nativeSha256(row.content!.capabilities)
+          )
+            throw unprocessable(
+              "The capability's declared authority cannot be expanded in Hire Agent",
+              { code: "hire_authority_not_editable" },
+            );
+        }
         await validateReferences(
           tx,
           actor,
@@ -593,7 +759,7 @@ export function agentAuthoringService(db: Db) {
           },
           publications,
         );
-        return view(updated!);
+        return view(updated!, tx);
       });
     },
     discard: async (
@@ -615,7 +781,7 @@ export function agentAuthoringService(db: Db) {
             throw conflict("Draft discard request has different content", {
               code: "draft_request_conflict",
             });
-          return view(row);
+          return view(row, tx);
         }
         if (row.status !== "draft" || row.version !== input.expectedVersion)
           throw conflict("Draft baseline changed", {
@@ -648,7 +814,7 @@ export function agentAuthoringService(db: Db) {
           },
           publications,
         );
-        return view(updated!);
+        return view(updated!, tx);
       });
     },
     review: async (
@@ -660,6 +826,33 @@ export function agentAuthoringService(db: Db) {
         content = row.content;
       if (!content) throw conflict("This draft was discarded");
       const blockers: AgentAuthoringReview["blockers"] = [];
+      if (row.kind === "hire") {
+        try {
+          const capability = await hireRelease(
+            db,
+            actor,
+            row.packageVersionId!,
+          );
+          if (
+            capability.contentHash !== row.packageContentHash ||
+            capability.key !== row.packageKey
+          )
+            throw unprocessable("Capability pin changed");
+        } catch (error) {
+          if (
+            ![404, 409, 422].includes(
+              (error as { status?: number }).status ?? 0,
+            )
+          )
+            throw error;
+          blockers.push({
+            code: "hire_release_unavailable",
+            message:
+              "The selected capability version is unavailable; choose a currently qualified capability",
+            step: "review",
+          });
+        }
+      }
       if (!content.outcome.trim() || !content.ownerUserId)
         blockers.push({
           code: "outcome_required",

@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { act, StrictMode } from "react";
+import { act, StrictMode, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   V5_FEATURE_KEYS,
+  agentAuthoringContentSchema,
   type HireAgentCapability,
   type LiveEvent,
 } from "@paperclipai/shared";
@@ -16,7 +17,7 @@ import { HireAgent } from "./HireAgent";
 const context = vi.hoisted(() => ({
   company: "10000000-0000-4000-8000-000000000001",
   principal: "author",
-  live: null as null | ((event: LiveEvent) => void),
+  handlers: new Set<(event: LiveEvent) => void>(),
 }));
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({
@@ -33,7 +34,12 @@ vi.mock("../api/companies-query", () => ({
 }));
 vi.mock("../context/LiveUpdatesProvider", () => ({
   useCompanyLiveEvent: (handler: (event: LiveEvent) => void) => {
-    context.live = handler;
+    useEffect(() => {
+      context.handlers.add(handler);
+      return () => {
+        context.handlers.delete(handler);
+      };
+    }, [handler]);
   },
 }));
 const capability: HireAgentCapability = {
@@ -54,7 +60,7 @@ afterEach(async () => {
   client?.clear();
   container?.remove();
   context.principal = "author";
-  context.live = null;
+  context.handlers.clear();
   vi.restoreAllMocks();
 });
 async function mount(path = "/AW/agents/hire") {
@@ -64,6 +70,10 @@ async function mount(path = "/AW/agents/hire") {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  vi.spyOn(agentAuthoringApi, "list").mockResolvedValue({
+    items: [],
+    nextCursor: null,
+  });
   vi.spyOn(instanceSettingsApi, "getExperimental").mockResolvedValue({
     ...Object.fromEntries(V5_FEATURE_KEYS.map((key) => [key, true])),
     enableFoundationV1: true,
@@ -83,6 +93,10 @@ async function mount(path = "/AW/agents/hire") {
               <Route
                 path="/AW/agents/hire/capabilities/:versionId"
                 element={<HireAgent />}
+              />
+              <Route
+                path="/AW/agents/hire/drafts/:draftId/:screen?"
+                element={<p>Saved Hire setup destination</p>}
               />
             </Routes>
           </MemoryRouter>
@@ -123,7 +137,7 @@ it("searches capabilities by outcome and displays the current native detail with
     [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Use this agent",
     )?.disabled,
-  ).toBe(true);
+  ).toBe(false);
   expect(create).not.toHaveBeenCalled();
 });
 it("shows a truthful empty catalog and rejects a withdrawn deep-linked version", async () => {
@@ -145,17 +159,74 @@ it("hides the catalog on a permission event while the native owner rechecks curr
   );
   get.mockImplementation(() => new Promise(() => {}));
   await act(async () =>
-    context.live?.({
-      id: 1,
-      createdAt: "2026-10-09T00:00:00.000Z",
-      type: "activity.logged",
-      companyId: context.company,
-      payload: {
-        action: "company_membership.permission_changed",
-        entityType: "company_membership",
-      },
-    } as LiveEvent),
+    [...context.handlers].forEach((handler) =>
+      handler({
+        id: 1,
+        createdAt: "2026-10-09T00:00:00.000Z",
+        type: "activity.logged",
+        companyId: context.company,
+        payload: {
+          action: "company_membership.permission_changed",
+          entityType: "company_membership",
+        },
+      } as LiveEvent),
+    ),
   );
   expect(container.textContent).not.toContain(capability.name);
   expect(container.textContent).toContain("Loading available capabilities");
+});
+
+it("retries an unacknowledged create with the exact request and package version", async () => {
+  vi.spyOn(agentAuthoringApi, "hireCatalog").mockResolvedValue([capability]);
+  const create = vi
+    .spyOn(agentAuthoringApi, "create")
+    .mockRejectedValueOnce(new Error("Disconnected"))
+    .mockResolvedValueOnce({
+      id: "10000000-0000-4000-8000-000000000003",
+      companyId: context.company,
+      agentId: null,
+      createdByUserId: context.principal,
+      kind: "hire",
+      version: 1,
+      status: "draft",
+      step: "hire_access",
+      baselineHash: null,
+      package: {
+        key: capability.key,
+        versionId: capability.versionId,
+        version: capability.version,
+        contentHash: "a".repeat(64),
+      },
+      content: agentAuthoringContentSchema.parse({
+        name: capability.name,
+        ownerUserId: context.principal,
+      }),
+      createdAt: "2026-10-09T00:00:00.000Z",
+      updatedAt: "2026-10-09T00:00:00.000Z",
+    });
+  await mount(`/AW/agents/hire/capabilities/${capability.versionId}`);
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain("Use this agent"),
+  );
+  const click = async () =>
+    act(async () =>
+      [...container.querySelectorAll("button")]
+        .find(
+          (button) =>
+            button.textContent === "Use this agent" ||
+            button.textContent === "Retry the same setup request",
+        )!
+        .click(),
+    );
+  await click();
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain("not acknowledged"),
+  );
+  const first = structuredClone(create.mock.calls[0]![2]);
+  expect(first.packageVersionId).toBe(capability.versionId);
+  await click();
+  expect(create.mock.calls[1]![2]).toEqual(first);
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain("Saved Hire setup destination"),
+  );
 });

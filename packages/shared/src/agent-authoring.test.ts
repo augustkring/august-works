@@ -8,6 +8,43 @@ import {
 } from "./agent-authoring.js";
 
 describe("unpublished agent authoring contracts", () => {
+  it("accepts explicit Hire version references and bounded setup steps without client-supplied pins or authority", () => {
+    const requestId = "10000000-0000-4000-8000-000000000001";
+    expect(agentDraftCreateSchema.parse({ requestId })).toEqual({
+      requestId,
+      agentId: null,
+      packageVersionId: null,
+    });
+    expect(
+      agentDraftCreateSchema.safeParse({
+        requestId,
+        packageVersionId: requestId,
+      }).success,
+    ).toBe(true);
+    expect(
+      agentDraftCreateSchema.safeParse({
+        requestId,
+        packageVersionId: requestId,
+        packageContentHash: "a".repeat(64),
+      }).success,
+    ).toBe(false);
+    expect(
+      agentDraftSaveSchema.safeParse({
+        requestId,
+        expectedVersion: 1,
+        step: "hire_authority",
+        content: {},
+      }).success,
+    ).toBe(true);
+    expect(
+      agentDraftSaveSchema.safeParse({
+        requestId,
+        expectedVersion: 1,
+        step: "hire_activated",
+        content: {},
+      }).success,
+    ).toBe(false);
+  });
   it("keeps earlier accepted drafts readable above the new write budget", () => {
     const content = agentAuthoringContentSchema.parse({
       scenarios: Array.from({ length: 10 }, () => "界".repeat(1800)),
