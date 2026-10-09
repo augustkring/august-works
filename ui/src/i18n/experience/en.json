@@ -622,5 +622,7 @@
   "workflowStartReviewRequired": "Review this workflow's execution settings, inputs and governed actions in Advanced before starting it here.",
   "workflowStartAdvanced": "Review run in Advanced",
   "workflowStartInactive": "A current active published version is required for a new run.",
-  "workflowStartVersion": "Reviewed published version {{version}}"
+  "workflowStartVersion": "Reviewed published version {{version}}",
+  "workflowRunBranchSelected": "Recorded branch selects next step: {{name}}. This does not confirm that the next step ran.",
+  "workflowRunBranchNotRecorded": "A branch selection is not available from this attempt’s retained checkpoint."
 }

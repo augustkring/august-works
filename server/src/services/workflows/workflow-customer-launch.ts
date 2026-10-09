@@ -5,7 +5,6 @@ import { workflowNodeDefinitions } from "./workflow-node-registry.js";
 // agent/model calls, network requests, approvals or configurable tool adapters.
 const types = new Set([
   "core.manual_trigger",
-  "core.transform",
   "core.condition",
   "core.switch",
   "core.merge",
@@ -43,6 +42,16 @@ export function customerWorkflowLaunchReady(
     ]),
   );
   return nodes.every((node) => {
+    // Transform nodes can invoke governed Optimizer artifact replacements; the
+    // closed customer subset must not infer their effective execution from a
+    // pure built-in descriptor. Recovery approvals and delayed retries also
+    // require their original review rather than this internal-only command.
+    if (
+      node.inputSchema !== undefined ||
+      node.failurePolicy === "wait_for_human" ||
+      (node.retryPolicy && node.retryPolicy.mode !== "none")
+    )
+      return false;
     const definition = registry.get(node.type);
     return (
       types.has(node.type) &&

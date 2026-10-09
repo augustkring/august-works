@@ -111,6 +111,93 @@ function fixture() {
 }
 const project = (f: ReturnType<typeof fixture>) =>
   workflowRunReview(f.detail, f.revision, workflowNodeDefinitions());
+function branching(type: "core.condition" | "core.switch" = "core.condition") {
+  const f = fixture();
+  f.detail.waits = [];
+  f.detail.steps[0].status = "succeeded";
+  f.detail.steps[0].outputJson =
+    type === "core.condition"
+      ? { result: true, private: "SECRET-OUTPUT" }
+      : { branchKey: "SECRET-BRANCH", private: "SECRET-OUTPUT" };
+  f.revision.graph.nodes[0].type = type;
+  f.revision.graph.nodes.push({
+    ...f.revision.graph.nodes[0],
+    id: "next",
+    name: "Prepare report",
+    type: "core.merge",
+  });
+  f.revision.graph.edges = [
+    {
+      id: "selected",
+      source: "review",
+      target: "next",
+      sourceHandle: type === "core.condition" ? " TRUE " : "SECRET-BRANCH",
+    },
+  ];
+  return f;
+}
+function choice(f: ReturnType<typeof fixture>) {
+  const trace = project(f).trace;
+  if (trace.state !== "available") throw new Error("trace unavailable");
+  return trace.attempts[0].branchChoice;
+}
+it.each(["core.condition", "core.switch"] as const)(
+  "projects %s's native completed checkpoint onto its historical next-step name without exposing payloads or claiming execution",
+  (type) => {
+    const f = branching(type),
+      before = structuredClone(f);
+    expect(choice(f)).toEqual({
+      state: "selected",
+      nextStep: "Prepare report",
+    });
+    expect(f.detail.steps).toHaveLength(1);
+    expect(JSON.stringify(project(f))).not.toContain("SECRET");
+    expect(f).toEqual(before);
+  },
+);
+it.each([
+  "deleted",
+  "waiting",
+  "failed",
+  "recovered",
+  "invalid_output",
+  "missing_branch",
+  "ambiguous_branch",
+  "recovery_policy",
+])("does not infer a branch from %s control history", (kind) => {
+  const f = branching();
+  if (kind === "deleted") f.detail.steps[0].payloadDeleted = true;
+  if (kind === "recovered")
+    f.detail.steps[0].failureResolution = {
+      policy: "continue_with_null",
+      resolved: true,
+    };
+  if (kind === "waiting" || kind === "failed") f.detail.steps[0].status = kind;
+  if (kind === "invalid_output")
+    f.detail.steps[0].outputJson = { result: "true" };
+  if (kind === "missing_branch")
+    f.revision.graph.edges[0].sourceHandle = "false";
+  if (kind === "ambiguous_branch")
+    f.revision.graph.edges.push({
+      ...f.revision.graph.edges[0],
+      id: "duplicate-choice",
+    });
+  if (kind === "recovery_policy")
+    f.revision.graph.nodes[0].failurePolicy = "follow_failure_branch";
+  // A later target attempt is not evidence for this control decision.
+  f.detail.steps.push({
+    ...f.detail.steps[0],
+    id: id(8),
+    nodeId: "next",
+    status: "succeeded",
+  });
+  expect(choice(f)).toEqual({ state: "not_recorded" });
+});
+it("rejects a trace with an unbound graph edge rather than exposing a foreign destination", () => {
+  const f = branching();
+  f.revision.graph.edges[0].target = "foreign";
+  expect(project(f).trace).toEqual({ state: "unavailable" });
+});
 it("uses the exact historical revision and recorded attempts, with no private payload, actor identity or decision", () => {
   const f = fixture();
   const before = structuredClone(f);

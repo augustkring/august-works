@@ -4,9 +4,70 @@ import {
   type WorkflowRevision,
   type WorkflowNodeDefinitionDescriptor,
   type WorkflowRunExperience,
+  type WorkflowStepRun,
+  type WorkflowGraphV1,
 } from "@paperclipai/shared";
 
-/** Native attempt metadata only; no inputs, outputs, errors, actor IDs or decisions. */
+type BranchChoice = Extract<
+  WorkflowRunExperience["trace"],
+  { state: "available" }
+>["attempts"][number]["branchChoice"];
+
+/** Read only the executor's completed control checkpoint. Never infer a branch
+ * from another node's attempt: parallel paths and merges make that ambiguous.
+ * Return the bound revision's next-step name, never the private switch value. */
+function branchChoice(
+  step: WorkflowStepRun,
+  node: WorkflowGraphV1["nodes"][number],
+  graph: WorkflowGraphV1,
+): BranchChoice {
+  const recovery = ["follow_failure_branch", "wait_for_human"].includes(
+    node.failurePolicy ?? "fail_workflow",
+  );
+  if (
+    !recovery &&
+    node.type !== "core.condition" &&
+    node.type !== "core.switch"
+  )
+    return { state: "not_applicable" };
+  if (
+    recovery ||
+    step.status !== "succeeded" ||
+    step.failureResolution?.resolved ||
+    step.payloadDeleted ||
+    !step.outputJson ||
+    typeof step.outputJson !== "object" ||
+    Array.isArray(step.outputJson)
+  )
+    return { state: "not_recorded" };
+  const output = step.outputJson as Record<string, unknown>;
+  const key =
+    node.type === "core.condition"
+      ? typeof output.result === "boolean"
+        ? String(output.result)
+        : null
+      : typeof output.branchKey === "string"
+        ? output.branchKey
+        : null;
+  if (key === null) return { state: "not_recorded" };
+  const selected = graph.edges.filter(
+    (edge) =>
+      edge.source === node.id &&
+      (node.type === "core.condition"
+        ? (edge.sourceHandle ?? edge.label ?? "").trim().toLowerCase()
+        : (edge.sourceHandle ?? edge.label ?? "").trim()) === key,
+  );
+  if (selected.length !== 1) return { state: "not_recorded" };
+  const target = graph.nodes.find(
+    (candidate) => candidate.id === selected[0].target,
+  );
+  return target
+    ? { state: "selected", nextStep: target.name.slice(0, 160) }
+    : { state: "not_recorded" };
+}
+
+/** Native attempt metadata and bounded control checkpoints only; no raw payloads,
+ * errors, actor identities, approval decisions or independent verification. */
 export function workflowRunReview(
   detail: WorkflowRunDetail,
   revision: WorkflowRevision,
@@ -34,6 +95,11 @@ export function workflowRunReview(
   const bounded =
     withinLimits &&
     ids.size === nodes.length &&
+    new Set(revision.graph.edges.map((edge) => edge.id)).size ===
+      revision.graph.edges.length &&
+    revision.graph.edges.every(
+      (edge) => ids.has(edge.source) && ids.has(edge.target),
+    ) &&
     new Set(steps.map((step) => step.id)).size === steps.length &&
     attemptKeys.size === steps.length &&
     new Set(waits.map((wait) => wait.id)).size === waits.length &&
@@ -74,6 +140,7 @@ export function workflowRunReview(
                 : ("not_recorded" as const),
             approvalCheckpoint: node.type === "human.approval",
             payloadUnavailable: step.payloadDeleted === true,
+            branchChoice: branchChoice(step, node, revision.graph),
             waitingFor:
               step.status === "waiting"
                 ? [

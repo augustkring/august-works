@@ -2,12 +2,7 @@
   "screenId": "WORKFLOW-OPERATE",
   "journeyId": "workflow",
   "routeOrSurface": "/workflows/:workflowId",
-  "targetExperienceProfiles": [
-    "member",
-    "manager",
-    "admin",
-    "security_admin"
-  ],
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
   "customerOutcome": "Inspect the next configured native schedule, bounded recent execution statuses and waiting/recovering runs; explicitly Pause or Resume with an original-request receipt. Explicitly admit a bounded internal run of the reviewed published version and inspect its recorded result.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
@@ -37,7 +32,8 @@
       "Next configured enabled routine schedule, with request/event and execution-gate limitations; paused/archived workflows do not promise new triggers.",
       "Ten latest run status records and five current waiting/recovering records, independently bounded with explicit additional-history indicators. Execution success is not independent business verification.",
       "Run now is available only for the closed built-in internal subset with no input/output schema or variables and an explicit deadline up to 60 seconds. Material work requires its Advanced review.",
-      "Run and lifecycle confirmation freeze the displayed native version at dialog opening; a later version never silently replaces that reviewed tuple."
+      "Run and lifecycle confirmation freeze the displayed native version at dialog opening; a later version never silently replaces that reviewed tuple.",
+      "Optimizer-transform steps, human recovery approvals, retries and node input contracts require Advanced review; they never enter the bounded customer launch subset."
     ]
   },
   "inputs": [],
@@ -91,7 +87,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."

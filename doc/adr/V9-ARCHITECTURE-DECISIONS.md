@@ -494,7 +494,7 @@ and SaaS workflow admission. No new queue, scheduler, policy engine, grant or
 persistent schema is introduced.
 
 The first customer admission subset is closed to built-in pure C0 manual,
-transform, condition, switch, merge and parallel nodes, with at most 20 nodes,
+condition, switch, merge and parallel nodes, with at most 20 nodes,
 40 edges and 65,536 serialized characters. Input/output schemas and variables
 are absent; a configured total deadline of 1–60 seconds is required. Registry
 metadata cannot substitute caller-defined purity. Child workflows, provider/model
@@ -521,3 +521,22 @@ CI pulls the same digest-pinned PostgreSQL manifest from the official Docker
 image ECR public mirror. Manifest bytes hash to the unchanged reviewed SHA-256;
 Docker Hub's unauthenticated quota had blocked tests before execution. No mutable
 image tag, test omission or increased budget is introduced.
+
+
+## ADR-V9-026 — Bound native control checkpoint projection
+
+2026-10-09. Customer run inspection projects a completed condition boolean or
+switch checkpoint only onto the next-step name in the exact bound historical
+revision. Native edge-handle normalization is preserved. Private switch keys,
+raw outputs and expressions are excluded. A selected next step is not evidence
+that it executed; no branch is inferred from target attempts, parallel paths or
+merge activity. Missing, deleted, incomplete, recovered and ambiguous checkpoints
+remain explicitly unrecorded. Recovery-policy branches remain unqualified.
+
+Graph edges must have unique identities and bound source/target nodes, in
+addition to the inherited whole-trace limits and company/run/attempt binding.
+Current native privacy and learned-source admission still precede projection.
+The shared/server/client contract adds a strict branchChoice union, deployed
+together behind the default-off shell flag. No migration, checkpoint writer,
+approval or executor owner is introduced. Complete selected-actor inspection,
+executed paths and independent verification remain open.

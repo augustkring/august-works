@@ -2,12 +2,7 @@
   "screenId": "WORKFLOW-INSPECT",
   "journeyId": "workflow",
   "routeOrSurface": "/workflows/:workflowId/runs/:runId",
-  "targetExperienceProfiles": [
-    "member",
-    "manager",
-    "admin",
-    "security_admin"
-  ],
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
   "customerOutcome": "Inspect the recorded native run and exact historical revision without exposing private payloads or treating recorded completion as independent verification.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
@@ -32,7 +27,8 @@
       "Recorded attempt status, attempt number, registry operation and agent/tool execution presence only",
       "Current native wait kinds on waiting attempts; declared approval checkpoint is not an approval decision",
       "Private inputs, outputs, errors, actor IDs and hidden reasoning are omitted",
-      "Oversized, duplicate or unbound history is unavailable; no attempt history is distinct from successful execution"
+      "Oversized, duplicate or unbound history is unavailable; no attempt history is distinct from successful execution",
+      "Completed native condition/switch checkpoints select a next-step name from the exact historical graph. Private keys and raw outputs are never returned; selection does not prove the next step ran. Recovery, missing/deleted/ambiguous checkpoints remain not recorded."
     ]
   },
   "inputs": [],
@@ -115,7 +111,8 @@
   "acceptance": {
     "functional": [
       "Verify exact historical revision, native attempts, retry numbers, wait association, no mutations and empty/unavailable separation.",
-      "Complete selected-agent/tool identity, independently verified outcome/error and branch-path reconstruction remain open; this metadata view does not fulfill all §81.9 requirements."
+      "Complete selected-agent/tool identity, independently verified outcome/error and branch-path reconstruction remain open; this metadata view does not fulfill all §81.9 requirements.",
+      "Verify true/false and switch checkpoints, no destination-attempt inference, private switch-key exclusion, deletion, recovery, ambiguous edges and historical graph identity."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

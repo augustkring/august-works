@@ -45,6 +45,7 @@ const data: View = {
         execution: "not_recorded",
         approvalCheckpoint: true,
         payloadUnavailable: true,
+        branchChoice: { state: "not_applicable" },
         waitingFor: ["human_interaction"],
       },
     ],
@@ -123,6 +124,28 @@ it.each(["unavailable", "empty"])(
       ),
     );
     expect(container.querySelector("ol")).toBeNull();
+  },
+);
+it.each(["selected", "not_recorded"] as const)(
+  "explains %s branch evidence without claiming that the next step ran",
+  async (state) => {
+    const view = structuredClone(data);
+    if (view.trace.state !== "available") throw new Error("trace unavailable");
+    view.trace.attempts[0].branchChoice =
+      state === "selected" ? { state, nextStep: "Prepare report" } : { state };
+    vi.spyOn(workflowsApi, "runExperience").mockResolvedValue(view);
+    await mount();
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain(
+        state === "selected"
+          ? "Recorded branch selects next step: Prepare report"
+          : "A branch selection is not available",
+      ),
+    );
+    if (state === "selected")
+      expect(container.textContent).toContain(
+        "does not confirm that the next step ran",
+      );
   },
 );
 it.each(["permission.revoked", "analytical.context.access_lost"])(

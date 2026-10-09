@@ -28,6 +28,14 @@ export const workflowRunExperienceSchema = z.strictObject({
             execution: z.enum(["agent", "tool", "not_recorded"]),
             approvalCheckpoint: z.boolean(),
             payloadUnavailable: z.boolean(),
+            branchChoice: z.discriminatedUnion("state", [
+              z.strictObject({ state: z.literal("not_applicable") }),
+              z.strictObject({ state: z.literal("not_recorded") }),
+              z.strictObject({
+                state: z.literal("selected"),
+                nextStep: z.string().max(160),
+              }),
+            ]),
             waitingFor: z
               .array(z.enum(WORKFLOW_WAIT_KINDS))
               .max(WORKFLOW_WAIT_KINDS.length),

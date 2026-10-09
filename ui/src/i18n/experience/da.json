@@ -622,5 +622,7 @@
   "workflowStartReviewRequired": "Gennemgå workflowets kørselsindstillinger, input og regulerede handlinger i Advanced, før du starter det her.",
   "workflowStartAdvanced": "Gennemgå kørsel i Advanced",
   "workflowStartInactive": "En aktuel aktiv udgivet version er nødvendig for en ny kørsel.",
-  "workflowStartVersion": "Gennemgået udgivet version {{version}}"
+  "workflowStartVersion": "Gennemgået udgivet version {{version}}",
+  "workflowRunBranchSelected": "Den registrerede gren vælger næste trin: {{name}}. Det bekræfter ikke, at næste trin blev kørt.",
+  "workflowRunBranchNotRecorded": "Et grenvalg er ikke tilgængeligt fra dette forsøgs bevarede kontrolpunkt."
 }

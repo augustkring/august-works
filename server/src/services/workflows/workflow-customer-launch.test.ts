@@ -47,6 +47,10 @@ it.each([
   "child",
   "agent",
   "unknown",
+  "optimizer_transform",
+  "recovery_approval",
+  "delayed_retry",
+  "node_input_contract",
 ])("requires native advanced review for %s", (scenario) => {
   const value = revision();
   if (scenario === "draft") value.state = "draft";
@@ -67,6 +71,18 @@ it.each([
   if (scenario === "network") value.graph.nodes[0].type = "core.http_request";
   if (scenario === "child") value.graph.nodes[0].type = "core.subworkflow";
   if (scenario === "agent") value.graph.nodes[0].type = "agent.task";
+  if (scenario === "optimizer_transform")
+    value.graph.nodes[0].type = "core.transform";
+  if (scenario === "recovery_approval")
+    value.graph.nodes[0].failurePolicy = "wait_for_human";
+  if (scenario === "delayed_retry")
+    value.graph.nodes[0].retryPolicy = {
+      mode: "fixed",
+      maxAttempts: 2,
+      initialDelayMs: 1000,
+      maxDelayMs: 1000,
+    };
+  if (scenario === "node_input_contract") value.graph.nodes[0].inputSchema = {};
   if (scenario === "unknown") value.graph.nodes[0].type = "self.declared.pure";
   expect(customerWorkflowLaunchReady(value)).toBe(false);
 });

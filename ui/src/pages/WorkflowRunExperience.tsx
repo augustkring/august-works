@@ -168,6 +168,16 @@ export function WorkflowRunExperience({
                   {t(`workflowAttemptStatus.${attempt.status}`)}
                 </p>
                 <p>{t(`workflowExecution.${attempt.execution}`)}</p>
+                {attempt.branchChoice.state === "selected" && (
+                  <p className="break-words">
+                    {t("workflowRunBranchSelected", {
+                      name: attempt.branchChoice.nextStep,
+                    })}
+                  </p>
+                )}
+                {attempt.branchChoice.state === "not_recorded" && (
+                  <p>{t("workflowRunBranchNotRecorded")}</p>
+                )}
                 {attempt.approvalCheckpoint && (
                   <p>{t("workflowRunApprovalBoundary")}</p>
                 )}

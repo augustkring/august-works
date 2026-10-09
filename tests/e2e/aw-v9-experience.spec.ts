@@ -368,8 +368,43 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
           position: { x: 0, y: 0 },
           config: {},
         },
+        {
+          id: "decision",
+          type: "core.condition",
+          name: "Check report",
+          position: { x: 0, y: 1 },
+          config: { expression: "true" },
+        },
+        {
+          id: "yes",
+          type: "core.merge",
+          name: "Prepare report",
+          position: { x: 0, y: 2 },
+          config: { mode: "all" },
+        },
+        {
+          id: "no",
+          type: "core.merge",
+          name: "Other report path",
+          position: { x: 1, y: 2 },
+          config: { mode: "all" },
+        },
       ],
-      edges: [],
+      edges: [
+        { id: "start-check", source: "start", target: "decision" },
+        {
+          id: "check-yes",
+          source: "decision",
+          target: "yes",
+          sourceHandle: "true",
+        },
+        {
+          id: "check-no",
+          source: "decision",
+          target: "no",
+          sourceHandle: "false",
+        },
+      ],
       variables: [],
       settings: { totalDeadlineSeconds: 60 },
     });
@@ -477,6 +512,12 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     ).toBeVisible();
     await expect(
       page.getByText("Attempt 1 · Recorded as completed", { exact: true }),
+    ).toHaveCount(3);
+    await expect(
+      page.getByText(
+        "Recorded branch selects next step: Prepare report. This does not confirm that the next step ran.",
+        { exact: true },
+      ),
     ).toBeVisible();
     await expect(
       page.getByText("PRIVATE-V9-RUN-INPUT", { exact: false }),
@@ -545,7 +586,7 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     await page
       .getByRole("button", { name: "Retry original run request", exact: true })
       .click();
-    await expect(page.getByRole("status")).toContainText(
+    await expect(page.getByRole("status").filter({ hasText: "The original run request was accepted" })).toContainText(
       "The original run request was accepted",
     );
     expect(originalRuns).toHaveLength(2);
@@ -571,6 +612,12 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     );
     await expect(
       page.getByText("Attempt 1 · Recorded as completed", { exact: true }),
+    ).toHaveCount(3);
+    await expect(
+      page.getByText(
+        "Recorded branch selects next step: Prepare report. This does not confirm that the next step ran.",
+        { exact: true },
+      ),
     ).toBeVisible();
     await page.unroute(launchRoute);
     await page.goto(path);

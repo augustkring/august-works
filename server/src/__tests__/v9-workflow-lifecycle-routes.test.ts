@@ -173,6 +173,130 @@ describePg("V9 native workflow lifecycle", () => {
   }
   const launchPath = (detail: WorkflowDetail, principal = "local-board") =>
     `/api/companies/${detail.companyId}/workflows/${detail.id}/experience/launch?expectedUserId=${principal}`;
+  it("inspects the real executor's selected branch using the exact historical revision after a newer publication", async () => {
+    let detail = await seed();
+    const svc = workflowService(db);
+    const base = detail.publishedRevision!.graph;
+    const saved = await svc.updateDraft(
+      detail.companyId,
+      detail.id,
+      {
+        expectedRevisionId: detail.draftRevisionId!,
+        graph: {
+          ...base,
+          nodes: [
+            ...base.nodes,
+            {
+              id: "decision",
+              name: "Check report",
+              type: "core.condition",
+              config: { expression: "true" },
+              position: { x: 0, y: 0 },
+            },
+            {
+              id: "yes",
+              name: "Prepare report",
+              type: "core.merge",
+              config: { mode: "all" },
+              position: { x: 0, y: 0 },
+            },
+            {
+              id: "no",
+              name: "Other path",
+              type: "core.merge",
+              config: { mode: "all" },
+              position: { x: 0, y: 0 },
+            },
+          ],
+          edges: [
+            { id: "start-check", source: "start", target: "decision" },
+            {
+              id: "check-yes",
+              source: "decision",
+              target: "yes",
+              sourceHandle: "true",
+            },
+            {
+              id: "check-no",
+              source: "decision",
+              target: "no",
+              sourceHandle: "false",
+            },
+          ],
+        },
+      },
+      native,
+    );
+    detail = await svc.publish(
+      detail.companyId,
+      detail.id,
+      {
+        expectedDraftRevisionId: saved.draftRevisionId!,
+        expectedPublishedRevisionId: detail.publishedRevisionId,
+      },
+      native,
+    );
+    const admitted = await http()
+      .post(launchPath(detail))
+      .send(launchCommand(detail))
+      .expect(200);
+    const originalRevision = detail.publishedRevisionId;
+    const changed = await svc.updateDraft(
+      detail.companyId,
+      detail.id,
+      {
+        expectedRevisionId: detail.draftRevisionId!,
+        graph: {
+          ...detail.publishedRevision!.graph,
+          nodes: detail.publishedRevision!.graph.nodes.map((node) =>
+            node.id === "yes" ? { ...node, name: "Changed publication" } : node,
+          ),
+        },
+      },
+      native,
+    );
+    await svc.publish(
+      detail.companyId,
+      detail.id,
+      {
+        expectedDraftRevisionId: changed.draftRevisionId!,
+        expectedPublishedRevisionId: originalRevision,
+      },
+      native,
+    );
+    const inspected = await http()
+      .get(
+        `/api/companies/${detail.companyId}/workflow-runs/${admitted.body.runId}/experience?expectedUserId=local-board`,
+      )
+      .expect(200);
+    expect(inspected.headers["cache-control"]).toBe("private, no-store");
+    expect(inspected.body).toMatchObject({
+      revisionId: originalRevision,
+      revisionState: "superseded",
+      status: "succeeded",
+      trace: { state: "available" },
+    });
+    expect(
+      inspected.body.trace.attempts.find(
+        (attempt: { name: string }) => attempt.name === "Check report",
+      ),
+    ).toMatchObject({
+      status: "succeeded",
+      branchChoice: { state: "selected", nextStep: "Prepare report" },
+    });
+    expect(JSON.stringify(inspected.body)).not.toContain("Changed publication");
+    expect(
+      inspected.body.trace.attempts.find(
+        (attempt: { name: string }) => attempt.name === "Other path",
+      ),
+    ).toMatchObject({ status: "skipped" });
+    expect(
+      await db
+        .select()
+        .from(workflowRuns)
+        .where(eq(workflowRuns.workflowId, detail.id)),
+    ).toHaveLength(1);
+  });
   it("admits one immutable native run and reconciles its original receipt after Pause", async () => {
     const detail = await seed(),
       input = launchCommand(detail);
@@ -293,25 +417,21 @@ describePg("V9 native workflow lifecycle", () => {
     const detail = await seed(),
       userId = "run-operator",
       input = launchCommand(detail);
-    await db
-      .insert(companyMemberships)
-      .values({
+    await db.insert(companyMemberships).values({
+      companyId: detail.companyId,
+      principalType: "user",
+      principalId: userId,
+      membershipRole: "viewer",
+      status: "active",
+    });
+    await db.insert(principalPermissionGrants).values(
+      ["workflows:read", "workflows:run"].map((permissionKey) => ({
         companyId: detail.companyId,
         principalType: "user",
         principalId: userId,
-        membershipRole: "viewer",
-        status: "active",
-      });
-    await db
-      .insert(principalPermissionGrants)
-      .values(
-        ["workflows:read", "workflows:run"].map((permissionKey) => ({
-          companyId: detail.companyId,
-          principalType: "user",
-          principalId: userId,
-          permissionKey,
-        })),
-      );
+        permissionKey,
+      })),
+    );
     const actor: Express.Request["actor"] = {
       type: "board",
       source: "session",
@@ -345,6 +465,58 @@ describePg("V9 native workflow lifecycle", () => {
       .where(eq(workflowRuns.workflowId, detail.id));
     expect(runs).toHaveLength(1);
     expect(runs[0].id).toBe(original.body.runId);
+  });
+
+  it("requires effective review for transform nodes that can invoke Optimizer replacements", async () => {
+    const original = await seed(),
+      svc = workflowService(db);
+    const graph = {
+      ...original.publishedRevision!.graph,
+      nodes: [
+        ...original.publishedRevision!.graph.nodes,
+        {
+          id: "calculate",
+          name: "Calculation",
+          type: "core.transform",
+          config: { mapping: { result: "1" } },
+          position: { x: 0, y: 1 },
+        },
+      ],
+      edges: [{ id: "next", source: "start", target: "calculate" }],
+    };
+    const saved = await svc.updateDraft(
+      original.companyId,
+      original.id,
+      { expectedRevisionId: original.draftRevisionId!, graph },
+      native,
+    );
+    const detail = await svc.publish(
+      original.companyId,
+      original.id,
+      {
+        expectedDraftRevisionId: saved.draftRevisionId!,
+        expectedPublishedRevisionId: original.publishedRevisionId,
+      },
+      native,
+    );
+    const overview = await http()
+      .get(
+        `/api/companies/${detail.companyId}/workflows/${detail.id}/experience?expectedUserId=local-board`,
+      )
+      .expect(200);
+    expect(overview.body).toMatchObject({
+      canRequestRun: true,
+      runAvailability: "review_required",
+    });
+    const refusal = await http()
+      .post(launchPath(detail))
+      .send(launchCommand(detail))
+      .expect(409);
+    expect(refusal.body.details.code).toBe("workflow_launch_review_required");
+    expect(await db.select().from(workflowRuns)).toHaveLength(0);
+    expect((await current(detail)).publishedRevision).toEqual(
+      detail.publishedRevision,
+    );
   });
 
   it("reads bounded native run status and blockers without exposing copied payloads or errors", async () => {
