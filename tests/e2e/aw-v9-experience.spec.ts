@@ -146,6 +146,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     ).toHaveValue("Browser typed draft");
     expect((await json(await request.get(`${base}/issues`))).length).toBe(0);
     await page.keyboard.press("Escape");
+    const feedbackPage = page.url();
     await page.goto(`/${company.issuePrefix}/company/settings`);
     await expect(
       page.getByRole("heading", { name: "Company", exact: true }),
@@ -165,7 +166,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
         { exact: true },
       ),
     ).toBeVisible();
-    await page.goto(`/${company.issuePrefix}/work`);
+    await page.goto(feedbackPage);
     await trigger.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("combobox")).toBeFocused();
