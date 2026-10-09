@@ -331,7 +331,7 @@ export function HireAgentSetup({
     (owner) => owner.id === content.ownerUserId,
   )?.name;
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <Link
         className="inline-flex min-h-11 items-center underline"
         to="/agents/hire"
@@ -677,6 +677,6 @@ export function HireAgentSetup({
       >
         {discard.isError ? "Retry the same discard" : "Discard setup"}
       </Button>
-    </main>
+    </div>
   );
 }

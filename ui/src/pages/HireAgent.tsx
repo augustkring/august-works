@@ -135,7 +135,7 @@ function HireCatalog({
       .includes(term),
   );
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <Link
         to={versionId ? "/agents/hire" : "/agents"}
         className="inline-flex min-h-11 items-center underline"
@@ -348,7 +348,7 @@ function HireCatalog({
           </div>
         </>
       )}
-    </main>
+    </div>
   );
 }
 
@@ -385,7 +385,7 @@ export function HireAgent() {
     );
   if (!v9FeatureEnabled(settings.data, "hire_agent_v9"))
     return (
-      <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+      <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
         <p role="status">New agent hiring is unavailable.</p>
         {company && identity.userId && !identity.localImplicit && (
           <HireSavedSetups
@@ -394,7 +394,7 @@ export function HireAgent() {
             principal={identity.userId}
           />
         )}
-      </main>
+      </div>
     );
   if (!company || !identity.userId || identity.localImplicit)
     return (

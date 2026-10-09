@@ -77,6 +77,7 @@ it("uses native company-prefixed work owners and scopes the empty state to this 
     ),
   ).toEqual(["/AW/projects", "/AW/issues", "/AW/routines"]);
   expect(container.textContent).toContain("This view shows");
+  expect(container.querySelector("h1")?.textContent).toBe("Work");
   expect(container.querySelector("h2")).toBeNull();
 });
 it("keeps dependency failure separate from an empty company and offers a native recheck", async () => {

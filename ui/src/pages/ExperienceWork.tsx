@@ -41,9 +41,9 @@ export function ExperienceWork() {
   );
   const unavailable = !tasks || tasks.state !== "fresh";
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
-        {t("work")}
+        {t("nav.work")}
       </h1>
       <Button
         className="min-h-11"
@@ -111,6 +111,6 @@ export function ExperienceWork() {
         query.data.inProgress.length === 0 &&
         query.data.done.length === 0 && <p>{t("workEmptyView")}</p>}
       <p className="text-sm text-muted-foreground">{t("workBounded")}</p>
-    </main>
+    </div>
   );
 }

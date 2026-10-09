@@ -130,7 +130,7 @@ function DraftStart({
     },
   });
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <Link
         to="/advanced"
         className="inline-flex min-h-11 items-center underline"
@@ -214,7 +214,7 @@ function DraftStart({
           </Button>
         )}
       </section>
-    </main>
+    </div>
   );
 }
 
@@ -416,7 +416,7 @@ function DraftEditor({
     Boolean(discardAttempt.current);
   if (accessLost)
     return (
-      <main className="space-y-4 p-6">
+      <div className="space-y-4 p-6">
         <p role="alert">
           Access to this draft changed. Its content has been hidden.
         </p>
@@ -426,7 +426,7 @@ function DraftEditor({
         >
           Your drafts
         </Link>
-      </main>
+      </div>
     );
   if (reauthorizing)
     return <p role="status">Checking current access to this draft…</p>;
@@ -434,7 +434,7 @@ function DraftEditor({
     return <p role="status">Loading your saved agent draft…</p>;
   if (draft.isError && !receipt)
     return (
-      <main className="space-y-4 p-6">
+      <div className="space-y-4 p-6">
         <p role="alert">
           This draft could not be loaded. Check your account and company access.
         </p>
@@ -447,12 +447,12 @@ function DraftEditor({
         >
           Your drafts
         </Link>
-      </main>
+      </div>
     );
   if (receipt?.kind === "hire") return <p>This is a Hire Agent setup. <Link className="inline-flex min-h-11 items-center underline" to={`/agents/hire/drafts/${receipt.id}/${receipt.step}`}>Open saved setup</Link></p>;
   if (!receipt?.content || !content)
     return (
-      <main className="space-y-4 p-6">
+      <div className="space-y-4 p-6">
         <h1>Draft discarded</h1>
         <p>The draft content has been removed.</p>
         <Link
@@ -461,12 +461,12 @@ function DraftEditor({
         >
           Your drafts
         </Link>
-      </main>
+      </div>
     );
   const index = CUSTOM_AGENT_STEPS.indexOf(step),
     next = CUSTOM_AGENT_STEPS[index + 1];
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <Link
         className="inline-flex min-h-11 items-center underline"
         to="/agents/custom"
@@ -964,7 +964,7 @@ function DraftEditor({
           Discard draft
         </Button>
       </div>
-    </main>
+    </div>
   );
 }
 

@@ -54,7 +54,7 @@ export function ExperienceNeedsYou() {
     attention.reason === "more_items_available";
   const unavailable = !attention || (attention.state !== "fresh" && !bounded);
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
         {t("needsYou")}
       </h1>
@@ -88,6 +88,6 @@ export function ExperienceNeedsYou() {
       >
         {t("openFullQueue")}
       </Link>
-    </main>
+    </div>
   );
 }
