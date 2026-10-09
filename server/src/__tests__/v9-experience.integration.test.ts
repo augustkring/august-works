@@ -1,0 +1,371 @@
+import { randomUUID } from "node:crypto";
+import express from "express";
+import request from "supertest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import {
+  companies,
+  companyMemberships,
+  principalPermissionGrants,
+  createDb,
+  issues,
+  approvals,
+  issueApprovals,
+  decisionQueues,
+} from "@paperclipai/db";
+import { experienceRoutes } from "../routes/experience.js";
+import { errorHandler } from "../middleware/error-handler.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
+import {
+  getEmbeddedPostgresTestSupport,
+  startEmbeddedPostgresTestDatabase,
+} from "./helpers/embedded-postgres.js";
+const support = await getEmbeddedPostgresTestSupport();
+(support.supported ? describe : describe.skip)(
+  "V9 experience on migrated PostgreSQL",
+  () => {
+    let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
+    let db: ReturnType<typeof createDb>;
+    let companyId: string, foreignId: string;
+    const userId = "experience-member";
+    beforeAll(async () => {
+      database = await startEmbeddedPostgresTestDatabase("aw-v9-experience-");
+      db = createDb(database.connectionString);
+    });
+    afterAll(async () => {
+      await database?.cleanup();
+    });
+    beforeEach(async () => {
+      companyId = randomUUID();
+      foreignId = randomUUID();
+      for (const id of [companyId, foreignId])
+        await db.insert(companies).values({
+          id,
+          name: "Experience company",
+          issuePrefix: `E${id.slice(0, 7)}`,
+        });
+      await db.insert(companyMemberships).values({
+        companyId,
+        principalType: "user",
+        principalId: userId,
+        membershipRole: "viewer",
+        status: "active",
+      });
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: false,
+        home_v9: false,
+        progressive_shell_v9: false,
+      });
+    });
+    function app(actor: Express.Request["actor"]) {
+      const application = express();
+      application.use(express.json());
+      application.use((req, _res, next) => {
+        req.actor = actor;
+        next();
+      });
+      application.use("/api", experienceRoutes(db));
+      application.use(errorHandler);
+      return application;
+    }
+    const member = () => ({
+      type: "board" as const,
+      source: "session" as const,
+      userId,
+      companyIds: [companyId],
+    });
+    it("keeps ten Company categories stable while filtering current native grants and account context", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+        progressive_shell_v9: true,
+      });
+      const url = `/api/companies/${companyId}/experience/company`;
+      await request(app(member())).get(url).expect(403);
+      await db
+        .update(companyMemberships)
+        .set({ membershipRole: "owner" })
+        .where(eq(companyMemberships.companyId, companyId));
+      await db.insert(principalPermissionGrants).values({
+        companyId,
+        principalType: "user",
+        principalId: userId,
+        permissionKey: "users:invite",
+      });
+      const response = await request(app(member())).get(url).expect(200);
+      expect(response.body.sections).toHaveLength(10);
+      const entries = response.body.sections
+        .flatMap(
+          (section: { entries: Array<{ id: string }> }) => section.entries,
+        )
+        .map((entry: { id: string }) => entry.id);
+      expect(entries).toContain("company_identity");
+      expect(entries).toContain("members");
+      expect(entries).not.toContain("roles");
+      expect(entries).not.toContain("billing");
+      await request(app(member()))
+        .get(`${url}?expectedUserId=another-account`)
+        .expect(409);
+      await db
+        .delete(principalPermissionGrants)
+        .where(eq(principalPermissionGrants.companyId, companyId));
+      await request(app(member())).get(url).expect(403);
+      await db
+        .update(companyMemberships)
+        .set({ membershipRole: "viewer" })
+        .where(eq(companyMemberships.companyId, companyId));
+      await request(app(member())).get(url).expect(403);
+    });
+    it("enforces disabled rollout, tenant scope and human-only access", async () => {
+      await request(app(member()))
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(404);
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+      });
+      await request(app(member()))
+        .get(`/api/companies/${foreignId}/experience`)
+        .expect(403);
+      await request(
+        app({
+          type: "agent",
+          source: "agent_key",
+          agentId: randomUUID(),
+          companyId,
+        }),
+      )
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(403);
+    });
+    it("returns native company tasks with current versions and cannot escalate a viewer profile", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+      });
+      const [own] = await db
+        .insert(issues)
+        .values({
+          companyId,
+          title: "Prepare sales brief",
+          status: "in_progress",
+          identifier: "EX-1",
+          issueNumber: 1,
+        })
+        .returning();
+      await db.insert(issues).values({
+        companyId: foreignId,
+        title: "Confidential foreign work",
+        status: "in_progress",
+        identifier: "FX-1",
+        issueNumber: 1,
+      });
+      const response = await request(app(member()))
+        .get(`/api/companies/${companyId}/experience?profile=security_admin`)
+        .expect(200);
+      expect(response.headers["cache-control"]).toBe("private, no-store");
+      expect(response.body.profile).toBe("member");
+      expect(
+        response.body.inProgress.find(
+          (card: { id: string }) => card.id === own!.id,
+        )?.source.version,
+      ).toBe(String(own!.statusVersion));
+      expect(JSON.stringify(response.body)).not.toContain(
+        "Confidential foreign work",
+      );
+    });
+    it("filters attention linked to foreign work and leaves queue materialization to its native owner", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+      });
+      const [task] = await db
+        .insert(issues)
+        .values({ companyId: foreignId, title: "Foreign confidential task" })
+        .returning();
+      const [approval] = await db
+        .insert(approvals)
+        .values({
+          companyId,
+          type: "request_board_approval",
+          status: "pending",
+          payload: { title: "Confidential approval linked to foreign task" },
+        })
+        .returning();
+      await db
+        .insert(issueApprovals)
+        .values({ companyId, issueId: task!.id, approvalId: approval!.id });
+      const before = await db
+        .select()
+        .from(decisionQueues)
+        .where(eq(decisionQueues.companyId, companyId));
+      const response = await request(app(member()))
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(200);
+      expect(JSON.stringify(response.body)).not.toContain(
+        "Confidential approval",
+      );
+      expect(
+        await db
+          .select()
+          .from(decisionQueues)
+          .where(eq(decisionQueues.companyId, companyId)),
+      ).toEqual(before);
+    });
+    it("preserves authorized expert destinations and removes them when their native gate closes", async () => {
+      const settings = instanceSettingsService(db);
+      const original = await settings.getExperimental();
+      const enabled = {
+        experience_projection_v9: true,
+        enableFoundationV1: true,
+        enableContextEngineV1: true,
+        agent_identities_v5: true,
+        agent_provider_bindings_v5: true,
+        agent_runtime_fabric_v5: true,
+        role_packs_v5: true,
+        playbooks_v5: true,
+      };
+      await settings.updateExperimental(enabled);
+      await db.insert(principalPermissionGrants).values({
+        companyId,
+        principalType: "user",
+        principalId: userId,
+        permissionKey: "foundation:read",
+      });
+      try {
+        const first = await request(app(member()))
+          .get(`/api/companies/${companyId}/experience`)
+          .expect(200);
+        expect(first.body.advancedLinks).toEqual(
+          expect.arrayContaining([
+            { id: "role_packs", href: "/role-packs" },
+            { id: "playbooks", href: "/playbooks" },
+            { id: "skills", href: "/skills/studio" },
+          ]),
+        );
+        expect(
+          first.body.advancedLinks.some(
+            (entry: { id: string }) => entry.id === "experimental",
+          ),
+        ).toBe(false);
+        await settings.updateExperimental({
+          role_packs_v5: false,
+          playbooks_v5: false,
+        });
+        const second = await request(app(member()))
+          .get(`/api/companies/${companyId}/experience`)
+          .expect(200);
+        expect(
+          second.body.advancedLinks.some((entry: { id: string }) =>
+            ["role_packs", "playbooks"].includes(entry.id),
+          ),
+        ).toBe(false);
+        await db
+          .update(companyMemberships)
+          .set({ status: "inactive" })
+          .where(eq(companyMemberships.companyId, companyId));
+        await request(app(member()))
+          .get(`/api/companies/${companyId}/experience`)
+          .expect(403);
+      } finally {
+        await settings.updateExperimental(
+          Object.fromEntries(
+            Object.keys(enabled).map((key) => [
+              key,
+              original[key as keyof typeof original],
+            ]),
+          ),
+        );
+      }
+    });
+    it("checks current persisted membership even when middleware carries old company access", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+      });
+      await db
+        .update(companyMemberships)
+        .set({ status: "inactive" })
+        .where(eq(companyMemberships.companyId, companyId));
+      await request(app(member()))
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(403);
+      await request(app({ ...member(), isInstanceAdmin: true }))
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(403);
+    });
+    it("lets an authorized owner choose depth without granting a viewer administrative authority", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+      });
+      await request(app(member()))
+        .post(`/api/companies/${companyId}/experience/profile`)
+        .send({ profile: "admin" })
+        .expect(403);
+      await db
+        .update(companyMemberships)
+        .set({ membershipRole: "owner" })
+        .where(eq(companyMemberships.companyId, companyId));
+      await db.insert(principalPermissionGrants).values(
+        ["users:invite", "users:manage_permissions"].map((permissionKey) => ({
+          companyId,
+          principalType: "user",
+          principalId: userId,
+          permissionKey,
+          grantedByUserId: userId,
+        })),
+      );
+      const initial = await request(app(member()))
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(200);
+      expect(initial.body.profile).toBe("manager");
+      expect(initial.body.availableProfiles).toContain("admin");
+      await request(app(member()))
+        .post(`/api/companies/${companyId}/experience/profile`)
+        .send({ profile: "admin" })
+        .expect(200);
+      const chosen = await request(app(member()))
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(200);
+      expect(chosen.body.profile).toBe("admin");
+      await db
+        .update(companyMemberships)
+        .set({ membershipRole: "viewer" })
+        .where(eq(companyMemberships.companyId, companyId));
+      await db
+        .delete(principalPermissionGrants)
+        .where(eq(principalPermissionGrants.companyId, companyId));
+      const reduced = await request(app(member()))
+        .get(`/api/companies/${companyId}/experience`)
+        .expect(200);
+      expect(reduced.body.profile).toBe("member");
+      expect(reduced.body.availableProfiles).toEqual(["member"]);
+    });
+    it("fences a browser request issued for another account", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+      });
+      await request(app(member()))
+        .get(
+          `/api/companies/${companyId}/experience?expectedUserId=previous-account`,
+        )
+        .expect(409);
+    });
+    it("rejects broken graph updates atomically and preserves disabled defaults", async () => {
+      const settings = instanceSettingsService(db);
+      await expect(
+        settings.updateExperimental({ home_v9: true }),
+      ).rejects.toMatchObject({
+        status: 400,
+        details: { code: "V9_FEATURE_DEPENDENCY_INVALID" },
+      });
+      expect((await settings.getExperimental()).home_v9).toBe(false);
+      await settings.updateExperimental({
+        experience_projection_v9: true,
+        home_v9: true,
+      });
+      await expect(
+        settings.updateExperimental({ experience_projection_v9: false }),
+      ).rejects.toMatchObject({ status: 400 });
+      await settings.updateExperimental({
+        experience_projection_v9: false,
+        home_v9: false,
+      });
+    });
+  },
+);

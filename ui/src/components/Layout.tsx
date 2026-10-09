@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useQuery } from "@tanstack/react-query";
 import { Outlet, useLocation, useNavigate, useNavigationType, useParams } from "@/lib/router";
 import { Sidebar } from "./Sidebar";
+import { ExperienceUtilities } from "./ExperienceUtilities";
 import { CompanySettingsSidebar } from "./CompanySettingsSidebar";
 import { CompanySettingsNav } from "./access/CompanySettingsNav";
 import { AppsSidebar } from "./AppsSidebar";
@@ -646,6 +647,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
 
         {isMobile ? (
           <div
+            id="mobile-sidebar"
             className={cn(
               "fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden pt-(--sz-safe-top) transition-transform duration-100 ease-out",
               sidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -699,10 +701,11 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
         <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "h-full flex-1")}>
           <div
             className={cn(
-              !isMobile && useStreamlinedTaskDetailShell && "hidden",
               isMobile && "sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85",
             )}
           >
+            <ExperienceUtilities />
+            <div className={cn(!isMobile && useStreamlinedTaskDetailShell && "hidden")}>
             <StandaloneBrowserControls mobile={isMobile} />
             <BreadcrumbBar />
             {isMobile && isCompanySettingsRoute ? (
@@ -710,6 +713,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
                 <CompanySettingsNav />
               </div>
             ) : null}
+            </div>
           </div>
           <div className={cn(
             isMobile ? "block" : "flex flex-1 min-h-0",

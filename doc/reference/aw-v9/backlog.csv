@@ -1,32 +1,32 @@
 id,brief_line,description,implementation_status
-V9-001,2157,ADR + architecture locks + Security Assurance Map + C0–C4 mapping + feature dependency map + Safe Change template,not_started
-V9-002,2159,experience shared types/validators,not_started
-V9-003,2161,Experience Orchestrator read model,not_started
-V9-004,2163,authorization/staleness + Experience Orchestrator degradation/freshness/resilience regression suite,not_started
-V9-005,2165,experience profile resolver,not_started
-V9-006,2167,progressive shell + Advanced entry,not_started
-V9-007,2169,sidebar route compatibility + deep-link tests,not_started
+V9-001,2157,ADR + architecture locks + Security Assurance Map + C0–C4 mapping + feature dependency map + Safe Change template,in_progress
+V9-002,2159,experience shared types/validators,in_progress
+V9-003,2161,Experience Orchestrator read model,in_progress
+V9-004,2163,authorization/staleness + Experience Orchestrator degradation/freshness/resilience regression suite,in_progress
+V9-005,2165,experience profile resolver,in_progress
+V9-006,2167,progressive shell + Advanced entry,in_progress
+V9-007,2169,sidebar route compatibility + deep-link tests,in_progress
 V9-008,2171,legacy shell usage telemetry,not_started
-V9-009,2173,Home projection service,not_started
-V9-010,2175,Home UI / accessible empty/loading/failure states,not_started
-V9-011,2177,Needs You naming/IA migration over attention,not_started
-V9-012,2179,unified ActionCard renderer base,not_started
+V9-009,2173,Home projection service,in_progress
+V9-010,2175,Home UI / accessible empty/loading/failure states,in_progress
+V9-011,2177,Needs You naming/IA migration over attention,in_progress
+V9-012,2179,unified ActionCard renderer base,in_progress
 V9-013,2181,attention precision + critical recall/miss/late/duplicate metrics + dismiss reason telemetry,not_started
-V9-014,2183,notification preference schema extension,not_started
-V9-015,2185,quiet hours/digest scheduler,not_started
+V9-014,2183,notification preference schema extension,in_progress
+V9-015,2185,quiet hours/digest scheduler,in_progress
 V9-016,2187,Slack/Teams/email delivery policy adapters,not_started
-V9-017,2189,notification privacy/redaction tests,not_started
-V9-018,2191,onboarding schema migration,not_started
-V9-019,2193,activation state machine/service,not_started
-V9-020,2195,intent capture UX,not_started
-V9-021,2197,discovery progress + source/provenance/evidence cards + untrusted-content boundary,not_started
-V9-022,2199,material-question resolver + indirect prompt-injection/ingestion policy tests,not_started
-V9-023,2201,activation resume/recovery,not_started
-V9-024,2203,Free Core onboarding commercial gate removal,not_started
+V9-017,2189,notification privacy/redaction tests,in_progress
+V9-018,2191,onboarding schema migration,in_progress
+V9-019,2193,activation state machine/service,in_progress
+V9-020,2195,intent capture UX,in_progress
+V9-021,2197,discovery progress + source/provenance/evidence cards + untrusted-content boundary,in_progress
+V9-022,2199,material-question resolver + indirect prompt-injection/ingestion policy tests,in_progress
+V9-023,2201,activation resume/recovery,in_progress
+V9-024,2203,Free Core onboarding commercial gate removal,in_progress
 V9-025,2205,first-value task/run binding,not_started
 V9-026,2207,first-value verification + analytics,not_started
 V9-027,2209,first-outcome UI,not_started
-V9-028,2211,Agent Package customer catalog projection,not_started
+V9-028,2211,Agent Package customer catalog projection,in_progress
 V9-029,2213,Hire Package simplified install flow,not_started
 V9-030,2215,package permissions/consequence preview,not_started
 V9-031,2217,advanced package/custom agent path,not_started
@@ -99,23 +99,23 @@ V9-097,2349,live channel notification/approval qualification,not_started
 V9-098,2351,enterprise admin/accessibility qualification,not_started
 V9-099,2353,customer support readiness + runbook,not_started
 V9-100,2355,V2 assurance evidence baseline + legacy cleanup prerequisites,not_started
-V9-101,2362,Screen Contract schema + coverage manifest + CI completeness check,not_started
-V9-102,2364,"canonical profile navigation + shell utility area (`Ask August`, `Feedback`, help/profile) + responsive adaptation",not_started
-V9-103,2366,onboarding execution screens ONB-01–ONB-04,not_started
-V9-104,2368,onboarding execution screens ONB-05–ONB-08 + just-in-time connection/permission contract,not_started
-V9-105,2370,onboarding execution screens ONB-09–ONB-12 + resume/recovery/accessibility,not_started
+V9-101,2362,Screen Contract schema + coverage manifest + CI completeness check,in_progress
+V9-102,2364,"canonical profile navigation + shell utility area (`Ask August`, `Feedback`, help/profile) + responsive adaptation",in_progress
+V9-103,2366,onboarding execution screens ONB-01–ONB-04,in_progress
+V9-104,2368,onboarding execution screens ONB-05–ONB-08 + just-in-time connection/permission contract,in_progress
+V9-105,2370,onboarding execution screens ONB-09–ONB-12 + resume/recovery/accessibility,in_progress
 V9-106,2372,Hire Agent flow + capability/access/authority/test/review/activation receipt,not_started
 V9-107,2374,"Custom Agent builder steps 1–6 (outcome, identity, instructions, knowledge, tools, authority)",not_started
 V9-108,2376,"Custom Agent builder steps 7–13 (memory, collaboration, runtime, test, review, publish, monitor) + draft/live lifecycle",not_started
 V9-109,2378,orchestration decision contract + bounded multi-agent admin projection + takeover/kill propagation,not_started
 V9-110,2380,workflow full lifecycle + plain-language-first review + safe test + immutable publish revision + recovery/retirement,not_started
-V9-111,2382,Company/Settings/Governance canonical IA + contextual governance + settings search/deep-link contracts,not_started
-V9-112,2384,global microcopy/form/confirmation/error/recovery/loading/success receipt standards + component/state QA,not_started
-V9-113,2386,enhanced accessibility targets + dialog/focus/live-status/zoom/touch/authentication critical-flow evidence,not_started
-V9-114,2388,Customer Feedback shared schema/domain/API + tenant/RBAC/privacy contract,not_started
-V9-115,2390,persistent global Feedback trigger + feedback dialog + session draft + confirmation receipt,not_started
-V9-116,2392,feedback safe-context collector + optional diagnostics + screenshot attachment pipeline + malware/privacy controls,not_started
-V9-117,2394,My Feedback status/follow-up UI + AW internal triage/dedupe/linking + notification loop,not_started
-V9-118,2396,migrate `OutputFeedbackButtons` away from Paperclip Labs sharing; tenant-local output feedback + explicit per-submission AW product-sharing path,not_started
-V9-119,2398,feedback security/a11y/privacy/E2E/usability suite + support/security destination tests,not_started
+V9-111,2382,Company/Settings/Governance canonical IA + contextual governance + settings search/deep-link contracts,in_progress
+V9-112,2384,global microcopy/form/confirmation/error/recovery/loading/success receipt standards + component/state QA,in_progress
+V9-113,2386,enhanced accessibility targets + dialog/focus/live-status/zoom/touch/authentication critical-flow evidence,in_progress
+V9-114,2388,Customer Feedback shared schema/domain/API + tenant/RBAC/privacy contract,in_progress
+V9-115,2390,persistent global Feedback trigger + feedback dialog + session draft + confirmation receipt,in_progress
+V9-116,2392,feedback safe-context collector + optional diagnostics + screenshot attachment pipeline + malware/privacy controls,in_progress
+V9-117,2394,My Feedback status/follow-up UI + AW internal triage/dedupe/linking + notification loop,in_progress
+V9-118,2396,migrate `OutputFeedbackButtons` away from Paperclip Labs sharing; tenant-local output feedback + explicit per-submission AW product-sharing path,in_progress
+V9-119,2398,feedback security/a11y/privacy/E2E/usability suite + support/security destination tests,in_progress
 V9-120,2400,V3 no-guess experience coverage audit + final security/AI/UX/accessibility/privacy/migration/feedback acceptance evidence + release-status decision,not_started

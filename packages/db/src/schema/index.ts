@@ -294,3 +294,5 @@ export {causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns} 
 export { managementReviewSnapshots, managementReviewSourceLinks, managementReviewManifestDependencies, managementReviewGovernanceDependencies, managementReviewEvents } from "./management_reviews.js";
 
 export { adaptivePlanningProposals } from "./adaptive_planning.js";
+
+export * from "./customer_feedback.js";

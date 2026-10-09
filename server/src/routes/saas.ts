@@ -1,4 +1,5 @@
-import { v7FeatureEnabled } from "@paperclipai/shared";
+import { v7FeatureEnabled, v9FeatureEnabled, activationCommandSchema } from "@paperclipai/shared";
+import { activationService } from "../services/saas/activation.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { z } from "zod";
 import { Router, type Request } from "express";
@@ -105,6 +106,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     next();
   });
   router.get("/saas/capabilities", async (_req, res) => {
+    res.set("Cache-Control", "no-store");
     res.json({
       profile: "saas",
       enterpriseSso: v7FeatureEnabled(await instanceSettingsService(db).getExperimental(), "enterprise_identity_v7"),
@@ -113,6 +115,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         "email_verification_required_v6",
       ),
       onboarding: await platform.enabled("server_onboarding_v6"),
+      activationV9: v9FeatureEnabled(await instanceSettingsService(db).getExperimental(), "activation_v9"),
       billing: await platform.enabled("billing_v6"),
       checkout: await platform.enabled("billing_checkout_v6"),
       runtime: await platform.enabled("hosted_openclaw_v6"),
@@ -135,7 +138,22 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     const companyId = String(req.params.companyId);
     await company(req, companyId);
     await gate("server_onboarding_v6");
-    res.json(await platform.onboarding.get(companyId));
+    const run=await platform.onboarding.get(companyId);
+    if(run.activationState)throw conflict("Continue in the current activation flow",{code:"ACTIVATION_FLOW_REQUIRED"});
+    res.set("Cache-Control","private, no-store");
+    res.json(run);
+  });
+  router.get("/companies/:companyId/activation", async (req,res) => {
+    const companyId=z.uuid().parse(req.params.companyId);
+    await company(req,companyId);
+    res.set("Cache-Control","private, no-store");
+    res.json(await activationService(db).get(req.actor,companyId));
+  });
+  router.post("/companies/:companyId/activation", async (req,res) => {
+    const companyId=z.uuid().parse(req.params.companyId);
+    await company(req,companyId);
+    res.set("Cache-Control","private, no-store");
+    res.json(await activationService(db).command(req.actor,companyId,activationCommandSchema.parse(req.body)));
   });
   router.patch("/companies/:companyId/onboarding", async (req, res) => {
     const companyId = String(req.params.companyId);

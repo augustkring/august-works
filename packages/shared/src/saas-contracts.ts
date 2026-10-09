@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { activationWebsiteSchema } from "./activation.js";
 export const runtimeBackupPolicySchema = z
   .object({
     enabled: z.boolean(),
@@ -19,6 +20,7 @@ export const createSaasCompanySchema = z
     name: z.string().trim().min(1).max(120),
     description: z.string().trim().max(1000).optional(),
     idempotencyKey: idempotencyKeySchema,
+    activation: z.strictObject({version:z.literal(9), website:activationWebsiteSchema.default("")}).optional(),
   })
   .strict();
 export const onboardingStageSchema = z.enum([

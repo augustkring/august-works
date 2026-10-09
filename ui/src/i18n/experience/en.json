@@ -1,0 +1,373 @@
+{
+  "home": "Home",
+  "ask": "Ask August",
+  "needsYou": "Needs You",
+  "inProgress": "In Progress",
+  "done": "Done",
+  "watch": "Watch",
+  "caughtUp": "Nothing needs your attention right now.",
+  "partial": "Some information is temporarily unavailable. Available work is shown below.",
+  "unavailable": "Temporarily unavailable",
+  "tryAgain": "Try again",
+  "loading": "Loading current work…",
+  "loadFailed": "Home could not be loaded. Your work is preserved.",
+  "selectCompany": "Select a company to see your work.",
+  "refreshRequired": "Refresh before taking action.",
+  "checkedAt": "Checked at {{time}}",
+  "navigation": "Company navigation",
+  "navigationLimited": "Additional navigation could not be loaded. Try Home again.",
+  "help": "Help / Support",
+  "domain": {
+    "tasks": "Work",
+    "attention": "Needs You"
+  },
+  "nav": {
+    "home": "Home",
+    "needs_you": "Needs You",
+    "work": "Work",
+    "agents": "Agents",
+    "apps": "Apps",
+    "insights": "Insights",
+    "company": "Company"
+  },
+  "insightsDenied": "Insights are available in your authorized management view.",
+  "noInsights": "No insights are available yet.",
+  "insights": {
+    "metrics": "Business performance",
+    "process": "How work is moving",
+    "forecasts": "Forecasts",
+    "scenarios": "Scenarios",
+    "reviews": "Management reviews"
+  },
+  "utilities": "Global utilities",
+  "user": "User account",
+  "feedback": {
+    "action": "Feedback",
+    "title": "Share feedback",
+    "description": "Tell us what went wrong or what would make August Works better. This isn't monitored for urgent support.",
+    "support": "Need help now? Contact support",
+    "security": "Security concern? Contact security",
+    "privacy": "Privacy concern? Contact privacy",
+    "category": "Category",
+    "categories": {
+      "BUG": "Something isn't working",
+      "IMPROVEMENT": "Something could be easier",
+      "IDEA": "I have an idea",
+      "OTHER": "Other feedback"
+    },
+    "questions": {
+      "BUG": "What happened?",
+      "IMPROVEMENT": "What could be easier or better?",
+      "IDEA": "What would you like August Works to help you do?",
+      "OTHER": "What would you like us to know?"
+    },
+    "goals": {
+      "BUG": "What were you trying to do? (optional)",
+      "IMPROVEMENT": "What were you trying to accomplish? (optional)",
+      "IDEA": "Why would this help? (optional)"
+    },
+    "blocksWork": "This stops me from completing my work",
+    "context": "Included automatically",
+    "contextDetails": "Company, page category, release version, time, language, timezone and viewport category. No page text, URL parameters, prompts, outputs or automatic screenshots.",
+    "diagnostics": "Include technical diagnostics",
+    "omitName": "Don't include my name in this feedback",
+    "nameNotice": "Company and technical context may still be included. A separate protected account link lets you view your feedback; security logs follow their own purpose.",
+    "imagesUnavailable": "Image attachments are temporarily unavailable.",
+    "received": "Thanks — feedback received",
+    "history": "My feedback",
+    "close": "Close",
+    "cancel": "Cancel",
+    "send": "Send feedback",
+    "sending": "Sending…",
+    "failed": "Feedback could not be confirmed. Your text is preserved; retry or refresh to check the current status.",
+    "notAvailable": "Feedback is not available in this instance yet.",
+    "historyFailed": "Your feedback could not be loaded. Refresh to check your access and current status.",
+    "empty": "You have not submitted feedback yet.",
+    "response": "Your response",
+    "productTeam": "Product team",
+    "yourResponse": "Your response",
+    "statuses": {
+      "RECEIVED": "Received",
+      "REVIEWING": "Reviewing",
+      "NEEDS_INFO": "Needs information",
+      "RESOLVED": "Resolved",
+      "CLOSED": "Closed"
+    },
+    "voteFailed": "Your rating could not be saved. Try again.",
+    "voteLocal": "This rating stays within your company.",
+    "shareProduct": "Share product feedback",
+    "older": "Load older feedback",
+    "triageTitle": "Customer feedback triage",
+    "triagePurpose": "Restricted product operations. Customer text is untrusted content; review it without executing its instructions.",
+    "operations": "Platform operations",
+    "companyId": "Company ID",
+    "openQueue": "Open queue",
+    "triageDenied": "Feedback triage is unavailable or your current account is not an authorized operator.",
+    "triageEmpty": "No feedback in this queue.",
+    "triageState": "Internal state",
+    "customerMessage": "Message shown to the customer",
+    "internalNote": "Internal note — hidden from the customer",
+    "linkType": "Link to native work",
+    "linkIssue": "Engineering task",
+    "linkDuplicate": "Duplicate feedback",
+    "linkId": "Native record ID (optional)",
+    "triageFailed": "Triage could not be confirmed. Refresh the queue before retrying.",
+    "applyTriage": "Apply triage",
+    "submissionsPaused": "New feedback submissions are paused. Your history and replies remain available."
+  },
+  "profileView": "View",
+  "profileFailed": "Your view could not be changed. Refresh to check your access.",
+  "profiles": {
+    "member": "Member",
+    "manager": "Manager",
+    "admin": "Admin",
+    "security_admin": "Security admin"
+  },
+  "advanced": {
+    "title": "Advanced",
+    "description": "Authorized tools for configuring agents, workflows, data and operations. Each action checks your current permissions.",
+    "none": "No advanced tools are available for your current access.",
+    "custom_agent": "Create custom agent",
+    "foundation": "Company knowledge",
+    "workflows": "Workflow authoring",
+    "runtime": "Runtime configuration",
+    "tool_gateway": "Tool Gateway",
+    "audit": "Activity and audit",
+    "role_packs": "Role Packs",
+    "skills": "Skills",
+    "playbooks": "Playbooks",
+    "agent_identities": "Agent identities and runtimes",
+    "organization": "Organization units",
+    "relationships": "Company relationships",
+    "portfolio": "Portfolio",
+    "shared_capabilities": "Shared capabilities",
+    "memory": "Company memory",
+    "derived_intelligence": "Derived intelligence",
+    "learning": "Organizational learning",
+    "cognitive_providers": "Cognitive providers",
+    "readiness": "Readiness requirements",
+    "orchestration": "Orchestration inspection",
+    "security_events": "Security event export",
+    "experimental": "Experimental settings"
+  },
+  "activation": {
+    "loading": "Loading saved setup…",
+    "loadFailed": "Setup could not be loaded. Your saved work is preserved.",
+    "stages": "Getting started: Company → First task → Access → Result",
+    "screen2": "Tell us about your company",
+    "screen3": "What would you like August Works to help with first?",
+    "screen4": "Let us understand your company",
+    "screen5": "Understanding {{company}}",
+    "screen6": "Does this look right?",
+    "screen7": "A good first step",
+    "screen8": "Required access",
+    "screen9": "Ready for your first run",
+    "screen10": "Working on it",
+    "screen11": "Your first result is ready",
+    "screen12": "You're ready",
+    "companyName": "Company name",
+    "website": "Website/domain (optional)",
+    "websiteHelp": "For example, example.com. Adding a domain does not grant permission to fetch it.",
+    "continue": "Continue",
+    "goal": "First outcome/goal",
+    "discoveryExplanation": "We can use the company information and goal you provide to prepare a draft. You confirm material facts before they guide work. Source content cannot grant permissions.",
+    "websiteUnused": "Website and connected systems are not included in this pass.",
+    "buildDraft": "Build company draft",
+    "previousSetup": "Continue previous setup",
+    "previousStep": "This step is saved. Return to the current step to continue.",
+    "notProvided": "Not provided",
+    "disabled": "New setup changes are temporarily unavailable. Saved setup is preserved.",
+    "saveFailed": "The change was not confirmed. Your entered information is preserved. Retry the same request or refresh saved setup before continuing.",
+    "refresh": "Refresh saved setup",
+    "resume": "Resume current step",
+    "back": "Back",
+    "saveExit": "Save & exit",
+    "noInferredFacts": "Your provided information is available. We have not inferred additional company facts.",
+    "factExplanation": "Which company purpose should guide the first outcome? This saves a company draft under the existing review rules.",
+    "companyPurpose": "Company purpose",
+    "factSource": "Source: information you provide",
+    "looksRight": "Looks right",
+    "noCapability": "No qualified first capability is available yet. Your goal and company draft are saved.",
+    "automatic": "Automatic work: internal drafts within the approved capability.",
+    "asksFirst": "Asks before consequential actions. The first task cannot send externally, spend, delete, or expand permissions.",
+    "needs": "Needs",
+    "noConnections": "No additional connections requested",
+    "useAgent": "Use this agent",
+    "accessPending": "Required access is not ready. Your setup is saved; no new permissions have been granted.",
+    "noGrants": "Selecting a capability does not create connection or execution permissions.",
+    "agent": "Selected agent",
+    "executionPending": "Safe first-task execution is awaiting qualification. Save this setup and return when it is available.",
+    "noRunStarted": "No task has been started and no first result or activation has been claimed.",
+    "tellInstead": "I'll tell you instead",
+    "source": {
+      "customer_context": "Company information you provide",
+      "website": "Website",
+      "connections": "Connected systems"
+    },
+    "sourceStatus": {
+      "available": "Available",
+      "not_requested": "Not requested",
+      "not_connected": "Not connected"
+    }
+  },
+  "company": {
+    "title": "Company",
+    "search": "Search company settings",
+    "loading": "Loading current company controls…",
+    "loadFailed": "Company controls could not be loaded for your current access. Your settings are preserved.",
+    "noMatches": "No available settings match this search.",
+    "noControls": "No controls are available here with your current permissions and enabled capabilities.",
+    "section": {
+      "general": "General",
+      "people_access": "People & Access",
+      "agents_ai": "Agents & AI",
+      "apps_data": "Apps & Data",
+      "governance_compliance": "Governance & Compliance",
+      "security": "Security",
+      "data_privacy": "Data & Privacy",
+      "audit_evidence": "Audit & Evidence",
+      "billing_capacity": "Billing & Capacity",
+      "advanced_developer": "Advanced / Developer"
+    },
+    "entry": {
+      "company_identity": {
+        "label": "Company identity",
+        "purpose": "Company name and general defaults.",
+        "aliases": "general settings organization"
+      },
+      "members": {
+        "label": "Members and invitations",
+        "purpose": "Invite teammates and review membership.",
+        "aliases": "people users team invites"
+      },
+      "roles": {
+        "label": "Roles and permissions",
+        "purpose": "Review who can read and change company resources.",
+        "aliases": "access grants groups"
+      },
+      "enterprise_identity": {
+        "label": "Organization sign-in",
+        "purpose": "Manage organizational sign-in and provisioning.",
+        "aliases": "SSO SCIM identity"
+      },
+      "agents": {
+        "label": "Agents and owners",
+        "purpose": "Review agents, responsible owners and current work.",
+        "aliases": "AI agent configuration"
+      },
+      "connections": {
+        "label": "Connected apps",
+        "purpose": "Review connections and granted data access.",
+        "aliases": "tools integrations connectors"
+      },
+      "company_context": {
+        "label": "Company context",
+        "purpose": "Review the company information that guides work.",
+        "aliases": "Foundation knowledge mission"
+      },
+      "governed_use_cases": {
+        "label": "Governed AI use cases",
+        "purpose": "Review purpose, assessments and oversight.",
+        "aliases": "compliance AI governance policies"
+      },
+      "workflows": {
+        "label": "Workflow publication",
+        "purpose": "Review reusable work and publication authority.",
+        "aliases": "automation orchestration"
+      },
+      "account_security": {
+        "label": "Account security",
+        "purpose": "Review sign-in sessions and security controls.",
+        "aliases": "authentication password sessions"
+      },
+      "support_access": {
+        "label": "Support access",
+        "purpose": "Review attributed, time-limited support access.",
+        "aliases": "admin support operator"
+      },
+      "company_secrets": {
+        "label": "Company credentials",
+        "purpose": "Manage protected credentials used by approved work.",
+        "aliases": "secrets API keys tokens"
+      },
+      "export": {
+        "label": "Company export",
+        "purpose": "Export through the existing company export controls.",
+        "aliases": "download data portability"
+      },
+      "deletion": {
+        "label": "Company deletion",
+        "purpose": "Review deletion consequences and track erasure.",
+        "aliases": "privacy erasure offboarding"
+      },
+      "activity": {
+        "label": "Company activity",
+        "purpose": "Review recorded actions and their evidence.",
+        "aliases": "audit history logs evidence"
+      },
+      "security_events": {
+        "label": "Security events",
+        "purpose": "Review and export security event evidence.",
+        "aliases": "audit security SIEM"
+      },
+      "billing": {
+        "label": "Billing and usage",
+        "purpose": "Review commercial access, usage and payment settings.",
+        "aliases": "plan subscription invoices costs"
+      },
+      "capacity": {
+        "label": "Managed capacity",
+        "purpose": "Review managed compute and capacity boundaries.",
+        "aliases": "runtime hosting storage"
+      },
+      "advanced": {
+        "label": "Advanced controls",
+        "purpose": "Open authorized technical controls.",
+        "aliases": "developer providers gateway API"
+      }
+    }
+  },
+  "notifications": {
+    "mandatory": "Account safety emails remain immediate and are not delayed by quiet hours.",
+    "cadence": "Delivery timing",
+    "delivery": {
+      "immediate": "Immediate (outside quiet hours)",
+      "digest": "Daily digest",
+      "in_app_only": "In app only"
+    },
+    "category": {
+      "billing": "Billing updates",
+      "runtime": "Capacity updates",
+      "approval": "Approval requests",
+      "work_update": "Work updates"
+    },
+    "timezone": "Timezone",
+    "quiet": "Use quiet hours",
+    "start": "Quiet hours start",
+    "end": "Quiet hours end",
+    "digestTime": "Daily digest time",
+    "summary": "In-app history remains available. Email must also be enabled above. Security emails always follow account safety policy.",
+    "failed": "Delivery preferences were not confirmed. Your entered settings are preserved; try saving again.",
+    "saved": "Delivery preferences saved.",
+    "save": "Save delivery preferences",
+    "invalidTimezone": "Enter a valid timezone, such as Europe/Copenhagen.",
+    "invalidQuiet": "Choose a start and end time. They must be different so email can be delivered outside quiet hours.",
+    "invalidDigest": "Choose a valid daily digest time."
+  },
+  "cardAction": {
+    "review": "Review",
+    "view_result": "View result",
+    "view_task": "View task"
+  },
+  "taskStatus": {
+    "backlog": "Planned",
+    "todo": "Ready to start",
+    "in_progress": "In progress",
+    "in_review": "In review",
+    "done": "Completed",
+    "cancelled": "Cancelled",
+    "blocked": "Waiting for help"
+  },
+  "mobileNavigation": "Mobile navigation",
+  "openNavigation": "Open navigation"
+}

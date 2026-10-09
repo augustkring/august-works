@@ -250,6 +250,10 @@ export async function eraseAccountAccess(
   email?: string,
   now = new Date(),
 ) {
+  // Erase this actor's feedback content and private ownership links together.
+  // The same path covers no-name submissions without exposing them to triage.
+  await tx.execute(sql`delete from customer_feedback where id in (select feedback_id from customer_feedback_access where user_id=${userId})`);
+  await tx.execute(sql`delete from ${authRateLimits} where key like ${"customer-feedback:" + sha256(JSON.stringify(userId)) + ":%"}`);
   await tx.execute(sql`delete from "session" where user_id=${userId}`);
   await tx.execute(sql`delete from "account" where user_id=${userId}`);
   await tx.execute(sql`delete from board_api_keys where user_id=${userId}`);
@@ -268,6 +272,7 @@ export async function eraseAccountAccess(
   await tx.execute(
     sql`delete from user_sidebar_preferences where user_id=${userId}`,
   );
+  await tx.execute(sql`delete from company_user_sidebar_preferences where user_id=${userId}`);
   await tx.execute(
     sql`delete from user_inbox_agent_policies where user_id=${userId}`,
   );

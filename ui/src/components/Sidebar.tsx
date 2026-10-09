@@ -54,9 +54,12 @@ import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "../lib/utils";
 import { PluginSlotOutlet } from "@/plugins/slots";
 import { PluginLauncherOutlet } from "@/plugins/launchers";
 import { SidebarCompanyMenu } from "./SidebarCompanyMenu";
+import { ExperienceNavigation } from "./ExperienceNavigation";
+import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { primarySidebarStyles } from "./primary-sidebar-styles";
 
 export function Sidebar({ children }: { children?: ReactNode }) {
+  const {enabled:experienceShell}=useV9FeatureEnabled("progressive_shell_v9");
   const { openNewIssue } = useDialogActions();
   const { enabled: agentChatEnabled } = useAgentChatEnabled();
   // Every labeled section is collapsible (session-scoped, default open) —
@@ -144,6 +147,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
       </div>
 
       <nav className={primarySidebarStyles.nav}>
+        {experienceShell ? <ExperienceNavigation/> : <>
         <div className={primarySidebarStyles.group}>
           {/* New Task button aligned with nav items */}
           {(() => {
@@ -333,6 +337,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           itemClassName="rounded-lg border border-border p-3"
           missingBehavior="placeholder"
         />
+        </>}
       </nav>
     </aside>
   );

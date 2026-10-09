@@ -1,0 +1,1154 @@
+{
+  "version": 1,
+  "briefSha256": "654824ed416706c02393153ba88d07b033aaa72332ad548b2123deef85228811",
+  "baseline": "b76141d317da78a43e5ab86b6f23ce731aeecc89",
+  "screenContractSchema": "packages/shared/src/experience.ts#experienceScreenContractSchema",
+  "globalContracts": [
+    "76.2",
+    "77.2",
+    "78.14",
+    "83",
+    "84",
+    "85.24",
+    "86"
+  ],
+  "releaseRule": "Every surface needs a resolved Screen Contract, implementation mapping and exact-artifact functional/accessibility/securityPrivacy/usability evidence. Source references alone do not pass release.",
+  "screens": [
+    {
+      "screenId": "ONB-01",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3625,
+        "endLine": 3641,
+        "sha256": "5910da50aea08ac8d2c249bf221a2c630a870a84ef53ece2fabbdf6266f5551f"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "ONB-02",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3642,
+        "endLine": 3660,
+        "sha256": "1d2605c3ebabdb92c054d3f5c68aa37e9594f15dce632f777dd9a46e9cb6b954"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-02.json"
+    },
+    {
+      "screenId": "ONB-03",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3661,
+        "endLine": 3679,
+        "sha256": "cc3f6d2a6fd84f85650dcf8c2e7c951a69631102b4fad50fb3f6d9990966f545"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-03.json"
+    },
+    {
+      "screenId": "ONB-04",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3680,
+        "endLine": 3696,
+        "sha256": "6ea3ef4b8b70696f0e1eb321d2c44b0f5dd5006cd61a0838cf22f14abb805744"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-04.json"
+    },
+    {
+      "screenId": "ONB-05",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3697,
+        "endLine": 3720,
+        "sha256": "8e4dc4fddfe0dee0addeb9c3a23184eb9dc9f55a7d0cbb18ed8bcb849fd74860"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-05.json"
+    },
+    {
+      "screenId": "ONB-06",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3721,
+        "endLine": 3740,
+        "sha256": "067a3cf824a5829850caa115f54cab890a8edf9650844ac2dc722b768e6c4aff"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-06.json"
+    },
+    {
+      "screenId": "ONB-07",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3741,
+        "endLine": 3760,
+        "sha256": "7e5c3d68c806456dc7b0a8903773ec9f7c020cb9ff5e7aa693d66c632c48a514"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-07.json"
+    },
+    {
+      "screenId": "ONB-08",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3761,
+        "endLine": 3787,
+        "sha256": "ec7e9e44907912eac13131f5b4d4655bc50e4fd58e616a706eb131b982963d52"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-08.json"
+    },
+    {
+      "screenId": "ONB-09",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3788,
+        "endLine": 3807,
+        "sha256": "ed7f7a97423a1eec0a184f333c1e8652ae7e71eb44b9bdc47d877867f037d49e"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-09.json"
+    },
+    {
+      "screenId": "ONB-10",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3808,
+        "endLine": 3820,
+        "sha256": "fbeaf95d8f74816e7b76d8ed35668ddd197aae122a4e931a692801f7eaf787d0"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "ONB-11",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3821,
+        "endLine": 3841,
+        "sha256": "56b43ca93c45aee5c6d0e80de9f296f19edc09071a830703e98549d7c1ba517b"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "ONB-12",
+      "journeyId": "onb",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3842,
+        "endLine": 3863,
+        "sha256": "ad889105261b5552a0cfd68bba7b18231c07af38a7ec05d96bcb40d4950e7b79"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "HIRE-01",
+      "journeyId": "hire",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3908,
+        "endLine": 3920,
+        "sha256": "52ea169dd185f42054fd7938ee8aa990cca1a8d26559e80203b50774a40c7da4"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "HIRE-02",
+      "journeyId": "hire",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3921,
+        "endLine": 3937,
+        "sha256": "e6f7ca5e864331197c0722897291ed49be74f4da3c6c4d1b0e0558bc9a7c712c"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "HIRE-03",
+      "journeyId": "hire",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3938,
+        "endLine": 3943,
+        "sha256": "efc04977e08557990fa8c5ae4468aad9b9add490bc5e25ac41e7f18db8ccb210"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "HIRE-04",
+      "journeyId": "hire",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3944,
+        "endLine": 3957,
+        "sha256": "f05232ed6a5ebbbf51403cf5f8cf6b16dfdf8e2afb2db29971078227b4c5eac7"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "HIRE-05",
+      "journeyId": "hire",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3958,
+        "endLine": 3967,
+        "sha256": "7bd890a6e0adb451a2b59a8cf3dd40a0f2ea2e91852f9b0c3ca2be9880f04f8c"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "HIRE-06",
+      "journeyId": "hire",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3968,
+        "endLine": 3983,
+        "sha256": "1e8f745b0f9a7a7f257b6c48eac044e8294c3f484f85a6e4d12e3b8e1c69eff0"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "HIRE-07",
+      "journeyId": "hire",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3984,
+        "endLine": 3995,
+        "sha256": "4b8a93cddc9fb01d16811ace3b196d4d3f8e59dcbf2a04c09bf568c1cf9b7792"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-01",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4004,
+        "endLine": 4014,
+        "sha256": "e20f068f48d7481488cd038ac5f629f6b2b567655b53d45bcb6c840f76220287"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-02",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4015,
+        "endLine": 4024,
+        "sha256": "131f37c40bf34f3763210b02f8903cd34b862aa43f32138913bdaaf8cfd48418"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-03",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4025,
+        "endLine": 4039,
+        "sha256": "c872dfacb34d2aa652f288b6d7416f7b1fee61bfe495740792f771eb2aebf64e"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-04",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4040,
+        "endLine": 4051,
+        "sha256": "12fb85949567f8bba2c0808450d9ceddc1ac20cfb546905bf67f6fa629641cee"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-05",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4052,
+        "endLine": 4066,
+        "sha256": "dfa5073b2bfd4c93bde0d67112973bf906c4c9d1872264fc908264ada8558510"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-06",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4067,
+        "endLine": 4080,
+        "sha256": "c273f89f0fb34e7fa56b0f64e1db1bdc2985e128128845669f9b028c2b133ae8"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-07",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4081,
+        "endLine": 4092,
+        "sha256": "1191d59b99c95b0d1d35f0ab45bb75bbb2fb8500e8fd497760d3d4f6292070d2"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-08",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4093,
+        "endLine": 4106,
+        "sha256": "fff1d306573b40e0124de40b968fd8445e0a4bb62be3af5683ded5fffa20c627"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-09",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4107,
+        "endLine": 4114,
+        "sha256": "5ce79717e1556cb387c3077e17120b45d31dfa66a74ba79fb13d2981eb0c6dac"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-10",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4115,
+        "endLine": 4131,
+        "sha256": "eca5b91d6eb2bcf315d3e8c0949225199823deb9ed3613bbbbfdf5a851e860ba"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-11",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4132,
+        "endLine": 4148,
+        "sha256": "ddc93620b3e081eee73177859fcc6c6c4d4e020352d752b79ca2a2505cf0b6e6"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-12",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4149,
+        "endLine": 4158,
+        "sha256": "c37baac3be034c7deebb4172b9a6e04c9702ee942164d53777870b50a6bb5ba4"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "CUSTOM-13",
+      "journeyId": "custom",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4159,
+        "endLine": 4172,
+        "sha256": "d690d103fa0931e64fa1e35388b0bef3de87744ea5476b5816d4a8545a47e8be"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SHELL",
+      "journeyId": "shell",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3479,
+        "endLine": 3494,
+        "sha256": "d008ef56109ba7479ca5c28272a0fe5c6e920d67c3d50a2157af4b6677cedd06"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/components/ExperienceUtilities.tsx",
+        "ui/src/components/ExperienceNavigation.tsx",
+        "ui/src/components/Layout.tsx",
+        "ui/src/components/ExperienceMobileNavigation.tsx",
+        "ui/src/components/MobileBottomNav.tsx",
+        "ui/src/lib/company-routes.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/shell.json"
+    },
+    {
+      "screenId": "HOME",
+      "journeyId": "daily",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3518,
+        "endLine": 3535,
+        "sha256": "381d8b0e290b0479db831c162d87bb743c7129929318fe717f30a456dd4f0dfb"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceHome.tsx",
+        "server/src/services/experience/service.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/home.json"
+    },
+    {
+      "screenId": "NEEDS-YOU",
+      "journeyId": "attention",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3536,
+        "endLine": 3563,
+        "sha256": "e306afa25c97ddca9b3cd198815ee686f441ef1e7dc50786b9e1e614c02a9522"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORK",
+      "journeyId": "work",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3564,
+        "endLine": 3576,
+        "sha256": "f7ec9d8c39283a5d2d1ff545f88bffd2d646f03741a7d58a00fe2a49cebc0562"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "APPS",
+      "journeyId": "apps",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3761,
+        "endLine": 3787,
+        "sha256": "ec7e9e44907912eac13131f5b4d4655bc50e4fd58e616a706eb131b982963d52"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "AGENT-MONITOR",
+      "journeyId": "agents",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4173,
+        "endLine": 4187,
+        "sha256": "d9aeee1049249a7b03a746d09beae23acf46d30dec878f23ddebe550657878b4"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "AGENT-CHANGE",
+      "journeyId": "agents",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4188,
+        "endLine": 4201,
+        "sha256": "87c46d6f3c178105447ef84ade1656b48b4243b0019328dbcdb4aac61f132411"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "AGENT-RETIRE",
+      "journeyId": "agents",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4202,
+        "endLine": 4217,
+        "sha256": "f09deebb804018c48baba9fdddc847454457c26160478217ae08321f544b67b4"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "ORCHESTRATION",
+      "journeyId": "orchestration",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4220,
+        "endLine": 4225,
+        "sha256": "5a2bce2da65516d1d0f2ec76f38e25ad515b7678fe7d833347a05ea47d09fc4f"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW",
+      "journeyId": "workflows",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4295,
+        "endLine": 4302,
+        "sha256": "79fbf875791184d073f36a3ce49bf954cf382493514de47e449d04dbd072a75a"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "COMPANY",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4476,
+        "endLine": 4494,
+        "sha256": "bf3085cf0b407c33dd064119c33c0b29b7d062d557e64d2304e92a5ca848aa39"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/company.json"
+    },
+    {
+      "screenId": "HELP-RECOVERY",
+      "journeyId": "support",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4664,
+        "endLine": 4675,
+        "sha256": "621b45ab1adfeac6a9eb7852ba981bf11153ad2159f5d109936e2a82e2de6f53"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "FEEDBACK",
+      "journeyId": "feedback",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4878,
+        "endLine": 4892,
+        "sha256": "46b16110af4f400ee749110f5ff9d5177725da87c70858d1118a582fef34dd63"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/components/CustomerFeedbackDialog.tsx",
+        "server/src/services/customer-feedback.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/feedback.json"
+    },
+    {
+      "screenId": "MY-FEEDBACK",
+      "journeyId": "feedback",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 5087,
+        "endLine": 5122,
+        "sha256": "25d81450670cad9d7c6f590d03662239e501d60effc6ba16947025852a64be86"
+      },
+      "criticality": "C2",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/MyFeedback.tsx",
+        "server/src/services/customer-feedback.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/my-feedback.json"
+    },
+    {
+      "screenId": "APPROVAL-CARD",
+      "journeyId": "attention",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 3536,
+        "endLine": 3563,
+        "sha256": "e306afa25c97ddca9b3cd198815ee686f441ef1e7dc50786b9e1e614c02a9522"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SETTINGS-GENERAL",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4482,
+        "endLine": 4482,
+        "sha256": "6827957e639ed78382cb66ec177e895063b016b31e30b3a2d1b66b26ff158772"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SETTINGS-PEOPLE-ACCESS",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4483,
+        "endLine": 4483,
+        "sha256": "1336d8c6432eebefc6f796fe15abe23f129cea9321692fe0fd9384cbf5b3ae3d"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SETTINGS-AGENTS-AI",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4484,
+        "endLine": 4484,
+        "sha256": "905b743f256bbfc825a2f1cf94944f2b18d03cf78ae1b2f7b8b491bb12361071"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SETTINGS-APPS-DATA",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4485,
+        "endLine": 4485,
+        "sha256": "a466908545f9625c727773bd37855c5e2fe87bd17359b0a6b245bc133e52e67a"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SETTINGS-GOVERNANCE-COMPLIANCE",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4486,
+        "endLine": 4486,
+        "sha256": "7d59138e4d4ff1499d09c2032597784fbaba223b7c6fa6846664a3db286b16d2"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SETTINGS-SECURITY",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4487,
+        "endLine": 4487,
+        "sha256": "89d9c3b47b4a93cd1be96659ae4dff49b8df73cca5a9dc389f801229092d2e1e"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SETTINGS-DATA-PRIVACY",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4488,
+        "endLine": 4488,
+        "sha256": "36c0b96b8ebd7263ca2c00ff935a53c69e31ac2ab04b852c4160201c598ec10a"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SETTINGS-AUDIT-EVIDENCE",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4489,
+        "endLine": 4489,
+        "sha256": "ea7f38338655048eb5fc8fff679a465ee232110279c292f05101b59756deeb3b"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SETTINGS-BILLING-CAPACITY",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4490,
+        "endLine": 4490,
+        "sha256": "2b714713d68b6ab72354324457e96fbabd592e5bc0f369db2b70f682af435b95"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "SETTINGS-ADVANCED-DEVELOPER",
+      "journeyId": "settings",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4491,
+        "endLine": 4491,
+        "sha256": "2a67f653808ccb9f865a1002341f394eb0ee6712e8a3ac08bcf87a4899ef325f"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-DESCRIBE",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4322,
+        "endLine": 4334,
+        "sha256": "2e390ef857a7c96ca50b007187cb13c4882a83e764983c006a900d0a9e01896a"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-DRAFT",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4335,
+        "endLine": 4346,
+        "sha256": "d0a1a4b39e1dcd3567d8a3ab37d9fa8119792cf7d40c7245c6d25aae93252aef"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-REVIEW",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4347,
+        "endLine": 4360,
+        "sha256": "1ed8d6ae8f692495f03c62137dbb301acd30c40c305237c2e150c1c7efe94416"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-ACCESS",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4361,
+        "endLine": 4366,
+        "sha256": "eb3f4948f9f63f3671aec7e0201bef61c6a69e0aef8c6026fe9b47e60253e253"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-APPROVAL",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4367,
+        "endLine": 4378,
+        "sha256": "e33a3b6d56e46639b2233179e77717ecdb972c231580238625a7bd33cd116891"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-TEST",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4379,
+        "endLine": 4391,
+        "sha256": "390fe2d30f9861a63820827a5560bbc283c31dee5744e8e5e8278ded6ef9c7d8"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-INSPECT",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4392,
+        "endLine": 4403,
+        "sha256": "220a07719a6d56b32ed1e3abe0df6e0ec8646357653b8e2ce2c78c2986266921"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-FIX",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4404,
+        "endLine": 4407,
+        "sha256": "127711cec8548b5d9e90831b2ada2f4af01b14c0ec39320f0fc6251c21d268aa"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-CHECK-PUBLISH",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4408,
+        "endLine": 4423,
+        "sha256": "70390e1b1f39f28c0625efecd3c378d48ab6b2c7bbee7f90cdf6854e7e1666cb"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-PUBLISH",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4424,
+        "endLine": 4439,
+        "sha256": "29e0912081af9c9d019c996964502787e4e5ca79db4e61ecef369e5da1803f42"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-OPERATE",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4440,
+        "endLine": 4453,
+        "sha256": "58e21fdedb3c74d47bafcdeaae531305c1fad6fa1dfd1cd38f1b60df8d3d81f9"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-RECOVER",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4454,
+        "endLine": 4461,
+        "sha256": "e0a04cef69ec2647add4b59071ed881695ffb94a74e22ad471eaef39ba284318"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    },
+    {
+      "screenId": "WORKFLOW-RETIRE",
+      "journeyId": "workflow",
+      "specification": {
+        "path": "doc/reference/aw-v9/brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md",
+        "startLine": 4462,
+        "endLine": 4471,
+        "sha256": "8e924d0d6ee09548bde8066993ef81c7c0b3309203b1a5feb21ca56ba35ceecc"
+      },
+      "criticality": "C3",
+      "owner": "August Works product and engineering",
+      "implementationStatus": "pending",
+      "componentPaths": [],
+      "evidenceRefs": []
+    }
+  ]
+}

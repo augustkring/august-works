@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Link, useSearchParams } from "@/lib/router";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { useAccountIdentity } from "@/api/companies-query";
+import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
+import { NotificationPolicySettings } from "../components/NotificationPolicySettings";
 
 export function SaasAccountPage() {
   const capabilities = useSaasCapabilities();
+  const interruptionPolicy=useV9FeatureEnabled("notification_policy_v9");
   const identity = useAccountIdentity();
   const { selectedCompanyId } = useCompany();
   const scope = identity.userId + ":" + selectedCompanyId;
@@ -136,13 +139,14 @@ export function SaasAccountPage() {
                 }
                 onChange={(event) =>
                   preference.mutate({
-                    ...item,
+                    category:item.category,
                     emailEnabled: event.target.checked,
                   })
                 }
               />
             </label>
           ))}
+          {interruptionPolicy.enabled&&selectedCompanyId&&identity.userId&&preferences.isSuccess?preferences.data.map(item=><NotificationPolicySettings key={`${scope}:${item.category}`} item={item} companyId={selectedCompanyId} principal={identity.userId!} onSaved={()=>{if(currentScope.current===scope)void preferences.refetch();}}/>):null}
         </section>
       )}
       <Link className="saas-link" to="/saas/reset-password">

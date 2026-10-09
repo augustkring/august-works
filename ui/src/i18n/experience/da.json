@@ -1,0 +1,373 @@
+{
+  "home": "Hjem",
+  "ask": "Spørg August",
+  "needsYou": "Kræver dig",
+  "inProgress": "I gang",
+  "done": "Færdigt",
+  "watch": "Hold øje",
+  "caughtUp": "Der er ikke noget, der kræver din opmærksomhed lige nu.",
+  "partial": "Nogle oplysninger er midlertidigt utilgængelige. Tilgængeligt arbejde vises nedenfor.",
+  "unavailable": "Midlertidigt utilgængelig",
+  "tryAgain": "Prøv igen",
+  "loading": "Henter aktuelt arbejde…",
+  "loadFailed": "Hjem kunne ikke indlæses. Dit arbejde er bevaret.",
+  "selectCompany": "Vælg en virksomhed for at se dit arbejde.",
+  "refreshRequired": "Opdatér før du udfører en handling.",
+  "checkedAt": "Kontrolleret kl. {{time}}",
+  "navigation": "Virksomhedens navigation",
+  "navigationLimited": "Yderligere navigation kunne ikke hentes. Prøv Hjem igen.",
+  "help": "Hjælp / Support",
+  "domain": {
+    "tasks": "Arbejde",
+    "attention": "Kræver dig"
+  },
+  "nav": {
+    "home": "Hjem",
+    "needs_you": "Kræver dig",
+    "work": "Arbejde",
+    "agents": "Agenter",
+    "apps": "Apps",
+    "insights": "Indsigter",
+    "company": "Virksomhed"
+  },
+  "insightsDenied": "Indsigter er tilgængelige i din godkendte ledelsesvisning.",
+  "noInsights": "Der er endnu ingen indsigter.",
+  "insights": {
+    "metrics": "Virksomhedens resultater",
+    "process": "Sådan bevæger arbejdet sig",
+    "forecasts": "Prognoser",
+    "scenarios": "Scenarier",
+    "reviews": "Ledelsesgennemgange"
+  },
+  "utilities": "Globale funktioner",
+  "user": "Brugerkonto",
+  "feedback": {
+    "action": "Feedback",
+    "title": "Del feedback",
+    "description": "Fortæl os, hvad der gik galt, eller hvad der kunne gøre August Works bedre. Her behandles ikke akut support.",
+    "support": "Brug for hjælp nu? Kontakt support",
+    "security": "Sikkerhedsproblem? Kontakt sikkerhed",
+    "privacy": "Privatlivsproblem? Kontakt privatliv",
+    "category": "Kategori",
+    "categories": {
+      "BUG": "Noget virker ikke",
+      "IMPROVEMENT": "Noget kunne være lettere",
+      "IDEA": "Jeg har en idé",
+      "OTHER": "Anden feedback"
+    },
+    "questions": {
+      "BUG": "Hvad skete der?",
+      "IMPROVEMENT": "Hvad kunne være lettere eller bedre?",
+      "IDEA": "Hvad vil du gerne have August Works til at hjælpe dig med?",
+      "OTHER": "Hvad vil du gerne fortælle os?"
+    },
+    "goals": {
+      "BUG": "Hvad prøvede du at gøre? (valgfrit)",
+      "IMPROVEMENT": "Hvad prøvede du at opnå? (valgfrit)",
+      "IDEA": "Hvorfor ville det hjælpe? (valgfrit)"
+    },
+    "blocksWork": "Dette forhindrer mig i at færdiggøre mit arbejde",
+    "context": "Medtages automatisk",
+    "contextDetails": "Virksomhed, sidekategori, udgivelsesversion, tidspunkt, sprog, tidszone og skærmstørrelseskategori. Ingen sidetekst, URL-parametre, prompts, output eller automatiske skærmbilleder.",
+    "diagnostics": "Medtag teknisk diagnostik",
+    "omitName": "Medtag ikke mit navn i denne feedback",
+    "nameNotice": "Virksomhed og teknisk kontekst kan stadig medtages. En separat beskyttet kontorelation giver dig adgang til din feedback; sikkerhedslogning har sit eget formål.",
+    "imagesUnavailable": "Billedvedhæftninger er midlertidigt utilgængelige.",
+    "received": "Tak — din feedback er modtaget",
+    "history": "Min feedback",
+    "close": "Luk",
+    "cancel": "Annuller",
+    "send": "Send feedback",
+    "sending": "Sender…",
+    "failed": "Din feedback kunne ikke bekræftes. Din tekst er bevaret; prøv igen eller opdatér for at kontrollere status.",
+    "notAvailable": "Feedback er endnu ikke tilgængelig i denne installation.",
+    "historyFailed": "Din feedback kunne ikke hentes. Opdatér for at kontrollere adgang og status.",
+    "empty": "Du har endnu ikke sendt feedback.",
+    "response": "Dit svar",
+    "productTeam": "Produktteamet",
+    "yourResponse": "Dit svar",
+    "statuses": {
+      "RECEIVED": "Modtaget",
+      "REVIEWING": "Gennemgås",
+      "NEEDS_INFO": "Mangler oplysninger",
+      "RESOLVED": "Løst",
+      "CLOSED": "Lukket"
+    },
+    "voteFailed": "Din vurdering kunne ikke gemmes. Prøv igen.",
+    "voteLocal": "Denne vurdering bliver i din virksomhed.",
+    "shareProduct": "Del produktfeedback",
+    "older": "Hent ældre feedback",
+    "triageTitle": "Behandling af kundefeedback",
+    "triagePurpose": "Begrænset produktdrift. Kundetekst er ikke betroede instruktioner; gennemgå den uden at udføre dens anvisninger.",
+    "operations": "Platformdrift",
+    "companyId": "Virksomheds-ID",
+    "openQueue": "Åbn kø",
+    "triageDenied": "Feedbackbehandling er utilgængelig, eller din konto er ikke en godkendt operatør.",
+    "triageEmpty": "Ingen feedback i denne kø.",
+    "triageState": "Intern tilstand",
+    "customerMessage": "Besked, som vises til kunden",
+    "internalNote": "Intern note — skjult for kunden",
+    "linkType": "Knyt til eksisterende arbejde",
+    "linkIssue": "Udviklingsopgave",
+    "linkDuplicate": "Dublet af feedback",
+    "linkId": "Postens ID (valgfrit)",
+    "triageFailed": "Behandlingen kunne ikke bekræftes. Opdatér køen før et nyt forsøg.",
+    "applyTriage": "Anvend behandling",
+    "submissionsPaused": "Nye feedbackindsendelser er sat på pause. Din historik og dine svar er stadig tilgængelige."
+  },
+  "profileView": "Visning",
+  "profileFailed": "Din visning kunne ikke ændres. Opdatér for at kontrollere din adgang.",
+  "profiles": {
+    "member": "Medlem",
+    "manager": "Leder",
+    "admin": "Administrator",
+    "security_admin": "Sikkerhedsadministrator"
+  },
+  "advanced": {
+    "title": "Avanceret",
+    "description": "Godkendte værktøjer til agenter, arbejdsgange, data og drift. Hver handling kontrollerer dine aktuelle rettigheder.",
+    "none": "Ingen avancerede værktøjer er tilgængelige med din aktuelle adgang.",
+    "custom_agent": "Opret tilpasset agent",
+    "foundation": "Virksomhedens viden",
+    "workflows": "Opret arbejdsgange",
+    "runtime": "Kørselsmiljø",
+    "tool_gateway": "Værktøjsadgang",
+    "audit": "Aktivitet og revisionsspor",
+    "role_packs": "Rollepakker",
+    "skills": "Kompetencer",
+    "playbooks": "Playbooks",
+    "agent_identities": "Agentidentiteter og runtime",
+    "organization": "Organisationsenheder",
+    "relationships": "Virksomhedsrelationer",
+    "portfolio": "Portefølje",
+    "shared_capabilities": "Delte kompetencer",
+    "memory": "Virksomhedshukommelse",
+    "derived_intelligence": "Afledt indsigt",
+    "learning": "Organisatorisk læring",
+    "cognitive_providers": "Kognitive udbydere",
+    "readiness": "Parathedskrav",
+    "orchestration": "Inspektion af orkestrering",
+    "security_events": "Eksport af sikkerhedshændelser",
+    "experimental": "Eksperimentelle indstillinger"
+  },
+  "activation": {
+    "loading": "Indlæser gemt opsætning…",
+    "loadFailed": "Opsætningen kunne ikke indlæses. Dit gemte arbejde er bevaret.",
+    "stages": "Kom i gang: Virksomhed → Første opgave → Adgang → Resultat",
+    "screen2": "Fortæl os om din virksomhed",
+    "screen3": "Hvad vil du først have August Works til at hjælpe med?",
+    "screen4": "Lad os forstå din virksomhed",
+    "screen5": "Vi lærer {{company}} at kende",
+    "screen6": "Ser det rigtigt ud?",
+    "screen7": "Et godt første skridt",
+    "screen8": "Nødvendig adgang",
+    "screen9": "Klar til din første opgave",
+    "screen10": "Vi arbejder på det",
+    "screen11": "Dit første resultat er klar",
+    "screen12": "Du er klar",
+    "companyName": "Virksomhedsnavn",
+    "website": "Hjemmeside/domæne (valgfrit)",
+    "websiteHelp": "For eksempel example.com. Et domæne giver ikke tilladelse til at hente hjemmesiden.",
+    "continue": "Fortsæt",
+    "goal": "Første ønskede resultat",
+    "discoveryExplanation": "Vi kan bruge virksomhedsoplysningerne og målet, du angiver, til et udkast. Du bekræfter væsentlige fakta, før de styrer arbejdet. Kildeindhold kan ikke give tilladelser.",
+    "websiteUnused": "Hjemmesiden og tilsluttede systemer indgår ikke i denne gennemgang.",
+    "buildDraft": "Lav virksomhedsudkast",
+    "previousSetup": "Fortsæt tidligere opsætning",
+    "previousStep": "Dette trin er gemt. Gå til det aktuelle trin for at fortsætte.",
+    "notProvided": "Ikke angivet",
+    "disabled": "Nye ændringer i opsætningen er midlertidigt utilgængelige. Den gemte opsætning er bevaret.",
+    "saveFailed": "Ændringen er ikke bekræftet. Dine indtastninger er bevaret. Prøv samme anmodning igen, eller genindlæs den gemte opsætning, før du fortsætter.",
+    "refresh": "Genindlæs gemt opsætning",
+    "resume": "Fortsæt aktuelt trin",
+    "back": "Tilbage",
+    "saveExit": "Gem og afslut",
+    "noInferredFacts": "Dine oplysninger er tilgængelige. Vi har ikke udledt yderligere fakta om virksomheden.",
+    "factExplanation": "Hvilket formål for virksomheden skal styre det første resultat? Dette gemmer et virksomhedsudkast under de eksisterende regler for gennemgang.",
+    "companyPurpose": "Virksomhedens formål",
+    "factSource": "Kilde: oplysninger, du angiver",
+    "looksRight": "Det ser rigtigt ud",
+    "noCapability": "Der er endnu ingen kvalificeret første funktion tilgængelig. Dit mål og virksomhedsudkast er gemt.",
+    "automatic": "Automatisk arbejde: interne udkast inden for den godkendte funktion.",
+    "asksFirst": "Spørger før handlinger med væsentlige konsekvenser. Den første opgave kan ikke sende eksternt, bruge penge, slette eller udvide tilladelser.",
+    "needs": "Kræver",
+    "noConnections": "Der anmodes ikke om yderligere forbindelser",
+    "useAgent": "Brug denne agent",
+    "accessPending": "Den nødvendige adgang er ikke klar. Din opsætning er gemt; ingen nye tilladelser er givet.",
+    "noGrants": "Valg af en funktion giver ikke tilladelser til forbindelser eller udførelse.",
+    "agent": "Valgt agent",
+    "executionPending": "Sikker udførelse af den første opgave afventer kvalificering. Gem opsætningen, og vend tilbage, når udførelse er tilgængelig.",
+    "noRunStarted": "Ingen opgave er startet, og der er ikke registreret et første resultat eller en aktivering.",
+    "tellInstead": "Jeg fortæller det selv",
+    "source": {
+      "customer_context": "Virksomhedsoplysninger, du angiver",
+      "website": "Hjemmeside",
+      "connections": "Tilsluttede systemer"
+    },
+    "sourceStatus": {
+      "available": "Tilgængelig",
+      "not_requested": "Ikke anmodet",
+      "not_connected": "Ikke tilsluttet"
+    }
+  },
+  "company": {
+    "title": "Virksomhed",
+    "search": "Søg i virksomhedsindstillinger",
+    "loading": "Indlæser aktuelle virksomhedskontroller…",
+    "loadFailed": "Virksomhedskontroller kunne ikke indlæses med din aktuelle adgang. Dine indstillinger er bevaret.",
+    "noMatches": "Ingen tilgængelige indstillinger matcher søgningen.",
+    "noControls": "Ingen kontroller er tilgængelige her med dine aktuelle tilladelser og aktiverede funktioner.",
+    "section": {
+      "general": "Generelt",
+      "people_access": "Personer og adgang",
+      "agents_ai": "Agenter og AI",
+      "apps_data": "Apps og data",
+      "governance_compliance": "Styring og efterlevelse",
+      "security": "Sikkerhed",
+      "data_privacy": "Data og privatliv",
+      "audit_evidence": "Audit og dokumentation",
+      "billing_capacity": "Betaling og kapacitet",
+      "advanced_developer": "Avanceret / udvikler"
+    },
+    "entry": {
+      "company_identity": {
+        "label": "Virksomhedsidentitet",
+        "purpose": "Virksomhedsnavn og generelle standarder.",
+        "aliases": "generelt indstillinger organisation"
+      },
+      "members": {
+        "label": "Medlemmer og invitationer",
+        "purpose": "Invitér kolleger og gennemgå medlemskab.",
+        "aliases": "personer brugere team invitationer"
+      },
+      "roles": {
+        "label": "Roller og tilladelser",
+        "purpose": "Gennemgå hvem der kan læse og ændre virksomhedens ressourcer.",
+        "aliases": "adgang tildelinger grupper"
+      },
+      "enterprise_identity": {
+        "label": "Organisationslogin",
+        "purpose": "Administrér organisationslogin og klargøring.",
+        "aliases": "SSO SCIM identitet"
+      },
+      "agents": {
+        "label": "Agenter og ejere",
+        "purpose": "Gennemgå agenter, ansvarlige ejere og aktuelt arbejde.",
+        "aliases": "AI agent opsætning"
+      },
+      "connections": {
+        "label": "Tilsluttede apps",
+        "purpose": "Gennemgå forbindelser og tildelt dataadgang.",
+        "aliases": "værktøjer integrationer forbindelser"
+      },
+      "company_context": {
+        "label": "Virksomhedskontekst",
+        "purpose": "Gennemgå virksomhedsoplysningerne, der styrer arbejdet.",
+        "aliases": "Foundation viden mission"
+      },
+      "governed_use_cases": {
+        "label": "AI-anvendelser under styring",
+        "purpose": "Gennemgå formål, vurderinger og tilsyn.",
+        "aliases": "efterlevelse AI styring politikker"
+      },
+      "workflows": {
+        "label": "Publicering af workflows",
+        "purpose": "Gennemgå genbrugeligt arbejde og tilladelse til publicering.",
+        "aliases": "automatisering orkestrering"
+      },
+      "account_security": {
+        "label": "Kontosikkerhed",
+        "purpose": "Gennemgå login-sessioner og sikkerhedskontroller.",
+        "aliases": "autentificering adgangskode sessioner"
+      },
+      "support_access": {
+        "label": "Supportadgang",
+        "purpose": "Gennemgå navngiven og tidsbegrænset supportadgang.",
+        "aliases": "administrator support operatør"
+      },
+      "company_secrets": {
+        "label": "Virksomhedens legitimationsoplysninger",
+        "purpose": "Administrér beskyttede legitimationsoplysninger til godkendt arbejde.",
+        "aliases": "hemmeligheder API nøgler tokens"
+      },
+      "export": {
+        "label": "Virksomhedseksport",
+        "purpose": "Eksportér via virksomhedens eksisterende eksportkontroller.",
+        "aliases": "download data portabilitet"
+      },
+      "deletion": {
+        "label": "Sletning af virksomhed",
+        "purpose": "Gennemgå sletningens konsekvenser og følg sletningen.",
+        "aliases": "privatliv sletning afslutning"
+      },
+      "activity": {
+        "label": "Virksomhedsaktivitet",
+        "purpose": "Gennemgå registrerede handlinger og dokumentationen.",
+        "aliases": "audit historik logs dokumentation"
+      },
+      "security_events": {
+        "label": "Sikkerhedshændelser",
+        "purpose": "Gennemgå og eksportér dokumentation for sikkerhedshændelser.",
+        "aliases": "audit sikkerhed SIEM"
+      },
+      "billing": {
+        "label": "Betaling og forbrug",
+        "purpose": "Gennemgå kommerciel adgang, forbrug og betalingsindstillinger.",
+        "aliases": "plan abonnement fakturaer omkostninger"
+      },
+      "capacity": {
+        "label": "Administreret kapacitet",
+        "purpose": "Gennemgå administreret beregning og kapacitetsgrænser.",
+        "aliases": "runtime hosting lagring"
+      },
+      "advanced": {
+        "label": "Avancerede kontroller",
+        "purpose": "Åbn tekniske kontroller, du har adgang til.",
+        "aliases": "udvikler udbydere gateway API"
+      }
+    }
+  },
+  "notifications": {
+    "mandatory": "E-mails om kontosikkerhed sendes straks og forsinkes ikke af stilleperioder.",
+    "cadence": "Leveringstidspunkt",
+    "delivery": {
+      "immediate": "Straks (uden for stilleperioder)",
+      "digest": "Daglig opsamling",
+      "in_app_only": "Kun i appen"
+    },
+    "category": {
+      "billing": "Betalingsopdateringer",
+      "runtime": "Kapacitetsopdateringer",
+      "approval": "Godkendelsesanmodninger",
+      "work_update": "Arbejdsopdateringer"
+    },
+    "timezone": "Tidszone",
+    "quiet": "Brug stilleperioder",
+    "start": "Stilleperiode starter",
+    "end": "Stilleperiode slutter",
+    "digestTime": "Tidspunkt for daglig opsamling",
+    "summary": "Historikken i appen er stadig tilgængelig. E-mail skal også være aktiveret ovenfor. Sikkerhedsmails følger altid politikken for kontosikkerhed.",
+    "failed": "Leveringspræferencerne blev ikke bekræftet. Dine indtastninger er bevaret; prøv at gemme igen.",
+    "saved": "Leveringspræferencer gemt.",
+    "save": "Gem leveringspræferencer",
+    "invalidTimezone": "Indtast en gyldig tidszone, f.eks. Europe/Copenhagen.",
+    "invalidQuiet": "Vælg et start- og sluttidspunkt. De skal være forskellige, så e-mail kan leveres uden for stilleperioden.",
+    "invalidDigest": "Vælg et gyldigt tidspunkt for den daglige opsummering."
+  },
+  "cardAction": {
+    "review": "Gennemgå",
+    "view_result": "Se resultat",
+    "view_task": "Se opgave"
+  },
+  "taskStatus": {
+    "backlog": "Planlagt",
+    "todo": "Klar til start",
+    "in_progress": "I gang",
+    "in_review": "Under gennemgang",
+    "done": "Afsluttet",
+    "cancelled": "Annulleret",
+    "blocked": "Afventer hjælp"
+  },
+  "mobileNavigation": "Mobilnavigation",
+  "openNavigation": "Åbn navigation"
+}

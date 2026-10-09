@@ -96,9 +96,15 @@ import { CompanyActivity } from "./pages/audit/CompanyActivity";
 import { AuditHub } from "./pages/audit/AuditHub";
 import { Inbox } from "./pages/Inbox";
 import { WhatNeedsMe } from "./pages/WhatNeedsMe";
+import { DashboardEntry } from "./pages/ExperienceHome";
+import { ExperienceInsights } from "./pages/ExperienceInsights";
+import { MyFeedback } from "./pages/MyFeedback";
+import { FeedbackTriage } from "./pages/FeedbackTriage";
+import { ExperienceAdvanced } from "./pages/ExperienceAdvanced";
 import { DecisionQueuePage } from "./pages/DecisionQueuePage";
 import { BoardChat } from "./pages/BoardChat";
 import { CompanySettings } from "./pages/CompanySettings";
+import { CompanySettingsEntry } from "./pages/ExperienceCompany";
 import { CompanyEnvironments } from "./pages/CompanyEnvironments";
 import { BootstrapSetupUxLab } from "./pages/BootstrapSetupUxLab";
 import { ResponsibleUserDenialUxLab } from "./pages/ResponsibleUserDenialUxLab";
@@ -137,7 +143,7 @@ import { PluginPage } from "./pages/PluginPage";
 import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
 import { SaasOperationsPage } from "./pages/SaasOperations";
-import { SaasWelcomePage } from "./pages/SaasWelcome";
+import { SaasWelcomeEntry, ActivationPage } from "./pages/Activation";
 import { SaasRuntimesPage } from "./pages/SaasRuntimes";
 import { SaasSupportPage } from "./pages/SaasSupport";
 import { SaasDeletionPage } from "./pages/SaasDeletion";
@@ -201,7 +207,11 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="work" element={<Navigate to="/issues" replace />} />
       <Route path="connections" element={<Navigate to="/apps" replace />} />
       <Route path="governance" element={<Governance />} />
-      <Route path="dashboard" element={<Dashboard />} />
+      <Route path="dashboard" element={<DashboardEntry />} />
+      <Route path="needs-you" element={<WhatNeedsMe />} />
+      <Route path="insights" element={<ExperienceInsights />} />
+      <Route path="advanced" element={<ExperienceAdvanced />} />
+      <Route path="my-feedback" element={<MyFeedback />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
       <Route
         path="timeline"
@@ -209,7 +219,8 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       />
       <Route path="onboarding" element={<OnboardingRoutePage />} />
       <Route path="companies" element={<Companies />} />
-      <Route path="company/settings" element={<CompanySettings />} />
+      <Route path="company/settings" element={<CompanySettingsEntry />} />
+      <Route path="company/settings/general" element={<CompanySettings />} />
       <Route path="company/settings/enterprise" element={<V7FeatureGate feature="enterprise_identity_v7"><Enterprise /></V7FeatureGate>} />
       <Route path="company/settings/security-events" element={<V7FeatureGate feature="security_event_export_v7"><SecurityEvents /></V7FeatureGate>} />
       <Route path="company/settings/billing" element={<SaasBillingPage />} />
@@ -680,7 +691,7 @@ export function OnboardingRoutePage() {
   const matchedCompany = companyPrefix
     ? companies.find((company) => company.issuePrefix.toUpperCase() === companyPrefix.toUpperCase()) ?? null
     : null;
-  if (saas.data?.onboarding) return <SaasWelcomePage />;
+  if (saas.data?.onboarding) return <SaasWelcomeEntry />;
   // The OnboardingWizard auto-opens on this route (and can also be opened
   // explicitly). While it is showing it covers the whole screen, so the
   // launcher card below must not stay interactive behind it — otherwise users
@@ -873,7 +884,9 @@ export function App() {
         <Route path="oauth-handoff" element={<PaperclipCloudOAuthHandoffPage />} />
         <Route path="auth" element={<AuthPage />} />
         <Route path="saas/operations" element={<SaasOperationsPage />} />
-        <Route path="saas/welcome" element={<SaasWelcomePage />} />
+        <Route path="saas/feedback" element={<FeedbackTriage />} />
+        <Route path="saas/welcome" element={<SaasWelcomeEntry />} />
+        <Route path="saas/activation/:screen?" element={<ActivationPage />} />
         <Route path="saas/reset-password" element={<SaasResetPasswordPage />} />
         <Route path="board-claim/:token" element={<BoardClaimPage />} />
         <Route path="cli-auth/:id" element={<CliAuthPage />} />
@@ -891,6 +904,10 @@ export function App() {
         <Route element={streamlinedUiLoaded ? <CloudAccessGate /> : <PaperclipLoading />}>
           <Route index element={<CompanyRootRedirect />} />
           <Route path="onboarding" element={<OnboardingRoutePage />} />
+          <Route path="needs-you" element={<UnprefixedBoardRedirect />} />
+          <Route path="insights" element={<UnprefixedBoardRedirect />} />
+          <Route path="advanced" element={<UnprefixedBoardRedirect />} />
+          <Route path="my-feedback" element={<UnprefixedBoardRedirect />} />
           <Route path="instance" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings/*" element={<LegacySettingsRedirect />} />

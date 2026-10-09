@@ -17,6 +17,15 @@ import { queryKeys } from "../lib/queryKeys";
 import { isAnalyticalSourceAccessLost } from "../api/client";
 
 describe("LiveUpdatesProvider issue invalidation", () => {
+  it("clears this company's Home projection when current membership changes", () => {
+    const client=new QueryClient();
+    client.setQueryData(["experience","company-1","user-1"],{profile:"admin",title:"Private work"});
+    client.setQueryData(["experience","company-2","user-1"],{title:"Independent work"});
+    __liveUpdatesTestUtils.invalidateActivityQueries(client,"company-1",{entityType:"company_membership",action:"company_membership.updated"},{userId:"user-1",agentId:null},{isForegrounded:false});
+    expect(client.getQueryData(["experience","company-1","user-1"])).toBeUndefined();
+    expect(client.getQueryData(["experience","company-2","user-1"])).toEqual({title:"Independent work"});
+    client.clear();
+  });
   it("immediately removes the affected native chat and run payloads while preserving independent cached work", async () => {
     const client = new QueryClient();
     const chat = { id: "chat-1", companyId: "company-1", identifier: "PAP-1" };
@@ -447,6 +456,7 @@ describe("LiveUpdatesProvider issue invalidation", () => {
         invalidations.push(input);
       },
       getQueryData: () => undefined,
+      getQueryCache: () => ({ findAll: () => [] }),
     };
 
     __liveUpdatesTestUtils.invalidateActivityQueries(

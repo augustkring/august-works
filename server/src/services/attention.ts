@@ -163,6 +163,8 @@ type AttentionListOptions = AttentionFeedQuery & {
 type AttentionServiceOptions = {
   openDecisionLimit?: number;
   now?: () => number;
+  /** Projection callers must not seed canonical queue state as a read side effect. */
+  materializeQueues?: boolean;
 };
 
 function emptyCounts(): Record<AttentionSourceKind, number> {
@@ -1869,7 +1871,7 @@ export function attentionService(db: Db, serviceOptions: AttentionServiceOptions
       }
 
       const collectedItems = [...deduped.values()].sort(compareAttentionItems);
-      await decisionQueueService(db).materializeSeededQueues(companyId, collectedItems);
+      if(serviceOptions.materializeQueues!==false)await decisionQueueService(db).materializeSeededQueues(companyId, collectedItems);
       const enrichedItems = await enrichAttentionItems(db, companyId, collectedItems, now);
 
       const activitySince = parseActivityBoundary(options.activitySince, "activitySince");

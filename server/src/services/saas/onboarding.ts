@@ -24,6 +24,7 @@ import {
   createSaasCompanySchema,
   updateOnboardingSchema,
   PERMISSION_KEYS,
+  initialActivationState, v9FeatureEnabled,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import {
@@ -35,6 +36,7 @@ import { entitlementService } from "../billing/entitlements.js";
 import { sha256 } from "./crypto.js";
 import { foundationService } from "../foundation/foundation-service.js";
 import type { z } from "zod";
+import { instanceSettingsService } from "../instance-settings.js";
 
 const STAGES = [
   "organization",
@@ -54,6 +56,7 @@ export function saasOnboardingService(db: Db) {
       JSON.stringify({
         name: input.name,
         description: input.description ?? null,
+        ...(input.activation ? {activation:input.activation} : {}),
       }),
     );
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -84,6 +87,8 @@ export function saasOnboardingService(db: Db) {
               throw conflict("Idempotency key has a different request");
             return existing;
           }
+          if (input.activation && !v9FeatureEnabled(await instanceSettingsService(tx as unknown as Db).getExperimental(), "activation_v9"))
+            throw notFound("Intent-first activation is not enabled");
           const owned = await tx
             .select({ id: companyMemberships.id })
             .from(companyMemberships)
@@ -142,6 +147,7 @@ export function saasOnboardingService(db: Db) {
               createdByUserId: userId,
               idempotencyKey: input.idempotencyKey,
               requestHash,
+              ...(input.activation ? {activationState:initialActivationState(input.activation.website),currentStage:"v9_intent"} : {}),
             })
             .returning();
           await tx.insert(activityLog).values({
@@ -183,6 +189,7 @@ export function saasOnboardingService(db: Db) {
     )
       throw unprocessable("First-agent creation evidence is server-owned");
     const current = await get(companyId);
+    if (current.activationState) throw conflict("Continue this setup in the current activation flow", {code:"ACTIVATION_FLOW_REQUIRED"});
     const from = STAGES.indexOf(current.currentStage),
       to = STAGES.indexOf(input.stage);
     if (
@@ -390,6 +397,7 @@ export function saasOnboardingService(db: Db) {
         .where(eq(companyOnboardingRuns.companyId, companyId))
         .for("update");
       if (!run) throw notFound("Onboarding not found");
+      if (run.activationState) throw conflict("Continue this setup in the current activation flow", {code:"ACTIVATION_FLOW_REQUIRED"});
       const name = input.name.trim();
       if (!name || name.length > 100)
         throw unprocessable("Agent name must contain 1–100 characters");

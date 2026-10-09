@@ -106,6 +106,12 @@ export function CommandPalette() {
   const fileViewerEnabled = experimentalSettings?.enableExperimentalFileViewer === true;
 
   useEffect(() => {
+    const show = () => { setOpen(true); if(isMobile) setSidebarOpen(false); };
+    document.addEventListener("paperclip:open-command",show);
+    return () => document.removeEventListener("paperclip:open-command",show);
+  }, [isMobile,setSidebarOpen]);
+
+  useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();

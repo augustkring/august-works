@@ -13,6 +13,8 @@ import { SIDEBAR_SCROLL_RESET_STATE } from "../lib/navigation-scroll";
 import { cn } from "../lib/utils";
 import { useInboxBadge } from "../hooks/useInboxBadge";
 import { Badge } from "@/components/ui/badge";
+import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
+import { ExperienceMobileNavigation } from "./ExperienceMobileNavigation";
 
 interface MobileBottomNavProps {
   visible: boolean;
@@ -36,6 +38,11 @@ interface MobileNavActionItem {
 type MobileNavItem = MobileNavLinkItem | MobileNavActionItem;
 
 export function MobileBottomNav({ visible }: MobileBottomNavProps) {
+  const feature = useV9FeatureEnabled("progressive_shell_v9");
+  return feature.enabled ? <ExperienceMobileNavigation visible={visible} /> : <LegacyMobileBottomNav visible={visible} />;
+}
+
+function LegacyMobileBottomNav({ visible }: MobileBottomNavProps) {
   const location = useLocation();
   const { selectedCompanyId } = useCompany();
   const { openNewIssue } = useDialogActions();
