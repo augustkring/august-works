@@ -18,7 +18,8 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { experienceService } from "./service.js";
 import { withExperienceAdmission } from "./admission.js";
 import { visibleIssueCondition } from "../issue-visibility.js";
-import { notFound } from "../../errors.js";
+import { conflict, forbidden, notFound } from "../../errors.js";
+import { isDeepStrictEqual } from "node:util";
 
 export async function experienceCommands(
   db: Db,
@@ -261,13 +262,127 @@ export async function experienceCommands(
         }
       }
       signal.throwIfAborted();
-      await experienceService(db).context(actor, companyId);
-      if (
-        !v9FeatureEnabled(
-          await settings.getExperimental(),
-          "ambient_commands_v9",
-        )
-      )
+      async function assertCurrentAllowed(
+        input: Parameters<typeof auth.decide>[0],
+      ) {
+        signal.throwIfAborted();
+        if (!(await auth.decide(input)).allowed)
+          throw forbidden("Command access changed; search again");
+        signal.throwIfAborted();
+      }
+      // Resource-specific authority and versions can change while other kinds
+      // are being read. Company membership alone cannot release retained names.
+      for (const resource of resources) {
+        signal.throwIfAborted();
+        if (resource.kind === "agent") {
+          const [current] = await db
+            .select({ name: agents.name, updatedAt: agents.updatedAt })
+            .from(agents)
+            .where(
+              and(
+                eq(agents.companyId, companyId),
+                eq(agents.id, resource.id),
+                ne(agents.status, "terminated"),
+              ),
+            );
+          if (
+            !current ||
+            current.updatedAt.toISOString() !== resource.version ||
+            current.name.slice(0, 2000) !== resource.title
+          )
+            throw conflict("Command results changed; search again");
+          await assertCurrentAllowed({
+            actor,
+            action: "agent:read",
+            resource: { type: "agent", companyId, agentId: resource.id },
+          });
+        } else if (resource.kind === "project") {
+          const [current] = await db
+            .select({ name: projects.name, updatedAt: projects.updatedAt })
+            .from(projects)
+            .where(
+              and(
+                eq(projects.companyId, companyId),
+                eq(projects.id, resource.id),
+                isNull(projects.archivedAt),
+              ),
+            );
+          if (
+            !current ||
+            current.updatedAt.toISOString() !== resource.version ||
+            current.name.slice(0, 2000) !== resource.title
+          )
+            throw conflict("Command results changed; search again");
+          await assertCurrentAllowed({
+            actor,
+            action: "project:read",
+            resource: { type: "project", companyId, projectId: resource.id },
+          });
+        } else {
+          const [current] = await db
+            .select({
+              title: issues.title,
+              updatedAt: issues.updatedAt,
+              projectId: issues.projectId,
+              assigneeAgentId: issues.assigneeAgentId,
+              assigneeUserId: issues.assigneeUserId,
+            })
+            .from(issues)
+            .where(
+              and(
+                eq(issues.companyId, companyId),
+                eq(issues.id, resource.id),
+                visibleIssueCondition(),
+              ),
+            );
+          if (
+            !current ||
+            current.updatedAt.toISOString() !== resource.version ||
+            current.title.slice(0, 2000) !== resource.title
+          )
+            throw conflict("Command results changed; search again");
+          await assertCurrentAllowed({
+            actor,
+            action: "issue:read",
+            resource: {
+              type: "issue",
+              companyId,
+              issueId: resource.id,
+              projectId: current.projectId,
+              assigneeAgentId: current.assigneeAgentId,
+              assigneeUserId: current.assigneeUserId,
+            },
+          });
+        }
+      }
+      // Never reuse the initial command-availability decisions for release.
+      for (const command of commands) {
+        const definition = definitions.find(
+          (entry) => entry.id === command.id,
+        )!;
+        if (definition.action)
+          await assertCurrentAllowed({
+            actor,
+            action: definition.action,
+            resource: { type: "company", companyId },
+          });
+        if (command.id === "run_workflow")
+          await assertCurrentAllowed({
+            actor,
+            action: "workflows:read",
+            resource: { type: "company", companyId },
+          });
+      }
+      const currentContext = await experienceService(db).context(
+        actor,
+        companyId,
+      );
+      if (currentContext.profile !== context.profile)
+        throw forbidden("Command access changed; search again");
+      const currentFlags = await settings.getExperimental();
+      if (!isDeepStrictEqual(flags, currentFlags))
+        throw conflict("Command context changed; search again");
+      if (!v9FeatureEnabled(currentFlags, "ambient_commands_v9"))
         throw notFound("Commands are not enabled");
       signal.throwIfAborted();
       return experienceCommandsSchema.parse({

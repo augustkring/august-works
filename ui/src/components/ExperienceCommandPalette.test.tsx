@@ -6,12 +6,29 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ExperienceCommandPalette } from "./ExperienceCommandPalette";
 import { api } from "../api/client";
 import { i18n } from "../i18n";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "./ui/dialog";
 const state = vi.hoisted(() => ({
   principal: "first-member",
   companyId: "10000000-0000-4000-8000-000000000001",
   openNewIssue: vi.fn(),
   navigate: vi.fn(),
   setSidebarOpen: vi.fn(),
+  utilityOpen: false,
+}));
+let live: (event: {
+  companyId: string;
+  type: string;
+  payload: Record<string, unknown>;
+}) => void;
+vi.mock("../context/LiveUpdatesProvider", () => ({
+  useCompanyLiveEvent: (listener: typeof live) => {
+    live = listener;
+  },
 }));
 vi.mock("../api/companies-query", () => ({
   useAccountIdentity: () => ({
@@ -104,12 +121,24 @@ afterEach(async () => {
   state.principal = "first-member";
   state.openNewIssue.mockReset();
   state.navigate.mockReset();
+  state.utilityOpen = false;
 });
 async function render() {
   await act(async () =>
     root.render(
       <QueryClientProvider client={client}>
         <ExperienceCommandPalette />
+        {state.utilityOpen && (
+          <Dialog open>
+            <DialogContent>
+              <DialogTitle>Utility question</DialogTitle>
+              <DialogDescription>
+                Keep this input active during private background checks.
+              </DialogDescription>
+              <input aria-label="Utility clarification" />
+            </DialogContent>
+          </Dialog>
+        )}
       </QueryClientProvider>,
     ),
   );
@@ -210,4 +239,82 @@ it("rejects a foreign destination instead of offering the corrupted command", as
   );
   expect(document.body.textContent).not.toContain("Private agent title");
   expect(document.body.textContent).not.toContain("Prepare a Task");
+});
+it("hides retained names during a native source-loss recheck and rejects a late old-epoch response", async () => {
+  let finishOld!: (value: ReturnType<typeof model>) => void;
+  const get = vi
+    .spyOn(api, "get")
+    .mockResolvedValueOnce(model())
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = resolve;
+        }),
+    )
+    .mockRejectedValueOnce(new Error("PRIVATE-SOURCE-ERROR"));
+  await mount();
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Private agent title"),
+  );
+  await act(async () =>
+    live({
+      companyId: "another-company",
+      type: "analytical.context.access_lost",
+      payload: {},
+    }),
+  );
+  expect(get).toHaveBeenCalledTimes(1);
+  await act(async () =>
+    live({
+      companyId: state.companyId,
+      type: "activity.logged",
+      payload: { action: "permission.revoked" },
+    }),
+  );
+  await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+  expect(document.body.textContent).not.toContain("Private agent title");
+  expect(document.body.textContent).not.toContain("Prepare a Task");
+  await act(async () =>
+    live({
+      companyId: state.companyId,
+      type: "analytical.context.access_lost",
+      payload: {},
+    }),
+  );
+  await vi.waitFor(() =>
+    expect(document.querySelector('[role="alert"]')).not.toBeNull(),
+  );
+  await act(async () => finishOld(model()));
+  expect(document.body.textContent).not.toContain("Private agent title");
+  expect(document.body.textContent).not.toContain("PRIVATE-SOURCE-ERROR");
+  expect(document.activeElement).toBe(document.querySelector('[role="alert"]'));
+  expect(state.navigate).not.toHaveBeenCalled();
+  expect(state.openNewIssue).not.toHaveBeenCalled();
+});
+it("hides failed private command results without stealing focus from another open utility", async () => {
+  vi.spyOn(api, "get")
+    .mockResolvedValueOnce(model())
+    .mockRejectedValueOnce(new Error("revoked"));
+  await mount();
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Private agent title"),
+  );
+  state.utilityOpen = true;
+  await render();
+  const input = document.querySelector(
+    'input[aria-label="Utility clarification"]',
+  );
+  expect(document.activeElement).toBe(input);
+  await act(async () =>
+    live({
+      companyId: state.companyId,
+      type: "analytical.context.access_lost",
+      payload: {},
+    }),
+  );
+  await vi.waitFor(() =>
+    expect(document.querySelector('[role="alert"]')).not.toBeNull(),
+  );
+  expect(document.body.textContent).not.toContain("Private agent title");
+  expect(document.activeElement).toBe(input);
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   parseExperienceCommand,
@@ -12,6 +12,7 @@ import {
   getExperienceCommands,
 } from "../api/experience-commands";
 import { useCompany } from "../context/CompanyContext";
+import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useDialogActions } from "../context/DialogContext";
 import { useSidebar } from "../context/SidebarContext";
 import { useNavigate } from "../lib/router";
@@ -44,13 +45,36 @@ function Commands({
     { openNewIssue } = useDialogActions();
   const [text, setText] = useState(""),
     [debounced, setDebounced] = useState("");
+  const client = useQueryClient();
+  const [epoch, setEpoch] = useState(0);
+  const error = useRef<HTMLDivElement>(null);
+  const prefix = experienceCommandsKey(companyId, principal);
+  useCompanyLiveEvent((event) => {
+    if (event.companyId !== companyId) return;
+    const action =
+      typeof event.payload.action === "string" ? event.payload.action : "";
+    if (
+      event.type !== "analytical.context.access_lost" &&
+      !(
+        event.type === "activity.logged" &&
+        (/issue|agent|project|workflow|permission|membership|privacy|erased|deleted|withdraw|settings/i.test(
+          action,
+        ) ||
+          event.payload.entityType === "company_membership")
+      )
+    )
+      return;
+    setEpoch((value) => value + 1);
+    void client.cancelQueries({ queryKey: prefix });
+    client.removeQueries({ queryKey: prefix });
+  });
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(text), 200);
     return () => clearTimeout(timer);
   }, [text]);
   const intent = parseExperienceCommand(text);
   const query = useQuery({
-    queryKey: [...experienceCommandsKey(companyId, principal), debounced],
+    queryKey: [...prefix, debounced, epoch],
     queryFn: ({ signal }) =>
       getExperienceCommands(companyId, principal, debounced, signal),
     staleTime: 0,
@@ -58,6 +82,12 @@ function Commands({
     retry: false,
   });
   const ready = query.isSuccess && text === debounced && !query.isFetching;
+  useEffect(() => {
+    if (!query.isError) return;
+    const focusedDialog = document.activeElement?.closest('[role="dialog"]');
+    const ownDialog = error.current?.closest('[role="dialog"]');
+    if (!focusedDialog || focusedDialog === ownDialog) error.current?.focus();
+  }, [query.isError]);
   const data = ready ? query.data : null;
   function execute(command: ExperienceCommands["commands"][number]) {
     if (!data) return;
@@ -102,7 +132,7 @@ function Commands({
       </p>
       <CommandList className="max-h-96">
         {query.isError ? (
-          <div role="alert" className="space-y-3 p-4">
+          <div ref={error} tabIndex={-1} role="alert" className="space-y-3 p-4">
             <p>{t("commands.failed")}</p>
             <Button
               className="min-h-11"

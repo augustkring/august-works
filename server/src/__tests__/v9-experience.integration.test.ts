@@ -89,7 +89,10 @@ const support = await getEmbeddedPostgresTestSupport();
       userId,
       companyIds: [companyId],
     });
-    function afterFirstTaskRead(change: () => Promise<void>) {
+    function afterFirstResourceRead(
+      change: () => Promise<void>,
+      action: authorization.AuthorizationAction = "issue:read",
+    ) {
       const real = authorization.authorizationService;
       let changed = false;
       vi.spyOn(authorization, "authorizationService").mockImplementation(
@@ -99,7 +102,7 @@ const support = await getEmbeddedPostgresTestSupport();
             ...native,
             decide: async (input) => {
               const decision = await native.decide(input);
-              if (!changed && input.action === "issue:read") {
+              if (!changed && input.action === action) {
                 changed = true;
                 expect(decision.allowed).toBe(true);
                 await change();
@@ -125,7 +128,7 @@ const support = await getEmbeddedPostgresTestSupport();
             status: "in_progress",
           })
           .returning();
-        const assertChanged = afterFirstTaskRead(async () => {
+        const assertChanged = afterFirstResourceRead(async () => {
           await db
             .update(issues)
             .set(
@@ -157,24 +160,20 @@ const support = await getEmbeddedPostgresTestSupport();
         enableFoundationV1: true,
         enableContextEngineV1: true,
       });
-      await db
-        .insert(principalPermissionGrants)
-        .values(
-          ["users:invite", "foundation:read"].map((permissionKey) => ({
-            companyId,
-            principalType: "user",
-            principalId: userId,
-            permissionKey,
-          })),
-        );
-      await db
-        .insert(issues)
-        .values({
+      await db.insert(principalPermissionGrants).values(
+        ["users:invite", "foundation:read"].map((permissionKey) => ({
           companyId,
-          title: "Authorized unchanged task",
-          status: "in_progress",
-        });
-      const assertChanged = afterFirstTaskRead(async () => {
+          principalType: "user",
+          principalId: userId,
+          permissionKey,
+        })),
+      );
+      await db.insert(issues).values({
+        companyId,
+        title: "Authorized unchanged task",
+        status: "in_progress",
+      });
+      const assertChanged = afterFirstResourceRead(async () => {
         await db
           .delete(principalPermissionGrants)
           .where(eq(principalPermissionGrants.companyId, companyId));
@@ -196,14 +195,12 @@ const support = await getEmbeddedPostgresTestSupport();
       await instanceSettingsService(db).updateExperimental({
         experience_projection_v9: true,
       });
-      await db
-        .insert(issues)
-        .values({
-          companyId,
-          title: "PRIVATE-FLAG-TASK",
-          status: "in_progress",
-        });
-      const assertChanged = afterFirstTaskRead(async () => {
+      await db.insert(issues).values({
+        companyId,
+        title: "PRIVATE-FLAG-TASK",
+        status: "in_progress",
+      });
+      const assertChanged = afterFirstResourceRead(async () => {
         await instanceSettingsService(db).updateExperimental({
           experience_projection_v9: false,
         });
@@ -355,6 +352,109 @@ const support = await getEmbeddedPostgresTestSupport();
         .delete(companyMemberships)
         .where(eq(companyMemberships.companyId, companyId));
       await request(app(member())).get(url).expect(403);
+    });
+    it.each([
+      "hidden_task",
+      "changed_task",
+      "terminated_agent",
+      "archived_project",
+    ])(
+      "refuses retained command results after an actual native source becomes %s",
+      async (kind) => {
+        await instanceSettingsService(db).updateExperimental({
+          experience_projection_v9: true,
+          ambient_commands_v9: true,
+        });
+        const target = randomUUID(),
+          title = "PRIVATE-COMMAND-SOURCE";
+        let action: authorization.AuthorizationAction = "issue:read";
+        if (kind === "terminated_agent") {
+          action = "agent:read";
+          await db
+            .insert(agents)
+            .values({
+              id: target,
+              companyId,
+              name: title,
+              role: "general",
+              adapterType: "process",
+            });
+        } else if (kind === "archived_project") {
+          action = "project:read";
+          await db
+            .insert(projects)
+            .values({ id: target, companyId, name: title });
+        } else await db.insert(issues).values({ id: target, companyId, title });
+        const assertChanged = afterFirstResourceRead(async () => {
+          if (kind === "terminated_agent")
+            await db
+              .update(agents)
+              .set({ status: "terminated" })
+              .where(eq(agents.id, target));
+          else if (kind === "archived_project")
+            await db
+              .update(projects)
+              .set({ archivedAt: new Date() })
+              .where(eq(projects.id, target));
+          else
+            await db
+              .update(issues)
+              .set(
+                kind === "hidden_task"
+                  ? { hiddenAt: new Date() }
+                  : { title: "CHANGED-PRIVATE-TITLE" },
+              )
+              .where(eq(issues.id, target));
+        }, action);
+        const response = await request(app(member()))
+          .get(
+            `/api/companies/${companyId}/experience/commands?q=PRIVATE-COMMAND`,
+          )
+          .expect(409);
+        assertChanged();
+        expect(response.headers["cache-control"]).toBe("private, no-store");
+        expect(JSON.stringify(response.body)).not.toContain(title);
+        expect(JSON.stringify(response.body)).not.toContain(
+          "CHANGED-PRIVATE-TITLE",
+        );
+      },
+    );
+    it("rechecks a real command grant revoked after its availability decision", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true,
+        ambient_commands_v9: true,
+      });
+      await db
+        .insert(principalPermissionGrants)
+        .values({
+          companyId,
+          principalType: "user",
+          principalId: userId,
+          permissionKey: "tools:manage_connections",
+        });
+      const assertChanged = afterFirstResourceRead(async () => {
+        await db
+          .delete(principalPermissionGrants)
+          .where(
+            and(
+              eq(principalPermissionGrants.companyId, companyId),
+              eq(principalPermissionGrants.principalId, userId),
+              eq(
+                principalPermissionGrants.permissionKey,
+                "tools:manage_connections",
+              ),
+            ),
+          );
+      }, "tools:manage_connections");
+      const response = await request(app(member()))
+        .get(
+          `/api/companies/${companyId}/experience/commands?expectedUserId=${userId}`,
+        )
+        .expect(403);
+      assertChanged();
+      expect(response.headers["cache-control"]).toBe("private, no-store");
+      expect(response.body.resources).toBeUndefined();
+      expect(response.body.commands).toBeUndefined();
     });
     it("keeps ten Company categories stable while filtering current native grants and account context", async () => {
       await instanceSettingsService(db).updateExperimental({

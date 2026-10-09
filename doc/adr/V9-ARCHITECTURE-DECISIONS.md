@@ -635,3 +635,27 @@ canonical receipt; transport loss alone never proves application or reversal.
 Provider termination, unresolved external effects and human usability remain
 separate qualification gates. Deploy compatible shared/server/UI versions
 behind default-off rollout; R0/sourceComplete=false remains unchanged.
+
+## ADR-V9-030 — Recheck command sources and availability before release
+
+2026-10-09. Deterministic command search remains a bounded read projection. A
+final company context check cannot replace resource-specific admission. Each
+retained agent/project/task name is reread in its current company, visibility,
+status and version, then admitted again through the actual native authorization
+owner. A changed source refuses the whole result; it never releases a stale
+private name or treats an unavailable source as an empty successful search.
+Command availability decisions are also repeated before release without reusing
+the initial permission cache. Profile or rollout-context changes refuse the
+reply within the inherited 1.5-second admission budget.
+
+The mounted palette cancels and removes current private query data on relevant
+native source/authority events, advances its query epoch, and hides retained
+names and selectable actions while checking. A response from an older epoch
+cannot restore them. Account/company teardown retains the existing close/reset
+boundary; a failed read uses safe copy and focuses the error. No model, effect,
+permission, storage, migration, notification or new destination is added.
+Native tests inject actual hidden/changed tasks, terminated agents, archived
+projects and a revoked real command grant after their first native decision.
+UI tests cover current-company invalidation and a late old response. Full source
+qualification remains required; semantic authoring/channel parity and human
+usability are not promoted by these read-only fixes.
