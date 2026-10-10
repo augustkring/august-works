@@ -1,0 +1,46 @@
+name: BLENTERA V9 Next.js exported-site Chrome and Axe QA
+on:
+  push:
+    branches:
+      - blentera-preview/clarity-first-v9-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exported-browser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: blentera-v9-next
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install app and test dependencies
+        run: npm install --no-save --no-audit --no-fund puppeteer-core@24 @axe-core/puppeteer@4
+      - name: Build the actual Next static export
+        run: |
+          npm run typecheck
+          npm run build
+      - name: Start static exported app server
+        shell: bash
+        run: |
+          python3 -m http.server 8765 --directory out > /tmp/blentera-v9-static-server.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8765/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/blentera-v9-static-server.log
+          exit 1
+      - name: Check real Next export across routes and accessibility rules
+        run: node tests/exported-next.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blentera-v9-next-export-browser-test
+          path: |
+            blentera-v9-next/next-*.png
+            blentera-v9-next/exported-next-e2e.json
+          if-no-files-found: warn
