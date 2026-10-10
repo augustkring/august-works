@@ -490,6 +490,16 @@ const support = await getEmbeddedPostgresTestSupport();
       await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
       await expect(readPackageMaintenanceAttention(db, { ...f.actor, isInstanceAdmin: true }, f.home, signal)).rejects.toMatchObject({ status: 403 });
     });
+    it("V9 maintenance retains the native database refusal of cross-company agent references", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await expect(db.insert(companyAgentPackageInstallations).values({
+        companyId: f.home, packageId: installed.packageId, installedVersionId: installed.installedVersionId,
+        agentId: f.guestPresence.id, installedByUserId: f.userId, components: [], status: "configuring", updatePolicy: "auto_low_risk",
+      })).rejects.toMatchObject({ cause: { code: "23503" } });
+      // The migrated native composite foreign key owns this tenant invariant.
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).agentId).toBe(f.presence.id);
+    });
     it("V9 maintenance history requires current native tenant and agent read authority and closes on rollback", async () => {
       await enableV9Maintenance();
       const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });

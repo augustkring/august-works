@@ -38,7 +38,10 @@ export async function readPackageMaintenanceAttention(
   actor: AuthorizationActor,
   companyId: string,
   signal: AbortSignal,
-): ReturnType<ExperienceReader["read"]> {
+): Promise<{
+  needsYou: ExperienceCard[];
+  coverage?: Awaited<ReturnType<ExperienceReader["read"]>>["coverage"];
+}> {
   v5HumanActorId(actor);
   const current = {
       ...actor,

@@ -1,3 +1,4 @@
+import type { ExperienceCard } from "@paperclipai/shared";
 import { describe, expect, it } from "vitest";
 import { composeExperience, ExperienceOverloadError } from "./projection.js";
 const companyId = "10000000-0000-4000-8000-000000000001";
@@ -145,6 +146,15 @@ describe("experience fan-in", () => {
     expect(called).toBe(false);
   });
   it("keeps current high-criticality attention ahead of lower-priority maintenance regardless of reader completion order", async () => {
+    const reviewAction: ExperienceCard["actions"][number] = {
+      id: "open",
+      label: "Review",
+      operation: "open",
+      href: "/needs-you",
+      criticality: "C3",
+      source,
+      requiresCurrentAuthorization: true,
+    };
     const approvalCards = Array.from({ length: 25 }, (_, index) => ({
       ...card,
       id: `approval-${index}`,
@@ -153,7 +163,7 @@ describe("experience fan-in", () => {
         domain: "attention" as const,
         resourceId: `approval-${index}`,
       },
-      actions: card.actions.map((action) => ({
+      actions: [reviewAction].map((action) => ({
         ...action,
         criticality: "C3" as const,
         source: {
@@ -173,7 +183,7 @@ describe("experience fan-in", () => {
           domain: "agent_package_installation" as const,
           resourceId: "installation",
         },
-        actions: card.actions.map((action) => ({
+        actions: [reviewAction].map((action) => ({
           ...action,
           criticality: "C2" as const,
           source: {
@@ -204,6 +214,9 @@ describe("experience fan-in", () => {
     expect(model.needsYou.map((value) => value.id)).toEqual(
       approvalCards.map((value) => value.id),
     );
+    expect(
+      model.needsYou.every((value) => value.actions[0]?.criticality === "C3"),
+    ).toBe(true);
     expect(
       model.dependencies.find((value) => value.domain === "maintenance"),
     ).toMatchObject({ state: "partial", reason: "more_items_available" });
