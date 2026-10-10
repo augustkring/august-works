@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "@/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   v9FeatureEnabled,
@@ -23,13 +24,13 @@ const actionNames: Record<
   HireAgentCapability["actionClasses"][number],
   string
 > = {
-  internal_draft: "Create internal drafts",
-  external_communication: "Send externally",
-  data_mutation: "Change company data",
-  financial_commitment: "Make financial commitments",
-  person_decision: "Make decisions affecting people",
-  destructive_action: "Delete or replace data",
-  restricted_processing: "Process restricted information",
+  internal_draft: "hireCatalog.createDrafts",
+  external_communication: "hireCatalog.sendExternally",
+  data_mutation: "hireCatalog.changeData",
+  financial_commitment: "hireCatalog.financial",
+  person_decision: "hireCatalog.personDecision",
+  destructive_action: "hireCatalog.deleteData",
+  restricted_processing: "hireCatalog.restricted",
 };
 
 function HireCatalog({
@@ -39,6 +40,7 @@ function HireCatalog({
   company: string;
   principal: string;
 }) {
+  const { t } = useTranslation("experience");
   const { versionId } = useParams<{ versionId?: string }>();
   const [search, setSearch] = useState("");
   const [checkingAccess, setCheckingAccess] = useState(false);
@@ -137,70 +139,55 @@ function HireCatalog({
       .toLocaleLowerCase()
       .includes(term),
   );
-  if (!authority.readReady) return <p role={authority.failed ? "alert" : "status"}>Checking current access to agent hiring…</p>;
+  if (!authority.readReady) return <p role={authority.failed ? "alert" : "status"}>{t("hireCatalog.checkingAccess")}</p>;
   if (!authority.writeReady) return (
     <div className="space-y-4 p-6">
-      <p role="status">New agent hiring is unavailable.</p>
-      {attempt.current && <p role="alert">The previous setup request remains unconfirmed. Review your saved setups before starting another.</p>}
+      <p role="status">{t("hireCatalog.unavailable")}</p>
+      {attempt.current && <p role="alert">{t("hireCatalog.previousUnconfirmed")}</p>}
       <HireSavedSetups company={company} principal={principal} authority={authority} />
     </div>
   );
-  if (catalog.isFetching) return <p role="status">Loading available capabilities…</p>;
+  if (catalog.isFetching) return <p role="status">{t("hireCatalog.loadingCatalog")}</p>;
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <Link
         to={versionId ? "/agents/hire" : "/agents"}
         className="inline-flex min-h-11 items-center underline"
       >
-        {versionId ? "Back to capabilities" : "Back to agents"}
+        {versionId ? t("hireCatalog.backCapabilities") : t("hireCatalog.backAgents")}
       </Link>
       <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
-        {selected?.name ?? "Hire agent"}
+        {selected?.name ?? t("hireCatalog.title")}
       </h1>
       {create.isError &&
         attempt.current &&
         (!selected ||
           selected.versionId !== attempt.current.packageVersionId) && (
           <div role="alert" className="space-y-2">
-            <p>
-              The earlier setup request was not acknowledged. Check that same
-              request to find its saved result before starting another setup.
-            </p>
+            <p>{t("hireCatalog.earlierUnconfirmed")}</p>
             <Button
               className="min-h-11"
               disabled={create.isPending || checkingAccess}
               onClick={() => create.mutate()}
-            >
-              Retry the same setup request
-            </Button>
+            >{t("hireCatalog.retrySetup")}</Button>
           </div>
         )}
       {(catalog.isPending || checkingAccess) && (
-        <p role="status">Loading available capabilities…</p>
+        <p role="status">{t("hireCatalog.loadingCatalog")}</p>
       )}
       {catalog.isError && (
         <div role="alert">
-          <p>
-            Available capabilities could not be loaded. Check your current
-            company access and try again.
-          </p>
-          <Button className="min-h-11" onClick={() => void catalog.refetch()}>
-            Try again
-          </Button>
+          <p>{t("hireCatalog.catalogFailed")}</p>
+          <Button className="min-h-11" onClick={() => void catalog.refetch()}>{t("hireCatalog.tryAgain")}</Button>
         </div>
       )}
       {catalog.isSuccess && !checkingAccess && versionId && !selected && (
-        <p role="status">
-          This capability version is no longer available. Choose a currently
-          available capability.
-        </p>
+        <p role="status">{t("hireCatalog.withdrawn")}</p>
       )}
       {catalog.isSuccess && !checkingAccess && !versionId && (
         <>
-          <p>Choose the outcome you want an agent to help with.</p>
-          <label className="block space-y-2">
-            Find a capability
-            <Input
+          <p>{t("hireCatalog.chooseOutcome")}</p>
+          <label className="block space-y-2">{t("hireCatalog.findCapability")}<Input
               className="min-h-11"
               value={search}
               maxLength={200}
@@ -208,12 +195,10 @@ function HireCatalog({
             />
           </label>
           {catalog.data.length === 0 && (
-            <p role="status">
-              No customer capabilities are available in this deployment yet.
-            </p>
+            <p role="status">{t("hireCatalog.noCapabilities")}</p>
           )}
           {catalog.data.length > 0 && matches?.length === 0 && (
-            <p role="status">No capabilities match your search.</p>
+            <p role="status">{t("hireCatalog.noMatches")}</p>
           )}
           <ul className="space-y-4">
             {matches?.map((item) => (
@@ -231,14 +216,14 @@ function HireCatalog({
                 </h2>
                 <p>{item.outcome}</p>
                 {item.requiredConnections.length > 0 && (
-                  <p>Needs: {item.requiredConnections.join(", ")}</p>
+                  <p>{t("hireCatalog.needsLabel")}{" "}{item.requiredConnections.join(", ")}</p>
                 )}
                 <p>
                   {item.actionClasses.every(
                     (action) => action === "internal_draft",
                   )
-                    ? "Internal drafts; company access must be checked."
-                    : "Asks before actions that materially affect your company or others."}
+                    ? t("hireCatalog.draftsConditional")
+                    : t("hireCatalog.asksMaterial")}
                 </p>
               </li>
             ))}
@@ -251,45 +236,32 @@ function HireCatalog({
       {selected && (
         <>
           <section className="space-y-2" aria-labelledby="capability-does">
-            <h2 id="capability-does" className="text-lg font-semibold">
-              Does
-            </h2>
+            <h2 id="capability-does" className="text-lg font-semibold">{t("hireCatalog.does")}</h2>
             <p>{selected.outcome}</p>
           </section>
           <section className="space-y-2" aria-labelledby="capability-needs">
-            <h2 id="capability-needs" className="text-lg font-semibold">
-              Needs
-            </h2>
-            <p>
-              Knowledge:{" "}
+            <h2 id="capability-needs" className="text-lg font-semibold">{t("hireCatalog.needs")}</h2>
+            <p>{t("hireCatalog.knowledgeLabel")}{" "}{" "}
               {selected.requiredKnowledge.join(", ") ||
-                "No required knowledge sources declared."}
+                t("hireCatalog.noKnowledge")}
             </p>
-            <p>
-              Connected apps:{" "}
+            <p>{t("hireCatalog.appsLabel")}{" "}{" "}
               {selected.requiredConnections.join(", ") ||
-                "No required connected apps declared."}
+                t("hireCatalog.noApps")}
             </p>
-            <p>Current company access will need to be checked before use.</p>
+            <p>{t("hireCatalog.checkAccess")}</p>
           </section>
           <section className="space-y-2" aria-labelledby="capability-automatic">
-            <h2 id="capability-automatic" className="text-lg font-semibold">
-              Can do automatically
-            </h2>
+            <h2 id="capability-automatic" className="text-lg font-semibold">{t("hireCatalog.automatic")}</h2>
             <p>
               {selected.actionClasses.includes("internal_draft")
-                ? "Create internal drafts when current company policy and access allow it."
-                : "No automatic actions are declared for this capability."}
+                ? t("hireCatalog.automaticDrafts")
+                : t("hireCatalog.noAutomatic")}
             </p>
           </section>
           <section className="space-y-2" aria-labelledby="capability-approval">
-            <h2 id="capability-approval" className="text-lg font-semibold">
-              Asks before
-            </h2>
-            <p>
-              Actions that materially affect your company or others always
-              require human approval.
-            </p>
+            <h2 id="capability-approval" className="text-lg font-semibold">{t("hireCatalog.asksBefore")}</h2>
+            <p>{t("hireCatalog.humanApproval")}</p>
             {selected.actionClasses.filter(
               (action) => action !== "internal_draft",
             ).length > 0 && (
@@ -297,48 +269,38 @@ function HireCatalog({
                 {selected.actionClasses
                   .filter((action) => action !== "internal_draft")
                   .map((action) => (
-                    <li key={action}>{actionNames[action]}</li>
+                    <li key={action}>{t(actionNames[action])}</li>
                   ))}
               </ul>
             )}
-            <p>Agents cannot grant themselves permissions.</p>
+            <p>{t("hireCatalog.cannotGrant")}</p>
           </section>
           <section className="space-y-2" aria-labelledby="capability-limits">
-            <h2 id="capability-limits" className="text-lg font-semibold">
-              Important limits
-            </h2>
+            <h2 id="capability-limits" className="text-lg font-semibold">{t("hireCatalog.limits")}</h2>
             <ul>
               {selected.limits.map((limit, index) => (
                 <li key={index}>{limit}</li>
               ))}
             </ul>
           </section>
-          <p>
-            A company owner has not been assigned. This capability is not active
-            in your company.
-          </p>
-          <p>
-            Using this capability starts a saved setup. It does not activate an
-            agent or give it access.
-          </p>
+          <p>{t("hireCatalog.notActive")}</p>
+          <p>{t("hireCatalog.savedSetupOnly")}</p>
           {create.isError && (
             <p role="alert">
               {create.error instanceof ApiError &&
               [400, 422].includes(create.error.status)
-                ? "This capability could not be used. Choose a currently available capability and try again."
+                ? t("hireCatalog.useFailed")
                 : create.error instanceof ApiError &&
                     [401, 403].includes(create.error.status)
-                  ? "Your current access does not permit this setup."
-                  : "The setup request was not acknowledged. Retry the same request to find its saved result."}
+                  ? t("hireCatalog.accessDenied")
+                  : t("hireCatalog.unconfirmed")}
             </p>
           )}
           <div className="flex items-center justify-between gap-4">
             <Link
               className="inline-flex min-h-11 items-center underline"
               to="/agents"
-            >
-              Back to agents
-            </Link>
+            >{t("hireCatalog.backAgents")}</Link>
             <Button
               className="min-h-11"
               disabled={
@@ -352,10 +314,10 @@ function HireCatalog({
               onClick={() => create.mutate()}
             >
               {create.isPending
-                ? "Preparing setup…"
+                ? t("hireCatalog.preparing")
                 : create.isError && attempt.current
-                  ? "Retry the same setup request"
-                  : "Use this agent"}
+                  ? t("hireCatalog.retrySetup")
+                  : t("hireCatalog.useAgent")}
             </Button>
           </div>
         </>
@@ -365,6 +327,7 @@ function HireCatalog({
 }
 
 export function HireAgent() {
+  const { t } = useTranslation("experience");
   const { selectedCompanyId: company } = useCompany();
   const identity = useV9CurrentAccount();
   const { draftId } = useParams<{ draftId?: string }>();
@@ -373,7 +336,7 @@ export function HireAgent() {
     queryFn: () => instanceSettingsApi.getExperimental(),
   });
   if (settings.isPending || (!identity.userId && !identity.settled))
-    return <p role="status">Loading agent hiring options…</p>;
+    return <p role="status">{t("hireCatalog.loadingOptions")}</p>;
   if (draftId && company && identity.userId && !identity.localImplicit)
     return (
       <HireAgentSetup
@@ -389,17 +352,13 @@ export function HireAgent() {
   if (settings.isError)
     return (
       <div role="alert">
-        <p>Agent hiring options could not be loaded.</p>
-        <Button className="min-h-11" onClick={() => void settings.refetch()}>
-          Try again
-        </Button>
+        <p>{t("hireCatalog.optionsFailed")}</p>
+        <Button className="min-h-11" onClick={() => void settings.refetch()}>{t("hireCatalog.tryAgain")}</Button>
       </div>
     );
   if (!company || !identity.userId || identity.localImplicit)
     return (
-      <p role="status">
-        Sign in with a verified account and select a company to hire an agent.
-      </p>
+      <p role="status">{t("hireCatalog.signIn")}</p>
     );
   return (
     <HireCatalog
