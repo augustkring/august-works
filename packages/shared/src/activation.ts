@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { issueDocumentKeySchema } from "./validators/issue.js";
 
 export const ACTIVATION_STEPS = [
   "intent",
@@ -40,6 +41,7 @@ export const activationFirstValueResultSchema =
       .array(
         z.strictObject({
           documentId: z.uuid(),
+          documentKey: issueDocumentKeySchema.optional(),
           revisionId: z.uuid(),
           hash: z.string().regex(/^[a-f0-9]{64}$/),
         }),
@@ -126,6 +128,7 @@ export const activationCommandSchema = z.discriminatedUnion("operation", [
     packageVersionId: z.uuid(),
   }),
   z.strictObject({ ...envelope, operation: z.literal("continue_access") }),
+  z.strictObject({ ...envelope, operation: z.literal("change_setup") }),
   z.strictObject({
     ...envelope,
     operation: z.literal("record_verified_result"),

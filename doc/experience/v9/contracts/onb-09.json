@@ -2,7 +2,12 @@
   "screenId": "ONB-09",
   "journeyId": "onb",
   "routeOrSurface": "/saas/activation/9",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Review goal, capability, sources and authority before a safe first run.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
@@ -15,7 +20,13 @@
   "content": {
     "h1": "Ready for your first run",
     "supportingCopy": "Review goal, capability, sources and authority before a safe first run.",
-    "customerTerms": ["Company", "Work", "Needs You", "Agent", "Feedback"],
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
     "displayedState": [
       "Current canonical state/version",
       "Missing permission or qualification is explicit; no invented progress or outcomes"
@@ -28,6 +39,7 @@
       "operation": "Advance only through the typed native activation command permitted by the current state"
     },
     "secondary": [
+      "Change setup uses the original versioned change_setup command, preserving literal goal/company answers and existing Native work/access; it clears only the selected capability and returns to intent.",
       "Back preserves current valid inputs",
       "Save & exit after a durable organization exists",
       "Retry only the same safe request; refresh current state after a version conflict"
@@ -40,7 +52,7 @@
       "Current verified creator membership",
       "Native Foundation and published package qualification"
     ],
-    "canonicalWriteOperation": "Launch remains unavailable until native task/run binding, independent artifact verification and enforced safe execution are implemented and qualified. This contract does not assert they exist.",
+    "canonicalWriteOperation": "Launch remains unavailable until native task/run binding, independent artifact verification and enforced safe execution are implemented and qualified. This contract does not assert they exist. The bounded change_setup command is available only in review, before a recorded first result, under current creator membership, rollout, request hash and version checks.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
     "asyncWork": "Native reads/mutations only; projection work uses bounded admission and a 1500 ms total deadline. Unknown mutation outcomes retain the original request key for reconciliation.",
     "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."

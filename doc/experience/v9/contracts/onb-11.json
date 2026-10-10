@@ -31,7 +31,8 @@
     "displayedState": [
       "Current original Native worker review and exact successful package activation/run/task/output references",
       "A withdrawn/currently unavailable result hides private output links, use-result controls and success headings",
-      "Independent draft verification does not establish revenue, savings or other business impact"
+      "Independent draft verification does not establish revenue, savings or other business impact",
+      "Current Native document keys open reviewed output through the existing Task document pane. Existing controls own editing; changed evidence requires a new review. Older responses without a key retain only the original Task link."
     ]
   },
   "inputs": [],
@@ -42,7 +43,8 @@
     },
     "secondary": [
       "Open the original task and saved output under its current native authorization",
-      "Refresh the original onboarding source after uncertainty; metadata recording creates no new run or grant"
+      "Refresh the original onboarding source after uncertainty; metadata recording creates no new run or grant",
+      "Why is this result ready? explains the retained completed Task, successful run, saved output and independent human review without exposing private rationale or execution internals."
     ],
     "destructiveOrIrreversible": []
   },

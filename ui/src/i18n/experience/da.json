@@ -247,7 +247,14 @@
     "openHome": "Gå til Hjem",
     "resultNeedsReview": "Gennemgå dit gemte resultat",
     "futureDrafts": "Den valgte agent er fortsat tilgængelig for interne udkast inden for sine aktuelle tilladelser.",
-    "futureRequests": "Se fremtidige anmodninger i Kræver dig"
+    "futureRequests": "Se fremtidige anmodninger i Kræver dig",
+    "openReviewedOutput": "Åbn gennemgået resultat {{number}}",
+    "outputReviewScope": "Linket åbner det aktuelle gemte dokument. Gennemgå og redigér det via opgavens eksisterende kontroller; ændringer kræver en ny gennemgang.",
+    "whyResultReady": "Hvorfor er resultatet klar?",
+    "resultEvidenceSummary_one": "Ét gemt resultat matcher den aktuelle afsluttede opgave, den gennemførte kørsel og en uafhængig menneskelig gennemgang.",
+    "resultEvidenceSummary_other": "{{count}} gemte resultater matcher den aktuelle afsluttede opgave, den gennemførte kørsel og en uafhængig menneskelig gennemgang.",
+    "changeSetup": "Ret opsætning",
+    "changeSetupScope": "Dit mål og dine svar om virksomheden bevares, så du kan rette dem. Eksisterende arbejde og adgang styres fortsat hver for sig."
   },
   "company": {
     "title": "Virksomhed",

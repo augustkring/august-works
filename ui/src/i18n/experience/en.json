@@ -247,7 +247,14 @@
     "openHome": "Go to Home",
     "resultNeedsReview": "Review your saved result",
     "futureDrafts": "The selected agent remains available for internal drafts within its current permissions.",
-    "futureRequests": "Review future requests in Needs You"
+    "futureRequests": "Review future requests in Needs You",
+    "openReviewedOutput": "Open reviewed output {{number}}",
+    "outputReviewScope": "The link opens the current saved document. Review and edit it using its original task controls; changes need a new review.",
+    "whyResultReady": "Why is this result ready?",
+    "resultEvidenceSummary_one": "One saved output matches the current completed task, successful run and independent human review.",
+    "resultEvidenceSummary_other": "{{count}} saved outputs match the current completed task, successful run and independent human review.",
+    "changeSetup": "Change setup",
+    "changeSetupScope": "Your goal and company answers will be kept for editing. Existing work and access remain under their own controls."
   },
   "company": {
     "title": "Company",

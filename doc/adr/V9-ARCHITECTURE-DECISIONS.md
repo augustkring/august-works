@@ -1235,3 +1235,43 @@ human/instance-role and Agent-policy revocation, 10,000-Task populations, full
 Earlier incomplete and failed waves remain recorded; no deadline, data-volume,
 assertion or runtime prerequisite was relaxed. The complete integrated suite,
 hosted performance and release acceptance remain pending.
+
+
+### ADR-V9-055 — Setup correction and current original output navigation
+
+2026-10-10. Change setup is a strict, versioned original onboarding command
+available only in review before a first result. It retains literal customer
+answers, clears the selected capability and returns to intent. Existing work,
+Foundation drafts, installations and access retain their owners. Current creator
+membership, rollout, Native locks, request hash and version fences precede the
+change; capability selection later requires fresh Native admission.
+
+Nine actual migrated PostgreSQL activation checks pass on the separate source
+SHA-256 `baeea87151098e1f93896a104ba7045596053dfd8f1ca8dd12f340b6fdf9953e`,
+including identical concurrent commands, changed-content refusal, stale versions,
+rollout rollback, current membership revocation and unchanged work/access counts.
+Twenty-one focused checks pass. Early verifier launches failed before tests
+because the unprivileged runtime could not read public installed modules or
+write its public bundler caches; their logs are retained. No product assertion,
+loader or runtime prerequisite was changed. Integrated qualification is pending.
+
+First-result views resolve bounded current Native document keys under the same
+Task/company and share-lock those links. They retain exact reviewed revision and
+hash references and navigate through the original document-pane hash builder.
+The link opens current saved content under Native access; editing remains owned
+by that Task and invalidates old verification. Older responses without a key
+retain only the original Task link. A disclosure explains the completed Task,
+successful run and independent human review without exposing private rationale.
+Twenty-one focused checks and token/coverage gates pass for the separate output
+change; current combined Native and browser qualification remain pending.
+Neither change supplies safe first-task execution or human release acceptance.
+
+The combined source now passes 23 focused checks, shared build and token/coverage
+gates, 51 actual migrated PostgreSQL checks across activation/package suites, and
+all three built-browser first-result/account/setup-correction cases. Native tests
+withdraw links after an output revision changes and block completion without a
+new review. Browser cases recover an uncertain correction through a current GET,
+preserve the saved goal, verify the document destination and explanation, and
+check narrow focus/axe/reflow and absence of extra work. The matching Native and
+browser source SHA-256 is `9c1235bb326c0fbe3b0442474c64fc70f843f5ae08b3a923b80d918bf9ab45e3`. Complete integrated workspace
+qualification and manual/hosted/usability acceptance remain pending.

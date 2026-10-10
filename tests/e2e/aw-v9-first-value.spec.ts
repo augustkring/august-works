@@ -12,6 +12,79 @@ async function json(response: APIResponse) {
   return response.json();
 }
 
+// Browser account/activation answers are explicit software fixtures. Native
+// command authorization, atomicity and unchanged work are tested separately.
+test("change setup recovers a missing acknowledgement through a current read and preserves the saved goal", async ({ page, request }, info) => {
+  const company = await json(await request.post("/api/companies", {
+    data: { name: "Disposable change-setup browser fixture" },
+  }));
+  try {
+    const session = await json(await request.get("/api/auth/get-session"));
+    const id = "10000000-0000-4000-8000-000000000001";
+    const { receipts: _, ...initial } = initialActivationState();
+    let value = activationViewSchema.parse({
+      runId: id, companyId: company.id, companyName: company.name, version: 3,
+      status: "in_progress",
+      state: { ...initial, step: "review", intent: "PRIVATE saved research goal",
+        companyPurpose: "PRIVATE retained company answers", packageVersionId: id },
+      capabilities: [], sources: [], blockers: ["safe_execution_unqualified"],
+      firstValue: { status: "not_recorded", result: null, candidates: [], hasMore: false },
+    });
+    const commands: Array<Record<string, unknown>> = [];
+    let releasePost: (() => void) | undefined;
+    await page.route("**/api/auth/get-session", (route) => route.fulfill({
+      json: { ...session, session: { ...session.session, localImplicit: false } },
+    }));
+    await page.route("**/api/saas/capabilities", (route) => route.fulfill({
+      json: { activationV9: true, onboarding: true },
+    }));
+    await page.route(`**/api/companies/${company.id}/activation?**`, async (route) => {
+      expect(new URL(route.request().url()).searchParams.get("expectedUserId")).toBe(session.user.id);
+      if (route.request().method() === "POST") {
+        const input = route.request().postDataJSON(); commands.push(input);
+        expect(Object.keys(input).sort()).toEqual(["expectedVersion", "operation", "requestId"]);
+        expect(input).toMatchObject({ expectedVersion: 3, operation: "change_setup" });
+        await new Promise<void>((resolve) => { releasePost = resolve; });
+        value = activationViewSchema.parse({ ...value, version: 4,
+          state: { ...value.state, step: "intent", packageVersionId: null },
+        });
+        return route.abort("failed");
+      }
+      return route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: value });
+    });
+    await page.goto(`/${company.issuePrefix}/dashboard`);
+    await expect(page.getByRole("main")).toBeVisible();
+    await page.goto("/saas/activation/9");
+    const change = page.getByRole("button", { name: "Change setup", exact: true });
+    await expect(change).toBeEnabled(); await change.click();
+    await expect.poll(() => releasePost !== undefined).toBe(true);
+    await expect(change).toBeDisabled(); expect(commands).toHaveLength(1);
+    releasePost!();
+    await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+    await page.reload();
+    const heading = page.getByRole("heading", { level: 1,
+      name: "What would you like August Works to help with first?", exact: true });
+    await expect(heading).toBeVisible(); await expect(heading).toBeFocused();
+    await expect(page.getByRole("textbox", { name: "First outcome/goal", exact: true }))
+      .toHaveValue("PRIVATE saved research goal");
+    await expect(change).toHaveCount(0); expect(commands).toHaveLength(1);
+    const base = `/api/companies/${company.id}`;
+    expect(await json(await request.get(`${base}/issues`))).toEqual([]);
+    expect(await json(await request.get(`${base}/agents`))).toEqual([]);
+    const runs = await json(await request.get(`${base}/heartbeat-runs`));
+    expect(Array.isArray(runs) ? runs : runs.items).toEqual([]);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addScriptTag({ path: axePath });
+    expect(await page.evaluate(async () => (await (window as unknown as {
+      axe: { run(scope: string): Promise<{ violations: unknown[] }> };
+    }).axe.run("main")).violations)).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath("v9-change-setup-mobile.png"), fullPage: true });
+  } finally {
+    await json(await request.delete(`/api/companies/${company.id}`));
+  }
+});
+
 // Actual built browser/route/layout with explicit account and private API
 // software fixtures. The original Native DB/verification suite proves the
 // separate task/run/review binding; these fixtures establish no real output.
@@ -36,7 +109,7 @@ test("first result recovers a missing acknowledgement and withdraws success when
     title: "Native fixture reviewed draft",
     resultHash: "a".repeat(64),
     verifiedAt: "2026-10-10T09:00:00.000Z",
-    artifacts: [{ documentId: id, revisionId: id, hash: "b".repeat(64) }],
+    artifacts: [{ documentId: id, documentKey: "result", revisionId: id, hash: "b".repeat(64) }],
   };
   let value = activationViewSchema.parse({
     runId: id,
@@ -173,6 +246,10 @@ test("first result recovers a missing acknowledgement and withdraws success when
   await expect(
     page.getByRole("link", { name: result.title, exact: true }),
   ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open reviewed output 1", exact: true }))
+    .toHaveAttribute("href", new RegExp(`/issues/${id}#document-result&viewer=full$`));
+  await page.getByText("Why is this result ready?", { exact: true }).click();
+  await expect(page.getByText("One saved output matches the current completed task, successful run and independent human review.", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", {
       name: "Use this as my first result",
