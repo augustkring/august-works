@@ -1,0 +1,141 @@
+{
+  "screenId": "HELP-RECOVERY",
+  "journeyId": "support",
+  "routeOrSurface": "/workflows/:workflowId/runs/:runId — customer-reviewed support report",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Inspect and download minimal native workflow diagnostic metadata for exceptional support without granting support access or automatically sending private data.",
+  "entryConditions": [
+    "Current private native workflow-run view passed exact company/workflow/run and account admission.",
+    "Effective V9 presentation is enabled; pending, checking, denied or unavailable native reads do not mount report controls."
+  ],
+  "exitConditions": [
+    "Download requested after explicit preview; browser initiation is not proof that a file was saved or sent.",
+    "A source or authority reread unmounts the open private report."
+  ],
+  "content": {
+    "h1": "Review your support report",
+    "supportingCopy": "Review the exact JSON before downloading. Nothing is sent automatically.",
+    "customerTerms": [
+      "Support report",
+      "Review",
+      "Download",
+      "Recorded status"
+    ],
+    "displayedState": [
+      "Exact native company, workflow, run and revision references, revision state, source updatedAt, recorded run status and explicit live/test purpose.",
+      "Trace summary contains only bounded status counts and payload-unavailable count. Actual empty history differs from unavailable history.",
+      "Names, customer text, branch names, logs, prompts, errors, actor IDs, credentials and stop commands/receipts are omitted.",
+      "Recorded execution only; no current activation or independent business verification claim."
+    ]
+  },
+  "inputs": [
+    {
+      "id": "reportPreview",
+      "label": "Report to download",
+      "dataType": "Read-only strict JSON",
+      "required": false,
+      "default": "Exact current authorized native metadata",
+      "help": "Company/resource UUIDs are included. Review before choosing download.",
+      "validation": "Strict schema with exact native binding and bounded consistent counts; unknown fields refuse export.",
+      "autofillOrPrefill": "Explicit projection from the current authorized native view; no raw source object spread."
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Download report",
+      "operation": "Validate and download only the inspected JSON through a local browser Blob after an explicit click; release the object URL."
+    },
+    "secondary": [
+      "Cancel and return focus to the invoking control",
+      "Contact support through the user-confirmed mailto address without prefilled private report data",
+      "Refresh the native run outside the dialog to recheck source and authority"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Existing native workflow-run experience owner and actual account/company/workflow/run admission"
+    ],
+    "canonicalWriteOperation": "No native write, audit event, network send, clipboard or browser persistent storage. Explicit customer download only.",
+    "authorityEffect": "No new grant or support-session approval. Resource IDs do not authorize support inspection; V6 scoped support admission remains necessary.",
+    "asyncWork": "Only the existing private native read. Its checking/error branches unmount the report control and dialog.",
+    "receipt": "Fixed Download requested announcement denotes browser initiation only, not saved-file, external delivery or business-result proof."
+  },
+  "states": {
+    "loading": "No report controls while the native view is pending or fetching.",
+    "empty": "A native available trace with zero attempts exports available/zero; it does not fabricate successful work.",
+    "partial": "Unavailable trace exports unavailable without guessed counts.",
+    "stale": "Current view rechecks unmount the preview; late prior source responses remain handled by the existing private query epochs.",
+    "validation_error": "Invalid or mismatched native source refuses report construction; strict export validation refuses additional fields.",
+    "system_error": "A fixed translated download error excludes private exception text.",
+    "permission_denied": "The existing denied native read hides the report and all retained private metadata.",
+    "recovering": "Refresh current native source before explicitly opening a new report. An earlier downloaded snapshot does not become current.",
+    "success": "Download requested only. No report was sent to support automatically."
+  },
+  "navigation": {
+    "back": "Native workflow run remains the context.",
+    "cancelOrSaveExit": "Cancel closes the dialog and restores focus to its trigger; no native or persistent browser draft.",
+    "deepLink": "Existing canonical native workflow-run route; no separate report-sharing URL.",
+    "resume": "Refresh current native private state and explicitly open a new preview."
+  },
+  "accessibility": {
+    "initialFocus": "Native dialog focus management; labeled read-only preview and explicit footer actions.",
+    "focusAfterError": "Safe error region unless another native dialog owns focus.",
+    "focusAfterSuccess": "Nonintrusive status; dialog remains open with cancel/download controls.",
+    "keyboardModel": "Standard links/buttons and native tab order; no custom keyboard trap.",
+    "statusAnnouncement": "Polite loading status, safe alert for unavailable current state.",
+    "targetSize": "Token min-h-11 links/buttons.",
+    "zoomReflow": "Stacked current state and receipt rows at narrow width; no horizontal table.",
+    "reducedMotion": "No animation.",
+    "screenReaderNotes": "Named native dialog, labeled read-only text area, associated disclosure and status/error announcements; no additional main landmark."
+  },
+  "responsive": {
+    "wide": "Stacked current installation state and historical maintenance receipts.",
+    "narrow": "Identical information with wrapping links.",
+    "mobile": "Token touch targets and no columns requiring lateral scrolling."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Exact locally exported company/resource UUIDs, fixed status/version/time/purpose and bounded status counts."
+    ],
+    "dataCollected": [
+      "No new automatic collection, server report storage, support transmission, telemetry or persistent browser storage."
+    ],
+    "sensitiveFields": [
+      "The current native source remains private; export excludes all customer text, names, errors, logs, actor identities and credentials."
+    ],
+    "loggingConstraints": "No logging of report content or private download exceptions; no report body in mailto query, route or filename."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Report JSON",
+      "Resource IDs",
+      "Customer text",
+      "Raw error strings",
+      "Prompts, logs, credentials and screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Strict native binding, consistent bounded counts, unavailable versus empty, exact inspected JSON download, object URL release on success and failure.",
+      "Actual native execution, built browser preview/download, mobile axe, current source refresh and rollout compatibility.",
+      "General self-service recovery, re-authentication, support assistant, cross-domain diagnostics and V6 support-session customer UX remain open."
+    ],
+    "accessibility": [
+      "Keyboard dialog/preview/footer and focus return; mobile automated checks on the exact artifact, with manual screen-reader/zoom acceptance still required."
+    ],
+    "securityPrivacy": [
+      "No customer text or private source objects in exported report; no automatic send, analytics, clipboard or persistence.",
+      "Open preview is withdrawn during source/authority recheck; account/company-bound page key and native read admission retain their existing ownership."
+    ],
+    "usability": [
+      "Representative exploratory and confirmatory support/recovery evidence remains pending; source tests are not human acceptance."
+    ]
+  }
+}

@@ -837,9 +837,16 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/WorkflowRunExperience.tsx",
+        "ui/src/components/WorkflowSupportDiagnostics.tsx",
+        "ui/src/lib/support-diagnostic-download.ts",
+        "packages/shared/src/support-diagnostics.ts",
+        "tests/e2e/aw-v9-support-diagnostics.spec.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/help-recovery.json"
     },
     {
       "screenId": "FEEDBACK",

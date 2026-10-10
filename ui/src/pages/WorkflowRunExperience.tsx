@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { workflowSupportDiagnostic } from "@paperclipai/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { workflowsApi } from "../api/workflows";
@@ -8,6 +9,7 @@ import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { Button } from "../components/ui/button";
 import { WorkflowStopControls } from "../components/WorkflowStopControls";
+import { WorkflowSupportDiagnostics } from "../components/WorkflowSupportDiagnostics";
 import { Link, useParams } from "../lib/router";
 import { queryKeys } from "../lib/queryKeys";
 import { WorkflowRun } from "./WorkflowRun";
@@ -142,6 +144,11 @@ export function WorkflowRunExperience({
       </>
     );
   const detail = query.data;
+  const supportReport = workflowSupportDiagnostic(detail, {
+    companyId: company,
+    workflowId: workflow,
+    runId: id,
+  });
   return (
     <>
       <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
@@ -152,7 +159,11 @@ export function WorkflowRunExperience({
           {t("workflowRunBack")}
         </Link>
         <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
-          {t(detail.purpose === "test" ? "workflowTestRunTitle" : "workflowRunTitle")}
+          {t(
+            detail.purpose === "test"
+              ? "workflowTestRunTitle"
+              : "workflowRunTitle",
+          )}
         </h1>
         <p>
           {t("workflowRunRevision", {
@@ -217,6 +228,12 @@ export function WorkflowRunExperience({
             </ol>
           )}
         </section>
+        {supportReport && (
+          <WorkflowSupportDiagnostics
+            key={`${epoch}:${detail.updatedAt}`}
+            report={supportReport}
+          />
+        )}
         <Link
           className="inline-flex min-h-11 items-center underline"
           to={`/workflows/${workflow}/runs/${id}/advanced`}

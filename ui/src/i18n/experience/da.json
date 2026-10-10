@@ -42,6 +42,18 @@
   },
   "utilities": "Globale funktioner",
   "user": "Brugerkonto",
+  "supportDiagnostics": {
+    "open": "Forbered en supportrapport",
+    "title": "Gennemgå din supportrapport",
+    "disclosure": "Rapporten indeholder virksomhedens og workflowets ressource-id'er, den registrerede version og status samt antal trin. Gennemgå den præcise rapport nedenfor, før du henter den. Intet sendes automatisk til support.",
+    "boundary": "Navne, arbejdsindhold, prompts, logs, credentials og fejlbeskeder er udeladt. Registreret kørselsstatus bekræfter ikke et forretningsresultat. Dette er et øjebliksbillede; support skal stadig have tilladelse til at undersøge dine ressourcer.",
+    "preview": "Rapport til download",
+    "contact": "Kontakt support",
+    "cancel": "Annuller",
+    "download": "Hent rapport",
+    "failed": "Rapporten kunne ikke hentes. Luk dialogen, og opdater kørslen, før du prøver igen.",
+    "downloaded": "Download er anmodet. Ingen rapport er sendt til support."
+  },
   "feedback": {
     "action": "Feedback",
     "title": "Del feedback",

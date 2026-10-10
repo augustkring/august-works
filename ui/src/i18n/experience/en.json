@@ -42,6 +42,18 @@
   },
   "utilities": "Global utilities",
   "user": "User account",
+  "supportDiagnostics": {
+    "open": "Prepare a support report",
+    "title": "Review your support report",
+    "disclosure": "This report contains company and workflow resource IDs, the recorded version and status, and step counts. Review the exact report below before downloading. Nothing is sent to support automatically.",
+    "boundary": "Names, work content, prompts, logs, credentials and error messages are excluded. Recorded execution status does not verify a business outcome. This is a snapshot; support still needs permission to inspect your resources.",
+    "preview": "Report to download",
+    "contact": "Contact support",
+    "cancel": "Cancel",
+    "download": "Download report",
+    "failed": "The report could not be downloaded. Close this dialog and refresh the run before trying again.",
+    "downloaded": "Download requested. No report has been sent to support."
+  },
   "feedback": {
     "action": "Feedback",
     "title": "Share feedback",

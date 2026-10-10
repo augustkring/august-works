@@ -775,3 +775,19 @@ Public policy state exposes no policy references or owner identity. Configured
 references remain execution-unqualified and GA admission refuses even when all
 keys exist. Native retention/DSR/legal holds and protected attachment qualification
 remain necessary. Customer/admin/triage/model input cannot set these policies.
+
+## V9-038 — Customer-reviewed diagnostics reuse the private native run view
+
+The existing account/company/workflow/run-authorized native experience read owns
+source authority. A strict local projection produces only UUID references,
+recorded version/state/time/purpose and consistent bounded attempt status counts.
+No source object spread, step name, branch name, error, actor identity, prompt,
+credential or stop receipt enters the report. Unavailable history differs from
+empty history and recorded execution remains distinct from business verification.
+An explicit preview precedes a local browser download; no automatic network send,
+clipboard, telemetry, server store or browser persistence is added. Native read
+rechecks unmount the preview and export controls. Blob URLs are released after the
+explicit action, including failures. The fixed support mailto contains no report
+data. Download initiation is not proof of saved file or external delivery; exported
+snapshots confer no grant and V6 scoped support access remains independently owned.
+General support/recovery and human accessibility/usability qualification remain open.

@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { WorkflowRunExperience as View } from "@paperclipai/shared";
 import { workflowsApi } from "../api/workflows";
 import { WorkflowRunExperience } from "./WorkflowRunExperience";
+import * as supportDownloads from "../lib/support-diagnostic-download";
 import "../i18n";
 let live: (event: {
   companyId: string;
@@ -25,11 +26,14 @@ vi.mock("../context/CompanyContext", () => ({
   }),
 }));
 vi.mock("./WorkflowRun", () => ({ WorkflowRun: () => null }));
+const companyId = "10000000-0000-4000-8000-000000000001";
+const workflowId = "10000000-0000-4000-8000-000000000002";
+const runId = "10000000-0000-4000-8000-000000000003";
 const data: View = {
-  companyId: "company",
-  id: "run",
-  workflowId: "workflow",
-  revisionId: "historical-revision",
+  companyId,
+  id: runId,
+  workflowId,
+  revisionId: "10000000-0000-4000-8000-000000000004",
   revisionNumber: 2,
   revisionState: "superseded",
   status: "waiting",
@@ -41,7 +45,7 @@ const data: View = {
     state: "available",
     attempts: [
       {
-        id: "attempt",
+        id: "10000000-0000-4000-8000-000000000005",
         name: "Review customer-safe result",
         operation: "Human Approval",
         attempt: 2,
@@ -72,10 +76,10 @@ async function mount(principal = "member") {
       <QueryClientProvider client={client}>
         <MemoryRouter>
           <WorkflowRunExperience
-            company="company"
+            company={companyId}
             principal={principal}
-            workflow="workflow"
-            id="run"
+            workflow={workflowId}
+            id={runId}
           />
         </MemoryRouter>
       </QueryClientProvider>,
@@ -97,15 +101,17 @@ it("renders the historical run rather than presenting its superseded version as 
   );
   expect(container.textContent).not.toContain("Active version");
   expect(container.querySelectorAll("a")).toHaveLength(2);
-  expect(container.querySelector('a[href$="/run/advanced"]')).not.toBeNull();
+  expect(
+    container.querySelector(`a[href$="/${runId}/advanced"]`),
+  ).not.toBeNull();
   expect(
     [...container.querySelectorAll("button")].map((b) => b.textContent),
-  ).toEqual(["Refresh run"]);
+  ).toEqual(["Refresh run", "Prepare a support report"]);
   expect(get.mock.calls[0].slice(0, 4)).toEqual([
-    "company",
+    companyId,
     "member",
-    "workflow",
-    "run",
+    workflowId,
+    runId,
   ]);
   expect(document.activeElement).toBe(container.querySelector("h1"));
 });
@@ -177,7 +183,7 @@ it.each(["permission.revoked", "analytical.context.access_lost"])(
     );
     await act(async () =>
       live({
-        companyId: "company",
+        companyId,
         type: "activity.logged",
         payload: { action: "workflow.run_updated" },
       }),
@@ -186,7 +192,7 @@ it.each(["permission.revoked", "analytical.context.access_lost"])(
     expect(container.textContent).not.toContain("Review customer-safe result");
     await act(async () =>
       live({
-        companyId: "company",
+        companyId,
         type:
           kind === "permission.revoked"
             ? "activity.logged"
@@ -207,3 +213,92 @@ it.each(["permission.revoked", "analytical.context.access_lost"])(
     );
   },
 );
+
+it("requires preview and an explicit download without including step content or contacting support", async () => {
+  vi.spyOn(workflowsApi, "runExperience").mockResolvedValue(data);
+  const download = vi
+    .spyOn(supportDownloads, "downloadWorkflowSupportDiagnostic")
+    .mockImplementation(() => {});
+  await mount();
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain("Prepare a support report"),
+  );
+  await act(async () =>
+    [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Prepare a support report")!
+      .click(),
+  );
+  const dialog = document.querySelector('[role="dialog"]')!;
+  const preview = dialog.querySelector("textarea")!;
+  const report = JSON.parse(preview.value);
+  expect(report).toMatchObject({
+    companyId,
+    workflowId,
+    runId,
+    runStatus: "waiting",
+    verification: "recorded_execution_only",
+  });
+  expect(preview.readOnly).toBe(true);
+  expect(preview.value).not.toContain("Review customer-safe result");
+  expect(preview.value).not.toContain("Human Approval");
+  expect(preview.value).not.toContain("member");
+  expect(dialog.textContent).toContain(
+    "Nothing is sent to support automatically",
+  );
+  expect(download).not.toHaveBeenCalled();
+  expect(
+    dialog.querySelector('a[href="mailto:support@blentera.com"]'),
+  ).not.toBeNull();
+  await act(async () =>
+    [...dialog.querySelectorAll("button")]
+      .find((button) => button.textContent === "Download report")!
+      .click(),
+  );
+  expect(download).toHaveBeenCalledExactlyOnceWith(report);
+  expect(dialog.querySelector('[role="status"]')?.textContent).toContain(
+    "Download requested",
+  );
+});
+
+it("withdraws the open support preview during native authority recheck and does not restore it from a late response", async () => {
+  let resolveNew!: (view: View) => void;
+  vi.spyOn(workflowsApi, "runExperience")
+    .mockResolvedValueOnce(data)
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveNew = resolve;
+        }),
+    );
+  const download = vi
+    .spyOn(supportDownloads, "downloadWorkflowSupportDiagnostic")
+    .mockImplementation(() => {});
+  await mount();
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain("Prepare a support report"),
+  );
+  await act(async () =>
+    [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Prepare a support report")!
+      .click(),
+  );
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  await act(async () =>
+    live({
+      companyId,
+      type: "activity.logged",
+      payload: { action: "permission.revoked" },
+    }),
+  );
+  await vi.waitFor(() =>
+    expect(document.querySelector('[role="dialog"]')).toBeNull(),
+  );
+  expect(document.querySelector("textarea")).toBeNull();
+  expect(container.textContent).not.toContain("Prepare a support report");
+  expect(download).not.toHaveBeenCalled();
+  await act(async () => resolveNew(data));
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain("Prepare a support report"),
+  );
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+});

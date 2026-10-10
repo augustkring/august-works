@@ -1,4 +1,5 @@
 export * from "./maintenance-history.js";
+export * from "./support-diagnostics.js";
 export { agentAdapterTypeSchema, optionalAgentAdapterTypeSchema } from "./adapter-type.js";
 export * from "./v9-feature-flags.js";
 export * from "./experience.js";
