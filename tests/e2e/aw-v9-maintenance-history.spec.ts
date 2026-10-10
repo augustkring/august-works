@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
 import { expect, test, type APIResponse } from "@playwright/test";
 import {
   createDb,
@@ -239,7 +240,7 @@ test("maintenance history reads native receipts separately from current state an
       .select()
       .from(companyAgentPackageInstallations)
       .where(
-        (await import("drizzle-orm")).eq(
+        eq(
           companyAgentPackageInstallations.id,
           installationId,
         ),
