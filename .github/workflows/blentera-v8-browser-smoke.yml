@@ -1,0 +1,82 @@
+name: BLENTERA V8 deployed browser QA
+on:
+  push:
+    branches:
+      - blentera-preview/v8-supabase-system-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install independent browser harness
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/blentera-qa"
+          npm install --prefix "$RUNNER_TEMP/blentera-qa" playwright@1.56.1 --no-audit --no-fund
+      - name: Test deployed URL in Chrome
+        shell: bash
+        env:
+          PUBLIC_URL: https://sharehtml.zhenjia.dev/v/6VqWcm7rGE/
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/blentera-qa/check.cjs" <<'JS'
+          const {chromium}=require('playwright');
+          const fs=require('fs');
+          (async()=>{
+            const browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+            const bad=[];
+            const url=process.env.PUBLIC_URL;
+            for(const width of [390,1440]){
+              const page=await browser.newPage({viewport:{width,height:900}});
+              page.on('pageerror',e=>bad.push('js: '+e.message));
+              await page.goto(url,{waitUntil:'domcontentloaded',timeout:45000});
+              await page.waitForTimeout(300);
+              const heading=await page.locator('.page[data-page="home"] h1').innerText();
+              if(!heading.includes('Change the tools.'))bad.push('home missing');
+              let metrics=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));
+              if(metrics.scroll>metrics.client)bad.push('home overflow '+width);
+              if(width===390){
+                await page.locator('.mobile-menu-trigger').click();
+                if(!await page.locator('#mobile-navigation').isVisible())bad.push('mobile menu hidden');
+                await page.locator('#mobile-navigation a[href="#/about"]').click();
+              } else {
+                await page.locator('.primary-nav a[href="#/about"]').click();
+              }
+              await page.waitForTimeout(250);
+              if(!await page.locator('.page[data-page="organisation"]').isVisible())bad.push('about routing '+width);
+              const roles=await page.locator('.executive-role').count();
+              if(roles!==8)bad.push('executive count '+roles);
+              await page.locator('.executive-role[data-role="CMO"]').click();
+              if(!await page.locator('#inspector-title').innerText().then(x=>x.includes('Marketing')))bad.push('role picker '+width);
+              await page.locator('.scenario-tab[data-scenario="incident"]').click();
+              if(!await page.locator('#scenario-title').innerText().then(x=>x.includes('Respond as one team')))bad.push('scenario picker '+width);
+              metrics=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));
+              if(metrics.scroll>metrics.client)bad.push('about overflow '+width);
+              await page.screenshot({path:process.env.RUNNER_TEMP+'/blentera-about-'+width+'.png',fullPage:true,animations:'disabled'});
+              if(width===1440){
+                await page.locator('.primary-nav a[href="#/"]').click();
+                await page.waitForTimeout(120);
+                await page.screenshot({path:process.env.RUNNER_TEMP+'/blentera-home-'+width+'.png',fullPage:true,animations:'disabled'});
+              }
+              console.log('PASS VIEWPORT',width,'ROLES',roles);
+              await page.close();
+            }
+            await browser.close();
+            if(bad.length){console.error('QA_FAIL',JSON.stringify(bad));process.exit(1);}
+            console.log('PUBLIC_BROWSER_VERIFIED='+url);
+          })().catch(e=>{console.error(e);process.exit(1);});
+          JS
+          NODE_PATH="$RUNNER_TEMP/blentera-qa/node_modules" node "$RUNNER_TEMP/blentera-qa/check.cjs"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blentera-v8-public-screenshots
+          path: ${{ runner.temp }}/blentera-*.png
+          if-no-files-found: warn
+          retention-days: 7
