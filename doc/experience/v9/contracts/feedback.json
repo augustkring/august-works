@@ -11,10 +11,11 @@
   "customerOutcome": "Submit a private product report with clear disclosure and a durable server-confirmed receipt.",
   "entryConditions": [
     "Current settled board identity and selected company; the feedback form is keyed by company and principal and does not retain foreign drafts.",
-    "Effective customer_feedback_v9 enables new submissions; original domain membership, company availability and request abuse admission remain necessary."
+    "Effective customer_feedback_v9 enables new submissions; original domain membership, company availability and request abuse admission remain necessary.",
+    "Current session and rollout reads must settle before writing or showing private draft fields and receipt references; same-turn fetching guards apply before mutation."
   ],
   "exitConditions": [
-    "A validated canonical server receipt confirms acceptance. An unconfirmed request keeps its original key, payload and context.",
+    "A validated Native acknowledgement from the current account epoch or a fresh current-authorized GET of its original ID confirms acceptance. A late acknowledgement remains concealed until the original read succeeds.",
     "Closing preserves the current in-memory form while mounted. A confirmed new report resets it; company/account withdrawal unmounts it."
   ],
   "content": {
@@ -29,7 +30,8 @@
     ],
     "displayedState": [
       "Category-specific question and optional goal, included-context disclosure, explicit diagnostics/name choices, unavailable image status and fixed support/security/privacy links.",
-      "Pending/unconfirmed submission disables input edits; only an accepted canonical receipt displays the feedback reference."
+      "Pending/unconfirmed submission disables input edits; only an accepted canonical receipt displays the feedback reference.",
+      "Generic session-recheck state hides private fields and receipt IDs while preserving the same mounted draft; a different settled account purges it."
     ]
   },
   "inputs": [
@@ -102,7 +104,8 @@
     "secondary": [
       "Cancel or close preserves the mounted draft and restores the invoking control.",
       "Retry an unconfirmed submission with its exact original key and payload; a canonical validation refusal allows correction with a new key.",
-      "View accepted feedback through My feedback; use separate confirmed support/security/privacy mailto links without prefilled report data."
+      "View accepted feedback through My feedback; use separate confirmed support/security/privacy mailto links without prefilled report data.",
+      "Check feedback receipt reads the original committed feedback after an unconfirmed account recheck; Share feedback in the command palette opens this same empty form without submitting or filling body/context."
     ],
     "destructiveOrIrreversible": []
   },
@@ -115,7 +118,7 @@
     "canonicalWriteOperation": "POST canonical Customer Feedback with immutable body/goal and explicit disclosure choices, company membership, durable request key and abuse limit.",
     "authorityEffect": "Only the canonical feedback owner can accept a submission. No tool/provider/agent effect or permission expansion is caused by feedback content.",
     "asyncWork": "Explicit submission only, with original native idempotency, current membership and transactional rollout admission. Original limit is twenty requests per principal/company in ten minutes. No automatic retry or report send occurs.",
-    "receipt": "Server-accepted AWF reference. The form never claims acceptance for a lost acknowledgement; private My feedback is separately owned by the same current account."
+    "receipt": "Server-accepted AWF reference shown only in the current account epoch. A late acknowledgement uses a fresh original feedback GET with no-store, abort signal and no retained query cache. Read refusal remains unconfirmed and offers read-only Check feedback receipt; it never resubmits the create."
   },
   "states": {
     "loading": "The global trigger waits for settled identity and admission; a pending submission disables form edits and announces sending.",

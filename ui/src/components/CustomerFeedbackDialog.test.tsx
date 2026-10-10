@@ -8,8 +8,9 @@ import { i18n } from "../i18n";
 import { customerFeedbackApi } from "../api/customer-feedback";
 import { ApiError } from "../api/client";
 import { CustomerFeedbackDialog } from "./CustomerFeedbackDialog";
+const identityState = vi.hoisted(() => ({ principal: "feedback-member" }));
 vi.mock("../hooks/useV9FeatureEnabled", () => ({
-  useV9FeatureEnabled: () => ({ enabled: true }),
+  useV9FeatureEnabled: () => ({ enabled: true, query: { isSuccess: true, isFetching: false, isError: false } }),
 }));
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({
@@ -19,7 +20,7 @@ vi.mock("../context/CompanyContext", () => ({
 }));
 vi.mock("../api/companies-query", () => ({
   useAccountIdentity: () => ({
-    userId: "feedback-member",
+    userId: identityState.principal,
     localImplicit: false,
     settled: true,
     failed: false,
@@ -31,6 +32,7 @@ afterEach(async () => {
   container?.remove();
   client?.clear();
   vi.restoreAllMocks();
+  identityState.principal = "feedback-member";
   await i18n.changeLanguage("en");
 });
 async function click(label: string) {
@@ -227,4 +229,76 @@ describe("feedback consent and canonical receipt", () => {
     expect(JSON.stringify(first)).not.toContain("private-query");
     expect(JSON.stringify(first)).not.toContain("Lost acknowledgement");
   });
+});
+
+async function sessionRecheck() {
+  let resolve!: (value: object) => void, pending!: Promise<unknown>;
+  await act(async () => {
+    pending = client.fetchQuery({ queryKey: ["auth", "session"], queryFn: () => new Promise<object>(done => { resolve = done; }) });
+  });
+  // Query notifications are batched outside React's act. Wait for the real
+  // pending-state render before resolving the fixture or changing its account.
+  await vi.waitFor(() => expect([...document.querySelectorAll("button")].find(button => button.textContent === "Feedback")?.disabled).toBe(true));
+  return async () => { await act(async () => { resolve({}); await pending; }); };
+}
+it("hides a same-account draft during a real session recheck and preserves it only for that account", async () => {
+  const post = vi.spyOn(customerFeedbackApi, "create");
+  await mount();await enter("PRIVATE-UNSENT-FEEDBACK");
+  const settle = await sessionRecheck();
+  expect(document.querySelector("textarea")).toBeNull();
+  expect(document.body.textContent).not.toContain("PRIVATE-UNSENT-FEEDBACK");
+  expect(post).not.toHaveBeenCalled();
+  await settle();
+  await vi.waitFor(() => expect(document.querySelector("textarea")?.value).toBe("PRIVATE-UNSENT-FEEDBACK"));
+  const changed = await sessionRecheck();identityState.principal = "other-member";await changed();
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  await click("Feedback");
+  expect(document.querySelector("textarea")!.value).toBe("");
+  expect(post).not.toHaveBeenCalled();
+});
+it("withholds a late acknowledgement through an account epoch and reconciles its original receipt with current GET only", async () => {
+  let acknowledge!: (value: typeof accepted) => void;
+  const post = vi.spyOn(customerFeedbackApi, "create").mockImplementation(() => new Promise(done => { acknowledge = done; }));
+  const read = vi.spyOn(customerFeedbackApi, "get").mockRejectedValueOnce(new Error("PRIVATE-READ-CANARY")).mockResolvedValueOnce(accepted);
+  await mount();await enter(accepted.body);await click("Send feedback");
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  const settle = await sessionRecheck();
+  await act(async () => acknowledge(accepted));
+  expect(document.body.textContent).not.toContain(accepted.feedbackId);
+  expect(read).not.toHaveBeenCalled();
+  await settle();
+  await vi.waitFor(() => expect(document.body.textContent).toContain("could not be confirmed with your current access"));
+  expect(document.body.textContent).not.toContain(accepted.feedbackId);
+  expect(document.body.textContent).not.toContain("PRIVATE-READ-CANARY");
+  expect(document.querySelector("textarea")).toBeNull();
+  await click("Check feedback receipt");
+  await vi.waitFor(() => expect(document.body.textContent).toContain(accepted.feedbackId));
+  expect(read).toHaveBeenCalledTimes(2);
+  expect(read.mock.calls.every(call => call[0] === accepted.companyId && call[1] === "feedback-member" && call[2] === accepted.id)).toBe(true);
+  expect(post).toHaveBeenCalledTimes(1);
+});
+it("withdraws an acknowledged receipt until a fresh original-owner read after session revalidation", async () => {
+  const post = vi.spyOn(customerFeedbackApi, "create").mockResolvedValue(accepted);
+  const read = vi.spyOn(customerFeedbackApi, "get").mockRejectedValue(new Error("PRIVATE-WITHDRAWN-CANARY"));
+  await mount();await enter(accepted.body);await click("Send feedback");
+  await vi.waitFor(() => expect(document.body.textContent).toContain(accepted.feedbackId));
+  const settle = await sessionRecheck();
+  expect(document.body.textContent).not.toContain(accepted.feedbackId);
+  await settle();
+  await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+  expect(document.body.textContent).not.toContain(accepted.feedbackId);
+  expect(document.body.textContent).not.toContain("PRIVATE-WITHDRAWN-CANARY");
+  expect(post).toHaveBeenCalledTimes(1);
+});
+it("blocks a same-turn submit before React observes the session fetch", async () => {
+  const post = vi.spyOn(customerFeedbackApi, "create");
+  await mount();await enter(accepted.body);
+  let resolve!: (value: object) => void, pending!: Promise<unknown>;
+  await act(async () => {
+    pending = client.fetchQuery({ queryKey: ["auth", "session"], queryFn: () => new Promise<object>(done => { resolve = done; }) });
+    document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  expect(post).not.toHaveBeenCalled();
+  await act(async () => { resolve({});await pending; });
+  await vi.waitFor(() => expect(document.querySelector("textarea")?.value).toBe(accepted.body));
 });

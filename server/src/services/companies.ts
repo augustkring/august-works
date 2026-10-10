@@ -33,6 +33,8 @@ import {
   routineTriggers,
   routineRevisions,
   routines,
+  customerFeedback,
+  saasNotifications,
 } from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
 import { isCloudManagedInstance } from "./cloud-instance.js";
@@ -538,6 +540,10 @@ export function companyService(db: Db) {
     remove: (id: string) =>
       db.transaction(async (tx) => {
         // Delete from child tables in dependency order
+        // The original feedback root owns its private access and event rows
+        // through tenant-bound cascade FKs. Erase it before its company.
+        await tx.delete(customerFeedback).where(eq(customerFeedback.companyId, id));
+        await tx.delete(saasNotifications).where(eq(saasNotifications.companyId, id));
         const companyRunIds = await tx
           .select({ id: heartbeatRuns.id })
           .from(heartbeatRuns)

@@ -2,7 +2,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { businessMetrics, businessMetricVersions, businessMetricTargets, businessMetricTargetVersions, businessMetricObservations, decisions, decisionTargetIssues, documentRevisions, foundationDocuments, foundationSections, goals, issues, projects, projectMilestones, type Db } from "@paperclipai/db";
 import { v5FeatureEnabled, type BusinessMetricResult, type StrategyExecutionReference } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
-import type { AuthorizationActor } from "../authorization.js";
+import { authorizationService, type AuthorizationActor, type AuthorizationResource } from "../authorization.js";
 import { assertV7Authorization } from "../v7-authorization.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { canReadDecisionSource } from "../decision-queues.js";
@@ -20,6 +20,7 @@ export function strategyReferenceId(ref: StrategyExecutionReference) {
 const nativeProjectColumns = {id:projects.id,status:projects.status,createdAt:projects.createdAt,updatedAt:projects.updatedAt,archivedAt:projects.archivedAt};
 const nativeIssueColumns = {id:issues.id,projectId:issues.projectId,parentId:issues.parentId,assigneeAgentId:issues.assigneeAgentId,assigneeUserId:issues.assigneeUserId,status:issues.status,originKind:issues.originKind,originId:issues.originId,createdAt:issues.createdAt,updatedAt:issues.updatedAt};
 type NativePopulationReads = {
+  authority?: Pick<ReturnType<typeof authorizationService>, "decide">;
   issues: Map<string, Pick<typeof issues.$inferSelect, keyof typeof nativeIssueColumns>>;
   projects: Map<string, Pick<typeof projects.$inferSelect, keyof typeof nativeProjectColumns>>;
 };
@@ -30,10 +31,15 @@ async function authorizeReference(tx: Db, companyId: string, actor: Authorizatio
   const issueIds = new Set<string>(), projectIds = new Set<string>();
   let metricObservation: BusinessMetricResult | undefined;
   let nativeObject:{snapshot:NativeMetricInput;archived:boolean}|undefined;
+  async function authorizeSource(action: "issue:read" | "project:read", resource: AuthorizationResource) {
+    if (!reads?.authority) return assertV7Authorization(tx, actor, companyId, action, resource);
+    const decision = await reads.authority.decide({ actor, action, resource, enforceResponsibleUserIntersection: true });
+    if (!decision.allowed) throw forbidden(decision.explanation, { code: "permission_denied", reason: decision.reason });
+  }
   async function project(id: string) {
     const row = reads ? reads.projects.get(id) : (await tx.select(nativeProjectColumns).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).for("share"))[0];
     if (!row) throw notFound("Strategy project source is unavailable");
-    await assertV7Authorization(tx, actor, companyId, "project:read", { type: "project", companyId, projectId: id });
+    await authorizeSource("project:read", { type: "project", companyId, projectId: id });
     projectIds.add(id);
     return row;
   }
@@ -41,7 +47,7 @@ async function authorizeReference(tx: Db, companyId: string, actor: Authorizatio
     const row = reads ? reads.issues.get(id) : (await tx.select(nativeIssueColumns).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, id), isNull(issues.hiddenAt))).for("share"))[0];
     if (!row) throw notFound("Strategy task source is unavailable");
     issueIds.add(id);
-    await assertV7Authorization(tx, actor, companyId, "issue:read", { type: "issue", companyId, issueId: row.id, projectId: row.projectId, parentIssueId: row.parentId, assigneeAgentId: row.assigneeAgentId, assigneeUserId: row.assigneeUserId, status: row.status, originKind: row.originKind, originId: row.originId });
+    await authorizeSource("issue:read", { type: "issue", companyId, issueId: row.id, projectId: row.projectId, parentIssueId: row.parentId, assigneeAgentId: row.assigneeAgentId, assigneeUserId: row.assigneeUserId, status: row.status, originKind: row.originKind, originId: row.originId });
     if (row.projectId) await project(row.projectId);
     return row;
   }
@@ -138,19 +144,25 @@ export async function authorizeStrategyNativePopulation(tx: Db, companyId: strin
     const rows = await tx.select(nativeProjectColumns).from(projects).where(and(eq(projects.companyId, companyId), inArray(projects.id, selected))).limit(selected.length + 1).for("share");
     for (const row of rows) reads.projects.set(row.id, row);
   }
-  const admitted = new Map<string, Awaited<ReturnType<typeof authorizeReference>>>();
+  // The original Source owner transports only locked current row facts and
+  // compiled SQL. Every exact root and ancestor still gets its own current
+  // actor × responsible-human decision. No permission result is reused.
+  return authorizationService(tx).withReadSources(companyId, type === "issue" ? unitIds : [], projectIds, async authority => {
+    const currentReads: NativePopulationReads = { ...reads, authority };
+    const admitted = new Map<string, Awaited<ReturnType<typeof authorizeReference>>>();
   for (let offset = 0; offset < unitIds.length; offset += 32) {
     budget();
     // Drain every in-flight authorization before throwing: no admission may
     // outlive the transaction's original source and privacy locks.
     const checked = await Promise.allSettled(unitIds.slice(offset, offset + 32).map(async id => {
-      const result = await authorizeReference(tx, companyId, actor, { type, id }, sensitivity, true, reads);
+      const result = await authorizeReference(tx, companyId, actor, { type, id }, sensitivity, true, currentReads);
       budget(); return { id, result };
     }));
     for (const check of checked) if (check.status === "rejected") throw check.reason;
     for (const check of checked) if (check.status === "fulfilled") admitted.set(check.value.id, check.value.result);
   }
   budget(); return admitted;
+  });
 }
 
 export async function validateCurrentStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, now = new Date()) {

@@ -17,6 +17,7 @@ export const EXPERIENCE_COMMAND_DESTINATIONS = {
   run_workflow: "/workflows",
   create_task: null,
   create_project: null,
+  share_feedback: null,
 } as const;
 export type ExperienceCommandId = keyof typeof EXPERIENCE_COMMAND_DESTINATIONS;
 const commandIds = Object.keys(EXPERIENCE_COMMAND_DESTINATIONS) as [
@@ -122,6 +123,9 @@ export function parseExperienceCommand(raw: string): ExperienceCommandIntent {
     "forbind app": "connect_app",
     "run workflow": "run_workflow",
     "kør workflow": "run_workflow",
+    feedback: "share_feedback",
+    "share feedback": "share_feedback",
+    "del feedback": "share_feedback",
   };
   if (Object.hasOwn(aliases, normalized))
     return { kind: "command", id: aliases[normalized]!, text: "" };

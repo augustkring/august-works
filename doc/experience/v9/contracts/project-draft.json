@@ -1,7 +1,7 @@
 {
   "screenId": "PROJECT-DRAFT",
   "journeyId": "ambient-authoring",
-  "routeOrSurface": "Command palette → original Create Project dialog",
+  "routeOrSurface": "Command palette \u2192 original Create Project dialog",
   "targetExperienceProfiles": [
     "member",
     "manager",
@@ -16,7 +16,7 @@
   ],
   "exitConditions": [
     "Cancellation leaves no project until an explicit submission.",
-    "Only the original Native project receipt and a current actor/company-bound project read permit saved-project presentation."
+    "Only the original creator-bound Native idempotency receipt and a current actor/company-bound project read permit saved-project presentation."
   ],
   "content": {
     "h1": "Prepare a Project",
@@ -30,7 +30,7 @@
     ],
     "displayedState": [
       "Editable name and optional goal",
-      "Pending or unconfirmed save with the original frozen request",
+      "Pending or unconfirmed creation; reconcile the original nonce with reads",
       "Current authorized project receipt or unavailable state"
     ]
   },
@@ -63,7 +63,7 @@
     },
     "secondary": [
       "Cancel the unsaved draft",
-      "Try again uses the original immutable request",
+      "Check project receipt reads the original nonce without another create",
       "Open project only after a current original-owner read"
     ],
     "destructiveOrIrreversible": []
@@ -72,12 +72,12 @@
     "canonicalReadDomains": [
       "Original current actor session",
       "Current original command availability",
-      "Original Native Project get with actor/company binding"
+      "Original Native creator-bound Project create-receipt lookup with current project read authorization"
     ],
     "canonicalWriteOperation": "Original POST /api/companies/:companyId/projects with its existing actor-scoped Native idempotency receipt; no second writer or store",
     "authorityEffect": "A draft and a command do not grant permissions. The original Native owner admits explicit project creation. No repository, runtime, lead-agent assignment or job is requested.",
-    "asyncWork": "Original uncached scoped reads and an explicit original-owner POST. Unconfirmed saves freeze their full original request in React memory and never retry automatically.",
-    "receipt": "Minimal original project ID/company/name; a fresh current-owner read is required before displaying the project after every account revalidation."
+    "asyncWork": "One explicit original-owner POST. Unconfirmed outcomes reconcile only through GET of the original Native nonce; reload never reconstructs or resends the creation body.",
+    "receipt": "Minimal current project ID/company/name after a fresh creator-bound Native receipt read. Bounded per-tab sessionStorage keeps only version/company/principal/nonce, never project content, and removes the locator after a confirmed current read."
   },
   "states": {
     "loading": "Conceal prior private fields and receipts during current session or original-source checks.",
@@ -87,14 +87,14 @@
     "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
     "permission_denied": "Withhold the private draft/receipt when the account changes or original project read is denied.",
-    "recovering": "Recheck original current authority; explicit retry preserves exactly the original Native idempotency request.",
+    "recovering": "Recheck original current authority and read the retained original nonce. Missing or erased Native evidence remains unconfirmed and cannot authorize another create.",
     "success": "Present only the current authorized original project. Open it to add tasks and review any configured automation; this receipt does not attest to all downstream execution."
   },
   "navigation": {
     "back": "The same mounted account/company draft retains entered name/goal during session rechecks.",
-    "cancelOrSaveExit": "Cancel closes the scoped unsaved draft; no browser persistent storage is used. An already committed Native project remains in Projects.",
-    "deepLink": "Command palette → Create Project",
-    "resume": "After reload, check Projects for a committed original result before starting a new draft. Cross-reload request reconstruction is not implemented."
+    "cancelOrSaveExit": "Cancel closes the draft. Only the content-free original nonce/scope survives an unknown submitted outcome in this tab; an already committed project remains in Projects.",
+    "deepLink": "Command palette \u2192 Create Project",
+    "resume": "After reload, opening a project draft resumes the original creator-bound receipt through GET. Failed or corrupt recovery storage blocks creation and offers Projects."
   },
   "accessibility": {
     "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
@@ -102,7 +102,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
@@ -136,7 +136,7 @@
   },
   "acceptance": {
     "functional": [
-      "Verify original Native creation/replay, fresh current-owner read, lost acknowledgement and no created agent/task/run on the exact artifact."
+      "Verify a single original Native create, lost acknowledgement and first receipt-read failure, reload recovery through GET, current Native name, cleared content-free locator and zero created agents/tasks/runs on the exact artifact."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

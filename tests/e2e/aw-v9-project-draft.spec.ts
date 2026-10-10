@@ -8,10 +8,10 @@ async function json(response: APIResponse) {
   return response.json();
 }
 
-// Original local-board/project APIs and actual Native idempotency. Only the
-// transport of the first committed POST is aborted; its Native result persists.
+// Original local-board/project APIs and current creator-bound receipt. Only
+// the transport of the single committed POST and first receipt GET is aborted.
 // This is software evidence, not hosted identity or live business acceptance.
-test("an explicit project draft recovers a lost Native acknowledgement without creating another project or running work", async ({
+test("an explicit project draft recovers a lost Native acknowledgement after reload through reads without creating another project or running work", async ({
   page,
   request,
 }, info) => {
@@ -36,21 +36,29 @@ test("an explicit project draft recovers a lost Native acknowledgement without c
   );
   const base = `/api/companies/${company.id}`;
   const attempts: Array<Record<string, unknown>> = [];
-  let savedId: string | undefined;
+  let savedId: string | undefined, key: string | undefined, reads = 0;
   await page.route(`**${base}/projects?**`, async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     expect(
       new URL(route.request().url()).searchParams.get("expectedActorId"),
     ).toBe("local-board");
     attempts.push(route.request().postDataJSON());
+    expect(attempts).toHaveLength(1);
+    key = attempts[0]!.idempotencyKey as string;
     const response = await route.fetch();
     const result = await json(response);
     expect(result.companyId).toBe(company.id);
     expect(result.status).toBe("planned");
     savedId ??= result.id;
     expect(result.id).toBe(savedId);
-    if (attempts.length === 1) return route.abort("failed");
-    await route.fulfill({ response });
+    await route.abort("failed");
+  });
+  await page.route(`**${base}/projects/create-receipts/**`, async (route) => {
+    expect(route.request().method()).toBe("GET");
+    expect(new URL(route.request().url()).searchParams.get("expectedActorId")).toBe("local-board");
+    reads++;
+    if (reads === 1) return route.abort("failed");
+    await route.continue();
   });
   try {
     await page.goto(`/${company.issuePrefix}/dashboard`);
@@ -76,24 +84,34 @@ test("an explicit project draft recovers a lost Native acknowledgement without c
       .getByRole("button", { name: "Create project", exact: true })
       .click();
     await expect(page.getByRole("alert")).toContainText(
-      "could not be confirmed",
+      "We have not confirmed this project",
     );
     expect(attempts).toHaveLength(1);
-    await expect(
-      page.getByRole("textbox", { name: "Project name", exact: true }),
-    ).toBeDisabled();
+    await expect(page.getByRole("textbox", { name: "Project name", exact: true })).toHaveCount(0);
     const once = await json(await request.get(`${base}/projects`));
     expect(once).toHaveLength(1);
     expect(once[0].id).toBe(savedId);
-    await page.getByRole("button", { name: "Try again", exact: true }).click();
+    await json(await request.patch(`/api/projects/${savedId}`, { data: { name: "Current Native research project" } }));
+    const pending = await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-project-receipts"));
+    expect(pending).toContain(key!);
+    expect(pending).not.toContain("Private browser draft");
+    expect(pending).not.toContain("Customer Research");
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1, name: "Home", exact: true })).toBeVisible();
+    await page.keyboard.press("Control+k");
+    await page.getByRole("combobox").fill("create project A separate new draft");
+    await page.getByRole("option", { name: "Prepare a Project", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Find your project", exact: true })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Project saved", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Project saved", exact: true }),
     ).toBeFocused();
-    expect(attempts).toHaveLength(2);
-    expect(attempts[1]).toEqual(attempts[0]);
+    expect(attempts).toHaveLength(1);
+    expect(reads).toBe(2);
+    await expect(page.getByRole("dialog")).toContainText("Current Native research project");
+    expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-project-receipts"))).toBeNull();
     const retained = await json(await request.get(`${base}/projects`));
     expect(retained).toHaveLength(1);
     expect(retained[0].id).toBe(savedId);

@@ -136,7 +136,9 @@
     "noMessages": "Ingen beskeder eller interne noter endnu.",
     "submissionUnknown": "Din feedback kunne ikke bekræftes. Den oprindelige tekst er låst; et genforsøg sender samme anmodning. Kontrollér Min feedback, før du starter en ny indsendelse.",
     "replyUnknown": "Dit svar er ikke bekræftet. Den oprindelige tekst er låst; et genforsøg kontrollerer samme svar uden at oprette et ekstra.",
-    "triageUnknown": "Triage er ikke bekræftet. Felterne er låst; et genforsøg sender den oprindelige opdatering."
+    "triageUnknown": "Triage er ikke bekræftet. Felterne er låst; et genforsøg sender den oprindelige opdatering.",
+    "receiptUnconfirmed": "Kvitteringen for din feedback kunne ikke bekræftes med din aktuelle adgang. Kontrollér Min feedback eller kvitteringen igen.",
+    "checkReceipt": "Kontrollér feedbackkvittering"
   },
   "profileView": "Visning",
   "profileFailed": "Din visning kunne ikke ændres. Opdatér for at kontrollere din adgang.",
@@ -449,7 +451,8 @@
       "connect_app": "Forbind en app",
       "run_workflow": "Åbn workflows til kørsel",
       "ask_august": "Spørg August",
-      "create_project": "Forbered et projekt"
+      "create_project": "Forbered et projekt",
+      "share_feedback": "Del feedback"
     }
   },
   "needsYouLoadFailed": "Needs You kunne ikke indlæses. Din aktuelle adgang til virksomheden skal kontrolleres.",
@@ -892,10 +895,16 @@
     "saved": "Projekt gemt",
     "open": "Åbn projekt",
     "close": "Luk projektkladde",
-    "unconfirmed": "Gemningen kunne ikke bekræftes. Din kladde er bevaret. Prøv igen bruger den samme oprindelige forespørgsel; tjek Projekter, før du starter en ny kladde.",
+    "unconfirmed": "Vi har ikke bekræftet projektet. Tjek kvitteringen eller Projekter, før du opretter en ny.",
     "unavailable": "Det aktuelle projekt eller din konto kunne ikke verificeres. Tjek din adgang, eller prøv igen.",
     "cancel": "Annuller",
-    "loading": "Forbereder projektkladde…"
+    "loading": "Forbereder projektkladde…",
+    "recoveryUnavailable": "Vi kunne ikke gendanne projektets kvitteringsreference. Tjek Projekter, før du opretter en ny projekt.",
+    "notSent": "Vi kunne ikke gemme kvitteringsreferencen. Projektet er ikke sendt. Prøv igen, eller brug Projekter.",
+    "checkReceipt": "Tjek projektkvitteringen",
+    "resumeTitle": "Find din projekt",
+    "resumeDescription": "Tjek projektet fra dit tidligere forsøg.",
+    "checkProjects": "Se Projekter"
   },
   "toolCard": {
     "loading": "Henter det aktuelle kort…",

@@ -136,7 +136,9 @@
     "noMessages": "No messages or internal notes yet.",
     "submissionUnknown": "Feedback could not be confirmed. The original text is locked; retry sends the same request. Check My feedback before starting another report.",
     "replyUnknown": "Your response has not been confirmed. The original text is locked; retry checks the same response without creating a second one.",
-    "triageUnknown": "Triage has not been confirmed. Inputs are locked; retry sends the original update."
+    "triageUnknown": "Triage has not been confirmed. Inputs are locked; retry sends the original update.",
+    "receiptUnconfirmed": "Your feedback receipt could not be confirmed with your current access. Check My Feedback or check the receipt again.",
+    "checkReceipt": "Check feedback receipt"
   },
   "profileView": "View",
   "profileFailed": "Your view could not be changed. Refresh to check your access.",
@@ -449,7 +451,8 @@
       "connect_app": "Connect an App",
       "run_workflow": "Open Workflows to run",
       "ask_august": "Ask August",
-      "create_project": "Prepare a Project"
+      "create_project": "Prepare a Project",
+      "share_feedback": "Share feedback"
     }
   },
   "needsYouLoadFailed": "Needs You could not be loaded. Your current company access must be checked.",
@@ -892,10 +895,16 @@
     "saved": "Project saved",
     "open": "Open project",
     "close": "Close project draft",
-    "unconfirmed": "Saving could not be confirmed. Your draft is retained. Try again uses the same original request; check Projects before starting another draft.",
+    "unconfirmed": "We have not confirmed this project. Check its receipt or Projects before creating another one.",
     "unavailable": "The current project or account could not be verified. Check your access or try again.",
     "cancel": "Cancel",
-    "loading": "Preparing project draft…"
+    "loading": "Preparing project draft…",
+    "recoveryUnavailable": "We could not restore project recovery information. Check Projects before creating another project.",
+    "notSent": "We could not keep a recovery receipt. Your project has not been sent. Try again or use Projects.",
+    "checkReceipt": "Check project receipt",
+    "resumeTitle": "Find your project",
+    "resumeDescription": "Check the project from your earlier attempt.",
+    "checkProjects": "Check Projects"
   },
   "toolCard": {
     "loading": "Loading the current card…",
