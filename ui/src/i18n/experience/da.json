@@ -71,6 +71,7 @@
     "context": "Medtages automatisk",
     "contextDetails": "Virksomhed, sidekategori, udgivelsesversion, tidspunkt, sprog, tidszone og skærmstørrelseskategori. Ingen sidetekst, URL-parametre, prompts, output eller automatiske skærmbilleder.",
     "diagnostics": "Medtag teknisk diagnostik",
+    "diagnosticsEmpty": "Der er ikke indsamlet teknisk diagnostik til denne rapport. Hvis du vælger denne mulighed, sendes en tom diagnostikpakke. Logs, beskeder og skærmbilleder indsamles ikke.",
     "omitName": "Medtag ikke mit navn i denne feedback",
     "nameNotice": "Virksomhed og teknisk kontekst kan stadig medtages. En separat beskyttet kontorelation giver dig adgang til din feedback; sikkerhedslogning har sit eget formål.",
     "imagesUnavailable": "Billedvedhæftninger er midlertidigt utilgængelige.",

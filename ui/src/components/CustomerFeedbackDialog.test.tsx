@@ -178,4 +178,41 @@ describe("feedback consent and canonical receipt", () => {
     );
     expect(save.mock.calls[1]![2].body).toBe("Corrected report");
   });
+  it("discloses the exact empty diagnostic bundle before opt-in and freezes it for an unknown retry", async () => {
+    const save = vi
+      .spyOn(customerFeedbackApi, "create")
+      .mockRejectedValueOnce(new Error("Lost acknowledgement"))
+      .mockResolvedValueOnce(accepted);
+    await mount();
+    const toggle = [
+      ...document.querySelectorAll<HTMLInputElement>("input"),
+    ].find(
+      (input) =>
+        input.getAttribute("aria-describedby") ===
+        "feedback-diagnostics-disclosure",
+    )!;
+    expect(toggle.checked).toBe(false);
+    expect(
+      document.getElementById("feedback-diagnostics-disclosure")?.textContent,
+    ).toContain("Selecting this option sends an empty diagnostic bundle");
+    await act(async () => toggle.click());
+    await enter(accepted.body);
+    await click("Send feedback");
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="alert"]')).not.toBeNull(),
+    );
+    const first = save.mock.calls[0]![2];
+    expect(first.includeDiagnostics).toBe(true);
+    expect(first.diagnostics).toEqual({
+      safeErrorCodes: [],
+      correlationIds: [],
+    });
+    expect(toggle.disabled).toBe(true);
+    await act(async () => toggle.click());
+    await click("Send feedback");
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls[1]![2]).toEqual(first);
+    expect(JSON.stringify(first)).not.toContain("private-query");
+    expect(JSON.stringify(first)).not.toContain("Lost acknowledgement");
+  });
 });

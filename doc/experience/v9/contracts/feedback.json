@@ -68,8 +68,8 @@
       "dataType": "Boolean",
       "required": false,
       "default": "False",
-      "help": "Explicit safe-code/correlation allowlist; no raw logs or screenshots.",
-      "validation": "Diagnostics require explicit opt-in",
+      "help": "Explicit safe-code/correlation allowlist; no raw logs or screenshots. The current dialog discloses that it has collected no diagnostics and opt-in sends an empty bundle before submission.",
+      "validation": "Diagnostics require explicit opt-in; unknown-result retries preserve the originally disclosed immutable bundle.",
       "autofillOrPrefill": "No automatic content collection"
     },
     {

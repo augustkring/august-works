@@ -71,6 +71,7 @@
     "context": "Included automatically",
     "contextDetails": "Company, page category, release version, time, language, timezone and viewport category. No page text, URL parameters, prompts, outputs or automatic screenshots.",
     "diagnostics": "Include technical diagnostics",
+    "diagnosticsEmpty": "No technical diagnostics have been collected for this report. Selecting this option sends an empty diagnostic bundle. Logs, messages and screenshots are not collected.",
     "omitName": "Don't include my name in this feedback",
     "nameNotice": "Company and technical context may still be included. A separate protected account link lets you view your feedback; security logs follow their own purpose.",
     "imagesUnavailable": "Image attachments are temporarily unavailable.",

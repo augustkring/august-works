@@ -201,7 +201,6 @@ function FeedbackForm({
                   attempted.current = null;
                   setRequestKey(crypto.randomUUID());
                   send.reset();
-                  send.reset();
                 }}
               >
                 {t("feedback.close")}
@@ -306,12 +305,19 @@ function FeedbackForm({
                   type="checkbox"
                   disabled={inputsLocked}
                   checked={includeDiagnostics}
+                  aria-describedby="feedback-diagnostics-disclosure"
                   onChange={(event) =>
                     edit(() => setIncludeDiagnostics(event.target.checked))
                   }
                 />
                 {t("feedback.diagnostics")}
               </label>
+              <p
+                id="feedback-diagnostics-disclosure"
+                className="text-sm text-muted-foreground"
+              >
+                {t("feedback.diagnosticsEmpty")}
+              </p>
               <label className="flex min-h-11 items-center gap-3">
                 <input
                   type="checkbox"
