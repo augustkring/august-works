@@ -19,6 +19,7 @@ test("customer stop recovers a lost native admission after reload without repeat
   );
   const enabled = {
     enableWorkflowsV1: true,
+    enableWorkflowBuilderV1: true,
     experience_projection_v9: true,
     progressive_shell_v9: true,
   };
