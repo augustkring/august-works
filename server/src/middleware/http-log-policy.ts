@@ -52,6 +52,7 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/companies\/[^/]+\/experience\/commands(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/company(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/support-access(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/(?:[^/]*\/)*support-sessions(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/agent-package-installations\/[^/]+\/experience(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/agents\/[^/]+\/experience(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/workflows\/[^/]+\/experience(?:\/|$)/i.test(pathname)
@@ -65,6 +66,7 @@ export function privateExperienceLogUrl(url: string): string {
   if (/\/experience\/commands(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/commands";
   if (/\/experience\/company(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/company";
   if (/\/experience\/support-access(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/support-access";
+  if (/\/support-sessions(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/support-sessions/:operation";
   if (/\/agent-package-installations\/[^/]+\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agent-package-installations/:installationId/experience";
   if (/\/agents\/[^/]+\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agents/:agentId/experience";
   if (/\/workflows\/[^/]+\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflows/:workflowId/experience";

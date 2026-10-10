@@ -45,6 +45,22 @@ describe("Resolved V9 screen contracts", () => {
     expect(parsed.journeyId).toBe("support");
     expect(manifest.screens).toHaveLength(70);
   });
+  it("validates original Native support controls as a supporting contract without replacing launch acceptance", () => {
+    const parsed = experienceScreenContractSchema.parse(
+      JSON.parse(
+        readFileSync(
+          resolve(
+            root,
+            "doc/experience/v9/contracts/native-support-controls.json",
+          ),
+          "utf8",
+        ),
+      ),
+    );
+    expect(parsed.screenId).toBe("NATIVE-SUPPORT-CONTROLS");
+    expect(parsed.journeyId).toBe("support");
+    expect(manifest.screens).toHaveLength(70);
+  });
   it("never substitutes pending implementation or evidence with a source paragraph", () => {
     for (const screen of manifest.screens)
       if (screen.implementationStatus === "implemented")

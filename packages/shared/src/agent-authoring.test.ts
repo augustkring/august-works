@@ -5,9 +5,53 @@ import {
   agentDraftSaveSchema,
   agentAuthoringDraftPageSchema,
   agentAuthoringDraftViewSchema,
+  hireAgentCapabilitySchema,
+  hireAgentDeclaredAccessSchema,
 } from "./agent-authoring.js";
 
 describe("unpublished agent authoring contracts", () => {
+  it("keeps old capability reads available without interpreting absent declarations as assessed access", () => {
+    const capability = hireAgentCapabilitySchema.parse({
+      key: "research",
+      versionId: "10000000-0000-4000-8000-000000000001",
+      version: "1.0.0",
+      name: "Research",
+      category: "Research",
+      outcome: "Prepare reviewed research",
+      requiredKnowledge: [],
+      requiredConnections: [],
+      limits: [],
+      actionClasses: ["internal_draft"],
+    });
+    expect(capability.declaredAccess).toBeUndefined();
+  });
+  it("refuses claimed effective access, provider qualification and removed human approval in package previews", () => {
+    const declaration = {
+      maximumRisk: "C1",
+      optionalConnections: [],
+      memoryPolicy: "source_governed",
+      humanApproval: "before_material_action",
+      supervision: "bounded_native",
+      verification: "independent_native",
+      sandboxAssurance: "qualified_managed",
+      runtimeProviders: ["paperclip_native"],
+      scopeAssessment: "unavailable",
+      authorityEffect: "none",
+    };
+    expect(hireAgentDeclaredAccessSchema.safeParse(declaration).success).toBe(
+      true,
+    );
+    for (const forged of [
+      { ...declaration, grants: ["write"] },
+      { ...declaration, scopeAssessment: "approved" },
+      { ...declaration, humanApproval: "not_required" },
+      { ...declaration, authorityEffect: "granted" },
+      { ...declaration, providerQualified: true },
+    ])
+      expect(hireAgentDeclaredAccessSchema.safeParse(forged).success).toBe(
+        false,
+      );
+  });
   it("accepts explicit Hire version references and bounded setup steps without client-supplied pins or authority", () => {
     const requestId = "10000000-0000-4000-8000-000000000001";
     expect(agentDraftCreateSchema.parse({ requestId })).toEqual({

@@ -20,7 +20,12 @@ export const createSaasCompanySchema = z
     name: z.string().trim().min(1).max(120),
     description: z.string().trim().max(1000).optional(),
     idempotencyKey: idempotencyKeySchema,
-    activation: z.strictObject({version:z.literal(9), website:activationWebsiteSchema.default("")}).optional(),
+    activation: z
+      .strictObject({
+        version: z.literal(9),
+        website: activationWebsiteSchema.default(""),
+      })
+      .optional(),
   })
   .strict();
 export const onboardingStageSchema = z.enum([
@@ -97,6 +102,11 @@ export const runtimeOperationSchema = z
 export const supportSessionSchema = z
   .object({
     companyId: z.string().uuid(),
+    // Optional original Native row reference; old callers keep their existing behavior.
+    approvalId: z
+      .uuid()
+      .transform((value) => value.toLowerCase())
+      .optional(),
     reason: z.string().min(10).max(500),
     operatorUserId: z.string().min(1).max(200),
     scopes: z
@@ -113,6 +123,9 @@ export const supportSessionSchema = z
     expiresInMinutes: z.number().int().min(1).max(60),
   })
   .strict();
+export const prepareSupportApprovalSchema = supportSessionSchema.extend({
+  approvalId: z.uuid().transform((value) => value.toLowerCase()),
+});
 export const entitlementOverrideSchema = z
   .object({
     companyId: z.string().uuid(),

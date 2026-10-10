@@ -369,11 +369,34 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     if (receipt?.requestedByUserId !== actor.id) await company(req, companyId);
     res.json(receipt);
   });
+  router.use("/companies/:companyId/support-sessions", (_req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
+    next();
+  });
   router.get("/companies/:companyId/support-sessions", async (req, res) => {
     const companyId = String(req.params.companyId),
       actor = await company(req, companyId);
     await gate("admin_support_v6");
     res.json(await platform.support.list(companyId, actor.id));
+  });
+  router.get("/companies/:companyId/support-sessions/pending-review", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), actor = await company(req, companyId);
+    await gate("admin_support_v6");
+    res.json(await platform.support.pendingApproval(companyId, actor.id));
+  });
+  router.post("/companies/:companyId/support-sessions/reviews", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), actor = await company(req, companyId);
+    await gate("admin_support_v6");
+    res.status(201).json(await platform.support.prepareApproval(companyId, actor.id, req.body));
+  });
+  router.delete("/companies/:companyId/support-sessions/reviews/:approvalId", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), actor = await company(req, companyId);
+    res.json(await platform.support.cancelApproval(companyId, actor.id, z.uuid().parse(req.params.approvalId)));
+  });
+  router.get("/companies/:companyId/support-sessions/:sessionId", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), actor = await company(req, companyId);
+    await gate("admin_support_v6");
+    res.json(await platform.support.get(companyId, actor.id, z.uuid().parse(req.params.sessionId)));
   });
   router.post("/companies/:companyId/support-sessions", async (req, res) => {
     const companyId = String(req.params.companyId),

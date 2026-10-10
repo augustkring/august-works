@@ -3,7 +3,7 @@
   "journeyId": "maintenance",
   "routeOrSurface": "/agents/packages/installations/:installationId/maintenance",
   "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
-  "customerOutcome": "Read historical native bounded M2 package configuration and loop-breaker receipts separately from current activation state.",
+  "customerOutcome": "Read bounded original M2 attempts and configuration receipts separately from current activation state.",
   "entryConditions": [
     "Current company and authenticated human account or explicit local board.",
     "Current native company and agent read authority, agent_packages_v7 and effective maintenance_autopilot_v9 dependencies enabled."
@@ -24,7 +24,8 @@
     "displayedState": [
       "Current native installation status/version and observation time",
       "At most ten original native V9 M2 receipts, with an explicit has-more boundary",
-      "Configured activation-required and attempt-budget/unknown-outcome human-review-required are historical facts; none is current readiness"
+      "Configured activation-required and attempt-budget/unknown-outcome human-review-required are historical facts; none is current readiness",
+      "At most ten original attempt references and native-clock timestamps; awaiting receipt, unconfirmed, no effect or configuration recorded, with current versus historical source relation. Unconfirmed never means failed or safe to repeat."
     ]
   },
   "inputs": [],
@@ -43,13 +44,13 @@
     ],
     "canonicalWriteOperation": "None",
     "authorityEffect": "Current native company_scope:read and agent:read are required; stale instance-admin claims cannot admit this data.",
-    "asyncWork": "Five-second source/SQL budget; native installation and history share locks under existing company privacy serialization; current access and rollout repeat before response.",
-    "receipt": "Only existing native recorded M2 facts. No alternate history table or inferred repair success."
+    "asyncWork": "Five-second source/SQL budget; native installation and history share locks under existing company privacy serialization; current access and rollout repeat before response. Fifteen-second foreground refresh hides old metadata while checking; no background polling.",
+    "receipt": "Original native recorded M2 facts only, including start/terminal/configured receipt binding. Missing terminal after the original five-second lease stays unconfirmed; no alternate history ledger or inferred success."
   },
   "states": {
     "loading": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
     "empty": "No recorded V9 package maintenance for this installation; other maintenance domains are not covered.",
-    "partial": "Bounded unchanged-content M2 attempts have durable native starts, atomic outcome receipts, five-second stale-worker fencing and non-expiring unknown-source refusal. General cross-domain, external-effect reconciliation and automated recovery remain open.",
+    "partial": "Bounded unchanged-content M2 attempts use durable native starts, atomic outcome receipts, original five-second lease and non-expiring unknown-source refusal. Attempt history is independently limited to ten with has-more; an older response without the attempt projection is unavailable, not empty. General cross-domain external reconciliation and automated recovery remain open.",
     "stale": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
     "validation_error": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
     "system_error": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
@@ -82,7 +83,8 @@
   "privacySecurity": {
     "dataShown": [
       "Current installation status/version and observation time",
-      "Native receipt IDs/timestamps, fixed M2 class and fixed historical outcome categories"
+      "Native receipt IDs/timestamps, fixed M2 class and fixed historical outcome categories",
+      "Original attempt UUID, native start/lease/end times, fixed outcome and current/historical source relation. No raw source tuple or actor identity."
     ],
     "dataCollected": [],
     "sensitiveFields": [
@@ -100,7 +102,8 @@
     "functional": [
       "Prove real native configured and budget-exhausted receipts, ten-row bound and historical/current distinction",
       "Prove current tenant/agent authority, missing sources, account mismatch, rollout closure and late private query suppression",
-      "Verify exact built artifact in browser; native flags/read data cannot qualify general M0–M4 maintenance or material outcomes"
+      "Verify exact built artifact in browser; native flags/read data cannot qualify general M0\u2013M4 maintenance or material outcomes",
+      "Read actual committed ACK-loss, rollback/unknown and no-effect Native records without adding an audit or repair; reject duplicate terminal/configured bindings rather than select an outcome."
     ],
     "accessibility": [
       "Initial focus and background refresh preserve customer/dialog focus.",

@@ -21,6 +21,7 @@ import {
   HIRE_AGENT_STEPS,
   hireAgentCatalogSchema,
   hireAgentCapabilityStatusSchema,
+  projectHireDeclaredAccess,
   v9FeatureEnabled,
   type AgentAuthoringContent,
   type AgentAuthoringReview,
@@ -331,6 +332,7 @@ export function agentAuthoringService(db: Db) {
         requiredConnections: release.manifest.requiredConnections,
         limits: release.manifest.knownLimitations,
         actionClasses: release.manifest.actionClasses,
+        declaredAccess: projectHireDeclaredAccess(release.manifest),
         available,
       });
     },
@@ -363,6 +365,7 @@ export function agentAuthoringService(db: Db) {
           requiredConnections: release.manifest.requiredConnections,
           limits: release.manifest.knownLimitations,
           actionClasses: release.manifest.actionClasses,
+          declaredAccess: projectHireDeclaredAccess(release.manifest),
         }));
       await access(db, actor, companyId, null, false, true);
       return hireAgentCatalogSchema.parse(capabilities);

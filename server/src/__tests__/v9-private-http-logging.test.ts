@@ -12,6 +12,13 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
+    ["POST", "/api/companies/private-company/support-sessions/reviews?expectedUserId=private-principal"],
+    ["GET", "/api/companies/private-company/support-sessions/pending-review?expectedUserId=private-principal"],
+    ["DELETE", "/api/companies/private-company/support-sessions/reviews/private-record?expectedUserId=private-principal"],
+    ["GET", "/api/companies/private-company/support-sessions?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/support-sessions?expectedUserId=private-principal"],
+    ["DELETE", "/api/companies/private-company/support-sessions/private-record?expectedUserId=private-principal"],
+    ["PATCH", "/api/companies//support-sessions/private-record"],
     ["GET", "/api/companies/private-company/experience/support-access?expectedUserId=private-principal"],
     ["DELETE", "/api/companies/private-company/experience/support-access?expectedUserId=private-principal"],
     ["GET", "/api/companies/private-company/agent-package-installations/private-record/experience/maintenance?expectedUserId=private-principal"],
@@ -115,6 +122,7 @@ describe("V9 private HTTP purpose", () => {
     for (const path of [
       "/api/customer-feedback/policy",
       "/api/companies/id/customer-feedback-extra",
+      "/api/companies/id/support-sessions-other",
       "/api/internal/customer-feedback-extra",
       "/api/companies/id/experience/profile",
     ])

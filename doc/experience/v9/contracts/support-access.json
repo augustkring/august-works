@@ -2,7 +2,12 @@
   "screenId": "SUPPORT-ACCESS",
   "journeyId": "support",
   "routeOrSurface": "/company/support-access",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Review bounded native V6 support approval history without granting access or inferring that support acted or resolved an issue.",
   "entryConditions": [
     "Current authenticated human company owner, matching expected account and company scope.",
@@ -53,7 +58,7 @@
   "states": {
     "loading": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",
     "empty": "The current authorized native source has no support records.",
-    "partial": "Owner history is implemented. V9 immutable approval review, original-command recovery, support assistant, full recovery and human launch acceptance remain open.",
+    "partial": "Owner history and separately owned original support controls are implemented in source. Immutable review reservation, exact approval/revocation receipt replay and pending-request cancellation still need exact migrated, built-browser and human qualification; support assistant and general recovery remain open.",
     "stale": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",
     "validation_error": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",
     "system_error": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",

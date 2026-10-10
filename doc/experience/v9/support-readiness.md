@@ -48,14 +48,28 @@ operator, selected scopes and a bounded duration. The current V9 customer histor
 does not add a new approval mechanism. Ordinary status inspection does not grant
 runtime management, restoration or billing authority.
 
-If an approval response is lost, inspect the original native support-session and
-activity state through authorized controls. Do not assume the grant failed and
-press Approve again merely because a response or a recent-history record is
-missing. The original approval API does not yet implement the V9 immutable
-request/reconciliation UX. A still-running transaction or older record can make
-absence in a limited snapshot inconclusive. Escalate unresolved command state to
-the native operating owner; resolve the original transaction/receipt before a
-separately reviewed new approval.
+The customer controls freeze the configured operator, reason, exact scopes and
+maximum duration for an explicit review, and require an initially unchecked
+acknowledgement before approval. Review preparation records only the original
+reference/hash with the Native owner; it grants no access. An unresolved original
+review prevents preparing another, including after navigation/reload. No private
+review fields are stored in the browser or copied into the Native review journal.
+
+If an approval response is lost, use **Check original approval**. It reads that
+exact Native row and requires its uniquely linked original approval audit. A
+missing or inconsistent receipt remains unconfirmed. Repeating a qualified keyed
+original approval retains its original grant, audit, expiry and revocation.
+Legacy API callers without the new reviewed reference keep their old behavior;
+do not blindly retry those unconfirmed approvals or infer absence from recent
+history. Escalate unresolved legacy command state to the Native operating owner.
+
+**Cancel original request** fences a later approval of the same ungranted review.
+If its grant already committed, cancellation reports recorded access and does not
+silently revoke it. Use the separate exact **Revoke** control for recorded access.
+Lost review/cancellation acknowledgements are checked against the same immutable
+original reference; the form never replaces that reference automatically. These
+are implemented source behaviors; the exact migrated, browser, hosted and human
+qualification for this latest command-recovery source remains pending.
 
 Expiry, operator withdrawal and owner-membership withdrawal are checked at use.
 Revocation removes future scoped authority; it is not proof that an earlier
@@ -100,8 +114,11 @@ requirements.
 
 - Assign support/incident/privacy operating owners, response objectives and a
   protected exceptional-evidence transfer procedure.
-- Complete immutable V9 support approval/revocation reconciliation, self-service
-  recovery and support-assistant behavior through the original native owners.
+- Retain the passing 40 migrated Native support/SaaS/operator checks and the
+  nine built-app checks (including explicit support software fixtures), then
+  qualify the complete aggregate and accepted hosted artifact. Complete legacy unkeyed-command handling,
+  general self-service recovery and support-assistant behavior through the original
+  Native owners.
 - Verify representative hosted runtime, actual operators and credential/channel
   boundaries; do not use fixture approvals as live qualification.
 - Complete keyboard, screen-reader, zoom, mobile and representative human support

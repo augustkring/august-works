@@ -63,3 +63,12 @@ export const customerSupportHistorySchema = z
 export type CustomerSupportHistory = z.infer<
   typeof customerSupportHistorySchema
 >;
+
+/** Native command review metadata only; it never establishes scoped access. */
+export const nativeSupportReviewSchema = z.strictObject({
+  companyId: z.uuid(),
+  approvalId: z.uuid(),
+  reviewedAt: z.iso.datetime(),
+  state: z.enum(["pending", "cancelled", "recorded"]),
+});
+export type NativeSupportReview = z.infer<typeof nativeSupportReviewSchema>;

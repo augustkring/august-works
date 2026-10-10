@@ -11840,7 +11840,10 @@ for (const operation of v6ApiPaths) {
       ...(operation.body ? { body: { required: true, content: { "application/json": { schema: operation.body } } } } : {}),
     },
     responses: {
-      [operation.successStatus]: responses.ok(),
+      [operation.successStatus]: {
+        ...responses.ok(operation.result),
+        ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } } : {}),
+      },
       400: responses.badRequest,
       401: { description: "Current authenticated principal or valid machine proof required." },
       403: responses.forbidden,

@@ -28,7 +28,7 @@ V9-026,2207,first-value verification + analytics,not_started
 V9-027,2209,first-outcome UI,not_started
 V9-028,2211,Agent Package customer catalog projection,in_progress
 V9-029,2213,Hire Package simplified install flow,in_progress
-V9-030,2215,package permissions/consequence preview,not_started
+V9-030,2215,package permissions/consequence preview,in_progress
 V9-031,2217,advanced package/custom agent path,not_started
 V9-032,2219,Cmd+K intent router,in_progress
 V9-033,2221,command palette Ask/Create/Run UI,in_progress
@@ -46,8 +46,8 @@ V9-044,2243,V8 insight cards contracts,not_started
 V9-045,2245,Slack block/modal action-card mapping,not_started
 V9-046,2247,Teams adaptive-card action mapping,not_started
 V9-047,2249,channel semantic parity tests,not_started
-V9-048,2251,AG-UI mapping/conformance spike,not_started
-V9-049,2253,A2UI compatibility/renderer experiment,not_started
+V9-048,2251,AG-UI mapping/conformance spike,in_progress
+V9-049,2253,A2UI compatibility/renderer experiment,in_progress
 V9-050,2255,MCP Apps stable-spec conformance + AW security ADR,not_started
 V9-051,2257,MCP Apps sandboxed host PoC,not_started
 V9-052,2259,MCP Apps Tool Gateway authorization integration,not_started
@@ -65,12 +65,12 @@ V9-063,2281,support diagnostic bundle,in_progress
 V9-064,2283,self-service error recovery cards,not_started
 V9-065,2285,V6 support session customer UX,in_progress
 V9-066,2287,design token audit/consolidation,not_started
-V9-067,2289,Storybook V9 state matrix,not_started
+V9-067,2289,Storybook V9 state matrix,in_progress
 V9-068,2291,premium shell typography/layout refinement,not_started
 V9-069,2293,card/surface reduction pass,not_started
 V9-070,2295,motion/reduced-motion pass,not_started
 V9-071,2297,dark-mode recomposition audit,not_started
-V9-072,2299,`.production`/legacy parity inventory,not_started
+V9-072,2299,`.production`/legacy parity inventory,in_progress
 V9-073,2301,migrate canonical Agents/Skills/Costs surfaces,not_started
 V9-074,2303,retire redundant onboarding variants,not_started
 V9-075,2305,retire streamlined legacy flag after migration,not_started

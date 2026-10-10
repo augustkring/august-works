@@ -777,5 +777,91 @@
       "billing_override": "Apply a temporary billing entitlement override",
       "backup_restore": "Replace runtime state from a verified backup"
     }
+  },
+  "maintenanceAttempts": {
+    "title": "Recorded maintenance attempts",
+    "boundary": "These records do not authorize another attempt or prove active or verified work. An unconfirmed outcome needs review of the original attempt.",
+    "unavailable": "Attempt history is unavailable for this response.",
+    "empty": "No maintenance attempts are recorded.",
+    "currentSource": "Matches the installation state observed above.",
+    "historicalSource": "Reviewed a different installation state.",
+    "started": "Started",
+    "finished": "Final receipt recorded",
+    "bounded": "Only the ten newest attempts are shown. Older records remain in the original history.",
+    "outcome": {
+      "awaiting_receipt": "A final receipt has not yet been recorded.",
+      "unconfirmed": "Outcome unconfirmed. This record does not justify repeating the original attempt.",
+      "no_effect": "This attempt did not apply a configuration change.",
+      "configuration_recorded": "A configuration change was recorded. Activation and verification are separate."
+    },
+    "reference": "Attempt reference"
+  },
+  "nativeSupport": {
+    "title": "Temporary support access",
+    "unavailable": "Support access is unavailable. Check your current account and company access.",
+    "description": "A company owner can approve a named support operator and the permissions shown below. Recorded access is separate from current operator authorization. Review every permission before approving.",
+    "operator": "Operator ID supplied by support",
+    "reason": "Reason",
+    "duration": "Maximum access duration",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
+    "permissions": "Permissions",
+    "reviewTitle": "Review temporary access",
+    "acknowledge": "I have reviewed the operator, duration and permissions and approve this temporary access.",
+    "confirm": "Approve temporary access",
+    "submitting": "Submitting approval…",
+    "approvalUnknown": "Approval outcome is unconfirmed. Do not repeat the approval because a response is missing. Check the original access history and ask support to reconcile the original request.",
+    "revokeUnknown": "Revocation outcome is unconfirmed. Check the original access record. Repeating revocation of that same record preserves its original receipt.",
+    "checkHistory": "Check access history",
+    "recorded": "An approval receipt was returned. Current access is checked separately when used.",
+    "history": "Access history",
+    "empty": "No support access records were returned.",
+    "revoked": "Revoked",
+    "expired": "Expired",
+    "expiry": "Recorded expiry: {{time}}",
+    "revoke": "Revoke this access",
+    "cancel": "Cancel",
+    "checkOriginal": "Check original approval",
+    "reviewUnknown": "The original review could not be confirmed. Check that same request before proceeding.",
+    "checkReview": "Check original review",
+    "pendingTitle": "An earlier approval needs resolution",
+    "pendingDescription": "Check the original approval record or cancel that request before reviewing new access. Cancellation prevents a late approval of that request; it does not revoke access already recorded.",
+    "cancelOriginal": "Cancel original request",
+    "checkCancellation": "Check original cancellation",
+    "cancelled": "Original request cancelled. A later approval of that request is blocked.",
+    "alreadyRecorded": "The original approval was recorded. Cancellation did not revoke its access; use Revoke for that record."
+  },
+  "interopUnavailable": "The current view is unavailable. Reload the original page.",
+  "hireDeclared": {
+    "title": "Declared access and safeguards",
+    "boundary": "These are package requirements. Saving this setup does not grant access, start work or qualify an execution environment.",
+    "unavailable": "The current package access declaration is unavailable. Recheck the selected capability before relying on it.",
+    "risk": "Declared action consequences",
+    "riskLevel": {
+      "C1": "Low-consequence actions",
+      "C2": "Changes may affect company work",
+      "C3": "Material actions require explicit review"
+    },
+    "memory": "Declared memory policy",
+    "memoryPolicy": {
+      "source_governed": "Memory follows approved source policy. Actual access is checked separately.",
+      "no_persistent_memory": "The package declares no persistent memory."
+    },
+    "environment": "Declared environment requirement",
+    "sandbox": {
+      "byo_customer_responsibility": "You supply the execution environment and are responsible for its safeguards.",
+      "qualified_managed": "A qualified managed environment is required. This declaration does not establish that one is available."
+    },
+    "runtime": "Declared supported runtimes",
+    "provider": {
+      "paperclip_native": "August Works Native",
+      "hermes": "Hermes",
+      "openclaw": "OpenClaw"
+    },
+    "approval": "Human approval is required before material actions. Current company policy still applies.",
+    "verification": "The package requires supervised execution and independent verification. No representative result is established by this preview.",
+    "optionalApps": "Optional connected apps",
+    "noOptionalApps": "No optional connected apps are declared.",
+    "scopesUnavailable": "App and data scopes have not been assessed for this setup. Declared app requirements are not granted permissions."
   }
 }

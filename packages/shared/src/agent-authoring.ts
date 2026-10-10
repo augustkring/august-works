@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { READINESS_ACTIONS } from "./readiness.js";
+import type { PackageRelease } from "./agent-packages.js";
 
 export const CUSTOM_AGENT_STEPS = [
   "outcome",
@@ -199,6 +200,41 @@ export const agentAuthoringDraftPageSchema = z.strictObject({
   nextCursor: z.uuid().nullable(),
 });
 export type AgentDraftSave = z.infer<typeof agentDraftSaveSchema>;
+/** Native package declarations; no effective permissions or qualification. */
+export const hireAgentDeclaredAccessSchema = z.strictObject({
+  maximumRisk: z.enum(["C1", "C2", "C3"]),
+  optionalConnections: z.array(text(120)).max(20),
+  memoryPolicy: z.enum(["source_governed", "no_persistent_memory"]),
+  humanApproval: z.literal("before_material_action"),
+  supervision: z.literal("bounded_native"),
+  verification: z.literal("independent_native"),
+  sandboxAssurance: z.enum([
+    "byo_customer_responsibility",
+    "qualified_managed",
+  ]),
+  runtimeProviders: z
+    .array(z.enum(["paperclip_native", "hermes", "openclaw"]))
+    .min(1)
+    .max(3),
+  scopeAssessment: z.literal("unavailable"),
+  authorityEffect: z.literal("none"),
+});
+export function projectHireDeclaredAccess(
+  manifest: PackageRelease["manifest"],
+) {
+  return hireAgentDeclaredAccessSchema.parse({
+    maximumRisk: manifest.maximumRisk,
+    optionalConnections: manifest.optionalConnections,
+    memoryPolicy: manifest.memoryPolicy,
+    humanApproval: manifest.humanApproval,
+    supervision: manifest.supervision,
+    verification: manifest.verification,
+    sandboxAssurance: manifest.sandboxAssurance,
+    runtimeProviders: manifest.runtimeProviders,
+    scopeAssessment: "unavailable",
+    authorityEffect: "none",
+  });
+}
 export const hireAgentCapabilitySchema = z.strictObject({
   key: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,119}$/),
   versionId: z.uuid(),
@@ -210,6 +246,8 @@ export const hireAgentCapabilitySchema = z.strictObject({
   requiredConnections: z.array(text(120)).max(20),
   limits: z.array(text(1000)).max(30),
   actionClasses: z.array(z.enum(READINESS_ACTIONS)).max(7),
+  // Older read owners omit this; absence means unavailable, not zero access.
+  declaredAccess: hireAgentDeclaredAccessSchema.optional(),
 });
 export const hireAgentCatalogSchema = z
   .array(hireAgentCapabilitySchema)

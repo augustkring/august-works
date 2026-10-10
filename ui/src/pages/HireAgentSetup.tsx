@@ -15,6 +15,7 @@ import { Link, useNavigate, useParams } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { HireDeclaredAccess } from "@/components/HireDeclaredAccess";
 
 const labels = {
   hire_access: "Owner & knowledge",
@@ -557,6 +558,13 @@ export function HireAgentSetup({
             Works in the company app. No external delivery channel has been
             selected.
           </p>
+          <HireDeclaredAccess
+            capability={
+              capability.isSuccess && !capability.isFetching
+                ? capability.data
+                : null
+            }
+          />
         </section>
       )}
       {step === "hire_test" && (

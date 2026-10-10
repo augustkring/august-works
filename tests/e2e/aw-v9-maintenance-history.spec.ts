@@ -94,8 +94,31 @@ test("maintenance history reads native receipts separately from current state an
       updatePolicy: "auto_low_risk",
     });
     const configuredId = randomUUID(),
-      blockedId = randomUUID();
+      blockedId = randomUUID(),
+      attemptId = randomUUID();
     await db.insert(activityLog).values([
+      {
+        companyId: company.id,
+        actorType: "system",
+        actorId: "core-stewards",
+        entityType: "agent_package_installation",
+        entityId: installationId,
+        action: "agent_package.maintenance_attempt_started",
+        createdAt: new Date(Date.now() - 60000),
+        details: {
+          attemptId,
+          candidateVersion: next,
+          maintenanceClass: "M2",
+          policyVersion: "aw-v9-package-maintenance-1",
+          policyOwnerUserId: "local-board",
+          reviewedSource: {
+            expectedInstallationVersion: 1,
+            expectedInstalledVersionId: previous,
+            expectedUpdatedAt: new Date(Date.now() - 120000).toISOString(),
+            expectedReleaseContentHash: hash,
+          },
+        },
+      },
       {
         id: configuredId,
         companyId: company.id,
@@ -173,6 +196,17 @@ test("maintenance history reads native receipts separately from current state an
       await request.get(base + "?expectedUserId=local-board"),
     );
     expect(view.installationStatus).toBe("configuring");
+    expect(view.attemptHistory).toMatchObject({
+      hasMore: false,
+      entries: [
+        {
+          attemptId,
+          outcome: "unconfirmed",
+          finishedAt: null,
+          sourceMatchesCurrent: false,
+        },
+      ],
+    });
     expect(
       view.entries
         .map((entry: { receiptId: string }) => entry.receiptId)
@@ -202,6 +236,21 @@ test("maintenance history reads native receipts separately from current state an
     await expect(
       page.getByText("Configuration requires review", { exact: true }),
     ).toBeVisible();
+    const attempts = page.getByRole("region", {
+      name: "Recorded maintenance attempts",
+      exact: true,
+    });
+    await expect(attempts).toBeVisible();
+    await expect(
+      attempts.getByText(
+        "Outcome unconfirmed. This record does not justify repeating the original attempt.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      attempts.getByText("Attempt reference " + attemptId, { exact: true }),
+    ).toBeVisible();
+    await expect(attempts.getByRole("button")).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.addScriptTag({ path: axePath });
     const violations = await page.evaluate(
@@ -239,12 +288,7 @@ test("maintenance history reads native receipts separately from current state an
     const [retained] = await db
       .select()
       .from(companyAgentPackageInstallations)
-      .where(
-        eq(
-          companyAgentPackageInstallations.id,
-          installationId,
-        ),
-      );
+      .where(eq(companyAgentPackageInstallations.id, installationId));
     expect(retained!.status).toBe("configuring");
     expect(retained!.version).toBe(2);
   } finally {

@@ -835,3 +835,91 @@ creates no approval, grant, privileged action, outbox message, alternate ledger,
 telemetry, browser persistence or automatic support transmission. Full V9
 immutable approval review/unknown-command recovery and human acceptance remain
 open; this view does not qualify those original material actions.
+
+
+## V9-041 — Attempt history reads original native evidence without recovery authority
+
+The existing authorized maintenance history transaction now reads the ten newest
+original Core Steward starts, separately from its ten receipt rows. Each start
+binds the actual package versions/content hash and exact source review. A terminal
+must be unique and match its original start; configured outcomes additionally
+require the uniquely linked original configuration receipt. Inconsistent Native
+evidence refuses the projection rather than selecting a favorable outcome. Native
+database wall time distinguishes awaiting receipt from unconfirmed after the
+unchanged five-second lease. Missing evidence never establishes no effect.
+
+Only attempt references, times, fixed outcomes and current/historical source
+relation leave the read owner. No source tuple, actor, repair control, grant,
+activation, alternate ledger or new audit is created. Absence of the optional
+projection on an older response is unavailable, not an observed empty history.
+Foreground polling and Native events reread current authority while hiding old
+private state. General M0–M4/external recovery and human acceptance remain open.
+
+
+## V9-042 — Original Native support command recovery
+
+The original V6 support owner now accepts an optional explicit original-session
+UUID. New customer controls first freeze that reference and review input, then
+reserve a hash in the existing scoped Native activity log. No private reason,
+operator payload, new permission, notification or browser persistence is created
+by preparation. A current owner may retain one unresolved original review. Reload
+recovers that reference before another review can be prepared. The original
+Native owner remains the only grant writer; old callers without a reference keep
+their original behavior and are not certified as using the new customer protocol.
+
+An exact reviewed grant serializes on the original reference and binds company,
+original approving owner, operator, reason, normalized scopes and duration.
+Replaying returns the original Native row and uniquely linked audit without
+renewing expiry, undoing revocation or creating another grant/notification.
+Missing, duplicate or inconsistent Native evidence refuses reconciliation.
+Preparation/approval/receipt reads hold current rollout, privacy and owner locks.
+Cancellation is independent of rollout: it records the original hash terminal
+before a later grant can commit, or returns recorded when the grant already
+committed. Cancellation never silently revokes recorded access. Concurrent
+cancel/grant has one Native outcome. A current-use operator still independently
+rechecks original owner, configuration, scope, expiry and revocation.
+
+The current customer form uses explicit frozen review and unchecked approval,
+content-free Native pending recovery after navigation/reload, exact original
+receipt reads and explicit original cancellation/revocation. Private state is
+hidden on current source checks/loss. Source implementation does not establish
+migrated/browser/human/hosted qualification; legacy callers, general external
+recovery, support assistant and full launch acceptance remain separate/open.
+
+## V9-043 — Optional protocol seams preserve current Native presentation authority
+
+AG-UI spec 1.0 CUSTOM and A2UI v0.9 custom-root mappings are pure offline adapters
+over the existing strict experience DTOs. Pinned official schemas/licenses are
+retained for actual upstream validation. The client experiment renders the same
+typed ExperienceCard. Neither helper is mounted as a production host or grants
+authority from protocol content. Decoding requires complete equality with a
+separately admitted current Native snapshot, company and expected surface;
+returns that Native copy; refuses all material actions, dynamic functions,
+handlers, metadata, extra components and unknown versions. UTF-8 payloads are
+bounded to 64 KiB without truncation; refusal copy contains no raw payload.
+
+The caller must still obtain current authorization and invalidate stale/denied
+epochs. Structural protocol compatibility proves no execution, provider,
+production adoption or human acceptance. All 25 focused tests pass, including
+official AJV schemas, Native identity adversaries and DOM escaped/read-only
+behavior. Strict workspace types/build and the built Storybook mobile checks in both
+themes pass. Combined full regression remains pending. General protocol streaming/rendering and MCP Apps are separate/open.
+
+## V9-044 — Hire access declarations are separate from effective authority
+
+The original Native customer catalog and pinned Hire capability owner project a
+strict optional declaration of the original package manifest: maximum consequence,
+optional apps, memory, material approval, supervision, independent verification,
+environment responsibility and supported runtimes. Scope assessment stays
+unavailable and authority effect stays none. Older owner responses without the
+field remain readable and show unavailable, rather than an empty assessment.
+
+The actual guided Authority screen displays customer wording and withdraws the
+declaration while checking its current source. A declared managed environment is
+a requirement, not proof of availability or qualification. The read creates no
+installation, grants, execution, output or Native readiness receipt. Twenty-seven
+focused checks pass, including forged-authority schema negatives and existing
+Hire recovery tests. Exact Native catalog assertions pass in the actual migrated package suite.
+Strict workspace types/build and current built app checks pass; full regression
+and hosted/human acceptance remain pending.
+Per-app effective scopes, representative execution and activation stay open.

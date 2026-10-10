@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAINTENANCE_ATTEMPT_LEASE_SECONDS } from "@paperclipai/shared";
 
 /** The existing native installation owns desired state; scan observations confer no authority. */
 export const packageStewardReviewSchema = z.strictObject({
@@ -14,7 +15,7 @@ export const PACKAGE_MAINTENANCE_LIMITS = Object.freeze({
   maximumResourcesPerScan: 20,
   maximumAttemptsPerResourcePerDay: 3,
   maximumAttemptsPerCompanyPerDay: 10,
-  maximumTransactionSeconds: 5,
+  maximumTransactionSeconds: MAINTENANCE_ATTEMPT_LEASE_SECONDS,
 });
 export function packageStewardReviewIsCurrent(
   review: PackageStewardReview,

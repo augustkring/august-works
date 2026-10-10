@@ -1,0 +1,33 @@
+{
+  "retrievedAt": "2026-10-10",
+  "files": [
+    {
+      "file": "ag-ui-1.0.schema.json",
+      "source": "https://raw.githubusercontent.com/ag-ui-protocol/ag-ui/2aabfc8cada0b429927e4c256c9cf990a6791e5f/spec/1.0/schema.json",
+      "commit": "2aabfc8cada0b429927e4c256c9cf990a6791e5f",
+      "sha256": "4b5c93226838a0e72d88e6c5df20633c686c49fcb75d9be2815c6cbf9e48e71a",
+      "license": "MIT"
+    },
+    {
+      "file": "AG-UI-LICENSE",
+      "source": "https://raw.githubusercontent.com/ag-ui-protocol/ag-ui/2aabfc8cada0b429927e4c256c9cf990a6791e5f/LICENSE",
+      "commit": "2aabfc8cada0b429927e4c256c9cf990a6791e5f",
+      "sha256": "06dcddbb6908a0c6dd4a9e8ec822eea41d5a460a53089fecccc8a68049e99241",
+      "license": "MIT"
+    },
+    {
+      "file": "a2ui-v0.9.server-to-client.json",
+      "source": "https://raw.githubusercontent.com/a2ui-project/a2ui/19919ef4c8ad3185867f70386fa4669284d7714c/specification/v0_9/json/server_to_client.json",
+      "commit": "19919ef4c8ad3185867f70386fa4669284d7714c",
+      "sha256": "e8c0d280ff9e338ceb26551cbf01cabeb50690f5ac941a27fef2ec0490682af2",
+      "license": "Apache-2.0"
+    },
+    {
+      "file": "A2UI-LICENSE",
+      "source": "https://raw.githubusercontent.com/a2ui-project/a2ui/19919ef4c8ad3185867f70386fa4669284d7714c/LICENSE",
+      "commit": "19919ef4c8ad3185867f70386fa4669284d7714c",
+      "sha256": "f9946796a8a5bd5981565142fa42e3b0cc36aef6f80e86beaf5905b3c0fef1b5",
+      "license": "Apache-2.0"
+    }
+  ]
+}

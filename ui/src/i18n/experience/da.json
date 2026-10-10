@@ -777,5 +777,91 @@
       "billing_override": "Anvend en midlertidig ændring af faktureringens rettigheder",
       "backup_restore": "Erstat runtimetilstand fra en verificeret sikkerhedskopi"
     }
+  },
+  "maintenanceAttempts": {
+    "title": "Registrerede vedligeholdelsesforsøg",
+    "boundary": "Disse records giver ikke tilladelse til et nyt forsøg og beviser ikke aktivt eller verificeret arbejde. Et ubekræftet udfald kræver gennemgang af det oprindelige forsøg.",
+    "unavailable": "Forsøgshistorikken er ikke tilgængelig i dette svar.",
+    "empty": "Der er ingen registrerede vedligeholdelsesforsøg.",
+    "currentSource": "Matcher den installationstilstand, der blev observeret ovenfor.",
+    "historicalSource": "Gennemgik en anden installationstilstand.",
+    "started": "Startet",
+    "finished": "Endelig kvittering registreret",
+    "bounded": "Kun de ti nyeste forsøg vises. Ældre records findes fortsat i den oprindelige historik.",
+    "outcome": {
+      "awaiting_receipt": "Der er endnu ikke registreret en endelig kvittering.",
+      "unconfirmed": "Udfaldet er ubekræftet. Denne record giver ikke grundlag for at gentage det oprindelige forsøg.",
+      "no_effect": "Dette forsøg anvendte ingen konfigurationsændring.",
+      "configuration_recorded": "En konfigurationsændring blev registreret. Aktivering og verificering er særskilte."
+    },
+    "reference": "Forsøgsreference"
+  },
+  "nativeSupport": {
+    "title": "Midlertidig supportadgang",
+    "unavailable": "Supportadgang er utilgængelig. Kontrollér din aktuelle konto og virksomhedsadgang.",
+    "description": "En virksomhedsejer kan godkende en navngiven supportoperatør og rettighederne vist nedenfor. Registreret adgang er adskilt fra operatørens aktuelle autorisation. Gennemgå hver rettighed før godkendelse.",
+    "operator": "Operatør-ID fra support",
+    "reason": "Begrundelse",
+    "duration": "Maksimal adgangsvarighed",
+    "minutes_one": "{{count}} minut",
+    "minutes_other": "{{count}} minutter",
+    "permissions": "Rettigheder",
+    "reviewTitle": "Gennemgå midlertidig adgang",
+    "acknowledge": "Jeg har gennemgået operatøren, varigheden og rettighederne og godkender denne midlertidige adgang.",
+    "confirm": "Godkend midlertidig adgang",
+    "submitting": "Sender godkendelse…",
+    "approvalUnknown": "Godkendelsens udfald er ubekræftet. Gentag ikke godkendelsen, fordi et svar mangler. Kontrollér den oprindelige adgangshistorik, og bed support afklare den oprindelige anmodning.",
+    "revokeUnknown": "Tilbagekaldelsens udfald er ubekræftet. Kontrollér den oprindelige adgangspost. En gentaget tilbagekaldelse af samme post bevarer den oprindelige kvittering.",
+    "checkHistory": "Kontrollér adgangshistorik",
+    "recorded": "En godkendelseskvittering blev returneret. Aktuel adgang kontrolleres særskilt ved brug.",
+    "history": "Adgangshistorik",
+    "empty": "Ingen supportadgangsposter blev returneret.",
+    "revoked": "Tilbagekaldt",
+    "expired": "Udløbet",
+    "expiry": "Registreret udløb: {{time}}",
+    "revoke": "Tilbagekald denne adgang",
+    "cancel": "Annuller",
+    "checkOriginal": "Kontrollér den oprindelige godkendelse",
+    "reviewUnknown": "Den oprindelige gennemgang kunne ikke bekræftes. Kontrollér den samme anmodning, før du fortsætter.",
+    "checkReview": "Kontrollér den oprindelige gennemgang",
+    "pendingTitle": "En tidligere godkendelse skal afklares",
+    "pendingDescription": "Kontrollér den oprindelige godkendelse, eller annullér anmodningen, før du gennemgår ny adgang. Annullering forhindrer en forsinket godkendelse af anmodningen; den tilbagekalder ikke adgang, som allerede er registreret.",
+    "cancelOriginal": "Annullér den oprindelige anmodning",
+    "checkCancellation": "Kontrollér den oprindelige annullering",
+    "cancelled": "Den oprindelige anmodning er annulleret. En forsinket godkendelse af anmodningen er blokeret.",
+    "alreadyRecorded": "Den oprindelige godkendelse er registreret. Annulleringen tilbagekaldte ikke dens adgang; brug Tilbagekald for den post."
+  },
+  "interopUnavailable": "Den aktuelle visning er utilgængelig. Genindlæs den oprindelige side.",
+  "hireDeclared": {
+    "title": "Deklareret adgang og sikkerhedsforanstaltninger",
+    "boundary": "Dette er pakkens krav. Når du gemmer denne opsætning, gives der ingen adgang, startes intet arbejde og kvalificeres intet kørselsmiljø.",
+    "unavailable": "Pakkens aktuelle adgangsdeklaration er utilgængelig. Kontrollér den valgte funktion igen, før du bruger den.",
+    "risk": "Deklarerede konsekvenser af handlinger",
+    "riskLevel": {
+      "C1": "Handlinger med begrænsede konsekvenser",
+      "C2": "Ændringer kan påvirke virksomhedens arbejde",
+      "C3": "Væsentlige handlinger kræver udtrykkelig gennemgang"
+    },
+    "memory": "Deklareret hukommelsespolitik",
+    "memoryPolicy": {
+      "source_governed": "Hukommelse følger politikken for godkendte kilder. Den faktiske adgang kontrolleres særskilt.",
+      "no_persistent_memory": "Pakken deklarerer ingen vedvarende hukommelse."
+    },
+    "environment": "Deklareret krav til kørselsmiljø",
+    "sandbox": {
+      "byo_customer_responsibility": "Du stiller kørselsmiljøet til rådighed og er ansvarlig for dets sikkerhedsforanstaltninger.",
+      "qualified_managed": "Et kvalificeret administreret miljø kræves. Denne deklaration fastslår ikke, at et sådant miljø er tilgængeligt."
+    },
+    "runtime": "Deklarerede understøttede kørselsmiljøer",
+    "provider": {
+      "paperclip_native": "August Works Native",
+      "hermes": "Hermes",
+      "openclaw": "OpenClaw"
+    },
+    "approval": "Menneskelig godkendelse kræves før væsentlige handlinger. Virksomhedens aktuelle politik gælder stadig.",
+    "verification": "Pakken kræver kørselskontrol og uafhængig verifikation. Denne forhåndsvisning fastslår ikke et repræsentativt resultat.",
+    "optionalApps": "Valgfrie tilsluttede apps",
+    "noOptionalApps": "Ingen valgfrie tilsluttede apps er deklareret.",
+    "scopesUnavailable": "App- og dataadgang er ikke vurderet for denne opsætning. Deklarerede appkrav er ikke tildelte rettigheder."
   }
 }

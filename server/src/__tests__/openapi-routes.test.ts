@@ -1212,3 +1212,15 @@ it("documents the account binding required for preference reads", () => {
     expect.objectContaining({ name: "expectedUserId", in: "query", required: true }),
   ]));
 });
+
+it("documents original Native review, pending recovery and cancellation without a second grant API", () => {
+  const spec = buildOpenApiSpec() as unknown as { paths: Record<string, Record<string, any>> };
+  const base = "/api/companies/{companyId}/support-sessions";
+  for (const [path, method, status] of [[base, "post", 201], [base + "/reviews", "post", 201], [base + "/pending-review", "get", 200], [base + "/reviews/{approvalId}", "delete", 200], [base + "/{sessionId}", "get", 200]] as const)
+    expect(spec.paths[path]![method].responses[status].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+  expect(spec.paths[base + "/reviews"]!.post.requestBody.content["application/json"].schema.required).toContain("approvalId");
+  expect(spec.paths[base]!.post.requestBody.content["application/json"].schema.required).not.toContain("approvalId");
+  const response = spec.paths[base + "/reviews"]!.post.responses[201].content["application/json"].schema;
+  expect(Object.keys(response.properties).sort()).toEqual(["approvalId", "companyId", "reviewedAt", "state"]);
+  expect(response.additionalProperties).toBe(false);
+});

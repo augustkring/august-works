@@ -3344,3 +3344,4 @@ export * from "./workflow-test.js";
 export * from "./agent-monitor.js";
 
 export * from "./workflow-publication.js";
+export * from "./protocol-interop.js";

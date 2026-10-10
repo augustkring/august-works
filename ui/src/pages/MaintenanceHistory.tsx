@@ -48,7 +48,7 @@ export function MaintenanceHistory({
     alert = useRef<HTMLDivElement>(null),
     focused = useRef(false);
   const main = useRef<HTMLElement>(null),
-    restoreHref = useRef<string | null>(null);
+    restoreFocus = useRef<{ heading: true } | { href: string } | null>(null);
   const prefix = ["maintenance-history", company, principal, installationId];
   const query = useQuery({
     queryKey: [...prefix, epoch],
@@ -58,6 +58,9 @@ export function MaintenanceHistory({
     gcTime: 0,
     staleTime: 0,
     refetchOnWindowFocus: true,
+    refetchInterval: () =>
+      document.visibilityState === "visible" ? 15000 : false,
+    refetchIntervalInBackground: false,
   });
   useCompanyLiveEvent((event) => {
     if (event.companyId !== company || event.type !== "activity.logged") return;
@@ -70,24 +73,32 @@ export function MaintenanceHistory({
     !current &&
     !query.isError &&
     main.current?.contains(document.activeElement)
-  )
-    restoreHref.current = document.activeElement?.getAttribute("href") ?? null;
+  ) {
+    const href = document.activeElement?.getAttribute("href");
+    restoreFocus.current =
+      document.activeElement === heading.current
+        ? { heading: true }
+        : href
+          ? { href }
+          : null;
+  }
   useEffect(() => {
-    if (
-      current &&
-      restoreHref.current &&
-      document.activeElement === document.body
-    ) {
-      Array.from(main.current?.querySelectorAll<HTMLAnchorElement>("a") ?? [])
-        .find((link) => link.getAttribute("href") === restoreHref.current)
-        ?.focus();
-      restoreHref.current = null;
+    if (!current) return;
+    if (document.activeElement?.closest('[role="dialog"]')) {
+      focused.current = true;
+      restoreFocus.current = null;
+      return;
     }
-    if (
-      current &&
-      !focused.current &&
-      !document.activeElement?.closest('[role="dialog"]')
-    ) {
+    const previous = restoreFocus.current;
+    restoreFocus.current = null;
+    if (previous && document.activeElement === document.body) {
+      if ("heading" in previous) heading.current?.focus();
+      else
+        Array.from(main.current?.querySelectorAll<HTMLAnchorElement>("a") ?? [])
+          .find((link) => link.getAttribute("href") === previous.href)
+          ?.focus();
+    }
+    if (!focused.current) {
       heading.current?.focus();
       focused.current = true;
     }
@@ -154,6 +165,63 @@ export function MaintenanceHistory({
         ))}
       </ul>
       {view.hasMore && <p>{t("maintenanceHistoryBounded")}</p>}
+      <section
+        aria-label={t("maintenanceAttempts.title")}
+        className="space-y-3"
+      >
+        <h2 className="text-lg font-medium">
+          {t("maintenanceAttempts.title")}
+        </h2>
+        <p className="text-muted-foreground">
+          {t("maintenanceAttempts.boundary")}
+        </p>
+        {!view.attemptHistory ? (
+          <p role="status">{t("maintenanceAttempts.unavailable")}</p>
+        ) : (
+          <>
+            {!view.attemptHistory.entries.length && (
+              <p>{t("maintenanceAttempts.empty")}</p>
+            )}
+            <ul className="space-y-2">
+              {view.attemptHistory.entries.map((attempt) => (
+                <li
+                  key={attempt.attemptId}
+                  className="space-y-2 rounded-lg border border-border p-4"
+                >
+                  <p>{t(`maintenanceAttempts.outcome.${attempt.outcome}`)}</p>
+                  <p className="break-all font-mono">
+                    {t("maintenanceAttempts.reference")} {attempt.attemptId}
+                  </p>
+                  <p>
+                    {t(
+                      attempt.sourceMatchesCurrent
+                        ? "maintenanceAttempts.currentSource"
+                        : "maintenanceAttempts.historicalSource",
+                    )}
+                  </p>
+                  <p>
+                    {t("maintenanceAttempts.started")}{" "}
+                    <time dateTime={attempt.startedAt}>
+                      {new Date(attempt.startedAt).toLocaleString()}
+                    </time>
+                  </p>
+                  {attempt.finishedAt && (
+                    <p>
+                      {t("maintenanceAttempts.finished")}{" "}
+                      <time dateTime={attempt.finishedAt}>
+                        {new Date(attempt.finishedAt).toLocaleString()}
+                      </time>
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {view.attemptHistory.hasMore && (
+              <p>{t("maintenanceAttempts.bounded")}</p>
+            )}
+          </>
+        )}
+      </section>
       <Link
         className="inline-flex min-h-11 items-center underline"
         to="/agents/packages"

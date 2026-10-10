@@ -20,6 +20,7 @@ import {
   PACKAGE_MAINTENANCE_POLICY_VERSION,
   packageStewardReviewSchema,
 } from "../stewards/maintenance-policy.js";
+import { readMaintenanceAttemptHistory } from "./maintenance-attempt-history.js";
 
 /** Historical native receipts are separate from current installation/activation state. */
 export async function readMaintenanceHistory(
@@ -164,6 +165,12 @@ export async function readMaintenanceHistory(
         outcome,
       });
     }
+    const attemptHistory = await readMaintenanceAttemptHistory(
+      tx,
+      companyId,
+      installation,
+      budget,
+    );
     await access(installation.agentId);
     return maintenanceHistorySchema.parse({
       companyId,
@@ -171,9 +178,10 @@ export async function readMaintenanceHistory(
       agentId: installation.agentId,
       installationVersion: installation.version,
       installationStatus: installation.status,
-      observedAt: new Date().toISOString(),
+      observedAt: attemptHistory.observedAt,
       entries,
       hasMore: rows.length > 10,
+      attemptHistory,
     });
   });
 }

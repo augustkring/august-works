@@ -323,6 +323,15 @@ const support = await getEmbeddedPostgresTestSupport();
       const capability = rows.find((row) => row.key === customer.packageKey)!;
       expect(capability.versionId).toBe(published.id);
       expect(capability.outcome).toBe(customer.manifest.purpose);
+      expect(capability.declaredAccess).toMatchObject({
+        maximumRisk: customer.manifest.maximumRisk,
+        optionalConnections: customer.manifest.optionalConnections,
+        memoryPolicy: customer.manifest.memoryPolicy,
+        sandboxAssurance: customer.manifest.sandboxAssurance,
+        runtimeProviders: customer.manifest.runtimeProviders,
+        scopeAssessment: "unavailable",
+        authorityEffect: "none",
+      });
       expect(capability).not.toHaveProperty("releaseEvidence");
       expect(capability).not.toHaveProperty("components");
       const agentCount = (await db.select().from(agents)).length;
@@ -444,7 +453,10 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(1);
       expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished")).toHaveLength(0);
       expect(events.find(e => e.action === "agent_package.maintenance_loop_blocked")?.details).toMatchObject({ reason: "unknown_outcome", humanReviewRequired: true });
-      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).entries).toMatchObject([{ outcome: "human_review_required" }]);
+      const unknownHistory = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      expect(unknownHistory.entries).toMatchObject([{ outcome: "human_review_required" }]);
+      expect(unknownHistory.attemptHistory).toMatchObject({ hasMore: false, entries: [{ outcome: "unconfirmed", finishedAt: null, sourceMatchesCurrent: true }] });
+      expect(unknownHistory.attemptHistory?.observedAt).toBe(unknownHistory.observedAt);
       expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou[0]?.evidence).toEqual(["unknown_outcome"]);
       // An explicit native owner source transition supersedes, but does not erase, the old attempt.
       const suspended = await service.decide(f.actor, f.home, installed.id, "suspend", { expectedVersion: review.expectedInstallationVersion, reason: "Owner reviews retained unknown outcome" });
@@ -477,6 +489,12 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(1);
       expect(events.filter(e => e.action === "agent_package.low_risk_update_configured")).toHaveLength(lostTransaction === 2 ? 1 : 0);
       expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished")).toHaveLength(lostTransaction === 2 ? 1 : 0);
+      const history = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      const attempt = history.attemptHistory?.entries[0];
+      expect(attempt).toMatchObject({ sourceMatchesCurrent: lostTransaction === 1 });
+      expect(attempt?.outcome).toBe(lostTransaction === 2 ? "configuration_recorded"
+        : Date.parse(history.observedAt) >= Date.parse(attempt!.leaseExpiresAt) ? "unconfirmed" : "awaiting_receipt");
+      expect(await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id))).toHaveLength(events.length);
     });
     it("V9 maintenance rechecks original human authority after durable reservation", async () => {
       await enableV9Maintenance();
@@ -520,6 +538,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(2);
       expect(events.filter(e => e.action === "agent_package.low_risk_update_configured")).toHaveLength(1);
       expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished").map(e => e.details?.outcome).sort()).toEqual(["configured_activation_required", "no_effect"]);
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).attemptHistory?.entries.map(entry => entry.outcome).sort()).toEqual(["configuration_recorded", "no_effect"]);
     });
     it("V9 maintenance retains an unknown original tuple after its daily budget window has elapsed", async () => {
       await enableV9Maintenance();
@@ -537,6 +556,7 @@ const support = await getEmbeddedPostgresTestSupport();
       const blocked = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_loop_blocked")));
       expect(blocked).toHaveLength(1); expect(blocked[0]!.details).toMatchObject({ reason: "unknown_outcome" });
       expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou).toHaveLength(1);
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).attemptHistory).toMatchObject({ entries: [{ outcome: "unconfirmed", finishedAt: null, sourceMatchesCurrent: true }] });
     });
     it("V9 maintenance counts known no-effect attempts and never falls back to V7 authority", async () => {
       await enableV9Maintenance();
@@ -562,6 +582,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished").map(e => e.details?.outcome)).toEqual(["no_effect", "no_effect", "no_effect"]);
       expect(events.filter(e => e.action === "agent_package.low_risk_update_configured")).toHaveLength(0);
       expect(events.find(e => e.action === "agent_package.maintenance_loop_blocked")?.details).toMatchObject({ reason: "attempt_budget" });
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).attemptHistory?.entries.map(entry => entry.outcome)).toEqual(["no_effect", "no_effect", "no_effect"]);
       expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou[0]?.evidence).toEqual(["attempt_budget"]);
     });
     it("V9 maintenance concurrent scans configure once with a native verified configuration receipt and retain activation", async () => {
@@ -581,14 +602,53 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(history).toMatchObject({ companyId: f.home, installationId: installed.id, installationVersion: 3,
         installationStatus: "configuring", hasMore: false, entries: [{ receiptId: receipts[0]!.id, maintenanceClass: "M2", outcome: "configured_activation_required" }] });
       expect(JSON.stringify(history)).not.toContain("policyOwnerUserId");
-      // Additional retained native rows exercise only bounded history projection.
+      expect(history.attemptHistory).toMatchObject({ hasMore: false, entries: [{ outcome: "configuration_recorded", sourceMatchesCurrent: false }] });
+      // Additional unlinked historical receipt fixtures exercise only bounded projection.
+      // They must not duplicate the original attempt-bound configured receipt.
+      const { attemptId: _attemptId, ...historicalDetails } = receipts[0]!.details!;
       await db.insert(activityLog).values(Array.from({ length: 11 }, (_, index) => ({
         companyId: f.home, actorType: "system", actorId: "core-stewards", entityType: "agent_package_installation", entityId: installed.id,
-        action: "agent_package.low_risk_update_configured", details: receipts[0]!.details, createdAt: new Date(Date.now() + index),
+        action: "agent_package.low_risk_update_configured", details: historicalDetails, createdAt: new Date(Date.now() + index),
       })));
       const bounded = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
       expect(bounded.entries).toHaveLength(10); expect(bounded.hasMore).toBe(true);
       await expect(run()).rejects.toMatchObject({ cause: { code: "23514", message: "package_run_activation_required" } });
+    });
+    it("V9 maintenance attempt projection bounds retained original starts without writing or inventing outcomes", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Read retained native attempt history" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      // Original audit fixtures qualify read projection, not package execution or recovery.
+      await db.insert(activityLog).values(Array.from({ length: 11 }, (_, index) => ({
+        companyId: f.home, actorType: "system", actorId: "core-stewards", entityType: "agent_package_installation", entityId: installed.id,
+        action: "agent_package.maintenance_attempt_started", createdAt: new Date(Date.now() - 60000 - index * 1000),
+        details: { attemptId: randomUUID(), candidateVersion: next.id, reviewedSource: review,
+          policyVersion: "aw-v9-package-maintenance-1", maintenanceClass: "M2", policyOwnerUserId: f.userId },
+      })));
+      const before = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      const history = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      expect(history.attemptHistory?.hasMore).toBe(true);
+      expect(history.attemptHistory?.entries).toHaveLength(10);
+      expect(history.attemptHistory?.entries.every(entry => entry.outcome === "unconfirmed" && entry.finishedAt === null && entry.sourceMatchesCurrent)).toBe(true);
+      expect(JSON.stringify(history)).not.toContain(f.userId);
+      expect(await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id))).toHaveLength(before.length);
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId });
+    });
+    it("V9 maintenance attempt projection refuses duplicate terminal evidence instead of choosing an outcome", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review original native terminal evidence" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, await reviewedMaintenance(installed.id, next))).toEqual({ updated: true });
+      const [terminal] = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_attempt_finished")));
+      // Deliberately inconsistent original-namespace fixture: no synthetic execution claim.
+      const [duplicate] = await db.insert(activityLog).values({ companyId: f.home, actorType: "system", actorId: "core-stewards",
+        entityType: "agent_package_installation", entityId: installed.id, action: terminal!.action, details: terminal!.details }).returning();
+      try { await expect(readMaintenanceHistory(db, f.actor, f.home, installed.id)).rejects.toMatchObject({ status: 404 }); }
+      finally { await db.delete(activityLog).where(eq(activityLog.id, duplicate!.id)); }
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).attemptHistory?.entries[0]?.outcome).toBe("configuration_recorded");
     });
     it("V9 maintenance breaks repeated configured-change recurrence without activating or granting work", async () => {
       await enableV9Maintenance();
