@@ -1,12 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, gt, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   emailDeliveries,
   emailSuppressions,
   emailWebhookReceipts,
+  authUsers,
+  companies,
+  companyMemberships,
+  saasNotificationPreferences,
 } from "@paperclipai/db";
-import type { PublicOriginConfig } from "@paperclipai/shared";
+import { notificationPolicySchema, type PublicOriginConfig } from "@paperclipai/shared";
 import { publicAppUrl } from "../../aw-deployment.js";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
 import { open, recipientHash, seal } from "../saas/crypto.js";
@@ -14,6 +18,7 @@ import {
   ProviderDeliveryError,
   type TransactionalEmailProvider,
 } from "./mailgun-provider.js";
+import { routeNotification } from "./interruption-policy.js";
 
 type EmailPurpose =
   | "verification"
@@ -47,6 +52,42 @@ export function transactionalEmail(
   provider: TransactionalEmailProvider,
 ) {
   const key = config.outbox.encryptionKey;
+  async function currentNotificationDelivery(
+    row: typeof emailDeliveries.$inferSelect,
+    payload: EmailPayload,
+    now: Date,
+  ) {
+    // Identity lifecycle messages keep their existing owner. Company notices
+    // must recheck their original recipient, membership and current preference.
+    if (!row.companyId || !["billing", "runtime", "approval", "work_update", "security"].includes(row.purpose))
+      return { channel: "email" as const, notBefore: now };
+    if (!row.userId) return { channel: "in_app_only" as const };
+    const [recipient] = await db.select({ email: authUsers.email })
+      .from(companyMemberships)
+      .innerJoin(authUsers, and(eq(authUsers.id, companyMemberships.principalId), eq(authUsers.emailVerified, true)))
+      .innerJoin(companies, eq(companies.id, companyMemberships.companyId))
+      .where(and(
+        eq(companyMemberships.companyId, row.companyId),
+        eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, row.userId),
+        eq(companyMemberships.status, "active"),
+        sql`${companies.status} <> 'archived'`,
+        ...(["approval", "work_update"].includes(row.purpose) ? [] : [sql`${companyMemberships.membershipRole} in ('owner','admin')`]),
+      )).limit(1);
+    if (!recipient || recipient.email.trim().toLowerCase() !== payload.recipient ||
+      recipientHash(recipient.email, config.outbox.recipientHashKey) !== row.recipientHash)
+      return { channel: "in_app_only" as const };
+    const [preference] = await db.select().from(saasNotificationPreferences)
+      .where(and(eq(saasNotificationPreferences.userId, row.userId), eq(saasNotificationPreferences.category, row.purpose))).limit(1);
+    const parsed = preference?.deliveryPolicy ? notificationPolicySchema.safeParse(preference.deliveryPolicy) : null;
+    if (row.purpose !== "security" && parsed && !parsed.success)
+      return { channel: "in_app_only" as const };
+    // The original outbox already owns the digest date/key. Once due, a fresh
+    // preference can postpone for quiet hours, without scheduling a new digest.
+    const policy = parsed?.success ? parsed.data : null;
+    return routeNotification({ category: row.purpose, emailEnabled: preference?.emailEnabled !== false,
+      policy: policy?.cadence === "digest" ? { ...policy, cadence: "immediate" } : policy, now });
+  }
   async function enqueue(
     input: {
       purpose: EmailPurpose;
@@ -197,6 +238,8 @@ export function transactionalEmail(
         .where(own);
       return true;
     }
+    let sendStarted = false;
+    const unresolved = claimed.status === "sending" || claimed.errorCode === "delivery_acceptance_unknown";
     try {
       if (!claimed.payloadCiphertext)
         throw new ProviderDeliveryError("mail_payload_missing", false);
@@ -212,9 +255,29 @@ export function transactionalEmail(
         "email:" + claimed.id,
       );
       const messageId = "<" + claimed.id + "@" + config.mail.domain + ">";
-      const existing =
-        claimed.status === "sending" ? await provider.find(messageId) : null;
+      const existing = unresolved ? await provider.find(messageId) : null;
+      if (unresolved && !existing)
+        throw new ProviderDeliveryError("delivery_acceptance_unknown", true);
       const link = publicAppUrl(origins, payload.actionPath);
+      if (!existing) {
+        const delivery = await currentNotificationDelivery(claimed, payload, now);
+        if (delivery.channel === "in_app_only") {
+          await db.update(emailDeliveries).set({ status: "suppressed", errorCode: "notification_access_withdrawn",
+            payloadCiphertext: null, leaseOwner: null, leaseUntil: null }).where(own);
+          return true;
+        }
+        if (delivery.notBefore.getTime() > now.getTime()) {
+          await db.update(emailDeliveries).set({ status: "pending", notBefore: delivery.notBefore,
+            attempts: claimed.attempts, leaseOwner: null, leaseUntil: null }).where(own);
+          return true;
+        }
+        // A webhook/other worker may have settled this row during the current
+        // source reads. Retain the original lease fence at the transport edge.
+        const [owned] = await db.select({ id: emailDeliveries.id }).from(emailDeliveries)
+          .where(and(own, gt(emailDeliveries.leaseUntil, new Date()))).limit(1);
+        if (!owned) return true;
+        sendStarted = true;
+      }
       const delivered = existing
         ? { providerMessageId: existing }
         : await provider.send({
@@ -244,11 +307,13 @@ export function transactionalEmail(
         })
         .where(own);
     } catch (error) {
-      const code =
+      const acceptanceUnknown = unresolved || (sendStarted &&
+        (!(error instanceof ProviderDeliveryError) || error.acceptance !== "not_accepted"));
+      const code = acceptanceUnknown ? "delivery_acceptance_unknown" :
         error instanceof ProviderDeliveryError
           ? error.code
           : "mail_provider_unavailable";
-      const retryable =
+      const retryable = acceptanceUnknown ||
         !(error instanceof ProviderDeliveryError) || error.retryable;
       const exhausted = claimed.attempts + 1 >= 5 || !retryable;
       await db
@@ -312,6 +377,7 @@ export function transactionalEmail(
             sentAt: row.sentAt ?? now,
             payloadCiphertext: null,
             providerMessageId: input.messageId,
+            errorCode: null,
             leaseOwner: null,
             leaseUntil: null,
           })
@@ -322,6 +388,7 @@ export function transactionalEmail(
                 eq(emailDeliveries.status, "accepted"),
                 eq(emailDeliveries.status, "sending"),
                 eq(emailDeliveries.status, "failed"),
+                and(inArray(emailDeliveries.status, ["quarantined", "expired"]), gt(emailDeliveries.attempts, 0)),
               ),
             ),
           );

@@ -1308,3 +1308,34 @@ retained unsaved input, correct heading focus, narrow axe/reflow and zero draft
 writes, Tasks, Agents or runs. Earlier failed browser/focused/type waves remain
 recorded. Current integrated workspace/regression and human/hosted acceptance
 remain pending.
+
+
+### ADR-V9-057 — Notification delivery rechecks current recipients and reconciles unknown acceptance
+
+2026-10-10. The existing encrypted transactional-email owner distinguishes an
+explicit provider refusal from an unknown acknowledgement. Transport exceptions,
+ambiguous server replies, missing acceptance IDs and expired sending leases
+require lookup by the same original logical message ID. An empty lookup cannot
+admit another send. Bounded retries are read-only; exhaustion quarantines the
+payload. A later authenticated exact-recipient receipt can record delivery even
+after quarantine/expiry without recreating a message. Provider event lookup
+filters the exact logical ID rather than trusting the first returned event.
+
+Before a new company notice, the owner freshly reads current verified recipient
+email, active company membership/required role, nonarchived company and personal
+delivery preference. Withdrawal suppresses and erases the queued payload. Newly
+applicable quiet hours defer the original row without renewing its dedupe key or
+consuming transport attempts. A due digest retains its original grouping date.
+Company account-safety notices remain immediate, with current recipient authority
+still required. Identity lifecycle email retains its original purpose owner.
+The existing lease is checked again at the transport boundary; this does not
+promise cancellation of an already accepted external effect.
+
+All 28 checks pass across the original 15-case SaaS regression, eleven new actual
+migrated PostgreSQL delivery cases and two provider-adapter fixtures on matching
+source SHA-256 `2dd0ca3ae62630f3921324830cb8682fb67895ae12fe1130e674c6efdbfa4601`. Native prerequisites prove actual PostgreSQL and artifact sandbox support. The
+first launcher failed before tests because its public prerequisite file lacked
+group-read access; only that runtime permission was corrected. No original
+assertion, loader, budget or test prerequisite changed. Strict current server
+types/integration remain pending. Injected transport fixtures do not qualify live
+Mailgun delivery, Slack/Teams routing or global human release acceptance.
