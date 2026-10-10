@@ -1,0 +1,62 @@
+name: Publish BLENTERA V9 preview
+on:
+  push:
+    branches:
+      - blentera-preview/v9-source-led-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source content
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s blentera-v9-live.html
+          grep -q 'Your people and AI' blentera-v9-live.html
+          grep -q 'data-preview-route="about"' blentera-v9-live.html
+          grep -q 'data-preview-route="platform"' blentera-v9-live.html
+          grep -q 'data-preview-route="control"' blentera-v9-live.html
+          grep -q 'data-role="ciso"' blentera-v9-live.html
+      - name: Publish to Cloudflare-hosted review service
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 90 --retry 2 \
+            -F 'file=@blentera-v9-live.html;type=text/html' \
+            -F 'title=BLENTERA V9 - Content-first product website review' \
+            https://sharehtml.zhenjia.dev/api/shares > "$RUNNER_TEMP/share.json"
+          python3 - <<'PY'
+          import json,os
+          d=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'share.json')))
+          url=d['share']['preview_url']
+          assert url.startswith('https://sharehtml.zhenjia.dev/v/') and url.endswith('/'),url
+          print('BLENTERA_V9_PUBLIC_URL='+url)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('url='+url+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('## BLENTERA V9 review\n\n')
+              f.write('**[Open latest live website preview]('+url+')**\n\n')
+              f.write('An unlisted third-party Cloudflare-hosted static marketing preview, not the qualified production platform or a first-party Pages deployment.\n')
+          PY
+      - name: Independently verify public HTML response
+        shell: bash
+        env:
+          LIVE_URL: ${{ steps.publish.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location --retry 2 --max-time 45 \
+            -D "$RUNNER_TEMP/response-headers" -o "$RUNNER_TEMP/live.html" "$LIVE_URL"
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/live.html"
+          grep -q 'Your people and AI' "$RUNNER_TEMP/live.html"
+          grep -q 'data-preview-route="about"' "$RUNNER_TEMP/live.html"
+          grep -q 'data-preview-route="platform"' "$RUNNER_TEMP/live.html"
+          grep -q 'data-preview-route="control"' "$RUNNER_TEMP/live.html"
+          grep -q 'data-role="ciso"' "$RUNNER_TEMP/live.html"
+          grep -q 'Current release status' "$RUNNER_TEMP/live.html"
+          grep -i -E '^HTTP/|^content-type:' "$RUNNER_TEMP/response-headers" || true
+          echo "HTTP_VERIFIED_BLENTERA_V9=$LIVE_URL"
