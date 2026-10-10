@@ -1,0 +1,54 @@
+name: Publish BLENTERA premium v4 design review
+on:
+  push:
+    branches:
+      - blentera-preview/premium-v4-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source validation
+        run: |
+          test -s blentera-premium-v4.html
+          grep -q 'data-preview-route="about"' blentera-premium-v4.html
+          grep -q 'data-preview-route="platform"' blentera-premium-v4.html
+          grep -q 'data-preview-route="trust"' blentera-premium-v4.html
+      - name: Publish Cloudflare-hosted HTML
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --connect-timeout 15 --max-time 90 --retry 2 \
+            -F 'file=@blentera-premium-v4.html;type=text/html' \
+            -F 'title=BLENTERA Premium V4 - Full Design Review' \
+            https://sharehtml.zhenjia.dev/api/shares > "$RUNNER_TEMP/response.json"
+          python3 - <<'PY'
+          import json,os
+          response=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'response.json')))
+          url=response['share']['preview_url']
+          assert url.startswith('https://sharehtml.zhenjia.dev/v/') and url.endswith('/'),url
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('url='+url+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:f.write('## BLENTERA premium v4 preview\n\n[Open complete site]('+url+')\n')
+          print('PREMIUM_V4_URL='+url)
+          PY
+      - name: Confirm HTTP and all four pages
+        shell: bash
+        env:
+          URL: ${{ steps.publish.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location --max-time 40 \
+            -D "$RUNNER_TEMP/headers" -o "$RUNNER_TEMP/page" "$URL"
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/page"
+          grep -q 'data-preview-route="about"' "$RUNNER_TEMP/page"
+          grep -q 'data-preview-route="platform"' "$RUNNER_TEMP/page"
+          grep -q 'data-preview-route="trust"' "$RUNNER_TEMP/page"
+          grep -q 'data-exec="cto"' "$RUNNER_TEMP/page"
+          grep -q 'data-scenario="incident"' "$RUNNER_TEMP/page"
+          head -n 18 "$RUNNER_TEMP/headers" | grep -i -E '^HTTP/|^content-type:' || true
+          echo "VERIFIED_PREMIUM_V4_URL=$URL"
