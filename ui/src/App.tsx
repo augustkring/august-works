@@ -1,3 +1,4 @@
+import { CustomerSupport } from "./pages/CustomerSupport";
 import { MaintenanceHistoryEntry } from "./pages/MaintenanceHistory";
 import { AgentMonitorEntry } from "./pages/AgentMonitor";
 import { SecurityEvents } from "./pages/SecurityEvents";
@@ -234,6 +235,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="company/settings/billing" element={<SaasBillingPage />} />
       <Route path="company/settings/runtime" element={<SaasRuntimesPage />} />
       <Route path="company/settings/support" element={<SaasSupportPage />} />
+      <Route path="company/support-access" element={<CustomerSupport />} />
       <Route path="company/settings/deletion" element={<SaasDeletionPage />} />
       <Route path="company/settings/security" element={<SaasAccountPage />} />
       <Route path="company/settings/environments" element={<Navigate to="/company/settings/instance/environments" replace />} />

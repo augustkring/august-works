@@ -15,6 +15,7 @@ const apiPrefixes: Record<string, string> = {
   "agent-authoring.ts": "/api",
   "customer-feedback.ts": "/api",
   "agent-monitor.ts": "/api",
+  "customer-support.ts": "/api",
   "maintenance-history.ts": "/api",
   "experience.ts": "/api",
   "business-events.ts": "/api",

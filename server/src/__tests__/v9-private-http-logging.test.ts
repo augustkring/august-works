@@ -12,6 +12,8 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
+    ["GET", "/api/companies/private-company/experience/support-access?expectedUserId=private-principal"],
+    ["DELETE", "/api/companies/private-company/experience/support-access?expectedUserId=private-principal"],
     ["GET", "/api/companies/private-company/agent-package-installations/private-record/experience/maintenance?expectedUserId=private-principal"],
     ["DELETE", "/api/companies/private-company/agent-package-installations/private-record/experience/maintenance?expectedUserId=private-principal"],
     ["GET", "/api/companies/private-company/workflows/private-record/experience/publication?expectedUserId=private-principal"],

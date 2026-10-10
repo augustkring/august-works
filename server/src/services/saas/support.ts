@@ -21,6 +21,30 @@ import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
 import { sha256 } from "./crypto.js";
 
+export async function assertNativeSupportOwner(
+  reader: Pick<Db, "select">,
+  companyId: string,
+  userId: string,
+  lock = false,
+) {
+  const query = reader
+    .select()
+    .from(companyMemberships)
+    .where(
+      and(
+        eq(companyMemberships.companyId, companyId),
+        eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, userId),
+        eq(companyMemberships.membershipRole, "owner"),
+        eq(companyMemberships.status, "active"),
+      ),
+    )
+    .limit(1);
+  const [membership] = await (lock ? query.for("share") : query);
+
+  if (!membership) throw forbidden("Company owner approval required");
+}
+
 export function saasSupportService(
   db: Db,
   config: SaasPlatformConfig,
@@ -36,22 +60,7 @@ export function saasSupportService(
     reader: Pick<Db, "select"> = db,
     lock = false,
   ) {
-    const query = reader
-      .select()
-      .from(companyMemberships)
-      .where(
-        and(
-          eq(companyMemberships.companyId, companyId),
-          eq(companyMemberships.principalType, "user"),
-          eq(companyMemberships.principalId, userId),
-          eq(companyMemberships.membershipRole, "owner"),
-          eq(companyMemberships.status, "active"),
-        ),
-      )
-      .limit(1);
-    const [membership] = await (lock ? query.for("share") : query);
-
-    if (!membership) throw forbidden("Company owner approval required");
+    return assertNativeSupportOwner(reader, companyId, userId, lock);
   }
   async function approve(
     companyId: string,

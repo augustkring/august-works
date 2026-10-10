@@ -748,5 +748,33 @@
   "needsYouMaintenanceBounded": "Package maintenance is a separate bounded view. Review other installations and retained history in agent packages.",
   "openPackageReview": "Open agent package review",
   "maintenanceUnknownTitle": "Review an unconfirmed package update",
-  "maintenanceUnknownConsequence": "We could not confirm the outcome of an automatic package update. Automatic retries are paused for this configuration. Review the recorded state through the existing package owner."
+  "maintenanceUnknownConsequence": "We could not confirm the outcome of an automatic package update. Automatic retries are paused for this configuration. Review the recorded state through the existing package owner.",
+  "supportHistory": {
+    "title": "Support access history",
+    "loading": "Checking current support history…",
+    "unavailable": "Support history could not be checked. A current company owner account and enabled support are required.",
+    "disclosure": "These are recorded support approvals. This view grants no access. Support checks the named operator, approving owner, exact permissions and expiry before any action. A recorded approval does not prove that support acted or resolved a problem.",
+    "observed": "Checked at",
+    "empty": "No support approvals are recorded for this company.",
+    "records": "Recorded approvals",
+    "operator": "Operator reference",
+    "approved": "Approval recorded",
+    "expires": "Recorded expiry",
+    "revoked": "Revocation recorded",
+    "more": "Showing the ten most recent approvals. Open the support access controls for the complete history.",
+    "back": "Back to Company",
+    "nativeControls": "Manage support access",
+    "contact": "Contact support",
+    "state": {
+      "recorded": "Approval recorded; access is rechecked when used",
+      "expired": "Recorded time limit expired",
+      "revoked": "Access revoked"
+    },
+    "scope": {
+      "status_read": "Inspect runtime status",
+      "runtime_manage": "Start, stop, back up and upgrade runtimes",
+      "billing_override": "Apply a temporary billing entitlement override",
+      "backup_restore": "Replace runtime state from a verified backup"
+    }
+  }
 }

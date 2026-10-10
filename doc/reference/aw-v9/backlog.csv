@@ -60,10 +60,10 @@ V9-058,2271,package/skill/playbook revalidation projection,not_started
 V9-059,2273,workflow/runtime recovery projection,not_started
 V9-060,2275,maintenance receipt UI/history,in_progress
 V9-061,2277,maintenance escalation → Needs You,in_progress
-V9-062,2279,maintenance cost/retry budgets,not_started
+V9-062,2279,maintenance cost/retry budgets,in_progress
 V9-063,2281,support diagnostic bundle,in_progress
 V9-064,2283,self-service error recovery cards,not_started
-V9-065,2285,V6 support session customer UX,not_started
+V9-065,2285,V6 support session customer UX,in_progress
 V9-066,2287,design token audit/consolidation,not_started
 V9-067,2289,Storybook V9 state matrix,not_started
 V9-068,2291,premium shell typography/layout refinement,not_started

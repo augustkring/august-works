@@ -1,3 +1,5 @@
+import { assertNativeSupportOwner } from "../saas/support.js";
+import { v5HumanActorId } from "../v5-authorization.js";
 import type { Db } from "@paperclipai/db";
 import {
   COMPANY_EXPERIENCE_SECTIONS,
@@ -15,7 +17,7 @@ import {
 import { experienceService } from "./service.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { withExperienceAdmission } from "./admission.js";
-import { forbidden, notFound } from "../../errors.js";
+import { HttpError, forbidden, notFound } from "../../errors.js";
 export async function companyExperience(
   db: Db,
   actor: AuthorizationActor,
@@ -110,7 +112,7 @@ export async function companyExperience(
         {
           section: "security",
           id: "support_access",
-          href: "/company/settings/support",
+          href: "/company/support-access",
           permission: "users:manage_permissions",
           enabled: v6FeatureEnabled(flags, "admin_support_v6"),
         },
@@ -223,6 +225,22 @@ export async function companyExperience(
         )
       )
         throw notFound("Company navigation is not enabled");
+      if (
+        sections.some((section) =>
+          section.entries.some((entry) => entry.id === "support_access"),
+        )
+      ) {
+        try {
+          await assertNativeSupportOwner(db, companyId, v5HumanActorId(actor));
+        } catch (error) {
+          if (!(error instanceof HttpError) || error.status !== 403)
+            throw error;
+          for (const section of sections)
+            section.entries = section.entries.filter(
+              (entry) => entry.id !== "support_access",
+            );
+        }
+      }
       signal.throwIfAborted();
       return companyExperienceSchema.parse({
         companyId,

@@ -814,3 +814,24 @@ Unknown outcomes are not relabelled as failed, closed or safe to retry. Native
 history/Needs You disclose owner review without creating a grant, notification,
 new scheduler, secondary ledger, automatic rollback or harmful retry.
 General external/material reconciliation and M0–M4 recovery remain open.
+
+## V9-040 — Customer support history reuses original V6 owner authority
+
+The original active native user/owner membership predicate is shared unchanged
+with V6 approve/revoke/operator admission. The V9 read repeats company scope,
+owner, original V6 and V9 rollout under privacy and share locks with a five-second
+bound. Ten newest original support records plus a has-more boundary form a strict
+DTO. Reasons, approving-owner identity, operator configuration, private work and
+raw errors are omitted. Record/operator references, fixed scopes and original
+times remain inspectable by the actual company owner. Recorded/expired/revoked
+are facts at observation, not current authorization; V6 independently rechecks
+configured operator, approving owner, exact scope and expiry at use.
+
+The private no-store customer query is keyed by account/company/epoch, unmounted
+during checking and erased on relevant native events; late old-owner results
+cannot return. Company navigation offers the new history link only to the actual
+V6 owner. An explicit link opens original separate native controls; the read itself
+creates no approval, grant, privileged action, outbox message, alternate ledger,
+telemetry, browser persistence or automatic support transmission. Full V9
+immutable approval review/unknown-command recovery and human acceptance remain
+open; this view does not qualify those original material actions.

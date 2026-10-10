@@ -748,5 +748,33 @@
   "needsYouMaintenanceBounded": "Pakkevedligeholdelse vises i et særskilt, begrænset udvalg. Vurder andre installationer og bevaret historik under agentpakker.",
   "openPackageReview": "Åbn vurdering af agentpakker",
   "maintenanceUnknownTitle": "Gennemgå en ubekræftet pakkeopdatering",
-  "maintenanceUnknownConsequence": "Vi kunne ikke bekræfte udfaldet af en automatisk pakkeopdatering. Automatiske genforsøg er sat på pause for denne konfiguration. Gennemgå den registrerede tilstand hos den eksisterende pakkeejer."
+  "maintenanceUnknownConsequence": "Vi kunne ikke bekræfte udfaldet af en automatisk pakkeopdatering. Automatiske genforsøg er sat på pause for denne konfiguration. Gennemgå den registrerede tilstand hos den eksisterende pakkeejer.",
+  "supportHistory": {
+    "title": "Historik for supportadgang",
+    "loading": "Kontrollerer aktuel supporthistorik…",
+    "unavailable": "Supporthistorikken kunne ikke kontrolleres. En aktuel virksomhedsejerkonto og aktiveret support er påkrævet.",
+    "disclosure": "Dette er registrerede supportgodkendelser. Denne visning giver ingen adgang. Support kontrollerer den navngivne operatør, den godkendende ejer, de præcise tilladelser og udløbet før hver handling. En registreret godkendelse beviser ikke, at support har handlet eller løst et problem.",
+    "observed": "Kontrolleret",
+    "empty": "Der er ingen registrerede supportgodkendelser for denne virksomhed.",
+    "records": "Registrerede godkendelser",
+    "operator": "Operatørreference",
+    "approved": "Godkendelse registreret",
+    "expires": "Registreret udløb",
+    "revoked": "Tilbagekaldelse registreret",
+    "more": "De ti seneste godkendelser vises. Åbn supportadgangens kontroller for hele historikken.",
+    "back": "Tilbage til Virksomhed",
+    "nativeControls": "Administrér supportadgang",
+    "contact": "Kontakt support",
+    "state": {
+      "recorded": "Godkendelse registreret; adgang kontrolleres ved brug",
+      "expired": "Den registrerede tidsgrænse er udløbet",
+      "revoked": "Adgang tilbagekaldt"
+    },
+    "scope": {
+      "status_read": "Se runtimestatus",
+      "runtime_manage": "Start, stop, sikkerhedskopiér og opgradér runtimes",
+      "billing_override": "Anvend en midlertidig ændring af faktureringens rettigheder",
+      "backup_restore": "Erstat runtimetilstand fra en verificeret sikkerhedskopi"
+    }
+  }
 }
