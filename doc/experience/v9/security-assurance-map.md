@@ -95,3 +95,13 @@ Native run references are checked by the existing payload/source owner. Private
 HTTP logging normalizes this route and excludes account query/IDs/response data.
 Source-loss checking cancels/removes old browser queries; obsolete responses
 cannot reintroduce a previous private view. No mutation or telemetry is added.
+
+Native bounded package maintenance: current original-human authority, immutable
+release/source/pin admission and existing installation row lock; reviewed exact
+version/installed-source/timestamp/content hash refuses stale observations.
+With V9 policy enabled, company advisory serialization enforces rolling resource/
+company configured-change limits, a native loop-blocked audit and a five-second
+transaction deadline. Postcondition verifies staged configuration with activation
+still required. Native Core Steward disable remains the effect kill path; V9
+presentation/policy flags do not claim to disable inherited V7 authority. External
+repairs and failed/unknown-attempt contracts remain closed/unqualified.

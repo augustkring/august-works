@@ -52,8 +52,8 @@ V9-050,2255,MCP Apps stable-spec conformance + AW security ADR,not_started
 V9-051,2257,MCP Apps sandboxed host PoC,not_started
 V9-052,2259,MCP Apps Tool Gateway authorization integration,not_started
 V9-053,2261,MCP Apps security/accessibility acceptance,not_started
-V9-054,2263,maintenance action classification + desired-state/concurrency model,not_started
-V9-055,2265,maintenance policy evaluator + fencing/version guards + blast-radius/kill/loop budgets,not_started
+V9-054,2263,maintenance action classification + desired-state/concurrency model,in_progress
+V9-055,2265,maintenance policy evaluator + fencing/version guards + blast-radius/kill/loop budgets,in_progress
 V9-056,2267,Core Steward/readiness maintenance projection,not_started
 V9-057,2269,connector recovery/re-auth projection,not_started
 V9-058,2271,package/skill/playbook revalidation projection,not_started

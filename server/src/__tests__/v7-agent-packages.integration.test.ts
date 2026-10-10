@@ -40,7 +40,7 @@ import {
   vi,
 } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   createDb,
   principalPermissionGrants,
@@ -105,6 +105,7 @@ const support = await getEmbeddedPostgresTestSupport();
         billing_v6: true,
         agent_packages_v7: true,
         core_stewards_v7: false,
+        maintenance_autopilot_v9: false,
       });
       f = await seedV5Presences(db);
       service = agentPackageService(db, {
@@ -389,6 +390,73 @@ const support = await getEmbeddedPostgresTestSupport();
         core_stewards_v7: true,
       });
     }
+    async function enableV9Maintenance() {
+      await enableStewards();
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, maintenance_autopilot_v9: true });
+    }
+    async function reviewedMaintenance(installedId: string, next: { id: string; contentHash: string }) {
+      const [current] = await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.id, installedId));
+      return { expectedInstallationVersion: current!.version, expectedInstalledVersionId: current!.installedVersionId,
+        expectedUpdatedAt: current!.updatedAt.toISOString(), expectedReleaseContentHash: next.contentHash };
+    }
+    it("V9 maintenance refuses unreviewed, stale-version, changed-time and changed-release observations before native mutation", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review bounded source admission" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      expect(await service.stewardUpdate(f.home, installed.id, next.id)).toEqual({ updated: false });
+      for (const change of [{ expectedInstallationVersion: review.expectedInstallationVersion + 1 },
+        { expectedUpdatedAt: "2000-01-01T00:00:00.000Z" }, { expectedReleaseContentHash: "0".repeat(64) }])
+        expect(await service.stewardUpdate(f.home, installed.id, next.id, { ...review, ...change })).toEqual({ updated: false });
+      const current = await service.get(f.actor, f.home, installed.id);
+      expect(current.installedVersionId).toBe(installed.installedVersionId); expect(current.status).toBe("active");
+      expect(await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.low_risk_update_configured")))).toHaveLength(0);
+    });
+    it("V9 maintenance concurrent scans configure once with a native verified configuration receipt and retain activation", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Opt in to bounded unchanged-content updates" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const scans = await Promise.all([maintainPackageUpdates(db), maintainPackageUpdates(db)]);
+      // The native scanner also services retained fixtures in other companies.
+      // Exactly-once is asserted below on this installation's real mutation receipt.
+      expect(scans.some(scan => scan.configured > 0)).toBe(true);
+      const current = await service.get(f.actor, f.home, installed.id);
+      expect(current).toMatchObject({ installedVersionId: next.id, status: "configuring", activationHash: null, version: 3 });
+      const receipts = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.low_risk_update_configured")));
+      expect(receipts).toHaveLength(1); expect(receipts[0]!.details).toMatchObject({ maintenanceClass: "M2", policyVersion: "aw-v9-package-maintenance-1", postcondition: "configured_activation_required", activationRequired: true });
+      await expect(run()).rejects.toMatchObject({ cause: { code: "23514", message: "package_run_activation_required" } });
+    });
+    it("V9 maintenance breaks repeated configured-change recurrence without activating or granting work", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      let version = installed.version;
+      const grants = await db.select().from(principalPermissionGrants);
+      for (let patch = 1; patch <= 4; patch++) {
+        await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: version, reason: "Explicit fixture human activation after each unchanged-content update" });
+        const next = await service.publish(f.actor, { ...input, version: `1.0.${patch}`, releaseNotes: "Editorial correction" });
+        expect(await service.stewardUpdate(f.home, installed.id, next.id, await reviewedMaintenance(installed.id, next))).toEqual({ updated: patch <= 3 });
+        const current = await service.get(f.actor, f.home, installed.id); version = current.version;
+        if (patch === 4) {
+          expect(current.installedVersionId).not.toBe(next.id); expect(current.status).toBe("active");
+          expect(await service.stewardUpdate(f.home, installed.id, next.id, await reviewedMaintenance(installed.id, next))).toEqual({ updated: false });
+        }
+      }
+      expect(await db.select().from(principalPermissionGrants)).toHaveLength(grants.length);
+      const blocked = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_loop_blocked")));
+      expect(blocked).toHaveLength(1); expect(blocked[0]!.details).toMatchObject({ reason: "configured_change_budget", humanReviewRequired: true });
+    });
+    it("V9 maintenance cannot bypass the native Core Steward kill path with a retained review", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Explicit bounded update admission" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      await instanceSettingsService(db).updateExperimental({ core_stewards_v7: false, maintenance_autopilot_v9: false });
+      await expect(service.stewardUpdate(f.home, installed.id, next.id, review)).rejects.toMatchObject({ status: 404 });
+      expect((await service.get(f.actor, f.home, installed.id)).installedVersionId).toBe(installed.installedVersionId);
+    });
     it("Core Stewards configure only opted-in unchanged-content releases and retain a human activation boundary", async () => {
       await enableStewards();
       const installed = await service.install(f.actor, f.home, {

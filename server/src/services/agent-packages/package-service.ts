@@ -1,9 +1,12 @@
+import { packageStewardReviewSchema, packageStewardReviewIsCurrent, packageMaintenanceRecurrenceAllows, PACKAGE_MAINTENANCE_LIMITS, PACKAGE_MAINTENANCE_POLICY_VERSION, type PackageStewardReview } from "../stewards/maintenance-policy.js";
+import { performance } from "node:perf_hooks";
 import { learningRoots } from "../learning/learning-service.js";
 import { entitlementService } from "../billing/entitlements.js";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import {
   agents,
+  activityLog,
   agentPackages,
   agentPackageVersions,
   agentPackageComponents,
@@ -27,6 +30,7 @@ import {
   type Db,
 } from "@paperclipai/db";
 import {
+  v9FeatureEnabled,
   packageReleaseSchema,
   packageInstallSchema,
   packageUpdateSchema,
@@ -44,6 +48,7 @@ import {
   v7HumanActorId,
 } from "../v7-authorization.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
+import { instanceSettingsService } from "../instance-settings.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
@@ -543,7 +548,9 @@ export function agentPackageService(
       companyId: string,
       id: string,
       nextVersionId: string,
+      reviewedSource?: PackageStewardReview,
     ) => {
+      const review = reviewedSource === undefined ? undefined : packageStewardReviewSchema.parse(reviewedSource);
       await assertV7Enabled(db, "core_stewards_v7");
       await assertV7Enabled(db, "agent_packages_v7");
       return withV7ActivityTransaction(db, async (tx, p) => {
@@ -552,6 +559,13 @@ export function agentPackageService(
         );
         await assertV7Enabled(tx, "core_stewards_v7");
         await assertV7Enabled(tx, "agent_packages_v7");
+        const boundedMaintenance = v9FeatureEnabled(await instanceSettingsService(tx).getExperimental(), "maintenance_autopilot_v9");
+        const started = performance.now();
+        function deadline() {
+          if (boundedMaintenance && performance.now() - started > PACKAGE_MAINTENANCE_LIMITS.maximumTransactionSeconds * 1000)
+            throw conflict("Native package maintenance deadline exceeded", { code: "maintenance_deadline" });
+        }
+        if (boundedMaintenance) await tx.execute(sql`set local statement_timeout='5s'`);
         await lockMemoryPrivacy(tx, companyId);
         const [row] = await tx
           .select()
@@ -579,6 +593,9 @@ export function agentPackageService(
         const before = await release(tx, row.installedVersionId, true),
           after = await release(tx, nextVersionId, true);
         available(after);
+        if ((boundedMaintenance && !review) || (review && !packageStewardReviewIsCurrent(review, row, after.version.contentHash)))
+          return { updated: false };
+        deadline();
         const semver = (v: string) => v.split(".").map(Number);
         const previous = semver(before.version.version),
           next = semver(after.version.version);
@@ -596,6 +613,24 @@ export function agentPackageService(
           sql`select aw_v7_package_installation_current(i) and not exists(select 1 from heartbeat_runs r where r.company_id=i.company_id and r.agent_id=i.agent_id and r.status in ('queued','running','scheduled_retry')) as current from company_agent_package_installations i where i.id=${id}::uuid and i.company_id=${companyId}::uuid`,
         );
         if (safe?.current !== true) return { updated: false };
+        if (boundedMaintenance) {
+          const [counts] = await tx.execute<{ resource_count: number; company_count: number }>(sql`
+            select count(*) filter (where entity_id=${id})::int as resource_count, count(*)::int as company_count
+            from activity_log where company_id=${companyId}::uuid and action='agent_package.low_risk_update_configured'
+              and created_at > now()-interval '24 hours'`);
+          if (!packageMaintenanceRecurrenceAllows(Number(counts?.resource_count), Number(counts?.company_count))) {
+            const [previous] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
+              eq(activityLog.companyId, companyId), eq(activityLog.entityType, "agent_package_installation"),
+              eq(activityLog.entityId, id), eq(activityLog.action, "agent_package.maintenance_loop_blocked"),
+              sql`${activityLog.createdAt} > now()-interval '24 hours'`)).limit(1);
+            if (!previous) await logActivity(tx, { companyId, actorType: "system", actorId: "core-stewards",
+              action: "agent_package.maintenance_loop_blocked", entityType: "agent_package_installation", entityId: id,
+              details: { policyVersion: PACKAGE_MAINTENANCE_POLICY_VERSION, maintenanceClass: "M2", reason: "configured_change_budget",
+                policyOwnerUserId: row.installedByUserId, humanReviewRequired: true } }, p);
+            return { updated: false };
+          }
+        }
+        deadline();
         await pins(
           tx,
           actor,
@@ -624,6 +659,17 @@ export function agentPackageService(
             updatedAt: new Date(),
           })
           .where(eq(companyAgentPackageInstallations.id, id));
+        if (boundedMaintenance) {
+          const [actual] = await tx.select().from(companyAgentPackageInstallations).where(and(
+            eq(companyAgentPackageInstallations.companyId, companyId), eq(companyAgentPackageInstallations.id, id)));
+          if (!actual || actual.version !== row.version + 1 || actual.installedVersionId !== nextVersionId
+              || actual.status !== "configuring" || actual.activationHash !== null || actual.readiness !== null
+              || actual.installedByUserId !== row.installedByUserId || actual.agentId !== row.agentId
+              || actual.packageId !== row.packageId || actual.updatePolicy !== row.updatePolicy
+              || nativeSha256(actual.components) !== nativeSha256(row.components))
+            throw conflict("Native maintenance postcondition was not verified", { code: "maintenance_postcondition_unverified" });
+          deadline();
+        }
         await logActivity(
           tx,
           {
@@ -639,10 +685,13 @@ export function agentPackageService(
               previousVersion: row.installedVersionId,
               nextVersion: nextVersionId,
               activationRequired: true,
+              ...(boundedMaintenance ? { maintenanceClass: "M2", policyVersion: PACKAGE_MAINTENANCE_POLICY_VERSION,
+                reviewedSource: review, postcondition: "configured_activation_required" } : {}),
             },
           },
           p,
         );
+        deadline();
         return { updated: true };
       });
     },

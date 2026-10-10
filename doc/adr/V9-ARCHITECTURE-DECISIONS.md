@@ -714,3 +714,18 @@ recorded execution status, not independent business verification. Controls remai
 with native owners; retirement cleanup and active draft publication require their
 own complete mutation contracts. No shadow lifecycle, run table or scheduler is
 added. Rollback hides this surface and preserves native history and controls.
+
+## V9-033 — Maintenance reviews fence the existing installation owner
+
+The existing Core Steward scanner provides a version/time/installed-source/
+candidate-content review; the native installation owner checks it under its
+existing current-authority/source/row locks. With V9 bounded maintenance enabled,
+company/resource configured-change budgets and a native daily loop-blocked audit
+event prevent repeated successful configuration churn. Company Memory privacy
+advisory locking serializes these counts across installations. A deadline and
+native postcondition verify configuration only; activation remains human owned.
+The native Core Steward disable flag retains the kill path. The additive V9 flag
+is not represented as disabling separately authorized inherited V7 stewardship.
+Unknown/external/failed-attempt repair contracts and customer escalation remain
+unqualified; M3/M4 changes are not admitted through this unchanged-content path.
+No parallel maintenance scheduler, broad retry permission or new grants are added.
