@@ -1,0 +1,58 @@
+name: Publish BLENTERA V3 design review
+on:
+  push:
+    branches:
+      - blentera-preview/product-led-reset-v3-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check review source
+        run: |
+          test -s blentera-v3-review.html
+          grep -q 'id="org-explorer"' blentera-v3-review.html
+          grep -q 'id="workspace-tab-work"' blentera-v3-review.html
+          grep -q 'data-scenario="incident"' blentera-v3-review.html
+      - name: Publish unlisted preview
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 90 --retry 2 \
+            -F 'file=@blentera-v3-review.html;type=text/html' \
+            -F 'title=BLENTERA V3 - product-led design review' \
+            https://sharehtml.zhenjia.dev/api/shares > "$RUNNER_TEMP/resp.json"
+          python3 - <<'PY'
+          import json,os
+          response=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'resp.json')))
+          url=response['share']['preview_url']
+          assert url.startswith('https://sharehtml.zhenjia.dev/v/') and url.endswith('/'),url
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('url='+url+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('## BLENTERA — V3 design review\n\n')
+              f.write('**[Open interactive website]('+url+')**\n\n')
+              f.write('Unlisted Cloudflare-hosted preview of a source-based design prototype. Not production/launch approved.\n')
+          print('PUBLIC_REVIEW_URL='+url)
+          PY
+      - name: Verify the publicly returned URL
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.publish.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location --max-time 40 \
+            --dump-header "$RUNNER_TEMP/head.txt" \
+            --output "$RUNNER_TEMP/live.html" "$PREVIEW_URL"
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/live.html"
+          grep -q 'data-preview="true"' "$RUNNER_TEMP/live.html"
+          grep -q 'id="org-explorer"' "$RUNNER_TEMP/live.html"
+          grep -q 'data-exec="cmo"' "$RUNNER_TEMP/live.html"
+          grep -q 'id="scenario-timeline"' "$RUNNER_TEMP/live.html"
+          echo 'HTTP VERIFIED:'
+          head -n 20 "$RUNNER_TEMP/head.txt" | grep -i -E '^HTTP/|^content-type:' || true
+          echo "PUBLIC_VERIFIED=$PREVIEW_URL"
