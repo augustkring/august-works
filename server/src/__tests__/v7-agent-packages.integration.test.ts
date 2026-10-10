@@ -420,6 +420,150 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(current.installedVersionId).toBe(installed.installedVersionId); expect(current.status).toBe("active");
       expect(await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.low_risk_update_configured")))).toHaveLength(0);
     });
+    it("V9 maintenance retains a durable unknown attempt when the native effect transaction rolls back", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review unknown outcome admission" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      await db.execute(sql`create function aw_v9_attempt_rollback() returns trigger language plpgsql as $$ begin
+        if new.action='agent_package.low_risk_update_configured' and new.entity_id=${sql.raw("'" + installed.id + "'")} then
+          raise exception 'Native configured receipt unavailable' using errcode='23514'; end if; return new; end $$`);
+      await db.execute(sql`create trigger aw_v9_attempt_rollback before insert on activity_log for each row execute function aw_v9_attempt_rollback()`);
+      try {
+        await expect(service.stewardUpdate(f.home, installed.id, next.id, review)).rejects.toMatchObject({ cause: { code: "23514" } });
+      } finally {
+        await db.execute(sql`drop trigger aw_v9_attempt_rollback on activity_log`);
+        await db.execute(sql`drop function aw_v9_attempt_rollback()`);
+      }
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId, version: review.expectedInstallationVersion });
+      // Observe the actual unchanged five-second native lease before escalation.
+      await new Promise(resolve => setTimeout(resolve, 6000));
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false });
+      const events = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(1);
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished")).toHaveLength(0);
+      expect(events.find(e => e.action === "agent_package.maintenance_loop_blocked")?.details).toMatchObject({ reason: "unknown_outcome", humanReviewRequired: true });
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).entries).toMatchObject([{ outcome: "human_review_required" }]);
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou[0]?.evidence).toEqual(["unknown_outcome"]);
+      // An explicit native owner source transition supersedes, but does not erase, the old attempt.
+      const suspended = await service.decide(f.actor, f.home, installed.id, "suspend", { expectedVersion: review.expectedInstallationVersion, reason: "Owner reviews retained unknown outcome" });
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou).toEqual([]);
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: suspended.version, reason: "Owner explicitly reauthorizes current configuration" });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, await reviewedMaintenance(installed.id, next))).toEqual({ updated: true });
+      expect((await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_attempt_started"))))).toHaveLength(2);
+    });
+    it.each([1, 2])("V9 maintenance does not repeat an effect after transaction %s acknowledgement is lost", async (lostTransaction) => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review original native acknowledgement" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      const transact = db.transaction.bind(db);
+      let completed = 0;
+      const dropAck = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+        const result = await transact(callback, config);
+        if (++completed === lostTransaction) throw new Error("Lost native transaction acknowledgement");
+        return result;
+      });
+      try { await expect(service.stewardUpdate(f.home, installed.id, next.id, review)).rejects.toThrow("Lost native transaction acknowledgement"); }
+      finally { dropAck.mockRestore(); }
+      const current = await service.get(f.actor, f.home, installed.id);
+      expect(current).toMatchObject(lostTransaction === 1
+        ? { status: "active", installedVersionId: review.expectedInstalledVersionId, version: review.expectedInstallationVersion }
+        : { status: "configuring", installedVersionId: next.id, version: review.expectedInstallationVersion + 1, activationHash: null });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false });
+      const events = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(1);
+      expect(events.filter(e => e.action === "agent_package.low_risk_update_configured")).toHaveLength(lostTransaction === 2 ? 1 : 0);
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished")).toHaveLength(lostTransaction === 2 ? 1 : 0);
+    });
+    it("V9 maintenance rechecks original human authority after durable reservation", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review current human authority" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      const transact = db.transaction.bind(db);
+      let completed = 0;
+      const withdraw = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+        const result = await transact(callback, config);
+        if (++completed === 1) await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+        return result;
+      });
+      try { await expect(service.stewardUpdate(f.home, installed.id, next.id, review)).rejects.toMatchObject({ status: 403 }); }
+      finally {
+        withdraw.mockRestore();
+        await db.update(companyMemberships).set({ status: "active" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      }
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false });
+    });
+    it("V9 maintenance fences a late reserved worker and counts its known no-effect attempt", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review native attempt lease" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      const transact = db.transaction.bind(db);
+      let completed = 0;
+      const delay = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+        const result = await transact(callback, config);
+        if (++completed === 1) await new Promise(resolve => setTimeout(resolve, 6000));
+        return result;
+      });
+      try { expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false }); }
+      finally { delay.mockRestore(); }
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: true });
+      const events = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(2);
+      expect(events.filter(e => e.action === "agent_package.low_risk_update_configured")).toHaveLength(1);
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished").map(e => e.details?.outcome).sort()).toEqual(["configured_activation_required", "no_effect"]);
+    });
+    it("V9 maintenance retains an unknown original tuple after its daily budget window has elapsed", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review retained unknown native source" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      // Retained original audit fixture exercises time-window semantics, not execution evidence.
+      await db.insert(activityLog).values({ companyId: f.home, actorType: "system", actorId: "core-stewards",
+        entityType: "agent_package_installation", entityId: installed.id, action: "agent_package.maintenance_attempt_started",
+        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000), details: { attemptId: randomUUID(), candidateVersion: next.id,
+          reviewedSource: review, policyVersion: "aw-v9-package-maintenance-1", maintenanceClass: "M2", policyOwnerUserId: f.userId } });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false });
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId });
+      const blocked = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_loop_blocked")));
+      expect(blocked).toHaveLength(1); expect(blocked[0]!.details).toMatchObject({ reason: "unknown_outcome" });
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou).toHaveLength(1);
+    });
+    it("V9 maintenance counts known no-effect attempts and never falls back to V7 authority", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review bounded attempt costs" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const transact = db.transaction.bind(db);
+        let completed = 0;
+        const rollbackFlag = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+          const result = await transact(callback, config);
+          if (++completed === 1) await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: false });
+          return result;
+        });
+        try { expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false }); }
+        finally { rollbackFlag.mockRestore(); await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: true }); }
+      }
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false });
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId, version: review.expectedInstallationVersion });
+      const events = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(3);
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished").map(e => e.details?.outcome)).toEqual(["no_effect", "no_effect", "no_effect"]);
+      expect(events.filter(e => e.action === "agent_package.low_risk_update_configured")).toHaveLength(0);
+      expect(events.find(e => e.action === "agent_package.maintenance_loop_blocked")?.details).toMatchObject({ reason: "attempt_budget" });
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou[0]?.evidence).toEqual(["attempt_budget"]);
+    });
     it("V9 maintenance concurrent scans configure once with a native verified configuration receipt and retain activation", async () => {
       await enableV9Maintenance();
       const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
@@ -463,7 +607,7 @@ const support = await getEmbeddedPostgresTestSupport();
       }
       expect(await db.select().from(principalPermissionGrants)).toHaveLength(grants.length);
       const blocked = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_loop_blocked")));
-      expect(blocked).toHaveLength(1); expect(blocked[0]!.details).toMatchObject({ reason: "configured_change_budget", humanReviewRequired: true });
+      expect(blocked).toHaveLength(1); expect(blocked[0]!.details).toMatchObject({ reason: "attempt_budget", humanReviewRequired: true });
       const history = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
       expect(history.installationStatus).toBe("active");
       expect(history.entries.filter(entry => entry.outcome === "human_review_required")).toHaveLength(1);

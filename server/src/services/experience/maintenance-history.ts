@@ -147,7 +147,11 @@ export async function readMaintenanceHistory(
         outcome = "configured_activation_required";
       } else {
         if (
-          details.reason !== "configured_change_budget" ||
+          ![
+            "configured_change_budget",
+            "attempt_budget",
+            "unknown_outcome",
+          ].includes(String(details.reason)) ||
           details.humanReviewRequired !== true
         )
           throw notFound("Native maintenance review source is unavailable");

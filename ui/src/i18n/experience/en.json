@@ -741,10 +741,12 @@
     "uninstalled": "Uninstalled"
   },
   "maintenanceHistoryVersion": "Installation version {{version}}",
-  "maintenanceAttentionTitle": "Review the automatic package change limit",
+  "maintenanceAttentionTitle": "Review automatic package maintenance",
   "maintenanceAttentionWhy": "You can review this installation’s current configuration.",
-  "maintenanceAttentionConsequence": "The unchanged-content update remains blocked by the current automatic change limit. Review it through the existing package owner.",
+  "maintenanceAttentionConsequence": "Automatic maintenance needs a native outcome or attempt-budget review through the existing package owner.",
   "maintenanceAttentionEvidence": "The current automatic configuration budget is exhausted.",
   "needsYouMaintenanceBounded": "Package maintenance is a separate bounded view. Review other installations and retained history in agent packages.",
-  "openPackageReview": "Open agent package review"
+  "openPackageReview": "Open agent package review",
+  "maintenanceUnknownTitle": "Review an unconfirmed package update",
+  "maintenanceUnknownConsequence": "We could not confirm the outcome of an automatic package update. Automatic retries are paused for this configuration. Review the recorded state through the existing package owner."
 }

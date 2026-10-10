@@ -14,7 +14,15 @@ export function ExperienceCard({
   const maintenance =
     card.source.domain === "agent_package_installation" &&
     card.kind === "maintenance";
-  const title = maintenance ? t("maintenanceAttentionTitle") : card.title;
+  const unknownMaintenance =
+    maintenance && card.evidence.includes("unknown_outcome");
+  const title = maintenance
+    ? t(
+        unknownMaintenance
+          ? "maintenanceUnknownTitle"
+          : "maintenanceAttentionTitle",
+      )
+    : card.title;
   return (
     <article
       className="space-y-2 rounded-lg border border-border bg-card p-4"
@@ -29,7 +37,11 @@ export function ExperienceCard({
       {card.consequence && (
         <p className="text-sm text-muted-foreground">
           {maintenance
-            ? t("maintenanceAttentionConsequence")
+            ? t(
+                unknownMaintenance
+                  ? "maintenanceUnknownConsequence"
+                  : "maintenanceAttentionConsequence",
+              )
             : card.consequence}
         </p>
       )}

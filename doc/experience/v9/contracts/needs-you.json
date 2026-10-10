@@ -21,7 +21,7 @@
       "Title, why action is needed, known pending-state consequence, compact native evidence, action link and freshness in that order.",
       "A bounded native attention page; more_items_available is partial coverage, never a complete empty queue.",
       "No future business impact, full-queue count, effective authority or completed decision is inferred.",
-      "Current M2 exhausted configured-change budgets may appear only with current native installation/candidate/source and agent read/configure authority; stale or missing maintenance sources never imply a complete empty queue. Critical native approvals retain priority under the global 25-card boundary."
+      "Current M2 exhausted durable attempt budgets or unconfirmed expired original attempts may appear only with current native installation/candidate/source and agent read/configure authority; stale or missing maintenance sources never imply a complete empty queue. Critical native approvals retain priority under the global 25-card boundary."
     ]
   },
   "inputs": [],

@@ -192,52 +192,61 @@ it.each(["unavailable", "partial"] as const)(
     expect(container.textContent).not.toContain("Nothing needs your action");
   },
 );
-it("localizes the native maintenance finding and opens its current native history owner", async () => {
-  await i18n.changeLanguage("da");
-  const maintenanceSource = {
-    ...source,
-    domain: "agent_package_installation" as const,
-    resourceId: "installation",
-  };
-  vi.spyOn(experienceApi, "home").mockResolvedValue({
-    ...model,
-    dependencies: [
-      ...model.dependencies,
-      {
-        domain: "maintenance",
-        state: "fresh",
-        observedAt: source.observedAt,
-        reason: null,
-      },
-    ],
-    needsYou: [
-      {
-        ...card,
-        id: "maintenance:event",
-        kind: "maintenance",
-        source: maintenanceSource,
-        evidence: ["configured_change_budget"],
-        actions: [
-          {
-            ...card.actions[0]!,
-            source: maintenanceSource,
-            href: "/agents/packages/installations/installation/maintenance",
-          },
-        ],
-      },
-    ],
-  });
-  await mount();
-  await vi.waitFor(() =>
-    expect(container.textContent).toContain(
-      "Vurder grænsen for automatiske pakkeændringer",
-    ),
-  );
-  expect(container.textContent).toContain("aktuelle konfiguration");
-  expect(container.textContent).not.toContain("configured_change_budget");
-  expect(container.querySelector('a[href="/AW/agents/packages"]')).toBeTruthy();
-  expect(container.textContent).toContain("andre installationer");
-  expect(container.querySelector("article a")?.getAttribute("href")).toContain(
-    "/agents/packages/installations/installation/maintenance",
-  );
-});
+it.each(["configured_change_budget", "attempt_budget", "unknown_outcome"])(
+  "localizes the native %s maintenance finding and opens its current native history owner",
+  async (reason) => {
+    await i18n.changeLanguage("da");
+    const maintenanceSource = {
+      ...source,
+      domain: "agent_package_installation" as const,
+      resourceId: "installation",
+    };
+    vi.spyOn(experienceApi, "home").mockResolvedValue({
+      ...model,
+      dependencies: [
+        ...model.dependencies,
+        {
+          domain: "maintenance",
+          state: "fresh",
+          observedAt: source.observedAt,
+          reason: null,
+        },
+      ],
+      needsYou: [
+        {
+          ...card,
+          id: "maintenance:event",
+          kind: "maintenance",
+          source: maintenanceSource,
+          evidence: [reason],
+          actions: [
+            {
+              ...card.actions[0]!,
+              source: maintenanceSource,
+              href: "/agents/packages/installations/installation/maintenance",
+            },
+          ],
+        },
+      ],
+    });
+    await mount();
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain(
+        reason === "unknown_outcome"
+          ? "Gennemgå en ubekræftet pakkeopdatering"
+          : "Gennemgå automatisk pakkevedligeholdelse",
+      ),
+    );
+    expect(container.textContent).toContain("aktuelle konfiguration");
+    expect(container.textContent).not.toContain(reason);
+    if (reason === "unknown_outcome")
+      expect(container.textContent).toContain("genforsøg er sat på pause");
+    expect(
+      container.querySelector('a[href="/AW/agents/packages"]'),
+    ).toBeTruthy();
+    expect(container.textContent).toContain("andre installationer");
+    expect(
+      container.querySelector("article a")?.getAttribute("href"),
+    ).toContain("/agents/packages/installations/installation/maintenance");
+  },
+);

@@ -134,10 +134,10 @@ export async function maintainPackageUpdates(db: Db, limit = 20) {
         ).updated
       )
         configured++;
-    } catch (error) {
+    } catch {
       logger.warn(
-        { err: error, installationId: row.id },
-        "Core Steward update remained closed",
+        { installationId: String(row.id), outcome: "unconfirmed" },
+        "Core Steward update outcome requires native receipt review",
       );
     }
   }

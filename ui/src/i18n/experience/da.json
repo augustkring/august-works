@@ -741,10 +741,12 @@
     "uninstalled": "Afinstalleret"
   },
   "maintenanceHistoryVersion": "Installationsversion {{version}}",
-  "maintenanceAttentionTitle": "Vurder grænsen for automatiske pakkeændringer",
+  "maintenanceAttentionTitle": "Gennemgå automatisk pakkevedligeholdelse",
   "maintenanceAttentionWhy": "Du kan vurdere installationens aktuelle konfiguration.",
-  "maintenanceAttentionConsequence": "Opdateringen med uændret indhold er fortsat blokeret af den aktuelle grænse for automatiske ændringer. Vurder den via den eksisterende pakkeinstallation.",
+  "maintenanceAttentionConsequence": "Automatisk vedligeholdelse kræver gennemgang af udfald eller forsøgsgrænse hos den eksisterende pakkeejer.",
   "maintenanceAttentionEvidence": "Den aktuelle grænse for automatiske konfigurationsændringer er nået.",
   "needsYouMaintenanceBounded": "Pakkevedligeholdelse vises i et særskilt, begrænset udvalg. Vurder andre installationer og bevaret historik under agentpakker.",
-  "openPackageReview": "Åbn vurdering af agentpakker"
+  "openPackageReview": "Åbn vurdering af agentpakker",
+  "maintenanceUnknownTitle": "Gennemgå en ubekræftet pakkeopdatering",
+  "maintenanceUnknownConsequence": "Vi kunne ikke bekræfte udfaldet af en automatisk pakkeopdatering. Automatiske genforsøg er sat på pause for denne konfiguration. Gennemgå den registrerede tilstand hos den eksisterende pakkeejer."
 }

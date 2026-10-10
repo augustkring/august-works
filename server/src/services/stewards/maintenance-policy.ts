@@ -12,8 +12,8 @@ export const PACKAGE_MAINTENANCE_POLICY_VERSION = "aw-v9-package-maintenance-1";
 export const PACKAGE_MAINTENANCE_LIMITS = Object.freeze({
   maximumResourcesPerCompanyPerScan: 1,
   maximumResourcesPerScan: 20,
-  maximumConfiguredChangesPerResourcePerDay: 3,
-  maximumConfiguredChangesPerCompanyPerDay: 10,
+  maximumAttemptsPerResourcePerDay: 3,
+  maximumAttemptsPerCompanyPerDay: 10,
   maximumTransactionSeconds: 5,
 });
 export function packageStewardReviewIsCurrent(
@@ -32,20 +32,19 @@ export function packageStewardReviewIsCurrent(
     review.expectedReleaseContentHash === releaseContentHash
   );
 }
-/** These budgets cover configured changes. Failed-attempt/unknown-outcome admission
- * and external repairs require their own durable native contracts before automation. */
+/** Durable attempt starts and legacy unlinked configured receipts consume the budget.
+ * Unknown outcomes additionally block the unchanged native source without expiry. */
 export function packageMaintenanceRecurrenceAllows(
-  resourceConfigured: number,
-  companyConfigured: number,
+  resourceAttempts: number,
+  companyAttempts: number,
 ) {
   return (
-    Number.isSafeInteger(resourceConfigured) &&
-    resourceConfigured >= 0 &&
-    Number.isSafeInteger(companyConfigured) &&
-    companyConfigured >= resourceConfigured &&
-    resourceConfigured <
-      PACKAGE_MAINTENANCE_LIMITS.maximumConfiguredChangesPerResourcePerDay &&
-    companyConfigured <
-      PACKAGE_MAINTENANCE_LIMITS.maximumConfiguredChangesPerCompanyPerDay
+    Number.isSafeInteger(resourceAttempts) &&
+    resourceAttempts >= 0 &&
+    Number.isSafeInteger(companyAttempts) &&
+    companyAttempts >= resourceAttempts &&
+    resourceAttempts <
+      PACKAGE_MAINTENANCE_LIMITS.maximumAttemptsPerResourcePerDay &&
+    companyAttempts < PACKAGE_MAINTENANCE_LIMITS.maximumAttemptsPerCompanyPerDay
   );
 }

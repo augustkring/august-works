@@ -1,3 +1,7 @@
+import {
+  readMaintenanceAttemptCounts,
+  hasUnconfirmedMaintenanceAttempt,
+} from "../stewards/maintenance-attempts.js";
 import type { ExperienceReader } from "./projection.js";
 import { and, desc, eq, sql } from "drizzle-orm";
 import {
@@ -123,25 +127,16 @@ export async function readPackageMaintenanceAttention(
         ).allowed
       )
         continue;
-      const [counts] = await tx.execute<{
-        resource_count: number;
-        company_count: number;
-      }>(sql`
-        select count(*) filter (where entity_id=${installation.id})::int as resource_count, count(*)::int as company_count
-        from activity_log where company_id=${companyId}::uuid and action='agent_package.low_risk_update_configured' and created_at > now()-interval '24 hours'`);
-      if (
-        packageMaintenanceRecurrenceAllows(
-          Number(counts?.resource_count),
-          Number(counts?.company_count),
-        )
-      )
-        continue;
       const details = event.details,
         review = packageStewardReviewSchema.safeParse(details?.reviewedSource);
       if (
         !review.success ||
         details?.maintenanceClass !== "M2" ||
-        details.reason !== "configured_change_budget" ||
+        ![
+          "configured_change_budget",
+          "attempt_budget",
+          "unknown_outcome",
+        ].includes(String(details.reason)) ||
         details.humanReviewRequired !== true ||
         typeof details.candidateVersion !== "string"
       ) {
@@ -153,6 +148,25 @@ export async function readPackageMaintenanceAttention(
         review.data.expectedInstalledVersionId !==
           installation.installedVersionId ||
         review.data.expectedUpdatedAt !== installation.updatedAt.toISOString()
+      )
+        continue;
+      const counts = await readMaintenanceAttemptCounts(
+        tx,
+        companyId,
+        installation.id,
+      );
+      if (details.reason === "unknown_outcome") {
+        if (
+          !(await hasUnconfirmedMaintenanceAttempt(
+            tx,
+            companyId,
+            installation.id,
+            review.data,
+          ))
+        )
+          continue;
+      } else if (
+        packageMaintenanceRecurrenceAllows(counts.resource, counts.company)
       )
         continue;
       const [before] = await tx
@@ -225,13 +239,13 @@ export async function readPackageMaintenanceAttention(
       cards.push({
         id: `maintenance:${event.id}`,
         kind: "maintenance",
-        title: "Review the automatic package change limit",
+        title: "Review automatic package maintenance",
         whyYou: "You can review this installation's current configuration.",
         consequence:
-          "The unchanged-content update remains blocked by the current automatic change limit. Review it through the existing package owner.",
+          "Automatic maintenance needs a native outcome or attempt-budget review through the existing package owner.",
         source,
         freshness: "fresh",
-        evidence: ["configured_change_budget"],
+        evidence: [String(details.reason)],
         actions: [
           {
             id: "open",

@@ -44,7 +44,7 @@ it.each([
   [1, 0, false],
   [NaN, 4, false],
   [1.5, 3, false],
-])("bounds configured recurrence %s/%s as %s", (resource, company, allowed) => {
+])("bounds attempted recurrence %s/%s as %s", (resource, company, allowed) => {
   expect(
     packageMaintenanceRecurrenceAllows(resource as number, company as number),
   ).toBe(allowed);

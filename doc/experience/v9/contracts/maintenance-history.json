@@ -2,12 +2,7 @@
   "screenId": "MAINTENANCE-HISTORY",
   "journeyId": "maintenance",
   "routeOrSurface": "/agents/packages/installations/:installationId/maintenance",
-  "targetExperienceProfiles": [
-    "member",
-    "manager",
-    "admin",
-    "security_admin"
-  ],
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
   "customerOutcome": "Read historical native bounded M2 package configuration and loop-breaker receipts separately from current activation state.",
   "entryConditions": [
     "Current company and authenticated human account or explicit local board.",
@@ -29,7 +24,7 @@
     "displayedState": [
       "Current native installation status/version and observation time",
       "At most ten original native V9 M2 receipts, with an explicit has-more boundary",
-      "Configured activation-required and exhausted-limit human-review-required are historical facts; neither is current readiness"
+      "Configured activation-required and attempt-budget/unknown-outcome human-review-required are historical facts; none is current readiness"
     ]
   },
   "inputs": [],
@@ -38,9 +33,7 @@
       "label": "Return to agent packages",
       "operation": "Navigate to the existing native installation review owner; this read creates no repair, activation, grant or decision."
     },
-    "secondary": [
-      "Retry the safe current read"
-    ],
+    "secondary": ["Retry the safe current read"],
     "destructiveOrIrreversible": []
   },
   "systemWork": {
@@ -56,7 +49,7 @@
   "states": {
     "loading": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
     "empty": "No recorded V9 package maintenance for this installation; other maintenance domains are not covered.",
-    "partial": "Only bounded unchanged-content M2 configuration/history is implemented; other domain repairs and failed/unknown attempt contracts remain open.",
+    "partial": "Bounded unchanged-content M2 attempts have durable native starts, atomic outcome receipts, five-second stale-worker fencing and non-expiring unknown-source refusal. General cross-domain, external-effect reconciliation and automated recovery remain open.",
     "stale": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
     "validation_error": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
     "system_error": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",

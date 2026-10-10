@@ -791,3 +791,26 @@ explicit action, including failures. The fixed support mailto contains no report
 data. Download initiation is not proof of saved file or external delivery; exported
 snapshots confer no grant and V6 scoped support access remains independently owned.
 General support/recovery and human accessibility/usability qualification remain open.
+
+## V9-039 — Native durable maintenance attempts precede bounded effects
+
+The existing package installation, company privacy serialization and native
+activity transaction own admission. A source/owner/release-validated transaction
+records an attempt before the unchanged-content M2 effect. The effect separately
+repeats flags, original human authority, exact reviewed source and native pins.
+A reserved V9 attempt cannot downgrade to inherited V7 authority. Three resource
+or ten company starts per day, including known no-effect attempts and legacy
+unlinked configured receipts, bound recurrence without double-counting linked
+configuration receipts. Atomic native outcome and configuration records retain
+activation-required; no execution or business verification is inferred.
+
+A five-second native reservation lease is checked against database wall time
+before effect and before its transaction can return successfully. Source version
+guards and the durable original attempt additionally fence stale workers. A live
+reservation blocks duplicate scans without premature escalation. An expired
+unconfirmed original source remains blocked without time expiry; only an explicit
+native owner source transition supersedes its tuple, retaining the audit.
+Unknown outcomes are not relabelled as failed, closed or safe to retry. Native
+history/Needs You disclose owner review without creating a grant, notification,
+new scheduler, secondary ledger, automatic rollback or harmful retry.
+General external/material reconciliation and M0–M4 recovery remain open.

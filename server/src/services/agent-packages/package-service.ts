@@ -1,3 +1,4 @@
+import { readMaintenanceAttemptCounts, hasUnconfirmedMaintenanceAttempt, maintenanceAttemptIsCurrent } from "../stewards/maintenance-attempts.js";
 import { packageStewardReviewSchema, packageStewardReviewIsCurrent, packageMaintenanceRecurrenceAllows, PACKAGE_MAINTENANCE_LIMITS, PACKAGE_MAINTENANCE_POLICY_VERSION, type PackageStewardReview } from "../stewards/maintenance-policy.js";
 import { performance } from "node:perf_hooks";
 import { learningRoots } from "../learning/learning-service.js";
@@ -553,147 +554,180 @@ export function agentPackageService(
       const review = reviewedSource === undefined ? undefined : packageStewardReviewSchema.parse(reviewedSource);
       await assertV7Enabled(db, "core_stewards_v7");
       await assertV7Enabled(db, "agent_packages_v7");
-      return withV7ActivityTransaction(db, async (tx, p) => {
-        await tx.execute(
-          sql`select singleton_key from instance_settings where singleton_key='default' for share`,
-        );
-        await assertV7Enabled(tx, "core_stewards_v7");
-        await assertV7Enabled(tx, "agent_packages_v7");
-        const boundedMaintenance = v9FeatureEnabled(await instanceSettingsService(tx).getExperimental(), "maintenance_autopilot_v9");
-        const started = performance.now();
-        function deadline() {
-          if (boundedMaintenance && performance.now() - started > PACKAGE_MAINTENANCE_LIMITS.maximumTransactionSeconds * 1000)
-            throw conflict("Native package maintenance deadline exceeded", { code: "maintenance_deadline" });
-        }
-        if (boundedMaintenance) await tx.execute(sql`set local statement_timeout='5s'`);
-        await lockMemoryPrivacy(tx, companyId);
-        const [row] = await tx
-          .select()
-          .from(companyAgentPackageInstallations)
-          .where(
-            and(
-              eq(companyAgentPackageInstallations.companyId, companyId),
-              eq(companyAgentPackageInstallations.id, id),
-            ),
-          )
-          .for("update");
-        if (
-          !row ||
-          row.status !== "active" ||
-          row.updatePolicy !== "auto_low_risk"
-        )
-          return { updated: false };
-        const actor: AuthorizationActor = {
-          type: "board",
-          source: "session",
-          userId: row.installedByUserId,
-          ignoreInstanceAdmin: true,
-        };
-        await access(tx, actor, companyId, row.agentId, true);
-        const before = await release(tx, row.installedVersionId, true),
-          after = await release(tx, nextVersionId, true);
-        available(after);
-        if ((boundedMaintenance && !review) || (review && !packageStewardReviewIsCurrent(review, row, after.version.contentHash)))
-          return { updated: false };
-        deadline();
-        const semver = (v: string) => v.split(".").map(Number);
-        const previous = semver(before.version.version),
-          next = semver(after.version.version);
-        const firstDifference = next.findIndex(
-          (part, index) => part !== previous[index],
-        );
-        if (
-          after.package.id !== row.packageId ||
-          firstDifference < 0 ||
-          next[firstDifference]! <= previous[firstDifference]! ||
-          packageChangeIsMaterial(before.version.release, after.version.release)
-        )
-          return { updated: false };
-        const [safe] = await tx.execute(
-          sql`select aw_v7_package_installation_current(i) and not exists(select 1 from heartbeat_runs r where r.company_id=i.company_id and r.agent_id=i.agent_id and r.status in ('queued','running','scheduled_retry')) as current from company_agent_package_installations i where i.id=${id}::uuid and i.company_id=${companyId}::uuid`,
-        );
-        if (safe?.current !== true) return { updated: false };
-        if (boundedMaintenance) {
-          const [counts] = await tx.execute<{ resource_count: number; company_count: number }>(sql`
-            select count(*) filter (where entity_id=${id})::int as resource_count, count(*)::int as company_count
-            from activity_log where company_id=${companyId}::uuid and action='agent_package.low_risk_update_configured'
-              and created_at > now()-interval '24 hours'`);
-          if (!packageMaintenanceRecurrenceAllows(Number(counts?.resource_count), Number(counts?.company_count))) {
-            const [previous] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
-              eq(activityLog.companyId, companyId), eq(activityLog.entityType, "agent_package_installation"),
-              eq(activityLog.entityId, id), eq(activityLog.action, "agent_package.maintenance_loop_blocked"),
-              sql`${activityLog.createdAt} > now()-interval '24 hours'`)).limit(1);
-            if (!previous) await logActivity(tx, { companyId, actorType: "system", actorId: "core-stewards",
-              action: "agent_package.maintenance_loop_blocked", entityType: "agent_package_installation", entityId: id,
-              details: { policyVersion: PACKAGE_MAINTENANCE_POLICY_VERSION, maintenanceClass: "M2", reason: "configured_change_budget",
-                policyOwnerUserId: row.installedByUserId, humanReviewRequired: true, reviewedSource: review, candidateVersion: nextVersionId } }, p);
-            return { updated: false };
+      const boundedAtAdmission = v9FeatureEnabled(await instanceSettingsService(db).getExperimental(), "maintenance_autopilot_v9");
+      if (boundedAtAdmission && !review) return { updated: false };
+      const attemptId = boundedAtAdmission ? randomUUID() : undefined;
+      const transact = (phase: "reserve" | "effect" | "legacy") => withV7ActivityTransaction(db, async (tx, p) => {
+        const work = async (): Promise<{ updated: boolean; reserved?: boolean }> => {
+          await tx.execute(
+            sql`select singleton_key from instance_settings where singleton_key='default' for share`,
+          );
+          await assertV7Enabled(tx, "core_stewards_v7");
+          await assertV7Enabled(tx, "agent_packages_v7");
+          const boundedMaintenance = v9FeatureEnabled(await instanceSettingsService(tx).getExperimental(), "maintenance_autopilot_v9");
+          // A reserved V9 attempt cannot downgrade to inherited V7 authority after rollout changes.
+          if ((attemptId && !boundedMaintenance) || (!attemptId && boundedMaintenance)) return { updated: false };
+          const started = performance.now();
+          function deadline() {
+            if (boundedMaintenance && performance.now() - started > PACKAGE_MAINTENANCE_LIMITS.maximumTransactionSeconds * 1000)
+              throw conflict("Native package maintenance deadline exceeded", { code: "maintenance_deadline" });
           }
-        }
-        deadline();
-        await pins(
-          tx,
-          actor,
-          companyId,
-          packageInstallSchema.parse({
-            versionId: nextVersionId,
-            agentId: row.agentId,
-            components: row.components.map((c) => ({
-              key: c.key,
-              resourceId: c.resourceId,
-              versionId: c.versionId,
-            })),
-            aiUseCaseId: row.aiUseCaseId,
-            updatePolicy: row.updatePolicy,
-          }),
-          after.version.release,
-        );
-        await tx
-          .update(companyAgentPackageInstallations)
-          .set({
-            installedVersionId: nextVersionId,
-            status: "configuring",
-            version: row.version + 1,
-            activationHash: null,
-            readiness: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(companyAgentPackageInstallations.id, id));
-        if (boundedMaintenance) {
-          const [actual] = await tx.select().from(companyAgentPackageInstallations).where(and(
-            eq(companyAgentPackageInstallations.companyId, companyId), eq(companyAgentPackageInstallations.id, id)));
-          if (!actual || actual.version !== row.version + 1 || actual.installedVersionId !== nextVersionId
-              || actual.status !== "configuring" || actual.activationHash !== null || actual.readiness !== null
-              || actual.installedByUserId !== row.installedByUserId || actual.agentId !== row.agentId
-              || actual.packageId !== row.packageId || actual.updatePolicy !== row.updatePolicy
-              || nativeSha256(actual.components) !== nativeSha256(row.components))
-            throw conflict("Native maintenance postcondition was not verified", { code: "maintenance_postcondition_unverified" });
+          if (boundedMaintenance) await tx.execute(sql`set local statement_timeout='5s'`);
+          await lockMemoryPrivacy(tx, companyId);
+          const [row] = await tx
+            .select()
+            .from(companyAgentPackageInstallations)
+            .where(
+              and(
+                eq(companyAgentPackageInstallations.companyId, companyId),
+                eq(companyAgentPackageInstallations.id, id),
+              ),
+            )
+            .for("update");
+          if (
+            !row ||
+            row.status !== "active" ||
+            row.updatePolicy !== "auto_low_risk"
+          )
+            return { updated: false };
+          const actor: AuthorizationActor = {
+            type: "board",
+            source: "session",
+            userId: row.installedByUserId,
+            ignoreInstanceAdmin: true,
+          };
+          await access(tx, actor, companyId, row.agentId, true);
+          const before = await release(tx, row.installedVersionId, true),
+            after = await release(tx, nextVersionId, true);
+          available(after);
+          if ((boundedMaintenance && !review) || (review && !packageStewardReviewIsCurrent(review, row, after.version.contentHash)))
+            return { updated: false };
           deadline();
-        }
-        await logActivity(
-          tx,
-          {
+          const semver = (v: string) => v.split(".").map(Number);
+          const previous = semver(before.version.version),
+            next = semver(after.version.version);
+          const firstDifference = next.findIndex(
+            (part, index) => part !== previous[index],
+          );
+          if (
+            after.package.id !== row.packageId ||
+            firstDifference < 0 ||
+            next[firstDifference]! <= previous[firstDifference]! ||
+            packageChangeIsMaterial(before.version.release, after.version.release)
+          )
+            return { updated: false };
+          const [safe] = await tx.execute(
+            sql`select aw_v7_package_installation_current(i) and not exists(select 1 from heartbeat_runs r where r.company_id=i.company_id and r.agent_id=i.agent_id and r.status in ('queued','running','scheduled_retry')) as current from company_agent_package_installations i where i.id=${id}::uuid and i.company_id=${companyId}::uuid`,
+          );
+          if (safe?.current !== true) return { updated: false };
+          if (phase === "reserve") {
+            const counts = await readMaintenanceAttemptCounts(tx, companyId, id);
+            const pending = await hasUnconfirmedMaintenanceAttempt(tx, companyId, id, review!);
+            // An in-flight reservation blocks duplicate scans without premature human escalation.
+            if (pending && !await hasUnconfirmedMaintenanceAttempt(tx, companyId, id, review!, true)) return { updated: false };
+            if (pending || !packageMaintenanceRecurrenceAllows(counts.resource, counts.company)) {
+              const reason = pending ? "unknown_outcome" : "attempt_budget";
+              const [previous] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
+                eq(activityLog.companyId, companyId), eq(activityLog.entityType, "agent_package_installation"),
+                eq(activityLog.entityId, id), eq(activityLog.action, "agent_package.maintenance_loop_blocked"),
+                sql`${activityLog.details}->>'reason' = ${reason}`,
+                sql`${activityLog.details}->'reviewedSource' = ${JSON.stringify(review)}::jsonb`)).limit(1);
+              if (!previous) await logActivity(tx, { companyId, actorType: "system", actorId: "core-stewards",
+                action: "agent_package.maintenance_loop_blocked", entityType: "agent_package_installation", entityId: id,
+                details: { policyVersion: PACKAGE_MAINTENANCE_POLICY_VERSION, maintenanceClass: "M2", reason,
+                  policyOwnerUserId: row.installedByUserId, humanReviewRequired: true, reviewedSource: review, candidateVersion: nextVersionId } }, p);
+              return { updated: false };
+            }
+            deadline();
+            await logActivity(tx, { companyId, actorType: "system", actorId: "core-stewards",
+              action: "agent_package.maintenance_attempt_started", entityType: "agent_package_installation", entityId: id,
+              details: { policyVersion: PACKAGE_MAINTENANCE_POLICY_VERSION, maintenanceClass: "M2", attemptId,
+                policyOwnerUserId: row.installedByUserId, reviewedSource: review, candidateVersion: nextVersionId } }, p);
+            deadline();
+            return { updated: false, reserved: true };
+          }
+          if (attemptId && !await maintenanceAttemptIsCurrent(tx, companyId, id, attemptId, nextVersionId, review!))
+            return { updated: false };
+          deadline();
+          await pins(
+            tx,
+            actor,
             companyId,
-            actorType: "system",
-            actorId: "core-stewards",
-            action: "agent_package.low_risk_update_configured",
-            entityType: "agent_package_installation",
-            entityId: id,
-            details: {
-              policy: "auto_low_risk",
-              policyOwnerUserId: row.installedByUserId,
-              previousVersion: row.installedVersionId,
-              nextVersion: nextVersionId,
-              activationRequired: true,
-              ...(boundedMaintenance ? { maintenanceClass: "M2", policyVersion: PACKAGE_MAINTENANCE_POLICY_VERSION,
-                reviewedSource: review, postcondition: "configured_activation_required" } : {}),
+            packageInstallSchema.parse({
+              versionId: nextVersionId,
+              agentId: row.agentId,
+              components: row.components.map((c) => ({
+                key: c.key,
+                resourceId: c.resourceId,
+                versionId: c.versionId,
+              })),
+              aiUseCaseId: row.aiUseCaseId,
+              updatePolicy: row.updatePolicy,
+            }),
+            after.version.release,
+          );
+          await tx
+            .update(companyAgentPackageInstallations)
+            .set({
+              installedVersionId: nextVersionId,
+              status: "configuring",
+              version: row.version + 1,
+              activationHash: null,
+              readiness: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(companyAgentPackageInstallations.id, id));
+          if (boundedMaintenance) {
+            const [actual] = await tx.select().from(companyAgentPackageInstallations).where(and(
+              eq(companyAgentPackageInstallations.companyId, companyId), eq(companyAgentPackageInstallations.id, id)));
+            if (!actual || actual.version !== row.version + 1 || actual.installedVersionId !== nextVersionId
+                || actual.status !== "configuring" || actual.activationHash !== null || actual.readiness !== null
+                || actual.installedByUserId !== row.installedByUserId || actual.agentId !== row.agentId
+                || actual.packageId !== row.packageId || actual.updatePolicy !== row.updatePolicy
+                || nativeSha256(actual.components) !== nativeSha256(row.components))
+              throw conflict("Native maintenance postcondition was not verified", { code: "maintenance_postcondition_unverified" });
+            deadline();
+          }
+          await logActivity(
+            tx,
+            {
+              companyId,
+              actorType: "system",
+              actorId: "core-stewards",
+              action: "agent_package.low_risk_update_configured",
+              entityType: "agent_package_installation",
+              entityId: id,
+              details: {
+                policy: "auto_low_risk",
+                policyOwnerUserId: row.installedByUserId,
+                previousVersion: row.installedVersionId,
+                nextVersion: nextVersionId,
+                activationRequired: true,
+                ...(boundedMaintenance ? { maintenanceClass: "M2", policyVersion: PACKAGE_MAINTENANCE_POLICY_VERSION,
+                  reviewedSource: review, attemptId, postcondition: "configured_activation_required" } : {}),
+              },
             },
-          },
-          p,
-        );
-        deadline();
-        return { updated: true };
+            p,
+          );
+          deadline();
+          return { updated: true };
+        };
+        const result = await work();
+        if (result.updated && attemptId && !await maintenanceAttemptIsCurrent(tx, companyId, id, attemptId, nextVersionId, review!))
+          throw conflict("Native maintenance attempt lease expired", { code: "maintenance_deadline" });
+        if (phase === "effect" && attemptId) await logActivity(tx, {
+          companyId, actorType: "system", actorId: "core-stewards",
+          action: "agent_package.maintenance_attempt_finished", entityType: "agent_package_installation", entityId: id,
+          details: { policyVersion: PACKAGE_MAINTENANCE_POLICY_VERSION, maintenanceClass: "M2", attemptId,
+            outcome: result.updated ? "configured_activation_required" : "no_effect", reviewedSource: review, candidateVersion: nextVersionId },
+        }, p);
+        if (result.updated && attemptId && !await maintenanceAttemptIsCurrent(tx, companyId, id, attemptId, nextVersionId, review!, false))
+          throw conflict("Native maintenance attempt lease expired", { code: "maintenance_deadline" });
+        return result;
       });
+      if (attemptId && !(await transact("reserve")).reserved) return { updated: false };
+      const result = await transact(attemptId ? "effect" : "legacy");
+      return { updated: result.updated };
     },
     proposeUpdate: async (
       actor: AuthorizationActor,
