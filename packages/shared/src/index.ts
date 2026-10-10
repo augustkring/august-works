@@ -3336,3 +3336,5 @@ export * from "./workflow-operations.js";
 export * from "./workflow-launch.js";
 export * from "./workflow-stop.js";
 export * from "./workflow-test.js";
+
+export * from "./agent-monitor.js";

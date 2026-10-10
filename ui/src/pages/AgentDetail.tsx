@@ -1,3 +1,4 @@
+import { AgentMonitorLink } from "../components/AgentMonitorEntry";
 import { AgentCharacter } from "../components/AgentCharacter";
 import { AgentRevisionEntry } from "../components/AgentRevisionEntry";
 import { characterStateForAgent } from "@paperclipai/shared";
@@ -1327,6 +1328,7 @@ export function AgentDetail() {
         </div>
       </header>
 
+      <AgentMonitorLink agentId={agent.id} />
       {resolvedCompanyId && <AgentRevisionEntry company={resolvedCompanyId} agentId={agent.id} beforeNavigate={prepareAgentNavigation} />}
       {builtInState && (
         <InlineBanner

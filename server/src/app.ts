@@ -1,3 +1,4 @@
+import { agentMonitorRoutes } from "./routes/agent-monitor.js";
 import { enterpriseRoutes } from "./routes/enterprise.js";
 import { agentPackageRoutes } from "./routes/agent-packages.js";
 import { agentAuthoringRoutes } from "./routes/agent-authoring.js";
@@ -908,6 +909,7 @@ export async function createApp(
   api.use(dashboardRoutes(db));
   api.use(experienceRoutes(db));
   api.use(agentAuthoringRoutes(db));
+  api.use(agentMonitorRoutes(db));
   api.use(customerFeedbackRoutes(db,{operatorUserIds:opts.saasPlatform?.config.operatorUserIds}));
   api.use(attentionRoutes(db));
   api.use(decisionTrainingRoutes(db));

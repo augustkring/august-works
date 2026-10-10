@@ -86,3 +86,12 @@ Existing erasure/history APIs and the output-sharing privacy latch survive rollb
 | Reviewed customer run stop | Existing native cancellation/executor/activity and recovery owners | Current human company/read/run/source/retention authority before new admission and original replay; actual current admin role and configuration/membership/grant/workflow/run fences | Strict run/revision/timestamp/request command; explicit retained-effect acknowledgement; atomic original receipt; native child cleanup; disabled execution drains cancelling rows only; no completed-stop, reversal or provider-termination claim | 95 native/API/projector/logging, 51 existing executor, 69 existing authorization and 73 shared/client/DOM/ScreenContract checks pass locally; full types/build/browser and remote qualification pending. Mounted unknown reconciliation is retained; durable navigation, hosted/provider and human qualification remain open |
 
 | Deterministic command results | Existing native task/project/agent, authorization and experience admission owners | Repeat each retained resource's current visibility/version and native read authority; repeat command grants/profile/rollout context | Existing 18-resource limit and 1.5-second admission; reject changed whole projection; live source-loss epochs hide retained names/actions and late replies; no effect/model/storage | 39 native/API/shared/DOM checks pass locally, including actual mid-read source changes and revoked command grant; full types/build/browser/remote checks and semantic/channel/human qualification remain open |
+
+Agent monitoring: company/account/agent-bound private no-store native read;
+current human agent resource authority, learned/analytical/conversation source
+admission, bounded second row/history read and final authority/rollout recheck.
+No active configuration, prompts, error/result prose or secrets are returned.
+Native run references are checked by the existing payload/source owner. Private
+HTTP logging normalizes this route and excludes account query/IDs/response data.
+Source-loss checking cancels/removes old browser queries; obsolete responses
+cannot reintroduce a previous private view. No mutation or telemetry is added.

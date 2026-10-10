@@ -1,3 +1,4 @@
+import { AgentMonitorEntry } from "./pages/AgentMonitor";
 import { SecurityEvents } from "./pages/SecurityEvents";
 import { Enterprise } from "./pages/Enterprise";
 import { AgentPackages } from "./pages/AgentPackages";
@@ -362,6 +363,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="agents/hire/capabilities/:versionId" element={<HireAgent />} />
       <Route path="agents/hire/drafts/:draftId/:screen?" element={<HireAgent />} />
       <Route path="agents/custom/:draftId/:screen?" element={<CustomAgent />} />
+      <Route path="agents/:agentId/monitor" element={<AgentMonitorEntry />} />
       <Route path="agents/:agentId" element={<AgentDetail />} />
       <Route path="agents/:agentId/:tab" element={<AgentDetail />} />
       <Route path="agents/:agentId/runs/:runId" element={<AgentDetail />} />

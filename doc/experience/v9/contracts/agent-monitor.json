@@ -1,0 +1,123 @@
+{
+  "screenId": "AGENT-MONITOR",
+  "journeyId": "agents",
+  "routeOrSurface": "/agents/:agentId/monitor",
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "customerOutcome": "Inspect current native agent scheduling and bounded recorded execution status without claiming production readiness or verified business outcomes.",
+  "entryConditions": [
+    "Current company and authenticated human account or explicit local board.",
+    "Current native agent read authority and progressive_shell_v9 enabled."
+  ],
+  "exitConditions": [
+    "Open existing authorized native history or Advanced controls.",
+    "Loss of current scope, authority, source or rollout hides the whole private projection."
+  ],
+  "content": {
+    "h1": "Monitor {agent name}",
+    "supportingCopy": "Recorded scheduling and run status do not independently verify the business result. Native pause/resume/configuration controls remain in Advanced.",
+    "customerTerms": [
+      "Active",
+      "Paused",
+      "Needs attention",
+      "Pending approval",
+      "Retired",
+      "Recent native runs"
+    ],
+    "displayedState": [
+      "Native agent lifecycle and sanitized pause category; checked timestamp and last recorded run timestamp.",
+      "At most six native run IDs/statuses/timestamps, newest first; hasMore explicitly identifies bounded history.",
+      "Current error/config/instructions, provider secrets, outputs and traces are excluded."
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Open run",
+      "operation": "Navigate to the existing authorized native run reader; no work or effect is created."
+    },
+    "secondary": [
+      "Open Advanced agent controls",
+      "Retry a failed private read"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Native agents",
+      "Native heartbeat_runs",
+      "Current V5 resource authorization",
+      "Native learned/analytical/conversation source privacy owners"
+    ],
+    "canonicalWriteOperation": "None; read-only projection.",
+    "authorityEffect": "None; current human source/resource authority is checked before and after native projection.",
+    "asyncWork": "Bounded private reread and cancellable background refresh; no agent/model call.",
+    "receipt": "Observed timestamp is a source check time, not an execution or business receipt."
+  },
+  "states": {
+    "loading": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "empty": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "partial": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "stale": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "validation_error": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "system_error": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "permission_denied": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "recovering": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "success": "Private current metadata is displayed after repeated source checks."
+  },
+  "navigation": {
+    "back": "Native agent detail",
+    "cancelOrSaveExit": "No draft or mutation on this surface.",
+    "deepLink": "UUID agent/company/account scoped monitor route.",
+    "resume": "Fresh native read after reload; no browser persistence."
+  },
+  "accessibility": {
+    "initialFocus": "Monitor H1 on first successful load only, preserving another actual native dialog.",
+    "focusAfterError": "Safe error region unless another native dialog owns focus.",
+    "focusAfterSuccess": "Preserve current user focus on background refresh.",
+    "keyboardModel": "Standard links/buttons and native tab order; no custom keyboard trap.",
+    "statusAnnouncement": "Polite loading status, safe alert for unavailable current state.",
+    "targetSize": "Token min-h-11 links/buttons.",
+    "zoomReflow": "Stacked sections and run rows at narrow width; no horizontal table.",
+    "reducedMotion": "No animation.",
+    "screenReaderNotes": "Named sections, text status and semantic time elements."
+  },
+  "responsive": {
+    "wide": "Stacked current-state and recent-run sections.",
+    "narrow": "Identical information with wrapping links.",
+    "mobile": "Token touch targets and no columns requiring lateral scrolling."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Authorized name, native scheduling category, sanitized pause category and bounded native run status metadata."
+    ],
+    "dataCollected": ["No new data; native current reads only."],
+    "sensitiveFields": [
+      "Native IDs/names/timestamps are private company/account scoped."
+    ],
+    "loggingConstraints": "Generic normalized route; no raw IDs/query/account/private response/error prose."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "No names, IDs, prompts, configuration, private run/result/error data or account identifiers."
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Actual native lifecycle/history is projected without readiness or business verification claims.",
+      "Cross-company/account mismatches, source retirement, membership loss and rollout close the read."
+    ],
+    "accessibility": [
+      "Initial focus and background refresh preserve customer/dialog focus.",
+      "Keyboard links, named state/history sections and loading/error announcements are implemented; human assistive-technology acceptance pending."
+    ],
+    "securityPrivacy": [
+      "No config, secret, prompt, error or output leaves the read model.",
+      "Current source and authority are repeated before private no-store response."
+    ],
+    "usability": [
+      "Native status and business verification are distinguished.",
+      "Representative human acceptance and hosted/runtime qualification remain pending."
+    ]
+  }
+}

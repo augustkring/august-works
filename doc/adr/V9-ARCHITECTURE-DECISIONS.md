@@ -702,3 +702,15 @@ older executors do not execute unpublished revisions and older Optimizer readers
 lack the test evidence exclusions. Mixed-version qualification remains required.
 Hosted/provider/human evidence and V9 source completion are not promoted;
 R0/sourceComplete=false remains unchanged.
+
+## V9-032 — Agent monitoring projects native scheduling, not readiness
+
+The customer monitor is a bounded private read of existing agent and heartbeat
+status metadata. Current resource/source/rollout admission and a second native
+row/history read fence stale projections. No prompt, active configuration, error
+prose, result payload or secret is copied. Native idle/running/active map to
+scheduling Active; this does not imply qualified readiness. Succeeded remains
+recorded execution status, not independent business verification. Controls remain
+with native owners; retirement cleanup and active draft publication require their
+own complete mutation contracts. No shadow lifecycle, run table or scheduler is
+added. Rollback hides this surface and preserves native history and controls.

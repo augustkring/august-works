@@ -733,9 +733,13 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/AgentMonitor.tsx",
+        "server/src/services/experience/agent-monitor.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/agent-monitor.json"
     },
     {
       "screenId": "AGENT-CHANGE",

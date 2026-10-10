@@ -655,5 +655,39 @@
   "workflowRunPurpose": {
     "test": "Internal test",
     "live": "Production run"
+  },
+  "agentMonitorTitle": "Monitor {{name}}",
+  "agentMonitorUnavailable": "The current agent state could not be checked. Reload to check your access and the latest state.",
+  "agentMonitorBoundary": "This shows recorded scheduling and run status. A successful run does not confirm that its business result is correct. Pause, resume and configuration controls are available in Advanced.",
+  "agentMonitorState": "Current scheduling state",
+  "agentMonitorObserved": "Checked at",
+  "agentMonitorLastRun": "Last recorded run activity:",
+  "agentMonitorNoRun": "No run activity recorded.",
+  "agentMonitorRecent": "Recent native runs",
+  "agentMonitorBounded": "Showing the six most recent runs. More history is available in Advanced.",
+  "agentMonitorAdvanced": "Open Advanced agent controls",
+  "agentMonitorOpen": "Monitor this agent",
+  "agentMonitorLifecycle": {
+    "active": "Active — eligible for native scheduling",
+    "paused": "Paused — new autonomous work is blocked",
+    "needs_attention": "Needs attention — inspect the native blocker in Advanced",
+    "pending_approval": "Pending approval — activation has not been admitted",
+    "retired": "Retired — future native use is blocked"
+  },
+  "agentMonitorPause": {
+    "manual": "Paused by an operator.",
+    "budget": "Paused by a budget limit.",
+    "system": "Paused by the system.",
+    "unknown": "Pause reason unavailable; inspect Advanced."
+  },
+  "agentMonitorRunStatus": {
+    "queued": "Queued",
+    "scheduled_retry": "Retry scheduled",
+    "running": "Running",
+    "succeeded": "Succeeded — recorded execution status",
+    "interrupted": "Interrupted",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "timed_out": "Timed out"
   }
 }

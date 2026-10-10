@@ -655,5 +655,39 @@
   "workflowRunPurpose": {
     "test": "Intern test",
     "live": "Produktionskørsel"
+  },
+  "agentMonitorTitle": "Overvåg {{name}}",
+  "agentMonitorUnavailable": "Agentens aktuelle tilstand kunne ikke kontrolleres. Genindlæs for at kontrollere adgang og seneste tilstand.",
+  "agentMonitorBoundary": "Her vises registreret planlægnings- og kørselsstatus. En vellykket kørsel bekræfter ikke, at forretningsresultatet er korrekt. Pause, genoptagelse og konfiguration findes i Avanceret.",
+  "agentMonitorState": "Aktuel planlægningstilstand",
+  "agentMonitorObserved": "Kontrolleret",
+  "agentMonitorLastRun": "Senest registrerede kørselsaktivitet:",
+  "agentMonitorNoRun": "Ingen kørselsaktivitet registreret.",
+  "agentMonitorRecent": "Seneste native kørsler",
+  "agentMonitorBounded": "De seks seneste kørsler vises. Mere historik findes i Avanceret.",
+  "agentMonitorAdvanced": "Åbn avancerede agentkontroller",
+  "agentMonitorOpen": "Overvåg denne agent",
+  "agentMonitorLifecycle": {
+    "active": "Aktiv — kan planlægges af den native motor",
+    "paused": "Sat på pause — nyt autonomt arbejde er blokeret",
+    "needs_attention": "Kræver opmærksomhed — se den native blokering i Avanceret",
+    "pending_approval": "Afventer godkendelse — aktivering er ikke tilladt endnu",
+    "retired": "Pensioneret — fremtidig native brug er blokeret"
+  },
+  "agentMonitorPause": {
+    "manual": "Sat på pause af en operatør.",
+    "budget": "Sat på pause af en budgetgrænse.",
+    "system": "Sat på pause af systemet.",
+    "unknown": "Pauseårsag utilgængelig; se Avanceret."
+  },
+  "agentMonitorRunStatus": {
+    "queued": "I kø",
+    "scheduled_retry": "Nyt forsøg planlagt",
+    "running": "Kører",
+    "succeeded": "Gennemført — registreret kørselsstatus",
+    "interrupted": "Afbrudt",
+    "failed": "Mislykket",
+    "cancelled": "Annulleret",
+    "timed_out": "Tidsgrænse overskredet"
   }
 }
