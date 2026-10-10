@@ -1,5 +1,9 @@
 import type { WorkflowRevision } from "@paperclipai/shared";
-import { workflowNodeDefinitions } from "./workflow-node-registry.js";
+import { HttpError } from "../../errors.js";
+import {
+  validateWorkflowPublishTopology,
+  workflowNodeDefinitions,
+} from "./workflow-node-registry.js";
 
 // A closed native subset. Generic pure declarations cannot admit child work,
 // agent/model calls, network requests, approvals or configurable tool adapters.
@@ -58,7 +62,7 @@ export function customerWorkflowInternalGraphReady(
       definition,
     ]),
   );
-  return nodes.every((node) => {
+  const internal = nodes.every((node) => {
     // Transform nodes can invoke governed Optimizer artifact replacements; the
     // closed customer subset must not infer their effective execution from a
     // pure built-in descriptor. Recovery approvals and delayed retries also
@@ -77,4 +81,14 @@ export function customerWorkflowInternalGraphReady(
       definition.testMode === "safe"
     );
   });
+  if (!internal) return false;
+  // Draft saves admit incomplete topology. Do not offer a ready internal Test
+  // for a graph that the native admission owner will refuse before enqueue.
+  try {
+    validateWorkflowPublishTopology(revision.graph);
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 422) return false;
+    throw error;
+  }
+  return true;
 }

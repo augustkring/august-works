@@ -37,6 +37,47 @@ function revision(): WorkflowRevision {
 }
 it("admits the bounded built-in internal subset without declaring completion or verification", () =>
   expect(customerWorkflowLaunchReady(revision())).toBe(true));
+it("requires both native condition paths before reporting an unpublished internal test ready", () => {
+  const value = revision();
+  value.state = "draft";
+  value.graph.nodes.push(
+    {
+      id: "route",
+      name: "Choose",
+      type: "core.condition",
+      config: { expression: "true" },
+      position: { x: 0, y: 1 },
+    },
+    {
+      id: "yes",
+      name: "Chosen",
+      type: "core.merge",
+      config: { mode: "all" },
+      position: { x: 0, y: 2 },
+    },
+    {
+      id: "no",
+      name: "Unselected",
+      type: "core.merge",
+      config: { mode: "all" },
+      position: { x: 1, y: 2 },
+    },
+  );
+  value.graph.edges.push(
+    { id: "start-route", source: "start", target: "route" },
+    { id: "yes-path", source: "route", target: "yes", sourceHandle: "true" },
+  );
+  expect(customerWorkflowTestReady(value)).toBe(false);
+  value.graph.edges.push({
+    id: "no-path",
+    source: "route",
+    target: "no",
+    sourceHandle: "false",
+  });
+  expect(customerWorkflowTestReady(value)).toBe(true);
+  value.graph.edges.push({ id: "cycle", source: "yes", target: "route" });
+  expect(customerWorkflowTestReady(value)).toBe(false);
+});
 it.each([
   "draft",
   "input",

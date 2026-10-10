@@ -30,6 +30,7 @@
     "displayedState": [
       "Current native draft ID, version, workflow updatedAt and internal eligibility are distinct from the published version.",
       "Only the closed manual/condition/switch/merge/parallel C0 subset with empty input, no contracts/variables and a 1–60 second deadline is admitted.",
+      "Native publish topology must pass before the view reports internal Test readiness; incomplete condition paths, disconnected nodes and cycles remain review-required. Full native node validation repeats at admission.",
       "The confirmation freezes the reviewed draft version and expected outcome; changing the native draft does not change an open confirmation.",
       "The original receipt means admitted, not completed or production verified. Follow its exact run for actual status and recorded steps.",
       "The latest original admission is recovered for the current human from native activity; an unrelated older admission cannot acknowledge an in-memory unknown attempt.",

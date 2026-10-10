@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FEEDBACK_CONTACTS,
@@ -25,9 +25,11 @@ export function WorkflowSupportDiagnostics({
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   return (
     <>
       <Button
+        ref={trigger}
         variant="outline"
         className="min-h-11"
         onClick={() => {
@@ -43,6 +45,10 @@ export function WorkflowSupportDiagnostics({
           className="max-h-dvh overflow-y-auto"
           closeButtonClassName="min-h-11 min-w-11 flex items-center justify-center"
           closeButtonLabel={t("supportDiagnostics.cancel")}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (trigger.current?.isConnected) trigger.current.focus();
+          }}
         >
           <DialogTitle>{t("supportDiagnostics.title")}</DialogTitle>
           <DialogDescription>

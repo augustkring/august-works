@@ -258,6 +258,18 @@ it("requires preview and an explicit download without including step content or 
   expect(dialog.querySelector('[role="status"]')?.textContent).toContain(
     "Download requested",
   );
+  const opener = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === "Prepare a support report",
+  )!;
+  await act(async () =>
+    [...dialog.querySelectorAll("button")]
+      .find((button) => button.textContent === "Cancel")!
+      .click(),
+  );
+  await vi.waitFor(() =>
+    expect(document.querySelector('[role="dialog"]')).toBeNull(),
+  );
+  expect(document.activeElement).toBe(opener);
 });
 
 it("withdraws the open support preview during native authority recheck and does not restore it from a late response", async () => {

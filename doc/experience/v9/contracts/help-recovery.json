@@ -84,7 +84,7 @@
     "resume": "Refresh current native private state and explicitly open a new preview."
   },
   "accessibility": {
-    "initialFocus": "Native dialog focus management; labeled read-only preview and explicit footer actions.",
+    "initialFocus": "Native dialog focus management; labeled read-only preview and explicit footer actions. Closing explicitly restores the connected invoking control; source rechecks unmount it and never focus an old private control.",
     "focusAfterError": "Safe error region unless another native dialog owns focus.",
     "focusAfterSuccess": "Nonintrusive status; dialog remains open with cancel/download controls.",
     "keyboardModel": "Standard links/buttons and native tab order; no custom keyboard trap.",

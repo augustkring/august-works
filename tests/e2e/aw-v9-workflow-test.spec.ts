@@ -73,6 +73,13 @@ test("an unpublished internal test recovers its original receipt after reload an
                 config: { mode: "all" },
                 position: { x: 0, y: 2 },
               },
+              {
+                id: "alternate",
+                type: "core.merge",
+                name: "Unselected internal path",
+                config: { mode: "all" },
+                position: { x: 1, y: 2 },
+              },
             ],
             edges: [
               { id: "start-route", source: "start", target: "route" },
@@ -81,6 +88,12 @@ test("an unpublished internal test recovers its original receipt after reload an
                 source: "route",
                 target: "finish",
                 sourceHandle: "true",
+              },
+              {
+                id: "route-alternate",
+                source: "route",
+                target: "alternate",
+                sourceHandle: "false",
               },
             ],
           },
@@ -94,9 +107,7 @@ test("an unpublished internal test recovers its original receipt after reload an
     await page.route(`**${endpoint}`, async (route) => {
       commands.push(route.request().postDataJSON());
       if (commands.length === 1) {
-        const response = await route.fetch();
-        expect(response.ok()).toBe(true);
-        accepted = await response.json();
+        accepted = await json(await route.fetch());
         await route.abort("failed");
       } else await route.continue();
     });
