@@ -1052,5 +1052,15 @@
     "external_agent_run": "Venter på en ekstern agentkørsel.",
     "direct_agent_run": "Venter på en agentkørsel.",
     "subworkflow": "Venter på et andet workflow."
+  },
+  "hireSaved": {
+    "checking": "Kontrollerer din aktuelle adgang til gemte opsætninger…",
+    "title": "Dine gemte opsætninger",
+    "loading": "Indlæser dine gemte opsætninger…",
+    "failed": "Gemte opsætninger kunne ikke indlæses.",
+    "empty": "Du har endnu ingen gemte opsætninger til at ansætte agenter.",
+    "untitled": "Opsætning uden navn",
+    "version": "Opsætning v{{version}}",
+    "older": "Indlæs ældre opsætninger"
   }
 }

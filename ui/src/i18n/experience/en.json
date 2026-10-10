@@ -1052,5 +1052,15 @@
     "external_agent_run": "Waiting for an external agent run.",
     "direct_agent_run": "Waiting for an agent run.",
     "subworkflow": "Waiting for another workflow."
+  },
+  "hireSaved": {
+    "checking": "Checking current access to saved setups…",
+    "title": "Your saved setups",
+    "loading": "Loading your saved setups…",
+    "failed": "Saved setups could not be loaded.",
+    "empty": "No saved Hire Agent setups yet.",
+    "untitled": "Untitled setup",
+    "version": "Setup v{{version}}",
+    "older": "Load older setups"
   }
 }

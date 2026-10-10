@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "@/i18n";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { agentAuthoringApi } from "@/api/agent-authoring";
 import { useCompanyLiveEvent } from "@/context/LiveUpdatesProvider";
@@ -15,6 +16,7 @@ export function HireSavedSetups({
   principal: string;
   authority: V9AuthoringAuthority;
 }) {
+  const { t } = useTranslation("experience");
   const client = useQueryClient(),
     epoch = useRef(0);
   const [checking, setChecking] = useState(false);
@@ -57,27 +59,27 @@ export function HireSavedSetups({
       .flatMap((page) => page.items)
       .filter((item) => item.kind === "hire") ?? [];
   if (!authority.readReady || (query.isFetching && !query.isFetchingNextPage))
-    return <p role={authority.failed ? "alert" : "status"}>Checking current access to saved setups…</p>;
+    return <p role={authority.failed ? "alert" : "status"}>{t("hireSaved.checking")}</p>;
   return (
     <section className="space-y-3" aria-labelledby="saved-hire-setups">
       <h2 id="saved-hire-setups" className="text-lg font-semibold">
-        Your saved setups
+        {t("hireSaved.title")}
       </h2>
       {(checking || query.isPending) && (
-        <p role="status">Loading your saved setups…</p>
+        <p role="status">{t("hireSaved.loading")}</p>
       )}
       {query.isError && (
         <div role="alert">
-          <p>Saved setups could not be loaded.</p>
+          <p>{t("hireSaved.failed")}</p>
           <Button className="min-h-11" onClick={() => void query.refetch()}>
-            Try again
+            {t("hireCatalog.tryAgain")}
           </Button>
         </div>
       )}
       {!checking && query.isSuccess && (
         <>
           {items.length === 0 && !query.hasNextPage && (
-            <p>No saved Hire Agent setups yet.</p>
+            <p>{t("hireSaved.empty")}</p>
           )}
           <ul>
             {items.map((item) => (
@@ -86,7 +88,7 @@ export function HireSavedSetups({
                   className="inline-flex min-h-11 items-center underline"
                   to={`/agents/hire/drafts/${item.id}/${item.step}`}
                 >
-                  {item.name || "Untitled setup"} · Setup v{item.version}
+                  {item.name || t("hireSaved.untitled")} · {t("hireSaved.version", { version: item.version })}
                 </Link>
               </li>
             ))}
@@ -97,7 +99,7 @@ export function HireSavedSetups({
               disabled={query.isFetchingNextPage}
               onClick={() => void query.fetchNextPage()}
             >
-              Load older setups
+              {t("hireSaved.older")}
             </Button>
           )}
         </>

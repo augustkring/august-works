@@ -1,7 +1,7 @@
 # V9 Hire catalog localization
 
-The Hire catalog and capability detail still contained fixed English customer
-copy. Move the 50 distinct labels, status/error messages, consequence summaries,
+The Hire catalog, capability detail and saved-setup list still contained fixed English customer
+copy. Move the 58 distinct labels, status/error messages, consequence summaries,
 navigation actions and request recovery messages into the existing `experience`
 English and Danish resources. Use the existing reactive language hook so a
 language change updates the surface without replacing its current draft request.
