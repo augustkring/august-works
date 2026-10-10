@@ -7,7 +7,9 @@ import { queryKeys } from "../lib/queryKeys";
  * Keep drafts scoped to the same principal, but use a new source epoch before
  * displaying private reads again. Native APIs still mediate every operation. */
 export function useV9CurrentAccount() {
-  const identity = useAccountIdentity();
+  // V9 private surfaces recheck on return even within the app's ordinary query
+  // freshness window. Nested observers subscribe without restarting that read.
+  const identity = useAccountIdentity({ staleTime: 0, refetchOnMount: false });
   const rechecking =
     useIsFetching({ queryKey: queryKeys.auth.session, exact: true }) > 0;
   const settled = identity.settled && !identity.failed && !rechecking;

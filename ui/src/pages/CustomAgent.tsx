@@ -17,7 +17,8 @@ import {
 import { agentAuthoringApi } from "@/api/agent-authoring";
 import { ApiError } from "@/api/client";
 import { instanceSettingsApi } from "@/api/instanceSettings";
-import { useAccountIdentity } from "@/api/companies-query";
+import { useV9CurrentAccount } from "@/hooks/useV9CurrentAccount";
+import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 import { queryKeys } from "@/lib/queryKeys";
 import { useCompany } from "@/context/CompanyContext";
 import { useCompanyLiveEvent } from "@/context/LiveUpdatesProvider";
@@ -69,6 +70,7 @@ function DraftStart({
     null,
   );
   const client = useQueryClient();
+  const authority = useV9AuthoringAuthority(company, principal);
   const [checkingAccess, setCheckingAccess] = useState(false);
   const securityEpoch = useRef(0);
   useEffect(() => {
@@ -78,14 +80,15 @@ function DraftStart({
     };
   }, []);
   const drafts = useInfiniteQuery({
-    queryKey: ["agent-authoring", company, principal, "list"],
+    queryKey: ["agent-authoring", company, principal, "list", authority.epoch],
     queryFn: ({ signal, pageParam }) =>
-      agentAuthoringApi.list(
+      authority.read(() => agentAuthoringApi.list(
         company,
         principal,
         signal,
         pageParam ?? undefined,
-      ),
+      )),
+    enabled: authority.readReady,
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
     gcTime: 0,
@@ -108,7 +111,7 @@ function DraftStart({
       const epoch = ++securityEpoch.current;
       void client
         .resetQueries({
-          queryKey: ["agent-authoring", company, principal, "list"],
+          queryKey: ["agent-authoring", company, principal, "list", authority.epoch],
           exact: true,
         })
         .then(() => {
@@ -118,17 +121,26 @@ function DraftStart({
     }
   });
   const create = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      if (!authority.canWrite() || client.getQueryState([
+        "agent-authoring", company, principal, "list", authority.epoch,
+      ])?.fetchStatus === "fetching") throw new Error("Current authoring access is unresolved");
       attempt.current ??= {
         requestId: crypto.randomUUID(),
         agentId: search.get("agentId"),
       };
-      return agentAuthoringApi.create(company, principal, attempt.current);
+      const epoch = securityEpoch.current;
+      const pending = attempt.current;
+      const draft = await authority.write(() => agentAuthoringApi.create(company, principal, pending));
+      if (epoch !== securityEpoch.current) throw new Error("Draft creation needs current confirmation");
+      return draft;
     },
     onSuccess: (draft) => {
-      if (alive.current) navigate(draft.kind === "hire" ? `/agents/hire/drafts/${draft.id}/${draft.step}` : `/agents/custom/${draft.id}/${draft.step}`);
+      if (alive.current && authority.confirmed(draft)) navigate(draft.kind === "hire" ? `/agents/hire/drafts/${draft.id}/${draft.step}` : `/agents/custom/${draft.id}/${draft.step}`);
     },
   });
+  if (!authority.readReady) return <p role={authority.failed ? "alert" : "status"}>Checking current access to saved drafts…</p>;
+  if (drafts.isFetching && !drafts.isFetchingNextPage) return <p role="status">Loading saved drafts…</p>;
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <Link
@@ -232,6 +244,7 @@ function DraftEditor({
   const navigate = useNavigate(),
     { screen } = useParams(),
     client = useQueryClient();
+  const authority = useV9AuthoringAuthority(company, principal);
   const parsed = customAgentStepSchema.safeParse(screen),
     step = parsed.success ? parsed.data : "outcome";
   const alive = useRef(true),
@@ -256,13 +269,11 @@ function DraftEditor({
       alive.current = false;
     };
   }, []);
-  useEffect(() => {
-    heading.current?.focus();
-  }, [step]);
   const draft = useQuery({
-    queryKey: ["agent-authoring", company, principal, id],
+    queryKey: ["agent-authoring", company, principal, id, authority.epoch],
     queryFn: ({ signal }) =>
-      agentAuthoringApi.get(company, principal, id, signal),
+      authority.read(() => agentAuthoringApi.get(company, principal, id, signal)),
+    enabled: authority.readReady,
     gcTime: 0,
     retry: false,
     refetchOnWindowFocus: false,
@@ -297,7 +308,7 @@ function DraftEditor({
         client
           .getQueryCache()
           .find({
-            queryKey: ["agent-authoring", company, principal, id],
+            queryKey: ["agent-authoring", company, principal, id, authority.epoch],
             exact: true,
           })
           ?.reset();
@@ -313,21 +324,27 @@ function DraftEditor({
       setContent(draft.data.content);
     }
   }, [draft.data, receipt, accessLost]);
+  const viewReady = authority.readReady && draft.isSuccess && !draft.isFetching &&
+    Boolean(receipt && content) && !accessLost && !reauthorizing;
+  useEffect(() => {
+    if (viewReady) heading.current?.focus();
+  }, [step, viewReady]);
   const options = useQuery({
     queryKey: [
       "agent-authoring-options",
       company,
       principal,
       receipt?.agentId ?? null,
+      authority.epoch,
     ],
     queryFn: ({ signal }) =>
-      agentAuthoringApi.options(
+      authority.read(() => agentAuthoringApi.options(
         company,
         principal,
         receipt?.agentId ?? null,
         signal,
-      ),
-    enabled: Boolean(receipt),
+      )),
+    enabled: authority.readReady && draft.isSuccess && !draft.isFetching && Boolean(receipt),
     gcTime: 0,
     retry: false,
   });
@@ -338,26 +355,35 @@ function DraftEditor({
       principal,
       id,
       receipt?.version,
+      authority.epoch,
     ],
     queryFn: ({ signal }) =>
-      agentAuthoringApi.review(company, principal, id, signal),
+      authority.read(() => agentAuthoringApi.review(company, principal, id, signal)),
     enabled: Boolean(
-      receipt?.content &&
+      authority.readReady && draft.isSuccess && !draft.isFetching && receipt?.content &&
         ["test", "review", "publish", "monitor"].includes(step),
     ),
     gcTime: 0,
     retry: false,
   });
   const save = useMutation({
-    mutationFn: (pending: NonNullable<typeof attempt.current>) =>
-      agentAuthoringApi.save(company, principal, id, pending.input),
+    mutationFn: async (pending: NonNullable<typeof attempt.current>) => {
+      if (securityPending.current || client.getQueryState([
+        "agent-authoring", company, principal, id, authority.epoch,
+      ])?.fetchStatus === "fetching") throw new Error("Current draft access is unresolved");
+      const epoch = securityEpoch.current;
+      const row = await authority.write(() => agentAuthoringApi.save(company, principal, id, pending.input));
+      if (securityPending.current || epoch !== securityEpoch.current)
+        throw new Error("Draft save needs current confirmation");
+      return row;
+    },
     onSuccess: (row, pending) => {
-      if (!alive.current || securityPending.current) return;
+      if (!alive.current || securityPending.current || !authority.confirmed(row)) return;
       attempt.current = null;
       setReceipt(row);
       setContent(row.content);
       setSaved(true);
-      client.setQueryData(["agent-authoring", company, principal, id], row);
+      client.setQueryData(["agent-authoring", company, principal, id, authority.epoch], row);
       navigate(pending.destination);
     },
     onError: (error) => {
@@ -372,24 +398,36 @@ function DraftEditor({
     },
   });
   const discard = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      if (!authority.canRead() || securityPending.current || client.getQueryState([
+        "agent-authoring", company, principal, id, authority.epoch,
+      ])?.fetchStatus === "fetching") throw new Error("Current authoring access is unresolved");
       discardAttempt.current ??= {
         requestId: crypto.randomUUID(),
         expectedVersion: receipt!.version,
       };
-      return agentAuthoringApi.discard(
+      const pending = discardAttempt.current, epoch = securityEpoch.current;
+      const row = await authority.discard(() => agentAuthoringApi.discard(
         company,
         principal,
         id,
-        discardAttempt.current,
-      );
+        pending,
+      ));
+      if (securityPending.current || epoch !== securityEpoch.current)
+        throw new Error("Draft discard needs current confirmation");
+      return row;
     },
-    onSuccess: () => {
-      if (alive.current) navigate("/agents/custom");
+    onSuccess: (row) => {
+      if (alive.current && authority.confirmed(row)) navigate("/agents/custom");
+    },
+    onError: (error) => {
+      if (alive.current && error instanceof ApiError && [401, 403].includes(error.status)) {
+        setAccessLost(true); setContent(null); setReceipt(null);
+      }
     },
   });
   function persist(destination: string, nextStep = step) {
-    if (!content || !receipt) return;
+    if (!authority.canWrite() || securityPending.current || !content || !receipt) return;
     attempt.current ??= {
       input: {
         requestId: crypto.randomUUID(),
@@ -409,7 +447,7 @@ function DraftEditor({
     setSaved(false);
   }
   const locked =
-    !enabled ||
+    !enabled || !authority.writeReady ||
     save.isPending ||
     Boolean(attempt.current) ||
     discard.isPending ||
@@ -428,11 +466,11 @@ function DraftEditor({
         </Link>
       </div>
     );
-  if (reauthorizing)
+  if (reauthorizing || !authority.readReady)
     return <p role="status">Checking current access to this draft…</p>;
-  if (draft.isPending && !receipt)
+  if (draft.isPending || draft.isFetching)
     return <p role="status">Loading your saved agent draft…</p>;
-  if (draft.isError && !receipt)
+  if (draft.isError)
     return (
       <div className="space-y-4 p-6">
         <p role="alert">
@@ -957,7 +995,7 @@ function DraftEditor({
           variant="outline"
           className="min-h-11"
           disabled={
-            save.isPending || Boolean(attempt.current) || discard.isPending
+            !authority.readReady || save.isPending || Boolean(attempt.current) || discard.isPending
           }
           onClick={() => discard.mutate()}
         >
@@ -970,7 +1008,7 @@ function DraftEditor({
 
 export function CustomAgent() {
   const { selectedCompanyId: company } = useCompany(),
-    { userId: principal } = useAccountIdentity(),
+    { userId: principal } = useV9CurrentAccount(),
     { draftId } = useParams();
   const settings = useQuery({
     queryKey: queryKeys.instance.experimentalSettings,

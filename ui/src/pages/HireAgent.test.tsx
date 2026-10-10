@@ -13,6 +13,8 @@ import {
 import { agentAuthoringApi } from "../api/agent-authoring";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { HireAgent } from "./HireAgent";
+import { queryKeys } from "../lib/queryKeys";
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const context = vi.hoisted(() => ({
   company: "10000000-0000-4000-8000-000000000001",
@@ -250,3 +252,56 @@ it.each([false, true])(
     );
   },
 );
+it("withholds a late setup acknowledgement across an account recheck and retains the exact retry", async () => {
+  vi.spyOn(agentAuthoringApi, "hireCatalog").mockResolvedValue([capability]);
+  const saved = { id: "10000000-0000-4000-8000-000000000009", companyId: context.company,
+    agentId: null, createdByUserId: "author", kind: "hire" as const, status: "draft" as const,
+    version: 1, step: "hire_access" as const, baselineHash: null,
+    content: agentAuthoringContentSchema.parse({ name: "Private saved setup" }),
+    createdAt: "2026-10-10T00:00:00.000Z", updatedAt: "2026-10-10T00:00:00.000Z" };
+  let releaseCreate!: (row: typeof saved) => void;
+  const create = vi.spyOn(agentAuthoringApi, "create")
+    .mockImplementationOnce(() => new Promise((resolve) => { releaseCreate = resolve; }))
+    .mockResolvedValueOnce(saved);
+  await mount(`/AW/agents/hire/capabilities/${capability.versionId}`);
+  await vi.waitFor(() => expect(container.textContent).toContain("Use this agent"));
+  await act(async () => Array.from(container.querySelectorAll("button")).find((value) => value.textContent === "Use this agent")!.click());
+  await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
+  const input = structuredClone(create.mock.calls[0]![2]);
+  let releaseSession!: () => void;
+  await act(async () => { void client.fetchQuery({ queryKey: queryKeys.auth.session,
+    queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {}); });
+  await vi.waitFor(() => expect(container.textContent).not.toContain(capability.name));
+  await act(async () => releaseSession());
+  await vi.waitFor(() => expect(container.textContent).toContain(capability.name));
+  await act(async () => releaseCreate(saved));
+  await vi.waitFor(() => expect(container.textContent).toContain("Retry the same setup request"));
+  expect(container.textContent).not.toContain("Saved Hire setup destination");
+  await act(async () => Array.from(container.querySelectorAll("button")).find((value) => value.textContent === "Retry the same setup request")!.click());
+  expect(create.mock.calls[1]![2]).toEqual(input);
+  await vi.waitFor(() => expect(container.textContent).toContain("Saved Hire setup destination"));
+});
+it("keeps an unknown setup request through rollout rollback without renewing its original key", async () => {
+  vi.spyOn(agentAuthoringApi, "hireCatalog").mockResolvedValue([capability]);
+  const saved = { id: "10000000-0000-4000-8000-000000000009", companyId: context.company,
+    agentId: null, createdByUserId: "author", kind: "hire" as const, status: "draft" as const,
+    version: 1, step: "hire_access" as const, baselineHash: null,
+    content: agentAuthoringContentSchema.parse({ name: "Private saved setup" }),
+    createdAt: "2026-10-10T00:00:00.000Z", updatedAt: "2026-10-10T00:00:00.000Z" };
+  const create = vi.spyOn(agentAuthoringApi, "create").mockRejectedValueOnce(new Error("Missing ACK"))
+    .mockResolvedValueOnce(saved);
+  await mount(`/AW/agents/hire/capabilities/${capability.versionId}`);
+  await vi.waitFor(() => expect(container.textContent).toContain("Use this agent"));
+  await act(async () => Array.from(container.querySelectorAll("button")).find((value) => value.textContent === "Use this agent")!.click());
+  await vi.waitFor(() => expect(container.textContent).toContain("Retry the same setup request"));
+  const input = structuredClone(create.mock.calls[0]![2]);
+  const flags = client.getQueryData<Record<string, boolean>>(queryKeys.instance.experimentalSettings)!;
+  await act(async () => client.setQueryData(queryKeys.instance.experimentalSettings, { ...flags, hire_agent_v9: false }));
+  await vi.waitFor(() => expect(container.textContent).toContain("previous setup request remains unconfirmed"));
+  expect(container.textContent).not.toContain(capability.name); expect(create).toHaveBeenCalledOnce();
+  await act(async () => client.setQueryData(queryKeys.instance.experimentalSettings, flags));
+  await vi.waitFor(() => expect(container.textContent).toContain("Retry the same setup request"));
+  await act(async () => Array.from(container.querySelectorAll("button")).find((value) => value.textContent === "Retry the same setup request")!.click());
+  expect(create.mock.calls[1]![2]).toEqual(input);
+  await vi.waitFor(() => expect(container.textContent).toContain("Saved Hire setup destination"));
+});

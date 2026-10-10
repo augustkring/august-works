@@ -14,6 +14,8 @@ import { agentAuthoringApi } from "../api/agent-authoring";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { ApiError } from "../api/client";
 import { CustomAgent } from "./CustomAgent";
+import { queryKeys } from "../lib/queryKeys";
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const context = vi.hoisted(() => ({
   company: "10000000-0000-4000-8000-000000000001",
@@ -276,4 +278,56 @@ it("clears the old editor and scopes the new request when the account changes", 
   expect(get.mock.calls.at(-1)![1]).toBe("other-member");
   expect(container.textContent).not.toContain("Private unsaved work");
   expect(document.querySelector("input")).toBeNull();
+});
+it("hides a same-account unsaved draft until both the session and a fresh native owner read resolve", async () => {
+  const get = vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  await mount(); await enter("PRIVATE unsaved same-account draft");
+  let releaseRead: ((row: AgentAuthoringDraftView) => void) | undefined;
+  get.mockImplementation(() => new Promise((resolve) => { releaseRead = resolve; }));
+  let releaseSession!: () => void;
+  await act(async () => { void client.fetchQuery({ queryKey: queryKeys.auth.session,
+    queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {}); });
+  await vi.waitFor(() => expect(container.querySelector("input,textarea")).toBeNull());
+  expect(container.textContent).not.toContain("PRIVATE"); expect(releaseRead).toBeUndefined();
+  await act(async () => releaseSession());
+  await vi.waitFor(() => expect(releaseRead).toBeDefined());
+  expect(container.querySelector("input,textarea")).toBeNull();
+  await act(async () => releaseRead!(draft));
+  await vi.waitFor(() => expect(container.querySelector("input")?.value).toBe("PRIVATE unsaved same-account draft"));
+});
+it("fences a same-turn save and never sends it while the original session query is fetching", async () => {
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  const save = vi.spyOn(agentAuthoringApi, "save").mockResolvedValue(draft);
+  await mount();
+  const button = Array.from(container.querySelectorAll("button")).find((value) => value.textContent === "Continue")!;
+  let releaseSession!: () => void;
+  await act(async () => {
+    void client.fetchQuery({ queryKey: queryKeys.auth.session,
+      queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {});
+    button.click();
+  });
+  expect(save).not.toHaveBeenCalled(); await vi.waitFor(() => expect(container.querySelector("input")).toBeNull());
+  await act(async () => releaseSession());
+});
+it("keeps a late save unconfirmed after a completed account recheck and retries only its original body", async () => {
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  let releaseSave!: (row: AgentAuthoringDraftView) => void;
+  const save = vi.spyOn(agentAuthoringApi, "save")
+    .mockImplementationOnce(() => new Promise((resolve) => { releaseSave = resolve; }))
+    .mockResolvedValueOnce({ ...draft, version: 2 });
+  await mount(); await enter("PRIVATE original save body"); await click("Save & exit");
+  await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+  const input = structuredClone(save.mock.calls[0]![3]);
+  let releaseSession!: () => void;
+  await act(async () => { void client.fetchQuery({ queryKey: queryKeys.auth.session,
+    queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {}); });
+  await vi.waitFor(() => expect(container.querySelector("input")).toBeNull());
+  await act(async () => releaseSession());
+  await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
+  await act(async () => releaseSave({ ...draft, version: 2 }));
+  await vi.waitFor(() => expect(container.textContent).toContain("save was not acknowledged"));
+  expect(container.textContent).not.toContain("Saved drafts destination");
+  await click("Retry the same save");
+  expect(save.mock.calls[1]![3]).toEqual(input);
+  await vi.waitFor(() => expect(container.textContent).toContain("Saved drafts destination"));
 });

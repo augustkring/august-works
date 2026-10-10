@@ -5,15 +5,22 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  V5_FEATURE_KEYS,
   agentAuthoringContentSchema,
   type AgentAuthoringDraftView,
   type LiveEvent,
 } from "@paperclipai/shared";
 import { agentAuthoringApi } from "../api/agent-authoring";
 import { ApiError } from "../api/client";
+import { instanceSettingsApi } from "../api/instanceSettings";
 import { HireAgentSetup } from "./HireAgentSetup";
+import { queryKeys } from "../lib/queryKeys";
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const context = vi.hoisted(() => ({
   handlers: new Set<(event: LiveEvent) => void>(),
+}));
+vi.mock("../api/companies-query", () => ({
+  useAccountIdentity: () => ({ userId: "author", settled: true, localImplicit: false, failed: false }),
 }));
 vi.mock("../context/LiveUpdatesProvider", () => ({
   useCompanyLiveEvent: (handler: (event: LiveEvent) => void) => {
@@ -72,6 +79,11 @@ async function mount(step = "hire_access", enabled = true) {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  vi.spyOn(instanceSettingsApi, "getExperimental").mockResolvedValue({
+    ...Object.fromEntries(V5_FEATURE_KEYS.map((key) => [key, true])),
+    enableFoundationV1: true, enableContextEngineV1: true, saas_deployment_profile_v6: true,
+    billing_v6: true, agent_packages_v7: true, hire_agent_v9: true,
+  } as never);
   vi.spyOn(agentAuthoringApi, "options").mockResolvedValue({
     owners: [{ id: "author", name: "Accountable author" }],
     knowledge: [],
@@ -275,6 +287,9 @@ it("keeps rollback reads and discard available while disabling new setup writes"
       content: null,
     });
   await mount("hire_access", false);
+  const flags = client.getQueryData<Record<string, boolean>>(queryKeys.instance.experimentalSettings)!;
+  await act(async () => client.setQueryData(queryKeys.instance.experimentalSettings, { ...flags, hire_agent_v9: false }));
+  await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
   expect(container.textContent).toContain("New setup changes are unavailable");
   expect(container.querySelector("input")!.matches(":disabled")).toBe(true);
   await click("Discard setup");
@@ -312,3 +327,38 @@ it.each(["hire_test", "hire_review", "hire_receipt"])(
     expect(create).not.toHaveBeenCalled();
   },
 );
+it("hides a private setup through the account recheck and resumes its unsaved name only after a fresh owner read", async () => {
+  const get = vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  await mount();
+  const input = container.querySelector("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "PRIVATE unsaved setup name");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  let releaseRead: ((row: AgentAuthoringDraftView) => void) | undefined;
+  get.mockImplementation(() => new Promise((resolve) => { releaseRead = resolve; }));
+  let releaseSession!: () => void;
+  await act(async () => { void client.fetchQuery({ queryKey: queryKeys.auth.session,
+    queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {}); });
+  await vi.waitFor(() => expect(container.querySelector("input,textarea")).toBeNull());
+  expect(container.textContent).not.toContain("PRIVATE"); expect(releaseRead).toBeUndefined();
+  await act(async () => releaseSession());
+  await vi.waitFor(() => expect(releaseRead).toBeDefined());
+  expect(container.querySelector("input,textarea")).toBeNull();
+  await act(async () => releaseRead!(draft));
+  await vi.waitFor(() => expect(container.querySelector("input")?.value).toBe("PRIVATE unsaved setup name"));
+});
+it("never sends a same-turn discard while the original session query is fetching", async () => {
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  const discard = vi.spyOn(agentAuthoringApi, "discard").mockResolvedValue(draft);
+  await mount();
+  const button = Array.from(container.querySelectorAll("button")).find((value) => value.textContent === "Discard setup")!;
+  let releaseSession!: () => void;
+  await act(async () => {
+    void client.fetchQuery({ queryKey: queryKeys.auth.session,
+      queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {});
+    button.click();
+  });
+  expect(discard).not.toHaveBeenCalled(); expect(container.querySelector("input")).toBeNull();
+  await act(async () => releaseSession());
+});
