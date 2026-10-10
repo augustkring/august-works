@@ -1,0 +1,70 @@
+name: Publish BLENTERA v6 design review
+
+on:
+  push:
+    branches:
+      - blentera-preview/design-reset-v6-20261010
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s blentera-v6-design-review.html
+          printf '%s  %s\n' '5244b1583d1962911a69579bf111d3bb776443f23e6d2d2541b33e1217f612b9' 'blentera-v6-design-review.html' | sha256sum -c -
+          grep -q 'Build your company' blentera-v6-design-review.html
+          grep -q 'People stay accountable.' blentera-v6-design-review.html
+          grep -q 'data-preview-page="platform"' blentera-v6-design-review.html
+          grep -q 'data-preview-page="about"' blentera-v6-design-review.html
+          grep -q 'data-preview-page="trust"' blentera-v6-design-review.html
+          grep -q 'data-scenario="incident"' blentera-v6-design-review.html
+
+      - name: Publish public unlisted Cloudflare-hosted preview
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --connect-timeout 20 --max-time 90 --retry 2 \
+            -F 'file=@blentera-v6-design-review.html;type=text/html' \
+            -F 'title=BLENTERA Design Review v6 | Accountable human and AI work' \
+            https://sharehtml.zhenjia.dev/api/shares > "$RUNNER_TEMP/share.json"
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'share.json')))
+          url=data['share']['preview_url']
+          assert url.startswith('https://sharehtml.zhenjia.dev/v/') and url.endswith('/'),url
+          print('BLENTERA_PUBLIC_REVIEW_URL='+url)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('url='+url+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('## BLENTERA — V6 review\n\n')
+              f.write('**[OPEN INTERACTIVE REVIEW SITE]('+url+')**\n\n')
+              f.write('Public unlisted third-party Cloudflare-hosted HTML preview. This is not production-qualified, approved art direction, or a first-party Cloudflare Pages deployment.\n')
+          PY
+
+      - name: HTTP-check publicly served document
+        shell: bash
+        env:
+          PREVIEW_URL: ${{steps.publish.outputs.url}}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location --max-time 45 \
+            -D "$RUNNER_TEMP/headers" \
+            -o "$RUNNER_TEMP/public.html" "$PREVIEW_URL"
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/public.html"
+          grep -q 'People stay accountable.' "$RUNNER_TEMP/public.html"
+          grep -q 'data-preview-page="about"' "$RUNNER_TEMP/public.html"
+          grep -q 'data-role-select="ciso"' "$RUNNER_TEMP/public.html"
+          grep -q 'data-scenario="incident"' "$RUNNER_TEMP/public.html"
+          echo "BLENTERA_PUBLIC_HTTP_VERIFIED=$PREVIEW_URL"
+          grep -Ei '^HTTP/|^[Cc]ontent-[Tt]ype:|^[Xx]-[Rr]obots-[Tt]ag:' "$RUNNER_TEMP/headers" || true
+          wc -c "$RUNNER_TEMP/public.html"
