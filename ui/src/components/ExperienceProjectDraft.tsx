@@ -1,10 +1,12 @@
+import {
+  readPendingProjectReceipt,
+  retainPendingProjectReceipt,
+  clearPendingProjectReceipt,
+} from "../lib/pending-project-receipts";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import {
-  experienceProjectReceiptSchema as receiptSchema,
-  type ExperienceProjectReceipt,
-} from "@paperclipai/shared";
+import { experienceProjectReceiptSchema as receiptSchema } from "@paperclipai/shared";
 import { createAccountClient } from "../api/account-client";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
@@ -20,6 +22,7 @@ import {
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
+
 type Attempt = {
   idempotencyKey: string;
   name: string;
@@ -27,8 +30,8 @@ type Attempt = {
   status: "planned";
 };
 
-/** Verbatim editable customer draft. Only explicit submission reaches the
- * original Native project owner; no repository, runtime or agent is inferred. */
+/** One explicit create. Unknown outcomes reconcile only through the original
+ * Native key and current project read guards; a missing key never causes a write. */
 export default function ExperienceProjectDraft({
   companyId,
   principal,
@@ -41,20 +44,27 @@ export default function ExperienceProjectDraft({
   onClose: () => void;
 }) {
   const { t } = useTranslation("experience");
-  const identity = useV9CurrentAccount();
-  const flags = useV9FeatureEnabled("ambient_commands_v9");
+  const identity = useV9CurrentAccount(),
+    flags = useV9FeatureEnabled("ambient_commands_v9");
   const { selectedCompanyId } = useCompany();
   const resolvedPrincipal = identity.localImplicit
     ? "local-board"
     : identity.userId;
   const matches =
     resolvedPrincipal === principal && selectedCompanyId === companyId;
-  const ready =
+  const authorityReady =
     matches &&
     identity.settled &&
     flags.enabled &&
     flags.query.isSuccess &&
     !flags.query.isFetching;
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const [resumed, setResumed] = useState(false);
+  const [recoveryUnavailable, setRecoveryUnavailable] = useState(false);
+  const [storageWriteFailed, setStorageWriteFailed] = useState(false);
+  const receiptKey = useRef<string | null>(null);
+  const initialized = useRef(false);
+  const ready = authorityReady && recoveryReady && !recoveryUnavailable;
   const context = useRef({
     ready,
     accountEpoch: identity.authorityEpoch,
@@ -69,6 +79,12 @@ export default function ExperienceProjectDraft({
       accountEpoch: identity.authorityEpoch,
       epoch: context.current.epoch + 1,
     };
+  const blocked =
+    identity.failed ||
+    (identity.settled &&
+      (!matches ||
+        flags.query.isError ||
+        (flags.query.isSuccess && !flags.enabled)));
   const client = useQueryClient();
   const canUseContext = () =>
     context.current.ready &&
@@ -77,54 +93,63 @@ export default function ExperienceProjectDraft({
       ?.fetchStatus !== "fetching";
   const [name, setName] = useState(initialName),
     [description, setDescription] = useState("");
-  const [unconfirmed, setUnconfirmed] = useState(false),
-    [receipt, setReceipt] = useState<ExperienceProjectReceipt | null>(null);
-  const attempt = useRef<Attempt | null>(null),
-    alive = useRef(true),
-    error = useRef<HTMLParagraphElement>(null),
-    heading = useRef<HTMLHeadingElement>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const attempt = useRef<Attempt | null>(null);
   useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
+    if (!authorityReady || initialized.current) return;
+    initialized.current = true;
+    try {
+      receiptKey.current = readPendingProjectReceipt(companyId, principal);
+      if (receiptKey.current) {
+        setSubmitted(true);
+        setResumed(true);
+      }
+      setRecoveryReady(true);
+    } catch {
+      setRecoveryUnavailable(true);
+    }
+  }, [authorityReady, companyId, principal]);
+  const error = useRef<HTMLParagraphElement>(null),
+    heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (identity.settled && !matches) onClose();
   }, [identity.settled, matches, onClose]);
   const save = useMutation({
     retry: false,
     mutationFn: async () => {
-      if (!canUseContext()) throw new Error("Project context changed");
-      const epoch = context.current.epoch;
-      attempt.current ??= {
+      if (!canUseContext() || attempt.current || receiptKey.current)
+        throw new Error("Project create is not available");
+      const body: Attempt = {
         idempotencyKey: crypto.randomUUID(),
         name: name.trim(),
         description,
         status: "planned",
       };
-      setUnconfirmed(false);
+      // Persist only the nonce/scope before the first POST. If this fails no
+      // original create is sent, and an unknown attempt is never overwritten.
+      try {
+        retainPendingProjectReceipt(companyId, principal, body.idempotencyKey);
+      } catch {
+        setStorageWriteFailed(true);
+        throw new Error("Project recovery is unavailable");
+      }
+      attempt.current = body;
+      receiptKey.current = body.idempotencyKey;
+      setStorageWriteFailed(false);
+      setSubmitted(true);
       const native = createAccountClient(
         principal === "local-board" ? "local-board" : `user:${principal}`,
       );
       const result = receiptSchema.parse(
-        await native.post(`/companies/${companyId}/projects`, attempt.current),
+        await native.post(
+          `/companies/${companyId}/projects`,
+          attempt.current,
+        ),
       );
       if (result.companyId !== companyId)
         throw new Error("Project context changed");
-      return { result, epoch };
-    },
-    onSuccess: ({ result, epoch }) => {
-      if (!alive.current) return;
-      if (!canUseContext() || epoch !== context.current.epoch) {
-        setUnconfirmed(true);
-        return;
-      }
-      attempt.current = null;
-      setReceipt(result);
-      void client.invalidateQueries({
-        queryKey: queryKeys.projects.all(companyId),
-      });
+      // The POST body is transport acknowledgement only. The Native key read
+      // below determines whether this project may be shown after any auth recheck.
     },
   });
   const original = useQuery({
@@ -132,26 +157,27 @@ export default function ExperienceProjectDraft({
       "ambient-project-receipt",
       companyId,
       principal,
-      receipt?.id,
+      receiptKey.current,
       context.current.epoch,
     ],
-    enabled: ready && !!receipt,
+    enabled: ready && submitted && !save.isPending,
     gcTime: 0,
     staleTime: 0,
     retry: false,
     queryFn: async ({ signal }) => {
-      if (!canUseContext()) throw new Error("Project context changed");
+      if (!canUseContext() || !receiptKey.current)
+        throw new Error("Project receipt is not available");
       const native = createAccountClient(
         principal === "local-board" ? "local-board" : `user:${principal}`,
       );
       const result = receiptSchema.parse(
         await native.get(
-          `/projects/${receipt!.id}?companyId=${encodeURIComponent(companyId)}`,
+          `/companies/${companyId}/projects/create-receipts/${receiptKey.current}`,
           { signal, cache: "no-store" },
         ),
       );
       signal.throwIfAborted();
-      if (result.companyId !== companyId || result.id !== receipt!.id)
+      if (result.companyId !== companyId)
         throw new Error("Project context changed");
       return result;
     },
@@ -159,12 +185,20 @@ export default function ExperienceProjectDraft({
   const current =
     ready && original.isSuccess && !original.isFetching ? original.data : null;
   useEffect(() => {
-    if (ready && (save.isError || unconfirmed)) error.current?.focus();
-  }, [ready, save.isError, unconfirmed]);
+    if (current && receiptKey.current) {
+      try {
+        clearPendingProjectReceipt(companyId, principal, receiptKey.current);
+      } catch {
+        /* Leave the locator intact; never repeat a create to clear it. */
+      }
+    }
+  }, [current?.id, companyId, principal]);
+  useEffect(() => {
+    if (ready && original.isError) error.current?.focus();
+  }, [ready, original.isError]);
   useEffect(() => {
     if (current) heading.current?.focus();
   }, [current?.id]);
-  const frozen = save.isPending || !!attempt.current;
   return (
     <Dialog
       open
@@ -177,36 +211,31 @@ export default function ExperienceProjectDraft({
         className="max-h-dvh overflow-y-auto"
         closeButtonLabel={t("projectDraft.close")}
       >
-        <DialogTitle>{t("projectDraft.title")}</DialogTitle>
-        <DialogDescription>{t("projectDraft.description")}</DialogDescription>
+        <DialogTitle>
+          {t(resumed ? "projectDraft.resumeTitle" : "projectDraft.title")}
+        </DialogTitle>
+        <DialogDescription>
+          {t(resumed ? "projectDraft.resumeDescription" : "projectDraft.description")}
+        </DialogDescription>
         {!ready ? (
-          <p
-            role={
-              identity.failed || flags.query.isError || !flags.enabled
-                ? "alert"
-                : "status"
-            }
-          >
-            {t(
-              identity.failed ||
-                flags.query.isError ||
-                (!flags.query.isPending && !flags.enabled)
-                ? "projectDraft.unavailable"
-                : "loading",
-            )}
-          </p>
-        ) : receipt && !current ? (
           <div className="space-y-3">
-            <p role={original.isError ? "alert" : "status"}>
-              {t(original.isError ? "projectDraft.unavailable" : "loading")}
+            <p role={blocked || recoveryUnavailable ? "alert" : "status"}>
+              {t(
+                recoveryUnavailable
+                  ? "projectDraft.recoveryUnavailable"
+                  : blocked
+                    ? "projectDraft.unavailable"
+                    : "loading",
+              )}
             </p>
-            {original.isError && (
-              <Button
-                className="min-h-11"
-                onClick={() => void original.refetch()}
+            {recoveryUnavailable && authorityReady && (
+              <Link
+                className="inline-flex min-h-11 items-center underline"
+                to="/projects"
+                onClick={onClose}
               >
-                {t("tryAgain")}
-              </Button>
+                {t("projectDraft.checkProjects")}
+              </Link>
             )}
           </div>
         ) : current ? (
@@ -224,12 +253,45 @@ export default function ExperienceProjectDraft({
               {t("projectDraft.open")}
             </Link>
           </div>
+        ) : submitted ? (
+          <div className="space-y-3">
+            <p
+              ref={error}
+              tabIndex={-1}
+              role={original.isError ? "alert" : "status"}
+            >
+              {t(original.isError ? "projectDraft.unconfirmed" : "loading")}
+            </p>
+            {original.isError && (
+              <Button
+                className="min-h-11"
+                disabled={original.isFetching}
+                onClick={() => {
+                  if (canUseContext()) void original.refetch();
+                }}
+              >
+                {t("projectDraft.checkReceipt")}
+              </Button>
+            )}
+            <Link
+              className="inline-flex min-h-11 items-center underline"
+              to="/projects"
+              onClick={onClose}
+            >
+              {t("projectDraft.checkProjects")}
+            </Link>
+          </div>
         ) : (
           <form
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (name.trim() && !save.isPending && canUseContext())
+              if (
+                name.trim() &&
+                !save.isPending &&
+                canUseContext() &&
+                !attempt.current
+              )
                 save.mutate();
             }}
           >
@@ -240,7 +302,7 @@ export default function ExperienceProjectDraft({
                 required
                 maxLength={180}
                 value={name}
-                disabled={frozen}
+                disabled={save.isPending}
                 onChange={(event) => setName(event.target.value)}
               />
             </label>
@@ -249,16 +311,12 @@ export default function ExperienceProjectDraft({
               <Textarea
                 maxLength={4000}
                 value={description}
-                disabled={frozen}
+                disabled={save.isPending}
                 onChange={(event) => setDescription(event.target.value)}
               />
             </label>
             <p>{t("projectDraft.noInference")}</p>
-            {(save.isError || unconfirmed) && (
-              <p ref={error} tabIndex={-1} role="alert">
-                {t("projectDraft.unconfirmed")}
-              </p>
-            )}
+            {storageWriteFailed && <p role="alert">{t("projectDraft.notSent")}</p>}
             <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
               <Button
                 type="button"
@@ -274,11 +332,7 @@ export default function ExperienceProjectDraft({
                 className="min-h-11"
                 disabled={save.isPending || !name.trim()}
               >
-                {t(
-                  save.isError || unconfirmed
-                    ? "tryAgain"
-                    : "projectDraft.create",
-                )}
+                {t("projectDraft.create")}
               </Button>
             </footer>
           </form>

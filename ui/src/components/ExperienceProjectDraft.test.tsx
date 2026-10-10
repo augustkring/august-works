@@ -1,3 +1,7 @@
+import {
+  PENDING_PROJECT_RECEIPTS_KEY,
+  retainPendingProjectReceipt,
+} from "../lib/pending-project-receipts";
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -11,7 +15,6 @@ const state = vi.hoisted(() => ({
   company: "10000000-0000-4000-8000-000000000001",
   principal: "draft-owner",
   enabled: true,
-  featureFetching: false,
 }));
 vi.mock("../api/companies-query", () => ({
   useAccountIdentity: () => ({
@@ -24,12 +27,7 @@ vi.mock("../api/companies-query", () => ({
 vi.mock("../hooks/useV9FeatureEnabled", () => ({
   useV9FeatureEnabled: () => ({
     enabled: state.enabled,
-    query: {
-      isSuccess: true,
-      isFetching: state.featureFetching,
-      isPending: false,
-      isError: false,
-    },
+    query: { isSuccess: true, isFetching: false },
   }),
 }));
 vi.mock("../context/CompanyContext", () => ({
@@ -50,22 +48,12 @@ afterEach(async () => {
   if (root) await act(async () => root.unmount());
   container?.remove();
   client?.clear();
+  window.sessionStorage.removeItem(PENDING_PROJECT_RECEIPTS_KEY);
   vi.restoreAllMocks();
   close.mockClear();
-  state.principal = "draft-owner";
   state.enabled = true;
-  state.featureFetching = false;
 });
-async function mount() {
-  client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  });
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await renderDraft();
-}
-async function renderDraft() {
+async function render() {
   await act(async () =>
     root.render(
       <QueryClientProvider client={client}>
@@ -81,186 +69,233 @@ async function renderDraft() {
     ),
   );
 }
-async function click(label: string) {
+async function mount() {
+  client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  await render();
+}
+async function click(text: string) {
   const button = [...document.querySelectorAll("button")].find(
-    (b) => b.textContent === label,
+    (b) => b.textContent === text,
   );
   expect(button).toBeTruthy();
   await act(async () => button!.click());
 }
-async function recheck() {
-  let resolve!: (value: object) => void, pending!: Promise<unknown>;
-  await act(async () => {
-    pending = client.fetchQuery({
-      queryKey: ["auth", "session"],
-      queryFn: () =>
-        new Promise<object>((done) => {
-          resolve = done;
-        }),
-    });
-  });
-  return async () => {
-    await act(async () => {
-      resolve({});
-      await pending;
-    });
-  };
-}
-it("edits an explicit project draft without effects, freezes the original unknown request and requires a current Native receipt before claiming success", async () => {
+it("sends one explicit Native create and reconciles a lost acknowledgement with GET only", async () => {
   const post = vi
     .spyOn(api, "post")
+    .mockRejectedValue(new Error("PRIVATE-RAW-ERROR"));
+  const get = vi
+    .spyOn(api, "get")
     .mockRejectedValueOnce(new Error("PRIVATE-RAW-ERROR"))
-    .mockResolvedValueOnce(project);
-  let resolve!: (value: unknown) => void;
-  const get = vi.spyOn(api, "get").mockImplementation(
-    () =>
-      new Promise((done) => {
-        resolve = done;
-      }),
-  );
+    .mockResolvedValue(project);
   await mount();
   expect(post).not.toHaveBeenCalled();
   expect(get).not.toHaveBeenCalled();
   expect(document.querySelector<HTMLInputElement>("input")!.value).toBe(
     project.name,
   );
-  expect(document.querySelector("img")).toBeNull();
   await click("Create project");
   await vi.waitFor(() =>
-    expect(document.querySelector('[role="alert"]')).toBeTruthy(),
+    expect(document.body.textContent).toContain(
+      "We have not confirmed this project",
+    ),
   );
+  expect(post).toHaveBeenCalledTimes(1);
   expect(document.body.textContent).not.toContain("PRIVATE-RAW-ERROR");
-  const first = post.mock.calls[0]!;
+  const [path, body] = post.mock.calls[0]!;
   expect(
-    new URL(first[0], "https://fixture.invalid").searchParams.get(
+    new URL(path, "https://fixture.invalid").searchParams.get(
       "expectedActorId",
     ),
   ).toBe("user:draft-owner");
-  expect(first[1]).toEqual({
+  expect(body).toEqual({
+    idempotencyKey: expect.stringMatching(/^[a-f0-9-]{36}$/),
     name: project.name,
     description: "",
     status: "planned",
-    idempotencyKey: expect.any(String),
   });
-  expect(document.querySelector<HTMLInputElement>("input")!.disabled).toBe(
-    true,
-  );
-  await click("Try again");
-  await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(1));
-  expect(post.mock.calls[1]).toEqual(first);
-  expect(document.body.textContent).not.toContain("Project saved");
-  await act(async () => resolve(project));
+  expect(document.querySelector("input")).toBeNull();
+  await click("Check project receipt");
   await vi.waitFor(() =>
     expect(document.body.textContent).toContain("Project saved"),
   );
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(get.mock.calls[1]![0]).toContain(
+    `/create-receipts/${(body as { idempotencyKey: string }).idempotencyKey}?`,
+  );
+  expect(get.mock.calls[1]![1]).toMatchObject({ cache: "no-store" });
   expect(document.querySelector("img")).toBeNull();
-  expect(document.querySelector("a")!.getAttribute("href")).toContain(
-    `/projects/${project.id}`,
-  );
-  expect(get.mock.calls[0]![1]).toEqual({
-    signal: expect.any(AbortSignal),
-    cache: "no-store",
-  });
+  expect(document.activeElement?.textContent).toBe("Project saved");
+  expect(
+    document.querySelector<HTMLAnchorElement>(
+      'a[href$="/projects/' + project.id + '"]',
+    ),
+  ).toBeTruthy();
 });
-it("fences a late acknowledgement across current-account revalidation and reconciles only the original Native request", async () => {
-  let resolve!: (value: unknown) => void;
-  const post = vi
-    .spyOn(api, "post")
-    .mockImplementationOnce(
-      () =>
-        new Promise((done) => {
-          resolve = done;
-        }),
-    )
-    .mockResolvedValueOnce(project);
-  vi.spyOn(api, "get").mockResolvedValue(project);
-  await mount();
-  await click("Create project");
-  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
-  const finish = await recheck();
-  await vi.waitFor(() =>
-    expect(document.querySelector("input,textarea")).toBeNull(),
-  );
-  await act(async () => resolve(project));
-  expect(document.body.textContent).not.toContain(project.name);
-  await finish();
-  await vi.waitFor(() =>
-    expect(document.querySelector('[role="alert"]')).toBeTruthy(),
-  );
-  expect(document.body.textContent).not.toContain("Project saved");
-  await click("Try again");
-  await vi.waitFor(() =>
-    expect(document.body.textContent).toContain("Project saved"),
-  );
-  expect(post.mock.calls[1]).toEqual(post.mock.calls[0]);
-});
-it("withdraws a saved project's name and link when a fresh current-owner read is denied without repeating creation", async () => {
-  const post = vi.spyOn(api, "post").mockResolvedValue(project);
+it("keeps a missing or erased receipt unconfirmed and never repeats its POST", async () => {
+  const post = vi.spyOn(api, "post").mockRejectedValue(new Error("lost"));
   const get = vi
     .spyOn(api, "get")
-    .mockResolvedValueOnce(project)
-    .mockRejectedValue(new Error("PRIVATE-DENIAL"));
+    .mockRejectedValue(new Error("receipt not found"));
+  await mount();
+  await click("Create project");
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain(
+      "We have not confirmed this project",
+    ),
+  );
+  await click("Check project receipt");
+  await click("Check project receipt");
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(get.mock.calls.length).toBeGreaterThanOrEqual(2);
+  expect(document.body.textContent).not.toContain("Project saved");
+  expect(
+    document.querySelector<HTMLAnchorElement>('a[href$="/projects"]'),
+  ).toBeTruthy();
+});
+it("hides a confirmed project during auth recheck and requires a new Native read", async () => {
+  vi.spyOn(api, "post").mockResolvedValue(project);
+  const get = vi.spyOn(api, "get").mockResolvedValue(project);
   await mount();
   await click("Create project");
   await vi.waitFor(() =>
     expect(document.body.textContent).toContain("Project saved"),
   );
-  const finish = await recheck();
-  await vi.waitFor(() => expect(document.querySelector("a")).toBeNull());
-  expect(document.body.textContent).not.toContain(project.name);
-  await finish();
-  await vi.waitFor(() =>
-    expect(document.querySelector('[role="alert"]')).toBeTruthy(),
-  );
-  expect(get).toHaveBeenCalledTimes(2);
-  expect(post).toHaveBeenCalledTimes(1);
-  expect(document.body.textContent).not.toMatch(/PRIVATE-|Project saved/);
-  expect(document.querySelector("a,input,textarea")).toBeNull();
-});
-
-it("withdraws an entered draft during feature revalidation and rollback, then retains it only in the same scoped dialog", async () => {
-  const post = vi.spyOn(api, "post");
-  await mount();
-  expect(document.querySelector("input")?.value).toBe(project.name);
-  state.featureFetching = true;
-  await renderDraft();
-  expect(document.querySelector("input")).toBeNull();
-  expect(document.body.textContent).not.toContain("PRIVATE-PROJECT");
-  expect(post).not.toHaveBeenCalled();
-  state.featureFetching = false;
-  state.enabled = false;
-  await renderDraft();
-  expect(document.querySelector("input")).toBeNull();
-  expect(document.querySelector('[role="alert"]')).toBeTruthy();
-  expect(post).not.toHaveBeenCalled();
-  state.enabled = true;
-  await renderDraft();
-  expect(document.querySelector("input")?.value).toBe(project.name);
-});
-
-it("refuses a write when the original session query starts before React can commit the pending state", async () => {
-  const post = vi.spyOn(api, "post");
-  await mount();
-  let release!: (value: null) => void;
-  let pending!: Promise<null>;
-  const form = document.querySelector("form")!;
+  let finish!: (value: object) => void, pending!: Promise<unknown>;
   await act(async () => {
     pending = client.fetchQuery({
       queryKey: ["auth", "session"],
       queryFn: () =>
-        new Promise<null>((resolve) => {
-          release = resolve;
+        new Promise<object>((done) => {
+          finish = done;
         }),
     });
-    form.dispatchEvent(
-      new Event("submit", { bubbles: true, cancelable: true }),
-    );
   });
-  expect(post).not.toHaveBeenCalled();
-  await vi.waitFor(() => expect(document.querySelector("input")).toBeNull());
+  await vi.waitFor(() =>
+    expect(document.body.textContent).not.toContain(project.name),
+  );
+  expect(
+    document.querySelector('a[href$="/projects/' + project.id + '"]'),
+  ).toBeNull();
+  get.mockRejectedValue(new Error("access revoked"));
   await act(async () => {
-    release(null);
+    finish({});
     await pending;
   });
+  await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain(
+      "We have not confirmed this project",
+    ),
+  );
+  expect(document.body.textContent).not.toContain(project.name);
+});
+it("blocks a stale same-turn write and preserves the draft across a flag rollback", async () => {
+  const post = vi.spyOn(api, "post");
+  await mount();
+  client.setQueryDefaults(["auth", "session"], {
+    queryFn: () => new Promise(() => {}),
+  });
+  let pending!: Promise<unknown>;
+  await act(async () => {
+    pending = client.fetchQuery({ queryKey: ["auth", "session"] });
+    document
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  expect(post).not.toHaveBeenCalled();
+  await act(async () => {
+    await client.cancelQueries({ queryKey: ["auth", "session"] });
+    await pending.catch(() => {});
+  });
+  state.enabled = false;
+  await render();
+  expect(document.querySelector("input")).toBeNull();
+  state.enabled = true;
+  await render();
+  expect(document.querySelector<HTMLInputElement>("input")!.value).toBe(
+    project.name,
+  );
+});
+
+it("restores only a per-tab Native receipt locator after remount and performs no second create", async () => {
+  const post = vi
+    .spyOn(api, "post")
+    .mockRejectedValue(new Error("lost acknowledgement"));
+  const get = vi
+    .spyOn(api, "get")
+    .mockRejectedValue(new Error("temporarily unavailable"));
+  await mount();
+  await click("Create project");
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain(
+      "We have not confirmed this project",
+    ),
+  );
+  const stored = window.sessionStorage.getItem(PENDING_PROJECT_RECEIPTS_KEY)!;
+  expect(stored).not.toContain(project.name);
+  expect(stored).not.toContain("description");
+  const nonce = (post.mock.calls[0]![1] as { idempotencyKey: string })
+    .idempotencyKey;
+  await act(async () => root.unmount());
+  container.remove();
+  client.clear();
+  get.mockResolvedValue(project);
+  await mount();
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Project saved"),
+  );
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(get.mock.calls.at(-1)![0]).toContain(`/create-receipts/${nonce}?`);
+  expect(window.sessionStorage.getItem(PENDING_PROJECT_RECEIPTS_KEY)).toBeNull();
+});
+it("refuses creation when recovery data is corrupt or storage cannot retain the nonce", async () => {
+  const post = vi.spyOn(api, "post");
+  window.sessionStorage.setItem(
+    PENDING_PROJECT_RECEIPTS_KEY,
+    "corrupt-private-state",
+  );
+  await mount();
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain(
+      "could not restore project recovery information",
+    ),
+  );
+  expect(document.querySelector("form")).toBeNull();
+  expect(post).not.toHaveBeenCalled();
+  await act(async () => root.unmount());
+  container.remove();
+  client.clear();
+  window.sessionStorage.removeItem(PENDING_PROJECT_RECEIPTS_KEY);
+  await mount();
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new Error("PRIVATE-STORAGE-CANARY");
+  });
+  await click("Create project");
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Your project has not been sent"),
+  );
+  expect(post).not.toHaveBeenCalled();
+  expect(document.body.textContent).not.toContain("PRIVATE-STORAGE-CANARY");
+});
+it("keeps another account's pending locator out of the draft", async () => {
+  retainPendingProjectReceipt(
+    state.company,
+    "another-owner",
+    "10000000-0000-4000-8000-000000000099",
+  );
+  const get = vi.spyOn(api, "get"),
+    post = vi.spyOn(api, "post");
+  await mount();
+  expect(document.querySelector<HTMLInputElement>("input")!.value).toBe(
+    project.name,
+  );
+  expect(get).not.toHaveBeenCalled();
   expect(post).not.toHaveBeenCalled();
 });

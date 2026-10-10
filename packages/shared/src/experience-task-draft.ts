@@ -19,3 +19,8 @@ export const experiencePendingTaskReceiptSchema = z.strictObject({
   idempotencyKey: z.uuid(),
 });
 export const experiencePendingTaskReceiptInventorySchema = z.array(experiencePendingTaskReceiptSchema).max(16);
+
+/** Project locators use the same bounded shape in a separate per-tab inventory.
+ * The original Project owner remains the only receipt authority. */
+export const experiencePendingProjectReceiptSchema = experiencePendingTaskReceiptSchema;
+export const experiencePendingProjectReceiptInventorySchema = experiencePendingTaskReceiptInventorySchema;

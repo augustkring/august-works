@@ -1018,9 +1018,10 @@ link on access loss. Legacy project-dialog callers keep their original form.
 Generic HTTP logging for the original project namespace becomes content-free,
 including rejected methods, invalid tenant paths and private query strings. The
 original Native project audit remains unchanged and purpose-separated. Drafts are
-kept in React memory; after reload the user must inspect original Projects before
-starting a new draft. This does not qualify general natural-language task/project
-creation, LLM interpretation, cross-reload reconciliation or live/human release.
+kept in React memory. Bounded per-tab recovery now retains only the original
+nonce/company/principal and reconciles through the creator-bound Native audit
+receipt and current read authorization (ADR-V9-052). This does not qualify
+general semantic authoring, LLM interpretation or live/human release.
 
 
 Feature admission and original auth/settings fetch state are rechecked at the
@@ -1157,3 +1158,62 @@ Forty-nine checks in five focused files plus token/coverage gates pass on the
 integrated source SHA-256
 `bca52fe0a321b4833456329076b92068b6fc464e1c87e863672d6ed8b3535171`.
 No hosted identity, manual assistive technology or release acceptance is claimed.
+
+
+### ADR-V9-052 — reload recovery uses a bounded per-tab locator, not a replay body
+
+Task recovery stores only version/company/principal/original UUID in tab session
+storage, before the first Native POST. Sixteen entries and 8KiB are the maximum;
+unknown entries are not overwritten or evicted to make room. No title, goal,
+result, credential, write payload, tracking event or Source of Truth is stored.
+The existing company account observation removes other principals' locators only
+on a settled successful identity change/logout. Failed or unresolved identity
+checks withhold views and preserve uncertainty. Corrupt inventories become a
+content-free refusal; missing storage blocks creation before any Native POST.
+
+Reload restores only the UUID and performs current original-owner GET. The Native
+route also checks original board creator and refuses agent-created/other-creator
+records even if the viewer can read them separately in Work. A current authorized
+receipt clears only its exact locator. Failure/erasure never renews keys, infers
+no effect, or repeats creation. The locator ends with the tab; cross-device and
+cross-browser unknown recovery still require original-owner work and are open.
+This is core functional recovery metadata, not a telemetry policy approval.
+
+
+### ADR-V9-052 — Project reload recovery reads the original creator-bound receipt
+
+2026-10-10. Before its single explicit original POST, the Project draft retains
+only the version/company/principal/original UUID in a separate bounded per-tab
+locator inventory. React draft text, project name, IDs/results and credentials
+are never persisted there. Unknown or corrupt inventory blocks a new write.
+Account changes remove other-principal locators through the original Company
+context; failed cleanup leaves a content-free refusal marker.
+
+The added read route uses the original `project.created` actor-bound audit key,
+then current Native Project authorization and company checks. It does not create
+a new receipt owner, write, renew a nonce or restore erased evidence. Reload and
+manual reconciliation issue GET only. A missing or erased original key remains
+unconfirmed; the UI offers the original Projects view. A current successful read
+clears the exact locator and presents only the current Native project name/link.
+
+The first focused qualification passed 46 checks in five files; eight migrated
+PostgreSQL cases passed on source SHA-256
+`27d5af42be66195cd948835bbe18ceb2054d6efb138866de6212ad5b92b478e2`.
+Those cases cover current names, creator/tenant isolation, audit erasure, membership
+revocation and rollout rollback without another project or execution. At that first checkpoint, the browser
+reload case and aggregate qualification remained pending; these are software checks,
+not manual accessibility, hosted login or representative-user release acceptance.
+
+The first browser reload run exposed an incorrectly unscoped Project locator
+cleanup during an unresolved cold-boot session. Both Task and Project cleanup
+now wait for a settled, successful account answer. Two added provider lifecycle
+checks cover pending/failed sessions, pruning only another principal and logout.
+The unchanged Project reload browser case then passes, including one POST, two
+GETs, current Native name, cleared locator, narrow focus/axe and zero work runs.
+Its separate source SHA-256 is
+`fd96eb9a91be83e3638302bbee1f1634f7402a8255c5f3ef59c2b0666a2b3715`.
+The integrated route sets no-store before refusals and rejects a malformed
+company before a source read. Integrated focused checks pass 48 cases in five
+files and token gates; 24 migrated PostgreSQL cases in three files pass,
+including all original Task deduplication cases and nine Project receipt cases.
+Current aggregate qualification remains pending.

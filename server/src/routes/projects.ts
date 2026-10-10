@@ -10,6 +10,8 @@ import { Router, type Request, type Response } from "express";
 import type { Db } from "@paperclipai/db";
 import {
   createProjectSchema,
+  experienceProjectReceiptSchema,
+  v9FeatureEnabled,
   createProjectWorkspaceSchema,
   findWorkspaceCommandDefinition,
   isUuidLike,
@@ -22,7 +24,7 @@ import type { WorkspaceRuntimeDesiredState, WorkspaceRuntimeServiceStateMap } fr
 import { trackProjectCreated } from "@paperclipai/shared/telemetry";
 import { validate } from "../middleware/validate.js";
 import { accessService, projectService, logActivity, workspaceOperationService } from "../services/index.js";
-import { conflict, forbidden, unprocessable } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { externalObjectService } from "../services/external-objects.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { assertBoard, assertCompanyAccess, getAccessibleResource, getActorInfo } from "./authz.js";
@@ -228,6 +230,32 @@ export function projectRoutes(db: Db) {
     if (!project) return;
     const summary = await externalObjectsSvc.getProjectSummary(project.id);
     res.json(summary);
+  });
+
+  router.get("/companies/:companyId/projects/create-receipts/:idempotencyKey", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const companyId = req.params.companyId as string;
+    if (!z.uuid().safeParse(companyId).success) throw badRequest("Invalid company ID");
+    assertCompanyAccess(req, companyId);
+    assertBoard(req);
+    if (!v9FeatureEnabled(await instanceSettings.getExperimental(), "ambient_commands_v9"))
+      throw notFound("Project receipt is not available");
+    const parsed = z.uuid().safeParse(req.params.idempotencyKey);
+    if (!parsed.success) throw badRequest("Invalid project receipt key");
+    const actor = getActorInfo(req);
+    const receiptKey = `project:${companyId}:${actor.actorId}:board:${parsed.data}`;
+    // Read the original creator-bound receipt. No new key, audit row, replay or
+    // workspace can be created while reconciling an unknown outcome.
+    const [prior] = await db.select({ entityId: activityLog.entityId }).from(activityLog).where(and(
+      eq(activityLog.companyId, companyId), eq(activityLog.action, "project.created"),
+      eq(activityLog.entityType, "project"), eq(activityLog.actorType, actor.actorType),
+      eq(activityLog.actorId, actor.actorId),
+      sql`${activityLog.details}->>'idempotencyKey' = ${receiptKey}`,
+    )).limit(1);
+    const project = prior ? await svc.getById(prior.entityId) : null;
+    if (!project || project.companyId !== companyId) throw notFound("Project receipt is not available");
+    if (!(await assertProjectReadAllowed(req, res, project))) return;
+    res.json(experienceProjectReceiptSchema.parse(project));
   });
 
   router.post("/companies/:companyId/projects", validate(createProjectSchema), async (req, res) => {

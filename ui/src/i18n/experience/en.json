@@ -893,10 +893,16 @@
     "saved": "Project saved",
     "open": "Open project",
     "close": "Close project draft",
-    "unconfirmed": "Saving could not be confirmed. Your draft is retained. Try again uses the same original request; check Projects before starting another draft.",
+    "unconfirmed": "We have not confirmed this project. Check its receipt or Projects before creating another one.",
     "unavailable": "The current project or account could not be verified. Check your access or try again.",
     "cancel": "Cancel",
-    "loading": "Preparing project draft…"
+    "loading": "Preparing project draft…",
+    "recoveryUnavailable": "We could not restore project recovery information. Check Projects before creating another project.",
+    "notSent": "We could not keep a recovery receipt. Your project has not been sent. Try again or use Projects.",
+    "checkReceipt": "Check project receipt",
+    "resumeTitle": "Find your project",
+    "resumeDescription": "Check the project from your earlier attempt.",
+    "checkProjects": "Check Projects"
   },
   "toolCard": {
     "loading": "Loading the current card…",

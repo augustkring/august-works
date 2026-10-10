@@ -893,10 +893,16 @@
     "saved": "Projekt gemt",
     "open": "Åbn projekt",
     "close": "Luk projektkladde",
-    "unconfirmed": "Gemningen kunne ikke bekræftes. Din kladde er bevaret. Prøv igen bruger den samme oprindelige forespørgsel; tjek Projekter, før du starter en ny kladde.",
+    "unconfirmed": "Vi har ikke bekræftet projektet. Tjek kvitteringen eller Projekter, før du opretter en ny.",
     "unavailable": "Det aktuelle projekt eller din konto kunne ikke verificeres. Tjek din adgang, eller prøv igen.",
     "cancel": "Annuller",
-    "loading": "Forbereder projektkladde…"
+    "loading": "Forbereder projektkladde…",
+    "recoveryUnavailable": "Vi kunne ikke gendanne projektets kvitteringsreference. Tjek Projekter, før du opretter en ny projekt.",
+    "notSent": "Vi kunne ikke gemme kvitteringsreferencen. Projektet er ikke sendt. Prøv igen, eller brug Projekter.",
+    "checkReceipt": "Tjek projektkvitteringen",
+    "resumeTitle": "Find din projekt",
+    "resumeDescription": "Tjek projektet fra dit tidligere forsøg.",
+    "checkProjects": "Se Projekter"
   },
   "toolCard": {
     "loading": "Henter det aktuelle kort…",
