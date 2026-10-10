@@ -19,7 +19,7 @@ export function ActivationFirstTask({ value, canStart, canStop, pending, onStart
         <p>{t("activation.firstTaskDispatchPending")}</p>
         <Button className="min-h-11" disabled={!canStart || pending} onClick={onContinue}>{t("activation.continueFirstTask")}</Button>
       </> : null}
-      {task.status === "running" || task.status === "paused" ? <Button variant="outline" className="min-h-11" disabled={!canStop || pending} onClick={() => onStop(task.planVersion)}>{t("activation.stopFirstTask")}</Button> : null}
+      {task.status === "running" || task.status === "paused" || task.status === "withdrawn" ? <Button variant="outline" className="min-h-11" disabled={!canStop || pending} onClick={() => onStop(task.planVersion)}>{t("activation.stopFirstTask")}</Button> : null}
       <Button variant="outline" className="min-h-11" disabled={pending} onClick={onRefresh}>{t("activation.checkFirstTask")}</Button>
       <p>{t("activation.firstTaskReviewRequired")}</p>
     </section>;

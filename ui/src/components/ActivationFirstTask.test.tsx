@@ -42,6 +42,18 @@ describe("Original first-task controls", () => {
     await act(async () => stop.click());expect(handlers.onStop).toHaveBeenCalledExactlyOnceWith(8);
     expect(container.textContent).not.toMatch(/\d+%/);
   });
+  it.each([true, false])("retains only authorized Stop for a withdrawn source (current authority: %s)", async (canStop) => {
+    const handlers = await mount(activationFirstTaskViewSchema.parse({ candidates: [], hasMore: false,
+      current: { installationId: candidate.installationId, installationHash: candidate.installationHash, planId: candidate.planId,
+        issueId: candidate.issueId, planVersion: 8, status: "withdrawn", dispatched: false } }), false, canStop);
+    const stop = [...container.querySelectorAll("button")].find(button => button.textContent === "Stop")!;
+    expect(stop.disabled).toBe(!canStop);
+    expect(container.textContent).not.toContain("Continue first task");
+    await act(async () => stop.click());
+    if (canStop) expect(handlers.onStop).toHaveBeenCalledExactlyOnceWith(8);
+    else expect(handlers.onStop).not.toHaveBeenCalled();
+    expect(handlers.onStart).not.toHaveBeenCalled(); expect(handlers.onContinue).not.toHaveBeenCalled();
+  });
   it("does not offer another execution after native completion and renders Danish recovery", async () => {
     await i18n.changeLanguage("da");
     const handlers = await mount(activationFirstTaskViewSchema.parse({ candidates: [], hasMore: false,

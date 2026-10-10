@@ -63,3 +63,9 @@ SHA-256. Shared/UI focused checks and original server/UI types pass in their
 scopes; historical fixture versions, stage and feature-dependency withdrawal
 were corrected without changing the underlying fences. Final combined checks
 and the remaining preparation/delivery implementation are still outstanding.
+
+A subsequent UI correction retains Stop when the original Source owner returns
+a withdrawn minimal control reference. The original current-session boundary
+still disables unauthorized Stop. No withdrawn private source is rendered and
+no Continue is offered. Focused authorization cases and the built-browser
+withdrawn-reference case require fresh qualification for this correction.

@@ -64,7 +64,9 @@ test("first task recovers through a current read, continues only explicitly and 
     const continued = page.getByRole("button", { name: "Continue first task", exact: true });
     await expect(continued).toBeEnabled();expect(commands).toHaveLength(1);
     await continued.click();await expect(continued).toHaveCount(0);expect(commands).toHaveLength(2);
-    enabled = false;await page.reload();
+    enabled = false;
+    value = activationViewSchema.parse({ ...value, firstTask: { ...value.firstTask!, current: { ...value.firstTask!.current!, status: "withdrawn" } } });
+    await page.reload();
     const stop = page.getByRole("button", { name: "Stop", exact: true });await expect(stop).toBeEnabled();
     await stop.click();await expect(page.getByRole("status").filter({ hasText: "Stop is recorded" })).toBeVisible();
     expect(commands).toHaveLength(3);

@@ -518,6 +518,7 @@ it("fences a stale Run button before transport when the original session changes
     planId: "10000000-0000-4000-8000-000000000005", issueId: "10000000-0000-4000-8000-000000000006",
     planVersion: 3, title: "Original prepared first task", maximumModelCostMinor: 0 as const, currency: "USD" as const };
   await mount({ ...view("review"), firstTask: { candidates: [candidate], hasMore: false, current: null } }, "/saas/activation/9");
+  await vi.waitFor(() => expect([...container.querySelectorAll("button")].some(b => b.textContent === "Run first task")).toBe(true));
   const run = [...container.querySelectorAll("button")].find(b => b.textContent === "Run first task")!;
   const write = vi.spyOn(activationApi, "command");
   await act(async () => { client.setQueryData(queryKeys.auth.session, v9SessionFixture("other-principal"));run.click(); });
