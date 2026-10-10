@@ -25,6 +25,7 @@ import {
   agents,
   projects,
   decisionQueues,
+  customerFeedback,
 } from "@paperclipai/db";
 import { experienceRoutes } from "../routes/experience.js";
 import { errorHandler } from "../middleware/error-handler.js";
@@ -265,6 +266,23 @@ const support = await getEmbeddedPostgresTestSupport();
           .from(decisionQueues)
           .where(eq(decisionQueues.companyId, companyId)),
       ).toEqual([]);
+    });
+    it("offers Share feedback only while the original feedback rollout is enabled, without creating feedback or company work", async () => {
+      await instanceSettingsService(db).updateExperimental({
+        experience_projection_v9: true, ambient_commands_v9: true, customer_feedback_v9: false,
+      });
+      const url = `/api/companies/${companyId}/experience/commands?q=share%20feedback`;
+      const before = await request(app(member())).get(url).expect(200);
+      expect(before.body.commands.map((command: { id: string }) => command.id)).not.toContain("share_feedback");
+      await instanceSettingsService(db).updateExperimental({ customer_feedback_v9: true });
+      const enabled = await request(app(member())).get(url).expect(200);
+      expect(enabled.body.commands).toContainEqual({ id: "share_feedback", href: null, group: "create", canonicalAuthorizationRequired: true });
+      expect(await db.select().from(issues).where(eq(issues.companyId, companyId))).toEqual([]);
+      expect(await db.select().from(projects).where(eq(projects.companyId, companyId))).toEqual([]);
+      expect(await db.select().from(customerFeedback).where(eq(customerFeedback.companyId, companyId))).toEqual([]);
+      await instanceSettingsService(db).updateExperimental({ customer_feedback_v9: false });
+      const after = await request(app(member())).get(url).expect(200);
+      expect(after.body.commands.map((command: { id: string }) => command.id)).not.toContain("share_feedback");
     });
     it("admits only deterministic current-scope commands and native-visible resource matches", async () => {
       const url = `/api/companies/${companyId}/experience/commands`;

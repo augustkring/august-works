@@ -88,6 +88,11 @@ export async function experienceCommands(
         { id: "create_task", group: "create" },
         { id: "create_project", group: "create" },
         {
+          id: "share_feedback",
+          group: "create",
+          enabled: v9FeatureEnabled(flags, "customer_feedback_v9"),
+        },
+        {
           id: "connect_app",
           group: "create",
           action: "tools:manage_connections",

@@ -20,6 +20,7 @@ import {
 } from "@paperclipai/db";
 import { customerFeedbackRoutes } from "../routes/customer-feedback.js";
 import { feedbackService } from "../services/feedback.js";
+import { companyService } from "../services/companies.js";
 import { customerFeedbackService } from "../services/customer-feedback.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { eraseAccountAccess } from "../services/saas/account-deletion.js";
@@ -141,6 +142,25 @@ const support = await getEmbeddedPostgresTestSupport();
       const [retained] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, response.body.id));
       expect(retained!.context).toEqual(row!.context);
       expect((await request(app(otherUser)).get(url + `/${response.body.id}`)).status).toBe(404);
+    });
+    it("original local company removal erases its feedback root and private descendants after rollout rollback while preserving another company", async () => {
+      const result = await request(app()).post(`/api/companies/${companyId}/customer-feedback`).send(input()).expect(201);
+      const foreignFeedbackId = randomUUID();
+      await db.insert(customerFeedback).values({ id: foreignFeedbackId, companyId: foreignId, category: "OTHER", body: "Foreign private feedback", context: {} });
+      await request(app(operatorId)).post(`/api/internal/customer-feedback/${companyId}/${result.body.id}/triage`).send({ idempotencyKey: randomUUID(), expectedVersion: 0, internalState: "NEEDS_INFO", customerMessage: "Private reply" }).expect(200);
+      expect(await db.select().from(saasNotifications).where(eq(saasNotifications.companyId, companyId))).toHaveLength(1);
+      await request(app()).post(`/api/companies/${companyId}/customer-feedback/${result.body.id}/follow-up`).send({ idempotencyKey: randomUUID(), expectedVersion: 1, body: "Private follow-up" }).expect(200);
+      expect(await db.select().from(customerFeedbackAccess).where(eq(customerFeedbackAccess.companyId, companyId))).toHaveLength(1);
+      expect(await db.select().from(customerFeedbackEvents).where(eq(customerFeedbackEvents.companyId, companyId))).toHaveLength(2);
+      await instanceSettingsService(db).updateExperimental({ customer_feedback_v9: false });
+      expect((await companyService(db).remove(companyId))?.id).toBe(companyId);
+      expect(await db.select().from(companies).where(eq(companies.id, companyId))).toEqual([]);
+      expect(await db.select().from(customerFeedback).where(eq(customerFeedback.companyId, companyId))).toEqual([]);
+      expect(await db.select().from(customerFeedbackAccess).where(eq(customerFeedbackAccess.companyId, companyId))).toEqual([]);
+      expect(await db.select().from(customerFeedbackEvents).where(eq(customerFeedbackEvents.companyId, companyId))).toEqual([]);
+      expect(await db.select().from(saasNotifications).where(eq(saasNotifications.companyId, companyId))).toEqual([]);
+      expect(await db.select().from(customerFeedback).where(eq(customerFeedback.id, foreignFeedbackId))).toHaveLength(1);
+      expect(await db.select().from(companies).where(eq(companies.id, foreignId))).toHaveLength(1);
     });
     it("retains the legacy immutable request hash without inserting defaults for new optional context", async () => {
       const payload = input();

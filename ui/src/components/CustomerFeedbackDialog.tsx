@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../lib/queryKeys";
 import { useTranslation } from "react-i18next";
 import {
   FEEDBACK_CONTACTS,
@@ -12,7 +13,7 @@ import {
   isRejectedFeedbackRequest,
 } from "../api/customer-feedback";
 import { useCompany } from "../context/CompanyContext";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import {
   feedbackClientEnvironment,
@@ -30,12 +31,25 @@ import {
 function FeedbackForm({
   companyId,
   principal,
+  accountReady,
+  accountFailed,
+  authorityEpoch,
 }: {
   companyId: string;
   principal: string;
+  accountReady: boolean;
+  accountFailed: boolean;
+  authorityEpoch: number;
 }) {
   const { t, i18n } = useTranslation("experience"),
     location = useLocation();
+  const client = useQueryClient();
+  const current = useRef({ ready: accountReady, authorityEpoch, epoch: 0 });
+  if (current.current.ready !== accountReady || current.current.authorityEpoch !== authorityEpoch)
+    current.current = { ready: accountReady, authorityEpoch, epoch: current.current.epoch + 1 };
+  const canUseContext = () => current.current.ready &&
+    client.getQueryState(queryKeys.auth.session)?.fetchStatus !== "fetching" &&
+    client.getQueryState(queryKeys.instance.experimentalSettings)?.fetchStatus !== "fetching";
   const [open, setOpen] = useState(false),
     [category, setCategory] =
       useState<CreateCustomerFeedback["category"]>("BUG");
@@ -57,8 +71,12 @@ function FeedbackForm({
   const send = useMutation({
     mutationKey: ["customer-feedback", companyId, principal, "create"],
     gcTime: 0,
-    mutationFn: (input: CreateCustomerFeedback) =>
-      customerFeedbackApi.create(companyId, principal, input),
+    mutationFn: async (input: CreateCustomerFeedback) => {
+      if (!canUseContext()) throw new Error("Feedback context is unavailable");
+      const epoch = current.current.epoch;
+      const receipt = await customerFeedbackApi.create(companyId, principal, input);
+      return { receipt, epoch };
+    },
     retry: false,
     onError: (error) => {
       if (isRejectedFeedbackRequest(error)) {
@@ -67,7 +85,23 @@ function FeedbackForm({
       }
     },
   });
+  const original = useQuery({
+    queryKey: ["customer-feedback-receipt", companyId, principal, send.data?.receipt.id, current.current.epoch],
+    enabled: open && accountReady && !!send.data && send.data.epoch !== current.current.epoch,
+    retry: false, gcTime: 0, staleTime: 0,
+    queryFn: async ({ signal }) => {
+      if (!canUseContext() || !send.data) throw new Error("Feedback receipt is unavailable");
+      const receipt = await customerFeedbackApi.get(companyId, principal, send.data.receipt.id, signal);
+      signal.throwIfAborted();
+      return receipt;
+    },
+  });
+  const confirmed = accountReady && canUseContext() && send.data
+    ? send.data.epoch === current.current.epoch ? send.data.receipt
+      : original.isSuccess && !original.isFetching ? original.data : null
+    : null;
   function show(event?: Event) {
+    if (!canUseContext()) return;
     returnFocus.current =
       event instanceof CustomEvent &&
       event.detail?.returnFocus === "global_feedback"
@@ -95,13 +129,14 @@ function FeedbackForm({
     setOpen(true);
   }
   useEffect(() => {
-    if (open && send.isError) errorFocus.current?.focus();
-    else if (open && send.isSuccess) receiptFocus.current?.focus();
-  }, [open, send.isError, send.isSuccess]);
+    if (open && !accountReady) errorFocus.current?.focus();
+    else if (open && accountReady && (send.isError || original.isError)) errorFocus.current?.focus();
+    else if (open && confirmed) receiptFocus.current?.focus();
+  }, [open, accountReady, send.isError, original.isError, confirmed?.id]);
   useEffect(() => {
     document.addEventListener("paperclip:open-feedback", show);
     return () => document.removeEventListener("paperclip:open-feedback", show);
-  }, [location.pathname, i18n.resolvedLanguage]);
+  }, [location.pathname, i18n.resolvedLanguage, accountReady, authorityEpoch]);
   function edit(change: () => void) {
     if (attempted.current) return;
     change();
@@ -117,6 +152,7 @@ function FeedbackForm({
         type="button"
         variant="ghost"
         className="min-h-11"
+        disabled={!accountReady}
         onClick={() => show()}
       >
         {t("feedback.action")}
@@ -128,7 +164,7 @@ function FeedbackForm({
           className="max-h-dvh overflow-y-auto"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            if (send.data) receiptFocus.current?.focus();
+            if (confirmed) receiptFocus.current?.focus();
             else categoryInput.current?.focus();
           }}
           onCloseAutoFocus={(event) => {
@@ -161,7 +197,9 @@ function FeedbackForm({
               {t("feedback.privacy")}
             </a>
           </div>
-          {send.data ? (
+          {!accountReady ? (
+            <p ref={errorFocus} tabIndex={-1} role={accountFailed ? "alert" : "status"}>{t(accountFailed ? "feedback.historyFailed" : "loading")}</p>
+          ) : confirmed ? (
             <div
               ref={receiptFocus}
               tabIndex={-1}
@@ -169,10 +207,10 @@ function FeedbackForm({
               className="space-y-3 outline-none"
             >
               <p>{t("feedback.received")}</p>
-              <p>{send.data.feedbackId}</p>
+              <p>{confirmed.feedbackId}</p>
               <Link
                 className="inline-flex min-h-11 items-center underline"
-                to={`/my-feedback?feedbackId=${send.data.id}`}
+                to={`/my-feedback?feedbackId=${confirmed.id}`}
                 onClick={() => setOpen(false)}
               >
                 {t("feedback.history")}
@@ -195,12 +233,22 @@ function FeedbackForm({
                 {t("feedback.close")}
               </Button>
             </div>
+          ) : send.data ? (
+            <div className="space-y-3">
+              <p ref={errorFocus} tabIndex={-1} role={original.isError ? "alert" : "status"}>
+                {t(original.isError ? "feedback.receiptUnconfirmed" : "loading")}
+              </p>
+              {original.isError && <Button className="min-h-11" onClick={() => {
+                if (canUseContext()) void original.refetch();
+              }}>{t("feedback.checkReceipt")}</Button>}
+              <Link className="inline-flex min-h-11 items-center underline" to="/my-feedback" onClick={() => setOpen(false)}>{t("feedback.history")}</Link>
+            </div>
           ) : (
             <form
               className="space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (context) {
+                if (context && canUseContext()) {
                   attempted.current ??= {
                     idempotencyKey: requestKey,
                     category,
@@ -372,15 +420,18 @@ function FeedbackForm({
   );
 }
 export function CustomerFeedbackDialog() {
-  const { enabled } = useV9FeatureEnabled("customer_feedback_v9"),
+  const { enabled, query } = useV9FeatureEnabled("customer_feedback_v9"),
     { selectedCompanyId } = useCompany(),
-    identity = useAccountIdentity();
+    identity = useV9CurrentAccount();
   const principal = identity.localImplicit ? "local-board" : identity.userId;
-  return enabled && identity.settled && principal && selectedCompanyId ? (
+  return enabled && principal && selectedCompanyId ? (
     <FeedbackForm
       key={`${selectedCompanyId}:${principal}`}
       companyId={selectedCompanyId}
       principal={principal}
+      accountReady={identity.settled && query.isSuccess && !query.isFetching}
+      accountFailed={identity.failed || query.isError}
+      authorityEpoch={identity.authorityEpoch}
     />
   ) : null;
 }

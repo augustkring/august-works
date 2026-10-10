@@ -98,6 +98,12 @@ function Commands({
   function execute(command: ExperienceCommands["commands"][number]) {
     if (!data) return;
     close();
+    if (command.id === "share_feedback") {
+      document.dispatchEvent(new CustomEvent("paperclip:open-feedback", {
+        detail: { returnFocus: "global_feedback" },
+      }));
+      return;
+    }
     if (command.id === "create_task") {
       openNewIssue({
         experienceScope: { companyId, principal },

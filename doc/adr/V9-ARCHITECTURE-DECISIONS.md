@@ -1127,3 +1127,33 @@ choice. It contains no identity, content, credentials or tracking IDs. The picke
 is visible only with the progressive shell; existing Native controls and queries
 retain their owners. Software checks do not imply human translation review,
 screen-reader usability, the full 70-screen state matrix or launch acceptance.
+
+
+### ADR-V9-053 — Feedback follows current account epochs and original receipts
+
+2026-10-10. The existing dialog hides private fields and references while the
+current session/rollout is unresolved, preserves the same mounted draft and
+unmounts it on a different settled account. Exact QueryClient fetching checks
+fence same-turn writes and disclosures. A late POST acknowledgement cannot prove
+current visibility: the dialog reads the original ID with current Native access,
+no-store, abort signal and no retained query cache. Read denial leaves a generic
+unconfirmed state with an explicit GET-only recovery control.
+
+The bounded EN/DA Share feedback command opens this existing blank dialog. It
+requires the original current command catalog and feedback rollout and carries
+only a focus-return token; no model, draft text, submission or work is created.
+
+Actual browser qualification passed the Native one-POST/two-read late-ACK path
+on the separate source. Its unchecked cleanup exposed a real local company
+delete failure. The original company owner now deletes the feedback root, its
+FK-owned access/events and company notifications in the same transaction before
+removing the company. Sixteen migrated PostgreSQL feedback checks pass, including
+rollout rollback and preservation of foreign-company feedback. The browser now
+asserts its cleanup response. Forty integrated Native checks across two suites
+and both browser account cases pass on source SHA-256
+`32c04efda2bd61059128950d1fcb54f3e45791f978e0730f1bd800ce90393b11`;
+the complete aggregate remains pending.
+Forty-nine checks in five focused files plus token/coverage gates pass on the
+integrated source SHA-256
+`bca52fe0a321b4833456329076b92068b6fc464e1c87e863672d6ed8b3535171`.
+No hosted identity, manual assistive technology or release acceptance is claimed.

@@ -136,7 +136,9 @@
     "noMessages": "No messages or internal notes yet.",
     "submissionUnknown": "Feedback could not be confirmed. The original text is locked; retry sends the same request. Check My feedback before starting another report.",
     "replyUnknown": "Your response has not been confirmed. The original text is locked; retry checks the same response without creating a second one.",
-    "triageUnknown": "Triage has not been confirmed. Inputs are locked; retry sends the original update."
+    "triageUnknown": "Triage has not been confirmed. Inputs are locked; retry sends the original update.",
+    "receiptUnconfirmed": "Your feedback receipt could not be confirmed with your current access. Check My Feedback or check the receipt again.",
+    "checkReceipt": "Check feedback receipt"
   },
   "profileView": "View",
   "profileFailed": "Your view could not be changed. Refresh to check your access.",
@@ -447,7 +449,8 @@
       "connect_app": "Connect an App",
       "run_workflow": "Open Workflows to run",
       "ask_august": "Ask August",
-      "create_project": "Prepare a Project"
+      "create_project": "Prepare a Project",
+      "share_feedback": "Share feedback"
     }
   },
   "needsYouLoadFailed": "Needs You could not be loaded. Your current company access must be checked.",

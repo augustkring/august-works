@@ -420,3 +420,22 @@ it("opens an account/company-bound editable project draft only after an explicit
   expect(state.openNewIssue).not.toHaveBeenCalled();
   expect(post).not.toHaveBeenCalled();
 });
+
+it("opens the existing Feedback form only through an available deterministic command, without a write or inferred content", async () => {
+  const get = vi.spyOn(api, "get").mockImplementation(async () => ({ ...model(), commands: [{ id: "share_feedback", href: null, group: "create", canonicalAuthorizationRequired: true }] }));
+  const post = vi.spyOn(api, "post");
+  const opened: unknown[] = [];
+  const capture = (event: Event) => opened.push((event as CustomEvent).detail);
+  document.addEventListener("paperclip:open-feedback", capture);
+  try {
+    await mount();await enter("share feedback");
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Share feedback"));
+    expect(opened).toEqual([]);
+    await click("Share feedback");
+    expect(opened).toEqual([{ returnFocus: "global_feedback" }]);
+    expect(post).not.toHaveBeenCalled();
+    expect(state.openNewIssue).not.toHaveBeenCalled();
+    expect(state.openNewProject).not.toHaveBeenCalled();
+    expect(get).toHaveBeenCalled();
+  } finally { document.removeEventListener("paperclip:open-feedback", capture); }
+});
