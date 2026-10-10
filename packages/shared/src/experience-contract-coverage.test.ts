@@ -61,6 +61,12 @@ describe("Resolved V9 screen contracts", () => {
     expect(parsed.journeyId).toBe("support");
     expect(manifest.screens).toHaveLength(70);
   });
+  it("validates personal Native account recovery without substituting it for launch acceptance", () => {
+    const parsed = experienceScreenContractSchema.parse(JSON.parse(readFileSync(resolve(root, "doc/experience/v9/contracts/account-security.json"), "utf8")));
+    expect(parsed.screenId).toBe("NATIVE-ACCOUNT-SECURITY");
+    expect(parsed.journeyId).toBe("account");
+    expect(manifest.screens).toHaveLength(70);
+  });
   it("never substitutes pending implementation or evidence with a source paragraph", () => {
     for (const screen of manifest.screens)
       if (screen.implementationStatus === "implemented")

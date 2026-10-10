@@ -1,5 +1,6 @@
 import { retainProjectReceiptsForPrincipal } from "../lib/pending-project-receipts";
 import { retainTaskReceiptsForPrincipal } from "../lib/pending-task-receipts";
+import { retainAccountDeletionForPrincipal } from "../lib/pending-account-deletion";
 import {
   createContext,
   useCallback,
@@ -140,6 +141,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     if (isSessionSettled && !sessionFailed) {
       retainTaskReceiptsForPrincipal(localImplicit ? "local-board" : sessionUserId);
       retainProjectReceiptsForPrincipal(localImplicit ? "local-board" : sessionUserId);
+      retainAccountDeletionForPrincipal(localImplicit ? null : sessionUserId);
     }
   }, [isSessionSettled, sessionFailed, localImplicit, sessionUserId]);
   const observedUserIdRef = useRef<string | null | undefined>(undefined);

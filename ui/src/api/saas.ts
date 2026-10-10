@@ -297,9 +297,10 @@ export const saasApi = {
       ),
       {},
     ),
-  notificationPreferences: (userId: string) =>
+  notificationPreferences: (userId: string, signal?: AbortSignal) =>
     api.get<SaasNotificationPreference[]>(
       scoped("/saas/account/notification-preferences", userId),
+      { signal, cache: "no-store" },
     ),
   updateNotificationPreference: (
     companyId: string,
@@ -481,13 +482,13 @@ export const saasApi = {
       idempotencyKey: string;
     },
   ) => api.delete<SaasDeletion>(scoped(companyPath(companyId), userId), input),
-  deletionReceipts: (userId: string) =>
+  deletionReceipts: (userId: string, signal?: AbortSignal) =>
     api.get<
       Pick<
         SaasDeletion,
         "id" | "companyId" | "status" | "stage" | "createdAt" | "completedAt"
       >[]
-    >(scoped("/saas/account/deletion-receipts", userId)),
+    >(scoped("/saas/account/deletion-receipts", userId), { signal, cache: "no-store" }),
   deleteAccount: (
     userId: string,
     input: {
@@ -584,8 +585,8 @@ export const saasApi = {
       ),
       {},
     ),
-  sessions: (userId: string) =>
-    api.get<SaasSession[]>(scoped("/saas/account/sessions", userId)),
+  sessions: (userId: string, signal?: AbortSignal) =>
+    api.get<SaasSession[]>(scoped("/saas/account/sessions", userId), { signal, cache: "no-store" }),
   revokeSession: (id: string, userId: string) =>
     api.delete<void>(
       scoped("/saas/account/sessions/" + encodeURIComponent(id), userId),

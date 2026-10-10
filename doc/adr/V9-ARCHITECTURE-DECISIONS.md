@@ -1339,3 +1339,42 @@ group-read access; only that runtime permission was corrected. No original
 assertion, loader, budget or test prerequisite changed. Strict current server
 types/integration remain pending. Injected transport fixtures do not qualify live
 Mailgun delivery, Slack/Teams routing or global human release acceptance.
+
+
+### ADR-V9-059 — Personal account recovery keeps original Native ownership
+
+2026-10-10. Personal sessions, preferences and deletion receipts require the
+successful current original session/capability state and fresh no-store reads.
+Same-person mounted forms hide private DOM during checking and retain their
+input; an account change unmounts it. Completed cache changes, invalidation,
+source fetches and account/source/company epochs fence mutations and late
+acknowledgements. Original Native endpoints, expected-user bindings, verified
+password, sole-owner and billing requirements remain unchanged.
+
+Account deletion uses a personal scope rather than company scope. Same-turn
+submissions coalesce. An unknown request retains its original body in mounted
+memory and original UUID across company changes. The actual organization
+switcher leaves the route, so a bounded per-tab Core locator also retains only
+schema version, principal and original UUID before any transport. Reopening
+restores no password/consent and requires fresh explicit confirmation. Refusing
+a later retry cannot erase an earlier unknown outcome. Malformed/unavailable
+recovery refuses transport; no locator becomes a receipt or an access grant.
+Only settled successful original session decisions prune account locators.
+There is no new Native deletion/receipt owner, scheduler, bearer recovery link,
+credential persistence or automatic irreversible replay.
+
+All 63 checks pass in seven focused files on matching source SHA-256
+`feb0299b6e6568fe22463d311170e7e165064b267aa1600efa2e7568a7d67a23`.
+This is controlled UI/API/storage software evidence; it creates no actual account
+deletion and does not qualify hosted identity or account deletion acceptance.
+Current strict UI types, token/coverage gates, built browser and integrated
+workspace qualification remain pending. The supporting contract does not change
+the 70 launch surfaces, sourceComplete=false or human release evidence.
+
+
+The complete supporting-contract wave also passes 115 checks in eight files,
+full UI token gates and normal V9 coverage, on matching source SHA-256
+`cd8d48fbb462459f2eb4483fe5f84ca7bdbda81d68333442517767e0d782821a`. The account page now uses a labelled section under the
+original Layout main landmark. Strict UI types and both actual browser cases
+remain queued behind uncontested integrated qualification. No launch or human
+acceptance status is upgraded.

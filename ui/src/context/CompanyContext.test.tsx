@@ -226,28 +226,38 @@ describe("CompanyProvider", () => {
       idempotencyKey: `10000000-0000-4000-8000-00000000000${index + 2}`,
     }));
     for (const key of keys) sessionStorage.setItem(key, JSON.stringify(receipts));
+    const accountKey = "aw.v9.pending-account-deletion";
+    const accountReceipts = receipts.map(({ companyId: _, ...item }) => item);
+    sessionStorage.setItem(accountKey, JSON.stringify(accountReceipts));
     let answer!: (value: ReturnType<typeof sessionFor>) => void;
     mockAuthApi.getSession.mockImplementation(() => new Promise(resolve => { answer = resolve; }));
     mockCompaniesApi.list.mockResolvedValue([makeCompany("company-1")]);
     await act(async () => root.render(<QueryClientProvider client={queryClient}><CompanyProvider><Probe onSelectedCompanyId={() => {}} /></CompanyProvider></QueryClientProvider>));
     await flushReact();
     for (const key of keys) expect(JSON.parse(sessionStorage.getItem(key)!)).toEqual(receipts);
+    expect(JSON.parse(sessionStorage.getItem(accountKey)!)).toEqual(accountReceipts);
     await act(async () => answer(sessionFor("user-1")));
     await flushReact();
     for (const key of keys) expect(JSON.parse(sessionStorage.getItem(key)!)).toEqual([receipts[0]]);
+    expect(JSON.parse(sessionStorage.getItem(accountKey)!)).toEqual([accountReceipts[0]]);
     await act(async () => queryClient.setQueryData(queryKeys.auth.session, null));
     await flushReact();
     for (const key of keys) expect(sessionStorage.getItem(key)).toBeNull();
+    expect(sessionStorage.getItem(accountKey)).toBeNull();
   });
 
   it("keeps both recovery inventories when the first session read fails", async () => {
     const keys = ["aw.v9.pending-task-receipts", "aw.v9.pending-project-receipts"];
     const receipt = { schemaVersion: 1, companyId: "10000000-0000-4000-8000-000000000001", principal: "user-1", idempotencyKey: "10000000-0000-4000-8000-000000000002" };
     for (const key of keys) sessionStorage.setItem(key, JSON.stringify([receipt]));
+    const accountKey = "aw.v9.pending-account-deletion";
+    const { companyId: _, ...accountReceipt } = receipt;
+    sessionStorage.setItem(accountKey, JSON.stringify([accountReceipt]));
     mockAuthApi.getSession.mockRejectedValue(new Error("Session unavailable"));
     await act(async () => root.render(<QueryClientProvider client={queryClient}><CompanyProvider><Probe onSelectedCompanyId={() => {}} /></CompanyProvider></QueryClientProvider>));
     await flushReact();await flushReact();
     for (const key of keys) expect(JSON.parse(sessionStorage.getItem(key)!)).toEqual([receipt]);
+    expect(JSON.parse(sessionStorage.getItem(accountKey)!)).toEqual([accountReceipt]);
     expect(mockCompaniesApi.list).not.toHaveBeenCalled();
   });
 
