@@ -111,9 +111,26 @@ test("an explicit task draft reconciles a lost Native acknowledgement with reads
         data: { title: "Current Native research task" },
       }),
     );
+    // Reload discards all React fields. Only the original nonce/scope survives
+    // in this tab; choosing another draft resumes its receipt without a POST.
+    const retained = await page.evaluate(() =>
+      sessionStorage.getItem("aw.v9.pending-task-receipts"),
+    );
+    expect(retained).toContain(key!);
+    expect(retained).not.toContain("Private browser draft");
+    expect(retained).not.toContain("Review Customer Research");
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Home", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Control+k");
+    await page.getByRole("combobox").fill("create task A separate new draft");
     await page
-      .getByRole("button", { name: "Check task receipt", exact: true })
+      .getByRole("option", { name: "Prepare a Task", exact: true })
       .click();
+    await expect(
+      page.getByRole("heading", { name: "Find your task", exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Task confirmed", exact: true }),
     ).toBeVisible();
@@ -125,6 +142,11 @@ test("an explicit task draft reconciles a lost Native acknowledgement with reads
     );
     expect(attempts).toHaveLength(1);
     expect(reads).toBe(2);
+    expect(
+      await page.evaluate(() =>
+        sessionStorage.getItem("aw.v9.pending-task-receipts"),
+      ),
+    ).toBeNull();
     expect(await json(await request.get(`${base}/issues`))).toHaveLength(1);
     expect(await json(await request.get(`${base}/agents`))).toEqual([]);
     const runs = await json(await request.get(`${base}/heartbeat-runs`));

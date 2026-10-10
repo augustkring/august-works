@@ -1,3 +1,7 @@
+import {
+  PENDING_TASK_RECEIPTS_KEY,
+  retainPendingTaskReceipt,
+} from "../lib/pending-task-receipts";
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -44,6 +48,7 @@ afterEach(async () => {
   if (root) await act(async () => root.unmount());
   container?.remove();
   client?.clear();
+  window.sessionStorage.removeItem(PENDING_TASK_RECEIPTS_KEY);
   vi.restoreAllMocks();
   close.mockClear();
   state.enabled = true;
@@ -176,7 +181,9 @@ it("hides a confirmed task during auth recheck and requires a new Native read", 
         }),
     });
   });
-  await vi.waitFor(() => expect(document.body.textContent).not.toContain(task.title));
+  await vi.waitFor(() =>
+    expect(document.body.textContent).not.toContain(task.title),
+  );
   expect(
     document.querySelector('a[href$="/issues/' + task.id + '"]'),
   ).toBeNull();
@@ -219,4 +226,80 @@ it("blocks a stale same-turn write and preserves the draft across a flag rollbac
   expect(document.querySelector<HTMLInputElement>("input")!.value).toBe(
     task.title,
   );
+});
+
+it("restores only a per-tab Native receipt locator after remount and performs no second create", async () => {
+  const post = vi
+    .spyOn(api, "post")
+    .mockRejectedValue(new Error("lost acknowledgement"));
+  const get = vi
+    .spyOn(api, "get")
+    .mockRejectedValue(new Error("temporarily unavailable"));
+  await mount();
+  await click("Create task");
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain(
+      "We have not confirmed this task",
+    ),
+  );
+  const stored = window.sessionStorage.getItem(PENDING_TASK_RECEIPTS_KEY)!;
+  expect(stored).not.toContain(task.title);
+  expect(stored).not.toContain("description");
+  const nonce = (post.mock.calls[0]![1] as { idempotencyKey: string })
+    .idempotencyKey;
+  await act(async () => root.unmount());
+  container.remove();
+  client.clear();
+  get.mockResolvedValue(task);
+  await mount();
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Task confirmed"),
+  );
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(get.mock.calls.at(-1)![0]).toContain(`/create-receipts/${nonce}?`);
+  expect(window.sessionStorage.getItem(PENDING_TASK_RECEIPTS_KEY)).toBeNull();
+});
+it("refuses creation when recovery data is corrupt or storage cannot retain the nonce", async () => {
+  const post = vi.spyOn(api, "post");
+  window.sessionStorage.setItem(
+    PENDING_TASK_RECEIPTS_KEY,
+    "corrupt-private-state",
+  );
+  await mount();
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain(
+      "could not restore task recovery information",
+    ),
+  );
+  expect(document.querySelector("form")).toBeNull();
+  expect(post).not.toHaveBeenCalled();
+  await act(async () => root.unmount());
+  container.remove();
+  client.clear();
+  window.sessionStorage.removeItem(PENDING_TASK_RECEIPTS_KEY);
+  await mount();
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new Error("PRIVATE-STORAGE-CANARY");
+  });
+  await click("Create task");
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Your task has not been sent"),
+  );
+  expect(post).not.toHaveBeenCalled();
+  expect(document.body.textContent).not.toContain("PRIVATE-STORAGE-CANARY");
+});
+it("keeps another account's pending locator out of the draft", async () => {
+  retainPendingTaskReceipt(
+    state.company,
+    "another-owner",
+    "10000000-0000-4000-8000-000000000099",
+  );
+  const get = vi.spyOn(api, "get"),
+    post = vi.spyOn(api, "post");
+  await mount();
+  expect(document.querySelector<HTMLInputElement>("input")!.value).toBe(
+    task.title,
+  );
+  expect(get).not.toHaveBeenCalled();
+  expect(post).not.toHaveBeenCalled();
 });

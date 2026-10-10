@@ -914,6 +914,10 @@
     "unavailable": "This task is not available in your current account.",
     "unconfirmed": "We have not confirmed this task. Check its receipt or Work before creating another one.",
     "checkReceipt": "Check task receipt",
-    "checkWork": "Check Work"
+    "checkWork": "Check Work",
+    "recoveryUnavailable": "We could not restore task recovery information. Check Work before creating another task.",
+    "notSent": "We could not keep a recovery receipt. Your task has not been sent. Try again or use Work.",
+    "resumeTitle": "Find your task",
+    "resumeDescription": "Check the task from your earlier attempt."
   }
 }

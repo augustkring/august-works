@@ -1089,3 +1089,23 @@ account renderer. Full schema registration retains company refinement and reject
 unknown UI fields; SDK annotations remain hints. The dated MCP display plan records
 actual SDK and assistant-ui checks. General provider/channel delivery, MCP Apps
 hosting and full interactive domain forms remain open.
+
+
+### ADR-V9-052 — reload recovery uses a bounded per-tab locator, not a replay body
+
+Task recovery stores only version/company/principal/original UUID in tab session
+storage, before the first Native POST. Sixteen entries and 8KiB are the maximum;
+unknown entries are not overwritten or evicted to make room. No title, goal,
+result, credential, write payload, tracking event or Source of Truth is stored.
+The existing company account observation removes other principals' locators only
+on a settled successful identity change/logout. Failed or unresolved identity
+checks withhold views and preserve uncertainty. Corrupt inventories become a
+content-free refusal; missing storage blocks creation before any Native POST.
+
+Reload restores only the UUID and performs current original-owner GET. The Native
+route also checks original board creator and refuses agent-created/other-creator
+records even if the viewer can read them separately in Work. A current authorized
+receipt clears only its exact locator. Failure/erasure never renews keys, infers
+no effect, or repeats creation. The locator ends with the tab; cross-device and
+cross-browser unknown recovery still require original-owner work and are open.
+This is core functional recovery metadata, not a telemetry policy approval.

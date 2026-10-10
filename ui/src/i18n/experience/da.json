@@ -914,6 +914,10 @@
     "unavailable": "Opgaven er ikke tilgængelig på din aktuelle konto.",
     "unconfirmed": "Vi har ikke bekræftet opgaven. Tjek kvitteringen eller Arbejde, før du opretter en ny.",
     "checkReceipt": "Tjek opgavekvitteringen",
-    "checkWork": "Tjek Arbejde"
+    "checkWork": "Tjek Arbejde",
+    "recoveryUnavailable": "Vi kunne ikke gendanne opgavens kvitteringsreference. Tjek Arbejde, før du opretter en ny opgave.",
+    "notSent": "Vi kunne ikke gemme kvitteringsreferencen. Opgaven er ikke sendt. Prøv igen, eller brug Arbejde.",
+    "resumeTitle": "Find din opgave",
+    "resumeDescription": "Tjek opgaven fra dit tidligere forsøg."
   }
 }

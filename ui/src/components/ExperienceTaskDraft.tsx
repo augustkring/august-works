@@ -1,3 +1,8 @@
+import {
+  readPendingTaskReceipt,
+  retainPendingTaskReceipt,
+  clearPendingTaskReceipt,
+} from "../lib/pending-task-receipts";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -51,12 +56,19 @@ export default function ExperienceTaskDraft({
     : identity.userId;
   const matches =
     resolvedPrincipal === principal && selectedCompanyId === companyId;
-  const ready =
+  const authorityReady =
     matches &&
     identity.settled &&
     flags.enabled &&
     flags.query.isSuccess &&
     !flags.query.isFetching;
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const [resumed, setResumed] = useState(false);
+  const [recoveryUnavailable, setRecoveryUnavailable] = useState(false);
+  const [storageWriteFailed, setStorageWriteFailed] = useState(false);
+  const receiptKey = useRef<string | null>(null);
+  const initialized = useRef(false);
+  const ready = authorityReady && recoveryReady && !recoveryUnavailable;
   const context = useRef({
     ready,
     accountEpoch: identity.authorityEpoch,
@@ -71,7 +83,12 @@ export default function ExperienceTaskDraft({
       accountEpoch: identity.authorityEpoch,
       epoch: context.current.epoch + 1,
     };
-  const blocked = identity.failed || (identity.settled && (!matches || flags.query.isError || (flags.query.isSuccess && !flags.enabled)));
+  const blocked =
+    identity.failed ||
+    (identity.settled &&
+      (!matches ||
+        flags.query.isError ||
+        (flags.query.isSuccess && !flags.enabled)));
   const client = useQueryClient();
   const canUseContext = () =>
     context.current.ready &&
@@ -82,6 +99,20 @@ export default function ExperienceTaskDraft({
     [description, setDescription] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const attempt = useRef<Attempt | null>(null);
+  useEffect(() => {
+    if (!authorityReady || initialized.current) return;
+    initialized.current = true;
+    try {
+      receiptKey.current = readPendingTaskReceipt(companyId, principal);
+      if (receiptKey.current) {
+        setSubmitted(true);
+        setResumed(true);
+      }
+      setRecoveryReady(true);
+    } catch {
+      setRecoveryUnavailable(true);
+    }
+  }, [authorityReady, companyId, principal]);
   const error = useRef<HTMLParagraphElement>(null),
     heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -90,9 +121,9 @@ export default function ExperienceTaskDraft({
   const save = useMutation({
     retry: false,
     mutationFn: async () => {
-      if (!canUseContext() || attempt.current)
+      if (!canUseContext() || attempt.current || receiptKey.current)
         throw new Error("Task create is not available");
-      attempt.current = {
+      const body: Attempt = {
         idempotencyKey: crypto.randomUUID(),
         title: title.trim(),
         description,
@@ -102,6 +133,17 @@ export default function ExperienceTaskDraft({
         assigneeUserId: null,
         allowDuplicate: true,
       };
+      // Persist only the nonce/scope before the first POST. If this fails no
+      // original create is sent, and an unknown attempt is never overwritten.
+      try {
+        retainPendingTaskReceipt(companyId, principal, body.idempotencyKey);
+      } catch {
+        setStorageWriteFailed(true);
+        throw new Error("Task recovery is unavailable");
+      }
+      attempt.current = body;
+      receiptKey.current = body.idempotencyKey;
+      setStorageWriteFailed(false);
       setSubmitted(true);
       const native = createAccountClient(
         principal === "local-board" ? "local-board" : `user:${principal}`,
@@ -123,7 +165,7 @@ export default function ExperienceTaskDraft({
       "ambient-task-receipt",
       companyId,
       principal,
-      attempt.current?.idempotencyKey,
+      receiptKey.current,
       context.current.epoch,
     ],
     enabled: ready && submitted && !save.isPending,
@@ -131,14 +173,14 @@ export default function ExperienceTaskDraft({
     staleTime: 0,
     retry: false,
     queryFn: async ({ signal }) => {
-      if (!canUseContext() || !attempt.current)
+      if (!canUseContext() || !receiptKey.current)
         throw new Error("Task receipt is not available");
       const native = createAccountClient(
         principal === "local-board" ? "local-board" : `user:${principal}`,
       );
       const result = receiptSchema.parse(
         await native.get(
-          `/companies/${companyId}/issues/create-receipts/${attempt.current.idempotencyKey}?awExperienceDraft=task`,
+          `/companies/${companyId}/issues/create-receipts/${receiptKey.current}?awExperienceDraft=task`,
           { signal, cache: "no-store" },
         ),
       );
@@ -150,6 +192,15 @@ export default function ExperienceTaskDraft({
   });
   const current =
     ready && original.isSuccess && !original.isFetching ? original.data : null;
+  useEffect(() => {
+    if (current && receiptKey.current) {
+      try {
+        clearPendingTaskReceipt(companyId, principal, receiptKey.current);
+      } catch {
+        /* Leave the locator intact; never repeat a create to clear it. */
+      }
+    }
+  }, [current?.id, companyId, principal]);
   useEffect(() => {
     if (ready && original.isError) error.current?.focus();
   }, [ready, original.isError]);
@@ -168,12 +219,33 @@ export default function ExperienceTaskDraft({
         className="max-h-dvh overflow-y-auto"
         closeButtonLabel={t("taskDraft.close")}
       >
-        <DialogTitle>{t("taskDraft.title")}</DialogTitle>
-        <DialogDescription>{t("taskDraft.description")}</DialogDescription>
+        <DialogTitle>
+          {t(resumed ? "taskDraft.resumeTitle" : "taskDraft.title")}
+        </DialogTitle>
+        <DialogDescription>
+          {t(resumed ? "taskDraft.resumeDescription" : "taskDraft.description")}
+        </DialogDescription>
         {!ready ? (
-          <p role={blocked ? "alert" : "status"}>
-            {t(blocked ? "taskDraft.unavailable" : "loading")}
-          </p>
+          <div className="space-y-3">
+            <p role={blocked || recoveryUnavailable ? "alert" : "status"}>
+              {t(
+                recoveryUnavailable
+                  ? "taskDraft.recoveryUnavailable"
+                  : blocked
+                    ? "taskDraft.unavailable"
+                    : "loading",
+              )}
+            </p>
+            {recoveryUnavailable && authorityReady && (
+              <Link
+                className="inline-flex min-h-11 items-center underline"
+                to="/work"
+                onClick={onClose}
+              >
+                {t("taskDraft.checkWork")}
+              </Link>
+            )}
+          </div>
         ) : current ? (
           <div className="space-y-3">
             <h2 ref={heading} tabIndex={-1} className="text-lg font-semibold">
@@ -252,6 +324,7 @@ export default function ExperienceTaskDraft({
               />
             </label>
             <p>{t("taskDraft.noInference")}</p>
+            {storageWriteFailed && <p role="alert">{t("taskDraft.notSent")}</p>}
             <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
               <Button
                 type="button"

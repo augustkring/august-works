@@ -8879,6 +8879,11 @@ export function issueRoutes(
     const issue = await getAccessibleResource(req, res, getIssueById(req, issueId), "Task receipt is not available");
     if (!issue) return;
     if (issue.companyId !== companyId) throw notFound("Task receipt is not available");
+    // This locator belongs to the original board creation, not any task that the
+    // viewer can otherwise read in Work. Key possession cannot retarget an actor.
+    const receiptActor = getActorInfo(req);
+    if (receiptActor.actorType !== "user" || issue.createdByUserId !== receiptActor.actorId || issue.createdByAgentId !== null)
+      throw notFound("Task receipt is not available");
     if (!(await assertIssueReadAllowed(req, res, issue))) return;
     res.set("Cache-Control", "no-store");
     res.json(experienceTaskReceiptSchema.parse(issue));

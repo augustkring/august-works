@@ -22,7 +22,6 @@ import { actorMiddleware } from "../middleware/auth.js";
 import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
 
-
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported
   ? describe
@@ -162,6 +161,27 @@ describeEmbeddedPostgres("V9 Native task receipt read", () => {
     expect(await db.select().from(issues)).toHaveLength(1);
     expect(await db.select().from(issueCreateIdempotencyKeys)).toEqual([]);
   });
+  it("does not let a company-visible task locator retarget the original creator", async () => {
+    const companyId = await seedCompany(),
+      key = randomUUID(),
+      app = createApp();
+    const created = await request(app)
+      .post(`/api/companies/${companyId}/issues`)
+      .send({ title: "Creator-bound private task", idempotencyKey: key })
+      .expect(201);
+    await db
+      .update(issues)
+      .set({ createdByUserId: "another-private-owner" })
+      .where(eq(issues.id, created.body.id));
+    const denied = await request(app)
+      .get(`/api/companies/${companyId}/issues/create-receipts/${key}`)
+      .expect(404);
+    expect(JSON.stringify(denied.body)).not.toContain(
+      "Creator-bound private task",
+    );
+    expect(await db.select().from(issues)).toHaveLength(1);
+  });
+
   it("fails closed on feature rollback and malformed keys", async () => {
     const companyId = await seedCompany(),
       key = randomUUID(),

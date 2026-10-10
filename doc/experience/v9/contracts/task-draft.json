@@ -77,8 +77,8 @@
     ],
     "canonicalWriteOperation": "Original POST /api/companies/:companyId/issues; no new writer, execution path or schema/store",
     "authorityEffect": "Commands and keys grant no authority. The original owner authorizes creation. Backlog and null assignees describe requested fields; downstream configured automation remains Native-owned.",
-    "asyncWork": "One explicit Native POST. Current-key lookup and Issue read guards reconcile acknowledgement loss without another POST.",
-    "receipt": "Minimal current ID/company/title. Missing, expired, erased or unauthorized keys remain unconfirmed; no creation is inferred from absence."
+    "asyncWork": "Persist only a strict per-tab company/principal/UUID locator before one explicit POST. Storage failure blocks the write. Restore can only GET the original Native receipt; missing/erased/unavailable outcomes never cause another create.",
+    "receipt": "Minimal current ID/company/title after original Issue read and exact original board-creator checks. Keys grant no authority. A denied or unavailable receipt remains unconfirmed."
   },
   "states": {
     "loading": "Conceal prior private fields and receipts during current session or original-source checks.",
@@ -93,9 +93,9 @@
   },
   "navigation": {
     "back": "Preserve unsent inputs across a same-account flag/session recheck; a submitted attempt permits receipt reads only.",
-    "cancelOrSaveExit": "Cancel closes the mounted draft. A submitted original Native task may persist even when transport fails. No private browser persistence is introduced.",
+    "cancelOrSaveExit": "Cancel before submission closes an unsent form. After submission, closing the form leaves a minimal per-tab locator for the already-possible Native effect. Only a current authorized receipt clears that locator; no write body or raw task text is persisted.",
     "deepLink": "Command palette → Create Task",
-    "resume": "The original UUID survives in this mounted scoped form only. Cross-reload recovery remains unimplemented. Check Work before creating another task."
+    "resume": "Within the same tab, recover the original per-account/company UUID after reload and read its original Native creator-bound receipt only. Closing the tab or clearing session data removes this locator. Cross-device/browser recovery remains unimplemented."
   },
   "accessibility": {
     "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
@@ -118,7 +118,8 @@
       "Only the current account/company-scoped draft and current original Native task title/reference"
     ],
     "dataCollected": [
-      "Explicit title/description, backlog/medium/null-assignee defaults, allowDuplicate=true and original UUID"
+      "Explicit title/description, backlog/medium/null-assignee defaults, allowDuplicate=true and original UUID",
+      "Per-tab opaque company/principal/idempotency UUID recovery locator; maximum 16 entries/8KiB, no task text or write body, erased on settled account switch/logout or tab end."
     ],
     "sensitiveFields": [
       "Raw intent, company facts, feedback and results remain customer data"

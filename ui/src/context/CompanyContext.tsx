@@ -1,3 +1,4 @@
+import { retainTaskReceiptsForPrincipal } from "../lib/pending-task-receipts";
 import {
   createContext,
   useCallback,
@@ -133,7 +134,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   // resolveBootstrapCompanySelection re-validates it against the incoming list,
   // so an account signing back in keeps its company while an unrelated account
   // cannot inherit it.
-  const { userId: sessionUserId, settled: isSessionSettled } = useAccountIdentity();
+  const { userId: sessionUserId, settled: isSessionSettled, failed: sessionFailed, localImplicit } = useAccountIdentity();
+  useEffect(() => {
+    if (isSessionSettled && !sessionFailed)
+      retainTaskReceiptsForPrincipal(localImplicit ? "local-board" : sessionUserId);
+  }, [isSessionSettled, sessionFailed, localImplicit, sessionUserId]);
   const observedUserIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
