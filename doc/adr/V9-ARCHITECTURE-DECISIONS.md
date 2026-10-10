@@ -741,3 +741,14 @@ reload use retained native history with current private admission, never a brows
 receipt or new publication request. Publication proves its original revision fact,
 not current active status or qualified material/business work. Test purpose remains
 Test after publication. The former published revision is retained historically.
+
+## V9-035 — Maintenance history reads original native receipts
+
+A bounded, private installation-specific customer view reads existing Core Steward
+M2 configuration and loop-breaker activity. Native company/agent read admission,
+actual installation and historical version/content-hash bindings remain necessary;
+current authority and rollout repeat before returning. The original recorded
+configuration required activation; a recorded budget exhaustion required human
+review. Neither receipt establishes current activation, resolved escalation or
+business verification. Current installation status is displayed separately.
+No history table, new maintenance engine, grant, notification or repair is added.

@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import { AgentPackages } from "./AgentPackages";
+vi.mock("../components/MaintenanceHistoryLink", () => ({ MaintenanceHistoryLink: () => null }));
 const f = vi.hoisted(() => ({
   userId: "owner-a",
   companyId: "company-a",

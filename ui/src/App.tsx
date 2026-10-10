@@ -1,3 +1,4 @@
+import { MaintenanceHistoryEntry } from "./pages/MaintenanceHistory";
 import { AgentMonitorEntry } from "./pages/AgentMonitor";
 import { SecurityEvents } from "./pages/SecurityEvents";
 import { Enterprise } from "./pages/Enterprise";
@@ -431,6 +432,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       />
       <Route path="memory/intelligence" element={<V7FeatureGate feature="memory_observations_v7"><DerivedMemory /></V7FeatureGate>} />
       <Route path="orchestration" element={<V7FeatureGate feature="orchestration_v7"><Orchestration /></V7FeatureGate>} />
+      <Route path="agents/packages/installations/:installationId/maintenance" element={<MaintenanceHistoryEntry />} />
       <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><AgentPackages /></V7FeatureGate>} />
       <Route path="ai-governance" element={<V7FeatureGate feature="ai_use_cases_v7"><AIGovernance /></V7FeatureGate>} />
       <Route path="work-signals" element={<V7FeatureGate feature="work_signals_v7"><WorkSignals /></V7FeatureGate>} />

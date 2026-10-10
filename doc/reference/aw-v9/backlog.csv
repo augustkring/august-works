@@ -54,11 +54,11 @@ V9-052,2259,MCP Apps Tool Gateway authorization integration,not_started
 V9-053,2261,MCP Apps security/accessibility acceptance,not_started
 V9-054,2263,maintenance action classification + desired-state/concurrency model,in_progress
 V9-055,2265,maintenance policy evaluator + fencing/version guards + blast-radius/kill/loop budgets,in_progress
-V9-056,2267,Core Steward/readiness maintenance projection,not_started
+V9-056,2267,Core Steward/readiness maintenance projection,in_progress
 V9-057,2269,connector recovery/re-auth projection,not_started
 V9-058,2271,package/skill/playbook revalidation projection,not_started
 V9-059,2273,workflow/runtime recovery projection,not_started
-V9-060,2275,maintenance receipt UI/history,not_started
+V9-060,2275,maintenance receipt UI/history,in_progress
 V9-061,2277,maintenance escalation → Needs You,not_started
 V9-062,2279,maintenance cost/retry budgets,not_started
 V9-063,2281,support diagnostic bundle,not_started

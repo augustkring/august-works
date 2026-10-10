@@ -1,3 +1,8 @@
+import express from "express";
+import request from "supertest";
+import { maintenanceHistoryRoutes } from "../routes/maintenance-history.js";
+import { errorHandler } from "../middleware/error-handler.js";
+import { readMaintenanceHistory } from "../services/experience/maintenance-history.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
 import {aiGovernanceService} from "../services/ai-governance/governance-service.js";
 import {memoryJobService} from "../services/memory/memory-jobs.js";
@@ -426,6 +431,17 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(current).toMatchObject({ installedVersionId: next.id, status: "configuring", activationHash: null, version: 3 });
       const receipts = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.low_risk_update_configured")));
       expect(receipts).toHaveLength(1); expect(receipts[0]!.details).toMatchObject({ maintenanceClass: "M2", policyVersion: "aw-v9-package-maintenance-1", postcondition: "configured_activation_required", activationRequired: true });
+      const history = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      expect(history).toMatchObject({ companyId: f.home, installationId: installed.id, installationVersion: 3,
+        installationStatus: "configuring", hasMore: false, entries: [{ receiptId: receipts[0]!.id, maintenanceClass: "M2", outcome: "configured_activation_required" }] });
+      expect(JSON.stringify(history)).not.toContain("policyOwnerUserId");
+      // Additional retained native rows exercise only bounded history projection.
+      await db.insert(activityLog).values(Array.from({ length: 11 }, (_, index) => ({
+        companyId: f.home, actorType: "system", actorId: "core-stewards", entityType: "agent_package_installation", entityId: installed.id,
+        action: "agent_package.low_risk_update_configured", details: receipts[0]!.details, createdAt: new Date(Date.now() + index),
+      })));
+      const bounded = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      expect(bounded.entries).toHaveLength(10); expect(bounded.hasMore).toBe(true);
       await expect(run()).rejects.toMatchObject({ cause: { code: "23514", message: "package_run_activation_required" } });
     });
     it("V9 maintenance breaks repeated configured-change recurrence without activating or granting work", async () => {
@@ -446,6 +462,33 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(await db.select().from(principalPermissionGrants)).toHaveLength(grants.length);
       const blocked = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_loop_blocked")));
       expect(blocked).toHaveLength(1); expect(blocked[0]!.details).toMatchObject({ reason: "configured_change_budget", humanReviewRequired: true });
+      const history = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      expect(history.installationStatus).toBe("active");
+      expect(history.entries.filter(entry => entry.outcome === "human_review_required")).toHaveLength(1);
+      expect(history.entries.filter(entry => entry.outcome === "configured_activation_required")).toHaveLength(3);
+
+    });
+    it("V9 maintenance history requires current native tenant and agent read authority and closes on rollback", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).entries).toEqual([]);
+      const api = express(); api.use(express.json()); api.use((req, _res, next) => { req.actor = f.actor; next(); });
+      api.use("/api", maintenanceHistoryRoutes(db)); api.use(errorHandler);
+      const url = `/api/companies/${f.home}/agent-package-installations/${installed.id}/experience/maintenance`;
+      const response = await request(api).get(url + `?expectedUserId=${f.userId}`).expect(200);
+      expect(response.headers["cache-control"]).toBe("private, no-store"); expect(response.body.entries).toEqual([]);
+      const changed = await request(api).get(url + "?expectedUserId=another-account").expect(409);
+      expect(changed.headers["cache-control"]).toBe("private, no-store");
+      await request(api).get(url + `?expectedUserId=${f.userId}&details=true`).expect(400);
+      await request(api).get(url).expect(400);
+
+      await expect(readMaintenanceHistory(db, f.actor, f.guest, installed.id)).rejects.toMatchObject({ status: 404 });
+      await expect(readMaintenanceHistory(db, f.actor, f.home, randomUUID())).rejects.toMatchObject({ status: 404 });
+      await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: false });
+      await expect(readMaintenanceHistory(db, f.actor, f.home, installed.id)).rejects.toMatchObject({ status: 404 });
+      await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: true });
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await expect(readMaintenanceHistory(db, { ...f.actor, isInstanceAdmin: true }, f.home, installed.id)).rejects.toMatchObject({ status: 403 });
     });
     it("V9 maintenance cannot bypass the native Core Steward kill path with a retained review", async () => {
       await enableV9Maintenance();

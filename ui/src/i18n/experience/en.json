@@ -704,5 +704,27 @@
     "review_required": "This draft requires Advanced review and qualified material testing.",
     "no_draft": "There is no current draft to publish.",
     "not_active": "Resume the workflow before reviewing a new publication."
-  }
+  },
+  "maintenanceHistoryTitle": "Maintenance history",
+  "maintenanceHistoryOpen": "View maintenance history",
+  "maintenanceHistoryBoundary": "These are historical configuration receipts. They do not confirm current activation or verified business results.",
+  "maintenanceHistoryUnavailable": "Maintenance history could not be checked. Reload to check your current access.",
+  "maintenanceHistoryEmpty": "No recorded V9 package maintenance for this installation.",
+  "maintenanceHistoryConfigured": "Configuration updated; activation was required",
+  "maintenanceHistoryReview": "Automatic change limit reached; human review was required",
+  "maintenanceHistoryBounded": "Only the ten most recent V9 package maintenance receipts are shown.",
+  "maintenanceHistoryCurrent": "Current installation state",
+  "maintenanceHistoryBack": "Return to agent packages",
+  "maintenanceHistoryObserved": "Checked at",
+  "maintenanceInstallationStatus": {
+    "configuring": "Configuration requires review",
+    "readiness_blocked": "Readiness blocked",
+    "ready": "Ready for activation review",
+    "active": "Active",
+    "needs_update": "Update required",
+    "degraded": "Needs attention",
+    "suspended": "Suspended",
+    "uninstalled": "Uninstalled"
+  },
+  "maintenanceHistoryVersion": "Installation version {{version}}"
 }

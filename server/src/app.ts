@@ -1,3 +1,4 @@
+import { maintenanceHistoryRoutes } from "./routes/maintenance-history.js";
 import { agentMonitorRoutes } from "./routes/agent-monitor.js";
 import { enterpriseRoutes } from "./routes/enterprise.js";
 import { agentPackageRoutes } from "./routes/agent-packages.js";
@@ -910,6 +911,7 @@ export async function createApp(
   api.use(experienceRoutes(db));
   api.use(agentAuthoringRoutes(db));
   api.use(agentMonitorRoutes(db));
+  api.use(maintenanceHistoryRoutes(db));
   api.use(customerFeedbackRoutes(db,{operatorUserIds:opts.saasPlatform?.config.operatorUserIds}));
   api.use(attentionRoutes(db));
   api.use(decisionTrainingRoutes(db));

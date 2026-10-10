@@ -114,3 +114,13 @@ publish owner plus atomic original receipt under native privacy/authority/workfl
 locks. Current private historical source and authority required for replay/reload;
 corrupt/foreign/changed original receipts refuse. No material test/approval bypass,
 new grant, browser persistence or production/business verification claim.
+
+Native maintenance history: installation-specific private no-store read with
+current native company and agent authority, stale admin elevation suppressed,
+existing company privacy serialization, actual installation/history share locks,
+five-second source budget and repeated rollout/authority admission. Only original
+Core Steward V9 M2 receipts with actual historical version/content-hash bindings
+are exposed as fixed categories. Raw audit details, actor identities, release
+prose, components and provider configuration are omitted. Account-bound query
+epochs hide old data during checking and refuse late responses. Reads perform no
+repair, activation, reconciliation, grant or notification.

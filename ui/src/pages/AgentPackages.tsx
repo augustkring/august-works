@@ -1,3 +1,4 @@
+import { MaintenanceHistoryLink } from "../components/MaintenanceHistoryLink";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -486,6 +487,7 @@ export function AgentPackages() {
         </label>
         {installations.data?.map((row) => (
           <section className="saas-section" key={row.id}>
+            <MaintenanceHistoryLink installationId={row.id} />
             <h3>
               {catalog.data?.find((p) => p.id === row.packageId)?.name ??
                 "Installed package"}

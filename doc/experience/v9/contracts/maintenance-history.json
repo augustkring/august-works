@@ -1,0 +1,118 @@
+{
+  "screenId": "MAINTENANCE-HISTORY",
+  "journeyId": "maintenance",
+  "routeOrSurface": "/agents/packages/installations/:installationId/maintenance",
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "customerOutcome": "Read historical native bounded M2 package configuration and loop-breaker receipts separately from current activation state.",
+  "entryConditions": [
+    "Current company and authenticated human account or explicit local board.",
+    "Current native company and agent read authority, agent_packages_v7 and effective maintenance_autopilot_v9 dependencies enabled."
+  ],
+  "exitConditions": [
+    "Return to the existing authorized native package installation owner.",
+    "Loss of current scope, authority, source or rollout hides the whole private projection."
+  ],
+  "content": {
+    "h1": "Maintenance history",
+    "supportingCopy": "Historical configuration receipts do not establish current activation or business verification.",
+    "customerTerms": [
+      "Maintenance history",
+      "Configuration updated",
+      "Human review",
+      "Current installation"
+    ],
+    "displayedState": [
+      "Current native installation status/version and observation time",
+      "At most ten original native V9 M2 receipts, with an explicit has-more boundary",
+      "Configured activation-required and exhausted-limit human-review-required are historical facts; neither is current readiness"
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Return to agent packages",
+      "operation": "Navigate to the existing native installation review owner; this read creates no repair, activation, grant or decision."
+    },
+    "secondary": ["Retry the safe current read"],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Current company and resource agent read authorization, privacy serialization and feature dependencies",
+      "Native installation, original Core Steward activity and actual historical package versions/content hashes"
+    ],
+    "canonicalWriteOperation": "None",
+    "authorityEffect": "Current native company_scope:read and agent:read are required; stale instance-admin claims cannot admit this data.",
+    "asyncWork": "Five-second source/SQL budget; native installation and history share locks under existing company privacy serialization; current access and rollout repeat before response.",
+    "receipt": "Only existing native recorded M2 facts. No alternate history table or inferred repair success."
+  },
+  "states": {
+    "loading": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "empty": "No recorded V9 package maintenance for this installation; other maintenance domains are not covered.",
+    "partial": "Only bounded unchanged-content M2 configuration/history is implemented; other domain repairs and failed/unknown attempt contracts remain open.",
+    "stale": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "validation_error": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "system_error": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "permission_denied": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "recovering": "Re-read native authority and retained original receipts; this surface performs no automatic retry or reconciliation.",
+    "success": "The admitted historical fact is displayed separately from current installation status and human activation."
+  },
+  "navigation": {
+    "back": "Existing agent package catalog and installation review",
+    "cancelOrSaveExit": "No draft or mutation on this surface.",
+    "deepLink": "/agents/packages/installations/:installationId/maintenance",
+    "resume": "Re-read current account/company/installation and actual native grants; no cached receipt grants authority."
+  },
+  "accessibility": {
+    "initialFocus": "Maintenance history H1 on first successful load only, preserving another actual native dialog.",
+    "focusAfterError": "Safe error region unless another native dialog owns focus.",
+    "focusAfterSuccess": "Preserve current user focus on background refresh.",
+    "keyboardModel": "Standard links/buttons and native tab order; no custom keyboard trap.",
+    "statusAnnouncement": "Polite loading status, safe alert for unavailable current state.",
+    "targetSize": "Token min-h-11 links/buttons.",
+    "zoomReflow": "Stacked current state and receipt rows at narrow width; no horizontal table.",
+    "reducedMotion": "No animation.",
+    "screenReaderNotes": "Named sections, text status and semantic time elements."
+  },
+  "responsive": {
+    "wide": "Stacked current installation state and historical maintenance receipts.",
+    "narrow": "Identical information with wrapping links.",
+    "mobile": "Token touch targets and no columns requiring lateral scrolling."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current installation status/version and observation time",
+      "Native receipt IDs/timestamps, fixed M2 class and fixed historical outcome categories"
+    ],
+    "dataCollected": [],
+    "sensitiveFields": [
+      "Policy-owner user identity, raw audit details, component pins, prompts, private errors, release prose, provider configuration and credentials are excluded"
+    ],
+    "loggingConstraints": "Private no-store responses and normalized private HTTP namespace, including rejected methods and failures. No raw account query, IDs, error prose or response payload."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "No names, IDs, prompts, configuration, private run/result/error data or account identifiers."
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Prove real native configured and budget-exhausted receipts, ten-row bound and historical/current distinction",
+      "Prove current tenant/agent authority, missing sources, account mismatch, rollout closure and late private query suppression",
+      "Verify exact built artifact in browser; native flags/read data cannot qualify general M0–M4 maintenance or material outcomes"
+    ],
+    "accessibility": [
+      "Initial focus and background refresh preserve customer/dialog focus.",
+      "Keyboard links, named state/history sections and loading/error announcements are implemented; human assistive-technology acceptance pending."
+    ],
+    "securityPrivacy": [
+      "No config, secret, prompt, error or output leaves the read model.",
+      "Current source and authority are repeated before private no-store response."
+    ],
+    "usability": [
+      "Historical configuration and exhausted-limit facts remain distinct from current activation and business verification.",
+      "Representative human acceptance and hosted/runtime qualification remain pending."
+    ]
+  }
+}

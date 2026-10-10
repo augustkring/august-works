@@ -19,6 +19,19 @@ describe("Resolved V9 screen contracts", () => {
       expect(parsed.actions.primary.operation).not.toContain("TODO");
     });
   }
+  it("validates the supporting native maintenance history contract without substituting it for the 70 launch surfaces", () => {
+    const parsed = experienceScreenContractSchema.parse(
+      JSON.parse(
+        readFileSync(
+          resolve(root, "doc/experience/v9/contracts/maintenance-history.json"),
+          "utf8",
+        ),
+      ),
+    );
+    expect(parsed.screenId).toBe("MAINTENANCE-HISTORY");
+    expect(parsed.journeyId).toBe("maintenance");
+    expect(manifest.screens).toHaveLength(70);
+  });
   it("never substitutes pending implementation or evidence with a source paragraph", () => {
     for (const screen of manifest.screens)
       if (screen.implementationStatus === "implemented")

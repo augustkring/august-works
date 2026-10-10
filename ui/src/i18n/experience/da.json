@@ -704,5 +704,27 @@
     "review_required": "Denne draft kræver avanceret gennemgang og kvalificeret test af væsentlige handlinger.",
     "no_draft": "Der er ingen aktuel draft at publicere.",
     "not_active": "Genoptag workflowet før gennemgang af en ny publicering."
-  }
+  },
+  "maintenanceHistoryTitle": "Vedligeholdelseshistorik",
+  "maintenanceHistoryOpen": "Se vedligeholdelseshistorik",
+  "maintenanceHistoryBoundary": "Dette er historiske konfigurationskvitteringer. De bekræfter ikke aktuel aktivering eller verificerede forretningsresultater.",
+  "maintenanceHistoryUnavailable": "Vedligeholdelseshistorikken kunne ikke kontrolleres. Genindlæs for at kontrollere din aktuelle adgang.",
+  "maintenanceHistoryEmpty": "Ingen registreret V9-pakkevedligeholdelse for denne installation.",
+  "maintenanceHistoryConfigured": "Konfiguration opdateret; aktivering var påkrævet",
+  "maintenanceHistoryReview": "Grænsen for automatiske ændringer blev nået; menneskelig vurdering var påkrævet",
+  "maintenanceHistoryBounded": "Kun de ti seneste V9-kvitteringer for pakkevedligeholdelse vises.",
+  "maintenanceHistoryCurrent": "Installationens aktuelle tilstand",
+  "maintenanceHistoryBack": "Tilbage til agentpakker",
+  "maintenanceHistoryObserved": "Kontrolleret kl.",
+  "maintenanceInstallationStatus": {
+    "configuring": "Konfiguration kræver vurdering",
+    "readiness_blocked": "Parathed blokeret",
+    "ready": "Klar til vurdering af aktivering",
+    "active": "Aktiv",
+    "needs_update": "Opdatering påkrævet",
+    "degraded": "Kræver opmærksomhed",
+    "suspended": "Suspenderet",
+    "uninstalled": "Afinstalleret"
+  },
+  "maintenanceHistoryVersion": "Installationsversion {{version}}"
 }
