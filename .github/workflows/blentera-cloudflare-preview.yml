@@ -1,0 +1,49 @@
+name: BLENTERA Cloudflare preview link
+
+on:
+  push:
+    branches:
+      - blentera-preview/cloudflare-hosted-20261010
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify single-file site
+        shell: bash
+        run: |
+          test -s blentera-live-20261010.html
+          grep -q 'id="tpl-about"' blentera-live-20261010.html
+          grep -q 'id="tpl-platform"' blentera-live-20261010.html
+          grep -q 'id="tpl-trust"' blentera-live-20261010.html
+          grep -q 'data:video/mp4;base64,' blentera-live-20261010.html
+      - name: Upload to Cloudflare-hosted Share HTML
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 20 --max-time 90 --retry 2 \
+            -F 'file=@blentera-live-20261010.html;type=text/html' \
+            -F 'title=BLENTERA - Preview, Platform and Human+AI Organisation' \
+            https://sharehtml.zhenjia.dev/api/shares > "$RUNNER_TEMP/blentera.json"
+          python3 - <<'PY'
+          import json, os
+          f=os.path.join(os.environ["RUNNER_TEMP"],"blentera.json")
+          obj=json.load(open(f))
+          share=obj["share"]
+          url=share["preview_url"]
+          if not url.startswith("https://sharehtml.zhenjia.dev/v/"):
+              raise RuntimeError("Unexpected Cloudflare preview URL")
+          print("BLENTERA_PUBLIC_PREVIEW="+url)
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as out:
+              out.write("## BLENTERA — Cloudflare-hosted live preview\n\n")
+              out.write("**[OPEN INTERACTIVE WEBSITE]("+url+")**\n\n")
+              out.write("Standalone responsive single-file preview: home, platform, About AI organisation and governance.\n")
+              out.write("Unlisted, non-production, third-party Cloudflare hosting; no customer data.\n")
+          PY
