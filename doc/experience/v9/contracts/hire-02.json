@@ -2,12 +2,18 @@
   "screenId": "HIRE-02",
   "journeyId": "hire",
   "routeOrSurface": "/agents/hire/capabilities/:versionId",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Review what the selected capability does, needs, asks before and cannot do.",
   "entryConditions": [
     "Current verified account, selected company, active membership and native agents:create authority; no instance-admin bypass.",
     "Effective hire_agent_v9 and native agent_packages_v7 prerequisites are enabled.",
-    "Only currently published, unexpired and independently qualified customer releases may enter this native projection."
+    "Only currently published, unexpired and independently qualified customer releases may enter this native projection.",
+    "Pending/failed current account or settings checks hide private content and controls. Same-account drafts remain mounted and resume only after a fresh original-owner read; a different settled principal cannot inherit the draft."
   ],
   "exitConditions": [
     "Catalog/detail reads create no agent, installation, grant or active receipt.",
@@ -51,7 +57,7 @@
     ],
     "canonicalWriteOperation": "Canonical agent_configuration_drafts create with frozen request ID and native package-version pin; no agent install or production publication.",
     "authorityEffect": "No grants, activation, agent mutation, external messages or runtime execution.",
-    "asyncWork": "Current principal/company-keyed native catalog query; abort signal and private no-store, immediate hide/recheck on authority events.",
+    "asyncWork": "Current principal/company-keyed native catalog query; abort signal and private no-store, immediate hide/recheck on authority events. V9 account observation rechecks on return inside the ordinary 30-second freshness window, without restarting reads for nested observers. Same-turn QueryClient fetch guards and authority epochs fence Native transport and late acknowledgements.",
     "receipt": "Current release version reference only; no active agent or successful representative test claimed."
   },
   "states": {
@@ -77,7 +83,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Native links, labeled inputs, select controls and semantic fieldsets; pending reconciliation disables editing. Standard Tab/Shift+Tab/Enter.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."

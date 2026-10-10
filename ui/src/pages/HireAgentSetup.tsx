@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HireDeclaredAccess } from "@/components/HireDeclaredAccess";
+import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 
 const labels = {
   hire_access: "Owner & knowledge",
@@ -50,6 +51,7 @@ export function HireAgentSetup({
   const navigate = useNavigate(),
     client = useQueryClient(),
     { screen } = useParams();
+  const authority = useV9AuthoringAuthority(company, principal);
   const alive = useRef(true),
     heading = useRef<HTMLHeadingElement>(null);
   const securityEpoch = useRef(0),
@@ -66,7 +68,7 @@ export function HireAgentSetup({
     requestId: string;
     expectedVersion: number;
   } | null>(null);
-  const key = ["agent-authoring", company, principal, id];
+  const key = ["agent-authoring", company, principal, id, authority.epoch];
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -76,7 +78,8 @@ export function HireAgentSetup({
   const draft = useQuery({
     queryKey: key,
     queryFn: ({ signal }) =>
-      agentAuthoringApi.get(company, principal, id, signal),
+      authority.read(() => agentAuthoringApi.get(company, principal, id, signal)),
+    enabled: authority.readReady,
     retry: false,
     gcTime: 0,
     refetchOnWindowFocus: false,
@@ -89,31 +92,33 @@ export function HireAgentSetup({
   }, [draft.data, receipt, accessLost]);
   const parsedStep = hireAgentStepSchema.safeParse(screen ?? receipt?.step);
   const step = parsedStep.success ? parsedStep.data : "hire_access";
+  const viewReady = authority.readReady && draft.isSuccess && !draft.isFetching &&
+    Boolean(receipt && content) && !accessLost && !checkingAccess;
   useEffect(() => {
-    heading.current?.focus();
-  }, [step]);
+    if (viewReady) heading.current?.focus();
+  }, [step, viewReady]);
   const options = useQuery({
-    queryKey: ["agent-authoring-options", company, principal, null],
+    queryKey: ["agent-authoring-options", company, principal, null, authority.epoch],
     queryFn: ({ signal }) =>
-      agentAuthoringApi.options(company, principal, null, signal),
-    enabled: Boolean(receipt) && !accessLost,
+      authority.read(() => agentAuthoringApi.options(company, principal, null, signal)),
+    enabled: authority.readReady && draft.isSuccess && !draft.isFetching && Boolean(receipt) && !accessLost,
     retry: false,
     gcTime: 0,
   });
   const capability = useQuery({
-    queryKey: ["hire-agent-capability", company, principal, id],
+    queryKey: ["hire-agent-capability", company, principal, id, authority.epoch],
     queryFn: ({ signal }) =>
-      agentAuthoringApi.hireCapability(company, principal, id, signal),
-    enabled: receipt?.kind === "hire" && !accessLost,
+      authority.read(() => agentAuthoringApi.hireCapability(company, principal, id, signal)),
+    enabled: authority.readReady && draft.isSuccess && !draft.isFetching && receipt?.kind === "hire" && !accessLost,
     retry: false,
     gcTime: 0,
   });
   const review = useQuery({
-    queryKey: ["hire-agent-review", company, principal, id, receipt?.version],
+    queryKey: ["hire-agent-review", company, principal, id, receipt?.version, authority.epoch],
     queryFn: ({ signal }) =>
-      agentAuthoringApi.review(company, principal, id, signal),
+      authority.read(() => agentAuthoringApi.review(company, principal, id, signal)),
     enabled:
-      Boolean(receipt?.content) &&
+      authority.readReady && draft.isSuccess && !draft.isFetching && Boolean(receipt?.content) &&
       !accessLost &&
       ["hire_test", "hire_review", "hire_receipt"].includes(step),
     retry: false,
@@ -180,21 +185,23 @@ export function HireAgentSetup({
   });
   const save = useMutation({
     mutationFn: async (pending: NonNullable<typeof attempt.current>) => {
+      if (checking.current || client.getQueryState(key)?.fetchStatus === "fetching")
+        throw new Error("Current setup access is unresolved");
       const epoch = securityEpoch.current;
       return {
-        next: await agentAuthoringApi.save(
+        next: await authority.write(() => agentAuthoringApi.save(
           company,
           principal,
           id,
           pending.input,
-        ),
+        )),
         pending,
         epoch,
       };
     },
     onSuccess: ({ next, pending, epoch }) => {
       if (!alive.current) return;
-      if (checking.current || epoch !== securityEpoch.current) {
+      if (checking.current || epoch !== securityEpoch.current || !authority.confirmed(next)) {
         setNotice(
           "Access changed while this setup was saving. Recheck the same save request before continuing.",
         );
@@ -225,7 +232,7 @@ export function HireAgentSetup({
     },
   });
   function persist(destination: string, nextStep = step) {
-    if (!receipt || !content || !enabled || checking.current) return;
+    if (!authority.canWrite() || !receipt || !content || !enabled || checking.current) return;
     const parsed = agentAuthoringContentSchema.safeParse(content);
     if (!parsed.success) {
       setNotice(parsed.error.issues[0]?.message ?? "Review the setup fields.");
@@ -243,20 +250,25 @@ export function HireAgentSetup({
     save.mutate(attempt.current);
   }
   const discard = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      if (!authority.canRead() || checking.current || client.getQueryState(key)?.fetchStatus === "fetching") throw new Error("Current hiring access is unresolved");
       discardAttempt.current ??= {
         requestId: crypto.randomUUID(),
         expectedVersion: receipt!.version,
       };
-      return agentAuthoringApi.discard(
+      const pending = discardAttempt.current, epoch = securityEpoch.current;
+      const row = await authority.discard(() => agentAuthoringApi.discard(
         company,
         principal,
         id,
-        discardAttempt.current,
-      );
+        pending,
+      ));
+      if (checking.current || epoch !== securityEpoch.current)
+        throw new Error("Setup discard needs current confirmation");
+      return row;
     },
-    onSuccess: () => {
-      if (alive.current) navigate("/agents/hire");
+    onSuccess: (row) => {
+      if (alive.current && authority.confirmed(row)) navigate("/agents/hire");
     },
     onError: (error) => {
       if (error instanceof ApiError && [401, 403].includes(error.status))
@@ -272,7 +284,7 @@ export function HireAgentSetup({
   async function reload() {
     const epoch = securityEpoch.current;
     const result = await draft.refetch();
-    if (!alive.current || checking.current || epoch !== securityEpoch.current)
+    if (!alive.current || !authority.canRead() || checking.current || epoch !== securityEpoch.current)
       return;
     if (result.isError || !result.data) {
       suppress();
@@ -292,11 +304,11 @@ export function HireAgentSetup({
         This saved setup is no longer available to your current account.
       </p>
     );
-  if (checkingAccess)
+  if (checkingAccess || !authority.readReady)
     return <p role="status">Checking current access to your setup…</p>;
-  if (draft.isPending && !receipt)
+  if (draft.isPending || draft.isFetching)
     return <p role="status">Loading saved setup…</p>;
-  if (draft.isError && !receipt)
+  if (draft.isError)
     return (
       <div role="alert">
         <p>The setup could not be loaded. Check your current company access.</p>

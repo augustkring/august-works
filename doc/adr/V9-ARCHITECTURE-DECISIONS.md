@@ -1275,3 +1275,36 @@ preserve the saved goal, verify the document destination and explanation, and
 check narrow focus/axe/reflow and absence of extra work. The matching Native and
 browser source SHA-256 is `9c1235bb326c0fbe3b0442474c64fc70f843f5ae08b3a923b80d918bf9ab45e3`. Complete integrated workspace
 qualification and manual/hosted/usability acceptance remain pending.
+
+
+### ADR-V9-056 — Authoring follows current account epochs and fresh original reads
+
+2026-10-10. Custom drafts, Hire catalog/setup and saved setups hide private
+content while the current account/settings or original draft read is unresolved.
+A same-account editor remains mounted; a new source epoch requires fresh Native
+reads before it shows the retained unsaved input. Current source fetch states
+fence same-turn requests. Late acknowledgements carry only private epoch tags,
+so they cannot navigate, expose a receipt or confirm a save across a recheck.
+Original immutable request bodies and IDs remain available for their original
+Native replay; no key is renewed by uncertainty.
+
+Existing reads and content discard keep their original rollback allowance.
+New creates/saves require the current rollout. Native membership, purpose,
+permissions, versions and draft owners remain authoritative; no new executor,
+permission owner, publication or representative-test claim is introduced.
+
+The built browser found that the global 30-second freshness window prevented a
+quick return from rechecking the session. V9 now observes the original session
+with zero stale time and no nested mount refetch. The original account helper
+keeps its defaults for other callers. An actual-query regression covers both the
+freshness window and nested observation. Saved setups use their parent's scope
+instead of remounting session/settings readers through their loading view.
+
+Seventy-two checks in eight files, strict UI types and tokens pass, including
+original account-client, company-context and feedback regressions. Both actual
+built-browser Custom/Hire cases pass on matching source SHA-256
+`3d38334ac4ab1e27857ba299598bded9234cb4bd6c819e7eb401c5d9f2e91b69`: hidden fields during pending account/source reads,
+retained unsaved input, correct heading focus, narrow axe/reflow and zero draft
+writes, Tasks, Agents or runs. Earlier failed browser/focused/type waves remain
+recorded. Current integrated workspace/regression and human/hosted acceptance
+remain pending.

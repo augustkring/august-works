@@ -2,11 +2,17 @@
   "screenId": "HIRE-06",
   "journeyId": "hire",
   "routeOrSurface": "/agents/hire/drafts/:draftId/hire_review",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Inspect the saved proposal and current blockers before any production activation.",
   "entryConditions": [
     "Current verified creator in the selected company with native agents:create authority; no instance-admin bypass.",
-    "The canonical setup pins an immutable native customer package version; historical reads and discard survive flag rollback."
+    "The canonical setup pins an immutable native customer package version; historical reads and discard survive flag rollback.",
+    "Pending/failed current account or settings checks hide private content and controls. Same-account drafts remain mounted and resume only after a fresh original-owner read; a different settled principal cannot inherit the draft."
   ],
   "exitConditions": [
     "Save & exit and section changes persist only an unpublished canonical proposal with request/version fences.",
@@ -53,7 +59,7 @@
     ],
     "canonicalWriteOperation": "Native unpublished draft save/discard only; per-kind step validation, immutable source pins and unmodifiable Hire capability declarations.",
     "authorityEffect": "No grants, activation, agent mutation, external messages or runtime execution.",
-    "asyncWork": "Principal/company/draft-keyed no-store queries; immediate hide on authority events; frozen request/body/version retry; late acknowledgements cannot restore private content after revocation.",
+    "asyncWork": "Principal/company/draft-keyed no-store queries; immediate hide on authority events; frozen request/body/version retry; late acknowledgements cannot restore private content after revocation. V9 account observation rechecks on return inside the ordinary 30-second freshness window, without restarting reads for nested observers. Same-turn QueryClient fetch guards and authority epochs fence Native transport and late acknowledgements.",
     "receipt": "Saved setup version only. Representative execution, independent verification, publication and active-agent receipts remain unavailable."
   },
   "states": {
@@ -79,7 +85,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Native links, labeled inputs, select controls and semantic fieldsets; pending reconciliation disables editing. Standard Tab/Shift+Tab/Enter.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."

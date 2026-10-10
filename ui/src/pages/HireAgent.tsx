@@ -6,7 +6,8 @@ import {
 } from "@paperclipai/shared";
 import { agentAuthoringApi } from "@/api/agent-authoring";
 import { instanceSettingsApi } from "@/api/instanceSettings";
-import { useAccountIdentity } from "@/api/companies-query";
+import { useV9CurrentAccount } from "@/hooks/useV9CurrentAccount";
+import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 import { useCompany } from "@/context/CompanyContext";
 import { useCompanyLiveEvent } from "@/context/LiveUpdatesProvider";
 import { queryKeys } from "@/lib/queryKeys";
@@ -57,11 +58,13 @@ function HireCatalog({
   }, []);
   const heading = useRef<HTMLHeadingElement>(null);
   const client = useQueryClient();
-  const key = ["agent-authoring-hire-catalog", company, principal];
+  const authority = useV9AuthoringAuthority(company, principal);
+  const key = ["agent-authoring-hire-catalog", company, principal, authority.epoch];
   const catalog = useQuery({
     queryKey: key,
     queryFn: ({ signal }) =>
-      agentAuthoringApi.hireCatalog(company, principal, signal),
+      authority.read(() => agentAuthoringApi.hireCatalog(company, principal, signal)),
+    enabled: authority.writeReady,
     gcTime: 0,
     retry: false,
     refetchOnWindowFocus: true,
@@ -93,6 +96,7 @@ function HireCatalog({
     : catalog.data?.find((item) => item.versionId === versionId);
   const create = useMutation({
     mutationFn: async () => {
+      if (!authority.canWrite() || client.getQueryState(key)?.fetchStatus === "fetching") throw new Error("Current hiring access is unresolved");
       if (!attempt.current) {
         if (!selected) throw new Error("Choose a current capability");
         attempt.current = {
@@ -102,17 +106,16 @@ function HireCatalog({
         };
       }
       const epoch = securityEpoch.current;
+      const pending = attempt.current;
+      const draft = await authority.write(() => agentAuthoringApi.create(company, principal, pending));
+      if (epoch !== securityEpoch.current) throw new Error("Agent setup needs current confirmation");
       return {
-        draft: await agentAuthoringApi.create(
-          company,
-          principal,
-          attempt.current,
-        ),
+        draft,
         epoch,
       };
     },
     onSuccess: ({ draft, epoch }) => {
-      if (alive.current && epoch === securityEpoch.current)
+      if (alive.current && epoch === securityEpoch.current && authority.confirmed(draft))
         navigate(`/agents/hire/drafts/${draft.id}/${draft.step}`);
     },
     onError: (error) => {
@@ -134,6 +137,15 @@ function HireCatalog({
       .toLocaleLowerCase()
       .includes(term),
   );
+  if (!authority.readReady) return <p role={authority.failed ? "alert" : "status"}>Checking current access to agent hiring…</p>;
+  if (!authority.writeReady) return (
+    <div className="space-y-4 p-6">
+      <p role="status">New agent hiring is unavailable.</p>
+      {attempt.current && <p role="alert">The previous setup request remains unconfirmed. Review your saved setups before starting another.</p>}
+      <HireSavedSetups company={company} principal={principal} authority={authority} />
+    </div>
+  );
+  if (catalog.isFetching) return <p role="status">Loading available capabilities…</p>;
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <Link
@@ -234,7 +246,7 @@ function HireCatalog({
         </>
       )}
       {!versionId && (
-        <HireSavedSetups company={company} principal={principal} />
+        <HireSavedSetups company={company} principal={principal} authority={authority} />
       )}
       {selected && (
         <>
@@ -354,13 +366,13 @@ function HireCatalog({
 
 export function HireAgent() {
   const { selectedCompanyId: company } = useCompany();
-  const identity = useAccountIdentity();
+  const identity = useV9CurrentAccount();
   const { draftId } = useParams<{ draftId?: string }>();
   const settings = useQuery({
     queryKey: queryKeys.instance.experimentalSettings,
     queryFn: () => instanceSettingsApi.getExperimental(),
   });
-  if (settings.isPending || !identity.settled)
+  if (settings.isPending || (!identity.userId && !identity.settled))
     return <p role="status">Loading agent hiring options…</p>;
   if (draftId && company && identity.userId && !identity.localImplicit)
     return (
@@ -381,19 +393,6 @@ export function HireAgent() {
         <Button className="min-h-11" onClick={() => void settings.refetch()}>
           Try again
         </Button>
-      </div>
-    );
-  if (!v9FeatureEnabled(settings.data, "hire_agent_v9"))
-    return (
-      <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
-        <p role="status">New agent hiring is unavailable.</p>
-        {company && identity.userId && !identity.localImplicit && (
-          <HireSavedSetups
-            key={`${company}:${identity.userId}`}
-            company={company}
-            principal={identity.userId}
-          />
-        )}
       </div>
     );
   if (!company || !identity.userId || identity.localImplicit)

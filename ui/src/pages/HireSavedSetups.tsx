@@ -4,27 +4,31 @@ import { agentAuthoringApi } from "@/api/agent-authoring";
 import { useCompanyLiveEvent } from "@/context/LiveUpdatesProvider";
 import { Link } from "@/lib/router";
 import { Button } from "@/components/ui/button";
+import type { V9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 
 export function HireSavedSetups({
   company,
   principal,
+  authority,
 }: {
   company: string;
   principal: string;
+  authority: V9AuthoringAuthority;
 }) {
   const client = useQueryClient(),
     epoch = useRef(0);
   const [checking, setChecking] = useState(false);
-  const key = ["agent-authoring", company, principal, "list"];
+  const key = ["agent-authoring", company, principal, "list", authority.epoch];
   const query = useInfiniteQuery({
     queryKey: key,
     queryFn: ({ signal, pageParam }) =>
-      agentAuthoringApi.list(
+      authority.read(() => agentAuthoringApi.list(
         company,
         principal,
         signal,
         pageParam ?? undefined,
-      ),
+      )),
+    enabled: authority.readReady,
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
     retry: false,
@@ -52,6 +56,8 @@ export function HireSavedSetups({
     query.data?.pages
       .flatMap((page) => page.items)
       .filter((item) => item.kind === "hire") ?? [];
+  if (!authority.readReady || (query.isFetching && !query.isFetchingNextPage))
+    return <p role={authority.failed ? "alert" : "status"}>Checking current access to saved setups…</p>;
   return (
     <section className="space-y-3" aria-labelledby="saved-hire-setups">
       <h2 id="saved-hire-setups" className="text-lg font-semibold">
