@@ -6,7 +6,8 @@
   "customerOutcome": "Review current authorized items that need human action and open the exact native resolver.",
   "entryConditions": [
     "Effective progressive_shell_v9 and native experience projection prerequisites are enabled.",
-    "Current company/principal and native resource visibility are resolved."
+    "Current company/principal and native resource visibility are resolved.",
+    "A pending current-session recheck suppresses cached private content and actions; restored account authority requires a fresh original-owner read."
   ],
   "exitConditions": [
     "Review opens an exact attention/decision ID in the existing native resolver.",
@@ -48,7 +49,7 @@
     "receipt": "Current canonical attention/version/observation reference only."
   },
   "states": {
-    "loading": "Announce loading while current identity or native read authorization is being checked; hide retained cards and controls during the check.",
+    "loading": "Announce loading while current identity or native read authorization is being checked; hide retained cards and controls during the check. A cached session is insufficient while its current recheck is unresolved.",
     "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
     "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
     "stale": "Suppress retained cards after native access/source loss; a company/principal-scoped query epoch rejects late old receipts. Changed sources are partial, never a complete empty queue.",

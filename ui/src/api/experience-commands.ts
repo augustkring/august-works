@@ -9,12 +9,15 @@ export async function getExperienceCommands(
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ expectedUserId: principal, q: query });
-  const result = experienceCommandsSchema.parse(
-    await api.get(`/companies/${companyId}/experience/commands?${params}`, {
+  const body = await api.get(
+    `/companies/${companyId}/experience/commands?${params}`,
+    {
       signal,
       cache: "no-store",
-    }),
+    },
   );
+  signal?.throwIfAborted();
+  const result = experienceCommandsSchema.parse(body);
   if (result.companyId !== companyId)
     throw new Error("Command company changed");
   return result;

@@ -318,3 +318,64 @@ it("hides failed private command results without stealing focus from another ope
   expect(document.body.textContent).not.toContain("Private agent title");
   expect(document.activeElement).toBe(input);
 });
+
+it("hides private command results during session revalidation, preserves same-account text and waits for a new authorized command read", async () => {
+  const get = vi.spyOn(api, "get").mockResolvedValue(model());
+  await mount();
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Private agent title"),
+  );
+  const input = document.querySelector<HTMLInputElement>("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "agent PRIVATE-UNSAVED-COMMAND");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await vi.waitFor(() =>
+    expect(get.mock.calls.at(-1)![0]).toContain("PRIVATE-UNSAVED-COMMAND"),
+  );
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Private agent title"),
+  );
+  const reads = get.mock.calls.length;
+  let resolveSession!: (value: object) => void;
+  let pendingSession!: Promise<unknown>;
+  await act(async () => {
+    pendingSession = client.fetchQuery({
+      queryKey: ["auth", "session"],
+      queryFn: () =>
+        new Promise<object>((resolve) => {
+          resolveSession = resolve;
+        }),
+    });
+  });
+  await vi.waitFor(() =>
+    expect(document.body.textContent).not.toContain("Private agent title"),
+  );
+  expect(document.querySelector("input")).toBeNull();
+  expect(get).toHaveBeenCalledTimes(reads);
+  let resolveRead!: (value: ReturnType<typeof model>) => void;
+  get.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveRead = resolve;
+      }),
+  );
+  await act(async () => {
+    resolveSession({});
+    await pendingSession;
+  });
+  await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(reads + 1));
+  expect(document.body.textContent).not.toContain("Private agent title");
+  expect(document.querySelector<HTMLInputElement>("input")!.value).toBe(
+    "agent PRIVATE-UNSAVED-COMMAND",
+  );
+  await act(async () => resolveRead(model()));
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Private agent title"),
+  );
+  expect(state.openNewIssue).not.toHaveBeenCalled();
+  expect(state.navigate).not.toHaveBeenCalled();
+});

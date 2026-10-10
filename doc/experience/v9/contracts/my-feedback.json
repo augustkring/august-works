@@ -6,7 +6,8 @@
   "customerOutcome": "Find privately owned submissions, status and visible product messages; answer requests for information.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
-    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary",
+    "A pending current-session recheck suppresses cached private content and actions; restored account authority requires a fresh original-owner read."
   ],
   "exitConditions": [
     "Only a canonical server-confirmed result permits a success claim",
@@ -56,7 +57,7 @@
     "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
   },
   "states": {
-    "loading": "Announce current identity/read checks while hiding retained private history and reply text.",
+    "loading": "Announce current identity/read checks while hiding retained private history and reply text. A cached session is insufficient while its current recheck is unresolved.",
     "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
     "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
     "stale": "Suppress retained history and mutation controls during native rechecks; principal/company epochs reject late access-loss responses.",

@@ -286,3 +286,50 @@ describe.each([
     );
   });
 });
+
+describe.each([
+  ["Home", ExperienceHome],
+  ["Needs You", ExperienceNeedsYou],
+  ["Work", ExperienceWork],
+] as const)("%s unresolved session revalidation", (_name, screen) => {
+  it("withdraws private titles and actions until both the current session and a new Native read resolve", async () => {
+    const get = vi.spyOn(api, "get").mockResolvedValue(model());
+    await mount(screen);
+    await ready();
+    const reads = get.mock.calls.length;
+    let resolveSession!: (value: object) => void;
+    let pendingSession!: Promise<unknown>;
+    await act(async () => {
+      pendingSession = client.fetchQuery({
+        queryKey: ["auth", "session"],
+        queryFn: () =>
+          new Promise<object>((resolve) => {
+            resolveSession = resolve;
+          }),
+      });
+    });
+    await vi.waitFor(() =>
+      expect(container.querySelector("article")).toBeNull(),
+    );
+    expect(container.textContent).not.toContain("PRIVATE-CURRENT-TASK");
+    expect(container.querySelector('a[href="/issues/AW-1"]')).toBeNull();
+    expect(get).toHaveBeenCalledTimes(reads);
+    let resolveRead!: (value: ExperienceModel) => void;
+    get.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    await act(async () => {
+      resolveSession({});
+      await pendingSession;
+    });
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(reads + 1));
+    expect(container.querySelector("article")).toBeNull();
+    await act(async () => resolveRead(model("PRIVATE-NEW-CURRENT-TASK")));
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain("PRIVATE-NEW-CURRENT-TASK"),
+    );
+  });
+});

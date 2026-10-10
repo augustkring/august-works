@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "../lib/router";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useExperienceHeading } from "../hooks/useExperienceHeading";
@@ -135,7 +135,7 @@ export function MyFeedback() {
   const client = useQueryClient();
   const { t } = useTranslation("experience"),
     { selectedCompanyId } = useCompany(),
-    identity = useAccountIdentity(),
+    identity = useV9CurrentAccount(),
     [params, setParams] = useSearchParams();
   const { enabled } = useV9FeatureEnabled("customer_feedback_v9");
   const principal = identity.localImplicit ? "local-board" : identity.userId;
@@ -168,7 +168,7 @@ export function MyFeedback() {
     client.removeQueries({ queryKey: prefix });
   });
   const query = useInfiniteQuery({
-    queryKey: [...prefix, "list", epoch],
+    queryKey: [...prefix, "list", identity.authorityEpoch, epoch],
     queryFn: ({ signal, pageParam }) =>
       customerFeedbackApi.list(
         selectedCompanyId!,
@@ -191,6 +191,7 @@ export function MyFeedback() {
       principal,
       "detail",
       selected,
+      identity.authorityEpoch,
       epoch,
     ],
     queryFn: ({ signal }) =>

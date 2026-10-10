@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "../lib/router";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { agentMonitorApi } from "../api/agent-monitor";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
@@ -11,7 +11,7 @@ import { Button } from "../components/ui/button";
 
 export function AgentMonitorEntry() {
   const feature = useV9FeatureEnabled("progressive_shell_v9");
-  const identity = useAccountIdentity();
+  const identity = useV9CurrentAccount();
   const { selectedCompanyId } = useCompany();
   const { agentId } = useParams();
   const { t } = useTranslation("experience");

@@ -6,7 +6,8 @@
   "customerOutcome": "Read bounded original M2 attempts and configuration receipts separately from current activation state.",
   "entryConditions": [
     "Current company and authenticated human account or explicit local board.",
-    "Current native company and agent read authority, agent_packages_v7 and effective maintenance_autopilot_v9 dependencies enabled."
+    "Current native company and agent read authority, agent_packages_v7 and effective maintenance_autopilot_v9 dependencies enabled.",
+    "A pending current-session recheck suppresses cached private content and actions; restored account authority requires a fresh original-owner read."
   ],
   "exitConditions": [
     "Return to the existing authorized native package installation owner.",
@@ -48,7 +49,7 @@
     "receipt": "Original native recorded M2 facts only, including start/terminal/configured receipt binding. Missing terminal after the original five-second lease stays unconfirmed; no alternate history ledger or inferred success."
   },
   "states": {
-    "loading": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "loading": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion. A cached session is insufficient while its current recheck is unresolved.",
     "empty": "No recorded V9 package maintenance for this installation; other maintenance domains are not covered.",
     "partial": "Bounded unchanged-content M2 attempts use durable native starts, atomic outcome receipts, original five-second lease and non-expiring unknown-source refusal. Attempt history is independently limited to ten with has-more; an older response without the attempt projection is unavailable, not empty. General cross-domain external reconciliation and automated recovery remain open.",
     "stale": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
@@ -102,7 +103,7 @@
     "functional": [
       "Prove real native configured and budget-exhausted receipts, ten-row bound and historical/current distinction",
       "Prove current tenant/agent authority, missing sources, account mismatch, rollout closure and late private query suppression",
-      "Verify exact built artifact in browser; native flags/read data cannot qualify general M0\u2013M4 maintenance or material outcomes",
+      "Verify exact built artifact in browser; native flags/read data cannot qualify general M0–M4 maintenance or material outcomes",
       "Read actual committed ACK-loss, rollback/unknown and no-effect Native records without adding an audit or repair; reject duplicate terminal/configured bindings rather than select an outcome."
     ],
     "accessibility": [

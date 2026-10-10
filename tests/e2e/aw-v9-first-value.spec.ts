@@ -69,8 +69,8 @@ test("first result recovers a missing acknowledgement and withdraws success when
     },
   });
   const commands: Array<Record<string, unknown>> = [];
-  let holdRead = false,
-    releaseRead: (() => void) | null = null;
+  let holdRead = false;
+  const pendingReads: Array<() => void> = [];
   await page.route("**/api/auth/get-session", (route) =>
     route.fulfill({
       json: {
@@ -142,7 +142,7 @@ test("first result recovers a missing acknowledgement and withdraws success when
         });
       } else if (holdRead)
         await new Promise<void>((resolve) => {
-          releaseRead = resolve;
+          pendingReads.push(resolve);
         });
       return route.fulfill({ headers, json: value });
     },
@@ -235,8 +235,11 @@ test("first result recovers a missing acknowledgement and withdraws success when
   await expect(
     page.getByRole("button", { name: "Use result", exact: true }),
   ).toHaveCount(0);
-  await expect.poll(() => releaseRead !== null).toBe(true);
-  releaseRead!();
+  await expect.poll(() => pendingReads.length).toBeGreaterThan(0);
+  // Authentication completion can cancel an early activation read and start a
+  // fresh authority-bound read. Release all held requests and future requests.
+  holdRead = false;
+  for (const release of pendingReads.splice(0)) release();
   await expect(
     page.getByRole("heading", {
       level: 1,
@@ -254,4 +257,104 @@ test("first result recovers a missing acknowledgement and withdraws success when
     page.getByRole("link", { name: "Go to Home", exact: true }),
   ).toHaveCount(0);
   expect(commands).toHaveLength(2);
+});
+
+// The session and activation responses below are declared software fixtures.
+// A browser visibility recheck drives the actual React Query account boundary.
+test("activation hides its private draft during account revalidation and resumes only after a new owner read", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120000);
+  const company = await json(
+    await request.post("/api/companies", {
+      data: { name: "Disposable activation authority fixture" },
+    }),
+  );
+  const session = await json(await request.get("/api/auth/get-session"));
+  const { receipts: _, ...initial } = initialActivationState();
+  const value = activationViewSchema.parse({
+    companyId: company.id,
+    runId: "10000000-0000-4000-8000-000000000002",
+    companyName: company.name,
+    version: 1,
+    status: "in_progress",
+    state: { ...initial, intent: "PRIVATE-SAVED-BROWSER-INTENT" },
+    sources: [],
+    capabilities: [],
+    blockers: ["no_qualified_capability"],
+  });
+  let holdSession = false,
+    holdRead = false;
+  let releaseSession: (() => void) | undefined;
+  const freshReads: Array<() => void> = [];
+  let reads = 0;
+  await page.route("**/api/auth/get-session", async (route) => {
+    if (holdSession)
+      await new Promise<void>((resolve) => {
+        releaseSession = resolve;
+      });
+    await route.fulfill({
+      json: {
+        ...session,
+        session: { ...session.session, localImplicit: false },
+      },
+    });
+  });
+  await page.route("**/api/saas/capabilities", (route) =>
+    route.fulfill({ json: { activationV9: true, onboarding: true } }),
+  );
+  await page.route(
+    `**/api/companies/${company.id}/activation?**`,
+    async (route) => {
+      expect(route.request().method()).toBe("GET");
+      expect(
+        new URL(route.request().url()).searchParams.get("expectedUserId"),
+      ).toBe(session.user.id);
+      reads++;
+      if (holdRead)
+        await new Promise<void>((resolve) => {
+          freshReads.push(resolve);
+        });
+      await route.fulfill({
+        headers: { "Cache-Control": "private, no-store" },
+        json: value,
+      });
+    },
+  );
+  await page.goto(`/${company.issuePrefix}/dashboard`);
+  await expect(page.getByRole("main")).toBeVisible();
+  await page.goto("/saas/activation/3");
+  const draft = page.getByRole("textbox", {
+    name: "First outcome/goal",
+    exact: true,
+  });
+  await expect(draft).toHaveValue("PRIVATE-SAVED-BROWSER-INTENT");
+  await draft.fill("PRIVATE-UNSAVED-BROWSER-INTENT");
+  const priorReads = reads;
+  holdSession = true;
+  holdRead = true;
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange", { bubbles: true })),
+  );
+  await expect.poll(() => releaseSession !== undefined).toBe(true);
+  await expect(page.getByRole("main").getByRole("textbox")).toHaveCount(0);
+  await expect(page.getByRole("main")).not.toContainText("PRIVATE-");
+  await expect(
+    page
+      .getByRole("main")
+      .getByRole("button", { name: "Continue", exact: true }),
+  ).toHaveCount(0);
+  expect(reads).toBe(priorReads);
+  holdSession = false;
+  releaseSession!();
+  await expect.poll(() => freshReads.length).toBeGreaterThan(0);
+  expect(reads).toBe(priorReads + 1);
+  await expect(page.getByRole("main").getByRole("textbox")).toHaveCount(0);
+  holdRead = false;
+  for (const release of freshReads.splice(0)) release();
+  await expect(draft).toHaveValue("PRIVATE-UNSAVED-BROWSER-INTENT");
+  await expect(
+    page.getByRole("button", { name: "Continue", exact: true }),
+  ).toBeEnabled();
 });

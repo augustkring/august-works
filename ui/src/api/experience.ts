@@ -17,12 +17,12 @@ export const experienceApi = {
     );
   },
   async home(companyId: string, principal: string, signal?: AbortSignal) {
-    const result = experienceModelSchema.parse(
-      await api.get(
-        `/companies/${companyId}/experience?expectedUserId=${encodeURIComponent(principal)}`,
-        { signal, cache: "no-store" },
-      ),
+    const body = await api.get(
+      `/companies/${companyId}/experience?expectedUserId=${encodeURIComponent(principal)}`,
+      { signal, cache: "no-store" },
     );
+    signal?.throwIfAborted();
+    const result = experienceModelSchema.parse(body);
     if (result.companyId !== companyId)
       throw new Error("Company context changed");
     return result;

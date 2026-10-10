@@ -2,16 +2,12 @@
   "screenId": "SUPPORT-ACCESS",
   "journeyId": "support",
   "routeOrSurface": "/company/support-access",
-  "targetExperienceProfiles": [
-    "member",
-    "manager",
-    "admin",
-    "security_admin"
-  ],
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
   "customerOutcome": "Review bounded native V6 support approval history without granting access or inferring that support acted or resolved an issue.",
   "entryConditions": [
     "Current authenticated human company owner, matching expected account and company scope.",
-    "Effective progressive_shell_v9 and original admin_support_v6 dependencies enabled."
+    "Effective progressive_shell_v9 and original admin_support_v6 dependencies enabled.",
+    "A pending current-session recheck suppresses cached private content and actions; restored account authority requires a fresh original-owner read."
   ],
   "exitConditions": [
     "Return to Company or explicitly open original native support controls.",
@@ -56,7 +52,7 @@
     "receipt": "Original native V6 record references only; no secondary history store or inferred authorization."
   },
   "states": {
-    "loading": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",
+    "loading": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history. A cached session is insufficient while its current recheck is unresolved.",
     "empty": "The current authorized native source has no support records.",
     "partial": "Owner history and separately owned original support controls are implemented in source. Immutable review reservation, exact approval/revocation receipt replay and pending-request cancellation still need exact migrated, built-browser and human qualification; support assistant and general recovery remain open.",
     "stale": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",

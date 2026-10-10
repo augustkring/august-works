@@ -2,16 +2,23 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  QueryClient,
+  QueryClientProvider,
+  focusManager,
+} from "@tanstack/react-query";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { authApi } from "../api/auth";
 import { activationApi } from "../api/activation";
 import { i18n } from "../i18n";
+import { queryKeys } from "../lib/queryKeys";
 import {
   initialActivationState,
   type ActivationView,
 } from "@paperclipai/shared";
 import { ActivationPage } from "./Activation";
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+let capabilitiesFetching = false;
 const companyId = "10000000-0000-4000-8000-000000000001";
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({
@@ -23,6 +30,7 @@ vi.mock("../context/CompanyContext", () => ({
 vi.mock("../hooks/useSaasCapabilities", () => ({
   useSaasCapabilities: () => ({
     data: { activationV9: true },
+    isFetching: capabilitiesFetching,
     isPending: false,
     isError: false,
   }),
@@ -31,10 +39,14 @@ vi.mock("../components/CustomerFeedbackDialog", () => ({
   CustomerFeedbackDialog: () => null,
 }));
 let root: Root, container: HTMLDivElement, client: QueryClient;
+beforeEach(() => {
+  capabilitiesFetching = false;
+});
 afterEach(async () => {
   if (root) await act(async () => root.unmount());
   container?.remove();
   client?.clear();
+  focusManager.setFocused(undefined);
   vi.restoreAllMocks();
   await i18n.changeLanguage("en");
 });
@@ -92,6 +104,23 @@ async function mount(data: ActivationView, route = "/saas/activation/3") {
     ),
   );
   await vi.waitFor(() => expect(document.querySelector("h1")).toBeTruthy());
+}
+async function render(route = "/saas/activation/3") {
+  await act(async () =>
+    root.render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[route]}>
+          <Routes>
+            <Route
+              path="/saas/activation/:screen?"
+              element={<ActivationPage />}
+            />
+            <Route path="/" element={<p>Saved exit destination</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    ),
+  );
 }
 async function click(text: string) {
   const button = [...document.querySelectorAll("button")].find(
@@ -166,10 +195,245 @@ describe("Native V9 onboarding UI", () => {
   });
   it("keeps unavailable capability qualification separate from a successful first result", async () => {
     await mount(view("capability"), "/saas/activation/7");
-    expect(document.body.textContent).toContain(
-      "No qualified first capability is available yet",
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(
+        "No qualified first capability is available yet",
+      ),
     );
     expect(document.body.textContent).not.toContain("Use this agent");
     expect(document.body.textContent).not.toContain("Run first task");
   });
+});
+
+describe("Activation current account authority", () => {
+  it("withdraws private fields during an account recheck, then requires a fresh read while preserving a same-account unsaved draft", async () => {
+    await mount({
+      ...view(),
+      state: { ...view().state, intent: "PRIVATE-SAVED-INTENT" },
+    });
+    await vi.waitFor(() =>
+      expect(container.querySelector("textarea")?.value).toBe(
+        "PRIVATE-SAVED-INTENT",
+      ),
+    );
+    await enter("PRIVATE-UNSAVED-INTENT");
+    const priorReads = vi.mocked(activationApi.get).mock.calls.length;
+    let resolveSession!: (
+      value: Awaited<ReturnType<typeof authApi.getSession>>,
+    ) => void;
+    const session = client.getQueryData(queryKeys.auth.session) as Awaited<
+      ReturnType<typeof authApi.getSession>
+    >;
+    vi.mocked(authApi.getSession).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSession = resolve;
+        }),
+    );
+    await act(async () => {
+      void client.invalidateQueries({ queryKey: queryKeys.auth.session });
+    });
+    await vi.waitFor(() =>
+      expect(container.querySelector("textarea")).toBeNull(),
+    );
+    expect(container.textContent).not.toMatch(/PRIVATE-|Customer company/);
+    expect(container.querySelector("form,button")).toBeNull();
+    expect(activationApi.get).toHaveBeenCalledTimes(priorReads);
+    let resolveRead!: (value: ActivationView) => void;
+    vi.mocked(activationApi.get).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    await act(async () => resolveSession(session));
+    await vi.waitFor(() =>
+      expect(activationApi.get).toHaveBeenCalledTimes(priorReads + 1),
+    );
+    expect(container.querySelector("textarea")).toBeNull();
+    await act(async () => resolveRead(view()));
+    await vi.waitFor(() =>
+      expect(container.querySelector("textarea")?.value).toBe(
+        "PRIVATE-UNSAVED-INTENT",
+      ),
+    );
+  });
+
+  it("withdraws private fields while capabilities are rechecked and cannot reuse the prior read", async () => {
+    await mount({
+      ...view(),
+      state: { ...view().state, intent: "PRIVATE-CAPABILITY-INTENT" },
+    });
+    await vi.waitFor(() =>
+      expect(container.querySelector("textarea")?.value).toBe(
+        "PRIVATE-CAPABILITY-INTENT",
+      ),
+    );
+    const priorReads = vi.mocked(activationApi.get).mock.calls.length;
+    capabilitiesFetching = true;
+    await render();
+    expect(container.querySelector("textarea,form,button")).toBeNull();
+    expect(container.textContent).not.toContain("PRIVATE-CAPABILITY-INTENT");
+    let resolveRead!: (value: ActivationView) => void;
+    vi.mocked(activationApi.get).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    capabilitiesFetching = false;
+    await render();
+    await vi.waitFor(() =>
+      expect(activationApi.get).toHaveBeenCalledTimes(priorReads + 1),
+    );
+    expect(container.querySelector("textarea")).toBeNull();
+    await act(async () => resolveRead(view()));
+    await vi.waitFor(() =>
+      expect(container.querySelector("textarea")).not.toBeNull(),
+    );
+  });
+
+  it("fences a late save acknowledgement across an account recheck and retries only the original request after fresh authority", async () => {
+    let resolveSave!: (value: ActivationView) => void;
+    const saved = {
+      ...view(),
+      version: 2,
+      state: { ...view().state, intent: "PRIVATE-UNCONFIRMED-DRAFT" },
+    };
+    const save = vi
+      .spyOn(activationApi, "command")
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSave = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(saved);
+    await mount(view());
+    await vi.waitFor(() =>
+      expect(container.querySelector("textarea")).not.toBeNull(),
+    );
+    await enter(saved.state.intent);
+    await click("Save & exit");
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const original = save.mock.calls[0]![2];
+    let resolveSession!: (
+      value: Awaited<ReturnType<typeof authApi.getSession>>,
+    ) => void;
+    const session = client.getQueryData(queryKeys.auth.session) as Awaited<
+      ReturnType<typeof authApi.getSession>
+    >;
+    vi.mocked(authApi.getSession).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSession = resolve;
+        }),
+    );
+    await act(async () => {
+      void client.invalidateQueries({ queryKey: queryKeys.auth.session });
+    });
+    await vi.waitFor(() =>
+      expect(container.querySelector("textarea")).toBeNull(),
+    );
+    await act(async () => resolveSave(saved));
+    expect(container.textContent).not.toContain("Saved exit destination");
+    expect(container.textContent).not.toContain(saved.state.intent);
+    await act(async () => resolveSession(session));
+    await vi.waitFor(() =>
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+        "not confirmed",
+      ),
+    );
+    expect(container.textContent).not.toContain("Saved exit destination");
+    await click("Try again");
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls[1]![2]).toEqual(original);
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain("Saved exit destination"),
+    );
+  });
+
+  it("never transfers the previous account's unsaved intent to a newly resolved principal", async () => {
+    await mount(view());
+    await vi.waitFor(() =>
+      expect(container.querySelector("textarea")).not.toBeNull(),
+    );
+    await enter("PRIVATE-PREVIOUS-ACCOUNT-DRAFT");
+    const session = client.getQueryData(queryKeys.auth.session) as NonNullable<
+      Awaited<ReturnType<typeof authApi.getSession>>
+    >;
+    vi.mocked(authApi.getSession).mockResolvedValue({
+      ...session,
+      user: { ...session.user, id: "different-owner" },
+      session: { ...session.session, userId: "different-owner" },
+    });
+    vi.mocked(activationApi.get).mockResolvedValue({
+      ...view(),
+      state: { ...view().state, intent: "NEW-ACCOUNT-INTENT" },
+    });
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: queryKeys.auth.session });
+    });
+    await vi.waitFor(() =>
+      expect(container.querySelector("textarea")?.value).toBe(
+        "NEW-ACCOUNT-INTENT",
+      ),
+    );
+    expect(container.textContent).not.toContain(
+      "PRIVATE-PREVIOUS-ACCOUNT-DRAFT",
+    );
+    expect(activationApi.get).toHaveBeenLastCalledWith(
+      companyId,
+      "different-owner",
+      expect.any(AbortSignal),
+    );
+  });
+});
+
+it("does not start an old-owner transport when focus starts session and Native observers in the same turn", async () => {
+  const saved = {
+    ...view(),
+    state: { ...view().state, intent: "PRIVATE-FOCUS-DRAFT" },
+  };
+  await mount(saved);
+  await vi.waitFor(() =>
+    expect(container.querySelector("textarea")?.value).toBe(saved.state.intent),
+  );
+  const priorReads = vi.mocked(activationApi.get).mock.calls.length;
+  const session = client.getQueryData(queryKeys.auth.session) as Awaited<
+    ReturnType<typeof authApi.getSession>
+  >;
+  let releaseSession!: (value: typeof session) => void;
+  vi.mocked(authApi.getSession).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        releaseSession = resolve;
+      }),
+  );
+  await act(async () => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
+  await vi.waitFor(() => expect(releaseSession).toBeTypeOf("function"));
+  await vi.waitFor(() =>
+    expect(container.querySelector("textarea")).toBeNull(),
+  );
+  expect(container.textContent).not.toContain("PRIVATE-");
+  expect(activationApi.get).toHaveBeenCalledTimes(priorReads);
+  let releaseRead!: (value: ActivationView) => void;
+  vi.mocked(activationApi.get).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        releaseRead = resolve;
+      }),
+  );
+  await act(async () => releaseSession(session));
+  await vi.waitFor(() =>
+    expect(activationApi.get).toHaveBeenCalledTimes(priorReads + 1),
+  );
+  expect(container.querySelector("textarea")).toBeNull();
+  await act(async () => releaseRead(saved));
+  await vi.waitFor(() =>
+    expect(container.querySelector("textarea")?.value).toBe(saved.state.intent),
+  );
 });

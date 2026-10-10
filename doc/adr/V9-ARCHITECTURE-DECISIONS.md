@@ -958,3 +958,43 @@ billing/provider qualification. Full current focused/types/build/browser and
 aggregate checks remain required. General first-task creation/execution, Core
 capability delivery, connection/access flow, artifact correction, privacy-approved
 analytics and complete hosted/human onboarding acceptance remain open.
+
+
+## V9-046 — Activation account revalidation and late acknowledgements
+
+2026-10-10. Retain the same account/company React scope for unsaved draft recovery,
+but conceal its private body and actions while the current session or SaaS
+capabilities are being rechecked. Each transition uses a new read-query epoch, so
+restored account authority cannot present the cached old Native view before a new
+owner read. A new principal/company remounts the scope and cannot inherit drafts.
+
+Mutation requests remain frozen under their original idempotency key. An
+acknowledgement that crosses any authority epoch cannot populate current query
+data or navigate; it becomes an unconfirmed outcome. After a fresh account and
+Native read, explicit retry reconciles exactly the original request. No browser
+persistent storage, authority grant or additional domain writer is introduced.
+
+Focus may start session and Native query observers before React commits pending
+state. Activation therefore checks the original session/capability query cache
+at every read/write/acknowledgement boundary as well as its retained scope epoch.
+A focused actual QueryClient regression proves no old-owner transport starts in
+that race. Five built browser cases and the 173-case focused group pass on the
+unchanged production source; eight final activation component cases pass.
+
+## V9-047 — Current-session boundary for V9 private read surfaces
+
+2026-10-10. `useV9CurrentAccount` observes the exact original auth-session query in
+addition to cached account identity. Each unresolved/revalidated transition gets
+a distinct source-read epoch. Home, Needs You and Work withhold cards/actions
+until the current session and a new original-owner read resolve. The command
+palette preserves same-account entered text while withholding input/results and
+requires a new current command read. Actual native permissions and effects remain
+independent; a selected command does not become an authorization grant.
+
+My Feedback uses the same boundary and fresh list/detail epochs; its existing
+scoped reply component retains an unsaved reply without placing it in the DOM.
+Readonly support, maintenance-history and monitor entry points unmount private
+reads during session revalidation, requiring a fresh read on return. These changes
+do not replace the original V7 authoring boundary or claim that every legacy
+surface has been migrated. No account cache schema, domain writer, telemetry or
+browser persistent storage is introduced.

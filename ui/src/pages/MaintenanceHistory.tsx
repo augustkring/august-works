@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "../lib/router";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { maintenanceHistoryApi } from "../api/maintenance-history";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
@@ -11,7 +11,7 @@ import { Button } from "../components/ui/button";
 
 export function MaintenanceHistoryEntry() {
   const feature = useV9FeatureEnabled("maintenance_autopilot_v9"),
-    identity = useAccountIdentity(),
+    identity = useV9CurrentAccount(),
     { selectedCompanyId } = useCompany(),
     { installationId } = useParams(),
     { t } = useTranslation("experience");

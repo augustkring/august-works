@@ -2,16 +2,12 @@
   "screenId": "AGENT-MONITOR",
   "journeyId": "agents",
   "routeOrSurface": "/agents/:agentId/monitor",
-  "targetExperienceProfiles": [
-    "member",
-    "manager",
-    "admin",
-    "security_admin"
-  ],
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
   "customerOutcome": "Inspect current native agent scheduling and bounded recorded execution status without claiming production readiness or verified business outcomes.",
   "entryConditions": [
     "Current company and authenticated human account or explicit local board.",
-    "Current native agent read authority and progressive_shell_v9 enabled."
+    "Current native agent read authority and progressive_shell_v9 enabled.",
+    "A pending current-session recheck suppresses cached private content and actions; restored account authority requires a fresh original-owner read."
   ],
   "exitConditions": [
     "Open existing authorized native history or Advanced controls.",
@@ -59,7 +55,7 @@
     "receipt": "Observed timestamp is a source check time, not an execution or business receipt."
   },
   "states": {
-    "loading": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
+    "loading": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion. A cached session is insufficient while its current recheck is unresolved.",
     "empty": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
     "partial": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
     "stale": "Current source checking hides prior private metadata; empty, rejected, stale, recovering and failed reads never imply readiness or completion.",
@@ -95,9 +91,7 @@
     "dataShown": [
       "Authorized name, native scheduling category, sanitized pause category and bounded native run status metadata."
     ],
-    "dataCollected": [
-      "No new data; native current reads only."
-    ],
+    "dataCollected": ["No new data; native current reads only."],
     "sensitiveFields": [
       "Native IDs/names/timestamps are private company/account scoped."
     ],

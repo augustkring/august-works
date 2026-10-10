@@ -11,7 +11,8 @@
   "customerOutcome": "Find the selected active capability, future review requests and Home without mandatory expansion.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
-    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary",
+    "An account/capability recheck hides private state and controls; same-account resolution requires a new Native read before presentation resumes."
   ],
   "exitConditions": [
     "Only a canonical server-confirmed result permits a success claim",
@@ -64,11 +65,11 @@
     "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
     "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
-    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect. A mutation acknowledgement that crosses an account-authority check cannot advance the page; explicit reconciliation retains the original request identity.",
     "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
   },
   "navigation": {
-    "back": "Browser and product Back preserve session form state without recreating organizations, agents or runs.",
+    "back": "Browser and product Back preserve session form state without recreating organizations, agents or runs. A same-account recheck retains the unsaved draft only in the mounted account scope; another principal never inherits it.",
     "cancelOrSaveExit": "No input is written to browser persistent storage; committed activation drafts remain in the native onboarding owner.",
     "deepLink": "/saas/activation/12",
     "resume": "Reload the original current onboarding owner. A recorded result is shown only while its exact Native evidence still qualifies; withdrawn evidence never authorizes completing setup."

@@ -63,6 +63,7 @@ export function ActivationPage() {
       principal={session.data.user.id}
       companyId={selectedCompanyId}
       enabled={capabilities.data?.activationV9 === true}
+      ready={!session.isFetching && !capabilities.isFetching}
     />
   );
 }
@@ -70,10 +71,12 @@ function ActivationScope({
   principal,
   companyId,
   enabled,
+  ready,
 }: {
   principal: string;
   companyId: string | null;
   enabled: boolean;
+  ready: boolean;
 }) {
   const { t } = useTranslation("experience"),
     { reloadCompanies, setSelectedCompanyId } = useCompany(),
@@ -83,7 +86,14 @@ function ActivationScope({
   const [name, setName] = useState(""),
     [website, setWebsite] = useState(""),
     [intent, setIntent] = useState(""),
-    [purpose, setPurpose] = useState("");
+    [purpose, setPurpose] = useState(""),
+    [unconfirmed, setUnconfirmed] = useState(false);
+  // A retained same-account draft is private while current authority is checked.
+  // Every transition gets a fresh read and fences acknowledgements from before it.
+  const authority = useRef({ ready, epoch: 0 });
+  if (authority.current.ready !== ready)
+    authority.current = { ready, epoch: authority.current.epoch + 1 };
+  const epoch = authority.current.epoch;
   const heading = useRef<HTMLHeadingElement>(null),
     error = useRef<HTMLDivElement>(null);
   const alive = useRef(true),
@@ -100,16 +110,26 @@ function ActivationScope({
       alive.current = false;
     };
   }, []);
-  const key = ["activation", companyId, principal];
+  // Query observers may start a focus refetch before React commits the pending
+  // session state. Consult the original query cache at the transport boundary.
+  const canUseAuthority = () =>
+    authority.current.ready &&
+    client.getQueryState(queryKeys.auth.session)?.fetchStatus !== "fetching" &&
+    client.getQueryState(["saas-capabilities"])?.fetchStatus !== "fetching";
+  const key = ["activation", companyId, principal, epoch];
   const run = useQuery({
     queryKey: key,
-    queryFn: ({ signal }) => activationApi.get(companyId!, principal, signal),
-    enabled: !!companyId,
+    queryFn: ({ signal }) => {
+      if (!canUseAuthority()) throw new Error("Activation context changed");
+      return activationApi.get(companyId!, principal, signal);
+    },
+    enabled: ready && !!companyId,
     staleTime: 0,
     gcTime: 0,
     retry: false,
   });
-  const current = run.isSuccess && !run.isFetching ? run.data : undefined;
+  const current =
+    ready && run.isSuccess && !run.isFetching ? run.data : undefined;
   const step = current?.state.step;
   const canonicalScreen = step ? ACTIVATION_STEPS.indexOf(step) + 3 : 2;
   const requestedScreen = Number(params.screen);
@@ -148,18 +168,40 @@ function ActivationScope({
     heading.current?.focus();
   }, [screen]);
   const create = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      if (!canUseAuthority())
+        throw new Error("Activation context changed");
+      const attemptEpoch = authority.current.epoch;
+      setUnconfirmed(false);
       creationAttempt.current ??= {
         name,
         idempotencyKey: crypto.randomUUID(),
         activation: { version: 9, website },
       };
-      return saasApi.createCompany(principal, creationAttempt.current);
+      const result = await saasApi.createCompany(
+        principal,
+        creationAttempt.current,
+      );
+      return { result, attemptEpoch };
     },
     retry: false,
-    onSuccess: async (result) => {
+    onSuccess: async ({ result, attemptEpoch }) => {
       if (!alive.current) return;
+      if (
+        !canUseAuthority() ||
+        authority.current.epoch !== attemptEpoch
+      ) {
+        setUnconfirmed(true);
+        return;
+      }
       await reloadCompanies();
+      if (
+        !canUseAuthority() ||
+        authority.current.epoch !== attemptEpoch
+      ) {
+        if (alive.current) setUnconfirmed(true);
+        return;
+      }
       if (alive.current) {
         setSelectedCompanyId(result.companyId);
         navigate("/saas/activation/3", { replace: true });
@@ -167,17 +209,35 @@ function ActivationScope({
     },
   });
   const command = useMutation({
-    mutationFn: (input: ActivationCommand) => {
+    mutationFn: async (input: ActivationCommand) => {
+      if (!canUseAuthority())
+        throw new Error("Activation context changed");
+      const attemptEpoch = authority.current.epoch;
+      setUnconfirmed(false);
       commandAttempt.current ??= input;
-      return activationApi.command(
+      const result = await activationApi.command(
         companyId!,
         principal,
         commandAttempt.current,
       );
+      return { result, attemptEpoch };
     },
     retry: false,
-    onSuccess: (result: ActivationView) => {
+    onSuccess: ({
+      result,
+      attemptEpoch,
+    }: {
+      result: ActivationView;
+      attemptEpoch: number;
+    }) => {
       if (!alive.current) return;
+      if (
+        !canUseAuthority() ||
+        authority.current.epoch !== attemptEpoch
+      ) {
+        setUnconfirmed(true);
+        return;
+      }
       commandAttempt.current = null;
       client.setQueryData(key, result);
       if (exitAfterSave.current) {
@@ -190,7 +250,7 @@ function ActivationScope({
       );
     },
   });
-  const failed = create.isError || command.isError;
+  const failed = create.isError || command.isError || unconfirmed;
   useEffect(() => {
     if (failed) error.current?.focus();
   }, [failed]);
@@ -227,6 +287,13 @@ function ActivationScope({
       /* mutation alert retains the draft; never navigate on unknown outcome */
     }
   }
+  if (!ready)
+    return (
+      <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+        <h1 className="text-2xl font-semibold">{t("activation.loading")}</h1>
+        <p role="status">{t("activation.loading")}</p>
+      </main>
+    );
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">

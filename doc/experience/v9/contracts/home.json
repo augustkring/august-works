@@ -6,7 +6,8 @@
   "customerOutcome": "Understand meaningful current work and the next action without interpreting internal domains.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
-    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary",
+    "A pending current-session recheck suppresses cached private content and actions; restored account authority requires a fresh original-owner read."
   ],
   "exitConditions": [
     "Only a canonical server-confirmed result permits a success claim",
@@ -45,7 +46,7 @@
     "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
   },
   "states": {
-    "loading": "Announce loading while current identity or native read authorization is being checked; hide retained cards and controls during the check.",
+    "loading": "Announce loading while current identity or native read authorization is being checked; hide retained cards and controls during the check. A cached session is insufficient while its current recheck is unresolved.",
     "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
     "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
     "stale": "Suppress retained cards after native access/source loss; a company/principal-scoped query epoch rejects late old receipts. Changed sources are partial, never a complete empty queue.",

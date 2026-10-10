@@ -6,7 +6,7 @@ import {
   type ExperienceCommands,
   type ExperienceCommandId,
 } from "@paperclipai/shared";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import {
   experienceCommandsKey,
   getExperienceCommands,
@@ -35,10 +35,14 @@ function Commands({
   companyId,
   principal,
   close,
+  accountReady,
+  authorityEpoch,
 }: {
   companyId: string;
   principal: string;
   close: () => void;
+  accountReady: boolean;
+  authorityEpoch: number;
 }) {
   const { t } = useTranslation("experience"),
     navigate = useNavigate(),
@@ -74,14 +78,16 @@ function Commands({
   }, [text]);
   const intent = parseExperienceCommand(text);
   const query = useQuery({
-    queryKey: [...prefix, debounced, epoch],
+    queryKey: [...prefix, authorityEpoch, debounced, epoch],
     queryFn: ({ signal }) =>
       getExperienceCommands(companyId, principal, debounced, signal),
+    enabled: accountReady,
     staleTime: 0,
     gcTime: 0,
     retry: false,
   });
-  const ready = query.isSuccess && text === debounced && !query.isFetching;
+  const ready =
+    accountReady && query.isSuccess && text === debounced && !query.isFetching;
   useEffect(() => {
     if (!query.isError) return;
     const focusedDialog = document.activeElement?.closest('[role="dialog"]');
@@ -118,6 +124,12 @@ function Commands({
       (intent.resourceKind === "project" && id === "projects")
     );
   }
+  if (!accountReady)
+    return (
+      <p role="status" className="p-4">
+        {t("loading")}
+      </p>
+    );
   return (
     <Command shouldFilter={false}>
       <CommandInput
@@ -224,14 +236,14 @@ function Commands({
 }
 export function ExperienceCommandPalette() {
   const { t } = useTranslation("experience"),
-    identity = useAccountIdentity(),
+    identity = useV9CurrentAccount(),
     { selectedCompanyId } = useCompany(),
     { isMobile, setSidebarOpen } = useSidebar();
   const [open, setOpen] = useState(false),
     invoker = useRef<HTMLElement | null>(null),
     navigating = useRef(false);
   const principal = identity.localImplicit ? "local-board" : identity.userId;
-  const scope = `${selectedCompanyId}:${principal}:${identity.settled}`,
+  const scope = `${selectedCompanyId}:${principal}`,
     previous = useRef(scope);
   useEffect(() => {
     if (scope !== previous.current) {
@@ -284,7 +296,7 @@ export function ExperienceCommandPalette() {
           <p role="alert" className="p-4">
             {t("commands.failed")}
           </p>
-        ) : !identity.settled || !principal ? (
+        ) : !principal ? (
           <p role="status" className="p-4">
             {t("loading")}
           </p>
@@ -293,6 +305,8 @@ export function ExperienceCommandPalette() {
             key={scope}
             companyId={selectedCompanyId}
             principal={principal}
+            accountReady={identity.settled}
+            authorityEpoch={identity.authorityEpoch}
             close={() => {
               navigating.current = true;
               setOpen(false);

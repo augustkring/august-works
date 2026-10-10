@@ -1,19 +1,19 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "./useV9CurrentAccount";
 import { experienceApi, experienceQueryKey } from "../api/experience";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { queryKeys } from "../lib/queryKeys";
 export function useExperience(companyId: string | null) {
   const client = useQueryClient();
-  const identity = useAccountIdentity();
+  const identity = useV9CurrentAccount();
   const principal = identity.localImplicit ? "local-board" : identity.userId;
   const scope = `${companyId ?? ""}:${principal ?? "unresolved"}`;
   const [revision, setRevision] = useState({ scope, epoch: 0 });
   const epoch = revision.scope === scope ? revision.epoch : 0;
   const prefix = experienceQueryKey(companyId ?? "", principal ?? "unresolved");
   const query = useQuery({
-    queryKey: [...prefix, epoch],
+    queryKey: [...prefix, identity.authorityEpoch, epoch],
     queryFn: ({ signal }) => experienceApi.home(companyId!, principal!, signal),
     enabled: !!companyId && identity.settled && !!principal,
     staleTime: 0,

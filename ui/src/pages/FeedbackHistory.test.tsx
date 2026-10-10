@@ -336,3 +336,55 @@ it("removes operator history and mutation controls when current access revalidat
     expect(document.querySelector('[role="alert"]')).toBeTruthy();
   });
 });
+
+it("hides private feedback and an unsaved reply during session revalidation, preserving the reply only after fresh Native reads", async () => {
+  const list = vi.spyOn(customerFeedbackApi, "list").mockResolvedValue([item]);
+  const get = vi.spyOn(customerFeedbackApi, "get").mockResolvedValue(item);
+  const send = vi.spyOn(customerFeedbackApi, "followUp");
+  await mount("customer");
+  await vi.waitFor(() =>
+    expect(document.querySelector("textarea")).toBeTruthy(),
+  );
+  await enter(document.querySelector("textarea")!, "PRIVATE-UNSAVED-REPLY");
+  const priorList = list.mock.calls.length,
+    priorDetail = get.mock.calls.length;
+  let resolveSession!: (value: object) => void;
+  let pendingSession!: Promise<unknown>;
+  await act(async () => {
+    pendingSession = client.fetchQuery({
+      queryKey: ["auth", "session"],
+      queryFn: () =>
+        new Promise<object>((resolve) => {
+          resolveSession = resolve;
+        }),
+    });
+  });
+  await vi.waitFor(() => expect(document.querySelector("textarea")).toBeNull());
+  expect(container.textContent).not.toContain(item.body);
+  expect(container.textContent).not.toContain("PRIVATE-UNSAVED-REPLY");
+  expect(list).toHaveBeenCalledTimes(priorList);
+  expect(get).toHaveBeenCalledTimes(priorDetail);
+  let resolveRead!: (value: CustomerFeedback) => void;
+  get.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveRead = resolve;
+      }),
+  );
+  await act(async () => {
+    resolveSession({});
+    await pendingSession;
+  });
+  await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(priorDetail + 1));
+  expect(list).toHaveBeenCalledTimes(priorList + 1);
+  expect(document.querySelector("textarea")).toBeNull();
+  expect(container.textContent).not.toContain(item.body);
+  await act(async () => resolveRead(item));
+  await vi.waitFor(() =>
+    expect(document.querySelector("textarea")?.value).toBe(
+      "PRIVATE-UNSAVED-REPLY",
+    ),
+  );
+  expect(container.textContent).toContain(item.body);
+  expect(send).not.toHaveBeenCalled();
+});

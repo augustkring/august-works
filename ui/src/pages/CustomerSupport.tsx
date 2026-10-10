@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { customerSupportHistorySchema } from "@paperclipai/shared";
 import { api } from "../api/client";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
@@ -13,7 +13,7 @@ import { Button } from "../components/ui/button";
 export function CustomerSupport() {
   const { t } = useTranslation("experience"),
     { selectedCompanyId } = useCompany(),
-    identity = useAccountIdentity(),
+    identity = useV9CurrentAccount(),
     feature = useV9FeatureEnabled("progressive_shell_v9");
   const principal = identity.localImplicit ? "local-board" : identity.userId;
   if (!selectedCompanyId) return <p role="status">{t("selectCompany")}</p>;
