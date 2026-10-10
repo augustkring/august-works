@@ -31,6 +31,7 @@ jobs:
           npm install --no-audit --no-fund
           npm run typecheck
           npm run build
+          npm audit --omit=dev --audit-level=high
           for f in out/index.html out/about/index.html out/platform/index.html out/trust/index.html; do test -s "$f"; done
           echo "NEXT_STATIC_EXPORT_VERIFIED=4_ROUTES"
       - name: Publish interactive single-file review
