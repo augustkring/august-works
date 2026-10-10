@@ -245,7 +245,9 @@
     "openHome": "Go to Home",
     "resultNeedsReview": "Review your saved result",
     "futureDrafts": "The selected agent remains available for internal drafts within its current permissions.",
-    "futureRequests": "Review future requests in Needs You"
+    "futureRequests": "Review future requests in Needs You",
+    "changeSetup": "Change setup",
+    "changeSetupScope": "Your goal and company answers will be kept for editing. Existing work and access remain under their own controls."
   },
   "company": {
     "title": "Company",

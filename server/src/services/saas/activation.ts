@@ -409,6 +409,19 @@ export function activationService(db: Db) {
             next.step = "review";
             break;
           }
+          case "change_setup": {
+            requireStep("review");
+            if (state.firstValueAt || state.firstValueReceipt)
+              throw conflict("Review the recorded result through its original controls", {
+                code: "FIRST_RESULT_ALREADY_RECORDED",
+              });
+            // This changes only the person's onboarding choice. Original
+            // Foundation drafts, installations, grants and work keep their
+            // own owners; selecting a capability again requires current admission.
+            next.packageVersionId = null;
+            next.step = "intent";
+            break;
+          }
           case "record_verified_result": {
             requireStep("review");
             if (

@@ -126,6 +126,7 @@ export const activationCommandSchema = z.discriminatedUnion("operation", [
     packageVersionId: z.uuid(),
   }),
   z.strictObject({ ...envelope, operation: z.literal("continue_access") }),
+  z.strictObject({ ...envelope, operation: z.literal("change_setup") }),
   z.strictObject({
     ...envelope,
     operation: z.literal("record_verified_result"),

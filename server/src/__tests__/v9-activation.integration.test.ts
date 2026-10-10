@@ -12,6 +12,7 @@ import {
 import {
   createSaasCompanySchema,
   type ActivationCommand,
+  activationStateSchema,
 } from "@paperclipai/shared";
 import { saasOnboardingService } from "../services/saas/onboarding.js";
 import { activationService } from "../services/saas/activation.js";
@@ -78,6 +79,60 @@ const support = await getEmbeddedPostgresTestSupport();
         "expectedVersion" | "requestId"
       >,
     ) => ({ ...rest, expectedVersion, requestId: randomUUID() });
+    // Explicit historical-review fixture with a now-unavailable selected UUID.
+    // It qualifies correction of stored setup, not a package release or execution.
+    async function reviewFixture() {
+      const run = await create();
+      const state = { ...activationStateSchema.parse(run.activationState), step: "review" as const,
+        intent: "PRIVATE review goal", companyPurpose: "PRIVATE company purpose", packageVersionId: randomUUID() };
+      await db.update(companyOnboardingRuns).set({ activationState: state, currentStage: "v9_review", version: run.version + 1 }).where(eq(companyOnboardingRuns.id, run.id));
+      return { ...run, version: run.version + 1, state };
+    }
+    it("corrects setup with one original receipt, keeps literal answers and leaves native work and access unchanged", async () => {
+      const run = await reviewFixture();
+      const before = await db.execute(sql`select
+        (select count(*) from issues where company_id=${run.companyId}::uuid) as tasks,
+        (select count(*) from agents where company_id=${run.companyId}::uuid) as agents,
+        (select count(*) from heartbeat_runs where company_id=${run.companyId}::uuid) as runs,
+        (select count(*) from principal_permission_grants where company_id=${run.companyId}::uuid) as grants`);
+      const input = { operation: "change_setup", requestId: randomUUID(), expectedVersion: run.version };
+      const service = activationService(db);
+      const [changed, replay] = await Promise.all([service.command(actor(), run.companyId, input), service.command(actor(), run.companyId, input)]);
+      expect(changed.version).toBe(run.version + 1);expect(replay.version).toBe(changed.version);
+      expect(changed.state).toMatchObject({ step: "intent", intent: run.state.intent, companyPurpose: run.state.companyPurpose, packageVersionId: null, firstValueAt: null });
+      const after = await db.execute(sql`select
+        (select count(*) from issues where company_id=${run.companyId}::uuid) as tasks,
+        (select count(*) from agents where company_id=${run.companyId}::uuid) as agents,
+        (select count(*) from heartbeat_runs where company_id=${run.companyId}::uuid) as runs,
+        (select count(*) from principal_permission_grants where company_id=${run.companyId}::uuid) as grants`);
+      expect(after).toEqual(before);
+      const logs = await db.select().from(activityLog).where(and(eq(activityLog.companyId, run.companyId), eq(activityLog.action, "activation.step_completed")));
+      expect(logs).toHaveLength(1);expect(JSON.stringify(logs)).not.toContain("PRIVATE");
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, run.id));
+      expect(stored!.activationState!.receipts).toHaveLength(1);
+      await expect(service.command(actor(), run.companyId, { ...input, expectedVersion: changed.version })).rejects.toMatchObject({ status: 409 });
+    });
+    it("refuses setup correction outside review and cannot clear a recorded result", async () => {
+      const ordinary = await create();
+      await expect(activationService(db).command(actor(), ordinary.companyId, { operation: "change_setup", requestId: randomUUID(), expectedVersion: ordinary.version })).rejects.toMatchObject({ status: 409 });
+      const run = await reviewFixture();
+      await db.update(companyOnboardingRuns).set({ activationState: { ...run.state, firstValueAt: new Date().toISOString() }, currentStage: "v9_review", version: run.version + 1 }).where(eq(companyOnboardingRuns.id, run.id));
+      await expect(activationService(db).command(actor(), run.companyId, { operation: "change_setup", requestId: randomUUID(), expectedVersion: run.version + 1 })).rejects.toMatchObject({ status: 409 });
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, run.id));
+      expect(stored!.activationState!.firstValueAt).not.toBeNull();expect(stored!.activationState!.step).toBe("review");
+    });
+    it("fences stale versions, rollout withdrawal and current membership before setup correction", async () => {
+      const run = await reviewFixture();const service = activationService(db);
+      const input = { operation: "change_setup", requestId: randomUUID(), expectedVersion: run.version };
+      await expect(service.command(actor(), run.companyId, { ...input, expectedVersion: run.version - 1 })).rejects.toMatchObject({ status: 409 });
+      await instanceSettingsService(db).updateExperimental({ activation_v9: false });
+      await expect(service.command(actor(), run.companyId, input)).rejects.toMatchObject({ status: 404 });
+      await instanceSettingsService(db).updateExperimental({ activation_v9: true });
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, run.companyId), eq(companyMemberships.principalId, userId)));
+      await expect(service.command({ ...actor(), isInstanceAdmin: true }, run.companyId, input)).rejects.toMatchObject({ status: 403 });
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, run.id));
+      expect(stored!.version).toBe(run.version);expect(stored!.activationState!.step).toBe("review");
+    });
     it("starts with intent and replays company creation without a paid plan or duplicate company", async () => {
       const input = createSaasCompanySchema.parse({
         name: "Activation company",

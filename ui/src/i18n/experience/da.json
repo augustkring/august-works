@@ -245,7 +245,9 @@
     "openHome": "Gå til Hjem",
     "resultNeedsReview": "Gennemgå dit gemte resultat",
     "futureDrafts": "Den valgte agent er fortsat tilgængelig for interne udkast inden for sine aktuelle tilladelser.",
-    "futureRequests": "Se fremtidige anmodninger i Kræver dig"
+    "futureRequests": "Se fremtidige anmodninger i Kræver dig",
+    "changeSetup": "Ret opsætning",
+    "changeSetupScope": "Dit mål og dine svar om virksomheden bevares, så du kan rette dem. Eksisterende arbejde og adgang styres fortsat hver for sig."
   },
   "company": {
     "title": "Virksomhed",

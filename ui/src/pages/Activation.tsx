@@ -642,6 +642,19 @@ function ActivationScope({
               <dd>{selected?.name ?? t("activation.noCapability")}</dd>
             </div>
           </dl>
+          {!isPast && current.state.step === "review" ? (
+            <div className="space-y-3">
+              <p>{t("activation.changeSetupScope")}</p>
+              <Button
+                variant="outline"
+                className="min-h-11"
+                disabled={!enabled || frozen}
+                onClick={() => command.mutate({ ...envelope(), operation: "change_setup" })}
+              >
+                {t("activation.changeSetup")}
+              </Button>
+            </div>
+          ) : null}
           <ActivationFirstValue
             value={current.firstValue}
             canRecord={

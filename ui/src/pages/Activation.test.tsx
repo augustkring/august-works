@@ -140,6 +140,26 @@ async function enter(text: string) {
   });
 }
 describe("Native V9 onboarding UI", () => {
+  it("returns to editable preserved answers only after the original setup-correction receipt", async () => {
+    const ready = view("review");
+    ready.state.intent = "Private first goal";ready.state.companyPurpose = "Private company answers";
+    ready.state.packageVersionId = "10000000-0000-4000-8000-000000000003";
+    const changed = { ...ready, version: 2, state: { ...ready.state, step: "intent" as const, packageVersionId: null } };
+    let acknowledge!: (value: ActivationView) => void;
+    const mutate = vi.spyOn(activationApi, "command").mockImplementation(() => new Promise(resolve => { acknowledge = resolve; }));
+    await mount(ready, "/saas/activation/9");
+    await vi.waitFor(() => expect(container.textContent).toContain("Change setup"));
+    await click("Change setup");
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate.mock.calls[0]).toEqual([companyId, "activation-owner", { operation: "change_setup", expectedVersion: 1, requestId: expect.any(String) }]);
+    expect([...container.querySelectorAll("button")].find(button => button.textContent === "Change setup")!.disabled).toBe(true);
+    expect(container.querySelector("textarea")).toBeNull();
+    await act(async () => acknowledge(changed));
+    await vi.waitFor(() => expect(container.querySelector("textarea")?.value).toBe("Private first goal"));
+    expect(container.querySelector("textarea")?.disabled).toBe(false);
+    expect(container.textContent).not.toContain("Run first task");
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
   it("resolves a stale step, preserves intent through Back, and does not expose an early plan purchase", async () => {
     await mount(view(), "/saas/activation/9");
     await vi.waitFor(() =>

@@ -95,6 +95,12 @@ describe("V9 activation input boundaries", () => {
       }).success,
     ).toBe(false);
   });
+  it("admits only the bounded setup-correction command without execution or replacement result fields", () => {
+    const input = { operation: "change_setup", requestId: randomUUID(), expectedVersion: 6 };
+    expect(activationCommandSchema.parse(input)).toEqual(input);
+    for (const extra of [{ packageVersionId: randomUUID() }, { step: "running" }, { firstValueAt: new Date().toISOString() }, { permissions: ["tools:admin"] }, { runId: randomUUID() }])
+      expect(activationCommandSchema.safeParse({ ...input, ...extra }).success).toBe(false);
+  });
   it("keeps the complete stable Company category set and rejects external navigation", () => {
     const view = {
       companyId: randomUUID(),
