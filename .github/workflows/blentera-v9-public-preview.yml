@@ -1,0 +1,58 @@
+name: Publish BLENTERA V9 design review
+on:
+  push:
+    branches:
+      - blentera-preview/clarity-first-v9-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check single-file source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s blentera-v9-review.html
+          grep -q 'Run AI work across your company' blentera-v9-review.html
+          grep -q 'An organisation for people and AI agents' blentera-v9-review.html
+          grep -q 'Chief Technology Officer' blentera-v9-review.html
+      - name: Publish to Cloudflare-hosted Share HTML
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --connect-timeout 15 --max-time 90 --retry 2 \
+            -F 'file=@blentera-v9-review.html;type=text/html' \
+            -F 'title=BLENTERA V9 clarity-first research-driven design review' \
+            https://sharehtml.zhenjia.dev/api/shares > "$RUNNER_TEMP/response.json"
+          python3 - <<'PY'
+          import json,os
+          result=json.load(open(os.path.join(os.environ["RUNNER_TEMP"],"response.json")))
+          url=result["share"]["preview_url"]
+          assert url.startswith("https://sharehtml.zhenjia.dev/v/") and url.endswith("/"),url
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f:f.write("url="+url+"\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as f:
+              f.write("## BLENTERA V9 — independent design review\n\n")
+              f.write("**[Open public preview]("+url+")**\n\n")
+              f.write("Unlisted, third-party Cloudflare-hosted conceptual website. Not the deployed Next.js app; no production claim.\n")
+          print("BLENTERA_V9_PREVIEW_URL="+url)
+          PY
+      - name: Verify public HTTP response and source
+        shell: bash
+        env:
+          URL: ${{ steps.publish.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location --max-time 40 \
+            -D "$RUNNER_TEMP/headers.txt" -o "$RUNNER_TEMP/live.html" "$URL"
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/live.html"
+          grep -q 'Run AI work across your company' "$RUNNER_TEMP/live.html"
+          grep -q 'An organisation for people and AI agents' "$RUNNER_TEMP/live.html"
+          grep -q 'const pages=' "$RUNNER_TEMP/live.html"
+          echo "BLENTERA_V9_HTTP_VERIFIED=$URL"
+          grep -Ei '^HTTP/|^[Cc]ontent-[Tt]ype:' "$RUNNER_TEMP/headers.txt" || true
+          wc -c "$RUNNER_TEMP/live.html"
