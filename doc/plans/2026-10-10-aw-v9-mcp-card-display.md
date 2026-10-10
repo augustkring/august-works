@@ -44,3 +44,14 @@ Integration with the latest project/task/account wave remains pending. No new To
 effect or MCP Apps iframe host is introduced. Actual runtime/provider admission,
 channel parity, broad semantic authoring and human/hosted launch checks remain
 open. R0/sourceComplete and all 70 acceptance rows remain pending.
+
+
+## Integration contract correction
+
+The latest root type/runner prerequisite caught stale generated legacy MCP source
+anchors after the tool file gained the display definition. The original capability
+generator refreshes the tool map and deterministic overview digest; its unchanged
+check then passes. The legacy 42-tool replacement dispositions, semantic operations
+and grants remain unchanged. The new display reference is not a legacy replacement
+or a new business-effect capability. The failed root run and matching source
+fingerprints are retained; all-workspace requalification remains required.
