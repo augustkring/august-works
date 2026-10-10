@@ -70,7 +70,7 @@ test("an unpublished internal test recovers its original receipt after reload an
                 id: "finish",
                 type: "core.merge",
                 name: "Finish internal test",
-                config: {},
+                config: { mode: "all" },
                 position: { x: 0, y: 2 },
               },
             ],

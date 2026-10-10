@@ -54,51 +54,44 @@ test("maintenance history reads native receipts separately from current state an
     path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"),
     "utf8",
   );
-  const db = createDb(
-    `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`,
-  );
+  const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`;
+  const db = createDb(databaseUrl);
   const packageId = randomUUID(),
     previous = randomUUID(),
     next = randomUUID(),
     installationId = randomUUID(),
     hash = "e".repeat(64);
   try {
-    await db
-      .insert(agentPackages)
-      .values({
-        id: packageId,
-        key: `browser-history-${packageId}`,
-        name: "Synthetic retained history",
-        description: "Software history prerequisite",
-        category: "internal",
-      });
-    await db
-      .insert(agentPackageVersions)
-      .values(
-        [previous, next].map((id, index) => ({
-          id,
-          packageId,
-          version: `1.0.${index}`,
-          state: "testing",
-          release: {} as PackageRelease,
-          contentHash: hash,
-          createdByUserId: "local-board",
-        })),
-      );
-    await db
-      .insert(companyAgentPackageInstallations)
-      .values({
-        id: installationId,
-        companyId: company.id,
+    await db.insert(agentPackages).values({
+      id: packageId,
+      key: `browser-history-${packageId}`,
+      name: "Synthetic retained history",
+      description: "Software history prerequisite",
+      category: "internal",
+    });
+    await db.insert(agentPackageVersions).values(
+      [previous, next].map((id, index) => ({
+        id,
         packageId,
-        installedVersionId: next,
-        agentId: agent.id,
-        installedByUserId: "local-board",
-        status: "configuring",
-        version: 2,
-        components: [],
-        updatePolicy: "auto_low_risk",
-      });
+        version: `1.0.${index}`,
+        state: "testing",
+        release: {} as PackageRelease,
+        contentHash: hash,
+        createdByUserId: "local-board",
+      })),
+    );
+    await db.insert(companyAgentPackageInstallations).values({
+      id: installationId,
+      companyId: company.id,
+      packageId,
+      installedVersionId: next,
+      agentId: agent.id,
+      installedByUserId: "local-board",
+      status: "configuring",
+      version: 2,
+      components: [],
+      updatePolicy: "auto_low_risk",
+    });
     const configuredId = randomUUID(),
       blockedId = randomUUID();
     await db.insert(activityLog).values([
@@ -236,11 +229,14 @@ test("maintenance history reads native receipts separately from current state an
     expect(retained!.status).toBe("configuring");
     expect(retained!.version).toBe(2);
   } finally {
-    await json(
-      await request.patch("/api/instance/settings/experimental", {
-        data: original,
-      }),
-    );
-    await closeRegisteredClients();
+    try {
+      await json(
+        await request.patch("/api/instance/settings/experimental", {
+          data: original,
+        }),
+      );
+    } finally {
+      await closeRegisteredClients(databaseUrl);
+    }
   }
 });
