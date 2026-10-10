@@ -1,0 +1,77 @@
+name: BLENTERA V7 — Next.js build and Cloudflare-hosted preview
+on:
+  push:
+    branches:
+      - blentera-preview/v7-nextjs-verified-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unpack Next.js source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/blentera"
+          base64 --decode blentera-v7-source.zip.b64 > "$RUNNER_TEMP/site.zip"
+          unzip -q "$RUNNER_TEMP/site.zip" -d "$RUNNER_TEMP/blentera"
+          test -s "$RUNNER_TEMP/blentera/app/page.tsx"
+      - name: Install and verify Next.js production export
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/blentera"
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run build
+          for f in out/index.html out/about/index.html out/platform/index.html out/trust/index.html; do test -s "$f"; done
+          echo "NEXT_STATIC_EXPORT_VERIFIED=4_ROUTES"
+      - name: Publish interactive single-file review
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s blentera-v7-review.html
+          grep -q 'data-page="about"' blentera-v7-review.html
+          grep -q 'data-page="platform"' blentera-v7-review.html
+          grep -q 'data-page="trust"' blentera-v7-review.html
+          ! grep -Eq 'href="\\{[A-Z]+\\}"' blentera-v7-review.html
+          curl --fail-with-body --silent --show-error --connect-timeout 20 --max-time 90 --retry 2 \
+            -F 'file=@blentera-v7-review.html;type=text/html' \
+            -F 'title=BLENTERA V7 — Next.js verified design review' \
+            https://sharehtml.zhenjia.dev/api/shares > "$RUNNER_TEMP/response.json"
+          python3 - <<'PY2'
+          import os,json
+          payload=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'response.json')))
+          url=payload['share']['preview_url']
+          assert url.startswith('https://sharehtml.zhenjia.dev/v/') and url.endswith('/'),url
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('url='+url+'\n')
+          print('BLENTERA_V7_PREVIEW_URL='+url)
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:
+              out.write('## BLENTERA V7 — Next.js build passed\n\n')
+              out.write('**[OPEN HTTP-VERIFIED DESIGN REVIEW]('+url+')**\n\n')
+              out.write('Self-contained conceptual preview; not first-party Cloudflare Pages deployment or product GA.\n')
+          PY2
+      - name: Verify public CDN response and content
+        env:
+          PREVIEW_URL: ${{ steps.publish.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location --max-time 45 \
+            --dump-header "$RUNNER_TEMP/headers" --output "$RUNNER_TEMP/page.html" "$PREVIEW_URL"
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/page.html"
+          grep -q 'id="work-exhibit-title"' "$RUNNER_TEMP/page.html"
+          grep -q 'data-page="about"' "$RUNNER_TEMP/page.html"
+          grep -q 'data-page="platform"' "$RUNNER_TEMP/page.html"
+          grep -q 'data-page="trust"' "$RUNNER_TEMP/page.html"
+          ! grep -Eq 'href="\\{[A-Z]+\\}"' "$RUNNER_TEMP/page.html"
+          echo "PUBLIC_VERIFIED_PREVIEW=$PREVIEW_URL"
+          grep -i -E '^HTTP/|^content-type:|^x-robots-tag:' "$RUNNER_TEMP/headers" || true
