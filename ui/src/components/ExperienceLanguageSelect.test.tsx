@@ -60,3 +60,44 @@ it("retains the current selection and uses a safe alert if the language change f
   expect(container!.textContent).not.toContain("PRIVATE-LANGUAGE-CANARY");
   expect(localStorage.getItem(EXPERIENCE_LOCALE_KEY)).toBeNull();
 });
+
+it("restores native focus after an asynchronous change without stealing a person's new focus", async () => {
+  const nativeChange = i18n.changeLanguage.bind(i18n);
+  let finish!: () => void;
+  vi.spyOn(i18n, "changeLanguage")
+    .mockImplementationOnce(nativeChange)
+    .mockImplementationOnce(() => new Promise((resolve) => {
+      finish = () => { void nativeChange("da").then(resolve); };
+    }));
+  await mount();
+  const select = container!.querySelector("select")!;
+  select.focus();
+  await change("da");
+  expect(select.disabled).toBe(true);
+  // jsdom does not implement the browser's disabled-control blur.
+  select.disabled = false;select.blur();select.disabled = true;
+  expect(document.activeElement).toBe(document.body);
+  await act(async () => finish());
+  await vi.waitFor(() => expect(select.disabled).toBe(false));
+  expect(document.activeElement).toBe(select);
+
+  let complete!: () => void;
+  // The real hook captured the installed method; use a separate mount for the
+  // second current language change and a fresh asynchronously settled method.
+  await act(async () => root!.unmount());root = undefined;
+  container!.remove();
+  vi.restoreAllMocks();
+  vi.spyOn(i18n, "changeLanguage")
+    .mockImplementationOnce(nativeChange)
+    .mockImplementationOnce(() => new Promise((resolve) => {
+      complete = () => { void nativeChange("da").then(resolve); };
+    }));
+  await mount();
+  const newSelect = container!.querySelector("select")!;
+  newSelect.focus();
+  await change("da");
+  const other = document.createElement("button");container!.append(other);other.focus();
+  await act(async () => complete());
+  await vi.waitFor(() => expect(newSelect.disabled).toBe(false));
+  expect(document.activeElement).toBe(other);
+});

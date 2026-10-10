@@ -15,6 +15,7 @@ export function ExperienceUtilities() {
   if (!shell.enabled && !feedback.enabled) return null;
   return (
     <div
+      role="region"
       aria-label={t("utilities")}
       className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-b border-border bg-background px-3"
     >
