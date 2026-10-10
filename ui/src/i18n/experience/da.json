@@ -919,5 +919,10 @@
     "notSent": "Vi kunne ikke gemme kvitteringsreferencen. Opgaven er ikke sendt. Prøv igen, eller brug Arbejde.",
     "resumeTitle": "Find din opgave",
     "resumeDescription": "Tjek opgaven fra dit tidligere forsøg."
+  },
+  "language": {
+    "label": "Sprog",
+    "notSaved": "Sproget er ændret for denne session. Valget kunne ikke gemmes.",
+    "failed": "Sproget kunne ikke ændres. Prøv igen."
   }
 }

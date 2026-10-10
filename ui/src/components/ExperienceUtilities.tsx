@@ -1,3 +1,4 @@
+import { ExperienceLanguageSelect } from "./ExperienceLanguageSelect";
 import { useTranslation } from "react-i18next";
 import { Menu, UserRound } from "lucide-react";
 import { FEEDBACK_CONTACTS } from "@paperclipai/shared";
@@ -41,6 +42,7 @@ export function ExperienceUtilities() {
           {t("ask")}
         </Button>
       )}
+      {shell.enabled && <ExperienceLanguageSelect />}
       <CustomerFeedbackDialog />
       <a
         className="inline-flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

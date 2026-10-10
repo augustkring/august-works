@@ -81,8 +81,8 @@ V9-079,2313,WCAG automated gates,not_started
 V9-080,2315,keyboard/screen-reader critical journey tests,not_started
 V9-081,2317,accessible auth/onboarding tests,not_started
 V9-082,2319,charts/generative UI nonvisual alternatives,not_started
-V9-083,2321,localization key migration for V9 surfaces,not_started
-V9-084,2323,Danish/English reference locale QA if launch scope requires,not_started
+V9-083,2321,localization key migration for V9 surfaces,in_progress
+V9-084,2323,Danish/English reference locale QA if launch scope requires,in_progress
 V9-085,2325,UX event Data Processing Contracts + allow-listed schema/redaction/leakage tests,not_started
 V9-086,2327,Time-to-first-outcome funnel,not_started
 V9-087,2329,interruption/attention telemetry,not_started

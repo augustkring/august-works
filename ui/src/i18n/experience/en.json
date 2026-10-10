@@ -919,5 +919,10 @@
     "notSent": "We could not keep a recovery receipt. Your task has not been sent. Try again or use Work.",
     "resumeTitle": "Find your task",
     "resumeDescription": "Check the task from your earlier attempt."
+  },
+  "language": {
+    "label": "Language",
+    "notSaved": "Your language changed for this session. The preference could not be saved.",
+    "failed": "The language could not be changed. Try again."
   }
 }

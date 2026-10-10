@@ -1109,3 +1109,21 @@ receipt clears only its exact locator. Failure/erasure never renews keys, infers
 no effect, or repeats creation. The locator ends with the tab; cross-device and
 cross-browser unknown recovery still require original-owner work and are open.
 This is core functional recovery metadata, not a telemetry policy approval.
+
+
+### ADR-V9-053 — explicit display language uses the existing translation owner
+
+The V9 global utilities offer the already registered English/Danish translations.
+A person explicitly selects the language; no model, browser-language inference,
+company edit or authorization change is involved. Only `en` or `da` is stored in
+the device's functional display preference. The existing English fallback stays
+in place. Unrecognized values and inaccessible storage fall back safely without
+rendering or logging the stored bytes. Changing language updates the document's
+language for assistive technology. Failed persistence leaves the current session
+usable with a translated status; a failed change keeps the prior selection.
+
+The preference is independent of account/company authority, like a local display
+choice. It contains no identity, content, credentials or tracking IDs. The picker
+is visible only with the progressive shell; existing Native controls and queries
+retain their owners. Software checks do not imply human translation review,
+screen-reader usability, the full 70-screen state matrix or launch acceptance.
