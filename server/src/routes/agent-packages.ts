@@ -68,18 +68,13 @@ export function agentPackageRoutes(
       validate(packageInstallSchema),
       async (req, res) => {
         const companyId = company(req);
-        const catalog = await service.catalog(req.actor);
-        if (
-          !catalog.some(
-            (r) =>
-              r.key === req.params.packageKey &&
-              r.versionId === req.body.versionId,
-          )
-        )
-          throw notFound("Package version not found");
+        if (action === "preview") {
+          const catalog = await service.catalog(req.actor);
+          if (!catalog.some(r => r.key === req.params.packageKey && r.versionId === req.body.versionId)) throw notFound("Package version not found");
+        }
         res
           .status(action === "install" ? 201 : 200)
-          .json(await service[action](req.actor, companyId, req.body));
+          .json(action === "install" ? await service.install(req.actor, companyId, req.body, req.params.packageKey as string) : await service.preview(req.actor, companyId, req.body));
       },
     );
   router.get(

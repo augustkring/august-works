@@ -1,4 +1,5 @@
 import type { CommercialAccess, EntitlementMap } from "./billing/catalog.js";
+import type { NotificationPolicy } from "./notification-policy.js";
 export interface SaasRuntimeBackupPolicy {
   enabled: boolean; allowBriefPause: boolean; intervalHours: number; version: number;
   phase: string; nextDueAt: string; lastSuccessAt: string | null; errorCode: string | null;
@@ -9,6 +10,7 @@ export interface SaasCapabilities {
   emailVerification: boolean;
   enterpriseSso?: boolean;
   onboarding: boolean;
+  activationV9?: boolean;
   billing: boolean;
   checkout: boolean;
   runtime: boolean;
@@ -130,6 +132,7 @@ export interface SaasNotification {
 export interface SaasNotificationPreference {
   category: "security" | "billing" | "runtime" | "approval" | "work_update";
   emailEnabled: boolean;
+  policy?: NotificationPolicy;
 }
 
 export interface SaasRuntimeBackup {

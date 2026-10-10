@@ -1,0 +1,103 @@
+{
+  "issues": [],
+  "svg_stats": [
+    {
+      "file": "blentera-horizontal-black.svg",
+      "paths": 10,
+      "bad": []
+    },
+    {
+      "file": "blentera-horizontal-color.svg",
+      "paths": 12,
+      "bad": []
+    },
+    {
+      "file": "blentera-horizontal-ink.svg",
+      "paths": 10,
+      "bad": []
+    },
+    {
+      "file": "blentera-horizontal-white.svg",
+      "paths": 10,
+      "bad": []
+    },
+    {
+      "file": "blentera-square-symbol-black.svg",
+      "paths": 2,
+      "bad": []
+    },
+    {
+      "file": "blentera-square-symbol-color.svg",
+      "paths": 4,
+      "bad": []
+    },
+    {
+      "file": "blentera-square-symbol-ink.svg",
+      "paths": 2,
+      "bad": []
+    },
+    {
+      "file": "blentera-square-symbol-white.svg",
+      "paths": 2,
+      "bad": []
+    },
+    {
+      "file": "blentera-symbol-black.svg",
+      "paths": 2,
+      "bad": []
+    },
+    {
+      "file": "blentera-symbol-color.svg",
+      "paths": 4,
+      "bad": []
+    },
+    {
+      "file": "blentera-symbol-ink.svg",
+      "paths": 2,
+      "bad": []
+    },
+    {
+      "file": "blentera-symbol-white.svg",
+      "paths": 2,
+      "bad": []
+    },
+    {
+      "file": "blentera-vertical-black.svg",
+      "paths": 10,
+      "bad": []
+    },
+    {
+      "file": "blentera-vertical-color.svg",
+      "paths": 12,
+      "bad": []
+    },
+    {
+      "file": "blentera-vertical-ink.svg",
+      "paths": 10,
+      "bad": []
+    },
+    {
+      "file": "blentera-vertical-white.svg",
+      "paths": 10,
+      "bad": []
+    },
+    {
+      "file": "blentera-wordmark-black.svg",
+      "paths": 8,
+      "bad": []
+    },
+    {
+      "file": "blentera-wordmark-ink.svg",
+      "paths": 8,
+      "bad": []
+    },
+    {
+      "file": "blentera-wordmark-white.svg",
+      "paths": 8,
+      "bad": []
+    }
+  ],
+  "png_count": 120,
+  "dual_renderer_rmse": 177.18524169921875,
+  "dual_renderer_rmse_over_white": 0.6786918640136719
+}

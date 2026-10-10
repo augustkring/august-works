@@ -13,11 +13,19 @@ import {
   workflowCapabilitySearchQuerySchema,
   workflowRunListQuerySchema,
   workflowDataSelectorRequestSchema,
+  workflowLifecycleCommandSchema,
+  workflowLaunchCommandSchema,
+  workflowStopCommandSchema,
+  v9FeatureEnabled,
   type PermissionKey,
   type WorkflowCapabilities,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
+import { conflict, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
+import { workflowReview } from "../services/experience/workflow-review.js";
+import { workflowRunReview } from "../services/experience/workflow-run-review.js";
+import { currentWorkflowStopRoleAllows, readCustomerWorkflowStopReceipt } from "../services/workflows/workflow-customer-stop.js";
+import { assertV5Authorization } from "../services/v5-authorization.js";
 import {
   accessService,
   instanceSettingsService,
@@ -505,6 +513,65 @@ export function workflowRoutes(db: Db) {
   router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/approve", reviewToolAction("approve"));
   router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/reject", reviewToolAction("reject"));
 
+  router.get("/companies/:companyId/workflow-runs/:runId/experience", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const runId = z.uuid().parse(req.params.runId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+    const detail = await executor.getRun(companyId, runId, req.actor);
+    if (!detail) throw notFound("Workflow run not found");
+    const revision = await svc.getRevision(companyId, detail.run.workflowId, detail.run.workflowRevisionId, req.actor);
+    if (!revision) throw notFound("Workflow run revision not found");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+    const stopAllowed = await access.decide({ actor: req.actor, action: "workflows:run", resource: { type: "company", companyId } });
+    const stopEnabled = v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9");
+    const stopRoleAllowed = await currentWorkflowStopRoleAllows(db, companyId, req.actor);
+    const canRequestStop = stopAllowed.allowed && stopEnabled && stopRoleAllowed;
+    const stopReceipt = canRequestStop ? await readCustomerWorkflowStopReceipt(db, detail.run, req.actor) : null;
+    // A receipt survives navigation, but never bypasses current private-source
+    // admission or reveals another principal's original request.
+    if (stopReceipt) {
+      if (!await executor.getRun(companyId, runId, req.actor)) throw notFound("Workflow run not found");
+      await assertWorkflowsEnabled();
+      await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+      await assertV5Authorization(db, req.actor, companyId, "workflows:run");
+      if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") ||
+          !await currentWorkflowStopRoleAllows(db, companyId, req.actor)) throw notFound("Workflow stop receipt is unavailable");
+    }
+    res.json(workflowRunReview(detail, revision, nodeRegistry.list(), canRequestStop, stopReceipt));
+  });
+
+  router.post("/companies/:companyId/workflow-runs/:runId/experience/stop", validate(workflowStopCommandSchema), async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), runId = z.uuid().parse(req.params.runId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    await assertPermission(req, companyId, "workflows:run");
+    const receipt = await executor.stopRun(companyId, runId, req.body, req.actor);
+    // A later authority/retention loss can hide the reply. The native admission
+    // is retained, so the client must reconcile the identical original request.
+    if (!await executor.getRun(companyId, runId, req.actor)) throw notFound("Workflow run not found");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    await assertPermission(req, companyId, "workflows:run");
+    await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+    await assertV5Authorization(db, req.actor, companyId, "workflows:run");
+    if (!await currentWorkflowStopRoleAllows(db, companyId, req.actor)) throw forbidden("Viewer access is read-only");
+    res.json(receipt);
+  });
+
   router.get("/companies/:companyId/workflow-runs/:runId", async (req, res) => {
     await assertWorkflowsEnabled();
     const companyId = req.params.companyId as string;
@@ -591,6 +658,68 @@ export function workflowRoutes(db: Db) {
       res.json(result);
     },
   );
+
+  router.post("/companies/:companyId/workflows/:workflowId/experience/launch", validate(workflowLaunchCommandSchema), async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    const receipt = await svc.launch(companyId, workflowId, req.body, req.actor);
+    // Native durable reconciliation also owns this run. Inline execution is
+    // best effort and cannot upgrade the admission receipt to completion.
+    try { await executor.executeQueuedRun(companyId, receipt.runId, runActor(req)); } catch { /* Original admission remains durable. */ }
+    res.json(receipt);
+  });
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience/operations", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    res.json(await svc.operations(companyId, workflowId, req.actor));
+  });
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal)
+      throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    const detail = await svc.getDetail(companyId, workflowId, req.actor);
+    if (!detail) throw notFound("Workflow not found");
+    const edit = await decidePermission(req, companyId, "workflows:edit");
+    const operate = await decidePermission(req, companyId, "workflows:publish");
+    const run = await decidePermission(req, companyId, "workflows:run");
+    const rollout = v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9");
+    const result = workflowReview(detail, nodeRegistry.list(), edit.allowed,
+      operate.allowed && rollout, run.allowed && rollout);
+    // Current native admission remains necessary after the asynchronous private read.
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    res.json(result);
+  });
+
+  router.post("/companies/:companyId/workflows/:workflowId/experience/lifecycle",
+    validate(workflowLifecycleCommandSchema), async (req, res) => {
+      assertBoard(req);
+      const companyId = z.uuid().parse(req.params.companyId);
+      const workflowId = z.uuid().parse(req.params.workflowId);
+      const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+      if (!principal) throw unauthorized("Authenticated user identity required");
+      if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+      res.set("Cache-Control", "private, no-store");
+      res.json(await svc.lifecycle(companyId, workflowId, req.body, req.actor));
+    });
 
   router.get("/companies/:companyId/workflows/:workflowId", async (req, res) => {
     await assertWorkflowsEnabled();

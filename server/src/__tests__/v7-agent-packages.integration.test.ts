@@ -50,6 +50,7 @@ import {
   companyAgentPackageInstallations,
   heartbeatRuns,
   agents,
+  agentConfigurationDrafts,
   agentPackageStopActions,
   issues,
 } from "@paperclipai/db";
@@ -66,6 +67,7 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { rolePackService } from "../services/role-packs.js";
 import { agentPackageService } from "../services/agent-packages/package-service.js";
+import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import {
   assertPackageExecution,
   packageToolRestriction,
@@ -246,6 +248,122 @@ const support = await getEmbeddedPostgresTestSupport();
         reason: "Explicit internal evaluation",
       });
     }
+    async function hireFixture() {
+      await instanceSettingsService(db).updateExperimental({hire_agent_v9: true});
+      const evidence = input.releaseEvidence.provenance;
+      const release: PackageRelease = {
+        ...input, packageKey: `hire-native-fixture-${randomUUID()}`,
+        manifest: {...input.manifest, audience: "customer", commercialProductKey: "agent_package_research"},
+        releaseEvidence: {...input.releaseEvidence, sbom: evidence, scan: evidence, evaluations: evidence, protectedHoldout: evidence, customerDemand: evidence},
+      };
+      return {release, published: await service.publish(f.actor, release), hire: agentAuthoringService(db)};
+    }
+    it("saves a pinned unpublished Hire setup once without installing, granting or creating an agent", async () => {
+      const {release, published, hire} = await hireFixture();
+      const beforeAgents = (await db.select().from(agents)).length;
+      const beforeInstallations = (await db.select().from(companyAgentPackageInstallations)).length;
+      const input = {requestId: randomUUID(), packageVersionId: published.id};
+      const [first, repeated] = await Promise.all([hire.create(f.actor, f.home, input), hire.create(f.actor, f.home, input)]);
+      expect(first.id).toBe(repeated.id);
+      expect(first.kind).toBe("hire"); expect(first.step).toBe("hire_access"); expect(first.agentId).toBeNull();
+      expect(first.package).toMatchObject({key: release.packageKey, versionId: published.id, contentHash: published.contentHash});
+      expect(first.content!.ownerUserId).toBe(f.userId);
+      const body = {requestId: randomUUID(), expectedVersion: 1, step: "hire_authority", content: first.content};
+      const saved = await hire.save(f.actor, f.home, first.id, body);
+      expect(saved.version).toBe(2);
+      expect((await hire.save(f.actor, f.home, first.id, body)).version).toBe(2);
+      await expect(hire.save(f.actor, f.home, first.id, {...body, requestId: randomUUID(), expectedVersion: 2, step: "tools"})).rejects.toMatchObject({status: 422});
+      await expect(hire.save(f.actor, f.home, first.id, {...body, requestId: randomUUID(), expectedVersion: 2, content: {...first.content!, capabilities: [{operation: "external_send", autonomy: "ask_first"}]}})).rejects.toMatchObject({status: 422});
+      const review = await hire.review(f.actor, f.home, first.id);
+      expect(review.publishAllowed).toBe(false); expect(review.test.status).toBe("unqualified");
+      expect(await db.select().from(agents)).toHaveLength(beforeAgents);
+      expect(await db.select().from(companyAgentPackageInstallations)).toHaveLength(beforeInstallations);
+      const audit = await db.select().from(activityLog).where(eq(activityLog.entityId, first.id));
+      expect(audit.filter((event) => event.action === "agent_configuration.draft_created")).toHaveLength(1);
+      expect(audit.filter((event) => event.action === "agent_configuration.draft_saved")).toHaveLength(1);
+    });
+    it("retains readable Hire pins through withdrawal and flag rollback, fences native pin/step substitution and permits discard", async () => {
+      const {published, hire} = await hireFixture();
+      const request = {requestId: randomUUID(), packageVersionId: published.id};
+      const draft = await hire.create(f.actor, f.home, request);
+      await expect(db.update(agentConfigurationDrafts).set({packageContentHash: "f".repeat(64), version: 2}).where(eq(agentConfigurationDrafts.id, draft.id))).rejects.toMatchObject({cause: {code: "23514"}});
+      await expect(db.update(agentConfigurationDrafts).set({step: "outcome", version: 2}).where(eq(agentConfigurationDrafts.id, draft.id))).rejects.toMatchObject({cause: {code: "23514"}});
+      await service.revoke(f.actor, published.id);
+      expect((await hire.create(f.actor, f.home, request)).id).toBe(draft.id);
+      expect((await hire.hireCapability(f.actor, f.home, draft.id)).available).toBe(false);
+      expect((await hire.review(f.actor, f.home, draft.id)).blockers.map((blocker) => blocker.code)).toContain("hire_release_unavailable");
+      await expect(hire.save(f.actor, f.home, draft.id, {requestId: randomUUID(), expectedVersion: 1, step: "hire_review", content: draft.content})).rejects.toMatchObject({status: 422});
+      await instanceSettingsService(db).updateExperimental({hire_agent_v9: false});
+      expect((await hire.get(f.actor, f.home, draft.id)).package?.versionId).toBe(published.id);
+      const removed = await hire.discard(f.actor, f.home, draft.id, {requestId: randomUUID(), expectedVersion: 1});
+      expect(removed.content).toBeNull(); expect(removed.package?.versionId).toBe(published.id);
+      await expect(hire.get({...f.actor, userId: "foreign-author", isInstanceAdmin: true}, f.home, draft.id)).rejects.toMatchObject({status: 403});
+    });
+    it("projects only available customer releases for Hire Agent and does not expose internal evaluation or release evidence", async () => {
+      await instanceSettingsService(db).updateExperimental({ hire_agent_v9: true });
+      const hire = agentAuthoringService(db);
+      expect((await hire.hireCatalog(f.actor, f.home)).some((row) => row.key === input.packageKey)).toBe(false);
+      const evidence = input.releaseEvidence.provenance;
+      const customer: PackageRelease = {
+        ...input,
+        packageKey: `customer-catalog-fixture-${randomUUID()}`,
+        manifest: { ...input.manifest, audience: "customer", commercialProductKey: "agent_package_research" },
+        releaseEvidence: { ...input.releaseEvidence, sbom: evidence, scan: evidence, evaluations: evidence, protectedHoldout: evidence, customerDemand: evidence },
+      };
+      const published = await service.publish(f.actor, customer);
+      const rows = await hire.hireCatalog(f.actor, f.home);
+      const capability = rows.find((row) => row.key === customer.packageKey)!;
+      expect(capability.versionId).toBe(published.id);
+      expect(capability.outcome).toBe(customer.manifest.purpose);
+      expect(capability).not.toHaveProperty("releaseEvidence");
+      expect(capability).not.toHaveProperty("components");
+      const agentCount = (await db.select().from(agents)).length;
+      await service.revoke(f.actor, published.id);
+      expect((await hire.hireCatalog(f.actor, f.home)).some((row) => row.key === customer.packageKey)).toBe(false);
+      expect(await db.select().from(agents)).toHaveLength(agentCount);
+      await expect(hire.hireCatalog({ ...f.actor, userId: "unknown-account", isInstanceAdmin: true }, f.home)).rejects.toMatchObject({ status: 403 });
+      await instanceSettingsService(db).updateExperimental({ hire_agent_v9: false });
+      await expect(hire.hireCatalog(f.actor, f.home)).rejects.toMatchObject({ status: 404 });
+    });
+    it("reconciles concurrent installation acknowledgements without duplicate installation or audit", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      const [first, second] = await Promise.all([
+        service.install(f.actor, f.home, body, input.packageKey),
+        service.install(f.actor, f.home, body, input.packageKey),
+      ]);
+      expect(first.id).toBe(second.id);
+      expect(first.installationRequestId).toBe(body.installationRequestId);
+      expect(first).not.toHaveProperty("installationRequestHash");
+      expect(first.status).toBe("configuring");
+      expect(first.activationHash).toBeNull();
+      expect(await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.agentId, f.presence.id))).toHaveLength(1);
+      const audit = await db.select().from(activityLog).where(eq(activityLog.entityId, first.id));
+      expect(audit.filter((event) => event.action === "agent_package.installed")).toHaveLength(1);
+      await expect(service.install(f.actor, f.home, { ...body, updatePolicy: "auto_low_risk" }, input.packageKey)).rejects.toMatchObject({status: 409, details: {code: "PACKAGE_INSTALL_REQUEST_CONFLICT"}});
+      await expect(service.install(f.actor, f.home, body, "other-package")).rejects.toMatchObject({status: 409});
+    });
+    it("retains the installation receipt after release withdrawal and uninstall, but requires current authority", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      const first = await service.install(f.actor, f.home, body, input.packageKey);
+      await service.revoke(f.actor, versionId);
+      const withdrawn = await service.install(f.actor, f.home, body, input.packageKey);
+      expect(withdrawn.id).toBe(first.id);
+      expect(withdrawn.status).not.toBe("active");
+      const removed = await service.decide(f.actor, f.home, first.id, "uninstall", {expectedVersion: withdrawn.version, reason: "Retire withdrawn evaluation"});
+      expect((await service.install(f.actor, f.home, body, input.packageKey)).status).toBe("uninstalled");
+      expect(removed.id).toBe(first.id);
+      await db.update(companyMemberships).set({status: "suspended"}).where(sql`company_id=${f.home}::uuid and principal_id=${f.userId}`);
+      await expect(service.install(f.actor, f.home, body, input.packageKey)).rejects.toMatchObject({status: 403});
+    });
+    it("rejects package-path substitution and immutable installation request rewrites at the native database", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      await expect(service.install(f.actor, f.home, body, "other-package")).rejects.toMatchObject({status: 404});
+      const first = await service.install(f.actor, f.home, body, input.packageKey);
+      await expect(db.update(companyAgentPackageInstallations).set({installationRequestId: randomUUID(), version: first.version + 1}).where(eq(companyAgentPackageInstallations.id, first.id))).rejects.toMatchObject({cause: {code: "23514", message: "package_installation_request_immutable"}});
+      await expect(db.update(companyAgentPackageInstallations).set({installationRequestHash: null, version: first.version + 1}).where(eq(companyAgentPackageInstallations.id, first.id))).rejects.toMatchObject({cause: {code: "23514"}});
+      const other = await seedV5Presences(db);
+      await expect(service.install(other.actor, other.home, body, input.packageKey)).rejects.toMatchObject({status: 404});
+    });
     async function run() {
       return (
         await db

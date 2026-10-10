@@ -1,7 +1,7 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { businessMetrics, businessMetricVersions, businessMetricTargets, businessMetricTargetVersions, businessMetricObservations, decisions, decisionTargetIssues, documentRevisions, foundationDocuments, foundationSections, goals, issues, projects, projectMilestones, type Db } from "@paperclipai/db";
 import { v5FeatureEnabled, type BusinessMetricResult, type StrategyExecutionReference } from "@paperclipai/shared";
-import { conflict, forbidden, notFound } from "../../errors.js";
+import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization } from "../v7-authorization.js";
 import { instanceSettingsService } from "../instance-settings.js";
@@ -17,19 +17,28 @@ export function strategyReferenceId(ref: StrategyExecutionReference) {
 }
 /** Current authority is checked separately from current version validity, so a
  * stale pin never makes a denied source visible through a review response. */
+const nativeProjectColumns = {id:projects.id,status:projects.status,createdAt:projects.createdAt,updatedAt:projects.updatedAt,archivedAt:projects.archivedAt};
+const nativeIssueColumns = {id:issues.id,projectId:issues.projectId,parentId:issues.parentId,assigneeAgentId:issues.assigneeAgentId,assigneeUserId:issues.assigneeUserId,status:issues.status,originKind:issues.originKind,originId:issues.originId,createdAt:issues.createdAt,updatedAt:issues.updatedAt};
+type NativePopulationReads = {
+  issues: Map<string, Pick<typeof issues.$inferSelect, keyof typeof nativeIssueColumns>>;
+  projects: Map<string, Pick<typeof projects.$inferSelect, keyof typeof nativeProjectColumns>>;
+};
 export async function authorizeStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential", includeNativeSnapshot=false) {
+  return authorizeReference(tx, companyId, actor, ref, sensitivity, includeNativeSnapshot);
+}
+async function authorizeReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential", includeNativeSnapshot=false, reads?: NativePopulationReads) {
   const issueIds = new Set<string>(), projectIds = new Set<string>();
   let metricObservation: BusinessMetricResult | undefined;
   let nativeObject:{snapshot:NativeMetricInput;archived:boolean}|undefined;
   async function project(id: string) {
-    const [row] = await tx.select({id:projects.id,status:projects.status,createdAt:projects.createdAt,updatedAt:projects.updatedAt,archivedAt:projects.archivedAt}).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).for("share");
+    const row = reads ? reads.projects.get(id) : (await tx.select(nativeProjectColumns).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).for("share"))[0];
     if (!row) throw notFound("Strategy project source is unavailable");
     await assertV7Authorization(tx, actor, companyId, "project:read", { type: "project", companyId, projectId: id });
     projectIds.add(id);
     return row;
   }
   async function issue(id: string) {
-    const [row] = await tx.select({id:issues.id,projectId:issues.projectId,parentId:issues.parentId,assigneeAgentId:issues.assigneeAgentId,assigneeUserId:issues.assigneeUserId,status:issues.status,originKind:issues.originKind,originId:issues.originId,createdAt:issues.createdAt,updatedAt:issues.updatedAt}).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, id), isNull(issues.hiddenAt))).for("share");
+    const row = reads ? reads.issues.get(id) : (await tx.select(nativeIssueColumns).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, id), isNull(issues.hiddenAt))).for("share"))[0];
     if (!row) throw notFound("Strategy task source is unavailable");
     issueIds.add(id);
     await assertV7Authorization(tx, actor, companyId, "issue:read", { type: "issue", companyId, issueId: row.id, projectId: row.projectId, parentIssueId: row.parentId, assigneeAgentId: row.assigneeAgentId, assigneeUserId: row.assigneeUserId, status: row.status, originKind: row.originKind, originId: row.originId });
@@ -104,6 +113,44 @@ export async function authorizeStrategyReference(tx: Db, companyId: string, acto
     }
   }
   return { issueIds: [...issueIds], projectIds: [...projectIds], ...(metricObservation ? { metricObservation } : {}),...(nativeObject?{nativeObject}:{}) };
+}
+
+
+/** Transport current native rows in bounded batches, then run the same original
+ * authorization for every root and its project ancestry. These private row maps
+ * never accept caller material or escape this native owner/transaction. No grant,
+ * source admission or actor decision is cached or skipped. */
+export async function authorizeStrategyNativePopulation(tx: Db, companyId: string, actor: AuthorizationActor,
+  type: "issue" | "project", unitIds: string[], sensitivity: "internal" | "confidential", deadline: number) {
+  if (unitIds.length > 4000 || new Set(unitIds).size !== unitIds.length) throw unprocessable("Native strategy source population exceeds its exact bounds");
+  const budget = () => { if (performance.now() > deadline) throw unprocessable("Native strategy source population budget exceeded"); };
+  const reads: NativePopulationReads = { issues: new Map(), projects: new Map() };
+  if (type === "issue") for (let offset = 0; offset < unitIds.length; offset += 1000) {
+    budget();
+    const selected = unitIds.slice(offset, offset + 1000);
+    const rows = await tx.select(nativeIssueColumns).from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, selected), isNull(issues.hiddenAt))).limit(selected.length + 1).for("share");
+    for (const row of rows) reads.issues.set(row.id, row);
+  }
+  const projectIds = type === "project" ? unitIds : [...new Set([...reads.issues.values()].flatMap(row => row.projectId ? [row.projectId] : []))];
+  for (let offset = 0; offset < projectIds.length; offset += 1000) {
+    budget();
+    const selected = projectIds.slice(offset, offset + 1000);
+    const rows = await tx.select(nativeProjectColumns).from(projects).where(and(eq(projects.companyId, companyId), inArray(projects.id, selected))).limit(selected.length + 1).for("share");
+    for (const row of rows) reads.projects.set(row.id, row);
+  }
+  const admitted = new Map<string, Awaited<ReturnType<typeof authorizeReference>>>();
+  for (let offset = 0; offset < unitIds.length; offset += 32) {
+    budget();
+    // Drain every in-flight authorization before throwing: no admission may
+    // outlive the transaction's original source and privacy locks.
+    const checked = await Promise.allSettled(unitIds.slice(offset, offset + 32).map(async id => {
+      const result = await authorizeReference(tx, companyId, actor, { type, id }, sensitivity, true, reads);
+      budget(); return { id, result };
+    }));
+    for (const check of checked) if (check.status === "rejected") throw check.reason;
+    for (const check of checked) if (check.status === "fulfilled") admitted.set(check.value.id, check.value.result);
+  }
+  budget(); return admitted;
 }
 
 export async function validateCurrentStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, now = new Date()) {

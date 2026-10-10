@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 import { billingAccounts } from "./saas_billing.js";
+import type { ActivationState, NotificationPolicy } from "@paperclipai/shared";
 
 export const companyOnboardingRuns = pgTable(
   "company_onboarding_runs",
@@ -35,6 +36,7 @@ export const companyOnboardingRuns = pgTable(
       .$type<Record<string, unknown>>()
       .notNull()
       .default({}),
+    activationState: jsonb("activation_state").$type<ActivationState>(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -146,6 +148,7 @@ export const saasNotificationPreferences = pgTable(
     userId: text("user_id").notNull(),
     category: text("category").notNull(),
     emailEnabled: boolean("email_enabled").notNull().default(true),
+    deliveryPolicy: jsonb("delivery_policy").$type<NotificationPolicy>(),
   },
   (t) => [
     uniqueIndex("saas_notification_preferences_uq").on(t.userId, t.category),

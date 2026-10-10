@@ -34,6 +34,16 @@ import { logger } from "../middleware/logger.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { grantsForHumanRole, normalizeHumanRole } from "./company-member-roles.js";
 
+/** Current native role evidence. The optional lock is owned by an enclosing
+ * mutation transaction; a role copied into an actor is never this evidence. */
+export async function hasCurrentInstanceAdminRole(db: Db | DbTransaction, userId: string | null | undefined, shareLock = false): Promise<boolean> {
+  if (!userId) return false;
+  const query = db.select({ id: instanceUserRoles.id }).from(instanceUserRoles)
+    .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")));
+  const rows = await (shareLock ? query.for("share") : query);
+  return rows.length > 0;
+}
+
 export type AuthorizationActor =
   {
     type: "board" | "agent" | "none";
@@ -592,17 +602,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     finally { context.active = false; }
   }
   async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
-    if (!userId) return false;
-    if (
-      await db
-        .select({ id: instanceUserRoles.id })
-        .from(instanceUserRoles)
-        .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
-        .then((rows) => rows[0] ?? null)
-    ) {
-      return true;
-    }
-    return false;
+    return hasCurrentInstanceAdminRole(db, userId);
   }
 
   async function getActiveMembership(

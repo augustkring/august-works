@@ -22,6 +22,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "../lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
 import { SidebarServerInfo } from "./SidebarServerInfo";
+import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
+import { useTranslation } from "react-i18next";
 
 const PROFILE_SETTINGS_PATH = "/company/settings/instance/profile";
 const DOCS_URL = "https://docs.paperclip.ing/";
@@ -113,6 +115,9 @@ export function SidebarAccountMenu({
   onOpenChange,
   forceExpanded = false,
 }: SidebarAccountMenuProps) {
+  const { t } = useTranslation("experience");
+  const customerFeedback = useV9FeatureEnabled("customer_feedback_v9");
+  const shell = useV9FeatureEnabled("progressive_shell_v9");
   const isCloud = Boolean(useCloudInstance());
   const [internalOpen, setInternalOpen] = useState(false);
   const { isMobile, setSidebarOpen, collapsed, peeking } = useSidebar();
@@ -232,7 +237,15 @@ export function SidebarAccountMenu({
             </div>
           </PopoverContent>
         </Popover>
-        {!rail && !isCloud ? (
+        {!rail && !isCloud && customerFeedback.enabled ? (
+          <button type="button" className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={t("feedback.action")} onClick={() => {
+              closeNavigationChrome();
+              document.dispatchEvent(new CustomEvent("paperclip:open-feedback", { detail: { returnFocus: "global_feedback" } }));
+            }}>
+            <Flag className="h-4 w-4" aria-hidden="true" />
+          </button>
+        ) : !rail && !isCloud && !shell.enabled ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <a

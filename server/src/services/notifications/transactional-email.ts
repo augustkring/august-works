@@ -56,6 +56,7 @@ export function transactionalEmail(
       message: string;
       dedupeKey: string;
       expiresAt: Date;
+      notBefore?: Date;
       userId?: string;
       companyId?: string;
     },
@@ -79,6 +80,7 @@ export function transactionalEmail(
       ),
       dedupeKey: input.dedupeKey,
       payloadExpiresAt: input.expiresAt,
+      ...(input.notBefore ? {notBefore:input.notBefore} : {}),
       payloadKeyId: config.outbox.keyId,
       payloadCiphertext: seal(
         {

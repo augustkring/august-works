@@ -1,4 +1,6 @@
 export { agentAdapterTypeSchema, optionalAgentAdapterTypeSchema } from "./adapter-type.js";
+export * from "./v9-feature-flags.js";
+export * from "./experience.js";
 export { workerModelBindingSchema, workerModelCallSchema, workerModelResultSchema, type WorkerModelBinding, type WorkerModelCall, type WorkerModelResult } from "./worker-model-gateway.js";
 export {
   RUNNER_GOAL_MAX_OBJECTIVE_CHARS,
@@ -3320,3 +3322,16 @@ export * from "./adaptive-planning.js";
 export * from "./management-reviews.js";
 export * from "./analytical-context.js";
 export * from "./management-chat-tools.js";
+
+export * from "./customer-feedback.js";
+export * from "./experience-commands.js";
+export * from "./activation.js";
+export * from "./company-experience.js";
+export * from "./notification-policy.js";
+export * from "./agent-authoring.js";
+export * from "./workflow-experience.js";
+export * from "./workflow-run-experience.js";
+export * from "./workflow-lifecycle.js";
+export * from "./workflow-operations.js";
+export * from "./workflow-launch.js";
+export * from "./workflow-stop.js";

@@ -78,7 +78,7 @@ export const saasApi = {
   },
   createCompany: (
     userId: string,
-    input: { name: string; idempotencyKey: string },
+    input: { name: string; idempotencyKey: string; activation?:{version:9;website:string} },
   ) => api.post<SaasOnboarding>(scoped("/saas/companies", userId), input),
   onboarding: (companyId: string, userId: string) =>
     api.get<SaasOnboarding>(

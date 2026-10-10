@@ -1,0 +1,133 @@
+{
+  "screenId": "WORKFLOW-REVIEW",
+  "journeyId": "workflow",
+  "routeOrSurface": "/workflows/:workflowId",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Review the native active workflow revision and its separate draft without mistaking declarations for effective authorization or passed tests.",
+  "entryConditions": [
+    "Current authenticated principal and company selection; no retained foreign-principal payload",
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+  ],
+  "exitConditions": [
+    "Only a canonical server-confirmed result permits a success claim",
+    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+  ],
+  "content": {
+    "h1": "Workflow name",
+    "supportingCopy": "Review the native active workflow revision and its separate draft without mistaking declarations for effective authorization or passed tests.",
+    "customerTerms": [
+      "Workflow",
+      "Draft",
+      "Active version",
+      "Approval",
+      "Run history"
+    ],
+    "displayedState": [
+      "Native published revision and draft are separate and explicitly versioned",
+      "Declared operation, possible effects, approval checkpoint, retry and test-mode metadata",
+      "Native connections and branch labels remain explicit; step numbering is not an execution trace",
+      "Oversized, duplicate, cyclic or dangling topology is unavailable, never silently truncated",
+      "Bound native-ID draft changes against the active revision; private values omitted; incomplete comparison is unavailable, never unchanged or approved."
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Review flow",
+      "operation": "Read the selected current native revision; no mutation or test result is created."
+    },
+    "secondary": [
+      "Switch active/draft revision",
+      "Open authorized Advanced draft editor",
+      "Open native run history",
+      "Retry current private read",
+      "Authorized native Pause/Resume/Retire controls, each with separate consequence confirmation"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Native workflows/revisions and current learned-asset privacy/lineage checks",
+      "Native workflows:read/edit grants and immutable node registry descriptors"
+    ],
+    "canonicalWriteOperation": "Review remains read-only; separate explicit lifecycle controls invoke the original native workflow owner (ADR-V9-023).",
+    "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
+    "asyncWork": "One current native workflow detail read; projected response is limited to 100 nodes and 200 connections per revision. Account identity and native read admission are checked; existing native owner governs read latency.",
+    "receipt": "Native revision IDs and version numbers only. No representative test, approval decision, effective access or publish/run receipt is fabricated."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "An empty revision means no steps in that revision, not a tested process.",
+    "partial": "Oversized, duplicate, cyclic or dangling-connection flows show flow unavailable with no truncated topology.",
+    "stale": "Hide retained private data during background rechecks and live authority/privacy/version invalidations; a new query epoch rejects late prior responses.",
+    "validation_error": "This read-only surface accepts no workflow inputs.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Show only the native revision read. No execution, approval, publication or safety success is claimed."
+  },
+  "navigation": {
+    "back": "Return to existing native workflow list.",
+    "cancelOrSaveExit": "No writes or browser-persisted draft data. Native Advanced editor retains canonical draft saves.",
+    "deepLink": "/workflows/:workflowId",
+    "resume": "Re-read current company/principal/native revision and grants. Flag rollback restores the existing graph editor; /advanced preserves a direct graph route."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current human/company-authorized workflow name and description",
+      "Allowlisted native revision/step/connection declarations only"
+    ],
+    "dataCollected": [],
+    "sensitiveFields": [
+      "Native graph configuration, prompts, credentials, inputs, schemas, variables, actor assignments and results are excluded from this projection"
+    ],
+    "loggingConstraints": "Purpose-separated workflow-experience namespace for success and rejected requests; generic logs omit account query strings, workflow/customer prose and raw errors."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify immutable active/draft separation, publication-free reads, native graph links, unknown operations, branch visibility and explicit bounds.",
+      "Complete per-step actor/input/effect/access policy, chat authoring, representative test/inspect/check/publish/safe run and full recovery remain open. Separate native lifecycle controls are specified in WORKFLOW-OPERATE/RETIRE.",
+      "Verify added/changed/removed native steps, dependency numbering, connection/data/settings indicators, private-value exclusion and unchanged immutable active source."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current native grants, membership revocation, account mismatch, foreign-company denial, agent denial, raw-config omission and late-response suppression."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "screenId": "HIRE-02",
+  "journeyId": "hire",
+  "routeOrSurface": "/agents/hire/capabilities/:versionId",
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "customerOutcome": "Review what the selected capability does, needs, asks before and cannot do.",
+  "entryConditions": [
+    "Current verified account, selected company, active membership and native agents:create authority; no instance-admin bypass.",
+    "Effective hire_agent_v9 and native agent_packages_v7 prerequisites are enabled.",
+    "Only currently published, unexpired and independently qualified customer releases may enter this native projection."
+  ],
+  "exitConditions": [
+    "Catalog/detail reads create no agent, installation, grant or active receipt.",
+    "Use this agent creates or reconciles one canonical unpublished setup pinned to the exact native package version.",
+    "Withdrawn versions do not permit new setup changes; saved setups remain readable and discardable."
+  ],
+  "content": {
+    "h1": "Current capability name",
+    "supportingCopy": "Review what the selected capability does, needs, asks before and cannot do.",
+    "customerTerms": [
+      "Agent",
+      "Company",
+      "Knowledge",
+      "Connected apps",
+      "Owner"
+    ],
+    "displayedState": [
+      "Current release identity and manifest outcome, prerequisites and limits",
+      "Catalog is bounded to 50 capabilities; internal evaluation and raw release evidence are excluded",
+      "Declared automation is conditional on current policy/access; no effective authority or assigned owner is inferred"
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Use this agent",
+      "operation": "Create or reconcile a private unpublished Hire setup using the selected exact version and original request identity."
+    },
+    "secondary": [
+      "Back to agents",
+      "Back to capabilities on detail",
+      "Retry failed current native catalog read"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Native first-party agent packages and current published release qualification",
+      "Current verified user/company membership and agents:create authorization",
+      "Canonical creator-private agent configuration draft summaries for saved Hire setups"
+    ],
+    "canonicalWriteOperation": "Canonical agent_configuration_drafts create with frozen request ID and native package-version pin; no agent install or production publication.",
+    "authorityEffect": "No grants, activation, agent mutation, external messages or runtime execution.",
+    "asyncWork": "Current principal/company-keyed native catalog query; abort signal and private no-store, immediate hide/recheck on authority events.",
+    "receipt": "Current release version reference only; no active agent or successful representative test claimed."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain that no currently customer-qualified capabilities are available; do not substitute an internal evaluation package.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Hide retained results immediately on authority changes and re-read the native owner; withdrawn exact-version links are unavailable.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Back to agents or the capability catalog via native links.",
+    "cancelOrSaveExit": "Saved setups resume through canonical draft links; authored content is not persisted in browser storage.",
+    "deepLink": "/agents/hire/capabilities/:versionId",
+    "resume": "Re-read current company/principal and exact release version; no browser content persistence."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Native links, labeled inputs, select controls and semantic fieldsets; pending reconciliation disables editing. Standard Tab/Shift+Tab/Enter.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Authorized customer-facing release name/outcome/prerequisites/action classes/known limits"
+    ],
+    "dataCollected": [
+      "In-memory search term; explicit canonical package-version reference and idempotent creation request ID."
+    ],
+    "sensitiveFields": [
+      "No company knowledge payload, credentials or raw release evidence is returned"
+    ],
+    "loggingConstraints": "Existing private agent-configuration-drafts purpose suppresses query/private identities and raw body/error content independently of rollout flags."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Check customer/internal filtering, withdrawal, literal outcome search and exact-request setup retry.",
+      "Complete connection assessment, representative execution/verification, native publication and active receipt remain open; no complete hiring claim."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

@@ -1,4 +1,5 @@
 import { AgentCharacter } from "../components/AgentCharacter";
+import { AgentRevisionEntry } from "../components/AgentRevisionEntry";
 import { characterStateForAgent } from "@paperclipai/shared";
 import { mergeRunLogChunks, readChunkSeq } from "../lib/run-log-chunks";
 import { getPageVisibility, usePageVisibility } from "../lib/page-visibility";
@@ -1326,6 +1327,7 @@ export function AgentDetail() {
         </div>
       </header>
 
+      {resolvedCompanyId && <AgentRevisionEntry company={resolvedCompanyId} agentId={agent.id} beforeNavigate={prepareAgentNavigation} />}
       {builtInState && (
         <InlineBanner
           tone="info"

@@ -1268,6 +1268,22 @@ function invalidateActivityQueries(
   const actorType = readString(payload.actorType);
   const actorId = readString(payload.actorId);
   const details = readRecord(payload.details);
+  // Home is a principal-scoped projection over these native owners. Never
+  // retain a now-private/deleted title while reauthorization is pending.
+  if (["issue", "decision", "approval", "company_membership", "agent"].includes(entityType ?? "") || action?.startsWith("resource_membership.") || action?.includes("erased")) {
+    if (entityType === "company_membership" || action?.startsWith("resource_membership.") || action?.endsWith("deleted") || action?.includes("erased")) {
+      for (const query of queryClient.getQueryCache().findAll({queryKey:["experience",companyId]})) query.reset();
+      for (const query of queryClient.getQueryCache().findAll({queryKey:["experience-company",companyId]})) query.reset();
+      for (const query of queryClient.getQueryCache().findAll({queryKey:["experience-commands",companyId]})) query.reset();
+      queryClient.invalidateQueries({queryKey:["experience-commands",companyId],refetchType: (options?.isForegrounded ?? isPageForegrounded()) ? "active" : "none"});
+      queryClient.invalidateQueries({queryKey:["experience-company",companyId],refetchType: (options?.isForegrounded ?? isPageForegrounded()) ? "active" : "none"});
+      queryClient.invalidateQueries({queryKey:["experience",companyId],refetchType: (options?.isForegrounded ?? isPageForegrounded()) ? "active" : "none"});
+    } else {
+      queryClient.invalidateQueries({queryKey:["experience-commands",companyId],refetchType: (options?.isForegrounded ?? isPageForegrounded()) ? "active" : "none"});
+      queryClient.invalidateQueries({queryKey:["experience",companyId],refetchType: (options?.isForegrounded ?? isPageForegrounded()) ? "active" : "none"});
+    }
+  }
+
   // Reauthorize retained process payloads when native source, purpose or access
   // owners change. This invalidates only this company's analytical cache.
   if (["issue", "project", "governance_obligation", "process_analysis_definition", "company_membership"].includes(entityType ?? "")

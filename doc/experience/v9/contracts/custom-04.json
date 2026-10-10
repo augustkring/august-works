@@ -1,0 +1,143 @@
+{
+  "screenId": "CUSTOM-04",
+  "journeyId": "custom",
+  "routeOrSurface": "/agents/custom/:draftId/knowledge",
+  "targetExperienceProfiles": [
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Select current approved company knowledge without granting access or copying documents into instructions.",
+  "entryConditions": [
+    "Current verified authenticated company membership and native agents:create or target agents:configure authority; instance-admin status does not bypass membership.",
+    "Draft belongs to the current creator; editing an existing agent requires current native read and configure authority.",
+    "hire_agent_v9 and its effective prerequisites admit new saves; existing reads and content discard survive flag rollback."
+  ],
+  "exitConditions": [
+    "Only a canonical accepted draft ID/version permits a saved claim.",
+    "Draft saving never changes production agent configuration, grants, runtime or scheduled work.",
+    "Testing, effective native policy mapping, publish and active monitoring remain unqualified; no success evidence is manufactured."
+  ],
+  "content": {
+    "h1": "Knowledge",
+    "supportingCopy": "Select current approved company knowledge without granting access or copying documents into instructions.",
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
+    "displayedState": [
+      "Native draft version, section and explicit draft status",
+      "Saved-draft blockers are distinct from unsaved local proposals and executed outcomes"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "knowledgeDocumentIds",
+      "label": "knowledgeDocumentIds",
+      "dataType": "Typed unpublished configuration field",
+      "required": false,
+      "default": "Existing saved draft field or safe empty/no-capability default",
+      "help": "This is customer data and cannot confer native authority.",
+      "validation": "packages/shared/src/agent-authoring.ts strict schema; current native references checked server-side",
+      "autofillOrPrefill": "Saved creator-owned native draft; existing agent name/description only, no credentials/effective instruction import"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Continue",
+      "operation": "Save the version-fenced typed draft before moving to another section"
+    },
+    "secondary": [
+      "Save & exit after canonical acknowledgement",
+      "Back/section navigation saves the current valid draft",
+      "Retry the exact same request after unknown acknowledgement; reload the saved draft explicitly on baseline conflict"
+    ],
+    "destructiveOrIrreversible": [
+      "Discard draft removes authored content but never pauses/retires the target production agent"
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "agent_configuration_drafts (first-class unpublished configuration owner)",
+      "Native agent configuration baseline, current company membership and permissions",
+      "Approved native Foundation revisions and existing presence runtime bindings"
+    ],
+    "canonicalWriteOperation": "Creator-scoped agent configuration create/save/discard with request hash, row version, database scope/version fences, native audit and post-commit publication",
+    "authorityEffect": "No grants, agent mutation, external messages, runtime provisioning or work execution. Native publication mapping and representative execution are unqualified.",
+    "asyncWork": "Bounded native references and 25-row native timestamp/ID pagination; unknown acknowledgements retain immutable client request bodies/keys.",
+    "receipt": "Current creator-owned canonical draft ID/version; never an inferred active version or first-value receipt."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Save current valid fields with a fenced command before moving back; browser reload returns to the saved native draft.",
+    "cancelOrSaveExit": "No browser persistent storage for authored content; Save & exit waits for canonical acknowledgement. Discard removes content.",
+    "deepLink": "/agents/custom/:draftId/knowledge",
+    "resume": "Read the current creator/company draft version. Permission changes hide retained content before a new native read."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Native links, labeled inputs, select controls and semantic fieldsets; pending reconciliation disables editing. Standard Tab/Shift+Tab/Enter.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current creator-owned draft and authorized approved source labels",
+      "No credential values, provider endpoints, private chain-of-thought or production instruction import"
+    ],
+    "dataCollected": [
+      "Explicit bounded structured draft fields and request/version receipts"
+    ],
+    "sensitiveFields": [
+      "Responsibility, instructions, scenario text, owner and selected source references"
+    ],
+    "loggingConstraints": "No draft prose, raw request/error bodies, arbitrary headers, query strings or private IDs in HTTP logs; native audit records fixed actions, versions and section only. Creator-account/tenant/target deletion cascades native draft content."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

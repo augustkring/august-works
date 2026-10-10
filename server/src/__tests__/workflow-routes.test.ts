@@ -23,6 +23,7 @@ import {
 import { errorHandler } from "../middleware/error-handler.js";
 import { workflowRoutes } from "../routes/workflows.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { eq } from "drizzle-orm";
 
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe.sequential : describe.skip;
@@ -205,6 +206,75 @@ describePg("Workflow routes", () => {
           error: "Viewer access is read-only",
         });
       });
+  });
+
+  it("projects separate draft and active versions without configuration or mutation authority", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+    const http = request(app(localBoard));
+    const created = await http.post(`/api/companies/${company.id}/workflows`)
+      .send({ name: "Private process", description: "Review this process" }).expect(201);
+    const url = `/api/companies/${company.id}/workflows/${created.body.id}/experience?expectedUserId=local-board`;
+    const draft = await http.get(url).expect(200);
+    expect(draft.headers["cache-control"]).toBe("private, no-store");
+    expect(draft.body).toMatchObject({ status: "draft", canEdit: true, active: null, draft: { id: created.body.draftRevisionId, version: 1, state: "draft", coverage: "complete", steps: [] } });
+    await http.patch(`/api/companies/${company.id}/workflows/${created.body.id}/draft`).send({
+      expectedRevisionId: created.body.draftRevisionId,
+      graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [{ name: "private", defaultValue: "PRIVATE-DEFAULT" }], settings: {} },
+      changeSummary: "PRIVATE-SUMMARY",
+    }).expect(200);
+    const changed = await http.get(url).expect(200);
+    const published = await http.post(`/api/companies/${company.id}/workflows/${created.body.id}/publish`).send({
+      expectedDraftRevisionId: changed.body.draft.id, expectedPublishedRevisionId: null, approvalId: null,
+    }).expect(200);
+    const active = await http.get(url).expect(200);
+    expect(active.body).toMatchObject({ status: "active", active: { id: published.body.publishedRevisionId, version: 2, state: "published" }, draft: { id: published.body.draftRevisionId, version: 3, state: "draft" } });
+    expect(active.body.comparison).toEqual({ state: "available", steps: [], removedSteps: 0, connectionsChanged: false, dataDefinitionChanged: false, settingsChanged: false });
+    await http.patch(`/api/companies/${company.id}/workflows/${created.body.id}/draft`).send({
+      expectedRevisionId: published.body.draftRevisionId,
+      graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start revised", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [{ name: "private", defaultValue: "PRIVATE-CHANGED" }], settings: {} },
+    }).expect(200);
+    const compared = await http.get(url).expect(200);
+    expect(compared.body.comparison).toEqual({ state: "available", steps: [{ number: 1, change: "changed" }], removedSteps: 0, connectionsChanged: false, dataDefinitionChanged: true, settingsChanged: false });
+    expect(compared.body.active).toEqual(active.body.active);
+    expect(compared.body.draft.id).not.toBe(published.body.draftRevisionId);
+    expect(JSON.stringify(compared.body)).not.toContain("PRIVATE-");
+    for (const forbidden of ["PRIVATE-", "config", "position", "variables", "changeSummary", "canRun", "canPublish"]) expect(JSON.stringify(active.body)).not.toContain(forbidden);
+    const before = await db.select().from(activityLog);
+    await http.get(url).expect(200);
+    expect(await db.select().from(activityLog)).toEqual(before);
+  });
+
+  it("requires a matching human account and rejects disabled, foreign and agent reads", async () => {
+    const company = await seedCompany();
+    const other = await seedCompany("Other");
+    await enableWorkflows();
+    const created = await request(app(localBoard)).post(`/api/companies/${company.id}/workflows`).send({ name: "Original" }).expect(201);
+    const path = `/api/companies/${company.id}/workflows/${created.body.id}/experience`;
+    await request(app(localBoard)).get(path).expect(409);
+    await request(app(localBoard)).get(`${path}?expectedUserId=another-account`).expect(409);
+    await request(app(localBoard)).get(`/api/companies/${other.id}/workflows/${created.body.id}/experience?expectedUserId=local-board`).expect(404);
+    await request(app({ type: "agent", agentId: randomUUID(), companyId: company.id, source: "agent_key" })).get(`${path}?expectedUserId=local-board`).expect(403);
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: false });
+    await request(app(localBoard)).get(`${path}?expectedUserId=local-board`).expect(404);
+  });
+
+  it("uses current native read grants, suppresses edit controls and honors membership revocation", async () => {
+    const company = await seedCompany();
+    await enableWorkflows();
+    const created = await request(app(localBoard)).post(`/api/companies/${company.id}/workflows`).send({ name: "Read only" }).expect(201);
+    const userId = "workflow-private-viewer";
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "viewer" });
+    await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read", scope: null });
+    const actor: Express.Request["actor"] = { type: "board", userId, source: "session", isInstanceAdmin: false, companyIds: [company.id] };
+    const http = request(app(actor));
+    const url = `/api/companies/${company.id}/workflows/${created.body.id}/experience?expectedUserId=${userId}`;
+    await http.get(url).expect(200).expect((response) => expect(response.body.canEdit).toBe(false));
+    await db.delete(principalPermissionGrants).where(eq(principalPermissionGrants.principalId, userId));
+    await http.get(url).expect(403);
+    await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read", scope: null });
+    await db.delete(companyMemberships).where(eq(companyMemberships.principalId, userId));
+    await http.get(url).expect(403);
   });
 
   it("does not expose a workflow through another company route", async () => {
@@ -519,6 +589,43 @@ describePg("Workflow routes", () => {
       .send({ input: { customerId: "c-1" } })
       .expect(201);
     expect(repeated.body.run.id).toBe(first.body.run.id);
+
+    const privateRead = `/api/companies/${company.id}/workflow-runs/${first.body.run.id}/experience`;
+    const auditBeforeRead = await db.select().from(activityLog);
+    const projected = await http.get(`${privateRead}?expectedUserId=local-board`).expect(200);
+    expect(projected.headers["cache-control"]).toBe("private, no-store");
+    expect(projected.body).toMatchObject({
+      companyId: company.id, id: first.body.run.id, workflowId: created.body.id,
+      revisionId: first.body.run.workflowRevisionId, revisionState: "published", status: "succeeded",
+      trace: { state: "available", attempts: [{ name: "Manual start", status: "succeeded", attempt: 1 }] },
+    });
+    for (const privateField of ["triggerPayload", "inputJson", "outputJson", "errorMessage", "responsibleUserId", "executionOwnerId", "idempotencyKey", "c-1"])
+      expect(JSON.stringify(projected.body)).not.toContain(privateField);
+    await http.get(privateRead).expect(409);
+    await http.get(`${privateRead}?expectedUserId=another-account`).expect(409);
+    const other = await seedCompany("Run foreign company");
+    await http.get(`/api/companies/${other.id}/workflow-runs/${first.body.run.id}/experience?expectedUserId=local-board`).expect(404);
+    await request(app({ type: "agent", agentId: randomUUID(), companyId: company.id, source: "agent_key" })).get(`${privateRead}?expectedUserId=local-board`).expect(403);
+    const userId = "workflow-run-viewer";
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "viewer" });
+    await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read", scope: null });
+    const viewer = request(app({ type: "board", userId, source: "session", isInstanceAdmin: false, companyIds: [company.id] }));
+    await viewer.get(`${privateRead}?expectedUserId=${userId}`).expect(200);
+    await db.delete(principalPermissionGrants).where(eq(principalPermissionGrants.principalId, userId));
+    await viewer.get(`${privateRead}?expectedUserId=${userId}`).expect(403);
+    await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read", scope: null });
+    await db.delete(companyMemberships).where(eq(companyMemberships.principalId, userId));
+    await viewer.get(`${privateRead}?expectedUserId=${userId}`).expect(403);
+    expect(await db.select().from(activityLog)).toEqual(auditBeforeRead);
+
+    const beforeRepublish = await http.get(`/api/companies/${company.id}/workflows/${created.body.id}`).expect(200);
+    await http.post(`/api/companies/${company.id}/workflows/${created.body.id}/publish`).send({
+      expectedDraftRevisionId: beforeRepublish.body.draftRevisionId,
+      expectedPublishedRevisionId: beforeRepublish.body.publishedRevisionId,
+      approvalId: null,
+    }).expect(200);
+    const historical = await http.get(`${privateRead}?expectedUserId=local-board`).expect(200);
+    expect(historical.body).toMatchObject({ revisionId: first.body.run.workflowRevisionId, revisionState: "superseded", revisionNumber: projected.body.revisionNumber });
 
     await http
       .get(`/api/companies/${company.id}/workflow-runs/${first.body.run.id}`)

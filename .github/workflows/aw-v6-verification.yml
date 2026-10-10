@@ -49,7 +49,7 @@ jobs:
       - name: Test migrated SaaS domains and transport boundaries
         working-directory: server
         env:
-          AW_TEST_DATABASE_DUMP_IMAGE: postgres@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+          AW_TEST_DATABASE_DUMP_IMAGE: public.ecr.aws/docker/library/postgres@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
         run: |
           docker pull "$AW_TEST_DATABASE_DUMP_IMAGE"
           pnpm exec vitest run src/__tests__/v6- --maxWorkers=1

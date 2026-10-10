@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { InstanceExperimentalSettings } from "@paperclipai/shared";
-import { V5_FEATURE_KEYS, V6_FEATURE_KEYS, V7_FEATURE_KEYS, V8_FEATURE_KEYS } from "@paperclipai/shared";
+import { V5_FEATURE_KEYS, V6_FEATURE_KEYS, V7_FEATURE_KEYS, V8_FEATURE_KEYS, V9_FEATURE_KEYS } from "@paperclipai/shared";
 import {
   applyExperimentalSettingsPatch,
   normalizeExperimentalSettings,
@@ -38,6 +38,7 @@ describe("instance settings service", () => {
       ...Object.fromEntries(V6_FEATURE_KEYS.map((key) => [key, false])),
       ...Object.fromEntries(V7_FEATURE_KEYS.map((key) => [key, false])),
       ...Object.fromEntries(V8_FEATURE_KEYS.map((key) => [key, false])),
+      ...Object.fromEntries(V9_FEATURE_KEYS.map((key) => [key, false])),
       enableEnvironments: true,
       enableNativeRunner: false,
       enableManagedSandboxOnly: false,

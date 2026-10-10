@@ -2,6 +2,7 @@ import { experimentalApiMetadata } from "./experimental-api-metadata.js";
 import { v5ApiPaths } from "./v5-api-paths.js";
 import { v6ApiPaths } from "./v6-api-paths.js";
 import { v7ApiPaths } from "./v7-api-paths.js";
+import { v9ApiPaths } from "./v9-api-paths.js";
 import {
   experimentalApiPaths,
   experimentalApiQueries,
@@ -1883,6 +1884,19 @@ function applyDocumentFixups(document: any): any {
           ...(contract.auth === "operator" ? { configuredOperator: true } : {}),
           ...(contract.auth === "publisher" ? { configuredPublisher: true } : {}),
           ...(contract.auth === "owner" ? { companyOwner: true } : {}) };
+  }
+  for (const contract of v9ApiPaths) {
+    const operation = document.paths[contract.path]?.[contract.method];
+    if (!operation) throw new Error(`Missing V9 API operation: ${contract.path}`);
+    operation.security = contract.auth === "public" ? [] : BOARD_SECURITY;
+    operation["x-paperclip-authorization"] = contract.auth === "public" ? { actor: "public" } : {
+      actor: "board", currentNativeAuthority: true, companyScoped: contract.path.includes("{companyId}"),
+      ...(contract.auth === "operator" ? { configuredOperator: true, noCompanyAdminBypass: true } : {}),
+    };
+    if (contract.auth === "public") {
+      delete operation.responses["401"];
+      delete operation.responses["403"];
+    }
   }
   return document;
 }
@@ -12104,3 +12118,22 @@ registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/runs/{ru
   responses: { 200: { ...r.ok(z.object({ playbookId: z.string().uuid(), revisionId: z.string().uuid(), markdown: z.string() }).strict()), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } },
     401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 422: { description: "Pinned body exceeds the 32000-byte UTF-8 budget" } },
 });
+
+// V9 follows native owners; blocked capabilities have no invented 2xx result.
+for (const operation of v9ApiPaths) {
+  registerCurrentRoute({
+    method: operation.method, path: operation.path, tags: ["V9"],
+    summary: operation.summary, query: operation.query, body: operation.body,
+    responses: {
+      ...(operation.successStatus ? { [operation.successStatus]: {
+        ...r.ok(operation.result),
+        ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } } : {}),
+      } } : {}),
+      400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
+      409: { description: "Current account, native source, original request or expected version changed" },
+      ...(operation.blocked || operation.unavailable ? { 422: { description: operation.blocked ? "Publication remains unqualified; no production change" : "Current capability, schema or qualification is unavailable" } } : {}),
+      ...(operation.rateLimited ? { 429: { description: "Native submitting-principal feedback budget exceeded" } } : {}),
+      ...(operation.overloaded ? { 503: { description: "Bounded projection admission unavailable; retry after the returned delay" } } : {}),
+    },
+  });
+}

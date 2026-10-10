@@ -1,0 +1,131 @@
+{
+  "screenId": "HIRE-05",
+  "journeyId": "hire",
+  "routeOrSurface": "/agents/hire/drafts/:draftId/hire_test",
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "customerOutcome": "Show the expected outcome and truthful unavailable test state until independent native execution is implemented.",
+  "entryConditions": [
+    "Current verified creator in the selected company with native agents:create authority; no instance-admin bypass.",
+    "The canonical setup pins an immutable native customer package version; historical reads and discard survive flag rollback."
+  ],
+  "exitConditions": [
+    "Save & exit and section changes persist only an unpublished canonical proposal with request/version fences.",
+    "No agent, installation, grant, execution result or active receipt is created.",
+    "Native representative test, connection scope assessment, publication and active receipt remain incomplete."
+  ],
+  "content": {
+    "h1": "Representative test",
+    "supportingCopy": "Show the expected outcome and truthful unavailable test state until independent native execution is implemented.",
+    "customerTerms": [
+      "Agent",
+      "Company",
+      "Knowledge",
+      "Connected apps",
+      "Owner"
+    ],
+    "displayedState": [
+      "Canonical proposal version and exact package version",
+      "Proposed owner, responsibility and approved knowledge only; no effective access inferred",
+      "Current native availability and named qualification blockers; no successful test or active agent inferred"
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Continue",
+      "operation": "Persist the private proposal before continuing; disabled for unqualified representative test or activation. No active receipt is fabricated."
+    },
+    "secondary": [
+      "Save & exit",
+      "Resume saved section",
+      "Retry the exact unacknowledged save",
+      "Explicitly reload after a version conflict"
+    ],
+    "destructiveOrIrreversible": [
+      "Discard setup removes authored proposal content; current native authority and exact request/version fences apply."
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Native creator-private agent_configuration_drafts",
+      "Pinned native package version and current customer qualification",
+      "Current authorized company members and approved Foundation sources"
+    ],
+    "canonicalWriteOperation": "Native unpublished draft save/discard only; per-kind step validation, immutable source pins and unmodifiable Hire capability declarations.",
+    "authorityEffect": "No grants, activation, agent mutation, external messages or runtime execution.",
+    "asyncWork": "Principal/company/draft-keyed no-store queries; immediate hide on authority events; frozen request/body/version retry; late acknowledgements cannot restore private content after revocation.",
+    "receipt": "Saved setup version only. Representative execution, independent verification, publication and active-agent receipts remain unavailable."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain that no currently customer-qualified capabilities are available; do not substitute an internal evaluation package.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Hide retained results immediately on authority changes and re-read the native owner; withdrawn exact-version links are unavailable.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Back to agents or the capability catalog via native links.",
+    "cancelOrSaveExit": "Saved setups resume through canonical draft links; authored content is not persisted in browser storage.",
+    "deepLink": "/agents/hire/drafts/:draftId/hire_test",
+    "resume": "Read the current creator-private proposal and its pinned package version. No browser content persistence."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Native links, labeled inputs, select controls and semantic fieldsets; pending reconciliation disables editing. Standard Tab/Shift+Tab/Enter.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current authorized creator-private proposal, member display names and approved source metadata",
+      "Customer-safe pinned package metadata and current blockers"
+    ],
+    "dataCollected": [
+      "Explicit proposal fields and bounded source IDs",
+      "Original request ID and expected canonical version"
+    ],
+    "sensitiveFields": [
+      "No company knowledge payload, credentials or raw release evidence is returned"
+    ],
+    "loggingConstraints": "Existing private agent-configuration-drafts purpose suppresses query/private identities and raw body/error content independently of rollout flags."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Exercise save/resume/discard, exact retries, concurrent versions, immutable package pins, withdrawal, authority revocation and rollback reads.",
+      "Complete representative execution, connection assessment, native publication and active receipt are open; source partial states cannot qualify this journey."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

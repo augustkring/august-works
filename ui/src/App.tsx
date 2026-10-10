@@ -1,6 +1,8 @@
 import { SecurityEvents } from "./pages/SecurityEvents";
 import { Enterprise } from "./pages/Enterprise";
 import { AgentPackages } from "./pages/AgentPackages";
+import { CustomAgent } from "./pages/CustomAgent";
+import { HireAgent } from "./pages/HireAgent";
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
 import { Playbooks } from "./pages/Playbooks";
@@ -79,8 +81,10 @@ import { Governance } from "./pages/Governance";
 import { Workflows } from "./pages/Workflows";
 import { AutomationArtifacts } from "./pages/AutomationArtifacts";
 import { WorkflowBuilder } from "./pages/WorkflowBuilder";
+import { WorkflowEntry } from "./pages/WorkflowReview";
 import { WorkflowRuns } from "./pages/WorkflowRuns";
 import { WorkflowRun } from "./pages/WorkflowRun";
+import { WorkflowRunEntry } from "./pages/WorkflowRunExperience";
 import { Learnings, PipelineItemDetail, PipelineItemLegacyRedirect, Pipelines, ReviewQueue } from "./pages/Pipelines";
 import { PipelineSettings } from "./pages/PipelineSettings";
 import { StatusCards } from "./pages/StatusCards";
@@ -96,9 +100,17 @@ import { CompanyActivity } from "./pages/audit/CompanyActivity";
 import { AuditHub } from "./pages/audit/AuditHub";
 import { Inbox } from "./pages/Inbox";
 import { WhatNeedsMe } from "./pages/WhatNeedsMe";
+import { DashboardEntry } from "./pages/ExperienceHome";
+import { NeedsYouEntry } from "./pages/ExperienceNeedsYou";
+import { WorkEntry } from "./pages/ExperienceWork";
+import { ExperienceInsights } from "./pages/ExperienceInsights";
+import { MyFeedback } from "./pages/MyFeedback";
+import { FeedbackTriage } from "./pages/FeedbackTriage";
+import { ExperienceAdvanced } from "./pages/ExperienceAdvanced";
 import { DecisionQueuePage } from "./pages/DecisionQueuePage";
 import { BoardChat } from "./pages/BoardChat";
 import { CompanySettings } from "./pages/CompanySettings";
+import { CompanySettingsEntry } from "./pages/ExperienceCompany";
 import { CompanyEnvironments } from "./pages/CompanyEnvironments";
 import { BootstrapSetupUxLab } from "./pages/BootstrapSetupUxLab";
 import { ResponsibleUserDenialUxLab } from "./pages/ResponsibleUserDenialUxLab";
@@ -137,7 +149,7 @@ import { PluginPage } from "./pages/PluginPage";
 import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
 import { SaasOperationsPage } from "./pages/SaasOperations";
-import { SaasWelcomePage } from "./pages/SaasWelcome";
+import { SaasWelcomeEntry, ActivationPage } from "./pages/Activation";
 import { SaasRuntimesPage } from "./pages/SaasRuntimes";
 import { SaasSupportPage } from "./pages/SaasSupport";
 import { SaasDeletionPage } from "./pages/SaasDeletion";
@@ -198,10 +210,14 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
     <>
       <Route index element={<Navigate to="dashboard" replace />} />
       <Route path="overview" element={<Navigate to="/dashboard" replace />} />
-      <Route path="work" element={<Navigate to="/issues" replace />} />
+      <Route path="work" element={<WorkEntry />} />
       <Route path="connections" element={<Navigate to="/apps" replace />} />
       <Route path="governance" element={<Governance />} />
-      <Route path="dashboard" element={<Dashboard />} />
+      <Route path="dashboard" element={<DashboardEntry />} />
+      <Route path="needs-you" element={<NeedsYouEntry />} />
+      <Route path="insights" element={<ExperienceInsights />} />
+      <Route path="advanced" element={<ExperienceAdvanced />} />
+      <Route path="my-feedback" element={<MyFeedback />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
       <Route
         path="timeline"
@@ -209,7 +225,8 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       />
       <Route path="onboarding" element={<OnboardingRoutePage />} />
       <Route path="companies" element={<Companies />} />
-      <Route path="company/settings" element={<CompanySettings />} />
+      <Route path="company/settings" element={<CompanySettingsEntry />} />
+      <Route path="company/settings/general" element={<CompanySettings />} />
       <Route path="company/settings/enterprise" element={<V7FeatureGate feature="enterprise_identity_v7"><Enterprise /></V7FeatureGate>} />
       <Route path="company/settings/security-events" element={<V7FeatureGate feature="security_event_export_v7"><SecurityEvents /></V7FeatureGate>} />
       <Route path="company/settings/billing" element={<SaasBillingPage />} />
@@ -340,6 +357,11 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
         />
       ))}
       <Route path="agents/new" element={<NewAgent />} />
+      <Route path="agents/custom" element={<CustomAgent />} />
+      <Route path="agents/hire" element={<HireAgent />} />
+      <Route path="agents/hire/capabilities/:versionId" element={<HireAgent />} />
+      <Route path="agents/hire/drafts/:draftId/:screen?" element={<HireAgent />} />
+      <Route path="agents/custom/:draftId/:screen?" element={<CustomAgent />} />
       <Route path="agents/:agentId" element={<AgentDetail />} />
       <Route path="agents/:agentId/:tab" element={<AgentDetail />} />
       <Route path="agents/:agentId/runs/:runId" element={<AgentDetail />} />
@@ -423,6 +445,10 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="automation-artifacts" element={<AutomationArtifacts />} />
       <Route
         path="workflows/:workflowId"
+        element={<WorkflowBuilderExperimentalGate><WorkflowEntry /></WorkflowBuilderExperimentalGate>}
+      />
+      <Route
+        path="workflows/:workflowId/advanced"
         element={<WorkflowBuilderExperimentalGate><WorkflowBuilder /></WorkflowBuilderExperimentalGate>}
       />
       <Route
@@ -431,6 +457,10 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       />
       <Route
         path="workflows/:workflowId/runs/:runId"
+        element={<WorkflowBuilderExperimentalGate><WorkflowRunEntry /></WorkflowBuilderExperimentalGate>}
+      />
+      <Route
+        path="workflows/:workflowId/runs/:runId/advanced"
         element={<WorkflowBuilderExperimentalGate><WorkflowRun /></WorkflowBuilderExperimentalGate>}
       />
       <Route path="routines" element={streamlinedUiEnabled ? <Routines /> : <ProductionSurface><ProductionRoutines /></ProductionSurface>} />
@@ -680,7 +710,7 @@ export function OnboardingRoutePage() {
   const matchedCompany = companyPrefix
     ? companies.find((company) => company.issuePrefix.toUpperCase() === companyPrefix.toUpperCase()) ?? null
     : null;
-  if (saas.data?.onboarding) return <SaasWelcomePage />;
+  if (saas.data?.onboarding) return <SaasWelcomeEntry />;
   // The OnboardingWizard auto-opens on this route (and can also be opened
   // explicitly). While it is showing it covers the whole screen, so the
   // launcher card below must not stay interactive behind it — otherwise users
@@ -873,7 +903,9 @@ export function App() {
         <Route path="oauth-handoff" element={<PaperclipCloudOAuthHandoffPage />} />
         <Route path="auth" element={<AuthPage />} />
         <Route path="saas/operations" element={<SaasOperationsPage />} />
-        <Route path="saas/welcome" element={<SaasWelcomePage />} />
+        <Route path="saas/feedback" element={<FeedbackTriage />} />
+        <Route path="saas/welcome" element={<SaasWelcomeEntry />} />
+        <Route path="saas/activation/:screen?" element={<ActivationPage />} />
         <Route path="saas/reset-password" element={<SaasResetPasswordPage />} />
         <Route path="board-claim/:token" element={<BoardClaimPage />} />
         <Route path="cli-auth/:id" element={<CliAuthPage />} />
@@ -891,6 +923,10 @@ export function App() {
         <Route element={streamlinedUiLoaded ? <CloudAccessGate /> : <PaperclipLoading />}>
           <Route index element={<CompanyRootRedirect />} />
           <Route path="onboarding" element={<OnboardingRoutePage />} />
+          <Route path="needs-you" element={<UnprefixedBoardRedirect />} />
+          <Route path="insights" element={<UnprefixedBoardRedirect />} />
+          <Route path="advanced" element={<UnprefixedBoardRedirect />} />
+          <Route path="my-feedback" element={<UnprefixedBoardRedirect />} />
           <Route path="instance" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings/*" element={<LegacySettingsRedirect />} />
@@ -960,6 +996,11 @@ export function App() {
             <Route key={tab} path={`agents/${tab}`} element={<UnprefixedBoardRedirect />} />
           ))}
           <Route path="agents/new" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/custom" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/hire" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/hire/capabilities/:versionId" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/hire/drafts/:draftId/:screen?" element={<UnprefixedBoardRedirect />} />
+          <Route path="agents/custom/:draftId/:screen?" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/:agentId" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/:agentId/:tab" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/:agentId/runs/:runId" element={<UnprefixedBoardRedirect />} />

@@ -1,0 +1,129 @@
+{
+  "screenId": "MY-FEEDBACK",
+  "journeyId": "feedback",
+  "routeOrSurface": "/:companyPrefix/my-feedback?feedbackId=:uuid",
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "customerOutcome": "Find privately owned submissions, status and visible product messages; answer requests for information.",
+  "entryConditions": [
+    "Current authenticated principal and company selection; no retained foreign-principal payload",
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+  ],
+  "exitConditions": [
+    "Only a canonical server-confirmed result permits a success claim",
+    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+  ],
+  "content": {
+    "h1": "My Feedback",
+    "supportingCopy": "Find privately owned submissions, status and visible product messages; answer requests for information.",
+    "customerTerms": ["Company", "Work", "Needs You", "Agent", "Feedback"],
+    "displayedState": [
+      "Current canonical state/version",
+      "Missing permission or qualification is explicit; no invented progress or outcomes"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "response",
+      "label": "Your response",
+      "dataType": "Plain text",
+      "required": true,
+      "default": "Empty",
+      "help": "Available when the product team asks for information.",
+      "validation": "Nonempty up to 10000 characters and current expected version",
+      "autofillOrPrefill": "No automatic content collection"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Send response",
+      "operation": "Append a typed, version-fenced idempotent customer follow-up"
+    },
+    "secondary": [
+      "Back preserves current valid inputs",
+      "Cancel / close restores the invoking control",
+      "Retry only the same safe request; refresh current state after a version conflict"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Customer Feedback joined through the principal’s private access relation",
+      "Customer-visible append-only events"
+    ],
+    "canonicalWriteOperation": "Append a current-version follow-up only for NEEDS_INFO; replay an already accepted original request before version/status checks. Original text stays immutable.",
+    "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
+    "asyncWork": "Existing native feedback owner locks current membership/ownership and versions. Private no-store reads hide retained results during rechecks. Unknown response retries retain the exact original request tuple in the selected session.",
+    "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
+  },
+  "states": {
+    "loading": "Announce current identity/read checks while hiding retained private history and reply text.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Suppress retained history and mutation controls during native rechecks; principal/company epochs reject late access-loss responses.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Retry only the frozen original tuple; keep text locked until a bound accepted receipt or canonical non-application refusal. The selected session preserves this tuple through private read rechecks.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Browser and product Back preserve session form state without recreating organizations, agents or runs.",
+    "cancelOrSaveExit": "No input is written to browser persistent storage; committed activation drafts remain in the native onboarding owner.",
+    "deepLink": "/:companyPrefix/my-feedback?feedbackId=:uuid",
+    "resume": "Refresh current native state and resume the first incomplete material step; stale steps cannot override it."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Only current principal/company-authorized customer data",
+      "Feedback original text and visible messages only in private customer history"
+    ],
+    "dataCollected": [
+      "Only explicit fields and the published safe-context allowlist"
+    ],
+    "sensitiveFields": [
+      "Raw intent, company facts, feedback and results remain customer data"
+    ],
+    "loggingConstraints": "Exclude customer prose, prompts, result bodies, attachments and raw errors from generic analytics/activity details; native domain audit is purpose-separated."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose.",
+      "Reject foreign/resource-mismatched receipts and invalid deep links, hide stale private history on identity/access loss, and preserve the original tuple through unknown acknowledgement and native status change."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

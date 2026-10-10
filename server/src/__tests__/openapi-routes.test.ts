@@ -12,6 +12,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROUTES_DIR = path.resolve(__dirname, "../routes");
 
 const apiPrefixes: Record<string, string> = {
+  "agent-authoring.ts": "/api",
+  "customer-feedback.ts": "/api",
+  "experience.ts": "/api",
   "business-events.ts": "/api",
   "business-metrics.ts": "/api",
   "business-forecasting.ts": "/api",
@@ -930,6 +933,51 @@ describe("openapi routes", () => {
       extraInSpec: [],
       excludedRoutes: [...explicitOpenApiOperationCoverageExclusions].sort(),
     });
+  });
+
+  it("documents V9 private human/operator admission and blocked publication without an invented success", () => {
+    const { spec } = loadSpecRoutes();
+    const board = [{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }];
+    const root = "/api/companies/{companyId}";
+    const stop = spec.paths[`${root}/workflow-runs/{runId}/experience/stop`].post;
+    expect(stop.security).toEqual(board);
+    expect(stop.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(stop.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(stop.requestBody.content["application/json"].schema.properties.acknowledgeCompletedEffectsRemain.enum).toEqual([true]);
+    expect(stop.responses[200].content["application/json"].schema.properties.disposition.enum).toEqual(["cancellation_requested"]);
+    const operations = spec.paths[`${root}/workflows/{workflowId}/experience/operations`].get;
+    expect(operations.security).toEqual(board);
+    expect(operations.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(operations.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const launch = spec.paths[`${root}/workflows/{workflowId}/experience/launch`].post;
+    expect(launch.security).toEqual(board);
+    expect(launch.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(launch.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(launch.requestBody.content["application/json"].schema.properties.acknowledgeInternalExecution.enum).toEqual([true]);
+    expect(launch.responses[200].content["application/json"].schema.properties.disposition.enum).toEqual(["admitted"]);
+    const lifecycle = spec.paths[`${root}/workflows/{workflowId}/experience/lifecycle`].post;
+    expect(lifecycle.security).toEqual(board);
+    expect(lifecycle.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(lifecycle.requestBody).toBeDefined();
+    const review = spec.paths[`${root}/workflows/{workflowId}/experience`].get;
+    expect(review.security).toEqual(board);
+    expect(review["x-paperclip-authorization"]).toMatchObject({ actor: "board", currentNativeAuthority: true, companyScoped: true });
+    expect(review.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(review.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const publish = spec.paths[`${root}/agent-configuration-drafts/{id}/publish`].post;
+    expect(publish.security).toEqual(board);
+    expect(publish.responses[422]).toBeDefined();
+    expect(publish.responses[200]).toBeUndefined();
+    expect(publish.responses[201]).toBeUndefined();
+    const triage = spec.paths["/api/internal/customer-feedback/{companyId}/{feedbackId}/triage"].post;
+    expect(triage.security).toEqual(board);
+    expect(triage["x-paperclip-authorization"]).toMatchObject({ configuredOperator: true, noCompanyAdminBypass: true });
+    expect(triage.responses[200].content["application/json"].schema.properties.internalState).toBeUndefined();
+    expect(triage.responses[200].content["application/json"].schema.properties.messages).toBeDefined();
+    const policy = spec.paths["/api/customer-feedback/policy"].get;
+    expect(policy.security).toEqual([]);
+    expect(policy["x-paperclip-authorization"]).toEqual({ actor: "public" });
+    expect(spec.paths[`${root}/customer-feedback/{feedbackId}/follow-up`].post.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
   });
 
   it("documents board-only repository discovery and selection", () => {

@@ -1277,8 +1277,11 @@ async function startServerWithDatabaseTeardown(
     }],
     ["workflow_recovery", async () => {
       const experimental = await instanceSettingsService(db).getExperimental();
-      if (experimental.enableWorkflowsV1 !== true) return;
-      const result = await workflowRecoveryExecutor.recoverExpiredRuns(20);
+      // Disabling new workflow use must still drain an already admitted stop.
+      // The native owner selects only cancellation when execution is disabled.
+      const result = await workflowRecoveryExecutor.recoverExpiredRuns(20, new Date(), {
+        cancellationOnly: experimental.enableWorkflowsV1 !== true,
+      });
       if (result.failedRunIds.length > 0) {
         logger.error(
           {

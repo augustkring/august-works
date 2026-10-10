@@ -9,6 +9,9 @@ import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { WorkflowCheckpointError } from "./workflow-errors.js";
 import { assertWorkflowTaskAssignmentAuthorized } from "./workflow-task-authority.js";
 import { directAgentConfig, dispatchDirectAgent } from "./workflow-direct-agent.js";
+import { lockCustomerWorkflowStop, inspectCustomerWorkflowStop, recordCustomerWorkflowStop, type CustomerWorkflowStop } from "./workflow-customer-stop.js";
+import { v5HumanActorId } from "../v5-authorization.js";
+import { logger } from "../../middleware/logger.js";
 import { executeOptimizedWorkflowTransform } from "../optimizer/optimizer-workflow-runtime.js";
 import { subworkflowConfig, requireSubworkflowRevision, assertSubworkflowGraph } from "./workflow-subworkflow.js";
 import { executeWorkflowMap } from "./workflow-map.js";
@@ -37,6 +40,9 @@ import {
   cancelWorkflowRunSchema,
   retryWorkflowRunSchema,
   startWorkflowRunSchema,
+  workflowStopCommandSchema,
+  type WorkflowStopCommand,
+  type WorkflowStopReceipt,
   type CancelWorkflowRun,
   type ExecutionPrincipal,
   type RetryWorkflowRun,
@@ -385,6 +391,26 @@ export async function enqueueWorkflowRunInTransaction(
       return { run: existing, created: false, publications: [] };
     }
   }
+
+  // All native run sources share this admission fence. A status read before
+  // enqueue is insufficient: pause/retirement can commit while callers prepare
+  // input. The lifecycle owner takes the same row lock. Replayed receipts above
+  // admit no new work and remain recoverable after pause.
+  const [workflow] = await executor.select({ status: workflows.status })
+    .from(workflows)
+    .where(and(eq(workflows.companyId, input.companyId), eq(workflows.id, input.workflowId)))
+    .for("update");
+  if (!workflow) throw notFound("Workflow not found");
+  if (input.idempotencyKey) {
+    const committed = await getIdempotentRun(executor, input.companyId, input.idempotencyKey);
+    if (committed) {
+      assertIdempotentRequestMatches(committed, input);
+      return { run: committed, created: false, publications: [] };
+    }
+  }
+  if (workflow.status !== "active") throw conflict("Workflow is not active", {
+    code: "workflow_invalid_transition", status: workflow.status,
+  });
 
   const now = new Date();
   const [run] = await executor
@@ -7171,9 +7197,12 @@ async function requestWorkflowRunCancellation(
   reason: string,
   actor: WorkflowRunActor,
   terminalFailure?: { code: "workflow_deadline_exceeded" | "workflow_wait_timeout" | "workflow_execution_principal_revoked"; message: string },
+  customerStop?: CustomerWorkflowStop,
 ): Promise<typeof workflowRuns.$inferSelect> {
   const publications: ActivityPublication[] = [];
   const updated = await db.transaction(async (tx) => {
+    const nativeDb = tx as unknown as Db;
+    if (customerStop) await lockCustomerWorkflowStop(nativeDb, companyId, customerStop);
     const run = await tx
       .select()
       .from(workflowRuns)
@@ -7187,6 +7216,12 @@ async function requestWorkflowRunCancellation(
       .then((rows) => rows[0] ?? null);
     if (!run) throw notFound("Workflow run not found");
 
+    if (customerStop && await inspectCustomerWorkflowStop(nativeDb, run, customerStop)) return run;
+    const admitted = async (row: typeof workflowRuns.$inferSelect) => {
+      if (customerStop) publications.push(await recordCustomerWorkflowStop(nativeDb, row, customerStop));
+      return row;
+    };
+
     if (run.status === "cancelled") return run;
     if (workflowRunIsTerminal(run.status)) {
       throw conflict("Workflow run is already terminal", {
@@ -7195,7 +7230,7 @@ async function requestWorkflowRunCancellation(
         status: run.status,
       });
     }
-    if (run.status === "cancelling") return run;
+    if (run.status === "cancelling") return admitted(run);
 
     const now = new Date();
     const resolutionActor = workflowCancellationResolutionActor(actor);
@@ -7435,7 +7470,7 @@ async function requestWorkflowRunCancellation(
         },
       );
       publications.push(activity.publication);
-      return cancelledRun;
+      return admitted(cancelledRun);
     }
 
     const [cancellingRun] = await tx
@@ -7480,7 +7515,7 @@ async function requestWorkflowRunCancellation(
       },
     );
     publications.push(activity.publication);
-    return cancellingRun;
+    return admitted(cancellingRun);
   });
 
   publishActivities(publications);
@@ -8180,6 +8215,26 @@ export function workflowExecutorService(
     getRun: (companyId: string, runId: string, reader?:AuthorizationActor) =>
       getRunDetail(db, companyId, runId,reader),
 
+    stopRun: async (companyId: string, runId: string, rawInput: WorkflowStopCommand,
+      authority: AuthorizationActor): Promise<WorkflowStopReceipt> => {
+      const command = workflowStopCommandSchema.parse(rawInput), principal = v5HumanActorId(authority);
+      const actor: WorkflowRunActor = { principal: authority.source === "local_implicit"
+        ? { type: "system", service: "local-board" } : { type: "user", userId: principal } };
+      const customer: CustomerWorkflowStop = { command, authority, deadline: performance.now() + 30_000, receipt: null };
+      const reason = "Customer requested workflow stop";
+      const requested = await requestWorkflowRunCancellation(db, companyId, runId, reason, actor, undefined, customer);
+      if (!customer.receipt) throw new Error("Native workflow stop receipt is unavailable");
+      if (requested.status === "cancelling") {
+        try { await continueWorkflowRunCancellation(db, requested, reason, actor, runtimeDeps); }
+        catch {
+          // Native recovery retains the durable cancelling row. Never label
+          // child/provider cleanup complete from this admission receipt.
+          logger.warn({ companyId, workflowRunId: runId }, "Native workflow stop is admitted; cancellation remains pending");
+        }
+      }
+      return customer.receipt;
+    },
+
     cancelRun: async (
       companyId: string,
       runId: string,
@@ -8663,6 +8718,7 @@ export function workflowExecutorService(
     recoverExpiredRuns: async (
       limit = 20,
       now = new Date(),
+      options: { cancellationOnly?: boolean } = {},
     ): Promise<{
       checked: number;
       recovered: number;
@@ -8676,7 +8732,7 @@ export function workflowExecutorService(
         .select()
         .from(workflowRuns)
         .where(
-          or(
+          options.cancellationOnly ? eq(workflowRuns.status, "cancelling") : or(
             and(
               eq(workflowRuns.status, "queued"),
               lt(workflowRuns.updatedAt, queuedBefore),

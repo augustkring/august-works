@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "stage": "R0_SPECIFIED",
+  "sourceComplete": false,
+  "acceptedBy": null,
+  "releaseIdentity": null,
+  "inheritedPredecessorGates": "H6-01..H6-18; H7-01..H7-03; native_openshell_host_bridge; credential_use_broker_and_revocation; pre_spend_model_reservation",
+  "coverageManifest": "doc/experience/v9/coverage.json",
+  "ledger": "doc/plans/2026-10-09-aw-v9-build.md",
+  "evidence": [],
+  "pendingEvidence": [
+    "migrated PostgreSQL tenant/current-authority contracts",
+    "browser journey and route compatibility",
+    "manual accessibility",
+    "exploratory usability baseline",
+    "pre-registered confirmatory usability",
+    "hosted runtime/provider/channel qualification",
+    "performance and recovery fault evidence"
+  ]
+}
