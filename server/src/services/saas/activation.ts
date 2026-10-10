@@ -7,6 +7,7 @@ import {
   companyOnboardingRuns,
   agentPackageVersions,
   agentPackages,
+  instanceSettings,
   type Db,
 } from "@paperclipai/db";
 import {
@@ -26,10 +27,28 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { foundationService } from "../foundation/foundation-service.js";
 import { packageReleaseBlockers } from "../agent-packages/package-policy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import {
+  activationFirstValueView,
+  readActivationFirstValue,
+} from "./activation-first-value.js";
 
 /** A presentation state machine on the existing onboarding owner. It never supplies
  * execution authority, grants, provider credentials, or synthetic first-value proof. */
 export function activationService(db: Db) {
+  async function lockSnapshot(tx: Db, companyId: string) {
+    await tx.execute(
+      sql`select set_config('statement_timeout', '5000', true), set_config('lock_timeout', '1000', true)`,
+    );
+    await lockAnalyticalCompany(tx, companyId);
+    await lockMemoryPrivacy(tx, companyId);
+    await tx
+      .select({ key: instanceSettings.singletonKey })
+      .from(instanceSettings)
+      .where(eq(instanceSettings.singletonKey, "default"))
+      .for("share");
+  }
   async function access(
     tx: Db,
     actor: AuthorizationActor,
@@ -139,7 +158,10 @@ export function activationService(db: Db) {
     return result;
   }
   async function view(tx: Db, actor: AuthorizationActor, companyId: string) {
-    const { run, state } = await read(tx, actor, companyId);
+    const [started] = await tx.execute(
+      sql`select clock_timestamp() as observed_at`,
+    );
+    const { run, state, userId } = await read(tx, actor, companyId);
     const [company] = await tx
       .select({ name: companies.name })
       .from(companies)
@@ -149,16 +171,39 @@ export function activationService(db: Db) {
     const selected = available.find(
       (c) => c.versionId === state.packageVersionId,
     );
+    const firstValue = await activationFirstValueView(
+      tx,
+      actor,
+      companyId,
+      {
+        createdAt: run.createdAt,
+        createdByUserId: userId,
+        activationState: state,
+      },
+      !!selected,
+    );
     const blockers: ActivationView["blockers"] = [];
     if (!available.length || (state.packageVersionId && !selected))
       blockers.push("no_qualified_capability");
     if (state.step === "access" && selected?.requiredConnections.length)
       blockers.push("required_access_pending");
-    if (["review", "running", "result", "activated"].includes(state.step))
+    if (
+      ["review", "running", "result", "activated"].includes(state.step) &&
+      firstValue.status !== "verified"
+    )
       blockers.push("safe_execution_unqualified");
     // Do not return internal idempotency receipts to the presentation layer.
     const { receipts: _, ...publicState } = state;
     await access(tx, actor, companyId);
+    const [finished] = await tx.execute(
+      sql`select clock_timestamp() as observed_at`,
+    );
+    if (
+      new Date(finished!.observed_at as string | Date).getTime() -
+        new Date(started!.observed_at as string | Date).getTime() >
+      5000
+    )
+      throw conflict("The current setup read exceeded its budget");
     return activationViewSchema.parse({
       runId: run.id,
       companyId,
@@ -166,6 +211,7 @@ export function activationService(db: Db) {
       version: run.version,
       status: run.status,
       state: publicState,
+      firstValue,
       sources: [
         {
           id: "customer_context",
@@ -182,13 +228,27 @@ export function activationService(db: Db) {
     });
   }
   return {
-    get: (actor: AuthorizationActor, companyId: string) =>
-      view(db, actor, companyId),
+    get: async (actor: AuthorizationActor, companyId: string) =>
+      db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await access(txDb, actor, companyId);
+        await lockSnapshot(txDb, companyId);
+        await access(txDb, actor, companyId, true);
+        const [company] = await tx
+          .select()
+          .from(companies)
+          .where(eq(companies.id, companyId))
+          .for("share");
+        if (!company || company.status !== "active")
+          throw forbidden("Company setup is unavailable");
+        return view(txDb, actor, companyId);
+      }),
     async command(actor: AuthorizationActor, companyId: string, raw: unknown) {
       const input = activationCommandSchema.parse(raw);
       await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await access(txDb, actor, companyId);
+        await lockSnapshot(txDb, companyId);
         const [company] = await tx
           .select()
           .from(companies)
@@ -349,6 +409,64 @@ export function activationService(db: Db) {
             next.step = "review";
             break;
           }
+          case "record_verified_result": {
+            requireStep("review");
+            if (
+              !(await capabilities(txDb)).some(
+                (c) => c.versionId === state.packageVersionId,
+              )
+            )
+              throw conflict("Choose a current qualified capability", {
+                code: "CAPABILITY_UNAVAILABLE",
+              });
+            const result = await readActivationFirstValue(
+              txDb,
+              actor,
+              companyId,
+              {
+                createdAt: run.createdAt,
+                createdByUserId: userId,
+                activationState: state,
+              },
+              input.installationId,
+              input.verificationRunId,
+            );
+            next.firstValueReceipt = {
+              installationId: result.installationId,
+              verificationRunId: result.verificationRunId,
+              issueId: result.issueId,
+              runId: result.runId,
+              resultHash: result.resultHash,
+            };
+            const [clock] = await tx.execute(
+              sql`select clock_timestamp() as observed_at`,
+            );
+            next.firstValueAt = new Date(
+              clock!.observed_at as string | Date,
+            ).toISOString();
+            next.step = "result";
+            break;
+          }
+          case "complete_activation": {
+            requireStep("result");
+            const current = await activationFirstValueView(
+              txDb,
+              actor,
+              companyId,
+              {
+                createdAt: run.createdAt,
+                createdByUserId: userId,
+                activationState: state,
+              },
+              false,
+            );
+            if (current.status !== "verified" || !state.firstValueAt)
+              throw conflict(
+                "Review current first-result evidence before completing setup",
+              );
+            next.step = "activated";
+            break;
+          }
         }
         next.receipts = [
           ...state.receipts,
@@ -359,6 +477,11 @@ export function activationService(db: Db) {
           .update(companyOnboardingRuns)
           .set({
             activationState: parsed,
+            status: parsed.step === "activated" ? "completed" : run.status,
+            completedAt:
+              parsed.step === "activated"
+                ? sql`clock_timestamp()`
+                : run.completedAt,
             currentStage: `v9_${parsed.step}`,
             version: sql`${companyOnboardingRuns.version}+1`,
             updatedAt: new Date(),
@@ -388,7 +511,20 @@ export function activationService(db: Db) {
           },
         });
       });
-      return view(db, actor, companyId);
+      return db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await access(txDb, actor, companyId);
+        await lockSnapshot(txDb, companyId);
+        await access(txDb, actor, companyId, true);
+        const [company] = await tx
+          .select()
+          .from(companies)
+          .where(eq(companies.id, companyId))
+          .for("share");
+        if (!company || company.status !== "active")
+          throw forbidden("Company setup is unavailable");
+        return view(txDb, actor, companyId);
+      });
     },
   };
 }

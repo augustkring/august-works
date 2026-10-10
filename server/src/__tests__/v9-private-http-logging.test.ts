@@ -12,6 +12,11 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
+    ["GET", "/api/companies/private-company/activation?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/activation?expectedUserId=private-principal"],
+    ["GET", "/api/companies/private-company/onboarding?expectedUserId=private-principal"],
+    ["PATCH", "/api/companies/private-company/onboarding?expectedUserId=private-principal"],
+    ["POST", "/api/companies//activation?expectedUserId=private-principal"],
     ["POST", "/api/companies/private-company/support-sessions/reviews?expectedUserId=private-principal"],
     ["GET", "/api/companies/private-company/support-sessions/pending-review?expectedUserId=private-principal"],
     ["DELETE", "/api/companies/private-company/support-sessions/reviews/private-record?expectedUserId=private-principal"],
@@ -125,6 +130,8 @@ describe("V9 private HTTP purpose", () => {
       "/api/companies/id/support-sessions-other",
       "/api/internal/customer-feedback-extra",
       "/api/companies/id/experience/profile",
+      "/api/companies/id/activation-extra",
+      "/api/companies/id/onboarding-extra",
     ])
       expect(isPrivateExperienceHttpRequest("GET", path)).toBe(false);
   });

@@ -1,0 +1,129 @@
+{
+  "screenId": "ONB-12",
+  "journeyId": "onb",
+  "routeOrSurface": "/saas/activation/12",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Find the selected active capability, future review requests and Home without mandatory expansion.",
+  "entryConditions": [
+    "Current authenticated principal and company selection; no retained foreign-principal payload",
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+  ],
+  "exitConditions": [
+    "Only a canonical server-confirmed result permits a success claim",
+    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+  ],
+  "content": {
+    "h1": "You're ready",
+    "supportingCopy": "Find the selected active capability, future review requests and Home without mandatory expansion.",
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
+    "displayedState": [
+      "Current original Native worker review and exact successful package activation/run/task/output references",
+      "A withdrawn/currently unavailable result hides private output links, use-result controls and success headings",
+      "Independent draft verification does not establish revenue, savings or other business impact"
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Go to Home",
+      "operation": "Navigate to Home; optional next steps never confer authority."
+    },
+    "secondary": [
+      "Open the original task and saved output under its current native authorization",
+      "Refresh the original onboarding source after uncertainty; metadata recording creates no new run or grant"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Existing company_onboarding_runs activation state/version and current verified creator membership",
+      "Original current package installation, licensed/purpose-approved Native authority and exact successful heartbeat/worker attempt",
+      "Original passing human worker verification, current completion contract, privacy/source pins and saved task document revisions"
+    ],
+    "canonicalWriteOperation": "Typed record_verified_result and complete_activation commands update only the existing onboarding owner after current Native proof, exact request hash and version checks. Safe first-task creation/execution, material access and full launch qualification remain separate/open.",
+    "authorityEffect": "No new execution, credentials, permissions, package activation or business-impact claim. Current original Native authority is checked independently.",
+    "asyncWork": "Private Native reads and existing onboarding metadata only. Five-second Native read guard; original request/version replay.",
+    "receipt": "Exact original Native task/run/installation/worker-review/output references; the original database-clock first-value timestamp is not renewed on replay."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Browser and product Back preserve session form state without recreating organizations, agents or runs.",
+    "cancelOrSaveExit": "No input is written to browser persistent storage; committed activation drafts remain in the native onboarding owner.",
+    "deepLink": "/saas/activation/12",
+    "resume": "Reload the original current onboarding owner. A recorded result is shown only while its exact Native evidence still qualifies; withdrawn evidence never authorizes completing setup."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current creator/company-authorized original task title and minimal Native output references; no output body, reviewer identity or private review rationale",
+      "Withdrawn/denied results remove original title and result links"
+    ],
+    "dataCollected": [
+      "Only explicit fields and the published safe-context allowlist"
+    ],
+    "sensitiveFields": [
+      "Raw intent, company facts, feedback and results remain customer data"
+    ],
+    "loggingConstraints": "Exclude customer prose, prompts, result bodies, attachments and raw errors from generic analytics/activity details; native domain audit is purpose-separated."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

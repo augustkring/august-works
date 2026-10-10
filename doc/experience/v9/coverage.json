@@ -209,7 +209,8 @@
       "owner": "August Works product and engineering",
       "implementationStatus": "pending",
       "componentPaths": [],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-11.json"
     },
     {
       "screenId": "ONB-12",
@@ -224,7 +225,8 @@
       "owner": "August Works product and engineering",
       "implementationStatus": "pending",
       "componentPaths": [],
-      "evidenceRefs": []
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-12.json"
     },
     {
       "screenId": "HIRE-01",

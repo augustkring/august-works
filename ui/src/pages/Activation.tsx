@@ -26,6 +26,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { CustomerFeedbackDialog } from "../components/CustomerFeedbackDialog";
+import { ActivationFirstValue } from "../components/ActivationFirstValue";
 import { SaasWelcomePage } from "./SaasWelcome";
 
 export function SaasWelcomeEntry() {
@@ -86,6 +87,8 @@ function ActivationScope({
   const heading = useRef<HTMLHeadingElement>(null),
     error = useRef<HTMLDivElement>(null);
   const alive = useRef(true),
+    resolvedInitialStep = useRef(false),
+    lastResolvedSource = useRef<{ id: string; version: number } | null>(null),
     exitAfterSave = useRef(false),
     creationAttempt = useRef<
       Parameters<typeof saasApi.createCompany>[1] | null
@@ -106,22 +109,39 @@ function ActivationScope({
     gcTime: 0,
     retry: false,
   });
-  const current = run.isSuccess ? run.data : undefined;
+  const current = run.isSuccess && !run.isFetching ? run.data : undefined;
   const step = current?.state.step;
   const canonicalScreen = step ? ACTIVATION_STEPS.indexOf(step) + 3 : 2;
   const requestedScreen = Number(params.screen);
   const screen =
-    Number.isInteger(requestedScreen) &&
-    requestedScreen >= 2 &&
-    requestedScreen <= canonicalScreen
-      ? requestedScreen
-      : canonicalScreen;
+    current && !resolvedInitialStep.current
+      ? canonicalScreen
+      : Number.isInteger(requestedScreen) &&
+          requestedScreen >= 2 &&
+          requestedScreen <= canonicalScreen
+        ? requestedScreen
+        : canonicalScreen;
   const isPast = screen < canonicalScreen;
   useEffect(() => {
     if (!current) return;
-    setIntent(current.state.intent);
-    setPurpose(current.state.companyPurpose);
-    if (!params.screen || Number(params.screen) > canonicalScreen)
+    if (
+      lastResolvedSource.current?.id !== current.runId ||
+      lastResolvedSource.current?.version !== current.version
+    ) {
+      setIntent(current.state.intent);
+      setPurpose(current.state.companyPurpose);
+      lastResolvedSource.current = {
+        id: current.runId,
+        version: current.version,
+      };
+    }
+    const firstResolution = !resolvedInitialStep.current;
+    resolvedInitialStep.current = true;
+    if (
+      firstResolution ||
+      !params.screen ||
+      Number(params.screen) > canonicalScreen
+    )
       navigate(`/saas/activation/${canonicalScreen}`, { replace: true });
   }, [current?.version, current?.runId]);
   useEffect(() => {
@@ -221,11 +241,18 @@ function ActivationScope({
       </header>
       <p>{t("activation.stages")}</p>
       <h1 tabIndex={-1} ref={heading} className="text-2xl font-semibold">
-        {t(`activation.screen${screen}`, {
-          company: current?.companyName ?? name,
-        })}
+        {t(
+          companyId && (run.isPending || run.isFetching)
+            ? "activation.loading"
+            : current?.firstValue?.status === "withdrawn" && screen >= 11
+              ? "activation.resultNeedsReview"
+              : `activation.screen${screen}`,
+          {
+            company: current?.companyName ?? name,
+          },
+        )}
       </h1>
-      {companyId && run.isPending ? (
+      {companyId && (run.isPending || run.isFetching) ? (
         <p role="status">{t("activation.loading")}</p>
       ) : null}
       {companyId && run.isError ? (
@@ -548,8 +575,53 @@ function ActivationScope({
               <dd>{selected?.name ?? t("activation.noCapability")}</dd>
             </div>
           </dl>
-          <p>{t("activation.executionPending")}</p>
-          <p>{t("activation.noRunStarted")}</p>
+          <ActivationFirstValue
+            value={current.firstValue}
+            canRecord={
+              enabled && !frozen && !isPast && current.state.step === "review"
+            }
+            onRecord={(input) =>
+              command.mutate({
+                ...input,
+                ...envelope(),
+                operation: "record_verified_result",
+              })
+            }
+          />
+          {current.firstValue?.status === "verified" &&
+          !isPast &&
+          current.state.step === "result" ? (
+            <Button
+              className="min-h-11"
+              disabled={!enabled || frozen}
+              onClick={() =>
+                command.mutate({
+                  ...envelope(),
+                  operation: "complete_activation",
+                })
+              }
+            >
+              {t("activation.finishSetup")}
+            </Button>
+          ) : null}
+          {current.firstValue?.status === "verified" &&
+          current.state.step === "activated" ? (
+            <>
+              <p>{t("activation.futureDrafts")}</p>
+              <Link className="underline" to="/needs-you">
+                {t("activation.futureRequests")}
+              </Link>
+              <Link className="underline" to="/">
+                {t("activation.openHome")}
+              </Link>
+            </>
+          ) : null}
+          {current.firstValue?.status !== "verified" ? (
+            <>
+              <p>{t("activation.executionPending")}</p>
+              <p>{t("activation.noRunStarted")}</p>
+            </>
+          ) : null}
         </section>
       ) : null}
       {companyId ? (

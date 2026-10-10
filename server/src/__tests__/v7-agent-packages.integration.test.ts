@@ -24,6 +24,14 @@ import {
 } from "@paperclipai/db";
 import { learningService } from "../services/learning/learning-service.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { activationService } from "../services/saas/activation.js";
+import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import { verificationService } from "../services/supervision/verification-service.js";
+import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { initialActivationState, createOrchestrationPlanSchema } from "@paperclipai/shared";
+import { purpose as governancePurpose, oversight as governanceOversight, reviews as governanceReviews } from "./helpers/governance-fixture.js";
+import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
+  documents, documentRevisions, issueDocuments } from "@paperclipai/db";
 import { readinessService } from "../services/readiness/readiness-service.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { accessService } from "../services/access.js";
@@ -1443,6 +1451,128 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(agentPackageStopActions.id, action!.id)),
       ).rejects.toMatchObject({ cause: { code: "23514" } });
     });
+    async function firstValueFixture() {
+      await instanceSettingsService(db).updateExperimental({
+        activation_v9: true, free_core_commercial_v7: true, billing_entitlements_v6: true,
+        billing_usage_v6: true, enableWorkflowsV1: true,
+        transactional_email_v6: true, email_verification_required_v6: true, server_onboarding_v6: true,
+        readiness_engine_v7: true, orchestration_v7: true, supervision_v7: true, verifier_v7: true,
+        ai_use_cases_v7: true,
+      });
+      const { published } = await hireFixture();
+      versionId = published.id;
+      // Seed the original onboarding owner at review, and a bounded native test
+      // entitlement. All package activation, orchestration, admission and review
+      // below use their original writers; this is not a live customer outcome.
+      const [account] = await db.insert(billingAccounts).values({ displayName: "First value fixture", payerUserId: f.userId }).returning();
+      await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
+      await db.insert(billingSubscriptions).values({ billingAccountId: account!.id,
+        providerSubscriptionId: `native-test-fixture-${randomUUID()}`, status: "active", productKeys: ["agent_package_research"],
+        currentPeriodEnd: new Date(Date.now() + 3600000), providerUpdatedAt: new Date(), sourceHash: "native-test-fixture" });
+      const intent = "Prepare a source-bound customer research draft";
+      const [onboarding] = await db.insert(companyOnboardingRuns).values({ companyId: f.home, billingAccountId: account!.id,
+        createdByUserId: f.userId, idempotencyKey: randomUUID(), requestHash: "a".repeat(64), currentStage: "v9_review",
+        activationState: { ...initialActivationState(), step: "review", intent, packageVersionId: versionId } }).returning();
+      const foundation = foundationService(db), principal = { principal: { type: "user" as const, userId: f.userId } };
+      const companyProfile = await foundation.createDraft(f.home, { foundationKey: "company_profile", category: "company",
+        documentType: "profile", body: "Native test company prepares source-bound customer research drafts",
+        authorityLevel: "canonical", sensitivity: "internal" }, principal);
+      await foundation.submitForReview(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
+      await foundation.approve(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id, status: "active" }).onConflictDoNothing();
+      await db.insert(principalPermissionGrants).values(["company_scope:read", "foundation:read"].map(permissionKey => ({
+        companyId: f.home, principalType: "agent", principalId: f.presence.id, permissionKey,
+      }))).onConflictDoNothing();
+      const governance = aiGovernanceService(db);
+      const oversight = await governance.oversight(f.actor, f.home, governanceOversight);
+      let useCase = await governance.create(f.actor, f.home, { key: `first-value-${randomUUID()}`, purpose: {
+        ...governancePurpose(), intendedPurpose: published.release.manifest.purpose, riskClass: "C1", oversightProfileId: oversight.id,
+      } });
+      for (const assessment of governanceReviews()) {
+        await governance.assess(f.actor, f.home, useCase.id, { ...assessment, expectedVersion: useCase.version });
+        useCase = { ...useCase, version: useCase.version + 1 };
+      }
+      useCase = await governance.decide(f.actor, f.home, useCase.id, "approve", { expectedVersion: useCase.version,
+        rationale: "Native fixture human reviewed this precise internal draft purpose" });
+      const installed = await service.install(f.actor, f.home, { ...installInput(), aiUseCaseId: useCase.id });
+      const installation = await service.decide(f.actor, f.home, installed.id, "activate", {
+        expectedVersion: installed.version, reason: "Explicit native fixture reviewed-purpose activation",
+      });
+      expect(installation.status, JSON.stringify(installation.readiness)).toBe("active");
+      const [task] = await db.insert(issues).values({ companyId: f.home, title: "Private first-result draft", status: "todo",
+        assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
+      const orchestration = orchestrationService(db);
+      const created = await orchestration.create(f.actor, f.home, createOrchestrationPlanSchema.parse({
+        issueId: task!.id, expectedIssueUpdatedAt: task!.updatedAt.toISOString(), riskClass: "C1", workload: "semantic",
+        completionContract: { objective: intent, requiredOutputs: [{ key: "result" }],
+          businessInvariants: ["Every claim cites an authorized retained source"] }, budgets: {}, workers: [{ key: "worker", issueId: task!.id }],
+      }));
+      const plan = await orchestration.decide(f.actor, f.home, created.id, { expectedVersion: created.version, action: "start",
+        rationale: "Start the explicitly bounded native fixture draft" });
+      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+        status: "running", contextSnapshot: { issueId: task!.id } }).returning();
+      await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: run!.id,
+        responsibleUserId: f.userId, issueId: task!.id, query: intent });
+      const [document] = await db.insert(documents).values({ companyId: f.home, title: "Research result",
+        latestBody: "Native fixture output for an independent human review", createdByAgentId: f.presence.id }).returning();
+      const [revision] = await db.insert(documentRevisions).values({ companyId: f.home, documentId: document!.id,
+        revisionNumber: 1, body: document!.latestBody }).returning();
+      await db.update(documents).set({ latestRevisionId: revision!.id }).where(eq(documents.id, document!.id));
+      await db.insert(issueDocuments).values({ companyId: f.home, issueId: task!.id, documentId: document!.id, key: "result" });
+      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run!.id));
+      const worker = (await orchestration.get(f.actor, f.home, plan.id)).workers[0]!;
+      const verifier = verificationService(db), packet = await verifier.packet(f.actor, f.home, plan.id, worker.id);
+      const review = await verifier.review(f.actor, f.home, plan.id, { expectedPlanVersion: packet.planVersion, workerId: worker.id,
+        expectedResultHash: packet.resultHash, result: "pass", objectiveSatisfied: true,
+        rationale: "Independently inspected the saved native draft against the declared invariant",
+        businessInvariants: [{ index: 0, satisfied: true, evidenceRefs: [packet.evidence[0]!.ref] }] });
+      expect(review.result).toBe("pass");
+      return { onboarding: onboarding!, installation, task: task!, run: run!, document: document!, revision: revision!, review: review! };
+    }
+    it("records only a current native first-result task/run/review and replays without executing or granting", async () => {
+      const fixture = await firstValueFixture(), activation = activationService(db);
+      const beforeRuns = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).length;
+      const candidate = (await activation.get(f.actor, f.home)).firstValue!.candidates[0]!;
+      expect(candidate).toMatchObject({ issueId: fixture.task.id, runId: fixture.run.id, verificationRunId: fixture.review.id,
+        installationId: fixture.installation.id, artifacts: [{ documentId: fixture.document.id, revisionId: fixture.revision.id }] });
+      const input = { operation: "record_verified_result" as const, expectedVersion: fixture.onboarding.version, requestId: randomUUID(),
+        installationId: fixture.installation.id, verificationRunId: fixture.review.id };
+      const [first, replay] = await Promise.all([activation.command(f.actor, f.home, input), activation.command(f.actor, f.home, input)]);
+      expect(first.state.step).toBe("result");
+      expect(first.firstValue?.status).toBe("verified");
+      expect(first.state.firstValueAt).toBe(replay.state.firstValueAt);
+      expect(first.version).toBe(replay.version);
+      expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).length).toBe(beforeRuns);
+      const audits = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.action, "activation.step_completed")));
+      expect(audits).toHaveLength(1);
+      expect(JSON.stringify(audits[0]!.details)).not.toContain("Private first-result");
+      await expect(activation.command(f.actor, f.home, { ...input, verificationRunId: randomUUID() })).rejects.toMatchObject({ status: 409 });
+      await expect(activation.command(f.actor, f.guest, input)).rejects.toMatchObject({ status: 404 });
+      const completion = { operation: "complete_activation" as const, expectedVersion: first.version, requestId: randomUUID() };
+      const completed = await activation.command(f.actor, f.home, completion);
+      expect(completed.state.step).toBe("activated");
+      expect(completed.status).toBe("completed");
+      expect(completed.firstValue?.status).toBe("verified");
+      const completionReplay = await activation.command(f.actor, f.home, completion);
+      expect(completionReplay.version).toBe(completed.version);
+      expect(completionReplay.state.firstValueAt).toBe(first.state.firstValueAt);
+    }, 60000);
+    it("withdraws first-result presentation on package revocation and cannot renew its original receipt", async () => {
+      const fixture = await firstValueFixture(), activation = activationService(db);
+      const input = { operation: "record_verified_result" as const, expectedVersion: fixture.onboarding.version, requestId: randomUUID(),
+        installationId: fixture.installation.id, verificationRunId: fixture.review.id };
+      const recorded = await activation.command(f.actor, f.home, input);
+      await service.revoke(f.actor, versionId);
+      const current = await activation.get(f.actor, f.home);
+      expect(current.firstValue).toEqual({ status: "withdrawn", result: null, candidates: [], hasMore: false });
+      expect(current.blockers).toContain("safe_execution_unqualified");
+      await expect(activation.command(f.actor, f.home, { operation: "complete_activation", expectedVersion: current.version,
+        requestId: randomUUID() })).rejects.toMatchObject({ status: 409 });
+      const replay = await activation.command(f.actor, f.home, input);
+      expect(replay.state.firstValueAt).toBe(recorded.state.firstValueAt);
+      expect(replay.firstValue?.status).toBe("withdrawn");
+      expect((await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.action, "activation.step_completed"))))).toHaveLength(1);
+    }, 60000);
     it("does not elevate fixture evidence to customer or high-assurance qualification", () => {
       expect(
         packageReleaseBlockers({

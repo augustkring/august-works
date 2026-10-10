@@ -220,7 +220,7 @@
     "noGrants": "Selecting a capability does not create connection or execution permissions.",
     "agent": "Selected agent",
     "executionPending": "Safe first-task execution is awaiting qualification. Save this setup and return when it is available.",
-    "noRunStarted": "No task has been started and no first result or activation has been claimed.",
+    "noRunStarted": "Recording a reviewed result does not start another task or grant access.",
     "tellInstead": "I'll tell you instead",
     "source": {
       "customer_context": "Company information you provide",
@@ -231,7 +231,21 @@
       "available": "Available",
       "not_requested": "Not requested",
       "not_connected": "Not connected"
-    }
+    },
+    "firstValuePending": "A result for your goal needs a successful run, a saved output and an independent review before it can be recorded.",
+    "firstValueWithdrawn": "The saved result can no longer be verified against current evidence. Refresh setup or review the original task in Work.",
+    "verifiedResult": "Your verified first result",
+    "independentReview": "An independent human review passed for this saved output and the selected agent.",
+    "resultLimit": "This confirms the reviewed draft. It does not establish revenue, savings or other business impact.",
+    "chooseVerifiedResult": "A reviewed result for your goal is available",
+    "inspectResult": "Review the original task and output",
+    "useVerifiedResult": "Use this as my first result",
+    "moreVerifiedResults": "More reviewed results exist. This view shows the five most recent qualified results.",
+    "finishSetup": "Use result",
+    "openHome": "Go to Home",
+    "resultNeedsReview": "Review your saved result",
+    "futureDrafts": "The selected agent remains available for internal drafts within its current permissions.",
+    "futureRequests": "Review future requests in Needs You"
   },
   "company": {
     "title": "Company",

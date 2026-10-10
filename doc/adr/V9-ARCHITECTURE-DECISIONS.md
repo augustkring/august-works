@@ -923,3 +923,38 @@ Hire recovery tests. Exact Native catalog assertions pass in the actual migrated
 Strict workspace types/build and current built app checks pass; full regression
 and hosted/human acceptance remain pending.
 Per-app effective scopes, representative execution and activation stay open.
+
+## V9-045 — First value references original independent verification
+
+The existing onboarding JSON may retain original installation, verification,
+Task, heartbeat-run and result-hash references. Only the original verified creator
+can record them. Current C1 customer-package qualification and the exact licensed,
+purpose-approved Native installation are required. A successful run alone never
+qualifies: the original single-worker contract must match the saved first goal,
+the creator/responsible user and package agent must match, and the exact retained
+human worker review must pass against current artifact/source pins. The existing
+verification service performs that read; the new projection does not reconcile
+attempts, certify completion, change a Task or write another evidence store.
+
+Analytical/privacy, current company/member, settings and original resource locks
+cover reads and metadata writes. Native clock/read bounds refuse stale or oversized
+complete reads. The original immutable request hash/version fence records the
+first-value time from the database clock. Replay cannot renew it or create work.
+Explicit use-result completion checks the same evidence again before completing
+only the original onboarding owner. Revoked/deleted/changed evidence withdraws
+result titles, links, use-result controls and success headings. The historical
+first-value timestamp does not establish current authority or business impact.
+
+The client binds every response to the requested company, aborts late private
+reads and hides source data while rechecking. Initial resume follows current
+Native state, while explicit Back can inspect previous steps. Same-version
+rechecks preserve unsaved input within the same account/company scope. Actual
+onboarding/activation HTTP namespaces have content-free failure logging.
+
+Two actual migrated Native cases pass for exact binding/completion/replay and
+revocation withdrawal. The tests use explicit Native license, approved-purpose,
+Foundation and provider fixtures; they establish no real customer output or live
+billing/provider qualification. Full current focused/types/build/browser and
+aggregate checks remain required. General first-task creation/execution, Core
+capability delivery, connection/access flow, artifact correction, privacy-approved
+analytics and complete hosted/human onboarding acceptance remain open.

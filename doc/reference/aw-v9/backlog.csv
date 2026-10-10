@@ -23,9 +23,9 @@ V9-021,2197,discovery progress + source/provenance/evidence cards + untrusted-co
 V9-022,2199,material-question resolver + indirect prompt-injection/ingestion policy tests,in_progress
 V9-023,2201,activation resume/recovery,in_progress
 V9-024,2203,Free Core onboarding commercial gate removal,in_progress
-V9-025,2205,first-value task/run binding,not_started
-V9-026,2207,first-value verification + analytics,not_started
-V9-027,2209,first-outcome UI,not_started
+V9-025,2205,first-value task/run binding,in_progress
+V9-026,2207,first-value verification + analytics,in_progress
+V9-027,2209,first-outcome UI,in_progress
 V9-028,2211,Agent Package customer catalog projection,in_progress
 V9-029,2213,Hire Package simplified install flow,in_progress
 V9-030,2215,package permissions/consequence preview,in_progress

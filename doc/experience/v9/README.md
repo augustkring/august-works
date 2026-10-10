@@ -38,3 +38,11 @@ The [AG-UI/A2UI experiment](protocol-interop/README.md) retains pinned upstream
 schemas and demonstrates read-only mapping to actual V9 cards. It is not a
 production protocol host or authority source; strict types, build, actual upstream tests and built Storybook checks pass. Full
 regression and production adoption remain open.
+
+
+The original first-result binding supports metadata for an already existing C1
+Task/run/output that has current independent human worker verification. The
+[ONB-11](contracts/onb-11.json) and [ONB-12](contracts/onb-12.json) contracts retain
+the explicit completion/revocation boundary. Actual Native tests and built-browser
+software fixtures pass; preparation/execution of a first job, Free Core delivery,
+artifact correction and full launch acceptance remain open.

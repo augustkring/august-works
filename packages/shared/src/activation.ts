@@ -24,6 +24,44 @@ export const activationWebsiteSchema = z
       ),
     "Enter a domain such as example.com, without a path or credentials",
   );
+// References to original owners only. This receipt never authorizes execution.
+export const activationFirstValueReceiptSchema = z.strictObject({
+  installationId: z.uuid(),
+  verificationRunId: z.uuid(),
+  issueId: z.uuid(),
+  runId: z.uuid(),
+  resultHash: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export const activationFirstValueResultSchema =
+  activationFirstValueReceiptSchema.extend({
+    title: z.string().max(500),
+    verifiedAt: z.iso.datetime(),
+    artifacts: z
+      .array(
+        z.strictObject({
+          documentId: z.uuid(),
+          revisionId: z.uuid(),
+          hash: z.string().regex(/^[a-f0-9]{64}$/),
+        }),
+      )
+      .min(1)
+      .max(16),
+  });
+export const activationFirstValueViewSchema = z
+  .strictObject({
+    status: z.enum(["not_recorded", "verified", "withdrawn"]),
+    result: activationFirstValueResultSchema.nullable(),
+    candidates: z.array(activationFirstValueResultSchema).max(5),
+    hasMore: z.boolean(),
+  })
+  .refine(
+    (value) =>
+      (value.status === "verified") === (value.result !== null) &&
+      (value.status === "not_recorded" ||
+        (!value.candidates.length && !value.hasMore)) &&
+      (!value.hasMore || value.candidates.length === 5),
+    "First-result status requires matching current evidence",
+  );
 export const activationStateSchema = z.strictObject({
   schemaVersion: z.literal(1),
   step: z.enum(ACTIVATION_STEPS),
@@ -34,6 +72,7 @@ export const activationStateSchema = z.strictObject({
   missionFoundationId: z.uuid().nullable(),
   packageVersionId: z.uuid().nullable(),
   firstValueAt: z.iso.datetime().nullable(),
+  firstValueReceipt: activationFirstValueReceiptSchema.optional(),
   receipts: z
     .array(
       z.strictObject({
@@ -87,6 +126,13 @@ export const activationCommandSchema = z.discriminatedUnion("operation", [
     packageVersionId: z.uuid(),
   }),
   z.strictObject({ ...envelope, operation: z.literal("continue_access") }),
+  z.strictObject({
+    ...envelope,
+    operation: z.literal("record_verified_result"),
+    installationId: z.uuid(),
+    verificationRunId: z.uuid(),
+  }),
+  z.strictObject({ ...envelope, operation: z.literal("complete_activation") }),
 ]);
 export type ActivationCommand = z.infer<typeof activationCommandSchema>;
 export const activationViewSchema = z.strictObject({
@@ -96,6 +142,7 @@ export const activationViewSchema = z.strictObject({
   version: z.number().int().positive(),
   status: z.enum(["in_progress", "completed", "abandoned"]),
   state: activationStateSchema.omit({ receipts: true }),
+  firstValue: activationFirstValueViewSchema.optional(),
   sources: z
     .array(
       z.strictObject({

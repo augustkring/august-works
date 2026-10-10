@@ -220,7 +220,7 @@
     "noGrants": "Valg af en funktion giver ikke tilladelser til forbindelser eller udførelse.",
     "agent": "Valgt agent",
     "executionPending": "Sikker udførelse af den første opgave afventer kvalificering. Gem opsætningen, og vend tilbage, når udførelse er tilgængelig.",
-    "noRunStarted": "Ingen opgave er startet, og der er ikke registreret et første resultat eller en aktivering.",
+    "noRunStarted": "Registrering af et gennemgået resultat starter ikke en ny opgave og giver ikke adgang.",
     "tellInstead": "Jeg fortæller det selv",
     "source": {
       "customer_context": "Virksomhedsoplysninger, du angiver",
@@ -231,7 +231,21 @@
       "available": "Tilgængelig",
       "not_requested": "Ikke anmodet",
       "not_connected": "Ikke tilsluttet"
-    }
+    },
+    "firstValuePending": "Et resultat for dit mål kræver en vellykket kørsel, et gemt output og en uafhængig gennemgang, før det kan registreres.",
+    "firstValueWithdrawn": "Det gemte resultat kan ikke længere verificeres mod den aktuelle dokumentation. Opdatér opsætningen eller gennemgå den oprindelige opgave i Arbejde.",
+    "verifiedResult": "Dit verificerede første resultat",
+    "independentReview": "En uafhængig menneskelig gennemgang er godkendt for dette gemte output og den valgte agent.",
+    "resultLimit": "Dette bekræfter det gennemgåede udkast. Det dokumenterer ikke omsætning, besparelser eller anden forretningseffekt.",
+    "chooseVerifiedResult": "Et gennemgået resultat for dit mål er tilgængeligt",
+    "inspectResult": "Gennemgå den oprindelige opgave og outputtet",
+    "useVerifiedResult": "Brug dette som mit første resultat",
+    "moreVerifiedResults": "Der findes flere gennemgåede resultater. Her vises de fem seneste kvalificerede resultater.",
+    "finishSetup": "Brug resultat",
+    "openHome": "Gå til Hjem",
+    "resultNeedsReview": "Gennemgå dit gemte resultat",
+    "futureDrafts": "Den valgte agent er fortsat tilgængelig for interne udkast inden for sine aktuelle tilladelser.",
+    "futureRequests": "Se fremtidige anmodninger i Kræver dig"
   },
   "company": {
     "title": "Virksomhed",

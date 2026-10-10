@@ -4,6 +4,7 @@ import {
   activationCommandSchema,
   activationStateSchema,
   activationWebsiteSchema,
+  activationFirstValueViewSchema,
   initialActivationState,
 } from "./activation.js";
 import {
@@ -59,6 +60,38 @@ describe("V9 activation input boundaries", () => {
           requestId: randomUUID(),
           requestHash: "a".repeat(64),
         })),
+      }).success,
+    ).toBe(false);
+  });
+  it("accepts only original-owner references for recording a verified result", () => {
+    const input = {
+      operation: "record_verified_result",
+      expectedVersion: 3,
+      requestId: randomUUID(),
+      installationId: randomUUID(),
+      verificationRunId: randomUUID(),
+    };
+    expect(activationCommandSchema.parse(input)).toEqual(input);
+    for (const extra of [
+      { firstValueAt: new Date().toISOString() },
+      { result: "pass" },
+      { runId: randomUUID() },
+      { artifacts: [] },
+      { revenue: 100 },
+      { activate: true },
+    ])
+      expect(
+        activationCommandSchema.safeParse({ ...input, ...extra }).success,
+      ).toBe(false);
+    expect(
+      activationStateSchema.parse(initialActivationState()).firstValueReceipt,
+    ).toBeUndefined();
+    expect(
+      activationFirstValueViewSchema.safeParse({
+        status: "verified",
+        result: null,
+        candidates: [],
+        hasMore: false,
       }).success,
     ).toBe(false);
   });
