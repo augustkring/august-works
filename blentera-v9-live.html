@@ -1,0 +1,327 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="BLENTERA brings company knowledge, tasks and AI agents together. Assign work, keep human approval and reuse what you learn."><meta name="color-scheme" content="light"><title>BLENTERA · Company AI foundation</title><style>/* BLENTERA V9. Site-specific typography and operating-model illustration.
+ * No external assets or scripted animations. No template grid of feature cards. */
+:root{
+ --paper:#f8f8f5;--white:#fff;--ink:#171e1a;--ink-soft:#46534b;--muted:#617066;
+ --edge:#d9ded8;--pale:#eef1eb;--green:#235642;--green-hover:#194631;--deep:#182820;
+ --line-light:#364b3e;--accent:#d2e5d4;--max:1260px;--pad:clamp(22px,4.7vw,72px);
+ --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+ --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+ font-family:var(--sans);color:var(--ink);background:var(--paper);font-synthesis:none;-webkit-font-smoothing:antialiased;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:100px}
+body{margin:0;line-height:1.5;font-size:16px}
+button,input{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none}
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:3px solid #377354;outline-offset:3px}
+[hidden]{display:none!important}::selection{background:#badfc5;color:#11281b}
+h1,h2,h3,h4,p{margin:0}h1,h2,h3,h4{line-height:1.08;letter-spacing:-.042em;font-weight:560}
+h1{font-size:clamp(47px,5.4vw,78px)}h2{font-size:clamp(36px,4.2vw,57px)}h3{font-size:27px}
+p{line-height:1.65}.container{max-width:var(--max);padding-inline:var(--pad);margin-inline:auto}
+.section-space{padding-block:clamp(72px,9vw,132px)}.figure-caption{font-size:12px;color:#657167;letter-spacing:.004em;line-height:1.5}
+.skip-link{position:fixed;top:-110px;left:16px;padding:14px 18px;background:var(--deep);color:#fff;z-index:110}
+.skip-link:focus{top:16px}
+/* Navigation: one dark action; no announcement bar, tiny eyebrow, or secondary footer chrome */
+.site-header{height:84px;border-bottom:1px solid var(--edge);background:var(--paper);position:relative;z-index:20}
+.header-in{max-width:var(--max);height:100%;padding-inline:var(--pad);margin:auto;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:34px}
+.wordmark{display:inline-flex;align-items:center;gap:11px;justify-self:start;white-space:nowrap;font-size:24px;font-weight:760;letter-spacing:-.075em;line-height:1}
+.brand-symbol{width:25px;height:26px;display:grid;grid-template-rows:repeat(3,5px);align-content:space-between;flex:none;position:relative}
+.brand-symbol>span{background:var(--green);height:5px;display:block;border-radius:1px}
+.brand-symbol>span:first-child{width:25px}.brand-symbol>span:nth-child(2){width:15px}.brand-symbol>span:nth-child(3){width:25px}
+.desktop-nav{display:flex;align-items:center;gap:35px;white-space:nowrap}.desktop-nav a{font-size:14px;font-weight:540;color:#4e5b52;transition:color .16s}
+.desktop-nav a:hover,.desktop-nav a[aria-current]{color:#172e22}
+.header-cta{justify-self:end;display:inline-flex;align-items:center;gap:18px;font-weight:630;font-size:14px;white-space:nowrap;border-bottom:1px solid var(--ink);padding-block:8px}
+.header-cta svg,.text-action svg,.button svg{transition:transform .18s}.header-cta:hover svg,.text-action:hover svg,.button:hover svg{transform:translateX(3px)}
+.menu-toggle{display:none}.mobile-nav{display:none}
+/* Hero: deliberate split; artifact is an illustration, never called a screenshot */
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(380px,.9fr);align-items:center;column-gap:clamp(48px,6.5vw,110px);padding-block:clamp(74px,9vw,128px) 108px}
+.hero-copy{align-self:center;padding-bottom:35px}.hero h1{max-width:660px}.hero .period{color:var(--green)}
+.hero-copy>p{max-width:520px;margin-top:26px;font-size:19px;color:var(--ink-soft);line-height:1.61;letter-spacing:-.009em}
+.hero-actions{display:flex;flex-wrap:wrap;align-items:center;gap:24px;margin-top:36px}
+.button{display:inline-flex;align-items:center;gap:22px;justify-content:center;min-height:52px;padding:14px 19px;font-weight:620;font-size:14px;transition:background .18s,transform .18s}
+.button-dark{background:var(--ink);color:#fff}.button-dark:hover{background:#314a3b}
+.text-action{display:inline-flex;align-items:center;gap:13px;padding:5px 0;border-bottom:1px solid currentColor;font-weight:650;font-size:14px;min-height:42px}
+.hero-artifact{align-self:center;min-width:0;background:#fcfdfb;border:1px solid #cbd5ca;box-shadow:0 26px 56px -49px #1e3427c0;padding:0;position:relative;transform:translateY(7px)}
+.artifact-top{padding:22px 27px 21px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--edge)}
+.artifact-label{font-size:13px;color:#54645a;font-weight:560}.artifact-spark{font-size:24px;line-height:1;color:var(--green)}
+.artifact-question{padding:28px 28px 18px;font-weight:640;line-height:1.2;letter-spacing:-.035em;font-size:clamp(26px,2.4vw,36px);max-width:430px}
+.artifact-owner{margin:0 28px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--edge);padding-bottom:20px;font-size:13px;color:#506156}
+.artifact-owner strong{color:var(--ink);font-size:14px}
+.artifact-trail{margin:0 28px;padding-bottom:24px;position:relative;display:grid;gap:19px}.artifact-trail::before{position:absolute;content:"";width:1px;background:#bbcdbf;top:15px;bottom:40px;left:11px}
+.artifact-trail>div{display:flex;gap:20px;align-items:start;position:relative;z-index:1}.trail-icon{display:grid;place-items:center;font-size:13px;line-height:1;width:23px;height:23px;border-radius:50%;background:#e6efe6;color:#245a40;flex:none}
+.artifact-trail strong{display:block;font-size:14px;letter-spacing:-.01em}.artifact-trail span:not(.trail-icon){display:block;font-size:13px;color:#5e6b61;line-height:1.65}
+.artifact-base{background:#e5eee4;margin:0 16px 16px;padding:20px 20px;display:grid;gap:4px}.artifact-base span{font-size:12px;color:#395d46}.artifact-base strong{font-size:16px;color:#1c3b2c;letter-spacing:-.01em}
+.hero-artifact .figure-caption{position:absolute;top:calc(100% + 11px);left:0;margin:0}
+/* Main walkthrough: one usable piece of visual documentation */
+.work-example{background:#fff;border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
+.split-intro{display:grid;grid-template-columns:1.15fr .85fr;gap:80px;align-items:end;margin-bottom:42px}
+.split-intro h2{max-width:660px}.split-intro p{font-size:18px;line-height:1.6;color:var(--ink-soft);max-width:400px;padding-bottom:4px}
+.scenario-selector{display:flex;border-bottom:1px solid var(--edge);gap:33px;overflow-x:auto;overscroll-behavior:contain}
+.scenario-tab{appearance:none;border:0;padding:14px 0 17px;border-bottom:2px solid transparent;background:transparent;color:#647167;white-space:nowrap;font-size:14px;font-weight:600;margin-bottom:-1px}
+.scenario-tab:hover{color:var(--ink)}.scenario-tab[aria-selected="true"]{border-color:var(--green);color:var(--ink)}
+.story-canvas{border:1px solid #d4ddd4;border-top:0;background:#fbfcfa;display:grid;grid-template-columns:1.1fr 1fr 1.15fr 1fr;min-height:355px}
+.story-intro{display:flex;gap:13px;align-items:start;padding:34px 24px 25px;border-right:1px solid var(--edge)}
+.story-mark{font-size:27px;line-height:1;color:var(--green)}.story-kicker{display:block;color:#557060;font-size:13px;font-weight:580;margin-bottom:20px}
+.story-intro h3{font-size:25px;font-weight:610;line-height:1.26;letter-spacing:-.038em;max-width:260px;min-height:160px}
+.story-owner{display:flex;flex-direction:column;gap:1px;font-size:12px;color:#738176}.story-owner strong{font-size:14px;color:#19251d}
+.story-phase{padding:34px 20px 24px;border-right:1px solid var(--edge);min-width:0}
+.phase-head{display:grid;grid-template-columns:26px 1fr;column-gap:8px;row-gap:7px;align-items:center;margin-bottom:28px}.phase-index{width:24px;height:24px;border:1px solid #9fafa0;border-radius:50%;font-size:12px;display:grid;place-items:center;color:#3a5643}
+.phase-head strong{font-size:15px;font-weight:630}.phase-head>span:last-child{grid-column:2;color:#68776d;font-size:12px}
+.story-phase>p{font-size:14px;color:var(--ink-soft);line-height:1.63}
+.delegate-list{display:grid;gap:18px}.delegate-row{display:flex;gap:12px;align-items:start;min-width:0}.delegate-role{font:600 11px/1 var(--mono);border:1px solid #b8cbb7;color:#365840;background:#eff5ef;min-width:40px;text-align:center;padding:8px 4px}
+.delegate-work{min-width:0}.delegate-work strong,.delegate-work span{display:block}.delegate-work strong{font-size:13px;line-height:1.35;font-weight:630}.delegate-work span{font-size:12px;color:#617168;line-height:1.53;margin-top:3px}
+.decision-rail{border-top:1px solid var(--edge);margin-top:25px;padding-top:17px;display:flex;gap:10px;font-size:12px;color:#4b6753;line-height:1.48}.decision-rail>span{font-size:18px;line-height:1}
+.story-outcome{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;background:#e3eee3;padding:19px 26px;border-top:1px solid #c4d8c7}
+.story-outcome>div:first-child{display:grid;gap:4px}.story-outcome span{font-size:12px;color:#3d5b42}.story-outcome strong{font-size:17px;letter-spacing:-.013em;color:#1b3f2b}.outcome-symbol{font-size:31px;color:#447a51;line-height:1}
+.scenario>.figure-caption{padding-top:11px}.section-tail{margin-top:28px}
+/* Knowledge ledger, value and control each have a distinct visual job */
+.knowledge-layout{display:grid;grid-template-columns:1fr 1fr;gap:clamp(68px,8vw,122px);align-items:start}
+.side-statement h2{max-width:520px}.side-statement p{max-width:470px;margin-top:23px;font-size:17px;color:var(--ink-soft)}
+.knowledge-ledger{border-top:1px solid #bbc9bc}.knowledge-ledger>div{padding:24px 0 26px;border-bottom:1px solid #bbc9bc;display:grid;grid-template-columns:34px 1fr;column-gap:15px;row-gap:5px;align-items:start}.ledger-icon{grid-row:1/span 2;font-size:20px;color:var(--green)}
+.knowledge-ledger h3{font-size:20px;font-weight:580}.knowledge-ledger p{font-size:13px;color:#58665a}
+.benefits{background:#f0f2ec}.benefits-header{display:grid;grid-template-columns:1fr .7fr;gap:80px;align-items:end;margin-bottom:62px}.benefits-header h2{max-width:720px}.benefits-header>p{font-size:18px;color:var(--ink-soft);max-width:380px;padding-bottom:5px}
+.benefit-rows{border-top:1px solid #c4cec2}.benefit-rows article{display:grid;grid-template-columns:1fr .75fr;gap:60px;align-items:center;border-bottom:1px solid #c4cec2;padding:27px 0 30px}.benefit-rows h3{font-size:25px;font-weight:570}.benefit-rows p{font-size:16px;color:var(--ink-soft);max-width:440px}
+.control-peek{background:var(--deep);color:#eef6ed}.control-layout{display:grid;grid-template-columns:1fr 1fr;gap:clamp(55px,7vw,108px);align-items:center}.control-copy h2{max-width:450px}.control-copy p{font-size:18px;color:#c8d7cd;margin-top:23px;max-width:455px}.control-copy .text-action{margin-top:30px}.text-action-light{color:#ebf4eb}
+.approval-exhibit{padding:38px 40px;background:#22372b;border:1px solid #5a755e}.approval-kicker{font-size:13px;color:#bdd2c2;margin-bottom:16px}.approval-exhibit h3{font-size:28px;color:#f4fff2;font-weight:550}.approval-flow{margin-top:44px;display:flex;align-items:center;flex-wrap:wrap;gap:16px;border-top:1px solid #426048;border-bottom:1px solid #426048;padding:20px 0;font-size:13px}.approval-flow strong{color:#d7efda}.approval-arr{font-size:25px;color:#9ebba4}.approval-rule{font-size:13px;color:#c4d2c5;margin-top:20px}
+.closing-layout{display:grid;grid-template-columns:1.2fr .8fr;gap:80px;align-items:start}.closing h2{max-width:690px}.closing-layout>div>p{font-size:18px;color:var(--ink-soft);max-width:435px}.closing .button{margin-top:28px}.closing-status{display:block;margin-top:21px;max-width:360px;font-size:12px;color:#657368;line-height:1.5}
+/* Subpages */
+.subhero{padding-block:90px 68px}.subhero h1{max-width:890px}.subhero>p{margin-top:22px;max-width:610px;color:var(--ink-soft);font-size:19px}
+.platform-model{padding-top:18px;padding-bottom:108px}.foundation-map{background:#ebf1eb;border:1px solid #cdd8cc;padding:35px 44px;display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center}
+.foundation-center{padding:36px 32px;background:#1b3629;color:#f5fff5;min-height:225px;display:flex;flex-direction:column;justify-content:space-between}.foundation-center>span{font-weight:710;letter-spacing:-.03em;font-size:13px;color:#b9d8c1}.foundation-center>strong{font-size:33px;font-weight:540;line-height:1.1;letter-spacing:-.045em}.foundation-center>p{font-size:13px;color:#c9dfcf;max-width:320px}
+.foundation-spokes{display:grid;grid-template-columns:1fr 1fr;gap:14px}.foundation-spokes>div{padding:21px 17px;border-bottom:1px solid #b9ccbb}.foundation-spokes strong,.foundation-spokes span{display:block}.foundation-spokes strong{font-size:18px;font-weight:580}.foundation-spokes span{font-size:13px;color:#49624e;margin-top:4px}
+.platform-model .figure-caption{margin-top:12px}.feature-sections{padding-top:0}
+.feature-row{border-top:1px solid var(--edge);display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(55px,8vw,140px);align-items:center;padding:60px 0 70px}.feature-row:last-child{border-bottom:1px solid var(--edge)}
+.feature-row h2{font-size:clamp(34px,3.6vw,51px)}.feature-row p{max-width:460px;margin-top:18px;font-size:17px;color:var(--ink-soft)}
+.feature-detail{min-height:240px;background:#edf1eb;border:1px solid #d3dfd3;padding:30px 34px;color:#1e3527}
+.knowledge-detail{display:flex;flex-direction:column;align-items:start;gap:12px}.knowledge-detail>span{color:#4e6554;font-size:13px}.knowledge-detail strong{font-size:20px;font-weight:570}.knowledge-detail i{font-style:normal;font-size:22px;color:#6b8e74}
+.work-detail dl{margin:0}.work-detail dl>div{display:grid;grid-template-columns:135px 1fr;align-items:center;padding:15px 0;border-bottom:1px solid #cedbce}.work-detail dl>div:first-child{padding-top:0}.work-detail dl>div:last-child{border:0;padding-bottom:0}.work-detail dt{font-size:13px;color:#475e4b}.work-detail dd{margin:0;font-size:15px;font-weight:560}
+.permission-detail{display:flex;flex-direction:column}.permission-detail span{color:#435c49;font-size:13px}.permission-detail strong{font-size:24px;margin-top:11px;font-weight:570}.permission-wait{background:#d9e6d9;margin-top:20px;padding:16px 18px;color:#33573c;font-weight:610;font-size:14px}.feature-detail.permission-detail p{font-size:13px;margin-top:16px}
+.learning-detail{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:center}.learning-detail>div{background:#fff;border:1px solid #c6d7c5;padding:17px 12px;font-size:14px;text-align:center;font-weight:550}.learning-detail>div:nth-child(2){background:#dcebdd;border-color:#bad5bf}
+.platform-replace{background:#e9eee7}.replace-layout{display:grid;grid-template-columns:1.15fr .85fr;gap:80px;align-items:end}.replace-layout p{font-size:18px;max-width:480px;color:var(--ink-soft)}
+.release{background:#f4f5f0}.release-layout{display:grid;grid-template-columns:1fr 1fr;gap:clamp(55px,7vw,100px);align-items:start}.release h2{max-width:540px}.release p{font-size:17px;color:var(--ink-soft);max-width:540px;margin-top:17px}
+.release-table{border-top:1px solid #c8d4c7}.release-table>div{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:24px 0;border-bottom:1px solid #c8d4c7;font-size:14px}.release-table span{color:#55685a}.release-table strong{text-align:right;font-weight:600}
+/* About / organisation: no fake avatar grid */
+.about-hero{padding-bottom:54px}.about-hero h1{max-width:980px}.about-hero>p{max-width:790px}
+.org-section{padding-bottom:clamp(70px,8vw,105px)}.org-frame{border:1px solid #ccd6cb;background:#fff}.org-top{padding:26px clamp(25px,3.3vw,50px) 23px;display:flex;flex-direction:column;align-items:center;background:#f0f3ee}
+.org-human,.org-cos{width:min(530px,100%);min-height:72px;padding:15px 19px;border:1px solid #b8c8b8;display:flex;align-items:center;justify-content:space-between;gap:18px;background:#fbfcf9}
+.org-cos{background:#e0ebe0;border-color:#a7c2ab}.org-human strong,.org-cos strong{display:block;font-size:17px;font-weight:630;line-height:1.4}.org-human span:not(.org-type),.org-cos span:not(.org-type){display:block;font-size:13px;color:#3e5945}.org-type{font:550 11px var(--mono);color:#526853;padding:5px 7px;border:1px solid #b7cdb8;white-space:nowrap}
+.org-tree-line{height:25px;width:1px;background:#acc3b0}.org-select-label{display:flex;gap:25px;justify-content:space-between;align-items:baseline;padding:29px 35px 17px}.org-select-label h2{font-size:23px;letter-spacing:-.032em}.org-select-label p{font-size:12px;color:#66736a}
+.org-roles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}.org-role{appearance:none;border:0;border-right:1px solid var(--edge);border-bottom:1px solid var(--edge);text-align:left;background:#fcfdfa;min-height:78px;padding:18px 23px;transition:background .14s;position:relative}
+.org-role:nth-child(4n){border-right:0}.org-role:nth-child(n+5){border-bottom:0}.org-role:hover{background:#eef4ee}.org-role[aria-selected="true"]{background:#e0ebe0;box-shadow:inset 0 3px var(--green)}
+.org-role strong{font-size:17px;font-weight:670;display:block;line-height:1.35}.org-role span{font-size:13px;color:#526355;display:block;margin-top:3px}
+.org-detail{padding:36px 35px 43px;min-height:270px}.role-detail-heading{display:flex;justify-content:space-between;gap:28px;align-items:start;border-bottom:1px solid var(--edge);padding-bottom:27px}
+.role-detail-heading h3{font-size:31px;font-weight:620}.role-detail-heading h3 span{font-size:27px;color:#6a746b;font-weight:460}.role-detail-heading p{font-size:15px;margin-top:7px;color:var(--ink-soft)}
+.role-specialist-count{font-size:12px;color:#5e705f;white-space:nowrap;padding-top:11px}.role-teams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:26px}
+.team-column{border-left:2px solid #aec8b4;padding-left:17px;min-width:0}.team-column h4{font-size:17px;font-weight:610}.team-column p{font-size:13px;color:#5c6b60;margin-top:9px}.bullet-mid{padding:0 9px;color:#9aaca0}.org-section>.container>.figure-caption{margin-top:10px}
+.about-work{background:#f0f2ed}.about-work .story-canvas{background:#fff}.about-afterword{font-size:17px;color:#314d38;max-width:810px;margin:34px 0 0}
+.company-layout{display:grid;grid-template-columns:1fr 1fr;gap:100px}.company h2{max-width:550px}.company p{color:var(--ink-soft);font-size:18px;margin-bottom:20px}.company .company-note{font-size:14px;color:#607367;padding-top:16px;border-top:1px solid var(--edge)}
+/* Control */
+.control-hero-art{padding-top:20px;padding-bottom:90px}.control-journey{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid #c5d2c4;background:#eaf0e7}.control-journey>div{padding:32px 28px;min-height:180px;border-right:1px solid #c3d0c1;display:flex;flex-direction:column;justify-content:space-between}.control-journey>div:last-child{border:0}.control-journey span{font-size:13px;color:#3e5844}.control-journey strong{font-size:24px;font-weight:580;letter-spacing:-.03em;line-height:1.17}.control-hero-art .figure-caption{margin-top:11px}
+.principle-intro{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-bottom:58px;align-items:end}.principle-intro p{color:var(--ink-soft);font-size:18px}.principle-list{border-top:1px solid var(--edge)}
+.principle-list article{display:grid;grid-template-columns:1fr 1fr;gap:80px;border-bottom:1px solid var(--edge);padding:31px 0;align-items:center}.principle-list h2{font-size:26px;font-weight:580}.principle-list p{color:var(--ink-soft);font-size:17px}
+/* Footer */
+.site-footer{background:#e9ede7;padding:72px 0 0;border-top:1px solid #d3ded3}.footer-main{display:grid;grid-template-columns:1fr 1fr;gap:90px;padding-bottom:66px}.footer-main>div:first-child p{margin-top:23px;color:#4b5f4f;font-size:14px;max-width:330px}
+.footer-links{display:grid;grid-template-columns:1fr 1fr;gap:35px}.footer-links>div{display:flex;flex-direction:column;gap:15px}.footer-links strong{font-size:13px;font-weight:680;margin-bottom:6px}.footer-links a{font-size:14px;color:#4a5a4c}.footer-links a:hover{text-decoration:underline}
+.footer-bottom{display:flex;align-items:center;justify-content:space-between;gap:35px;border-top:1px solid #cbd8cb;padding:19px 0 25px;font-size:12px;color:#475a4b}.footer-bottom a{color:#2a5540;display:inline-flex;align-items:center;gap:6px}.footer-bottom svg{width:13px;height:13px}
+/* Change composition, not only scale, under content pressure. */
+@media (max-width:1150px){
+ .hero{grid-template-columns:minmax(0,1fr) minmax(340px,.9fr);gap:48px}.hero h1{font-size:clamp(50px,5.8vw,66px)}
+ .story-intro{padding:29px 17px}.story-phase{padding:29px 14px}.story-canvas{grid-template-columns:1.05fr .78fr 1fr .9fr}.story-intro h3{font-size:22px}.split-intro,.benefits-header{gap:50px}
+}
+@media (max-width:950px){
+ .header-in{grid-template-columns:auto 1fr;gap:20px}.desktop-nav{justify-self:center;gap:20px}.header-cta{display:none}
+ .hero{grid-template-columns:1fr;gap:56px;padding-bottom:100px}.hero-copy{padding-bottom:0}.hero h1{font-size:clamp(50px,7.6vw,74px);max-width:760px}.hero-copy>p{max-width:700px}.hero-artifact{transform:none;max-width:660px;width:100%;justify-self:center}
+ .story-canvas{grid-template-columns:1fr 1fr}.story-intro{border-bottom:1px solid var(--edge)}.story-phase:nth-child(2){border-right:0;border-bottom:1px solid var(--edge)}.story-phase:nth-child(3){border-right:1px solid var(--edge)}.story-phase{min-height:230px}.story-intro h3{min-height:115px}.story-delegate{border-right:1px solid var(--edge)}
+ .knowledge-layout,.control-layout,.company-layout{gap:65px}.org-roles{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media (max-width:800px){
+ .site-header{height:74px}.header-in{grid-template-columns:1fr auto}.desktop-nav{display:none}.menu-toggle{width:42px;height:42px;border:1px solid #b6c6b7;background:transparent;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px}.menu-toggle span{width:18px;height:1.5px;background:var(--ink)}
+ .mobile-nav:not([hidden]){display:flex;position:absolute;top:74px;left:0;right:0;padding:18px var(--pad) 27px;flex-direction:column;background:var(--paper);border-bottom:1px solid var(--edge);box-shadow:0 22px 24px -25px #354e3c;z-index:30}.mobile-nav a{font-size:19px;letter-spacing:-.025em;padding:13px 0;border-bottom:1px solid var(--edge)}
+ .hero{padding-top:67px}.split-intro,.benefits-header,.knowledge-layout,.control-layout,.closing-layout,.replace-layout,.release-layout,.company-layout,.principle-intro{grid-template-columns:1fr;gap:30px}.split-intro h2,.split-intro p{max-width:none}.benefits-header{margin-bottom:35px}.benefit-rows article,.principle-list article{grid-template-columns:1fr;gap:10px}.control-layout{gap:43px}
+ .feature-row{grid-template-columns:1fr;gap:32px}.feature-row h2{max-width:640px}.feature-detail{min-height:200px}.platform-model{padding-bottom:75px}
+ .org-select-label{display:block}.org-select-label p{margin-top:8px}.org-roles{grid-template-columns:repeat(4,minmax(0,1fr))}.org-role{padding:15px 10px}.org-role strong{font-size:15px}.org-role span{font-size:12px}.org-type{font-size:11px}
+ .release-table{margin-top:10px}.footer-main{grid-template-columns:1fr;gap:43px}.footer-bottom{flex-wrap:wrap}
+}
+@media (max-width:580px){
+ :root{--pad:22px}.container{padding-inline:var(--pad)}.section-space{padding-block:70px}
+ h1{font-size:clamp(45px,10vw,54px)}h2{font-size:clamp(35px,9vw,43px)}
+ .wordmark{font-size:23px}.site-header{height:68px}.mobile-nav:not([hidden]){top:68px}
+ .hero{padding-top:60px;padding-bottom:92px;gap:40px}.hero-copy h1{font-size:clamp(45px,10.5vw,56px);line-height:1.045;letter-spacing:-.055em}.hero-copy>p{font-size:17px;margin-top:22px}.hero-actions{gap:18px;margin-top:28px}.button{min-height:49px}
+ .hero-artifact{width:100%}.artifact-top{padding:17px 18px}.artifact-question{font-size:25px;padding:25px 20px 18px}.artifact-owner{margin-inline:20px}.artifact-trail{margin-inline:20px;gap:15px}.artifact-base{padding:16px;margin-inline:12px}.hero-artifact .figure-caption{position:static;padding:0 12px 13px;margin-top:-3px}
+ .split-intro{gap:18px;margin-bottom:30px}.split-intro p{font-size:16px}.scenario-selector{gap:28px}.story-canvas{grid-template-columns:1fr}.story-intro{border-right:0;padding:26px 20px;gap:12px}.story-intro h3{font-size:24px;min-height:0;margin-bottom:24px}.story-phase,.story-phase:nth-child(2),.story-phase:nth-child(3){border-right:0;border-bottom:1px solid var(--edge);min-height:auto;padding:22px 22px 27px}.phase-head{margin-bottom:15px}.story-outcome{padding:17px 21px}.story-outcome strong{font-size:15px}
+ .knowledge-ledger{margin-top:18px}.benefit-rows h3{font-size:21px}.benefit-rows article{gap:9px;padding:23px 0}.control-copy p,.closing-layout>div>p{font-size:17px}.approval-exhibit{padding:24px 22px}.approval-flow{gap:12px}
+ .subhero{padding-top:65px;padding-bottom:46px}.subhero>p{font-size:17px}.foundation-map{grid-template-columns:1fr;padding:15px;gap:10px}.foundation-center{min-height:185px;padding:26px}.foundation-spokes{gap:6px}.foundation-spokes>div{padding:13px 10px}.foundation-spokes strong{font-size:15px}
+ .feature-row{padding:40px 0 50px}.feature-detail{padding:24px 23px}.release-table>div{font-size:13px}.work-detail dl>div{grid-template-columns:100px 1fr}
+ .about-hero{padding-bottom:37px}.org-top{padding:20px 15px 23px}.org-human,.org-cos{padding:15px 13px}.org-select-label{padding:23px 18px 17px}.org-select-label h2{font-size:22px}
+ .org-roles{grid-template-columns:repeat(2,minmax(0,1fr))}.org-role{padding:16px 17px;min-height:75px;border-bottom:1px solid var(--edge)!important}.org-role:nth-child(2n){border-right:0}.org-role:nth-child(n+7){border-bottom:0!important}
+ .org-detail{padding:27px 19px 32px}.role-detail-heading{display:block;padding-bottom:19px}.role-detail-heading h3{font-size:30px}.role-detail-heading h3 span{font-size:23px}.role-specialist-count{display:block;margin-top:8px}.role-teams{grid-template-columns:1fr;gap:19px}.team-column{padding-left:13px}.company p{font-size:17px}
+ .control-journey{grid-template-columns:1fr}.control-journey>div{min-height:110px;padding:21px 23px;border-right:0;border-bottom:1px solid #c3d0c1}.control-journey>div:last-child{border:0}.control-journey strong{font-size:21px}.control-hero-art{padding-bottom:70px}
+ .footer-main{padding-bottom:50px}.footer-bottom{gap:10px}.footer-bottom>span:nth-child(2){order:3;width:100%}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* V9 visual critique pass 2: one true demonstration instead of duplicating a mock dashboard in the hero. */
+.wordmark{letter-spacing:-.069em;font-size:27px;font-weight:750}
+.hero{display:block;padding-block:69px 56px;min-height:0}
+.hero-copy{max-width:850px;padding:0}
+.hero h1{font-size:clamp(55px,6.35vw,91px);line-height:1.035;max-width:900px;letter-spacing:-.063em}
+.hero-quiet{color:var(--green);font-weight:500}
+.hero-copy>p{max-width:690px;margin-top:25px;font-size:20px;line-height:1.58}
+.hero-actions{margin-top:32px}
+.work-example{padding-top:49px}
+.story-intro{background:#1d3728;color:#f3fbf3;border-right-color:#294e3b}
+.story-intro h3{color:#fff}
+.story-intro .story-kicker,.story-intro .story-owner,.story-intro .story-owner strong{color:#c5dbca}
+.story-mark{color:#a5d2ae}
+@media(max-width:950px){.hero{padding-block:77px 83px}.hero h1{font-size:clamp(56px,7.5vw,74px)}.hero-copy>p{max-width:650px}}
+@media(max-width:580px){.wordmark{font-size:25px}.hero{padding-top:62px;padding-bottom:66px}.hero h1{font-size:clamp(45px,11.3vw,58px);line-height:1.07;letter-spacing:-.056em}.hero-copy>p{font-size:17px;margin-top:23px}.work-example{padding-top:64px}.story-intro{background:#1d3728}}
+</style></head><body data-preview="v9"><a class="skip-link" href="#content">Skip to content</a><header class="site-header"><div class="header-in">
+<a aria-label="BLENTERA home" class="wordmark" href="#/">blentera</a>
+<nav aria-label="Primary" class="desktop-nav"><a href="#/platform/">Platform</a><a href="#/#walkthrough">How it works</a><a href="#/about/">About</a><a href="#/control/">Control</a></nav>
+<a class="header-cta" href="#/#walkthrough">See how it works <svg aria-hidden="true" fill="none" height="17" viewbox="0 0 24 24" width="17"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"></path></svg></a>
+<button aria-controls="mobile-navigation" aria-expanded="false" aria-label="Open navigation" class="menu-toggle" type="button"><span></span><span></span></button>
+</div><nav aria-label="Mobile navigation" class="mobile-nav" hidden="" id="mobile-navigation"><a href="#/platform/">Platform</a><a href="#/#walkthrough">How it works</a><a href="#/about/">About</a><a href="#/control/">Control</a></nav></header><main id="content"><div class="preview-view" data-preview-route="home" data-preview-path="/" ><section aria-labelledby="home-title" class="hero container"><div class="hero-copy"><h1 id="home-title">Your people and AI.<br/><span class="hero-quiet">One place to work.</span></h1><p>BLENTERA brings company knowledge, tasks and AI agents together. Assign work, keep human approval where it matters, and reuse what your teams learn.</p><div class="hero-actions"><a class="button button-dark" href="#/#walkthrough">See how it works <svg aria-hidden="true" fill="none" height="17" viewbox="0 0 24 24" width="17"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"></path></svg></a><a class="text-action" href="#/platform/">Explore the platform <svg aria-hidden="true" fill="none" height="17" viewbox="0 0 24 24" width="17"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"></path></svg></a></div></div></section>
+<section aria-labelledby="walkthrough-title" class="work-example section-space" id="walkthrough"><div class="container"><div class="section-intro split-intro"><h2 id="walkthrough-title">See how a job moves across teams.</h2><p>A new-market decision needs research, a financial check and someone accountable for the call.</p></div><div class="scenario" data-scenario-demo="home">
+<div aria-label="Work example" class="scenario-selector" role="tablist"><button aria-controls="home-scenario-panel" aria-selected="true" class="scenario-tab" data-scenario="market" id="home-scenario-market" role="tab" type="button">New market</button><button aria-controls="home-scenario-panel" aria-selected="false" class="scenario-tab" data-scenario="product" id="home-scenario-product" role="tab" type="button">Product launch</button><button aria-controls="home-scenario-panel" aria-selected="false" class="scenario-tab" data-scenario="support" id="home-scenario-support" role="tab" type="button">Customer issue</button></div><div aria-labelledby="home-scenario-market" class="story-canvas" id="home-scenario-panel" role="tabpanel" tabindex="0">
+<div class="story-intro"><div aria-hidden="true" class="story-mark">↳</div><div><span class="story-kicker">The request</span><h3 data-field="title">Should we enter Germany next quarter?</h3><span class="story-owner">Human owner <strong data-field="owner">CEO</strong></span></div></div>
+<div class="story-phase"><div class="phase-head"><span class="phase-index">1</span><strong>Assign</strong><span>Chief of Staff</span></div><p>Plans the work and brings in the right teams.</p></div>
+<div class="story-phase story-delegate"><div class="phase-head"><span class="phase-index">2</span><strong>Work together</strong><span>Specialist functions</span></div><div class="delegate-list" data-field="route"><div class="delegate-row"><div class="delegate-role">CMO</div><div class="delegate-work"><strong>Market research</strong><span>Competitors and channels</span></div></div><div class="delegate-row"><div class="delegate-role">CFO</div><div class="delegate-work"><strong>Cost analysis</strong><span>Costs and commercial assumptions</span></div></div></div></div>
+<div class="story-phase"><div class="phase-head"><span class="phase-index">3</span><strong>Review</strong><span>Human decision</span></div><p data-field="review">CEO decides whether to proceed</p><div class="decision-rail"><span aria-hidden="true">↳</span> No external action before approval</div></div>
+<div class="story-outcome"><div><span>What the company keeps</span><strong data-field="keep">Reviewed market-entry checklist</strong></div><div aria-hidden="true" class="outcome-symbol">↗</div></div>
+</div><p class="figure-caption">Illustrative workflow. This demonstration does not run AI agents or update external systems.</p></div><a class="text-action section-tail" href="#/about/">Explore the organisation <svg aria-hidden="true" fill="none" height="17" viewbox="0 0 24 24" width="17"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"></path></svg></a></div></section>
+<section aria-labelledby="knowledge-title" class="knowledge section-space"><div class="container knowledge-layout"><div class="side-statement"><h2 id="knowledge-title">Keep what the work teaches you.</h2><p>Approved decisions and useful methods stay with the company. New people and agents can build on that knowledge instead of rebuilding it.</p></div><div aria-label="Three company assets that can outlast any single AI tool" class="knowledge-ledger"><div><span class="ledger-icon">↳</span><h3>Company foundation</h3><p>Facts, strategy and standards</p></div><div><span class="ledger-icon">↳</span><h3>Reviewed learning</h3><p>Decisions and corrections worth keeping</p></div><div><span class="ledger-icon">↳</span><h3>Reusable playbooks</h3><p>A starting point for the next project</p></div></div></div></section>
+<section aria-labelledby="benefits-title" class="benefits section-space"><div class="container"><div class="benefits-header"><h2 id="benefits-title">More capacity.<br/>Less rebuilding.</h2><p>Make AI part of the way your company works, not another collection of individual tools.</p></div><div class="benefit-rows"><article><h3>Move recurring work forward.</h3><p>Give AI specialists defined tasks while people keep ownership of the work.</p></article><article><h3>Depend less on individuals.</h3><p>Keep useful company knowledge and documented decisions available through handoffs.</p></article><article><h3>Change tools without starting again.</h3><p>Keep the company layer separate from models, agents and runtimes.</p></article></div></div></section>
+<section aria-labelledby="control-peek-title" class="control-peek section-space"><div class="container control-layout"><div class="control-copy"><h2 id="control-peek-title">People remain responsible.</h2><p>Set who owns work, what agents may access and which actions need approval. Keep evidence of important decisions and results.</p><a class="text-action text-action-light" href="#/control/">See the control model <svg aria-hidden="true" fill="none" height="17" viewbox="0 0 24 24" width="17"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"></path></svg></a></div><div aria-label="Example of a human approval gate" class="approval-exhibit"><div class="approval-kicker">Before an external action</div><h3>Send customer proposal</h3><div class="approval-flow"><span>Prepared by AI</span><span aria-hidden="true" class="approval-arr">→</span><strong>Needs human approval</strong></div><div class="approval-rule">Action stays on hold until its owner decides.</div></div></div></section>
+<section class="closing section-space"><div class="container closing-layout"><h2>Start with one recurring process.</h2><div><p>Choose work your team repeats. Define what a useful result looks like. Then build a shared way for people and AI to run it.</p><a class="button button-dark" href="#/about/#company">About BLENTERA <svg aria-hidden="true" fill="none" height="17" viewbox="0 0 24 24" width="17"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"></path></svg></a><span class="closing-status">Prelaunch qualification. Illustrative examples; not live customer accounts.</span></div></div></section></div><div class="preview-view" data-preview-route="platform" data-preview-path="/platform/" hidden><section class="subhero container"><h1>The foundation behind the work.</h1><p>BLENTERA connects company knowledge, projects, people and AI agents. Each part has a job. Together they make work easier to hand over, review and reuse.</p></section>
+<section class="platform-model section-space"><div class="container"><div class="foundation-map"><div class="foundation-center"><span>BLENTERA</span><strong>The company layer</strong><p>Knowledge, work, roles and standards remain in the company.</p></div><div class="foundation-spokes"><div><strong>People</strong><span>Responsibility</span></div><div><strong>AI agents</strong><span>Specialist work</span></div><div><strong>Models</strong><span>Replaceable</span></div><div><strong>Tools</strong><span>Connected</span></div></div></div><p class="figure-caption">Conceptual model. Integrations and advanced capabilities require qualification.</p></div></section>
+<section class="feature-sections section-space"><div class="container"><article class="feature-row"><div><h2>Start with what your company knows.</h2><p>Keep facts, decisions and reviewed knowledge in one company context. Give people and agents relevant information for each task.</p></div><div class="feature-detail knowledge-detail"><span>Company context</span><strong>Strategy · Policies · Decisions</strong><i aria-hidden="true">↓</i><span>Relevant to each task</span><strong>People + AI agents</strong></div></article>
+<article class="feature-row"><div><h2>Give work an owner.</h2><p>Track goals and tasks, assign people or AI specialists and hand off work without losing the reason behind it.</p></div><div class="feature-detail work-detail"><dl><div><dt>Goal</dt><dd>Assess the new market</dd></div><div><dt>Owner</dt><dd>CEO</dd></div><div><dt>Assigned work</dt><dd>Growth, Finance</dd></div><div><dt>Decision</dt><dd>Review required</dd></div></dl></div></article>
+<article class="feature-row"><div><h2>Decide what AI may do.</h2><p>Use permissions, budgets and review steps to define boundaries. Keep decisions and evidence attached to the work.</p></div><div class="feature-detail permission-detail"><span>Action request</span><strong>External change</strong><div class="permission-wait">↳ Requires an owner’s approval</div><p>Risk, purpose and access are part of the work.</p></div></article>
+<article class="feature-row"><div><h2>Keep what works.</h2><p>Review useful results and turn repeatable methods into playbooks, skills or workflows.</p></div><div class="feature-detail learning-detail"><div>Work outcome</div><div>Human review</div><div>Shared playbook</div><div>Next run</div></div></article></div></section>
+<section class="platform-replace section-space"><div class="container replace-layout"><h2>Use new models without rebuilding the company.</h2><p>Models, agents and runtimes should be replaceable. The company knowledge, tasks and standards belong to the organisation.</p></div></section>
+<section class="release section-space" id="release-status"><div class="container release-layout"><div><h2>What is built. What is still being qualified.</h2><p>The platform foundation exists in source. Advanced memory, workflow, skill and learning capabilities are gated. Hosted production qualification remains open.</p></div><div class="release-table"><div><span>Foundation</span><strong>Source-built</strong></div><div><span>Advanced capabilities</span><strong>Built, gated</strong></div><div><span>Hosted production</span><strong>Qualification pending</strong></div></div></div></section>
+<section class="closing section-space"><div class="container closing-layout"><h2>See how people and agents work together.</h2><div><p>Explore an example of responsibilities and delegation across a company.</p><a class="button button-dark" href="#/about/">Explore the organisation <svg aria-hidden="true" fill="none" height="17" viewbox="0 0 24 24" width="17"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"></path></svg></a></div></div></section></div><div class="preview-view" data-preview-route="about" data-preview-path="/about/" hidden><section class="subhero about-hero container"><h1>Organise people and AI around the work.</h1><p>Give every task an owner. Let a Chief of Staff coordinate specialist teams, with people setting goals and approving important decisions.</p></section>
+<section class="org-section" id="organisation"><div class="container"><div class="org-frame"><div class="org-top"><div class="org-human"><div><strong>Human owner</strong><span>Sets direction · makes decisions</span></div><span class="org-type">Human</span></div><div aria-hidden="true" class="org-tree-line"></div><div class="org-cos"><div><strong>AI Chief of Staff</strong><span>Plans · assigns · reports back</span></div><span class="org-type">AI</span></div></div><div class="org-select-label"><h2>Choose a function to see the team.</h2><p>These roles are an example, not a roster of active BLENTERA staff.</p></div><div aria-label="AI leadership functions" class="org-roles" role="tablist"><button aria-controls="role-details" aria-selected="true" class="org-role is-active" data-role="cto" id="role-tab-cto" role="tab" type="button"><strong>CTO</strong><span>Technology</span></button><button aria-controls="role-details" aria-selected="false" class="org-role" data-role="cpo" id="role-tab-cpo" role="tab" type="button"><strong>CPO</strong><span>Product</span></button><button aria-controls="role-details" aria-selected="false" class="org-role" data-role="coo" id="role-tab-coo" role="tab" type="button"><strong>COO</strong><span>Operations</span></button><button aria-controls="role-details" aria-selected="false" class="org-role" data-role="cmo" id="role-tab-cmo" role="tab" type="button"><strong>CMO</strong><span>Growth</span></button><button aria-controls="role-details" aria-selected="false" class="org-role" data-role="cfo" id="role-tab-cfo" role="tab" type="button"><strong>CFO</strong><span>Finance</span></button><button aria-controls="role-details" aria-selected="false" class="org-role" data-role="cro" id="role-tab-cro" role="tab" type="button"><strong>CRO</strong><span>Revenue</span></button><button aria-controls="role-details" aria-selected="false" class="org-role" data-role="cco" id="role-tab-cco" role="tab" type="button"><strong>CCO</strong><span>Customer</span></button><button aria-controls="role-details" aria-selected="false" class="org-role" data-role="ciso" id="role-tab-ciso" role="tab" type="button"><strong>CISO</strong><span>Risk &amp; security</span></button></div><div aria-labelledby="role-tab-cto" class="org-detail" id="role-details" role="tabpanel" tabindex="0"><div class="role-detail-heading"><div><h3 id="role-name">CTO <span id="role-title">Technology</span></h3><p id="role-focus">Build, ship and maintain software systems.</p></div><span class="role-specialist-count">Three teams. Six specialist roles.</span></div><div class="role-teams" id="role-teams"><div class="team-column"><h4>Engineering</h4><p>Frontend<span aria-hidden="true" class="bullet-mid">·</span>Backend</p></div><div class="team-column"><h4>Platform</h4><p>DevOps<span aria-hidden="true" class="bullet-mid">·</span>Reliability</p></div><div class="team-column"><h4>Quality</h4><p>QA<span aria-hidden="true" class="bullet-mid">·</span>Code review</p></div></div></div></div><p class="figure-caption">Illustrative company configuration. Roles and teams are configurable; this is not a deployed customer organisation.</p></div></section>
+<section aria-labelledby="about-flow-title" class="about-work section-space"><div class="container"><div class="section-intro split-intro"><h2 id="about-flow-title">Follow one task across teams.</h2><p>Select a situation. See who does the work, where a person decides and what the company can reuse.</p></div><div class="scenario" data-scenario-demo="about">
+<div aria-label="Work example" class="scenario-selector" role="tablist"><button aria-controls="about-scenario-panel" aria-selected="true" class="scenario-tab" data-scenario="market" id="about-scenario-market" role="tab" type="button">New market</button><button aria-controls="about-scenario-panel" aria-selected="false" class="scenario-tab" data-scenario="product" id="about-scenario-product" role="tab" type="button">Product launch</button><button aria-controls="about-scenario-panel" aria-selected="false" class="scenario-tab" data-scenario="support" id="about-scenario-support" role="tab" type="button">Customer issue</button></div><div aria-labelledby="about-scenario-market" class="story-canvas" id="about-scenario-panel" role="tabpanel" tabindex="0">
+<div class="story-intro"><div aria-hidden="true" class="story-mark">↳</div><div><span class="story-kicker">The request</span><h3 data-field="title">Should we enter Germany next quarter?</h3><span class="story-owner">Human owner <strong data-field="owner">CEO</strong></span></div></div>
+<div class="story-phase"><div class="phase-head"><span class="phase-index">1</span><strong>Assign</strong><span>Chief of Staff</span></div><p>Plans the work and brings in the right teams.</p></div>
+<div class="story-phase story-delegate"><div class="phase-head"><span class="phase-index">2</span><strong>Work together</strong><span>Specialist functions</span></div><div class="delegate-list" data-field="route"><div class="delegate-row"><div class="delegate-role">CMO</div><div class="delegate-work"><strong>Market research</strong><span>Competitors and channels</span></div></div><div class="delegate-row"><div class="delegate-role">CFO</div><div class="delegate-work"><strong>Cost analysis</strong><span>Costs and commercial assumptions</span></div></div></div></div>
+<div class="story-phase"><div class="phase-head"><span class="phase-index">3</span><strong>Review</strong><span>Human decision</span></div><p data-field="review">CEO decides whether to proceed</p><div class="decision-rail"><span aria-hidden="true">↳</span> No external action before approval</div></div>
+<div class="story-outcome"><div><span>What the company keeps</span><strong data-field="keep">Reviewed market-entry checklist</strong></div><div aria-hidden="true" class="outcome-symbol">↗</div></div>
+</div><p class="figure-caption">Illustrative workflow. This demonstration does not run AI agents or update external systems.</p></div><p class="about-afterword">AI can prepare, analyse and coordinate. People remain accountable for decisions and access.</p></div></section>
+<section aria-labelledby="company-title" class="company section-space" id="company"><div class="container company-layout"><div><h2 id="company-title">Built for capability that stays.</h2></div><div><p>BLENTERA was founded by August Kring to help companies use AI without losing knowledge, standards or control every time technology changes.</p><p>The platform is being qualified for hosted operations and initial customer use. The focus is repeatable work and measured value, not agent counts.</p><p class="company-note">August Works is a separate implementation partner, not BLENTERA. Official company contact and legal disclosures are being finalized.</p><a class="text-action" href="#/control/">See how control works <svg aria-hidden="true" fill="none" height="17" viewbox="0 0 24 24" width="17"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"></path></svg></a></div></div></section></div><div class="preview-view" data-preview-route="control" data-preview-path="/control/" hidden><section class="subhero container"><h1>Give AI responsibility. Keep human authority.</h1><p>Work needs owners, access boundaries and review. BLENTERA is designed to keep these attached to the company, not scattered across individual tools.</p></section><section class="control-hero-art section-space"><div class="container"><div class="control-journey"><div><span>Proposed action</span><strong>Send a customer proposal</strong></div><div><span>Approval boundary</span><strong>Owner review required</strong></div><div><span>Human decision</span><strong>Approve, revise or stop</strong></div></div><p class="figure-caption">Illustrative approval path. Live actions and policies depend on configuration and product readiness.</p></div></section>
+<section class="control-principles section-space"><div class="container"><div class="principle-intro"><h2>Controls belong to the work.</h2><p>Responsibility is clearest when it's attached to the task and its consequences.</p></div><div class="principle-list"><article><h2>Know who is responsible.</h2><p>Give tasks a named owner and assign AI work to clear roles.</p></article><article><h2>Limit access.</h2><p>Scope agents to the data and actions they need for the task.</p></article><article><h2>Review important actions.</h2><p>Require approval before designated sensitive or external changes.</p></article><article><h2>Keep a record.</h2><p>Attach decisions, evidence and corrections to the work so people can inspect what happened.</p></article></div></div></section><section class="release section-space"><div class="container release-layout"><div><h2>Current release status.</h2><p>The foundation is source-built. Advanced capabilities are gated or default-off, and hosted production has not completed acceptance.</p><p>BLENTERA provides technical patterns for controls and evidence. It does not guarantee EU AI Act compliance by itself.</p></div><div class="release-table"><div><span>Foundation</span><strong>Source-built</strong></div><div><span>Advanced controls</span><strong>Gated</strong></div><div><span>Hosted operations</span><strong>Not qualified</strong></div></div></div></section><section class="closing section-space"><div class="container closing-layout"><h2>See the foundation that supports the work.</h2><div><p>Company knowledge, people, AI teams and controls are designed to work together.</p><a class="button button-dark" href="#/platform/">Explore the platform <svg aria-hidden="true" fill="none" height="17" viewbox="0 0 24 24" width="17"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"></path></svg></a></div></div></section></div></main><footer class="site-footer"><div class="container"><div class="footer-main"><div><a aria-label="BLENTERA home" class="wordmark footer-wordmark" href="#/">blentera</a><p>Company knowledge, work and AI in one place.</p></div><div class="footer-links"><div><strong>Explore</strong><a href="#/platform/">Platform</a><a href="#/about/">About &amp; organisation</a><a href="#/control/">Control</a></div><div><strong>Understand</strong><a href="#/#walkthrough">How it works</a><a href="#/platform/#release-status">Release status</a><a href="#/about/#company">Company</a></div></div></div>
+<div class="footer-bottom"><span>© 2026 BLENTERA</span><span>Prelaunch concept. Hosted production qualification is pending.</span><a href="#/about/#company">About the company <svg aria-hidden="true" fill="none" height="17" viewbox="0 0 24 24" width="17"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"></path></svg></a></div></div></footer><script>'use strict';
+(() => {
+  const openMenu = document.querySelector('.menu-toggle');
+  const menu = document.querySelector('#mobile-navigation');
+  if (openMenu && menu) {
+    const close = () => {openMenu.setAttribute('aria-expanded', 'false'); openMenu.setAttribute('aria-label', 'Open navigation');menu.hidden = true;};
+    openMenu.addEventListener('click', () => {
+      const isOpen = openMenu.getAttribute('aria-expanded') === 'true';
+      openMenu.setAttribute('aria-expanded', String(!isOpen));
+      openMenu.setAttribute('aria-label', isOpen ? 'Open navigation' : 'Close navigation');
+      menu.hidden = isOpen;
+    });
+    menu.addEventListener('click', event => {if (event.target.closest('a')) close();});
+    window.addEventListener('keydown', event => {if (event.key === 'Escape' && !menu.hidden) {close();openMenu.focus();}});
+    window.addEventListener('resize', () => {if (window.innerWidth > 800 && !menu.hidden) close();});
+  }
+
+  const scenarioData = {
+    market:{name:'New market',title:'Should we enter Germany next quarter?',owner:'CEO',route:[['CMO','Market research','Competitors and channels'],['CFO','Cost analysis','Costs and commercial assumptions']],review:'CEO decides whether to proceed.',keep:'Reviewed market-entry checklist'},
+    product:{name:'Product launch',title:'What needs to happen before we ship the new integration?',owner:'Product owner',route:[['CPO','Product specification','Scope and readiness'],['CTO','Engineering','Feasibility and delivery'],['CISO','Security checks','Risks and approvals']],review:'Product owner approves the release conditions.',keep:'Versioned release checklist'},
+    support:{name:'Customer issue',title:'Why does onboarding keep breaking at the same step?',owner:'Service owner',route:[['CCO','Support triage','Customer cases and patterns'],['COO','Process review','Handoffs and procedures'],['CTO','Reliability','Technical causes']],review:'Service owner approves customer-facing changes.',keep:'Updated onboarding playbook'}
+  };
+  const create = (type,cls,text) => {const x=document.createElement(type);if(cls)x.className=cls;if(text)x.textContent=text;return x;};
+  document.querySelectorAll('[data-scenario-demo]').forEach(demo => {
+    const buttons=[...demo.querySelectorAll('[role="tab"]')]; const panel=demo.querySelector('[role="tabpanel"]');
+    const activate = (button) => {
+      const data=scenarioData[button.dataset.scenario]; if(!data)return;
+      buttons.forEach(b => {b.setAttribute('aria-selected',String(b===button));b.tabIndex=b===button?0:-1;});
+      panel.setAttribute('aria-labelledby',button.id);
+      demo.querySelector('[data-field="title"]').textContent=data.title;
+      demo.querySelector('[data-field="owner"]').textContent=data.owner;
+      demo.querySelector('[data-field="review"]').textContent=data.review;
+      demo.querySelector('[data-field="keep"]').textContent=data.keep;
+      const route=demo.querySelector('[data-field="route"]');route.replaceChildren();
+      data.route.forEach(([role,job,output]) => {
+        const row=create('div','delegate-row');row.append(create('div','delegate-role',role));
+        const part=create('div','delegate-work');part.append(create('strong','',job),create('span','',output));row.append(part);route.append(row);
+      });
+    };
+    buttons.forEach((b,i)=>{
+      b.tabIndex=i===0?0:-1;
+      b.addEventListener('click',()=>activate(b));
+      b.addEventListener('keydown',e=>{
+        const next=e.key==='ArrowRight'||e.key==='ArrowDown'?(i+1)%buttons.length:e.key==='ArrowLeft'||e.key==='ArrowUp'?(i-1+buttons.length)%buttons.length:e.key==='Home'?0:e.key==='End'?buttons.length-1:-1;
+        if(next>=0){e.preventDefault();buttons[next].focus();activate(buttons[next]);}
+      });
+    });
+  });
+
+  const organisation=[
+    {id:'cto',name:'CTO',title:'Technology',focus:'Build, ship and maintain software systems.',teams:[['Engineering','Frontend','Backend'],['Platform','DevOps','Reliability'],['Quality','QA','Code review']]},
+    {id:'cpo',name:'CPO',title:'Product',focus:'Decide what to build, why it matters and what is ready.',teams:[['Discovery','Research','Validation'],['Design','UX','UI'],['Delivery','Product specification','Release planning']]},
+    {id:'coo',name:'COO',title:'Operations',focus:'Make recurring processes reliable and easier to run.',teams:[['Process','Workflow design','Automation'],['Delivery','Operations planning','Documentation'],['Systems','Integrations','Data operations']]},
+    {id:'cmo',name:'CMO',title:'Growth',focus:'Understand the market and connect with the right buyers.',teams:[['Content','Editorial','Organic discovery'],['Campaigns','Paid media','Partnerships'],['Insights','Market research','Performance analysis']]},
+    {id:'cfo',name:'CFO',title:'Finance',focus:'Give financial decisions a sound basis.',teams:[['Planning','Forecasting','Budgeting'],['Economics','Pricing analysis','Cost analysis'],['Finance operations','Reporting','Reconciliation']]},
+    {id:'cro',name:'CRO',title:'Revenue',focus:'Move qualified opportunities into a reliable sales process.',teams:[['Prospecting','Account research','Outreach'],['Revenue operations','CRM','Pipeline analytics'],['Enablement','Proposals','Sales documentation']]},
+    {id:'cco',name:'CCO',title:'Customer',focus:'Help customers adopt, use and improve the product.',teams:[['Onboarding','Implementation','Training'],['Support','Triage','Help content'],['Success','Health monitoring','Feedback analysis']]},
+    {id:'ciso',name:'CISO',title:'Risk & security',focus:'Keep access, evidence and assurance close to the work.',teams:[['Access','Permissions','Identity review'],['Assurance','Threat modelling','Security checks'],['Governance','Audit evidence','Privacy review']]}
+  ];
+  const roleTabs=[...document.querySelectorAll('.org-role')];
+  if(roleTabs.length){
+    const panel=document.getElementById('role-details');
+    const activate=(button)=>{
+      const d=organisation.find(r=>r.id===button.dataset.role);if(!d)return;
+      roleTabs.forEach(b=>{b.setAttribute('aria-selected',String(b===button));b.tabIndex=b===button?0:-1;b.classList.toggle('is-active',b===button);});
+      panel.setAttribute('aria-labelledby',button.id);
+      document.getElementById('role-name').firstChild.textContent=d.name+' ';
+      document.getElementById('role-title').textContent=d.title;
+      document.getElementById('role-focus').textContent=d.focus;
+      const list=document.getElementById('role-teams');list.replaceChildren();
+      d.teams.forEach(([name,a,b])=>{
+        const item=create('div','team-column');const p=create('p');p.append(document.createTextNode(a));p.append(create('span','bullet-mid','·'));p.append(document.createTextNode(b));
+        item.append(create('h4','',name),p);list.append(item);
+      });
+    };
+    roleTabs.forEach((b,i)=>{b.tabIndex=i===0?0:-1;b.addEventListener('click',()=>activate(b));b.addEventListener('keydown',e=>{
+      const next=e.key==='ArrowRight'||e.key==='ArrowDown'?(i+1)%roleTabs.length:e.key==='ArrowLeft'||e.key==='ArrowUp'?(i-1+roleTabs.length)%roleTabs.length:e.key==='Home'?0:e.key==='End'?roleTabs.length-1:-1;
+      if(next>=0){e.preventDefault();roleTabs[next].focus();activate(roleTabs[next]);}
+    });});
+  }
+})();
+</script><script>
+'use strict';
+(() => {
+  const sections = [...document.querySelectorAll('[data-preview-route]')];
+  const known = new Set(sections.map(x => x.getAttribute('data-preview-path')));
+  const render = () => {
+    const raw = (window.location.hash.slice(1) || '/');
+    const firstMark = raw.indexOf('#');
+    const path = firstMark < 0 ? raw : raw.slice(0,firstMark);
+    const targetId = firstMark < 0 ? '' : raw.slice(firstMark+1);
+    const usePath = known.has(path) ? path : '/';
+    sections.forEach(e => {e.hidden = e.getAttribute('data-preview-path') !== usePath;});
+    document.querySelectorAll('.desktop-nav a, .mobile-nav a').forEach(a => {
+      if (a.getAttribute('href') === '#'+usePath) a.setAttribute('aria-current','page');
+      else a.removeAttribute('aria-current');
+    });
+    const titles = {'/':'BLENTERA | Company AI foundation','/platform/':'Platform · BLENTERA','/about/':'About · BLENTERA','/control/':'Control · BLENTERA'};
+    document.title = titles[usePath];
+    // Close mobile navigation after a route change to preserve focus and viewport.
+    const toggle = document.querySelector('.menu-toggle');
+    const mobile = document.querySelector('#mobile-navigation');
+    if(toggle && mobile && !mobile.hidden){mobile.hidden=true;toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Open navigation');}
+    requestAnimationFrame(() => {
+      const dest=targetId&&document.getElementById(targetId);
+      if(dest && dest.closest('[data-preview-path]')?.getAttribute('data-preview-path')===usePath) dest.scrollIntoView({block:'start'});
+      else window.scrollTo({top:0,behavior:'instant'});
+    });
+  };
+  addEventListener('hashchange',render);
+  addEventListener('popstate',render);
+  render();
+})();
+</script></body></html>
