@@ -10,6 +10,7 @@
   "unavailable": "Temporarily unavailable",
   "tryAgain": "Try again",
   "loading": "Loading current work…",
+  "routeLoading": "Loading page…",
   "loadFailed": "Home could not be loaded. Your work is preserved.",
   "selectCompany": "Select a company to see your work.",
   "refreshRequired": "Refresh before taking action.",

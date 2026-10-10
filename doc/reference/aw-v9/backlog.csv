@@ -74,7 +74,7 @@ V9-072,2299,`.production`/legacy parity inventory,not_started
 V9-073,2301,migrate canonical Agents/Skills/Costs surfaces,not_started
 V9-074,2303,retire redundant onboarding variants,not_started
 V9-075,2305,retire streamlined legacy flag after migration,not_started
-V9-076,2307,route-level lazy loading/performance pass,not_started
+V9-076,2307,route-level lazy loading/performance pass,in_progress
 V9-077,2309,long-session memory/render performance,not_started
 V9-078,2311,mobile critical action surface,not_started
 V9-079,2313,WCAG automated gates,not_started

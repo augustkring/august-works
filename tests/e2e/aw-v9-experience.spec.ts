@@ -25,6 +25,16 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     ambient_commands_v9: true,
   };
   const errors: string[] = [];
+  const requestedPageChunks: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (
+      /\/(?:CustomAgent|NewAgent|HireAgent|MyFeedback|FeedbackTriage|CustomerSupport|Activation|AgentMonitor|MaintenanceHistory)-[^/]+\.js$/.test(
+        path,
+      )
+    )
+      requestedPageChunks.push(path);
+  });
   page.on("pageerror", (error) => errors.push(error.message));
   await json(
     await request.patch("/api/instance/settings/experimental", {
@@ -47,6 +57,9 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     await expect(
       page.getByRole("heading", { name: "Home", exact: true }),
     ).toBeFocused();
+    // The built Home entry must not fetch setup, triage or private history pages.
+    // This checks real browser imports, not a mocked lazy component.
+    expect(requestedPageChunks).toEqual([]);
     await expect(
       page.getByText("Nothing needs your attention right now.", {
         exact: true,
@@ -293,6 +306,9 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     await expect(
       page.getByRole("heading", { name: "My feedback", exact: true }),
     ).toBeVisible();
+    expect(
+      requestedPageChunks.some((path) => /\/MyFeedback-[^/]+\.js$/.test(path)),
+    ).toBe(true);
     await page
       .getByRole("button", { name: new RegExp(history[0].feedbackId) })
       .click();

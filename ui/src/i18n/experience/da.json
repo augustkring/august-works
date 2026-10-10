@@ -10,6 +10,7 @@
   "unavailable": "Midlertidigt utilgængelig",
   "tryAgain": "Prøv igen",
   "loading": "Henter aktuelt arbejde…",
+  "routeLoading": "Indlæser side…",
   "loadFailed": "Hjem kunne ikke indlæses. Dit arbejde er bevaret.",
   "selectCompany": "Vælg en virksomhed for at se dit arbejde.",
   "refreshRequired": "Opdatér før du udfører en handling.",

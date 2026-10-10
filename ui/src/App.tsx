@@ -1,11 +1,18 @@
-import { CustomerSupport } from "./pages/CustomerSupport";
-import { MaintenanceHistoryEntry } from "./pages/MaintenanceHistory";
-import { AgentMonitorEntry } from "./pages/AgentMonitor";
+import {
+  CustomerSupport,
+  MaintenanceHistoryEntry,
+  AgentMonitorEntry,
+  CustomAgent,
+  HireAgent,
+  MyFeedback,
+  FeedbackTriage,
+  NewAgent,
+  SaasWelcomeEntry,
+  ActivationPage,
+} from "./pages/V9RouteEntries";
 import { SecurityEvents } from "./pages/SecurityEvents";
 import { Enterprise } from "./pages/Enterprise";
 import { AgentPackages } from "./pages/AgentPackages";
-import { CustomAgent } from "./pages/CustomAgent";
-import { HireAgent } from "./pages/HireAgent";
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
 import { Playbooks } from "./pages/Playbooks";
@@ -107,8 +114,6 @@ import { DashboardEntry } from "./pages/ExperienceHome";
 import { NeedsYouEntry } from "./pages/ExperienceNeedsYou";
 import { WorkEntry } from "./pages/ExperienceWork";
 import { ExperienceInsights } from "./pages/ExperienceInsights";
-import { MyFeedback } from "./pages/MyFeedback";
-import { FeedbackTriage } from "./pages/FeedbackTriage";
 import { ExperienceAdvanced } from "./pages/ExperienceAdvanced";
 import { DecisionQueuePage } from "./pages/DecisionQueuePage";
 import { BoardChat } from "./pages/BoardChat";
@@ -149,10 +154,8 @@ import { PluginManager } from "./pages/PluginManager";
 import { PluginSettings } from "./pages/PluginSettings";
 import { AdapterManager } from "./pages/AdapterManager";
 import { PluginPage } from "./pages/PluginPage";
-import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
 import { SaasOperationsPage } from "./pages/SaasOperations";
-import { SaasWelcomeEntry, ActivationPage } from "./pages/Activation";
 import { SaasRuntimesPage } from "./pages/SaasRuntimes";
 import { SaasSupportPage } from "./pages/SaasSupport";
 import { SaasDeletionPage } from "./pages/SaasDeletion";
