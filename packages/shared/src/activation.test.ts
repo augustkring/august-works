@@ -6,6 +6,8 @@ import {
   activationWebsiteSchema,
   activationFirstValueViewSchema,
   activationFirstValueResultSchema,
+  activationFirstTaskCandidateSchema,
+  activationFirstTaskViewSchema,
   initialActivationState,
 } from "./activation.js";
 import {
@@ -13,6 +15,27 @@ import {
   COMPANY_EXPERIENCE_SECTIONS,
 } from "./company-experience.js";
 describe("V9 activation input boundaries", () => {
+  it("starts only an explicitly reviewed no-charge native first task without accepting client authority", () => {
+    const input = { operation: "start_first_task", requestId: randomUUID(), expectedVersion: 1,
+      installationId: randomUUID(), planId: randomUUID(), expectedPlanVersion: 1,
+      expectedInstallationHash: "a".repeat(64), expectedMaximumModelCostMinor: 0 };
+    expect(activationCommandSchema.parse(input)).toEqual(input);
+    for (const extra of [{ permissions: ["tools:admin"] }, { purposeApproved: true }, { providerProfile: "free" },
+      { expectedMaximumModelCostMinor: 1 }, { expectedInstallationHash: "invented" }])
+      expect(activationCommandSchema.safeParse({ ...input, ...extra }).success).toBe(false);
+    expect(activationCommandSchema.safeParse({ ...input, operation: "continue_first_task" }).success).toBe(false);
+  });
+  it("rejects charged first-task candidates and never accepts invented progress percentages", () => {
+    const candidate = { installationId: randomUUID(), installationHash: "a".repeat(64), planId: randomUUID(), issueId: randomUUID(),
+      planVersion: 1, title: "Prepared original task", maximumModelCostMinor: 0, currency: "USD" };
+    expect(activationFirstTaskCandidateSchema.parse(candidate)).toEqual(candidate);
+    for (const extra of [{ maximumModelCostMinor: 1 }, { currency: "EUR" }, { authority: "approved" }])
+      expect(activationFirstTaskCandidateSchema.safeParse({ ...candidate, ...extra }).success).toBe(false);
+    const { title: _, maximumModelCostMinor: __, currency: ___, ...reference } = candidate;
+    const current = { ...reference, status: "running", dispatched: false };
+    expect(activationFirstTaskViewSchema.parse({ candidates: [], hasMore: false, current }).current?.dispatched).toBe(false);
+    expect(activationFirstTaskViewSchema.safeParse({ candidates: [], hasMore: false, current: { ...current, progress: 90 } }).success).toBe(false);
+  });
   it("admits only bounded native document keys for reviewed output links", () => {
     const id = randomUUID();
     const result = { installationId: id, verificationRunId: id, issueId: id, runId: id,

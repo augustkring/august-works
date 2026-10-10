@@ -1378,3 +1378,35 @@ full UI token gates and normal V9 coverage, on matching source SHA-256
 original Layout main landmark. Strict UI types and both actual browser cases
 remain queued behind uncontested integrated qualification. No launch or human
 acceptance status is upgraded.
+## ADR-060 — First-task start through the original plan owner
+
+2026-10-10. ONB-09 can select an already prepared original single-worker C1
+internal draft. It requires current administrative and Task authority, the same
+initiating account/goal, current package activation and intended-purpose
+assignment, the installed Native draft controller, one output, two original
+save/submit tool actions, no retries/delegation, and a current zero-charge quote.
+A subscription or BYO key does not qualify starter funding. The original contract
+writer's advisory fence preserves the reviewed goal during the start decision.
+
+The original plan owner exposes its unchanged decision inside an existing
+transaction. Onboarding CAS, original plan CAS, durable reference and original
+activity records commit before the existing heartbeat queue is invoked. Original
+PostgreSQL triggers own run provenance. Request-receipt replay never dispatches
+or repeats Stop. A new explicit Continue rechecks current original owners and
+uses the existing wakeup key; Stop keeps its original safety outbox and rollback
+allowance. No competing Task, purpose, grant, executor or queue is introduced.
+
+Progress comes from original plan/attempt metadata with original source checks.
+An independent passing worker review must match the exact recorded plan, Task
+and installation hash before recording a result. EN/DA controls do not infer
+success from a start, model response or saved draft. Source withdrawal hides
+private metadata; original Stop controls retain their separate safety boundary.
+
+Twenty-nine shared/UI checks in four files and token/coverage checks pass on
+source SHA-256 `c8fce1ea93d071fa31d689c6b31531b571816db37236a96204d85e8b7484ca1b`.
+Subsequent source review added administrative preview admission and the original
+contract fence; current Native/type/browser and final integration checks remain
+pending. Native refusal/historical-reference fixtures and built browser fixtures
+are not no-charge provider or starter-funding qualification. Automatic Task
+preparation, generic Free Core first delivery and full first-agent provisioning
+remain open; see the dated first-task owner-bridge plan.

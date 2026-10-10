@@ -28,7 +28,7 @@ import { activationService } from "../services/saas/activation.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { verificationService } from "../services/supervision/verification-service.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
-import { initialActivationState, createOrchestrationPlanSchema } from "@paperclipai/shared";
+import { initialActivationState, createOrchestrationPlanSchema, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 import { purpose as governancePurpose, oversight as governanceOversight, reviews as governanceReviews } from "./helpers/governance-fixture.js";
 import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
   documents, documentRevisions, issueDocuments } from "@paperclipai/db";
@@ -1451,7 +1451,7 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(agentPackageStopActions.id, action!.id)),
       ).rejects.toMatchObject({ cause: { code: "23514" } });
     });
-    async function firstValueFixture() {
+    async function prepareFirstValueFixture(budgets: CreateOrchestrationPlanInput["budgets"] = {}) {
       await instanceSettingsService(db).updateExperimental({
         activation_v9: true, free_core_commercial_v7: true, billing_entitlements_v6: true,
         billing_usage_v6: true, enableWorkflowsV1: true,
@@ -1505,8 +1505,12 @@ const support = await getEmbeddedPostgresTestSupport();
       const created = await orchestration.create(f.actor, f.home, createOrchestrationPlanSchema.parse({
         issueId: task!.id, expectedIssueUpdatedAt: task!.updatedAt.toISOString(), riskClass: "C1", workload: "semantic",
         completionContract: { objective: intent, requiredOutputs: [{ key: "result" }],
-          businessInvariants: ["Every claim cites an authorized retained source"] }, budgets: {}, workers: [{ key: "worker", issueId: task!.id }],
+          businessInvariants: ["Every claim cites an authorized retained source"] }, budgets, workers: [{ key: "worker", issueId: task!.id }],
       }));
+      return { onboarding: onboarding!, installation, task: task!, created, intent, orchestration, useCase };
+    }
+    async function firstValueFixture() {
+      const { onboarding, installation, task, created, intent, orchestration } = await prepareFirstValueFixture();
       const plan = await orchestration.decide(f.actor, f.home, created.id, { expectedVersion: created.version, action: "start",
         rationale: "Start the explicitly bounded native fixture draft" });
       const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
@@ -1614,6 +1618,58 @@ const support = await getEmbeddedPostgresTestSupport();
           releaseNotes: "Editorial note",
         }),
       ).toBe(false);
+    });
+    it("does not start an unqualified default first task or change the original owners", async () => {
+      const fixture = await prepareFirstValueFixture({ maxWorkerCount: 1, maxParallelWorkers: 1, maxDelegationDepth: 0,
+        maxRetries: 0, maxToolActions: 2, maxModelCostMinor: 0 });
+      const input = { operation: "start_first_task", requestId: randomUUID(), expectedVersion: fixture.onboarding.version,
+        installationId: fixture.installation.id, planId: fixture.created.id, expectedPlanVersion: fixture.created.version,
+        expectedInstallationHash: fixture.installation.activationHash!, expectedMaximumModelCostMinor: 0 };
+      const before = await db.execute(sql`select (select count(*) from heartbeat_runs where company_id=${f.home}::uuid) as runs,
+        (select count(*) from orchestration_worker_attempts where company_id=${f.home}::uuid) as attempts,
+        (select count(*) from principal_permission_grants where company_id=${f.home}::uuid) as grants`);
+      await expect(activationService(db).command(f.actor, f.home, input)).rejects.toMatchObject({ status: 409 });
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      expect(stored!.version).toBe(fixture.onboarding.version);expect(stored!.activationState!.firstTask).toBeUndefined();
+      expect((await orchestrationService(db).get(f.actor, f.home, fixture.created.id)).status).toBe("draft");
+      expect(await db.execute(sql`select (select count(*) from heartbeat_runs where company_id=${f.home}::uuid) as runs,
+        (select count(*) from orchestration_worker_attempts where company_id=${f.home}::uuid) as attempts,
+        (select count(*) from principal_permission_grants where company_id=${f.home}::uuid) as grants`)).toEqual(before);
+    });
+    it("cancels a recorded original first plan after rollout withdrawal and replays its receipt without another decision", async () => {
+      // Historical original-plan reference fixture, not qualification of the
+      // new default's no-charge controller or real provider delivery.
+      const fixture = await prepareFirstValueFixture();
+      const plan = await fixture.orchestration.decide(f.actor, f.home, fixture.created.id, { expectedVersion: fixture.created.version,
+        action: "start", rationale: "Explicit original historical plan fixture before rollout withdrawal" });
+      await db.update(companyOnboardingRuns).set({ activationState: { ...fixture.onboarding.activationState!, step: "running",
+        firstTask: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: plan.id, issueId: fixture.task.id } },
+        currentStage: "v9_running", version: fixture.onboarding.version + 1 }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      await instanceSettingsService(db).updateExperimental({ activation_v9: false, orchestration_v7: false, supervision_v7: false, verifier_v7: false });
+      const input = { operation: "stop_first_task", requestId: randomUUID(), expectedVersion: fixture.onboarding.version + 1, expectedPlanVersion: plan.version };
+      const activation = activationService(db);
+      const [stopped, replay] = await Promise.all([activation.command(f.actor, f.home, input), activation.command(f.actor, f.home, input)]);
+      expect(stopped.version).toBe(fixture.onboarding.version + 2);expect(replay.version).toBe(stopped.version);
+      expect(stopped.firstTask?.current).toMatchObject({ planId: plan.id, status: "cancelled", planVersion: plan.version + 1 });
+      const audits = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.action, "orchestration.cancel_requested")));
+      expect(audits).toHaveLength(1);
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toHaveLength(0);
+    });
+    it("requires the exact recorded first plan when recording its independently reviewed output", async () => {
+      const fixture = await firstValueFixture();
+      await db.update(companyOnboardingRuns).set({ activationState: { ...fixture.onboarding.activationState!, step: "running",
+        firstTask: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: fixture.review.planId, issueId: fixture.task.id } },
+        currentStage: "v9_running", version: fixture.onboarding.version + 1 }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      const activation = activationService(db), current = await activation.get(f.actor, f.home);
+      expect(current.firstValue?.candidates).toHaveLength(1);
+      const recorded = await activation.command(f.actor, f.home, { operation: "record_verified_result", requestId: randomUUID(),
+        expectedVersion: current.version, installationId: fixture.installation.id, verificationRunId: fixture.review.id });
+      expect(recorded.firstValue?.status).toBe("verified");expect(recorded.state.step).toBe("result");
+      await db.update(companyOnboardingRuns).set({ activationState: { ...fixture.onboarding.activationState!, step: "running",
+        firstTask: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: randomUUID(), issueId: fixture.task.id } },
+        version: recorded.version + 1, currentStage: "v9_running" }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      await expect(activation.command(f.actor, f.home, { operation: "record_verified_result", requestId: randomUUID(), expectedVersion: recorded.version + 1,
+        installationId: fixture.installation.id, verificationRunId: fixture.review.id })).rejects.toMatchObject({ status: 409 });
     });
   },
 );

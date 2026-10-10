@@ -76,6 +76,10 @@ export async function readActivationFirstValue(
     .for("share");
   if (!review || review.erasedAt)
     throw notFound("Retained first-result review not found");
+  const firstTask = onboarding.activationState.firstTask;
+  if (firstTask && (firstTask.installationId !== installation.id || firstTask.installationHash !== installation.activationHash ||
+    firstTask.planId !== review.planId || firstTask.issueId !== review.issueId))
+    throw conflict("The reviewed result must belong to the recorded first task");
   const parsedReview = verificationReviewSchema.safeParse(review.review);
   if (
     review.result !== "pass" ||
@@ -282,7 +286,7 @@ export async function activationFirstValueView(
   const candidates: Array<
     ReturnType<typeof activationFirstValueResultSchema.parse>
   > = [];
-  if (allowCandidates && onboarding.activationState.step === "review") {
+  if (allowCandidates && ["review", "running"].includes(onboarding.activationState.step)) {
     const rows = await tx
       .select({
         installationId: companyAgentPackageInstallations.id,

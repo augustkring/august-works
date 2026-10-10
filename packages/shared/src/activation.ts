@@ -33,6 +33,28 @@ export const activationFirstValueReceiptSchema = z.strictObject({
   runId: z.uuid(),
   resultHash: z.string().regex(/^[a-f0-9]{64}$/),
 });
+// References to the original Task and plan; they confer no execution authority.
+export const activationFirstTaskReferenceSchema = z.strictObject({
+  installationId: z.uuid(),
+  installationHash: z.string().regex(/^[a-f0-9]{64}$/),
+  planId: z.uuid(),
+  issueId: z.uuid(),
+});
+export const activationFirstTaskCandidateSchema = activationFirstTaskReferenceSchema.extend({
+  planVersion: z.number().int().positive(),
+  title: z.string().max(500),
+  maximumModelCostMinor: z.literal(0),
+  currency: z.literal("USD"),
+});
+export const activationFirstTaskViewSchema = z.strictObject({
+  candidates: z.array(activationFirstTaskCandidateSchema).max(5),
+  hasMore: z.boolean(),
+  current: activationFirstTaskReferenceSchema.extend({
+    planVersion: z.number().int().positive(),
+    status: z.enum(["running", "paused", "completed", "cancelled", "failed", "withdrawn"]),
+    dispatched: z.boolean(),
+  }).nullable(),
+});
 export const activationFirstValueResultSchema =
   activationFirstValueReceiptSchema.extend({
     title: z.string().max(500),
@@ -75,6 +97,7 @@ export const activationStateSchema = z.strictObject({
   packageVersionId: z.uuid().nullable(),
   firstValueAt: z.iso.datetime().nullable(),
   firstValueReceipt: activationFirstValueReceiptSchema.optional(),
+  firstTask: activationFirstTaskReferenceSchema.optional(),
   receipts: z
     .array(
       z.strictObject({
@@ -130,6 +153,15 @@ export const activationCommandSchema = z.discriminatedUnion("operation", [
   z.strictObject({ ...envelope, operation: z.literal("continue_access") }),
   z.strictObject({ ...envelope, operation: z.literal("change_setup") }),
   z.strictObject({
+    ...envelope, operation: z.literal("start_first_task"),
+    installationId: z.uuid(), planId: z.uuid(),
+    expectedInstallationHash: z.string().regex(/^[a-f0-9]{64}$/),
+    expectedPlanVersion: z.number().int().positive(),
+    expectedMaximumModelCostMinor: z.literal(0),
+  }),
+  z.strictObject({ ...envelope, operation: z.literal("continue_first_task") }),
+  z.strictObject({ ...envelope, operation: z.literal("stop_first_task"), expectedPlanVersion: z.number().int().positive() }),
+  z.strictObject({
     ...envelope,
     operation: z.literal("record_verified_result"),
     installationId: z.uuid(),
@@ -146,6 +178,7 @@ export const activationViewSchema = z.strictObject({
   status: z.enum(["in_progress", "completed", "abandoned"]),
   state: activationStateSchema.omit({ receipts: true }),
   firstValue: activationFirstValueViewSchema.optional(),
+  firstTask: activationFirstTaskViewSchema.optional(),
   sources: z
     .array(
       z.strictObject({

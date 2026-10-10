@@ -33,6 +33,10 @@ import {
   activationFirstValueView,
   readActivationFirstValue,
 } from "./activation-first-value.js";
+import { activationFirstTaskView, readActivationFirstTask, readRecordedActivationFirstTask, assertActivationFirstTaskDispatch } from "./activation-first-task.js";
+import { orchestrationService } from "../orchestration/orchestration-service.js";
+import { orchestrationRuntimeControl } from "../orchestration/orchestration-runtime-control.js";
+import { withV7ActivityTransaction } from "../v7-mutations.js";
 
 /** A presentation state machine on the existing onboarding owner. It never supplies
  * execution authority, grants, provider credentials, or synthetic first-value proof. */
@@ -182,6 +186,9 @@ export function activationService(db: Db) {
       },
       !!selected,
     );
+    const firstTask = await activationFirstTaskView(db, tx, actor, companyId, {
+      createdAt: run.createdAt, createdByUserId: userId, activationState: state,
+    });
     const blockers: ActivationView["blockers"] = [];
     if (!available.length || (state.packageVersionId && !selected))
       blockers.push("no_qualified_capability");
@@ -189,7 +196,7 @@ export function activationService(db: Db) {
       blockers.push("required_access_pending");
     if (
       ["review", "running", "result", "activated"].includes(state.step) &&
-      firstValue.status !== "verified"
+      firstValue.status !== "verified" && !firstTask.candidates.length && !firstTask.current
     )
       blockers.push("safe_execution_unqualified");
     // Do not return internal idempotency receipts to the presentation layer.
@@ -212,6 +219,7 @@ export function activationService(db: Db) {
       status: run.status,
       state: publicState,
       firstValue,
+      firstTask,
       sources: [
         {
           id: "customer_context",
@@ -245,7 +253,7 @@ export function activationService(db: Db) {
       }),
     async command(actor: AuthorizationActor, companyId: string, raw: unknown) {
       const input = activationCommandSchema.parse(raw);
-      await db.transaction(async (tx) => {
+      const runtimeAction = await withV7ActivityTransaction(db, async (tx, publications) => {
         const txDb = tx as unknown as Db;
         await access(txDb, actor, companyId);
         await lockSnapshot(txDb, companyId);
@@ -269,7 +277,7 @@ export function activationService(db: Db) {
           return;
         }
         if (
-          !v9FeatureEnabled(
+          input.operation !== "stop_first_task" && !v9FeatureEnabled(
             await instanceSettingsService(txDb).getExperimental(),
             "activation_v9",
           )
@@ -411,7 +419,7 @@ export function activationService(db: Db) {
           }
           case "change_setup": {
             requireStep("review");
-            if (state.firstValueAt || state.firstValueReceipt)
+            if (state.firstValueAt || state.firstValueReceipt || state.firstTask)
               throw conflict("Review the recorded result through its original controls", {
                 code: "FIRST_RESULT_ALREADY_RECORDED",
               });
@@ -422,8 +430,42 @@ export function activationService(db: Db) {
             next.step = "intent";
             break;
           }
-          case "record_verified_result": {
+          case "start_first_task": {
             requireStep("review");
+            if (state.firstTask || state.firstValueReceipt) throw conflict("Read the existing first task before starting another");
+            const candidate = await readActivationFirstTask(db, txDb, actor, companyId, {
+              createdAt: run.createdAt, createdByUserId: userId, activationState: state,
+            }, input.installationId, input.planId);
+            if (candidate.planVersion !== input.expectedPlanVersion || candidate.installationHash !== input.expectedInstallationHash ||
+              candidate.maximumModelCostMinor !== input.expectedMaximumModelCostMinor)
+              throw conflict("First-run review changed; reload before starting");
+            await orchestrationService(db).decideWithinTransaction(txDb, publications, actor, companyId, candidate.planId, {
+              expectedVersion: input.expectedPlanVersion, action: "start", rationale: "The initiating human confirmed the bounded first internal draft.",
+            });
+            next.firstTask = { installationId: candidate.installationId, installationHash: candidate.installationHash,
+              planId: candidate.planId, issueId: candidate.issueId };
+            next.step = "running";
+            break;
+          }
+          case "continue_first_task": {
+            requireStep("running");
+            await assertActivationFirstTaskDispatch(db, txDb, actor, companyId, {
+              createdAt: run.createdAt, createdByUserId: userId, activationState: state,
+            });
+            break;
+          }
+          case "stop_first_task": {
+            requireStep("running");
+            const { plan } = await readRecordedActivationFirstTask(txDb, actor, companyId, {
+              createdAt: run.createdAt, createdByUserId: userId, activationState: state,
+            }, true);
+            await orchestrationService(db).decideWithinTransaction(txDb, publications, actor, companyId, plan.id, {
+              expectedVersion: input.expectedPlanVersion, action: "cancel", rationale: "The initiating human requested Stop for the first internal draft.",
+            });
+            break;
+          }
+          case "record_verified_result": {
+            if (!["review", "running"].includes(state.step)) throw conflict("Continue at the current setup step");
             if (
               !(await capabilities(txDb)).some(
                 (c) => c.versionId === state.packageVersionId,
@@ -444,6 +486,8 @@ export function activationService(db: Db) {
               input.installationId,
               input.verificationRunId,
             );
+            if (state.firstTask && (state.firstTask.issueId !== result.issueId || state.firstTask.installationId !== result.installationId))
+              throw conflict("Review the result of the recorded first task");
             next.firstValueReceipt = {
               installationId: result.installationId,
               verificationRunId: result.verificationRunId,
@@ -523,7 +567,21 @@ export function activationService(db: Db) {
             version: run.version + 1,
           },
         });
+        return input.operation === "start_first_task" || input.operation === "continue_first_task"
+          ? { action: "dispatch" as const, planId: parsed.firstTask!.planId }
+          : input.operation === "stop_first_task" ? { action: "stop" as const, planId: parsed.firstTask!.planId } : undefined;
       });
+      // Commit the original plan, onboarding reference and audit before any
+      // canonical dispatch. Receipt replay is read-only. A crash before dispatch
+      // is recovered by a new explicit Continue action, with original wake keys.
+      if (runtimeAction?.action === "dispatch") {
+        await orchestrationRuntimeControl(db).dispatch(actor, companyId, runtimeAction.planId);
+      }
+      if (runtimeAction?.action === "stop") {
+        // The original owner already persisted its safety cancellation outbox.
+        // Delivery is performed by that owner; no second queue is introduced.
+        await orchestrationRuntimeControl(db).stop(actor, companyId, runtimeAction.planId, "The initiating human requested Stop for the first internal draft.");
+      }
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await access(txDb, actor, companyId);

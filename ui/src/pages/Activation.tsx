@@ -27,6 +27,7 @@ import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { CustomerFeedbackDialog } from "../components/CustomerFeedbackDialog";
 import { ActivationFirstValue } from "../components/ActivationFirstValue";
+import { ActivationFirstTask } from "../components/ActivationFirstTask";
 import { SaasWelcomePage } from "./SaasWelcome";
 import { hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
 
@@ -222,7 +223,8 @@ function ActivationScope({
   });
   const command = useMutation({
     mutationFn: async (input: ActivationCommand) => {
-      if (!canWriteAuthority())
+      const attempt = commandAttempt.current ?? input;
+      if (!(attempt.operation === "stop_first_task" ? canUseAuthority() : canWriteAuthority()))
         throw new Error("Activation context changed");
       const attemptEpoch = authority.current.epoch;
       setUnconfirmed(false);
@@ -241,10 +243,10 @@ function ActivationScope({
     }: {
       result: ActivationView;
       attemptEpoch: number;
-    }) => {
+    }, input: ActivationCommand) => {
       if (!alive.current) return;
       if (
-        !canWriteAuthority() ||
+        !(input.operation === "stop_first_task" ? canUseAuthority() : canWriteAuthority()) ||
         authority.current.epoch !== attemptEpoch
       ) {
         setUnconfirmed(true);
@@ -654,7 +656,7 @@ function ActivationScope({
               <dd>{selected?.name ?? t("activation.noCapability")}</dd>
             </div>
           </dl>
-          {!isPast && current.state.step === "review" ? (
+          {!isPast && current.state.step === "review" && !current.state.firstTask ? (
             <div className="space-y-3">
               <p>{t("activation.changeSetupScope")}</p>
               <Button
@@ -667,10 +669,19 @@ function ActivationScope({
               </Button>
             </div>
           ) : null}
+          <ActivationFirstTask value={current.firstTask}
+            canStart={enabled && !frozen && !isPast}
+            canStop={!frozen && !isPast}
+            pending={pending}
+            onStart={input => command.mutate({ ...input, ...envelope() })}
+            onContinue={() => command.mutate({ ...envelope(), operation: "continue_first_task" })}
+            onStop={expectedPlanVersion => command.mutate({ ...envelope(), operation: "stop_first_task", expectedPlanVersion })}
+            onRefresh={() => void run.refetch()}
+          />
           <ActivationFirstValue
             value={current.firstValue}
             canRecord={
-              enabled && !frozen && !isPast && current.state.step === "review"
+              enabled && !frozen && !isPast && ["review", "running"].includes(current.state.step)
             }
             onRecord={(input) =>
               command.mutate({
@@ -708,7 +719,7 @@ function ActivationScope({
               </Link>
             </>
           ) : null}
-          {current.firstValue?.status !== "verified" ? (
+          {current.firstValue?.status !== "verified" && !current.firstTask?.current && !current.firstTask?.candidates.length ? (
             <>
               <p>{t("activation.executionPending")}</p>
               <p>{t("activation.noRunStarted")}</p>

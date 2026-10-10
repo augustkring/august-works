@@ -254,7 +254,28 @@
     "resultEvidenceSummary_one": "One saved output matches the current completed task, successful run and independent human review.",
     "resultEvidenceSummary_other": "{{count}} saved outputs match the current completed task, successful run and independent human review.",
     "changeSetup": "Change setup",
-    "changeSetupScope": "Your goal and company answers will be kept for editing. Existing work and access remain under their own controls."
+    "changeSetupScope": "Your goal and company answers will be kept for editing. Existing work and access remain under their own controls.",
+    "firstTaskProgress": "First task progress",
+    "openFirstTask": "Open original task",
+    "firstTaskDispatchPending": "The first task is confirmed. Its original work queue has not confirmed an execution yet. Check progress before explicitly continuing.",
+    "continueFirstTask": "Continue first task",
+    "stopFirstTask": "Stop",
+    "checkFirstTask": "Check progress",
+    "firstTaskReviewRequired": "A saved output needs an independent review before it can become your first result.",
+    "firstTaskReview": "Check first task",
+    "firstTaskScope": "This prepared task uses your confirmed goal and the selected agent to create one internal draft. It cannot send externally, commit money, delete data or expand permissions.",
+    "firstTaskCompute": "Qualified compute charge for this task: USD 0.00.",
+    "reviewFirstTask": "Review the prepared task",
+    "runFirstTask": "Run first task",
+    "moreFirstTasks": "More qualified tasks are available. This view shows the five most recent.",
+    "firstTaskStatus": {
+      "running": "The first task has started.",
+      "paused": "The first task is paused.",
+      "completed": "The task is completed. Review the saved output and current verification.",
+      "cancelled": "Stop is recorded. The original work controls handle cancellation.",
+      "failed": "The first task failed. Review its original task for the next action.",
+      "withdrawn": "The saved first task is no longer available for this view."
+    }
   },
   "company": {
     "title": "Company",

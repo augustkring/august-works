@@ -184,6 +184,7 @@ export async function qualifyNativeDraftPlan(
     throw conflict(
       "The remaining model/tool budget cannot produce each declared draft",
     );
+  return { maximumMinor: maximum };
 }
 
 /** Exact persisted Native heartbeat selection. Unconfigured controllers and

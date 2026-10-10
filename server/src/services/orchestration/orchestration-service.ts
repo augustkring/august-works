@@ -9,6 +9,7 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
+import type { ActivityPublication } from "../activity-log.js";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import { writeOrchestrationContract } from "./orchestration-contracts.js";
 import { assertWorkflowOutputSchema } from "../workflows/workflow-output-schema.js";
@@ -48,6 +49,46 @@ export function orchestrationService(db: Db) {
     return row;
   }
   const audit = (tx: Db, actor: AuthorizationActor, row: Plan, action: string, publications: Parameters<typeof logActivity>[2], details: Record<string, unknown>) => logActivity(tx, { companyId: row.companyId, actorType: "user", actorId: v7HumanActorId(actor), action, entityType: "orchestration_plan", entityId: row.id, details }, publications);
+  /** Server composition under an existing owner transaction. Callers publish
+   * these audit records only after their outer transaction commits. Every
+   * original admission, CAS, budget and Stop fence still runs here. */
+  async function decideWithinTransaction(
+    tx: Db, publications: ActivityPublication[], actor: AuthorizationActor,
+    companyId: string, id: string, raw: z.infer<typeof orchestrationDecisionSchema>,
+  ) {
+    const input = orchestrationDecisionSchema.parse(raw);
+    const control = input.action !== "start";
+    await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true, control);
+    const row = await plan(actor, companyId, id, tx, true, control);
+    if (row.version !== input.expectedVersion) throw conflict("Plan version changed; reload before deciding");
+    if (["completed", "cancelled", "failed"].includes(row.status)) throw conflict("Plan is terminal");
+    if (input.action === "start") {
+      const [task] = await tx.select({ harnessKind: issues.harnessKind }).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, row.issueId)));
+      if (task?.harnessKind === "provider_conformance") throw forbidden("Provider conformance cannot start ordinary work");
+      if (row.executionPrincipal && ((row.executionPrincipal.type === "user" && row.executionPrincipal.userId !== v7HumanActorId(actor)) || (row.executionPrincipal.type === "system" && actor.source !== "local_implicit"))) throw forbidden("Resume must preserve the plan's initiating human authority; cancel and review a new plan to transfer it");
+      if (!["draft", "ready", "paused"].includes(row.status)) throw conflict("Plan is already started");
+      if (row.budgets.maxModelCostMinor !== null) {
+        if (actor.source === "local_implicit") throw conflict("A model-cost cap requires its initiating authenticated human");
+        await qualifyNativeDraftPlan(db, tx, row, v7HumanActorId(actor));
+      }
+      await reconcileOrchestrationAttempts(tx, row);
+      const running = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.planId, id), eq(orchestrationWorkerAttempts.status, "running")));
+      const [unsettledStop] = await tx.select({ id: supervisionInterventions.id }).from(supervisionInterventions).where(and(eq(supervisionInterventions.companyId, companyId), eq(supervisionInterventions.planId, id), sql`${supervisionInterventions.status} in ('pending','running','failed') and ${supervisionInterventions.decisionAction} in ('PAUSE','STOP','ESCALATE_HUMAN')`)).limit(1);
+      if (unsettledStop) throw conflict("Qualified Stop must reconcile before resuming");
+      if (running.length) throw conflict("Wait for existing workers to stop before resuming");
+      if (row.startedAt && Date.now() >= row.startedAt.getTime() + row.budgets.maxWallClockSeconds * 1000) throw conflict("The original plan deadline has expired");
+    }
+    const [updated] = await tx.update(orchestrationPlans).set({ status: input.action === "start" ? "running" : input.action === "pause" ? "paused" : "cancelled", version: row.version + 1,
+      executionPrincipal: input.action === "start" ? row.executionPrincipal ?? (actor.source === "local_implicit" ? { type: "system", service: "local-board" } : { type: "user", userId: v7HumanActorId(actor) }) : row.executionPrincipal,
+      startedAt: input.action === "start" ? row.startedAt ?? new Date() : row.startedAt, completedAt: input.action === "cancel" ? new Date() : null, updatedAt: new Date() }).where(eq(orchestrationPlans.id, id)).returning();
+    if (input.action === "cancel") await tx.update(orchestrationWorkers).set({ status: "cancelled", updatedAt: new Date() }).where(and(eq(orchestrationWorkers.planId, id), sql`${orchestrationWorkers.status} in ('waiting','running')`));
+    if (control) {
+      const attempts = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, id), eq(orchestrationWorkerAttempts.status, "running")));
+      await enqueueSupervisionStop(tx, updated!, { actorType: "user", actorId: v7HumanActorId(actor), rationale: input.rationale, action: input.action === "pause" ? "PAUSE" : "STOP", reasonCode: `human_${input.action}`, attemptIds: attempts.map(a => a.id) });
+    }
+    await audit(tx, actor, updated!, `orchestration.${input.action}_requested`, publications, { rationaleRecorded: Boolean(input.rationale) });
+    return updated!;
+  }
   return {
     list: async (actor: AuthorizationActor, companyId: string) => withV7ActivityTransaction(db, async tx => {
       await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
@@ -126,40 +167,12 @@ export function orchestrationService(db: Db) {
         return created!;
       });
     },
+    decideWithinTransaction,
     decide: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof orchestrationDecisionSchema>) => {
-      const input = orchestrationDecisionSchema.parse(raw); const control = input.action !== "start"; await admit(actor, companyId, db, true, control);
-      return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true, control);
-        const row = await plan(actor, companyId, id, tx, true, control);
-        if (row.version !== input.expectedVersion) throw conflict("Plan version changed; reload before deciding");
-        if (["completed", "cancelled", "failed"].includes(row.status)) throw conflict("Plan is terminal");
-        if (input.action === "start") {
-          const [task] = await tx.select({ harnessKind: issues.harnessKind }).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, row.issueId)));
-          if (task?.harnessKind === "provider_conformance") throw forbidden("Provider conformance cannot start ordinary work");
-          if (row.executionPrincipal && ((row.executionPrincipal.type === "user" && row.executionPrincipal.userId !== v7HumanActorId(actor)) || (row.executionPrincipal.type === "system" && actor.source !== "local_implicit"))) throw forbidden("Resume must preserve the plan's initiating human authority; cancel and review a new plan to transfer it");
-          if (!["draft", "ready", "paused"].includes(row.status)) throw conflict("Plan is already started");
-          if (row.budgets.maxModelCostMinor !== null) {
-            if (actor.source === "local_implicit") throw conflict("A model-cost cap requires its initiating authenticated human");
-            await qualifyNativeDraftPlan(db, tx, row, v7HumanActorId(actor));
-          }
-          await reconcileOrchestrationAttempts(tx, row);
-          const running = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.planId, id), eq(orchestrationWorkerAttempts.status, "running")));
-          const [unsettledStop] = await tx.select({ id: supervisionInterventions.id }).from(supervisionInterventions).where(and(eq(supervisionInterventions.companyId, companyId), eq(supervisionInterventions.planId, id), sql`${supervisionInterventions.status} in ('pending','running','failed') and ${supervisionInterventions.decisionAction} in ('PAUSE','STOP','ESCALATE_HUMAN')`)).limit(1);
-          if (unsettledStop) throw conflict("Qualified Stop must reconcile before resuming");
-          if (running.length) throw conflict("Wait for existing workers to stop before resuming");
-          if (row.startedAt && Date.now() >= row.startedAt.getTime() + row.budgets.maxWallClockSeconds * 1000) throw conflict("The original plan deadline has expired");
-        }
-        const [updated] = await tx.update(orchestrationPlans).set({ status: input.action === "start" ? "running" : input.action === "pause" ? "paused" : "cancelled", version: row.version + 1,
-          executionPrincipal: input.action === "start" ? row.executionPrincipal ?? (actor.source === "local_implicit" ? { type: "system", service: "local-board" } : { type: "user", userId: v7HumanActorId(actor) }) : row.executionPrincipal,
-          startedAt: input.action === "start" ? row.startedAt ?? new Date() : row.startedAt, completedAt: input.action === "cancel" ? new Date() : null, updatedAt: new Date() }).where(eq(orchestrationPlans.id, id)).returning();
-        if (input.action === "cancel") await tx.update(orchestrationWorkers).set({ status: "cancelled", updatedAt: new Date() }).where(and(eq(orchestrationWorkers.planId, id), sql`${orchestrationWorkers.status} in ('waiting','running')`));
-        if (control) {
-          const attempts = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, id), eq(orchestrationWorkerAttempts.status, "running")));
-          await enqueueSupervisionStop(tx, updated!, { actorType: "user", actorId: v7HumanActorId(actor), rationale: input.rationale, action: input.action === "pause" ? "PAUSE" : "STOP", reasonCode: `human_${input.action}`, attemptIds: attempts.map(a => a.id) });
-        }
-        await audit(tx, actor, updated!, `orchestration.${input.action}_requested`, publications, { rationaleRecorded: Boolean(input.rationale) });
-        return updated!;
-      });
+      const input = orchestrationDecisionSchema.parse(raw);
+      await admit(actor, companyId, db, true, input.action !== "start");
+      return withV7ActivityTransaction(db, (tx, publications) =>
+        decideWithinTransaction(tx, publications, actor, companyId, id, input));
     },
   };
 }

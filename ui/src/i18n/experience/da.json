@@ -254,7 +254,28 @@
     "resultEvidenceSummary_one": "Ét gemt resultat matcher den aktuelle afsluttede opgave, den gennemførte kørsel og en uafhængig menneskelig gennemgang.",
     "resultEvidenceSummary_other": "{{count}} gemte resultater matcher den aktuelle afsluttede opgave, den gennemførte kørsel og en uafhængig menneskelig gennemgang.",
     "changeSetup": "Ret opsætning",
-    "changeSetupScope": "Dit mål og dine svar om virksomheden bevares, så du kan rette dem. Eksisterende arbejde og adgang styres fortsat hver for sig."
+    "changeSetupScope": "Dit mål og dine svar om virksomheden bevares, så du kan rette dem. Eksisterende arbejde og adgang styres fortsat hver for sig.",
+    "firstTaskProgress": "Status på første opgave",
+    "openFirstTask": "Åbn den oprindelige opgave",
+    "firstTaskDispatchPending": "Den første opgave er bekræftet. Den oprindelige arbejdskø har endnu ikke bekræftet en kørsel. Tjek status, før du fortsætter.",
+    "continueFirstTask": "Fortsæt første opgave",
+    "stopFirstTask": "Stop",
+    "checkFirstTask": "Tjek status",
+    "firstTaskReviewRequired": "Et gemt output skal have en uafhængig gennemgang, før det kan blive dit første resultat.",
+    "firstTaskReview": "Tjek første opgave",
+    "firstTaskScope": "Denne forberedte opgave bruger dit bekræftede mål og den valgte agent til at lave ét internt udkast. Den kan ikke sende eksternt, forpligte penge, slette data eller udvide tilladelser.",
+    "firstTaskCompute": "Kvalificeret beregningsomkostning for denne opgave: USD 0,00.",
+    "reviewFirstTask": "Gennemgå den forberedte opgave",
+    "runFirstTask": "Kør første opgave",
+    "moreFirstTasks": "Der er flere kvalificerede opgaver. Her vises de fem nyeste.",
+    "firstTaskStatus": {
+      "running": "Den første opgave er startet.",
+      "paused": "Den første opgave er sat på pause.",
+      "completed": "Opgaven er afsluttet. Gennemgå det gemte output og den aktuelle verifikation.",
+      "cancelled": "Stop er registreret. De oprindelige arbejdskontroller håndterer annullering.",
+      "failed": "Den første opgave fejlede. Gennemgå den oprindelige opgave for at vælge næste handling.",
+      "withdrawn": "Den gemte første opgave er ikke længere tilgængelig i denne visning."
+    }
   },
   "company": {
     "title": "Virksomhed",
