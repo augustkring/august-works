@@ -13,7 +13,7 @@ import {
   isRejectedFeedbackRequest,
 } from "../api/customer-feedback";
 import { useCompany } from "../context/CompanyContext";
-import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { hasCurrentV9Session, useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import {
   feedbackClientEnvironment,
@@ -34,12 +34,16 @@ function FeedbackForm({
   accountReady,
   accountFailed,
   authorityEpoch,
+  sessionId,
+  allowLocalImplicit,
 }: {
   companyId: string;
   principal: string;
   accountReady: boolean;
   accountFailed: boolean;
   authorityEpoch: number;
+  sessionId: string | null;
+  allowLocalImplicit: boolean;
 }) {
   const { t, i18n } = useTranslation("experience"),
     location = useLocation();
@@ -48,8 +52,11 @@ function FeedbackForm({
   if (current.current.ready !== accountReady || current.current.authorityEpoch !== authorityEpoch)
     current.current = { ready: accountReady, authorityEpoch, epoch: current.current.epoch + 1 };
   const canUseContext = () => current.current.ready &&
-    client.getQueryState(queryKeys.auth.session)?.fetchStatus !== "fetching" &&
-    client.getQueryState(queryKeys.instance.experimentalSettings)?.fetchStatus !== "fetching";
+    hasCurrentV9Session(client, principal, sessionId, allowLocalImplicit) &&
+    client.getQueryState(queryKeys.instance.experimentalSettings)?.status === "success" &&
+    client.getQueryState(queryKeys.instance.experimentalSettings)?.fetchStatus === "idle" &&
+    client.getQueryState(queryKeys.instance.experimentalSettings)?.isInvalidated === false &&
+    client.getQueryData<{ customer_feedback_v9?: boolean }>(queryKeys.instance.experimentalSettings)?.customer_feedback_v9 === true;
   const [open, setOpen] = useState(false),
     [category, setCategory] =
       useState<CreateCustomerFeedback["category"]>("BUG");
@@ -432,6 +439,8 @@ export function CustomerFeedbackDialog() {
       accountReady={identity.settled && query.isSuccess && !query.isFetching}
       accountFailed={identity.failed || query.isError}
       authorityEpoch={identity.authorityEpoch}
+      sessionId={identity.sessionId}
+      allowLocalImplicit={identity.localImplicit}
     />
   ) : null;
 }

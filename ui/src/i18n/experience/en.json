@@ -401,7 +401,16 @@
     "save": "Save delivery preferences",
     "invalidTimezone": "Enter a valid timezone, such as Europe/Copenhagen.",
     "invalidQuiet": "Choose a start and end time. They must be different so email can be delivered outside quiet hours.",
-    "invalidDigest": "Choose a valid daily digest time."
+    "invalidDigest": "Choose a valid daily digest time.",
+    "updates": {
+      "heading": "Account and runtime updates",
+      "loading": "Loading updates…",
+      "empty": "You are up to date.",
+      "markRead": "Mark read",
+      "more": "Load more updates",
+      "failed": "Updates could not be loaded. Check your account and try again.",
+      "retry": "Try again"
+    }
   },
   "cardAction": {
     "review": "Review",

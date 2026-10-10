@@ -28,6 +28,7 @@ import { Textarea } from "../components/ui/textarea";
 import { CustomerFeedbackDialog } from "../components/CustomerFeedbackDialog";
 import { ActivationFirstValue } from "../components/ActivationFirstValue";
 import { SaasWelcomePage } from "./SaasWelcome";
+import { hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
 
 export function SaasWelcomeEntry() {
   const flags = useSaasCapabilities(),
@@ -64,6 +65,7 @@ export function ActivationPage() {
       companyId={selectedCompanyId}
       enabled={capabilities.data?.activationV9 === true}
       ready={!session.isFetching && !capabilities.isFetching}
+      sessionId={session.data.session.id}
     />
   );
 }
@@ -72,11 +74,13 @@ function ActivationScope({
   companyId,
   enabled,
   ready,
+  sessionId,
 }: {
   principal: string;
   companyId: string | null;
   enabled: boolean;
   ready: boolean;
+  sessionId: string;
 }) {
   const { t } = useTranslation("experience"),
     { reloadCompanies, setSelectedCompanyId } = useCompany(),
@@ -90,9 +94,9 @@ function ActivationScope({
     [unconfirmed, setUnconfirmed] = useState(false);
   // A retained same-account draft is private while current authority is checked.
   // Every transition gets a fresh read and fences acknowledgements from before it.
-  const authority = useRef({ ready, epoch: 0 });
-  if (authority.current.ready !== ready)
-    authority.current = { ready, epoch: authority.current.epoch + 1 };
+  const authority = useRef({ ready, sessionId, epoch: 0 });
+  if (authority.current.ready !== ready || authority.current.sessionId !== sessionId)
+    authority.current = { ready, sessionId, epoch: authority.current.epoch + 1 };
   const epoch = authority.current.epoch;
   const heading = useRef<HTMLHeadingElement>(null),
     error = useRef<HTMLDivElement>(null);
@@ -114,14 +118,22 @@ function ActivationScope({
   // session state. Consult the original query cache at the transport boundary.
   const canUseAuthority = () =>
     authority.current.ready &&
-    client.getQueryState(queryKeys.auth.session)?.fetchStatus !== "fetching" &&
-    client.getQueryState(["saas-capabilities"])?.fetchStatus !== "fetching";
+    hasCurrentV9Session(client, principal, sessionId) &&
+    client.getQueryState(["saas-capabilities"])?.status === "success" &&
+    client.getQueryState(["saas-capabilities"])?.fetchStatus === "idle" &&
+    client.getQueryState(["saas-capabilities"])?.isInvalidated === false;
+  const canWriteAuthority = () => canUseAuthority() &&
+    client.getQueryData<{ activationV9?: boolean }>(["saas-capabilities"])?.activationV9 === true;
   const key = ["activation", companyId, principal, epoch];
   const run = useQuery({
     queryKey: key,
-    queryFn: ({ signal }) => {
+    queryFn: async ({ signal }) => {
       if (!canUseAuthority()) throw new Error("Activation context changed");
-      return activationApi.get(companyId!, principal, signal);
+      const attemptEpoch = authority.current.epoch;
+      const result = await activationApi.get(companyId!, principal, signal);
+      if (!canUseAuthority() || authority.current.epoch !== attemptEpoch)
+        throw new Error("Activation context changed during the read");
+      return result;
     },
     enabled: ready && !!companyId,
     staleTime: 0,
@@ -169,7 +181,7 @@ function ActivationScope({
   }, [screen]);
   const create = useMutation({
     mutationFn: async () => {
-      if (!canUseAuthority())
+      if (!canWriteAuthority())
         throw new Error("Activation context changed");
       const attemptEpoch = authority.current.epoch;
       setUnconfirmed(false);
@@ -188,7 +200,7 @@ function ActivationScope({
     onSuccess: async ({ result, attemptEpoch }) => {
       if (!alive.current) return;
       if (
-        !canUseAuthority() ||
+        !canWriteAuthority() ||
         authority.current.epoch !== attemptEpoch
       ) {
         setUnconfirmed(true);
@@ -196,7 +208,7 @@ function ActivationScope({
       }
       await reloadCompanies();
       if (
-        !canUseAuthority() ||
+        !canWriteAuthority() ||
         authority.current.epoch !== attemptEpoch
       ) {
         if (alive.current) setUnconfirmed(true);
@@ -210,7 +222,7 @@ function ActivationScope({
   });
   const command = useMutation({
     mutationFn: async (input: ActivationCommand) => {
-      if (!canUseAuthority())
+      if (!canWriteAuthority())
         throw new Error("Activation context changed");
       const attemptEpoch = authority.current.epoch;
       setUnconfirmed(false);
@@ -232,7 +244,7 @@ function ActivationScope({
     }) => {
       if (!alive.current) return;
       if (
-        !canUseAuthority() ||
+        !canWriteAuthority() ||
         authority.current.epoch !== attemptEpoch
       ) {
         setUnconfirmed(true);

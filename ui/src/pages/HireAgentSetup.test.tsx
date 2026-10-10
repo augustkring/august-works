@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import { act, StrictMode, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -76,6 +77,8 @@ async function mount(step = "hire_access", enabled = true) {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
+  client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+  client.setQueryData(queryKeys.auth.session, v9SessionFixture("author"));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -339,7 +342,7 @@ it("hides a private setup through the account recheck and resumes its unsaved na
   get.mockImplementation(() => new Promise((resolve) => { releaseRead = resolve; }));
   let releaseSession!: () => void;
   await act(async () => { void client.fetchQuery({ queryKey: queryKeys.auth.session,
-    queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {}); });
+    queryFn: () => new Promise<ReturnType<typeof v9SessionFixture>>((resolve) => { releaseSession = () => resolve(v9SessionFixture("author")); }) }).catch(() => {}); });
   await vi.waitFor(() => expect(container.querySelector("input,textarea")).toBeNull());
   expect(container.textContent).not.toContain("PRIVATE"); expect(releaseRead).toBeUndefined();
   await act(async () => releaseSession());
@@ -356,7 +359,7 @@ it("never sends a same-turn discard while the original session query is fetching
   let releaseSession!: () => void;
   await act(async () => {
     void client.fetchQuery({ queryKey: queryKeys.auth.session,
-      queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {});
+      queryFn: () => new Promise<ReturnType<typeof v9SessionFixture>>((resolve) => { releaseSession = () => resolve(v9SessionFixture("author")); }) }).catch(() => {});
     button.click();
   });
   expect(discard).not.toHaveBeenCalled(); expect(container.querySelector("input")).toBeNull();

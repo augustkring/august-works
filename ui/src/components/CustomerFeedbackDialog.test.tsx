@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
+import { queryKeys } from "../lib/queryKeys";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -56,6 +58,10 @@ async function mount() {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
+  client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+  client.setQueryData(queryKeys.auth.session, v9SessionFixture(identityState.principal));
+  client.setQueryDefaults(queryKeys.instance.experimentalSettings, { gcTime: Infinity });
+  client.setQueryData(queryKeys.instance.experimentalSettings, { customer_feedback_v9: true });
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -239,8 +245,17 @@ async function sessionRecheck() {
   // Query notifications are batched outside React's act. Wait for the real
   // pending-state render before resolving the fixture or changing its account.
   await vi.waitFor(() => expect([...document.querySelectorAll("button")].find(button => button.textContent === "Feedback")?.disabled).toBe(true));
-  return async () => { await act(async () => { resolve({}); await pending; }); };
+  return async () => { await act(async () => { resolve(v9SessionFixture(identityState.principal)); await pending; }); };
 }
+it("blocks feedback before transport when the completed session cache already changed account", async () => {
+  const post = vi.spyOn(customerFeedbackApi, "create");
+  await mount(); await enter("Private submitted feedback");
+  await act(async () => {
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("different-current-account"));
+    document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  expect(post).not.toHaveBeenCalled();
+});
 it("hides a same-account draft during a real session recheck and preserves it only for that account", async () => {
   const post = vi.spyOn(customerFeedbackApi, "create");
   await mount();await enter("PRIVATE-UNSENT-FEEDBACK");
@@ -299,6 +314,6 @@ it("blocks a same-turn submit before React observes the session fetch", async ()
     document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
   expect(post).not.toHaveBeenCalled();
-  await act(async () => { resolve({});await pending; });
+  await act(async () => { resolve(v9SessionFixture(identityState.principal));await pending; });
   await vi.waitFor(() => expect(document.querySelector("textarea")?.value).toBe(accepted.body));
 });

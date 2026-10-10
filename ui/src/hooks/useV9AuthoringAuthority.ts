@@ -4,7 +4,7 @@ import { v9FeatureEnabled } from "@paperclipai/shared";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { useCompany } from "../context/CompanyContext";
 import { queryKeys } from "../lib/queryKeys";
-import { useV9CurrentAccount } from "./useV9CurrentAccount";
+import { hasCurrentV9Session, useV9CurrentAccount } from "./useV9CurrentAccount";
 
 /** Authoring drafts retain their original owners. A cached session or rollout
  * cannot admit a read/write or certify an acknowledgement across a recheck. */
@@ -28,9 +28,14 @@ export function useV9AuthoringAuthority(company: string, principal: string) {
   }
   const acknowledgements = useRef(new WeakMap<object, { epoch: number; requiresRollout: boolean }>());
   const canRead = () => context.current.readReady &&
-    client.getQueryState(queryKeys.auth.session)?.fetchStatus !== "fetching" &&
-    client.getQueryState(queryKeys.instance.experimentalSettings)?.fetchStatus !== "fetching";
-  const canWrite = () => canRead() && context.current.writeReady;
+    hasCurrentV9Session(client, principal, identity.sessionId) &&
+    client.getQueryState(queryKeys.instance.experimentalSettings)?.status === "success" &&
+    client.getQueryState(queryKeys.instance.experimentalSettings)?.fetchStatus === "idle" &&
+    client.getQueryState(queryKeys.instance.experimentalSettings)?.isInvalidated === false;
+  const canWrite = () => {
+    const currentFlags = client.getQueryData<Awaited<ReturnType<typeof instanceSettingsApi.getExperimental>>>(queryKeys.instance.experimentalSettings);
+    return canRead() && context.current.writeReady && !!currentFlags && v9FeatureEnabled(currentFlags, "hire_agent_v9");
+  };
   async function mutation<T extends object>(operation: () => Promise<T>, requiresRollout: boolean): Promise<T> {
     const admitted = () => requiresRollout ? canWrite() : canRead();
     if (!admitted()) throw new Error("Current authoring access is unresolved");

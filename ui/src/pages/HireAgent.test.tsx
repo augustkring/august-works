@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import { act, StrictMode, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -69,6 +70,8 @@ async function mount(path = "/AW/agents/hire") {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
+  client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+  client.setQueryData(queryKeys.auth.session, v9SessionFixture(context.principal));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -270,7 +273,7 @@ it("withholds a late setup acknowledgement across an account recheck and retains
   const input = structuredClone(create.mock.calls[0]![2]);
   let releaseSession!: () => void;
   await act(async () => { void client.fetchQuery({ queryKey: queryKeys.auth.session,
-    queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {}); });
+    queryFn: () => new Promise<ReturnType<typeof v9SessionFixture>>((resolve) => { releaseSession = () => resolve(v9SessionFixture(context.principal)); }) }).catch(() => {}); });
   await vi.waitFor(() => expect(container.textContent).not.toContain(capability.name));
   await act(async () => releaseSession());
   await vi.waitFor(() => expect(container.textContent).toContain(capability.name));

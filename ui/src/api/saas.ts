@@ -278,6 +278,7 @@ export const saasApi = {
     companyId: string,
     userId: string,
     cursor: string | null,
+    signal?: AbortSignal,
   ) =>
     api.get<{ items: SaasNotification[]; nextCursor: string | null }>(
       scoped(
@@ -286,6 +287,7 @@ export const saasApi = {
           (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""),
         userId,
       ),
+      { signal, cache: "no-store" },
     ),
   readNotification: (companyId: string, userId: string, id: string) =>
     api.patch<SaasNotification>(

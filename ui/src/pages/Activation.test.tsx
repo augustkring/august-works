@@ -12,6 +12,7 @@ import { authApi } from "../api/auth";
 import { activationApi } from "../api/activation";
 import { i18n } from "../i18n";
 import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import {
   initialActivationState,
   type ActivationView,
@@ -74,6 +75,10 @@ async function mount(data: ActivationView, route = "/saas/activation/3") {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
+  // The capability observer is mocked; seed its original cache owner as well
+  // so transport/acknowledgement checks see the same successful Native read.
+  client.setQueryDefaults(["saas-capabilities"], { gcTime: Infinity });
+  client.setQueryData(["saas-capabilities"], { activationV9: true });
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -140,6 +145,32 @@ async function enter(text: string) {
   });
 }
 describe("Native V9 onboarding UI", () => {
+  it("does not submit retained onboarding fields after the original session cache changes account", async () => {
+    const mutate = vi.spyOn(activationApi, "command");
+    await mount(view());
+    await vi.waitFor(() => expect(container.querySelector("textarea")).toBeTruthy());
+    await enter("Private retained intent");
+    const button = [...container.querySelectorAll("button")].find(item => item.textContent === "Save & exit")!;
+    await act(async () => {
+      client.setQueryData(queryKeys.auth.session, v9SessionFixture("other-current-owner"));
+      button.click();
+    });
+    expect(mutate).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("Saved exit destination");
+  });
+  it("does not submit retained onboarding fields after rollout was withdrawn in the original cache", async () => {
+    const mutate = vi.spyOn(activationApi, "command");
+    await mount(view());
+    await vi.waitFor(() => expect(container.querySelector("textarea")).toBeTruthy());
+    await enter("Private retained intent");
+    const button = [...container.querySelectorAll("button")].find(item => item.textContent === "Save & exit")!;
+    await act(async () => {
+      client.setQueryData(["saas-capabilities"], { activationV9: false });
+      button.click();
+    });
+    expect(mutate).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("Saved exit destination");
+  });
   it("returns to editable preserved answers only after the original setup-correction receipt", async () => {
     const ready = view("review");
     ready.state.intent = "Private first goal";ready.state.companyPurpose = "Private company answers";

@@ -401,7 +401,16 @@
     "save": "Gem leveringspræferencer",
     "invalidTimezone": "Indtast en gyldig tidszone, f.eks. Europe/Copenhagen.",
     "invalidQuiet": "Vælg et start- og sluttidspunkt. De skal være forskellige, så e-mail kan leveres uden for stilleperioden.",
-    "invalidDigest": "Vælg et gyldigt tidspunkt for den daglige opsummering."
+    "invalidDigest": "Vælg et gyldigt tidspunkt for den daglige opsummering.",
+    "updates": {
+      "heading": "Opdateringer om konto og drift",
+      "loading": "Henter opdateringer…",
+      "empty": "Du er opdateret.",
+      "markRead": "Markér som læst",
+      "more": "Hent flere opdateringer",
+      "failed": "Opdateringerne kunne ikke hentes. Kontrollér din konto og prøv igen.",
+      "retry": "Prøv igen"
+    }
   },
   "cardAction": {
     "review": "Gennemgå",

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -99,6 +100,8 @@ async function mount(start = false) {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
+  client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+  client.setQueryData(queryKeys.auth.session, v9SessionFixture(context.principal));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -270,6 +273,7 @@ it("clears the old editor and scopes the new request when the account changes", 
   await mount();
   await enter("Private unsaved work");
   context.principal = "other-member";
+  client.setQueryData(queryKeys.auth.session, v9SessionFixture(context.principal));
   get.mockRejectedValue(new ApiError("Draft not found", 404, {}));
   await render();
   await vi.waitFor(() =>
@@ -286,7 +290,7 @@ it("hides a same-account unsaved draft until both the session and a fresh native
   get.mockImplementation(() => new Promise((resolve) => { releaseRead = resolve; }));
   let releaseSession!: () => void;
   await act(async () => { void client.fetchQuery({ queryKey: queryKeys.auth.session,
-    queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {}); });
+    queryFn: () => new Promise<ReturnType<typeof v9SessionFixture>>((resolve) => { releaseSession = () => resolve(v9SessionFixture(context.principal)); }) }).catch(() => {}); });
   await vi.waitFor(() => expect(container.querySelector("input,textarea")).toBeNull());
   expect(container.textContent).not.toContain("PRIVATE"); expect(releaseRead).toBeUndefined();
   await act(async () => releaseSession());
@@ -303,11 +307,36 @@ it("fences a same-turn save and never sends it while the original session query 
   let releaseSession!: () => void;
   await act(async () => {
     void client.fetchQuery({ queryKey: queryKeys.auth.session,
-      queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {});
+      queryFn: () => new Promise<ReturnType<typeof v9SessionFixture>>((resolve) => { releaseSession = () => resolve(v9SessionFixture(context.principal)); }) }).catch(() => {});
     button.click();
   });
   expect(save).not.toHaveBeenCalled(); await vi.waitFor(() => expect(container.querySelector("input")).toBeNull());
   await act(async () => releaseSession());
+});
+
+it("blocks a same-turn save when the completed original session already belongs to another account", async () => {
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  const save = vi.spyOn(agentAuthoringApi, "save").mockResolvedValue(draft);
+  await mount();
+  const button = Array.from(container.querySelectorAll("button")).find((value) => value.textContent === "Continue")!;
+  await act(async () => {
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("different-current-account"));
+    button.click();
+  });
+  expect(save).not.toHaveBeenCalled();
+});
+
+it("blocks a same-turn save after completed rollout withdrawal instead of using the previous rendered flag", async () => {
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  const save = vi.spyOn(agentAuthoringApi, "save").mockResolvedValue(draft);
+  await mount();
+  const button = Array.from(container.querySelectorAll("button")).find((value) => value.textContent === "Continue")!;
+  const flags = client.getQueryData(queryKeys.instance.experimentalSettings) as Record<string, unknown>;
+  await act(async () => {
+    client.setQueryData(queryKeys.instance.experimentalSettings, { ...flags, hire_agent_v9: false });
+    button.click();
+  });
+  expect(save).not.toHaveBeenCalled();
 });
 it("keeps a late save unconfirmed after a completed account recheck and retries only its original body", async () => {
   vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
@@ -320,7 +349,7 @@ it("keeps a late save unconfirmed after a completed account recheck and retries 
   const input = structuredClone(save.mock.calls[0]![3]);
   let releaseSession!: () => void;
   await act(async () => { void client.fetchQuery({ queryKey: queryKeys.auth.session,
-    queryFn: () => new Promise<null>((resolve) => { releaseSession = () => resolve(null); }) }).catch(() => {}); });
+    queryFn: () => new Promise<ReturnType<typeof v9SessionFixture>>((resolve) => { releaseSession = () => resolve(v9SessionFixture(context.principal)); }) }).catch(() => {}); });
   await vi.waitFor(() => expect(container.querySelector("input")).toBeNull());
   await act(async () => releaseSession());
   await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
