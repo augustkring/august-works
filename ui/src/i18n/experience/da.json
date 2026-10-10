@@ -82,7 +82,7 @@
     },
     "blocksWork": "Dette forhindrer mig i at færdiggøre mit arbejde",
     "context": "Medtages automatisk",
-    "contextDetails": "Virksomhed, sidekategori, udgivelsesversion, tidspunkt, sprog, tidszone og skærmstørrelseskategori. Ingen sidetekst, URL-parametre, prompts, output eller automatiske skærmbilleder.",
+    "contextDetails": "Virksomhed, sidekategori og genkendt skærm, produktversioner, tidspunkt, sprog, tidszone, visningskategori, oplyst browser- og styresystemnavn med hovedversion samt relevante aktive produktfunktioner. Oplyste detaljer kan afvige fra den aktuelle enhed. Ingen sidetekst, URL-parametre, prompts, outputs eller automatiske skærmbilleder.",
     "diagnostics": "Medtag teknisk diagnostik",
     "diagnosticsEmpty": "Der er ikke indsamlet teknisk diagnostik til denne rapport. Hvis du vælger denne mulighed, sendes en tom diagnostikpakke. Logs, beskeder og skærmbilleder indsamles ikke.",
     "omitName": "Medtag ikke mit navn i denne feedback",

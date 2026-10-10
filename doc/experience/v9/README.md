@@ -17,3 +17,7 @@ See [architecture decisions](../../adr/V9-ARCHITECTURE-DECISIONS.md),
 [implementation ledger](../../plans/2026-10-09-aw-v9-build.md) and
 [source readiness](../../../evals/aw-v9/readiness.json). Operator activation and
 hosted qualification remain separate from source coverage.
+
+The [support and recovery runbook](support-readiness.md) records the confirmed
+contact destinations, original support controls, diagnostic limits and unresolved
+operating acceptance. It does not declare public support or V9 launch readiness.

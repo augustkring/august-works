@@ -109,6 +109,11 @@ describe("feedback consent and canonical receipt", () => {
     expect(document.querySelector('[role="dialog"]')).toBeTruthy();
   });
   it("preserves draft on close/failure, retries the same payload and omits raw page context", async () => {
+    const reported = vi
+      .spyOn(navigator, "userAgent", "get")
+      .mockReturnValue(
+        "private-ua-canary Mozilla/5.0 (Windows NT 10.0) Chrome/143.0 Safari/537.36",
+      );
     const save = vi
       .spyOn(customerFeedbackApi, "create")
       .mockRejectedValueOnce(new Error("Lost acknowledgement"))
@@ -135,11 +140,18 @@ describe("feedback consent and canonical receipt", () => {
     await enter("An edit must not replace the unacknowledged request");
     expect(document.querySelector("textarea")!.value).toBe(accepted.body);
     expect(first.context.surfaceKey).toBe("needs_you");
+    expect(first.context.screenContractId).toBe("NEEDS-YOU");
+    expect(first.context.clientEnvironment?.browser).toEqual({
+      family: "chrome",
+      majorVersion: 143,
+    });
+    expect(JSON.stringify(first)).not.toContain("private-ua-canary");
     expect(first.includeDiagnostics).toBe(false);
     expect(first).not.toHaveProperty("diagnostics");
     expect(JSON.stringify(first)).not.toContain("private-query");
     expect(JSON.stringify(first)).not.toContain("private-fragment");
     await click("Cancel");
+    reported.mockReturnValue("Firefox/144.0 private-new-ua");
     expect(document.activeElement?.textContent).toBe("Feedback");
     await click("Feedback");
     expect(document.querySelector("textarea")!.value).toBe(accepted.body);

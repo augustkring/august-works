@@ -14,6 +14,10 @@ import {
 import { useCompany } from "../context/CompanyContext";
 import { useAccountIdentity } from "../api/companies-query";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
+import {
+  feedbackClientEnvironment,
+  feedbackPageContext,
+} from "../lib/feedback-safe-context";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import {
@@ -23,27 +27,6 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 
-function surface(
-  path: string,
-): CreateCustomerFeedback["context"]["surfaceKey"] {
-  const segments = path.split("/");
-  if (segments.includes("dashboard")) return "home";
-  if (segments.includes("needs-you") || segments.includes("decisions"))
-    return "needs_you";
-  if (segments.includes("agents")) return "agents";
-  if (segments.includes("apps")) return "apps";
-  if (
-    segments.includes("welcome") ||
-    segments.includes("onboarding") ||
-    segments.includes("activation")
-  )
-    return "onboarding";
-  if (segments.includes("workflows") || segments.includes("orchestration"))
-    return "workflow";
-  if (segments.includes("settings")) return "company";
-  if (segments.includes("issues") || segments.includes("work")) return "work";
-  return "other";
-}
 function FeedbackForm({
   companyId,
   principal,
@@ -93,7 +76,13 @@ function FeedbackForm({
           ? document.activeElement
           : null;
     setContext({
-      surfaceKey: surface(location.pathname),
+      ...feedbackPageContext(location.pathname),
+      clientEnvironment: feedbackClientEnvironment(navigator.userAgent),
+      clientReleaseBuildId:
+        typeof __PAPERCLIP_BUILD_COMMIT__ === "string" &&
+        /^[a-f0-9]{40}$/.test(__PAPERCLIP_BUILD_COMMIT__)
+          ? __PAPERCLIP_BUILD_COMMIT__
+          : null,
       locale: i18n.resolvedLanguage ?? "en",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       viewportClass:

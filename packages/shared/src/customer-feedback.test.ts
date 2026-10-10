@@ -15,6 +15,54 @@ const base = {
   },
 };
 describe("customer feedback privacy contract", () => {
+  it("retains the old immutable payload shape and admits only bounded reported environment and matching screen categories", () => {
+    const legacy = createCustomerFeedbackSchema.parse(base);
+    expect(legacy.context).toEqual(base.context);
+    const context = {
+      ...base.context,
+      screenContractId: "HOME",
+      clientReleaseBuildId: "a".repeat(40),
+      clientEnvironment: {
+        source: "reported_user_agent",
+        browser: { family: "chrome", majorVersion: 143 },
+        operatingSystem: { family: "windows", majorVersion: 10 },
+      },
+    };
+    expect(
+      createCustomerFeedbackSchema.safeParse({ ...base, context }).success,
+    ).toBe(true);
+    for (const patch of [
+      { screenContractId: "SUPPORT-ACCESS" },
+      { screenContractId: "private-screen-id" },
+      { userAgent: "private-ua" },
+      { relevantFeatureFlagIds: ["customer_feedback_v9"] },
+      { clientReleaseBuildId: "private-release" },
+      {
+        clientEnvironment: {
+          ...context.clientEnvironment,
+          rawUserAgent: "private-ua",
+        },
+      },
+      {
+        clientEnvironment: {
+          ...context.clientEnvironment,
+          browser: { family: "unknown", majorVersion: 143 },
+        },
+      },
+      {
+        clientEnvironment: {
+          ...context.clientEnvironment,
+          browser: { family: "chrome", majorVersion: 1000 },
+        },
+      },
+    ])
+      expect(
+        createCustomerFeedbackSchema.safeParse({
+          ...base,
+          context: { ...context, ...patch },
+        }).success,
+      ).toBe(false);
+  });
   it("rejects unexpected content and unsafe diagnostics even with diagnostics selected", () => {
     expect(
       createCustomerFeedbackSchema.safeParse({

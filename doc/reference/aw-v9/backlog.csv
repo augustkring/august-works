@@ -97,7 +97,7 @@ V9-095,2345,hosted starter-compute experiment (only after V6/V7 gates),not_start
 V9-096,2347,live managed-agent activation qualification,not_started
 V9-097,2349,live channel notification/approval qualification,not_started
 V9-098,2351,enterprise admin/accessibility qualification,not_started
-V9-099,2353,customer support readiness + runbook,not_started
+V9-099,2353,customer support readiness + runbook,in_progress
 V9-100,2355,V2 assurance evidence baseline + legacy cleanup prerequisites,not_started
 V9-101,2362,Screen Contract schema + coverage manifest + CI completeness check,in_progress
 V9-102,2364,"canonical profile navigation + shell utility area (`Ask August`, `Feedback`, help/profile) + responsive adaptation",in_progress

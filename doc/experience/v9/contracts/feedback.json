@@ -2,23 +2,34 @@
   "screenId": "FEEDBACK",
   "journeyId": "feedback",
   "routeOrSurface": "Persistent global Feedback dialog",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Submit a private product report with clear disclosure and a durable server-confirmed receipt.",
   "entryConditions": [
-    "Current authenticated principal and company selection; no retained foreign-principal payload",
-    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+    "Current settled board identity and selected company; the feedback form is keyed by company and principal and does not retain foreign drafts.",
+    "Effective customer_feedback_v9 enables new submissions; original domain membership, company availability and request abuse admission remain necessary."
   ],
   "exitConditions": [
-    "Only a canonical server-confirmed result permits a success claim",
-    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+    "A validated canonical server receipt confirms acceptance. An unconfirmed request keeps its original key, payload and context.",
+    "Closing preserves the current in-memory form while mounted. A confirmed new report resets it; company/account withdrawal unmounts it."
   ],
   "content": {
-    "h1": "Share feedback",
-    "supportingCopy": "Submit a private product report with clear disclosure and a durable server-confirmed receipt.",
-    "customerTerms": ["Company", "Work", "Needs You", "Agent", "Feedback"],
+    "h1": "Share feedback (named native dialog; the enclosing page retains its heading)",
+    "supportingCopy": "Tell us what went wrong or what would make August Works better. This is not monitored for urgent support.",
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
     "displayedState": [
-      "Current canonical state/version",
-      "Missing permission or qualification is explicit; no invented progress or outcomes"
+      "Category-specific question and optional goal, included-context disclosure, explicit diagnostics/name choices, unavailable image status and fixed support/security/privacy links.",
+      "Pending/unconfirmed submission disables input edits; only an accepted canonical receipt displays the feedback reference."
     ]
   },
   "inputs": [
@@ -89,9 +100,9 @@
       "operation": "Submit the exact frozen request; retry only with its original key and payload"
     },
     "secondary": [
-      "Back preserves current valid inputs",
-      "Cancel / close restores the invoking control",
-      "Retry only the same safe request; refresh current state after a version conflict"
+      "Cancel or close preserves the mounted draft and restores the invoking control.",
+      "Retry an unconfirmed submission with its exact original key and payload; a canonical validation refusal allows correction with a new key.",
+      "View accepted feedback through My feedback; use separate confirmed support/security/privacy mailto links without prefilled report data."
     ],
     "destructiveOrIrreversible": []
   },
@@ -102,37 +113,37 @@
       "Startup-owned strict references for all six Privacy policy purposes; declared references remain execution-unqualified and cannot enable GA."
     ],
     "canonicalWriteOperation": "POST canonical Customer Feedback with immutable body/goal and explicit disclosure choices, company membership, durable request key and abuse limit.",
-    "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
-    "asyncWork": "Native reads/mutations only; projection work uses bounded admission and a 1500 ms total deadline. Unknown mutation outcomes retain the original request key for reconciliation.",
-    "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
+    "authorityEffect": "Only the canonical feedback owner can accept a submission. No tool/provider/agent effect or permission expansion is caused by feedback content.",
+    "asyncWork": "Explicit submission only, with original native idempotency, current membership and transactional rollout admission. Original limit is twenty requests per principal/company in ten minutes. No automatic retry or report send occurs.",
+    "receipt": "Server-accepted AWF reference. The form never claims acceptance for a lost acknowledgement; private My feedback is separately owned by the same current account."
   },
   "states": {
-    "loading": "Announce loading only while the current identity/company request is pending.",
-    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
-    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
-    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
-    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
-    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
-    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
-    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
-    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+    "loading": "The global trigger waits for settled identity and admission; a pending submission disables form edits and announces sending.",
+    "empty": "A new mounted form has BUG selected and empty body/goal; diagnostics and omit-name are off.",
+    "partial": "Images are explicitly unavailable; optional diagnostics are disclosed as empty. The remaining form can submit through current native admission.",
+    "stale": "Account/company withdrawal removes the keyed form and retained private draft. An unconfirmed submitted snapshot is not recomputed when the dialog reopens.",
+    "validation_error": "Keep entered text; HTML/native bounded category/body/goal validation and canonical rejection allow correction with a new request key.",
+    "system_error": "Fixed translated acknowledgement-unconfirmed copy retains and locks the original payload. Raw exceptions never enter the dialog.",
+    "permission_denied": "Current native membership/company or rollout refusal cannot create a successful receipt or broaden access.",
+    "recovering": "Retry only the retained original submission. Context, disclosure choices and request key stay immutable until a canonical response.",
+    "success": "Show the canonical accepted AWF reference and link to My feedback; do not equate product feedback with urgent support or security incident handling."
   },
   "navigation": {
-    "back": "Browser and product Back preserve session form state without recreating organizations, agents or runs.",
-    "cancelOrSaveExit": "No input is written to browser persistent storage; committed activation drafts remain in the native onboarding owner.",
-    "deepLink": "Persistent global Feedback dialog",
-    "resume": "Refresh current native state and resume the first incomplete material step; stale steps cannot override it."
+    "back": "The enclosing page remains the navigation context. Closing/reopening within the mounted account/company preserves entered feedback.",
+    "cancelOrSaveExit": "Cancel/close returns focus to the connected invoking control. Drafts and diagnostics are never written to persistent browser storage.",
+    "deepLink": "Global feedback trigger; accepted history uses the existing private My feedback route.",
+    "resume": "An unconfirmed mounted submission retries its original immutable key/payload. Durable cross-reload draft/reconciliation UX still requires separate implementation and acceptance."
   },
   "accessibility": {
-    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
-    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
-    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "initialFocus": "Native named dialog opens on the labeled category control; the dialog container is not an ordinary focus target.",
+    "focusAfterError": "Fixed submission error announcement receives focus; field validation preserves other text.",
+    "focusAfterSuccess": "Accepted receipt receives focus; Close returns to the invoking control.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
     "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
-    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+    "screenReaderNotes": "Named dialog with category-specific labels, associated disclosure/diagnostic help, fixed error/status and native modal focus containment. The parent retains its main landmark."
   },
   "responsive": {
     "wide": "Readable constrained content width with natural wrapping.",
@@ -145,10 +156,12 @@
       "Feedback original text and visible messages only in private customer history"
     ],
     "dataCollected": [
-      "Only explicit fields and the published safe-context allowlist"
+      "Customer-entered feedback and optional goal; current company/private account ownership under the canonical feedback domain.",
+      "Safe page category and recognized static screen ID; locale, timezone and viewport category; reported browser/OS family and major version only; client/server build references and server-owned relevant effective feature IDs.",
+      "Optional diagnostics remain an explicit empty safe-code/correlation bundle in this dialog. No raw user-agent string, query/fragment, page text, prompts, outputs, logs, form values, automatic screenshots or fingerprint/client-hint requests."
     ],
     "sensitiveFields": [
-      "Raw intent, company facts, feedback and results remain customer data"
+      "Feedback body/goal, optional name, protected private account link and reported metadata remain customer data. No-name is not an anonymity claim."
     ],
     "loggingConstraints": "Exclude customer prose, prompts, result bodies, attachments and raw errors from generic analytics/activity details; native domain audit is purpose-separated. Startup parser errors omit private configuration; the public no-store policy DTO excludes owner identity and policy refs."
   },
@@ -164,14 +177,16 @@
   },
   "acceptance": {
     "functional": [
-      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+      "Verify submit/replay/concurrent requests, lost-ACK immutable context, canonical refusal/correction, scope withdrawal, new-work rollout, retained private history and separate support/security/privacy destinations on the exact artifact.",
+      "Protected image/scanner, qualified diagnostics, durable reload draft/reconciliation, retention/DSR/legal hold and complete closure remain pending."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
     ],
     "securityPrivacy": [
       "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose.",
-      "Refuse GA for missing required Privacy policy references and for complete declarations without qualified native policy execution; partial/numeric/unknown declarations cannot silently choose legal periods."
+      "Refuse GA for missing required Privacy policy references and for complete declarations without qualified native policy execution; partial/numeric/unknown declarations cannot silently choose legal periods.",
+      "Reject unknown/raw environment fields, mismatched screen category and forged server feature IDs. Preserve old request hashes and the original accepted metadata across retries and rollout changes."
     ],
     "usability": [
       "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."

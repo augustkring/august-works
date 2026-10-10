@@ -54,6 +54,80 @@ export const feedbackSurfaceSchema = z.enum([
   "support",
   "other",
 ]);
+// Reported presentation metadata, never authorization or proof of client state.
+export const feedbackClientEnvironmentSchema = z
+  .strictObject({
+    source: z.literal("reported_user_agent"),
+    browser: z.strictObject({
+      family: z.enum([
+        "edge",
+        "opera",
+        "chrome",
+        "chromium",
+        "firefox",
+        "safari",
+        "unknown",
+      ]),
+      majorVersion: z.number().int().min(1).max(999).nullable(),
+    }),
+    operatingSystem: z.strictObject({
+      family: z.enum([
+        "windows",
+        "android",
+        "ios",
+        "macos",
+        "chromeos",
+        "linux",
+        "unknown",
+      ]),
+      majorVersion: z.number().int().min(1).max(999).nullable(),
+    }),
+  })
+  .superRefine((value, ctx) => {
+    for (const key of ["browser", "operatingSystem"] as const)
+      if (value[key].family === "unknown" && value[key].majorVersion !== null)
+        ctx.addIssue({
+          code: "custom",
+          path: [key, "majorVersion"],
+          message: "Unknown family has no reported version",
+        });
+  });
+export const FEEDBACK_CONTEXT_FEATURE_IDS = [
+  "experience_projection_v9",
+  "progressive_shell_v9",
+  "home_v9",
+  "customer_feedback_v9",
+  "activation_v9",
+  "hire_agent_v9",
+  "ambient_commands_v9",
+] as const;
+export const feedbackContextScreenSchema = z.enum([
+  "HOME",
+  "NEEDS-YOU",
+  "WORK",
+  "APPS",
+  "COMPANY",
+  "WORKFLOW",
+  "AGENT-MONITOR",
+  "MY-FEEDBACK",
+  "SUPPORT-ACCESS",
+  "SETTINGS-GENERAL",
+]);
+const contextScreenSurfaces: Record<
+  z.infer<typeof feedbackContextScreenSchema>,
+  z.infer<typeof feedbackSurfaceSchema>
+> = {
+  HOME: "home",
+  "NEEDS-YOU": "needs_you",
+  WORK: "work",
+  APPS: "apps",
+  COMPANY: "company",
+  WORKFLOW: "workflow",
+  "AGENT-MONITOR": "agents",
+  "MY-FEEDBACK": "other",
+  "SUPPORT-ACCESS": "support",
+  "SETTINGS-GENERAL": "company",
+};
 export const feedbackContextSchema = z.strictObject({
   surfaceKey: feedbackSurfaceSchema,
   locale: z
@@ -72,6 +146,14 @@ export const feedbackContextSchema = z.strictObject({
       }
     }),
   viewportClass: z.enum(["compact", "medium", "wide"]),
+  // Optional preserves old immutable request hashes during an upgrade/retry.
+  screenContractId: feedbackContextScreenSchema.optional(),
+  clientEnvironment: feedbackClientEnvironmentSchema.optional(),
+  clientReleaseBuildId: z
+    .string()
+    .regex(/^[a-f0-9]{40}$/)
+    .nullable()
+    .optional(),
 });
 export const feedbackDiagnosticsSchema = z.strictObject({
   safeErrorCodes: z
@@ -99,6 +181,16 @@ export const createCustomerFeedbackSchema = z
     diagnostics: feedbackDiagnosticsSchema.optional(),
   })
   .superRefine((value, ctx) => {
+    if (
+      value.context.screenContractId &&
+      contextScreenSurfaces[value.context.screenContractId] !==
+        value.context.surfaceKey
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["context", "screenContractId"],
+        message: "Screen category does not match",
+      });
     if (value.diagnostics && !value.includeDiagnostics)
       ctx.addIssue({
         code: "custom",
@@ -192,9 +284,14 @@ export const feedbackInternalDetailSchema = customerFeedbackSchema
           "/saas/activation/:screen",
           "/workflows",
           "/company/settings/support",
+          "/company/support-access",
         ])
         .nullable(),
       releaseBuildId: z.string().min(1).max(200),
+      relevantFeatureFlagIds: z
+        .array(z.enum(FEEDBACK_CONTEXT_FEATURE_IDS))
+        .max(FEEDBACK_CONTEXT_FEATURE_IDS.length)
+        .optional(),
     }),
     diagnostics: feedbackDiagnosticsSchema.nullable(),
     events: z
@@ -213,6 +310,16 @@ export const feedbackInternalDetailSchema = customerFeedbackSchema
     nextEventCursor: z.uuid().nullable(),
   })
   .superRefine((value, ctx) => {
+    if (
+      value.context.screenContractId &&
+      contextScreenSurfaces[value.context.screenContractId] !==
+        value.context.surfaceKey
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["context", "screenContractId"],
+        message: "Screen category does not match",
+      });
     if (value.omitName && value.submittedByUserId !== undefined)
       ctx.addIssue({
         code: "custom",

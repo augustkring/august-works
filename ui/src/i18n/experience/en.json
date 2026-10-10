@@ -82,7 +82,7 @@
     },
     "blocksWork": "This stops me from completing my work",
     "context": "Included automatically",
-    "contextDetails": "Company, page category, release version, time, language, timezone and viewport category. No page text, URL parameters, prompts, outputs or automatic screenshots.",
+    "contextDetails": "Company, page category and recognized screen, product versions, time, language, timezone, display size category, reported browser and operating system name and major version, and relevant active product features. Reported details may differ from the actual device. No page text, URL parameters, prompts, outputs or automatic screenshots.",
     "diagnostics": "Include technical diagnostics",
     "diagnosticsEmpty": "No technical diagnostics have been collected for this report. Selecting this option sends an empty diagnostic bundle. Logs, messages and screenshots are not collected.",
     "omitName": "Don't include my name in this feedback",

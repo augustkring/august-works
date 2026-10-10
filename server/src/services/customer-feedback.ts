@@ -20,6 +20,7 @@ import {
   feedbackInternalDetailSchema,
   feedbackTriageSchema,
   FEEDBACK_CUSTOMER_STATUS,
+  FEEDBACK_CONTEXT_FEATURE_IDS,
   v9FeatureEnabled,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, tooManyRequests } from "../errors.js";
@@ -49,10 +50,10 @@ export function customerFeedbackService(
   db: Db,
   options: { operatorUserIds?: readonly string[] } = {},
 ) {
-  async function enabled() {
+  async function enabled(reader: Db = db) {
     if (
       !v9FeatureEnabled(
-        await instanceSettingsService(db).getExperimental(),
+        await instanceSettingsService(reader).getExperimental(),
         "customer_feedback_v9",
       )
     )
@@ -388,6 +389,10 @@ export function customerFeedbackService(
         const reader = tx as unknown as Db;
         await access(reader, actor, companyId, true);
         await awOutputFeedbackIsLocal(reader);
+        // Hold the effective admission through commit. A rollback after the
+        // preliminary read must not admit a new submission or guessed context.
+        await tx.execute(sql`select singleton_key from instance_settings where singleton_key='default' for share`);
+        await enabled(reader);
         const hash = digest(input);
         const [old] = await tx
           .select()
@@ -409,6 +414,7 @@ export function customerFeedbackService(
             await owned(reader, companyId, principal, old.feedbackId),
           );
         }
+        const flags = await instanceSettingsService(reader).getExperimental();
         const [row] = await tx
           .insert(customerFeedback)
           .values({
@@ -421,7 +427,8 @@ export function customerFeedbackService(
             submittedByUserId: input.omitName ? null : principal,
             context: {
               ...input.context,
-              routeTemplate: routeTemplates[input.context.surfaceKey],
+              routeTemplate: input.context.screenContractId === "SUPPORT-ACCESS" ? "/company/support-access" : routeTemplates[input.context.surfaceKey],
+              relevantFeatureFlagIds: FEEDBACK_CONTEXT_FEATURE_IDS.filter((id) => v9FeatureEnabled(flags, id)),
               releaseBuildId:
                 readBuildCommit() ?? `unverified:${serverVersion}`,
             },

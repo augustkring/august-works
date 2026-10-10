@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
@@ -77,6 +77,9 @@ const support = await getEmbeddedPostgresTestSupport();
         });
       await instanceSettingsService(db).updateExperimental({
         customer_feedback_v9: true,
+        experience_projection_v9: false,
+        progressive_shell_v9: false,
+        home_v9: false,
       });
     });
     const actor = (principal = userId) => ({
@@ -112,6 +115,64 @@ const support = await getEmbeddedPostgresTestSupport();
         timezone: "UTC",
         viewportClass: "wide",
       },
+    });
+    it("stores allow-listed reported context and original server-owned feature observation without exposing it in the customer receipt", async () => {
+      const payload = input();
+      const context = {
+        ...payload.context,
+        screenContractId: "NEEDS-YOU",
+        clientReleaseBuildId: "a".repeat(40),
+        clientEnvironment: {
+          source: "reported_user_agent",
+          browser: { family: "chrome", majorVersion: 143 },
+          operatingSystem: { family: "windows", majorVersion: 10 },
+        },
+      };
+      const submitted = { ...payload, context };
+      const url = `/api/companies/${companyId}/customer-feedback`;
+      const response = await request(app()).post(url).send(submitted).expect(201);
+      const [row] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, response.body.id));
+      expect(row!.context).toEqual({ ...context, routeTemplate: "/needs-you", releaseBuildId: expect.any(String), relevantFeatureFlagIds: ["customer_feedback_v9"] });
+      expect(response.body).not.toHaveProperty("context");
+      expect(row!.submittedByUserId).toBeNull();
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, progressive_shell_v9: true, home_v9: true });
+      const replay = await request(app()).post(url).send(submitted).expect(201);
+      expect(replay.body.id).toBe(response.body.id);
+      const [retained] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, response.body.id));
+      expect(retained!.context).toEqual(row!.context);
+      expect((await request(app(otherUser)).get(url + `/${response.body.id}`)).status).toBe(404);
+    });
+    it("retains the legacy immutable request hash without inserting defaults for new optional context", async () => {
+      const payload = input();
+      // Original closed schema field order/defaults, prior to adding optional context.
+      const original = { idempotencyKey: payload.idempotencyKey, category: payload.category, body: payload.body, goal: payload.goal, blocksWork: false, omitName: true, context: payload.context, includeDiagnostics: false };
+      const expectedHash = createHash("sha256").update(JSON.stringify(original)).digest("hex");
+      const response = await request(app()).post(`/api/companies/${companyId}/customer-feedback`).send(payload).expect(201);
+      const [access] = await db.select().from(customerFeedbackAccess).where(eq(customerFeedbackAccess.feedbackId, response.body.id));
+      expect(access!.requestHash).toBe(expectedHash);
+      const replay = await request(app()).post(`/api/companies/${companyId}/customer-feedback`).send(payload).expect(201);
+      expect(replay.body.id).toBe(response.body.id);
+    });
+    it("refuses raw user-agent, forged server feature IDs and mismatched screen context before any feedback write", async () => {
+      const payload = input();
+      for (const patch of [{ userAgent: "private-ua-canary" }, { relevantFeatureFlagIds: ["home_v9"] }, { screenContractId: "SUPPORT-ACCESS" }]) {
+        await request(app()).post(`/api/companies/${companyId}/customer-feedback`).send({ ...payload, context: { ...payload.context, ...patch } }).expect(400);
+      }
+      expect(await db.select().from(customerFeedback).where(eq(customerFeedback.companyId, companyId))).toHaveLength(0);
+    });
+    it("rechecks the actual rolled-back feature at native transaction admission before creating feedback", async () => {
+      const reader = new Proxy(db, {
+        get(target, key, receiver) {
+          if (key === "transaction") return async (callback: Parameters<typeof db.transaction>[0]) => {
+            await instanceSettingsService(db).updateExperimental({ customer_feedback_v9: false });
+            return db.transaction(callback);
+          };
+          return Reflect.get(target, key, receiver);
+        },
+      });
+      await expect(customerFeedbackService(reader).create(actor(), companyId, input())).rejects.toThrow("Customer feedback is not enabled");
+      expect(await db.select().from(customerFeedback).where(eq(customerFeedback.companyId, companyId))).toHaveLength(0);
+      expect(await db.select().from(customerFeedbackAccess).where(eq(customerFeedbackAccess.companyId, companyId))).toHaveLength(0);
     });
     it("keeps Privacy configuration distinct from qualified retention and never exposes private policy references", async () => {
       const preview = await request(app()).get("/api/customer-feedback/policy").expect(200);
