@@ -8487,6 +8487,16 @@ export function issueService(db: Db) {
       };
     },
 
+    // Read the original Native create key; do not renew it or create anything
+    // when it expired, was erased, or has no committed issue.
+    getCreateIdempotencyIssueId: async (companyId: string, idempotencyKey: string) => {
+      const [receipt] = await db.select({ issueId: issueCreateIdempotencyKeys.issueId })
+        .from(issueCreateIdempotencyKeys)
+        .where(and(eq(issueCreateIdempotencyKeys.companyId, companyId),
+          eq(issueCreateIdempotencyKeys.idempotencyKey, idempotencyKey))).limit(1);
+      return receipt?.issueId ?? null;
+    },
+
     getById: async (raw: string) => {
       const id = raw.trim();
       const identifier = normalizeIssueReferenceIdentifier(id);

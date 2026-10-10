@@ -998,3 +998,94 @@ reads during session revalidation, requiring a fresh read on return. These chang
 do not replace the original V7 authoring boundary or claim that every legacy
 surface has been migrated. No account cache schema, domain writer, telemetry or
 browser persistent storage is introduced.
+
+
+## V9-048 — Editable project drafts through the original project owner
+
+2026-10-10. The existing explicit EN/DA task-command grammar also recognizes
+create-project commands. It preserves user text without inferring dates, owners,
+access, tools or executable steps. A current command choice opens a lazy scoped
+project form. General semantic/model drafting stays unqualified.
+
+The original Create Project controller stores only transient scoped defaults.
+The form explicitly submits name/description/planned status and a frozen request
+UUID through the original account-bound project API. That API already serializes
+and fingerprints its Native actor-scoped idempotency receipt; no new backend
+writer/store is added. A crossed account epoch cannot present the acknowledgement.
+Current original-owner reads qualify the retained receipt and withdraw its name/
+link on access loss. Legacy project-dialog callers keep their original form.
+
+Generic HTTP logging for the original project namespace becomes content-free,
+including rejected methods, invalid tenant paths and private query strings. The
+original Native project audit remains unchanged and purpose-separated. Drafts are
+kept in React memory; after reload the user must inspect original Projects before
+starting a new draft. This does not qualify general natural-language task/project
+creation, LLM interpretation, cross-reload reconciliation or live/human release.
+
+
+Feature admission and original auth/settings fetch state are rechecked at the
+project transport/ack boundary, as well as its account scope epoch. A rollback
+hides private draft and controls. The original 23-case Native projection group
+passes with real PostgreSQL/sandbox prerequisites; five final component cases
+pass. Built Native project/browser and integrated aggregate verification remain
+pending; no project/source acceptance is inferred from pending checks.
+
+## V9-049 — Chat Tool UI selects current Native views, never supplied authority
+
+2026-10-10. The optional `aw_experience_card` display renderer accepts a strict,
+8 KiB-bounded, schema-versioned reference from the fixed 18-name catalog. The
+current account/selected company and uncached original Native Experience owner
+must independently resolve one fresh matching card ID/domain/resource/version.
+Tool output cannot supply titles, links, HTML, component code or effects. Model
+prose stays data and is excluded from this renderer and its transcript details.
+A streamed update cannot replace an accepted reference. Loading, errors, feature
+rechecks, current-session rechecks, access loss and version changes hide the card.
+
+The installed assistant-ui 0.15.16 renderer registration is a display-only
+compatibility seam; its supported legacy Tool UI factory is deprecated upstream.
+The original custom task transcript and classic assistant-ui thread call the same
+Native-bound display component. The factory is loaded only for an actual display
+tool message. No tool executor, approval decision, result submission, gateway,
+writer, dependency upgrade or evidence store is introduced. Native open actions
+navigate to original resource owners; effectful cards refuse display here.
+
+The fixed names describe a bounded registration vocabulary, not qualification
+of 18 complete domain forms, provider tool delivery or channel parity. Specialized
+Question/Approval/Foundation/Hire/V8 edit and action semantics, the corresponding
+Native tool definition, real provider/hosted delivery, full browser/manual state
+coverage and Slack/Teams adapters remain open. Existing Native mutations retain
+all original gates; this renderer supplies no grant or success certification.
+
+
+### ADR-V9-050 — task draft unknown outcomes use original Native receipt reads
+
+The existing Native Issue create-key owner is company-scoped and has legacy
+seven-day cleanup; it does not promise actor/body-immutable replay. V9 Task draft
+therefore sends a single explicit original POST, then reads the original key and
+reuses original Issue authorization and analytical privacy guards. Missing keys
+remain unconfirmed. Refresh never writes, renews a key or creates a substitute.
+No new mutation owner, table, schema or legacy replay semantics are introduced.
+
+The command supplies literal title and captured principal/company only. The
+customer reviews title/description. Backlog/medium/null-assignee fields are
+explicit requested defaults, not assertions about downstream configured
+business automation. No agent, runtime, repository, date or access is inferred.
+GET receipts contain only current ID/company/title and use no-store. The original
+key-read endpoint and purpose-marked create request suppress private HTTP prose;
+ordinary Native Issue diagnostics retain their existing policy.
+
+This qualifies only this source increment after its recorded checks pass.
+Cross-reload key recovery, general semantic authoring, full effect reconciliation
+and launch/human acceptance remain pending. R0 and all 70 acceptance rows remain
+unchanged.
+
+
+### ADR-V9-051 — installed MCP card display tool retains Native client authority
+
+The original MCP server registers a strict, bounded display-reference tool through
+the installed SDK. It performs no API fetch or effect and never supplies card
+content or authority. Only the two exact Native names select the existing current-
+account renderer. Full schema registration retains company refinement and rejects
+unknown UI fields; SDK annotations remain hints. The dated MCP display plan records
+actual SDK and assistant-ui checks. General provider/channel delivery, MCP Apps
+hosting and full interactive domain forms remain open.

@@ -1,3 +1,5 @@
+import { isExperienceCardToolName } from "@paperclipai/shared";
+import { ExperienceToolCard } from "./ExperienceToolCard";
 import { DispositionRecoveryNotice, useDispositionRecoverySnapshot } from "./DispositionRecoveryNotice";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { TaskChatPausedTakeover, type TaskComposerPause } from "./task-chat/TaskChatPausedTakeover";
@@ -11,6 +13,8 @@ import type {
 } from "@assistant-ui/react";
 import {
   createContext,
+  lazy,
+  Suspense,
   Component,
   forwardRef,
   memo,
@@ -324,6 +328,8 @@ interface IssueChatMessageContext {
   /** Linkify `PAP-C7` case chips in comment bodies (experimental Cases flag). */
   linkCaseReferences?: boolean;
 }
+
+const LazyExperienceToolUI = lazy(() => import("./ExperienceToolUI"));
 
 const IssueChatCtx = createContext<IssueChatMessageContext>({
   feedbackDataSharingPreference: "prompt",
@@ -1609,6 +1615,8 @@ function IssueChatToolPart({
   isError?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  if (isExperienceCardToolName(toolName))
+    return <ExperienceToolCard wire={args ?? argsText} state={isError ? "error" : result === undefined ? "loading" : "ready"} />;
   if (toolName === "paperclip_provider_activity") {
     return (
       <IssueChatProviderActivity
@@ -6547,6 +6555,9 @@ export function IssueChatThread({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      {messages.some(message => message.content.some(part => part.type === "tool-call" && isExperienceCardToolName(part.toolName))) && (
+        <Suspense fallback={null}><LazyExperienceToolUI /></Suspense>
+      )}
       <IssueChatCtx.Provider value={chatCtx}>
         <div className={cn(variant === "embedded" ? "space-y-3" : "space-y-4")}>
           {resolvedShowJumpToLatest ? (

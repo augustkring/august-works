@@ -446,7 +446,8 @@
       "create_task": "Forbered en opgave",
       "connect_app": "Forbind en app",
       "run_workflow": "Åbn workflows til kørsel",
-      "ask_august": "Spørg August"
+      "ask_august": "Spørg August",
+      "create_project": "Forbered et projekt"
     }
   },
   "needsYouLoadFailed": "Needs You kunne ikke indlæses. Din aktuelle adgang til virksomheden skal kontrolleres.",
@@ -877,5 +878,42 @@
     "optionalApps": "Valgfrie tilsluttede apps",
     "noOptionalApps": "Ingen valgfrie tilsluttede apps er deklareret.",
     "scopesUnavailable": "App- og dataadgang er ikke vurderet for denne opsætning. Deklarerede appkrav er ikke tildelte rettigheder."
+  },
+  "projectDraft": {
+    "title": "Forbered et projekt",
+    "description": "Gennemgå og rediger dit projekt, før du gemmer det.",
+    "name": "Projektnavn",
+    "goal": "Mål eller beskrivelse (valgfrit)",
+    "noInference": "Gennemgå navn og mål. Datoer, agenttildelinger og adgang er separate beslutninger.",
+    "noExecution": "Åbn projektet for at tilføje opgaver og gennemgå eventuelle automatiseringer.",
+    "create": "Opret projekt",
+    "saved": "Projekt gemt",
+    "open": "Åbn projekt",
+    "close": "Luk projektkladde",
+    "unconfirmed": "Gemningen kunne ikke bekræftes. Din kladde er bevaret. Prøv igen bruger den samme oprindelige forespørgsel; tjek Projekter, før du starter en ny kladde.",
+    "unavailable": "Det aktuelle projekt eller din konto kunne ikke verificeres. Tjek din adgang, eller prøv igen.",
+    "cancel": "Annuller",
+    "loading": "Forbereder projektkladde…"
+  },
+  "toolCard": {
+    "loading": "Henter det aktuelle kort…",
+    "unavailable": "Kortet kunne ikke bekræftes. Åbn Home eller Needs You for at se de aktuelle oplysninger."
+  },
+  "taskDraft": {
+    "title": "Opret en opgave",
+    "description": "Gennemgå opgaven, før du opretter den.",
+    "name": "Opgavens titel",
+    "goal": "Hvad skal der ske?",
+    "noInference": "Opgaven oprettes i Backlog uden at tildele en agent eller bruger. Gennemgå virksomhedens eventuelle automatiseringer.",
+    "saved": "Opgaven er bekræftet",
+    "nextStep": "Åbn opgaven for at se dens aktuelle status og vælge næste skridt.",
+    "open": "Åbn opgaven",
+    "close": "Luk opgavekladden",
+    "cancel": "Annuller",
+    "create": "Opret opgave",
+    "unavailable": "Opgaven er ikke tilgængelig på din aktuelle konto.",
+    "unconfirmed": "Vi har ikke bekræftet opgaven. Tjek kvitteringen eller Arbejde, før du opretter en ny.",
+    "checkReceipt": "Tjek opgavekvitteringen",
+    "checkWork": "Tjek Arbejde"
   }
 }

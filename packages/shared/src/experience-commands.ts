@@ -16,6 +16,7 @@ export const EXPERIENCE_COMMAND_DESTINATIONS = {
   connect_app: "/apps",
   run_workflow: "/workflows",
   create_task: null,
+  create_project: null,
 } as const;
 export type ExperienceCommandId = keyof typeof EXPERIENCE_COMMAND_DESTINATIONS;
 const commandIds = Object.keys(EXPERIENCE_COMMAND_DESTINATIONS) as [
@@ -125,8 +126,20 @@ export function parseExperienceCommand(raw: string): ExperienceCommandIntent {
   if (Object.hasOwn(aliases, normalized))
     return { kind: "command", id: aliases[normalized]!, text: "" };
   const task =
-    /^(?:create task|new task|opret opgave|ny opgave)(?:\s+(.+))?$/i.exec(text);
+    /^(?:create (?:a )?task|new task|opret (?:en )?opgave|ny opgave)(?:\s+(.+))?$/i.exec(
+      text,
+    );
   if (task) return { kind: "command", id: "create_task", text: task[1] ?? "" };
+  const projectDraft =
+    /^(?:create (?:a )?project|new project|opret (?:et )?projekt|nyt projekt)(?:\s+(.+))?$/i.exec(
+      text,
+    );
+  if (projectDraft)
+    return {
+      kind: "command",
+      id: "create_project",
+      text: projectDraft[1] ?? "",
+    };
   const agent = /^(?:open agent|åbn agent|agent)(?:\s+(.+))?$/i.exec(text);
   if (agent)
     return { kind: "resources", resourceKind: "agent", text: agent[1] ?? "" };
@@ -151,3 +164,13 @@ export function parseExperienceCommand(raw: string): ExperienceCommandIntent {
     text: search ? (search[1] ?? "") : text,
   };
 }
+
+/** Bounded references from the original Native project owner, without workspace or credential payloads. */
+export const experienceProjectReceiptSchema = z.object({
+  id: z.uuid(),
+  companyId: z.uuid(),
+  name: z.string().min(1).max(2000),
+});
+export type ExperienceProjectReceipt = z.infer<
+  typeof experienceProjectReceiptSchema
+>;

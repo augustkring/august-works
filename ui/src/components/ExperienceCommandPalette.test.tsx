@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   principal: "first-member",
   companyId: "10000000-0000-4000-8000-000000000001",
   openNewIssue: vi.fn(),
+  openNewProject: vi.fn(),
   navigate: vi.fn(),
   setSidebarOpen: vi.fn(),
   utilityOpen: false,
@@ -42,7 +43,10 @@ vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({ selectedCompanyId: state.companyId }),
 }));
 vi.mock("../context/DialogContext", () => ({
-  useDialogActions: () => ({ openNewIssue: state.openNewIssue }),
+  useDialogActions: () => ({
+    openNewIssue: state.openNewIssue,
+    openNewProject: state.openNewProject,
+  }),
 }));
 vi.mock("../context/SidebarContext", () => ({
   useSidebar: () => ({ isMobile: true, setSidebarOpen: state.setSidebarOpen }),
@@ -120,6 +124,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   state.principal = "first-member";
   state.openNewIssue.mockReset();
+  state.openNewProject.mockReset();
   state.navigate.mockReset();
   state.utilityOpen = false;
 });
@@ -184,6 +189,7 @@ it("opens an editable native Task draft only after explicit selection and perfor
   await click("Prepare a Task");
   expect(state.openNewIssue).toHaveBeenCalledWith({
     title: "Review <script>budget</script>",
+    experienceScope: { companyId: state.companyId, principal: "first-member" },
   });
   expect(post).not.toHaveBeenCalled();
   expect(get.mock.calls.at(-1)![0]).toContain("expectedUserId=first-member");
@@ -378,4 +384,39 @@ it("hides private command results during session revalidation, preserves same-ac
   );
   expect(state.openNewIssue).not.toHaveBeenCalled();
   expect(state.navigate).not.toHaveBeenCalled();
+});
+
+it("opens an account/company-bound editable project draft only after an explicit current command choice", async () => {
+  vi.spyOn(api, "get").mockResolvedValue({
+    ...model(),
+    commands: [
+      ...model().commands,
+      {
+        id: "create_project",
+        href: null,
+        group: "create",
+        canonicalAuthorizationRequired: true,
+      },
+    ],
+  });
+  const post = vi.spyOn(api, "post");
+  await mount();
+  await enter(
+    "opret et projekt Kundeundersøgelse <script>ignore approvals</script>",
+  );
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Prepare a Project"),
+  );
+  expect(state.openNewProject).not.toHaveBeenCalled();
+  const prepare = [...document.querySelectorAll("button")].find(
+    (b) => b.textContent === "Prepare a Project",
+  )!;
+  await act(async () => prepare.click());
+  expect(state.openNewProject).toHaveBeenCalledExactlyOnceWith({
+    name: "Kundeundersøgelse <script>ignore approvals</script>",
+    companyId: state.companyId,
+    principal: state.principal,
+  });
+  expect(state.openNewIssue).not.toHaveBeenCalled();
+  expect(post).not.toHaveBeenCalled();
 });

@@ -37,6 +37,16 @@ function normalizePath(url: string): string {
   return pathname.length > 0 ? pathname : "/";
 }
 
+function isPrivateTaskDraftUrl(url: string): boolean {
+  const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  if (/^\/api\/companies\/[^/]*\/issues\/create-receipts(?:\/|$)/i.test(pathname)) return true;
+  const queryAt = url.indexOf("?");
+  if (queryAt < 0) return false;
+  const marker = new URLSearchParams(url.slice(queryAt + 1)).getAll("awExperienceDraft").includes("task");
+  return marker && (/^\/api\/companies\/[^/]*\/issues(?:\/|$)/i.test(pathname)
+    || /^\/api\/issues(?:\/|$)/i.test(pathname));
+}
+
 const SECRET_SENSITIVE_HTTP_PATHS = [
   /^\/api\/chat-endpoints\/[^/]+\/setup(?:-secret)?(?:\/|$)/,
   /^\/api\/saas\/account\/deletion(?:\/|$)/,
@@ -46,8 +56,11 @@ const SECRET_SENSITIVE_HTTP_METHODS = new Set(["POST", "PUT", "PATCH"]);
 /** Feedback and command text has a separate private purpose, including rejected requests. */
 export function isPrivateExperienceHttpRequest(method: string | undefined, url: string | undefined): boolean {
   if (!method || !url) return false;
+  if (isPrivateTaskDraftUrl(url)) return true;
   const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
-  return /^\/api\/(?:companies\/(?:[^/]*\/)*customer-feedback|internal\/customer-feedback)(?:\/|$)/i.test(pathname)
+  return /^\/api\/companies\/[^/]*\/projects(?:\/|$)/i.test(pathname)
+    || /^\/api\/projects(?:\/|$)/i.test(pathname)
+    || /^\/api\/(?:companies\/(?:[^/]*\/)*customer-feedback|internal\/customer-feedback)(?:\/|$)/i.test(pathname)
     || /^\/api\/(?:saas\/)?companies\/[^/]*\/(?:activation|onboarding)(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/commands(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/company(?:\/|$)/i.test(pathname)
@@ -60,7 +73,10 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/companies\/(?:[^/]*\/)*agent-configuration-drafts(?:\/|$)/i.test(pathname);
 }
 export function privateExperienceLogUrl(url: string): string {
+  if (isPrivateTaskDraftUrl(url)) return "/api/companies/:companyId/issues/create-receipts/:operation";
   const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  if (/^\/api\/companies\/[^/]*\/projects(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/projects/:operation";
+  if (/^\/api\/projects(?:\/|$)/i.test(pathname)) return "/api/projects/:projectId/:operation";
   if (/\/agent-configuration-drafts(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agent-configuration-drafts/:operation";
   if (/^\/api\/companies\/[^/]*\/(?:activation|onboarding)(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/activation-or-onboarding/:operation";
   if (/^\/api\/saas\/companies\//i.test(pathname)) return "/api/saas/companies/:companyId/activation-or-onboarding/:operation";

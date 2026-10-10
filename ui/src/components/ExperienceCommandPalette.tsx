@@ -46,7 +46,7 @@ function Commands({
 }) {
   const { t } = useTranslation("experience"),
     navigate = useNavigate(),
-    { openNewIssue } = useDialogActions();
+    { openNewIssue, openNewProject } = useDialogActions();
   const [text, setText] = useState(""),
     [debounced, setDebounced] = useState("");
   const client = useQueryClient();
@@ -100,10 +100,22 @@ function Commands({
     close();
     if (command.id === "create_task") {
       openNewIssue({
+        experienceScope: { companyId, principal },
         title:
           intent.kind === "command" && intent.id === "create_task"
             ? intent.text
             : "",
+      });
+      return;
+    }
+    if (command.id === "create_project") {
+      openNewProject({
+        name:
+          intent.kind === "command" && intent.id === "create_project"
+            ? intent.text
+            : "",
+        companyId,
+        principal,
       });
       return;
     }

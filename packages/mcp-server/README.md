@@ -88,3 +88,15 @@ Escape hatch:
 
 `paperclipApiRequest` is limited to paths under `/api` and JSON bodies. It is
 meant for endpoints that do not yet have a dedicated MCP tool.
+
+
+### AW Chat display reference
+
+`aw_experience_card` accepts a bounded company/card/source/version reference for
+a pre-approved AW Chat component. It returns only a display reference and performs
+no API request, creation, execution, approval or permission grant. The receiving
+client independently reads and authorizes the current Native card before showing
+it; tool arguments and results cannot supply card prose, HTML or action callbacks.
+The renderer accepts the exact tool name and `mcp__paperclip__aw_experience_card`.
+The SDK's read-only annotations are hints, not authorization. This does not
+provide an MCP Apps iframe host or qualify every interactive card form.

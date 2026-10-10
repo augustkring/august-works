@@ -117,6 +117,10 @@ test("Home hides private results during session revalidation and requires a new 
     await expect(
       main.getByRole("heading", { name: "PRIVATE-BROWSER-TASK", exact: true }),
     ).toBeVisible();
+    // Home uses the original app-wide 30-second session cache. Focus can only
+    // start an auth recheck once that source is stale; advance browser Date,
+    // preserving real timers, transport and every privacy/fresh-read assertion.
+    await page.clock.setFixedTime(new Date(Date.now() + 31_000));
     holdSession = true;
     holdRead = true;
     await page.evaluate(() =>

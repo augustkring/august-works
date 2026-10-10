@@ -1,3 +1,5 @@
+import { isExperienceCardToolName } from "@paperclipai/shared";
+import { ExperienceToolCard } from "../ExperienceToolCard";
 import { useTaskChatExpansion } from "./expansion-state";
 import { cn } from "@/lib/utils";
 import {
@@ -34,6 +36,8 @@ export function TaskChatToolCard({ item }: { item: TaskChatToolItem }) {
   const RowIcon = toolTaxonomy(item.rawName ?? item.name).icon;
   const [showDetail, setShowDetail] = useTaskChatExpansion(item.id, false);
   const expandable = Boolean(item.target || item.detail || item.diff);
+  if (isExperienceCardToolName(item.rawName))
+    return <ExperienceToolCard wire={item.experienceCardRequest} state={item.status === "completed" ? "ready" : item.status === "in_progress" || item.status === "pending" ? "loading" : "error"} />;
 
   return (
     <div data-testid="task-chat-tool-card" className="flex min-w-0 max-w-full flex-col text-xs">

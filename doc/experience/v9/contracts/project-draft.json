@@ -1,0 +1,151 @@
+{
+  "screenId": "PROJECT-DRAFT",
+  "journeyId": "ambient-authoring",
+  "routeOrSurface": "Command palette → original Create Project dialog",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Review an editable project name and goal, then explicitly save a planned project through the original owner.",
+  "entryConditions": [
+    "Current resolved principal and selected company match the original command scope.",
+    "A current original command response offers create_project; text alone causes no writes.",
+    "Unresolved current-session checks conceal the private draft."
+  ],
+  "exitConditions": [
+    "Cancellation leaves no project until an explicit submission.",
+    "Only the original Native project receipt and a current actor/company-bound project read permit saved-project presentation."
+  ],
+  "content": {
+    "h1": "Prepare a Project",
+    "supportingCopy": "Review and edit your project before saving it.",
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
+    "displayedState": [
+      "Editable name and optional goal",
+      "Pending or unconfirmed save with the original frozen request",
+      "Current authorized project receipt or unavailable state"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "name",
+      "label": "Project name",
+      "dataType": "Plain text",
+      "required": true,
+      "default": "Verbatim text after the explicit English/Danish create-project command",
+      "help": "Review the name before saving.",
+      "validation": "Trimmed non-empty value; input limited to 180 characters",
+      "autofillOrPrefill": "Original same-account command text; no inferred agents, dates or access"
+    },
+    {
+      "id": "description",
+      "label": "Goal or description (optional)",
+      "dataType": "Plain text",
+      "required": false,
+      "default": "Empty",
+      "help": "Agent assignments, dates and access are separate decisions.",
+      "validation": "Up to 4000 characters",
+      "autofillOrPrefill": "None"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Create project",
+      "operation": "Submit only the original frozen name/description/planned-status/idempotency key to the Native project owner"
+    },
+    "secondary": [
+      "Cancel the unsaved draft",
+      "Try again uses the original immutable request",
+      "Open project only after a current original-owner read"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original current actor session",
+      "Current original command availability",
+      "Original Native Project get with actor/company binding"
+    ],
+    "canonicalWriteOperation": "Original POST /api/companies/:companyId/projects with its existing actor-scoped Native idempotency receipt; no second writer or store",
+    "authorityEffect": "A draft and a command do not grant permissions. The original Native owner admits explicit project creation. No repository, runtime, lead-agent assignment or job is requested.",
+    "asyncWork": "Original uncached scoped reads and an explicit original-owner POST. Unconfirmed saves freeze their full original request in React memory and never retry automatically.",
+    "receipt": "Minimal original project ID/company/name; a fresh current-owner read is required before displaying the project after every account revalidation."
+  },
+  "states": {
+    "loading": "Conceal prior private fields and receipts during current session or original-source checks.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Withhold the private draft/receipt when the account changes or original project read is denied.",
+    "recovering": "Recheck original current authority; explicit retry preserves exactly the original Native idempotency request.",
+    "success": "Present only the current authorized original project. Open it to add tasks and review any configured automation; this receipt does not attest to all downstream execution."
+  },
+  "navigation": {
+    "back": "The same mounted account/company draft retains entered name/goal during session rechecks.",
+    "cancelOrSaveExit": "Cancel closes the scoped unsaved draft; no browser persistent storage is used. An already committed Native project remains in Projects.",
+    "deepLink": "Command palette → Create Project",
+    "resume": "After reload, check Projects for a committed original result before starting a new draft. Cross-reload request reconstruction is not implemented."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Only the current account/company-scoped draft and original project name/reference"
+    ],
+    "dataCollected": [
+      "Only explicit name/description, planned status and original idempotency key"
+    ],
+    "sensitiveFields": [
+      "Raw intent, company facts, feedback and results remain customer data"
+    ],
+    "loggingConstraints": "Generic HTTP logs for the original project namespace omit query, body, private errors and entity IDs. The original Native project audit remains purpose-separated."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify original Native creation/replay, fresh current-owner read, lost acknowledgement and no created agent/task/run on the exact artifact."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

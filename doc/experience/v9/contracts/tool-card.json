@@ -1,0 +1,124 @@
+{
+  "screenId": "TOOL-CARD",
+  "journeyId": "chat",
+  "routeOrSurface": "Native task chat / assistant-ui aw_experience_card display renderer",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Review a current source-linked Native card in the task conversation without trusting tool-authored prose or granting execution authority.",
+  "entryConditions": [
+    "Effective action_cards_v9 admission and selected company match; renderer request schema version 1 passes strict bounded validation.",
+    "The current account must settle and an uncached original Native Experience read must succeed.",
+    "The referenced unique card, domain, resource ID and exact version must match the current fresh Native view."
+  ],
+  "exitConditions": [
+    "Render text and canonical navigation from the Native current card only.",
+    "Failed, loading, stale, missing, ambiguous, foreign or mismatched cards present fixed unavailable/loading copy."
+  ],
+  "content": {
+    "h1": "Native current card title at its existing heading level",
+    "supportingCopy": "Loading the current card… / This card could not be verified. Open Home or Needs You to review the current information.",
+    "customerTerms": [
+      "Work",
+      "Home",
+      "Needs You"
+    ],
+    "displayedState": [
+      "Native current summary, consequence and evidence.",
+      "Tool input/result prose, arbitrary HTML, effect controls and invented completion are never shown."
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Native current navigation label",
+      "operation": "Open the exact authorized Native destination; any eventual effect is separately authorized by its original owner."
+    },
+    "secondary": [
+      "Try again performs only a current private GET after a failed read."
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Existing company-scoped Experience projection over original Native Tasks, Attention and other currently projected owners."
+    ],
+    "canonicalWriteOperation": "None. Display renderer only; no effect implementation, tool-result submission or additional store.",
+    "authorityEffect": "C0 presentation/navigation; a chat tool name, argument or result cannot grant authority.",
+    "asyncWork": "Original bounded Native projection read with no-store, account/company key, cancellation and authority epoch; no LLM call.",
+    "receipt": "Existing exact Native source resource ID/version, not a new execution or verification receipt."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "validation_error": "Reject bounded-schema/control/prototype violations with fixed unavailable copy.",
+    "system_error": "Fixed localized unavailable copy; failed read may retry a GET only. Raw tool/API errors and output are hidden.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect. A mutation acknowledgement that crosses an account-authority check cannot advance the page; explicit reconciliation retains the original request identity.",
+    "success": "A current Native view permits display, never certification of success beyond its original state."
+  },
+  "navigation": {
+    "back": "Original task route navigation remains unchanged.",
+    "cancelOrSaveExit": "No form input, persistence or writes exist in this renderer.",
+    "deepLink": "Only current Native open actions; no tool-provided URL.",
+    "resume": "Re-read current Native state after auth or access changes; exact old versions cannot restore stale content."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Only current Native account/company-authorized text and links."
+    ],
+    "dataCollected": [
+      "Bounded schema-versioned reference; no raw tool-result body."
+    ],
+    "sensitiveFields": [
+      "Native titles, evidence and resource identity remain private customer data."
+    ],
+    "loggingConstraints": "No new logging, telemetry, HTML execution or external requests. The existing Native Experience private-log policy remains authoritative."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Tool inputs/results",
+      "Task titles/evidence",
+      "Private identifiers",
+      "Raw API errors",
+      "Credentials",
+      "Arbitrary URLs"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify exact Native source/version, fresh current read, source changes, absence/duplicates, feature denial, current auth rechecks and both task chat adapters."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify untrusted/prototype/accessor/control-key rejection; no tool-authored title/link/HTML/effect; current member and resource authorization stays in the Native owner."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

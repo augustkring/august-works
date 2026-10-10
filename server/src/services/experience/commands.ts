@@ -86,6 +86,7 @@ export async function experienceCommands(
         { id: "search", group: "navigate" },
         // This opens an editable native draft. Assignment/access/effects are checked by the native create owner.
         { id: "create_task", group: "create" },
+        { id: "create_project", group: "create" },
         {
           id: "connect_app",
           group: "create",

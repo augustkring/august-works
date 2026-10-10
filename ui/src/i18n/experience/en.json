@@ -446,7 +446,8 @@
       "create_task": "Prepare a Task",
       "connect_app": "Connect an App",
       "run_workflow": "Open Workflows to run",
-      "ask_august": "Ask August"
+      "ask_august": "Ask August",
+      "create_project": "Prepare a Project"
     }
   },
   "needsYouLoadFailed": "Needs You could not be loaded. Your current company access must be checked.",
@@ -877,5 +878,42 @@
     "optionalApps": "Optional connected apps",
     "noOptionalApps": "No optional connected apps are declared.",
     "scopesUnavailable": "App and data scopes have not been assessed for this setup. Declared app requirements are not granted permissions."
+  },
+  "projectDraft": {
+    "title": "Prepare a Project",
+    "description": "Review and edit your project before saving it.",
+    "name": "Project name",
+    "goal": "Goal or description (optional)",
+    "noInference": "Review the name and goal. Dates, agent assignments and access remain separate decisions.",
+    "noExecution": "Open the project to add tasks and review any configured automation.",
+    "create": "Create project",
+    "saved": "Project saved",
+    "open": "Open project",
+    "close": "Close project draft",
+    "unconfirmed": "Saving could not be confirmed. Your draft is retained. Try again uses the same original request; check Projects before starting another draft.",
+    "unavailable": "The current project or account could not be verified. Check your access or try again.",
+    "cancel": "Cancel",
+    "loading": "Preparing project draft…"
+  },
+  "toolCard": {
+    "loading": "Loading the current card…",
+    "unavailable": "This card could not be verified. Open Home or Needs You to review the current information."
+  },
+  "taskDraft": {
+    "title": "Create a task",
+    "description": "Review your task before creating it.",
+    "name": "Task title",
+    "goal": "What should happen?",
+    "noInference": "This creates a task in Backlog without assigning an agent or user. Review any configured automation in your company.",
+    "saved": "Task confirmed",
+    "nextStep": "Open the task to review its current status and decide the next step.",
+    "open": "Open task",
+    "close": "Close task draft",
+    "cancel": "Cancel",
+    "create": "Create task",
+    "unavailable": "This task is not available in your current account.",
+    "unconfirmed": "We have not confirmed this task. Check its receipt or Work before creating another one.",
+    "checkReceipt": "Check task receipt",
+    "checkWork": "Check Work"
   }
 }

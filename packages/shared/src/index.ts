@@ -3345,3 +3345,7 @@ export * from "./agent-monitor.js";
 
 export * from "./workflow-publication.js";
 export * from "./protocol-interop.js";
+
+export * from "./experience-tool-ui.js";
+
+export * from "./experience-task-draft.js";

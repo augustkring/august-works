@@ -12,25 +12,97 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
-    ["GET", "/api/companies/private-company/activation?expectedUserId=private-principal"],
-    ["POST", "/api/companies/private-company/activation?expectedUserId=private-principal"],
-    ["GET", "/api/companies/private-company/onboarding?expectedUserId=private-principal"],
-    ["PATCH", "/api/companies/private-company/onboarding?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/issues?awExperienceDraft=task&expectedActorId=user%3Aprivate-principal"],
+    ["GET", "/api/companies/private-company/issues/create-receipts/private-record?expectedActorId=user%3Aprivate-principal"],
+    ["PATCH", "/api/issues/private-record?awExperienceDraft=task&expectedActorId=user%3Aprivate-principal"],
+    ["GET", "/api/companies//issues?awExperienceDraft=task&expectedActorId=user%3Aprivate-principal"],
+
+    [
+      "POST",
+      "/api/companies/private-company/projects?expectedActorId=user%3Aprivate-principal",
+    ],
+    [
+      "POST",
+      "/api/companies//projects?expectedActorId=user%3Aprivate-principal",
+    ],
+    [
+      "GET",
+      "/api/projects/private-record?expectedActorId=user%3Aprivate-principal",
+    ],
+    [
+      "PATCH",
+      "/api/projects/private-record?expectedActorId=user%3Aprivate-principal",
+    ],
+    [
+      "GET",
+      "/api/companies/private-company/activation?expectedUserId=private-principal",
+    ],
+    [
+      "POST",
+      "/api/companies/private-company/activation?expectedUserId=private-principal",
+    ],
+    [
+      "GET",
+      "/api/companies/private-company/onboarding?expectedUserId=private-principal",
+    ],
+    [
+      "PATCH",
+      "/api/companies/private-company/onboarding?expectedUserId=private-principal",
+    ],
     ["POST", "/api/companies//activation?expectedUserId=private-principal"],
-    ["POST", "/api/companies/private-company/support-sessions/reviews?expectedUserId=private-principal"],
-    ["GET", "/api/companies/private-company/support-sessions/pending-review?expectedUserId=private-principal"],
-    ["DELETE", "/api/companies/private-company/support-sessions/reviews/private-record?expectedUserId=private-principal"],
-    ["GET", "/api/companies/private-company/support-sessions?expectedUserId=private-principal"],
-    ["POST", "/api/companies/private-company/support-sessions?expectedUserId=private-principal"],
-    ["DELETE", "/api/companies/private-company/support-sessions/private-record?expectedUserId=private-principal"],
+    [
+      "POST",
+      "/api/companies/private-company/support-sessions/reviews?expectedUserId=private-principal",
+    ],
+    [
+      "GET",
+      "/api/companies/private-company/support-sessions/pending-review?expectedUserId=private-principal",
+    ],
+    [
+      "DELETE",
+      "/api/companies/private-company/support-sessions/reviews/private-record?expectedUserId=private-principal",
+    ],
+    [
+      "GET",
+      "/api/companies/private-company/support-sessions?expectedUserId=private-principal",
+    ],
+    [
+      "POST",
+      "/api/companies/private-company/support-sessions?expectedUserId=private-principal",
+    ],
+    [
+      "DELETE",
+      "/api/companies/private-company/support-sessions/private-record?expectedUserId=private-principal",
+    ],
     ["PATCH", "/api/companies//support-sessions/private-record"],
-    ["GET", "/api/companies/private-company/experience/support-access?expectedUserId=private-principal"],
-    ["DELETE", "/api/companies/private-company/experience/support-access?expectedUserId=private-principal"],
-    ["GET", "/api/companies/private-company/agent-package-installations/private-record/experience/maintenance?expectedUserId=private-principal"],
-    ["DELETE", "/api/companies/private-company/agent-package-installations/private-record/experience/maintenance?expectedUserId=private-principal"],
-    ["GET", "/api/companies/private-company/workflows/private-record/experience/publication?expectedUserId=private-principal"],
-    ["POST", "/api/companies/private-company/workflows/private-record/experience/publication?expectedUserId=private-principal"],
-    ["GET", "/api/companies/private-company/agents/private-agent/experience?expectedUserId=private-principal"],
+    [
+      "GET",
+      "/api/companies/private-company/experience/support-access?expectedUserId=private-principal",
+    ],
+    [
+      "DELETE",
+      "/api/companies/private-company/experience/support-access?expectedUserId=private-principal",
+    ],
+    [
+      "GET",
+      "/api/companies/private-company/agent-package-installations/private-record/experience/maintenance?expectedUserId=private-principal",
+    ],
+    [
+      "DELETE",
+      "/api/companies/private-company/agent-package-installations/private-record/experience/maintenance?expectedUserId=private-principal",
+    ],
+    [
+      "GET",
+      "/api/companies/private-company/workflows/private-record/experience/publication?expectedUserId=private-principal",
+    ],
+    [
+      "POST",
+      "/api/companies/private-company/workflows/private-record/experience/publication?expectedUserId=private-principal",
+    ],
+    [
+      "GET",
+      "/api/companies/private-company/agents/private-agent/experience?expectedUserId=private-principal",
+    ],
     [
       "POST",
       "/api/companies/private-company/workflows/private-record/experience/test?expectedUserId=private-principal",
@@ -125,7 +197,14 @@ describe("V9 private HTTP purpose", () => {
   });
   it("does not classify adjacent namespaces as private feedback", () => {
     for (const path of [
+      "/api/companies/id/issues",
+      "/api/issues/id",
+      "/api/companies/id/issues?awExperienceDraft=other",
+      "/api/companies/id/issues-extra?awExperienceDraft=task",
       "/api/customer-feedback/policy",
+      "/api/companies/id/project-repositories",
+      "/api/companies/id/projects-extra",
+      "/api/projects-extra/id",
       "/api/companies/id/customer-feedback-extra",
       "/api/companies/id/support-sessions-other",
       "/api/internal/customer-feedback-extra",

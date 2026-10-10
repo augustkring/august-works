@@ -168,7 +168,7 @@ export function Projects() {
             </div>
           </PopoverContent>
         </Popover>
-        <Button size="sm" variant="outline" onClick={openNewProject}>
+        <Button size="sm" variant="outline" onClick={() => openNewProject()}>
           <Plus className="h-4 w-4 mr-1" />
           Add Project
         </Button>
