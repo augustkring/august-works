@@ -689,5 +689,20 @@
     "failed": "Failed",
     "cancelled": "Cancelled",
     "timed_out": "Timed out"
+  },
+  "workflowPublicationTitle": "Publish internal version",
+  "workflowPublicationBoundary": "This publication is limited to the reviewed internal control flow with empty synthetic input. Its internal test does not qualify material actions or independently verify a business outcome.",
+  "workflowPublicationRecorded": "The original native publication was recorded. Check the current version and run status separately.",
+  "workflowPublicationAction": "Publish reviewed version",
+  "workflowPublicationRetry": "Retry original publication request",
+  "workflowPublicationConfirm": "Publish internal version {{version}}?",
+  "workflowPublicationConsequence": "This publishes the exact reviewed revision and replaces the prior published revision. The native workflow creates its next draft and retains revision and test history. New runs can use the published version while the workflow is active.",
+  "workflowPublicationAcknowledge": "I reviewed the exact internal draft and its completed internal test.",
+  "workflowPublicationUnknown": "The publication response is unconfirmed. Reload to recover the native receipt or retry this exact original request.",
+  "workflowPublicationAvailability": {
+    "test_required": "Complete an internal test of the current draft before publication.",
+    "review_required": "This draft requires Advanced review and qualified material testing.",
+    "no_draft": "There is no current draft to publish.",
+    "not_active": "Resume the workflow before reviewing a new publication."
   }
 }

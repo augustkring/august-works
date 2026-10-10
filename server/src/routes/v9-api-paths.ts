@@ -1,6 +1,9 @@
 import { z } from "zod";
 import {
   agentMonitorSchema,
+  workflowPublicationCommandSchema,
+  workflowPublicationReceiptSchema,
+  workflowPublicationReviewSchema,
   activationCommandSchema,
   activationViewSchema,
   agentDraftCreateSchema,
@@ -91,6 +94,8 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  read(`${company}/workflows/{workflowId}/experience/publication`, "Review an exact native internal draft and its original successful internal test without material business qualification", workflowPublicationReviewSchema, account),
+  { ...write(`${company}/workflows/{workflowId}/experience/publication`, "Publish the exact reviewed native internal draft after its bound test; recover the immutable original publication receipt", workflowPublicationCommandSchema, workflowPublicationReceiptSchema), query: account },
   read(`${company}/agents/{agentId}/experience`, "Read bounded current native agent scheduling and execution metadata without business verification", agentMonitorSchema, account),
   { ...write(`${company}/workflow-runs/{runId}/experience/stop`,
     "Request native cancellation of the exact reviewed run with an original-request receipt; no completed stop or reversal is claimed",

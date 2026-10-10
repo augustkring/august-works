@@ -1226,9 +1226,13 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/components/WorkflowPublicationControls.tsx",
+        "server/src/services/workflows/workflow-customer-publication.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/workflow-check-publish.json"
     },
     {
       "screenId": "WORKFLOW-PUBLISH",
@@ -1241,9 +1245,13 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/components/WorkflowPublicationControls.tsx",
+        "server/src/services/workflows/workflow-customer-publication.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/workflow-publish.json"
     },
     {
       "screenId": "WORKFLOW-OPERATE",

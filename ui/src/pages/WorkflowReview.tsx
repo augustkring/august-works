@@ -1,3 +1,4 @@
+import { WorkflowPublicationControls } from "../components/WorkflowPublicationControls";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -100,13 +101,16 @@ export function WorkflowReview({
     client.removeQueries({ queryKey: prefix });
   });
   useEffect(() => {
-    heading.current?.focus();
+    if (!document.activeElement?.closest('[role="dialog"]')) heading.current?.focus();
   }, [query.data?.id, selected]);
   useEffect(() => {
-    if (query.isError) error.current?.focus();
+    if (query.isError && !document.activeElement?.closest('[role="dialog"]')) error.current?.focus();
   }, [query.isError]);
   const controls = (
     <>
+    <WorkflowPublicationControls key="publication" company={company} principal={principal} id={id}
+      detail={!query.isPending && !query.isFetching && !query.isError ? query.data : null}
+      refresh={() => void query.refetch()} />
     <WorkflowTestControls key="test" company={company} principal={principal} id={id}
       detail={!query.isPending && !query.isFetching && !query.isError ? query.data : null}
       refresh={() => void query.refetch()} />

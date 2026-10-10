@@ -105,3 +105,12 @@ transaction deadline. Postcondition verifies staged configuration with activatio
 still required. Native Core Steward disable remains the effect kill path; V9
 presentation/policy flags do not claim to disable inherited V7 authority. External
 repairs and failed/unknown-attempt contracts remain closed/unqualified.
+
+Reviewed internal publication: exact current immutable draft/time/previous-pointer
+and same-human succeeded Test binding; unchecked explicit acknowledgement.
+Native Read/Edit/Run/Publish plus actual role/source/rollout and commercial guards;
+retains current caller scope and discards stale admin snapshots. Existing native
+publish owner plus atomic original receipt under native privacy/authority/workflow
+locks. Current private historical source and authority required for replay/reload;
+corrupt/foreign/changed original receipts refuse. No material test/approval bypass,
+new grant, browser persistence or production/business verification claim.

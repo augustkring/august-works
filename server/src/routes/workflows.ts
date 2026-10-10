@@ -1,3 +1,5 @@
+import { readCustomerWorkflowPublication, admitCustomerWorkflowPublication } from "../services/workflows/workflow-customer-publication.js";
+import { workflowPublicationCommandSchema } from "@paperclipai/shared";
 import { proposeOptimizerCandidate } from "../services/optimizer/optimizer-candidate-proposal.js";
 import { submitWorkflowDirectResult } from "../services/workflows/workflow-direct-agent.js";
 import { Router, type Request, type Response } from "express";
@@ -660,6 +662,35 @@ export function workflowRoutes(db: Db) {
       res.json(result);
     },
   );
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience/publication", async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    const account = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    if (!principal || account.expectedUserId !== principal) throw conflict("Account changed; reload", { code: "ACCOUNT_CHANGED" });
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run", "workflows:publish"] as const) await assertPermission(req, companyId, action);
+    const review = await readCustomerWorkflowPublication(db, companyId, workflowId, req.actor);
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run", "workflows:publish"] as const) await assertV5Authorization(db, { ...req.actor, isInstanceAdmin: false }, companyId, action);
+    if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") || !await currentWorkflowStopRoleAllows(db, companyId, req.actor)) throw notFound("Current publication authority is unavailable");
+    await assertWorkflowsEnabled();
+    res.json(review);
+  });
+  router.post("/companies/:companyId/workflows/:workflowId/experience/publication", validate(workflowPublicationCommandSchema), async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    const account = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    if (!principal || account.expectedUserId !== principal) throw conflict("Account changed; reload", { code: "ACCOUNT_CHANGED" });
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run", "workflows:publish"] as const) await assertPermission(req, companyId, action);
+    const receipt = await admitCustomerWorkflowPublication(db, companyId, workflowId, req.actor, req.body);
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run", "workflows:publish"] as const) await assertV5Authorization(db, { ...req.actor, isInstanceAdmin: false }, companyId, action);
+    if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") || !await currentWorkflowStopRoleAllows(db, companyId, req.actor)) throw notFound("Current publication authority is unavailable");
+    await assertWorkflowsEnabled();
+    res.json(receipt);
+  });
 
   router.post("/companies/:companyId/workflows/:workflowId/experience/test", validate(workflowTestCommandSchema), async (req, res) => {
     assertBoard(req);

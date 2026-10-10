@@ -1,3 +1,4 @@
+import { workflowPublicationReviewSchema, workflowPublicationCommandSchema, workflowPublicationReceiptSchema, type WorkflowPublicationCommand } from "@paperclipai/shared";
 import type {
   CancelWorkflowRun,
   CreateWorkflow,
@@ -43,6 +44,21 @@ import {
 } from "@paperclipai/shared";
 
 export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
+  publicationReview: async (company: string, principal: string, workflow: string, signal?: AbortSignal) => {
+    const view = workflowPublicationReviewSchema.parse(await api.get(`/companies/${company}/workflows/${workflow}/experience/publication?expectedUserId=${encodeURIComponent(principal)}`, { signal, cache: "no-store" }));
+    if (view.companyId !== company || view.workflowId !== workflow) throw new Error("Publication context changed");
+    return view;
+  },
+  publishReviewed: async (company: string, principal: string, workflow: string, raw: WorkflowPublicationCommand) => {
+    const command = workflowPublicationCommandSchema.parse(raw);
+    if (command.expectedWorkflowId !== workflow) throw new Error("Publication request binding changed");
+    const receipt = workflowPublicationReceiptSchema.parse(await api.post(`/companies/${company}/workflows/${workflow}/experience/publication?expectedUserId=${encodeURIComponent(principal)}`, command));
+    if (receipt.companyId !== company || receipt.workflowId !== workflow || receipt.requestId !== command.requestId
+        || receipt.revisionId !== command.expectedDraftRevisionId || receipt.testRunId !== command.expectedTestRunId)
+      throw new Error("Publication receipt binding changed");
+    return receipt;
+  },
+
   test: async (companyId: string, principal: string, workflowId: string, raw: WorkflowTestCommand) => {
     const command = workflowTestCommandSchema.parse(raw);
     if (command.expectedWorkflowId !== workflowId) throw new Error("Workflow test request context changed");

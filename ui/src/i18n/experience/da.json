@@ -689,5 +689,20 @@
     "failed": "Mislykket",
     "cancelled": "Annulleret",
     "timed_out": "Tidsgrænse overskredet"
+  },
+  "workflowPublicationTitle": "Publicér intern version",
+  "workflowPublicationBoundary": "Denne publicering er begrænset til det gennemgåede interne kontrolflow med tomt syntetisk input. Den interne test kvalificerer ikke væsentlige handlinger og verificerer ikke et forretningsresultat uafhængigt.",
+  "workflowPublicationRecorded": "Den oprindelige native publicering er registreret. Kontrollér den aktuelle version og kørselsstatus særskilt.",
+  "workflowPublicationAction": "Publicér gennemgået version",
+  "workflowPublicationRetry": "Gentag oprindelig publiceringsrequest",
+  "workflowPublicationConfirm": "Publicér intern version {{version}}?",
+  "workflowPublicationConsequence": "Den præcise gennemgåede revision publiceres og erstatter den tidligere publicerede revision. Den native workflowmotor opretter næste draft og bevarer revisions- og testhistorik. Nye kørsler kan bruge den publicerede version, mens workflowet er aktivt.",
+  "workflowPublicationAcknowledge": "Jeg har gennemgået den præcise interne draft og dens gennemførte interne test.",
+  "workflowPublicationUnknown": "Svaret på publiceringen er ikke bekræftet. Genindlæs for at hente den native kvittering, eller gentag præcis den oprindelige request.",
+  "workflowPublicationAvailability": {
+    "test_required": "Gennemfør en intern test af den aktuelle draft før publicering.",
+    "review_required": "Denne draft kræver avanceret gennemgang og kvalificeret test af væsentlige handlinger.",
+    "no_draft": "Der er ingen aktuel draft at publicere.",
+    "not_active": "Genoptag workflowet før gennemgang af en ny publicering."
   }
 }

@@ -729,3 +729,15 @@ is not represented as disabling separately authorized inherited V7 stewardship.
 Unknown/external/failed-attempt repair contracts and customer escalation remain
 unqualified; M3/M4 changes are not admitted through this unchanged-content path.
 No parallel maintenance scheduler, broad retry permission or new grants are added.
+
+## V9-034 — Publish the exact reviewed internal test through the native owner
+
+Customer publication is restricted to the immutable current closed C0 draft with
+its same-human successful native Test run and an explicitly acknowledged tuple.
+Read/Edit/Run/Publish, current role/source/rollout and native admission are required.
+The existing workflowService.publish owns revision transition/next draft and drift;
+an enclosing native transaction owns the original publication receipt. Replay and
+reload use retained native history with current private admission, never a browser
+receipt or new publication request. Publication proves its original revision fact,
+not current active status or qualified material/business work. Test purpose remains
+Test after publication. The former published revision is retained historically.

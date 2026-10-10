@@ -306,3 +306,5 @@ it("keeps an unavailable comparison separate from an unchanged-flow result", asy
   expect(container.textContent).not.toContain("No changes found");
   expect(container.querySelector('a[href="#workflow-step-1"]')).toBeNull();
 });
+
+vi.mock("../components/WorkflowPublicationControls", () => ({ WorkflowPublicationControls: () => null }));
