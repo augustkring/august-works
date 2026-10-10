@@ -1217,3 +1217,21 @@ company before a source read. Integrated focused checks pass 48 cases in five
 files and token gates; 24 migrated PostgreSQL cases in three files pass,
 including all original Task deduplication cases and nine Project receipt cases.
 Current aggregate qualification remains pending.
+
+
+### ADR-V9-054 — Fresh authority inside bounded native Source reads
+
+2026-10-10. Native Source reads compile their repeated membership and current
+instance-role SQL inside the existing company-scoped callback. Each execution
+still reads current rows. Agent and current-run policy evidence is read together
+for each Source. No actor, grants, authorization result or policy cache survives
+a decision. Strategy populations use that private scope for their original
+issue/project decisions and drain bounded concurrent reads before refusal.
+
+Strict server types pass. All 171 original checks in five suites pass together
+on the unchanged source fingerprint, including 72 authorization checks, current
+human/instance-role and Agent-policy revocation, 10,000-Task populations, full
+68,000-outcome capture/replay and forecasting within their original limits.
+Earlier incomplete and failed waves remain recorded; no deadline, data-volume,
+assertion or runtime prerequisite was relaxed. The complete integrated suite,
+hosted performance and release acceptance remain pending.
